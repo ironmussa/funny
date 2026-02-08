@@ -1,0 +1,18 @@
+{
+  "permissions": {
+    "allow": [
+      "WebFetch(*)",
+      "WebFetch(domain:medium.com)",
+      "Bash(*)",
+      "Bash(npm view:*)",
+      "WebFetch(*)",
+      "Bash(npx kill-port 3001)",
+      "Bash(curl:*)",
+      "Bash(npx vite build)",
+      "Bash(npx kill-port:*)",
+      "Bash(npx vite)",
+      "Bash(nvm:*)",
+      "Bash(fnm:*)"
+    ]
+  }
+}

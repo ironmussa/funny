@@ -27,6 +27,7 @@ interface PromptInputProps {
   onStop?: () => void;
   loading?: boolean;
   running?: boolean;
+  queuedCount?: number;
   placeholder?: string;
 }
 
@@ -48,8 +49,18 @@ export function PromptInput({
     if (!running) textareaRef.current?.focus();
   }, [running]);
 
+  // Auto-resize textarea up to 35vh
+  useEffect(() => {
+    const ta = textareaRef.current;
+    if (!ta) return;
+    ta.style.height = 'auto';
+    const maxHeight = window.innerHeight * 0.35;
+    ta.style.height = `${Math.min(ta.scrollHeight, maxHeight)}px`;
+    ta.style.overflowY = ta.scrollHeight > maxHeight ? 'auto' : 'hidden';
+  }, [prompt]);
+
   const handleSubmit = () => {
-    if ((!prompt.trim() && images.length === 0) || loading || running) return;
+    if ((!prompt.trim() && images.length === 0) || loading) return;
     onSubmit(prompt, { model, mode }, images.length > 0 ? images : undefined);
     setPrompt('');
     setImages([]);
@@ -120,35 +131,6 @@ export function PromptInput({
   return (
     <div className="p-3 border-t border-border flex justify-center">
       <div className="w-1/2 min-w-[320px]">
-        {/* Dropdowns row */}
-        <div className="flex items-center gap-2 mb-2">
-          <Select value={model} onValueChange={setModel}>
-            <SelectTrigger className="w-[100px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MODELS.map((m) => (
-                <SelectItem key={m.value} value={m.value}>
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-
-          <Select value={mode} onValueChange={setMode}>
-            <SelectTrigger className="w-[150px]">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {MODES.map((m) => (
-                <SelectItem key={m.value} value={m.value}>
-                  {m.label}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-
         {/* Image previews */}
         {images.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-2">
@@ -162,7 +144,7 @@ export function PromptInput({
                 <button
                   onClick={() => removeImage(idx)}
                   className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                  disabled={loading || running}
+                  disabled={loading}
                 >
                   <X className="h-3 w-3" />
                 </button>
@@ -171,22 +153,22 @@ export function PromptInput({
           </div>
         )}
 
-        {/* Textarea + action buttons */}
-        <div className="flex items-end gap-2">
-          <div className="flex-1 flex flex-col gap-2">
-            <textarea
-              ref={textareaRef}
-              className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none transition-[border-color,box-shadow] duration-150"
-              placeholder={running ? 'Agent is working...' : placeholder}
-              value={prompt}
-              onChange={(e) => setPrompt(e.target.value)}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              rows={3}
-              disabled={loading || running}
-            />
-          </div>
-          <div className="flex gap-2">
+        {/* Textarea + bottom toolbar */}
+        <div className="rounded-md border border-input bg-background focus-within:ring-1 focus-within:ring-ring transition-[border-color,box-shadow] duration-150">
+          <textarea
+            ref={textareaRef}
+            className="w-full px-3 py-2 text-sm bg-transparent placeholder:text-muted-foreground focus:outline-none resize-none"
+            style={{ minHeight: '4.5rem' }}
+            placeholder={running ? 'Agent is working... type to queue a follow-up' : placeholder}
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
+            onKeyDown={handleKeyDown}
+            onPaste={handlePaste}
+            rows={1}
+            disabled={loading}
+          />
+          {/* Bottom toolbar */}
+          <div className="flex items-center justify-end px-2 py-2 gap-1">
             <input
               ref={fileInputRef}
               type="file"
@@ -196,13 +178,40 @@ export function PromptInput({
               onChange={handleFileSelect}
               disabled={loading || running}
             />
+            <Select value={model} onValueChange={setModel}>
+              <SelectTrigger className="h-7 w-[100px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MODELS.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={mode} onValueChange={setMode}>
+              <SelectTrigger className="h-7 w-[140px] text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {MODES.map((m) => (
+                  <SelectItem key={m.value} value={m.value}>
+                    {m.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             {!running && (
               <Button
                 onClick={() => fileInputRef.current?.click()}
-                variant="outline"
-                size="icon"
+                variant="ghost"
+                size="icon-sm"
                 title="Add image"
                 disabled={loading || running}
+                className="text-muted-foreground hover:text-foreground"
               >
                 <ImageIcon className="h-4 w-4" />
               </Button>
@@ -211,21 +220,21 @@ export function PromptInput({
               <Button
                 onClick={onStop}
                 variant="destructive"
-                size="icon"
+                size="icon-sm"
                 title="Stop agent"
               >
-                <Square className="h-4 w-4" />
+                <Square className="h-3.5 w-3.5" />
               </Button>
             ) : (
               <Button
                 onClick={handleSubmit}
                 disabled={(!prompt.trim() && images.length === 0) || loading}
-                size="icon"
+                size="icon-sm"
               >
                 {loading ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
                 ) : (
-                  <Send className="h-4 w-4" />
+                  <Send className="h-3.5 w-3.5" />
                 )}
               </Button>
             )}

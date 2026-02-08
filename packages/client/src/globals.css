@@ -91,4 +91,43 @@
     word-wrap: break-word;
     overflow-wrap: break-word;
   }
+
+  /* Markdown prose styles for agent messages */
+  .prose h1, .prose h2, .prose h3, .prose h4 {
+    font-weight: 600;
+    margin-top: 0.75em;
+    margin-bottom: 0.25em;
+  }
+  .prose h1 { font-size: 1.15em; }
+  .prose h2 { font-size: 1.05em; }
+  .prose h3 { font-size: 1em; }
+  .prose p { margin: 0.35em 0; }
+  .prose ul, .prose ol { padding-left: 1.25em; margin: 0.35em 0; }
+  .prose ul { list-style-type: disc; }
+  .prose ol { list-style-type: decimal; }
+  .prose li { margin: 0.15em 0; }
+  .prose strong { font-weight: 600; }
+  .prose a { text-decoration: underline; }
+  .prose pre { margin: 0.5em 0; }
+  .prose code { font-family: ui-monospace, monospace; }
+  .prose > *:first-child { margin-top: 0; }
+  .prose > *:last-child { margin-bottom: 0; }
+
+  /* Terminal panel xterm.js overrides */
+  .xterm {
+    padding: 4px;
+  }
+
+  .xterm-viewport::-webkit-scrollbar {
+    width: 6px;
+  }
+
+  .xterm-viewport::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.25);
+    border-radius: 3px;
+  }
+
+  .xterm-viewport::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.4);
+  }
 }

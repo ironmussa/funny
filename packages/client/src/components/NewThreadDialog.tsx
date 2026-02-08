@@ -49,7 +49,7 @@ export function NewThreadDialog() {
     try {
       const thread = await api.createThread({
         projectId: newThreadProjectId,
-        title: title || prompt.slice(0, 60),
+        title: title || prompt,
         mode,
         model,
         branch: mode === 'worktree' ? selectedBranch || undefined : undefined,

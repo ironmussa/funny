@@ -59,3 +59,39 @@ export const toolCalls = sqliteTable('tool_calls', {
   input: text('input'),
   output: text('output'),
 });
+
+export const automations = sqliteTable('automations', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  prompt: text('prompt').notNull(),
+  schedule: text('schedule').notNull(),
+  model: text('model').notNull().default('sonnet'),
+  mode: text('mode').notNull().default('worktree'),
+  permissionMode: text('permission_mode').notNull().default('autoEdit'),
+  baseBranch: text('base_branch'),
+  enabled: integer('enabled').notNull().default(1),
+  maxRunHistory: integer('max_run_history').notNull().default(20),
+  lastRunAt: text('last_run_at'),
+  nextRunAt: text('next_run_at'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export const automationRuns = sqliteTable('automation_runs', {
+  id: text('id').primaryKey(),
+  automationId: text('automation_id')
+    .notNull()
+    .references(() => automations.id, { onDelete: 'cascade' }),
+  threadId: text('thread_id')
+    .notNull()
+    .references(() => threads.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('running'),
+  triageStatus: text('triage_status').notNull().default('pending'),
+  hasFindings: integer('has_findings'),
+  summary: text('summary'),
+  startedAt: text('started_at').notNull(),
+  completedAt: text('completed_at'),
+});

@@ -3,12 +3,18 @@ import type {
   Thread,
   ThreadWithMessages,
   FileDiff,
+  GitStatusInfo,
   StartupCommand,
   McpServer,
   McpAddRequest,
   Skill,
   PluginListResponse,
   ImageAttachment,
+  Automation,
+  AutomationRun,
+  CreateAutomationRequest,
+  UpdateAutomationRequest,
+  InboxItem,
 } from '@a-parallel/shared';
 
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
@@ -154,6 +160,10 @@ export const api = {
     request<{ message: string }>(`/git/${threadId}/generate-commit-message`, {
       method: 'POST',
     }),
+  getGitStatuses: (projectId: string) =>
+    request<{ statuses: GitStatusInfo[] }>(`/git/status?projectId=${projectId}`),
+  getGitStatus: (threadId: string) =>
+    request<GitStatusInfo>(`/git/${threadId}/status`),
 
   // Startup Commands
   listCommands: (projectId: string) =>
@@ -209,4 +219,26 @@ export const api = {
   // Plugins
   listPlugins: () =>
     request<PluginListResponse>('/plugins'),
+
+  // Automations
+  listAutomations: (projectId?: string) =>
+    request<Automation[]>(`/automations${projectId ? `?projectId=${projectId}` : ''}`),
+  getAutomation: (id: string) => request<Automation>(`/automations/${id}`),
+  createAutomation: (data: CreateAutomationRequest) =>
+    request<Automation>('/automations', { method: 'POST', body: JSON.stringify(data) }),
+  updateAutomation: (id: string, data: UpdateAutomationRequest) =>
+    request<Automation>(`/automations/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  deleteAutomation: (id: string) =>
+    request<{ ok: boolean }>(`/automations/${id}`, { method: 'DELETE' }),
+  triggerAutomation: (id: string) =>
+    request<{ ok: boolean }>(`/automations/${id}/trigger`, { method: 'POST' }),
+  listAutomationRuns: (automationId: string) =>
+    request<AutomationRun[]>(`/automations/${automationId}/runs`),
+  getAutomationInbox: () =>
+    request<InboxItem[]>('/automations/inbox'),
+  triageRun: (runId: string, triageStatus: 'pending' | 'reviewed' | 'dismissed') =>
+    request<{ ok: boolean }>(`/automations/runs/${runId}/triage`, {
+      method: 'PATCH',
+      body: JSON.stringify({ triageStatus }),
+    }),
 };

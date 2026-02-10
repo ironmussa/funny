@@ -1,5 +1,6 @@
 import { wsBroker } from './ws-broker.js';
 import * as tm from './thread-manager.js';
+import * as pm from './project-manager.js';
 import type { WSEvent, ClaudeModel, PermissionMode, WaitingReason } from '@a-parallel/shared';
 import {
   ClaudeProcess,
@@ -12,6 +13,7 @@ import type {
   IClaudeProcess,
   IClaudeProcessFactory,
 } from './interfaces.js';
+import { getStatusSummary, deriveGitSyncState } from '../utils/git-v2.js';
 
 const PERMISSION_MAP: Record<PermissionMode, string> = {
   plan: 'plan',
@@ -247,7 +249,34 @@ export class AgentRunner {
         status: finalStatus,
         ...(waitingReason ? { waitingReason } : {}),
       });
+
+      // Emit git status for worktree threads (async, non-blocking)
+      this.emitGitStatus(threadId).catch(() => {});
     }
+  }
+
+  // ── Git status emission ────────────────────────────────────────
+
+  private async emitGitStatus(threadId: string): Promise<void> {
+    const thread = this.threadManager.getThread(threadId);
+    if (!thread?.worktreePath || thread.mode !== 'worktree') return;
+
+    const project = pm.getProject(thread.projectId);
+    if (!project) return;
+
+    const summary = await getStatusSummary(
+      thread.worktreePath,
+      thread.baseBranch ?? undefined,
+      project.path
+    );
+
+    this.emitWS(threadId, 'git:status', {
+      statuses: [{
+        threadId,
+        state: deriveGitSyncState(summary),
+        ...summary,
+      }],
+    });
   }
 
   // ── Public API ─────────────────────────────────────────────────

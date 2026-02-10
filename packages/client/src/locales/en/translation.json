@@ -138,6 +138,7 @@
     "gitSettings": "Git",
     "environments": "Environments",
     "worktrees": "Worktrees",
+    "automations": "Automations",
     "archivedThreads": "Archived Threads",
     "selectSetting": "Select a setting from the sidebar",
     "comingSoon": "{{label}} settings coming soon.",
@@ -354,5 +355,12 @@
     "addImage": "Add image",
     "stopAgent": "Stop agent",
     "loadingSkills": "Loading skills..."
+  },
+  "gitStatus": {
+    "dirty": "Uncommitted changes",
+    "unpushed": "Unpushed commits",
+    "pushed": "Pushed, pending merge",
+    "merged": "Branch merged",
+    "clean": "Clean"
   }
 }

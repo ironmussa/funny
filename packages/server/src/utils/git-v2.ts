@@ -1,6 +1,6 @@
 import { execute, executeSync } from './process.js';
 import { validatePath, validatePathSync } from './path-validation.js';
-import type { FileDiff } from '@a-parallel/shared';
+import type { FileDiff, GitSyncState } from '@a-parallel/shared';
 
 /**
  * Execute a git command safely with proper argument escaping
@@ -322,4 +322,82 @@ export async function getDiff(cwd: string): Promise<FileDiff[]> {
   }
 
   return diffs;
+}
+
+// ─── Git Status Summary ─────────────────────────────────
+
+export interface GitStatusSummary {
+  dirtyFileCount: number;
+  unpushedCommitCount: number;
+  hasRemoteBranch: boolean;
+  isMergedIntoBase: boolean;
+}
+
+/**
+ * Get a summary of the git status for a worktree.
+ * @param worktreeCwd - The worktree directory (for dirty/unpushed checks)
+ * @param baseBranch - The base branch to check merge status against
+ * @param projectCwd - The main repo directory (for merge check, since baseBranch lives there)
+ */
+export async function getStatusSummary(
+  worktreeCwd: string,
+  baseBranch?: string,
+  projectCwd?: string
+): Promise<GitStatusSummary> {
+  // 1. Count dirty files (very fast)
+  const porcelain = (await gitSafe(['status', '--porcelain'], worktreeCwd)) ?? '';
+  const dirtyFileCount = porcelain.split('\n').filter(Boolean).length;
+
+  // 2. Check remote tracking branch and unpushed commits
+  const branch = await getCurrentBranch(worktreeCwd);
+  const remoteBranch = await gitSafe(
+    ['rev-parse', '--abbrev-ref', `${branch}@{upstream}`],
+    worktreeCwd
+  );
+  const hasRemoteBranch = remoteBranch !== null;
+
+  let unpushedCommitCount = 0;
+  if (hasRemoteBranch) {
+    const countStr = await gitSafe(
+      ['rev-list', '--count', `${remoteBranch}..HEAD`],
+      worktreeCwd
+    );
+    unpushedCommitCount = countStr ? parseInt(countStr, 10) || 0 : 0;
+  } else if (baseBranch) {
+    // No remote branch — count commits since branching from base
+    const countStr = await gitSafe(
+      ['rev-list', '--count', `${baseBranch}..HEAD`],
+      worktreeCwd
+    );
+    unpushedCommitCount = countStr ? parseInt(countStr, 10) || 0 : 0;
+  }
+
+  // 3. Check if merged into base branch (run from main repo where baseBranch lives)
+  let isMergedIntoBase = false;
+  if (baseBranch && projectCwd) {
+    const mergedBranches = await gitSafe(
+      ['branch', '--merged', baseBranch, '--format=%(refname:short)'],
+      projectCwd
+    );
+    if (mergedBranches) {
+      isMergedIntoBase = mergedBranches
+        .split('\n')
+        .map((b) => b.trim())
+        .includes(branch);
+    }
+  }
+
+  return { dirtyFileCount, unpushedCommitCount, hasRemoteBranch, isMergedIntoBase };
+}
+
+/**
+ * Derive a single sync state from a git status summary.
+ * Priority: merged > dirty > unpushed > pushed > clean
+ */
+export function deriveGitSyncState(summary: GitStatusSummary): GitSyncState {
+  if (summary.isMergedIntoBase) return 'merged';
+  if (summary.dirtyFileCount > 0) return 'dirty';
+  if (summary.unpushedCommitCount > 0) return 'unpushed';
+  if (summary.hasRemoteBranch) return 'pushed';
+  return 'clean';
 }

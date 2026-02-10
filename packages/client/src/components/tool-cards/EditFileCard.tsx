@@ -17,7 +17,7 @@ export function EditFileCard({ parsed }: { parsed: Record<string, unknown> }) {
   }, [filePath, oldString, newString]);
 
   return (
-    <div className="rounded-md border border-border/60 bg-muted/30 text-sm max-w-full overflow-hidden">
+    <div className="rounded-md border border-border/60 bg-muted/30 text-sm w-full min-w-0 overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs hover:bg-accent/30 transition-colors rounded-md overflow-hidden"
@@ -43,7 +43,7 @@ export function EditFileCard({ parsed }: { parsed: Record<string, unknown> }) {
       </button>
       {expanded && hasDiff && (
         <div className="border-t border-border/40 overflow-hidden">
-          <div className="text-xs max-h-80 overflow-y-auto [&_.diff-container]:font-mono [&_.diff-container]:text-[11px]">
+          <div className="text-xs max-h-80 overflow-y-auto overflow-x-auto [&_.diff-container]:font-mono [&_.diff-container]:text-[11px]">
             <Suspense fallback={<div className="p-2 text-xs text-muted-foreground">Loading diff...</div>}>
               <ReactDiffViewer
                 oldValue={oldString || ''}

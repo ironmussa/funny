@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import type { Project } from '@a-parallel/shared';
 import { api } from '@/lib/api';
 import { useThreadStore } from './thread-store';
+import { useGitStatusStore } from './git-status-store';
 
 interface ProjectState {
   projects: Project[];
@@ -31,6 +32,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       projects.map((p) => threadStore.loadThreadsForProject(p.id))
     );
     set({ initialized: true });
+
+    // Fetch git statuses for all projects (best-effort, non-blocking)
+    const gitStore = useGitStatusStore.getState();
+    for (const p of projects) {
+      gitStore.fetchForProject(p.id);
+    }
   },
 
   toggleProject: (projectId: string) => {

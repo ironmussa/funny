@@ -16,6 +16,7 @@ import {
   GitFork,
   Archive,
   Terminal,
+  Timer,
 } from 'lucide-react';
 
 export const settingsItems = [
@@ -28,6 +29,7 @@ export const settingsItems = [
   { id: 'environments', label: 'Environments', icon: Monitor },
   { id: 'worktrees', label: 'Worktrees', icon: GitFork },
   { id: 'startup-commands', label: 'Startup Commands', icon: Terminal },
+  { id: 'automations', label: 'Automations', icon: Timer },
   { id: 'archived-threads', label: 'Archived Threads', icon: Archive },
 ] as const;
 
@@ -43,6 +45,7 @@ export const settingsLabelKeys: Record<string, string> = {
   environments: 'settings.environments',
   worktrees: 'settings.worktrees',
   'startup-commands': 'startup.title',
+  automations: 'settings.automations',
   'archived-threads': 'settings.archivedThreads',
 };
 

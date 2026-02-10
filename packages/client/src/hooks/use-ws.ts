@@ -115,6 +115,24 @@ function handleMessage(e: MessageEvent) {
       }
       break;
     }
+    case 'automation:run_started': {
+      import('@/stores/automation-store').then(({ useAutomationStore }) => {
+        useAutomationStore.getState().handleRunStarted({ ...data, threadId });
+      });
+      break;
+    }
+    case 'automation:run_completed': {
+      import('@/stores/automation-store').then(({ useAutomationStore }) => {
+        useAutomationStore.getState().handleRunCompleted(data);
+      });
+      break;
+    }
+    case 'git:status': {
+      import('@/stores/git-status-store').then(({ useGitStatusStore }) => {
+        useGitStatusStore.getState().updateFromWS(data.statuses);
+      });
+      break;
+    }
   }
 }
 

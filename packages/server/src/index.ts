@@ -17,7 +17,9 @@ import mcpRoutes from './routes/mcp.js';
 import skillsRoutes from './routes/skills.js';
 import pluginRoutes from './routes/plugins.js';
 import { worktreeRoutes } from './routes/worktrees.js';
+import { automationRoutes } from './routes/automations.js';
 import { wsBroker } from './services/ws-broker.js';
+import { startScheduler, stopScheduler } from './services/automation-scheduler.js';
 
 const port = Number(process.env.PORT) || 3001;
 const clientPort = Number(process.env.CLIENT_PORT) || 5173;
@@ -59,10 +61,12 @@ app.route('/api/mcp', mcpRoutes);
 app.route('/api/skills', skillsRoutes);
 app.route('/api/plugins', pluginRoutes);
 app.route('/api/worktrees', worktreeRoutes);
+app.route('/api/automations', automationRoutes);
 
 // Auto-create tables on startup, then start server
 autoMigrate();
 markStaleThreadsInterrupted();
+startScheduler();
 getAuthToken(); // Ensure auth token file exists before accepting connections
 // Server started below via Bun.serve()
 
@@ -100,6 +104,7 @@ const server = Bun.serve({
 // Graceful shutdown — close the server so the port is released immediately
 function shutdown() {
   console.log('[server] Shutting down...');
+  stopScheduler();
   server.stop(true);
   process.exit(0);
 }

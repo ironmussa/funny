@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/stores/app-store';
+import { useGitStatusStore } from '@/stores/git-status-store';
 import { SettingsPanel } from './SettingsPanel';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
@@ -21,6 +22,7 @@ import {
 } from '@/components/ui/tooltip';
 import { Settings } from 'lucide-react';
 import { AddProjectForm } from './sidebar/AddProjectForm';
+import { AutomationInboxButton } from './sidebar/AutomationInboxButton';
 import { RunningThreads } from './sidebar/RunningThreads';
 import { RecentThreads } from './sidebar/RecentThreads';
 import { ProjectItem } from './sidebar/ProjectItem';
@@ -112,6 +114,7 @@ export function Sidebar() {
       </div>
 
       <AddProjectForm onProjectAdded={loadProjects} />
+      <AutomationInboxButton />
 
       {/* Active threads + Project accordion list */}
       <ScrollArea className="flex-1 px-2 pb-2">
@@ -130,6 +133,8 @@ export function Sidebar() {
               if (wasExpanded) {
                 navigate('/');
               } else {
+                // Fetch git statuses for worktree threads when expanding
+                useGitStatusStore.getState().fetchForProject(project.id);
                 const projectThreads = threadsByProject[project.id];
                 if (projectThreads && projectThreads.length > 0) {
                   navigate(`/projects/${project.id}/threads/${projectThreads[0].id}`);

@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import * as tm from '../services/thread-manager.js';
-import { getDiff, stageFiles, unstageFiles, revertFiles, commit, push, createPR, mergeBranch, git } from '../utils/git-v2.js';
+import { getDiff, stageFiles, unstageFiles, revertFiles, commit, push, createPR, mergeBranch, git, getStatusSummary, deriveGitSyncState } from '../utils/git-v2.js';
 import * as wm from '../services/worktree-manager.js';
 import { validate, mergeSchema, stageFilesSchema, commitSchema, createPRSchema } from '../validation/schemas.js';
 import { sanitizePath } from '../utils/path-validation.js';
@@ -25,6 +25,62 @@ function validateFilePaths(cwd: string, paths: string[]): string | null {
   }
   return null;
 }
+
+// GET /api/git/status?projectId=xxx — bulk git status for all worktree threads
+gitRoutes.get('/status', async (c) => {
+  const projectId = c.req.query('projectId');
+  if (!projectId) return c.json({ error: 'projectId required' }, 400);
+
+  const project = requireProject(projectId);
+  const threads = tm.listThreads({ projectId });
+  const worktreeThreads = threads.filter(
+    (t) => t.mode === 'worktree' && t.worktreePath && t.branch
+  );
+
+  const results = await Promise.allSettled(
+    worktreeThreads.map(async (thread) => {
+      const summary = await getStatusSummary(
+        thread.worktreePath!,
+        thread.baseBranch ?? undefined,
+        project.path
+      );
+      return {
+        threadId: thread.id,
+        state: deriveGitSyncState(summary),
+        ...summary,
+      };
+    })
+  );
+
+  const statuses = results
+    .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+    .map((r) => r.value);
+
+  return c.json({ statuses });
+});
+
+// GET /api/git/:threadId/status — single thread git status
+gitRoutes.get('/:threadId/status', async (c) => {
+  const threadId = c.req.param('threadId');
+  const thread = requireThread(threadId);
+
+  if (thread.mode !== 'worktree' || !thread.worktreePath) {
+    return c.json({ error: 'Not a worktree thread' }, 400);
+  }
+
+  const project = requireProject(thread.projectId);
+  const summary = await getStatusSummary(
+    thread.worktreePath,
+    thread.baseBranch ?? undefined,
+    project.path
+  );
+
+  return c.json({
+    threadId,
+    state: deriveGitSyncState(summary),
+    ...summary,
+  });
+});
 
 // GET /api/git/:threadId/diff
 gitRoutes.get('/:threadId/diff', async (c) => {

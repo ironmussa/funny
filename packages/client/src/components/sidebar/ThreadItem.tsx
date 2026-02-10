@@ -16,10 +16,17 @@ import {
   Terminal,
   Square,
 } from 'lucide-react';
-import { statusConfig, timeAgo } from '@/lib/thread-utils';
-import type { Thread, ThreadStatus } from '@a-parallel/shared';
+import { statusConfig, gitSyncStateConfig, timeAgo } from '@/lib/thread-utils';
+import type { Thread, ThreadStatus, GitStatusInfo } from '@a-parallel/shared';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+
+const TERMINAL_STATUSES: ThreadStatus[] = ['completed', 'failed', 'stopped', 'interrupted'];
 
 interface ThreadItemProps {
   thread: Thread;
@@ -30,16 +37,34 @@ interface ThreadItemProps {
   timeValue?: string;
   onArchive?: () => void;
   onDelete?: () => void;
+  gitStatus?: GitStatusInfo;
 }
 
-export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle, timeValue, onArchive, onDelete }: ThreadItemProps) {
+export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle, timeValue, onArchive, onDelete, gitStatus }: ThreadItemProps) {
   const { t } = useTranslation();
   const [openDropdown, setOpenDropdown] = useState(false);
 
-  const s = statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending;
+  // Use git status icon for worktree threads in terminal states
+  const useGitIcon = thread.mode === 'worktree' && TERMINAL_STATUSES.includes(thread.status) && gitStatus;
+  const s = useGitIcon
+    ? gitSyncStateConfig[gitStatus.state]
+    : (statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending);
   const Icon = s.icon;
   const isRunning = thread.status === 'running' || thread.status === 'waiting';
   const displayTime = timeValue ?? timeAgo(thread.createdAt, t);
+
+  // Build tooltip text for git status
+  let gitTooltip: string | null = null;
+  if (useGitIcon) {
+    const label = t(gitSyncStateConfig[gitStatus.state].labelKey);
+    if (gitStatus.state === 'dirty' && gitStatus.dirtyFileCount > 0) {
+      gitTooltip = `${label} (${gitStatus.dirtyFileCount})`;
+    } else if (gitStatus.state === 'unpushed' && gitStatus.unpushedCommitCount > 0) {
+      gitTooltip = `${label} (${gitStatus.unpushedCommitCount})`;
+    } else {
+      gitTooltip = label;
+    }
+  }
 
   return (
     <div
@@ -54,7 +79,18 @@ export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle
         onClick={onSelect}
         className="flex-1 flex items-center gap-1.5 pl-2 py-1.5 text-left min-w-0 overflow-hidden"
       >
-        <Icon className={cn('h-3 w-3 flex-shrink-0', s.className)} />
+        {gitTooltip ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Icon className={cn('h-3 w-3 flex-shrink-0', s.className)} />
+            </TooltipTrigger>
+            <TooltipContent side="right" className="text-xs">
+              {gitTooltip}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <Icon className={cn('h-3 w-3 flex-shrink-0', s.className)} />
+        )}
         <div className="flex flex-col gap-0 min-w-0 flex-1">
           <span className="text-[11px] leading-tight truncate">{thread.title}</span>
           {subtitle && (

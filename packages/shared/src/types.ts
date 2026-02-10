@@ -29,6 +29,7 @@ export interface Thread {
   sessionId?: string;
   cost: number;
   archived?: boolean;
+  automationId?: string;
   createdAt: string;
   completedAt?: string;
 }
@@ -126,6 +127,18 @@ export interface WSCommandStatusData {
   exitCode?: number;
 }
 
+export interface WSAutomationRunStartedData {
+  automationId: string;
+  runId: string;
+}
+
+export interface WSAutomationRunCompletedData {
+  automationId: string;
+  runId: string;
+  hasFindings: boolean;
+  summary?: string;
+}
+
 export type WSEvent =
   | { type: 'agent:init'; threadId: string; data: WSInitData }
   | { type: 'agent:message'; threadId: string; data: WSMessageData }
@@ -135,7 +148,10 @@ export type WSEvent =
   | { type: 'agent:result'; threadId: string; data: WSResultData }
   | { type: 'agent:error'; threadId: string; data: WSErrorData }
   | { type: 'command:output'; threadId: string; data: WSCommandOutputData }
-  | { type: 'command:status'; threadId: string; data: WSCommandStatusData };
+  | { type: 'command:status'; threadId: string; data: WSCommandStatusData }
+  | { type: 'automation:run_started'; threadId: string; data: WSAutomationRunStartedData }
+  | { type: 'automation:run_completed'; threadId: string; data: WSAutomationRunCompletedData }
+  | { type: 'git:status'; threadId: string; data: WSGitStatusData };
 
 export type WSEventType = WSEvent['type'];
 
@@ -161,6 +177,23 @@ export interface FileDiff {
   status: FileStatus;
   diff: string;
   staged: boolean;
+}
+
+// ─── Git Sync Status ────────────────────────────────────
+
+export type GitSyncState = 'dirty' | 'unpushed' | 'pushed' | 'merged' | 'clean';
+
+export interface GitStatusInfo {
+  threadId: string;
+  state: GitSyncState;
+  dirtyFileCount: number;
+  unpushedCommitCount: number;
+  hasRemoteBranch: boolean;
+  isMergedIntoBase: boolean;
+}
+
+export interface WSGitStatusData {
+  statuses: GitStatusInfo[];
 }
 
 // ─── API Request/Response types ──────────────────────────
@@ -278,4 +311,68 @@ export interface Plugin {
 
 export interface PluginListResponse {
   plugins: Plugin[];
+}
+
+// ─── Automations ────────────────────────────────────────
+
+export type AutomationSchedule = '15m' | '30m' | '1h' | '2h' | '6h' | '12h' | '1d' | '7d';
+export type RunTriageStatus = 'pending' | 'reviewed' | 'dismissed';
+
+export interface Automation {
+  id: string;
+  projectId: string;
+  name: string;
+  prompt: string;
+  schedule: AutomationSchedule;
+  model: ClaudeModel;
+  mode: ThreadMode;
+  permissionMode: PermissionMode;
+  baseBranch?: string;
+  enabled: boolean;
+  maxRunHistory: number;
+  lastRunAt?: string;
+  nextRunAt?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AutomationRun {
+  id: string;
+  automationId: string;
+  threadId: string;
+  status: 'running' | 'completed' | 'failed' | 'archived';
+  triageStatus: RunTriageStatus;
+  hasFindings?: boolean;
+  summary?: string;
+  startedAt: string;
+  completedAt?: string;
+}
+
+export interface CreateAutomationRequest {
+  projectId: string;
+  name: string;
+  prompt: string;
+  schedule: AutomationSchedule;
+  model?: ClaudeModel;
+  mode?: ThreadMode;
+  permissionMode?: PermissionMode;
+  baseBranch?: string;
+}
+
+export interface UpdateAutomationRequest {
+  name?: string;
+  prompt?: string;
+  schedule?: AutomationSchedule;
+  model?: ClaudeModel;
+  mode?: ThreadMode;
+  permissionMode?: PermissionMode;
+  baseBranch?: string;
+  enabled?: boolean;
+  maxRunHistory?: number;
+}
+
+export interface InboxItem {
+  run: AutomationRun;
+  automation: Automation;
+  thread: Thread;
 }

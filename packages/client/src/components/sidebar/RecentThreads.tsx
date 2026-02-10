@@ -13,6 +13,7 @@ import {
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
 import type { Thread, ThreadStatus } from '@a-parallel/shared';
+import { useGitStatusStore } from '@/stores/git-status-store';
 
 const FINISHED_STATUSES: ThreadStatus[] = ['completed', 'failed', 'stopped', 'interrupted'];
 
@@ -27,6 +28,7 @@ export function RecentThreads() {
   const threadsByProject = useThreadStore(s => s.threadsByProject);
   const selectedThreadId = useThreadStore(s => s.selectedThreadId);
   const projects = useProjectStore(s => s.projects);
+  const gitStatusByThread = useGitStatusStore((s) => s.statusByThread);
   const [isExpanded, setIsExpanded] = useState(true);
 
   const recentThreads = useMemo(() => {
@@ -83,6 +85,7 @@ export function RecentThreads() {
               isSelected={selectedThreadId === thread.id}
               subtitle={thread.projectName}
               timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t)}
+              gitStatus={thread.mode === 'worktree' ? gitStatusByThread[thread.id] : undefined}
               onSelect={() => {
                 const store = useThreadStore.getState();
                 if (store.selectedThreadId === thread.id && (!store.activeThread || store.activeThread.id !== thread.id)) {

@@ -103,6 +103,40 @@ export const gitInitSchema = z.object({
   path: z.string().min(1, 'path is required'),
 });
 
+// ── Automations ─────────────────────────────────────────────────
+
+export const automationScheduleSchema = z.string().regex(
+  /^\d+(m|h|d)$/,
+  'Schedule must be a number followed by m (minutes), h (hours), or d (days)'
+);
+
+export const createAutomationSchema = z.object({
+  projectId: z.string().min(1),
+  name: z.string().min(1, 'name is required'),
+  prompt: z.string().min(1, 'prompt is required'),
+  schedule: automationScheduleSchema,
+  model: claudeModelSchema.optional().default('sonnet'),
+  mode: threadModeSchema.optional().default('worktree'),
+  permissionMode: permissionModeSchema.optional().default('autoEdit'),
+  baseBranch: z.string().optional(),
+});
+
+export const updateAutomationSchema = z.object({
+  name: z.string().min(1).optional(),
+  prompt: z.string().min(1).optional(),
+  schedule: automationScheduleSchema.optional(),
+  model: claudeModelSchema.optional(),
+  mode: threadModeSchema.optional(),
+  permissionMode: permissionModeSchema.optional(),
+  baseBranch: z.string().optional(),
+  enabled: z.boolean().optional(),
+  maxRunHistory: z.number().int().min(1).max(100).optional(),
+});
+
+export const updateRunTriageSchema = z.object({
+  triageStatus: z.enum(['pending', 'reviewed', 'dismissed']),
+});
+
 // ── Helper ───────────────────────────────────────────────────────
 
 /** Validate request body; returns parsed data or a 400 Response */

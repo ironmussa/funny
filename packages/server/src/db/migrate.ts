@@ -103,5 +103,46 @@ export function autoMigrate() {
     // Column already exists
   }
 
+  // Add automation_id column to threads
+  try {
+    db.run(sql`ALTER TABLE threads ADD COLUMN automation_id TEXT`);
+  } catch {
+    // Column already exists
+  }
+
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS automations (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      name TEXT NOT NULL,
+      prompt TEXT NOT NULL,
+      schedule TEXT NOT NULL,
+      model TEXT NOT NULL DEFAULT 'sonnet',
+      mode TEXT NOT NULL DEFAULT 'worktree',
+      permission_mode TEXT NOT NULL DEFAULT 'autoEdit',
+      base_branch TEXT,
+      enabled INTEGER NOT NULL DEFAULT 1,
+      max_run_history INTEGER NOT NULL DEFAULT 20,
+      last_run_at TEXT,
+      next_run_at TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS automation_runs (
+      id TEXT PRIMARY KEY,
+      automation_id TEXT NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
+      thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+      status TEXT NOT NULL DEFAULT 'running',
+      triage_status TEXT NOT NULL DEFAULT 'pending',
+      has_findings INTEGER,
+      summary TEXT,
+      started_at TEXT NOT NULL,
+      completed_at TEXT
+    )
+  `);
+
   console.log('[db] Tables ready');
 }

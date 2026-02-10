@@ -42,15 +42,15 @@ export const DIFF_VIEWER_STYLES = {
     lineHeight: '1.4',
   },
   contentText: {
-    whiteSpace: 'pre-wrap',
-    wordBreak: 'break-all',
-    overflow: 'hidden',
+    whiteSpace: 'pre',
+    // wordBreak: 'break-all',
+    // overflow: 'hidden',
   },
   diffContainer: {
     width: '100%',
     maxWidth: '100%',
-    overflow: 'hidden',
-    tableLayout: 'auto',
+    // overflow: 'hidden', // Removed to allow scrolling
+    // tableLayout: 'auto', // Removed to fix type error and allow natural layout
   },
   gutter: {
     whiteSpace: 'nowrap',

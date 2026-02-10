@@ -21,6 +21,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type { Project, Thread } from '@a-parallel/shared';
+import { useGitStatusStore } from '@/stores/git-status-store';
 import { ThreadItem } from './ThreadItem';
 
 interface ProjectItemProps {
@@ -53,6 +54,7 @@ export function ProjectItem({
   const { t } = useTranslation();
   const [hovered, setHovered] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(false);
+  const gitStatusByThread = useGitStatusStore((s) => s.statusByThread);
 
   return (
     <Collapsible
@@ -195,6 +197,7 @@ export function ProjectItem({
               onSelect={() => onSelectThread(th.id)}
               onArchive={() => onArchiveThread(th.id, th.title)}
               onDelete={() => onDeleteThread(th.id, th.title)}
+              gitStatus={th.mode === 'worktree' ? gitStatusByThread[th.id] : undefined}
             />
           ))}
           {threads.length > 10 && (

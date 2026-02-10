@@ -25,6 +25,7 @@ import { SkillsSettings } from './SkillsSettings';
 import { WorktreeSettings } from './WorktreeSettings';
 import { ArchivedThreadsSettings } from './ArchivedThreadsSettings';
 import { StartupCommandsSettings } from './StartupCommandsSettings';
+import { AutomationSettings } from './AutomationSettings';
 
 function getLanguageName(code: string): string {
   try {
@@ -233,6 +234,8 @@ export function SettingsDetailView() {
             <WorktreeSettings />
           ) : page === 'startup-commands' ? (
             <StartupCommandsSettings />
+          ) : page === 'automations' ? (
+            <AutomationSettings />
           ) : page === 'archived-threads' ? (
             <ArchivedThreadsSettings />
           ) : (

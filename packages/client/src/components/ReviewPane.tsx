@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ReactDiffViewer, DIFF_VIEWER_STYLES } from './tool-cards/utils';
 import { Button } from '@/components/ui/button';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import {
   Dialog,
   DialogContent,
@@ -37,6 +37,7 @@ import {
   Sparkles,
 } from 'lucide-react';
 import type { FileDiff } from '@a-parallel/shared';
+import { useGitStatusStore } from '@/stores/git-status-store';
 
 const fileStatusIcons: Record<string, typeof FileCode> = {
   added: FilePlus,
@@ -121,7 +122,7 @@ export function ReviewPane() {
     if (activeThread?.mode === 'worktree' && activeThread?.branch && !activeThread?.baseBranch && activeThread?.projectId) {
       api.listBranches(activeThread.projectId)
         .then(data => setDefaultBranch(data.defaultBranch))
-        .catch(() => {});
+        .catch(() => { });
     }
   }, [activeThread?.projectId, activeThread?.mode, activeThread?.branch, activeThread?.baseBranch]);
 
@@ -187,6 +188,7 @@ export function ReviewPane() {
       await api.commit(threadId, commitMsg);
       setCommitMsg('');
       await refresh();
+      useGitStatusStore.getState().fetchForThread(threadId);
     } catch (e: any) {
       toast.error(t('review.commitFailed', { message: e.message }));
     }
@@ -210,6 +212,7 @@ export function ReviewPane() {
     try {
       await api.push(threadId);
       toast.success(t('review.pushedSuccess'));
+      useGitStatusStore.getState().fetchForThread(threadId);
     } catch (e: any) {
       toast.error(t('review.pushFailed', { message: e.message }));
     }
@@ -227,6 +230,7 @@ export function ReviewPane() {
       });
       toast.success(t('review.mergeSuccess', { branch: activeThread.branch, target: mergeTarget }));
       await refresh();
+      useGitStatusStore.getState().fetchForThread(threadId);
     } catch (e: any) {
       toast.error(t('review.mergeFailed', { message: e.message }));
     } finally {
@@ -336,10 +340,10 @@ export function ReviewPane() {
       </ScrollArea>
 
       {/* Diff viewer */}
-      <ScrollArea className="flex-1">
+      <ScrollArea className="flex-1 w-full">
         {selectedDiff ? (
           selectedDiff.diff ? (
-            <div className="text-xs overflow-hidden [&_.diff-container]:font-mono [&_.diff-container]:text-[11px] [&_table]:w-full [&_td:last-child]:w-full [&_td:last-child]:max-w-0 [&_pre]:whitespace-pre-wrap [&_pre]:break-all [&_pre]:overflow-hidden">
+            <div className="text-xs [&_.diff-container]:font-mono [&_.diff-container]:text-[11px] [&_table]:w-max [&_td:last-child]:w-auto [&_td:last-child]:min-w-0">
               <Suspense fallback={<div className="p-2 text-xs text-muted-foreground">Loading diff...</div>}>
                 <MemoizedDiffView diff={selectedDiff.diff} />
               </Suspense>
@@ -350,6 +354,7 @@ export function ReviewPane() {
         ) : (
           <p className="text-xs text-muted-foreground p-2">{t('review.selectFile')}</p>
         )}
+        <ScrollBar orientation="horizontal" />
       </ScrollArea>
 
       {/* Git actions */}
@@ -366,48 +371,56 @@ export function ReviewPane() {
         )}
 
         {/* Commit */}
-        <div className="flex gap-1.5">
-          <input
-            className="flex-1 rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-1 focus:ring-ring"
+        <div className="space-y-1.5">
+          <textarea
+            className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+            rows={3}
             placeholder={t('review.commitMessage')}
             value={commitMsg}
             onChange={(e) => setCommitMsg(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleCommit()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                handleCommit();
+              }
+            }}
             disabled={!hasStagedFiles}
           />
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={handleGenerateCommitMsg}
-                  disabled={!hasStagedFiles || generatingMsg}
-                >
-                  <Sparkles className={cn('h-3.5 w-3.5', generatingMsg && 'animate-pulse')} />
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              {generatingMsg ? t('review.generatingCommitMsg') : t('review.generateCommitMsg')}
-            </TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <span>
-                <Button
-                  size="icon-sm"
-                  onClick={handleCommit}
-                  disabled={!commitMsg.trim() || !hasStagedFiles}
-                >
-                  <GitCommit className="h-3.5 w-3.5" />
-                </Button>
-              </span>
-            </TooltipTrigger>
-            <TooltipContent>
-              {!hasStagedFiles ? t('review.stageFirst') : t('review.commitTooltip')}
-            </TooltipContent>
-          </Tooltip>
+          <div className="flex gap-1.5 justify-end">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    size="icon-sm"
+                    onClick={handleCommit}
+                    disabled={!commitMsg.trim() || !hasStagedFiles}
+                  >
+                    <GitCommit className="h-3.5 w-3.5" />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {!hasStagedFiles ? t('review.stageFirst') : t('review.commitTooltip')}
+              </TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={handleGenerateCommitMsg}
+                    disabled={!hasStagedFiles || generatingMsg}
+                  >
+                    <Sparkles className={cn('h-3.5 w-3.5', generatingMsg && 'animate-pulse')} />
+                  </Button>
+                </span>
+              </TooltipTrigger>
+              <TooltipContent>
+                {generatingMsg ? t('review.generatingCommitMsg') : t('review.generateCommitMsg')}
+              </TooltipContent>
+            </Tooltip>
+          </div>
         </div>
 
         {/* Push & PR */}
@@ -452,9 +465,9 @@ export function ReviewPane() {
               {hasUncommittedChanges
                 ? t('review.commitFirst')
                 : t('review.createPRTooltip', {
-                    branch: activeThread?.branch?.replace(/^[^/]+\//, '') ?? '',
-                    target: mergeTarget ?? 'default',
-                  })}
+                  branch: activeThread?.branch?.replace(/^[^/]+\//, '') ?? '',
+                  target: mergeTarget ?? 'default',
+                })}
             </TooltipContent>
           </Tooltip>
         </div>
@@ -481,9 +494,9 @@ export function ReviewPane() {
                 {hasUncommittedChanges
                   ? t('review.commitFirst')
                   : t('review.mergeTooltip', {
-                      branch: activeThread.branch.replace(/^[^/]+\//, ''),
-                      target: mergeTarget,
-                    })}
+                    branch: activeThread.branch.replace(/^[^/]+\//, ''),
+                    target: mergeTarget,
+                  })}
               </TooltipContent>
             </Tooltip>
             <Tooltip>

@@ -102,7 +102,10 @@
     "mergeAndCleanupTooltip": "Mesclar em {{target}}, enviar para origin e remover o worktree",
     "generateCommitMsg": "Gerar mensagem de commit com IA",
     "generatingCommitMsg": "Gerando mensagem de commit...",
-    "generateFailed": "Erro ao gerar mensagem de commit: {{message}}"
+    "generateFailed": "Erro ao gerar mensagem de commit: {{message}}",
+    "stageFailed": "Erro ao preparar: {{message}}",
+    "unstageFailed": "Erro ao remover preparação: {{message}}",
+    "revertFailed": "Erro ao reverter: {{message}}"
   },
   "newThread": {
     "title": "Nova Thread",

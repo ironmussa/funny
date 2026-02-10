@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
-import { errorHandler } from './middleware/error-handler.js';
+import { handleError } from './middleware/error-handler.js';
 import { authMiddleware } from './middleware/auth.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { autoMigrate } from './db/migrate.js';
@@ -24,8 +24,10 @@ const clientPort = Number(process.env.CLIENT_PORT) || 5173;
 
 const app = new Hono();
 
+// Global error handler (must be set before routes)
+app.onError(handleError);
+
 // Middleware
-app.use('*', errorHandler);
 app.use('*', logger());
 app.use('*', secureHeaders());
 app.use(

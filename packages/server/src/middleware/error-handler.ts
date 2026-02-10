@@ -1,4 +1,4 @@
-import type { Context, Next } from 'hono';
+import type { Context, ErrorHandler } from 'hono';
 
 /** Application-specific error with HTTP status code */
 export class AppError extends Error {
@@ -16,16 +16,23 @@ export const NotFound = (msg: string) => new AppError(msg, 404);
 export const BadRequest = (msg: string) => new AppError(msg, 400);
 export const Forbidden = (msg: string) => new AppError(msg, 403);
 
-/** Hono error handling middleware */
-export async function errorHandler(c: Context, next: Next) {
-  try {
-    await next();
-  } catch (err: unknown) {
-    if (err instanceof AppError) {
-      return c.json({ error: err.message }, err.statusCode as any);
-    }
+/** Hono global error handler — use with app.onError() */
+export const handleError: ErrorHandler = (err, c) => {
+  const e = err as any;
 
-    console.error('[error-handler]', err);
-    return c.json({ error: 'Internal server error' }, 500);
+  // AppError — typed HTTP errors (NotFound, BadRequest, Forbidden, etc.)
+  if (e?.name === 'AppError' && typeof e.statusCode === 'number') {
+    return c.json({ error: e.message }, e.statusCode as any);
   }
-}
+
+  // ProcessExecutionError — git / CLI command failures
+  if (e?.name === 'ProcessExecutionError') {
+    console.error('[error-handler] Process error:', e.command, e.stderr);
+    return c.json({ error: e.message }, 400);
+  }
+
+  // Any other Error — surface the real message
+  console.error('[error-handler]', err);
+  const message = e?.message || 'Internal server error';
+  return c.json({ error: message }, 500);
+};

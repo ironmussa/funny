@@ -102,7 +102,10 @@
     "mergeAndCleanupTooltip": "Merge into {{target}}, push to origin, and remove the worktree",
     "generateCommitMsg": "Generate commit message with AI",
     "generatingCommitMsg": "Generating commit message...",
-    "generateFailed": "Failed to generate commit message: {{message}}"
+    "generateFailed": "Failed to generate commit message: {{message}}",
+    "stageFailed": "Stage failed: {{message}}",
+    "unstageFailed": "Unstage failed: {{message}}",
+    "revertFailed": "Revert failed: {{message}}"
   },
   "newThread": {
     "title": "New Thread",

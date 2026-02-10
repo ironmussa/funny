@@ -102,7 +102,10 @@
     "mergeAndCleanupTooltip": "Fusionar en {{target}}, subir a origin y eliminar el worktree",
     "generateCommitMsg": "Generar mensaje de commit con IA",
     "generatingCommitMsg": "Generando mensaje de commit...",
-    "generateFailed": "Error al generar mensaje de commit: {{message}}"
+    "generateFailed": "Error al generar mensaje de commit: {{message}}",
+    "stageFailed": "Error al preparar: {{message}}",
+    "unstageFailed": "Error al quitar preparación: {{message}}",
+    "revertFailed": "Error al revertir: {{message}}"
   },
   "newThread": {
     "title": "Nuevo Hilo",

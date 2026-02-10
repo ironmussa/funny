@@ -190,7 +190,6 @@ export function ProjectItem({
             <ThreadItem
               key={th.id}
               thread={th}
-              projectId={project.id}
               projectPath={project.path}
               isSelected={selectedThreadId === th.id}
               onSelect={() => onSelectThread(th.id)}

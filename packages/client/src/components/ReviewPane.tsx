@@ -153,20 +153,32 @@ export function ReviewPane() {
 
   const handleStage = async (paths: string[]) => {
     if (!threadId) return;
-    await api.stageFiles(threadId, paths);
-    await refresh();
+    try {
+      await api.stageFiles(threadId, paths);
+      await refresh();
+    } catch (e: any) {
+      toast.error(t('review.stageFailed', { message: e.message }));
+    }
   };
 
   const handleUnstage = async (paths: string[]) => {
     if (!threadId) return;
-    await api.unstageFiles(threadId, paths);
-    await refresh();
+    try {
+      await api.unstageFiles(threadId, paths);
+      await refresh();
+    } catch (e: any) {
+      toast.error(t('review.unstageFailed', { message: e.message }));
+    }
   };
 
   const handleRevert = async (paths: string[]) => {
     if (!threadId) return;
-    await api.revertFiles(threadId, paths);
-    await refresh();
+    try {
+      await api.revertFiles(threadId, paths);
+      await refresh();
+    } catch (e: any) {
+      toast.error(t('review.revertFailed', { message: e.message }));
+    }
   };
 
   const handleCommit = async () => {

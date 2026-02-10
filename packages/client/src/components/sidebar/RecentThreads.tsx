@@ -1,17 +1,24 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useThreadStore } from '@/stores/thread-store';
 import { useProjectStore } from '@/stores/project-store';
 import { cn } from '@/lib/utils';
-import { statusConfig, timeAgo } from '@/lib/thread-utils';
-import { History } from 'lucide-react';
+import { timeAgo } from '@/lib/thread-utils';
+import { History, ChevronRight } from 'lucide-react';
+import { ThreadItem } from './ThreadItem';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import type { Thread, ThreadStatus } from '@a-parallel/shared';
 
 const FINISHED_STATUSES: ThreadStatus[] = ['completed', 'failed', 'stopped', 'interrupted'];
 
 interface FinishedThread extends Thread {
   projectName: string;
+  projectPath: string;
 }
 
 export function RecentThreads() {
@@ -20,17 +27,20 @@ export function RecentThreads() {
   const threadsByProject = useThreadStore(s => s.threadsByProject);
   const selectedThreadId = useThreadStore(s => s.selectedThreadId);
   const projects = useProjectStore(s => s.projects);
+  const [isExpanded, setIsExpanded] = useState(true);
 
   const recentThreads = useMemo(() => {
     const result: FinishedThread[] = [];
-    const projectMap = new Map(projects.map(p => [p.id, p.name]));
+    const projectMap = new Map(projects.map(p => [p.id, { name: p.name, path: p.path }]));
 
     for (const [projectId, threads] of Object.entries(threadsByProject)) {
       for (const thread of threads) {
         if (FINISHED_STATUSES.includes(thread.status)) {
+          const project = projectMap.get(projectId);
           result.push({
             ...thread,
-            projectName: projectMap.get(projectId) ?? projectId,
+            projectName: project?.name ?? projectId,
+            projectPath: project?.path ?? '',
           });
         }
       }
@@ -48,46 +58,42 @@ export function RecentThreads() {
   if (recentThreads.length === 0) return null;
 
   return (
-    <div className="px-2 pb-1">
-      <div className="flex items-center gap-1.5 px-2 py-1.5 text-[10px] font-medium text-muted-foreground uppercase tracking-wider">
-        <History className="h-3 w-3" />
-        {t('sidebar.recentThreads')}
-      </div>
-      <div className="space-y-0.5">
-        {recentThreads.map((thread) => {
-          const s = statusConfig[thread.status as ThreadStatus] ?? statusConfig.completed;
-          const Icon = s.icon;
-          const isSelected = selectedThreadId === thread.id;
-
-          return (
-            <button
+    <Collapsible
+      open={isExpanded}
+      onOpenChange={setIsExpanded}
+      className="mb-1 min-w-0"
+    >
+      <CollapsibleTrigger className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-left text-muted-foreground hover:text-foreground min-w-0 transition-colors w-full">
+        <ChevronRight
+          className={cn(
+            'h-3 w-3 flex-shrink-0 transition-transform duration-200',
+            isExpanded && 'rotate-90'
+          )}
+        />
+        <History className="h-3.5 w-3.5 flex-shrink-0" />
+        <span className="truncate font-medium">{t('sidebar.recentThreads')}</span>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="data-[state=open]:animate-slide-down">
+        <div className="ml-3 border-l border-border/50 pl-1 mt-0.5 space-y-0.5 min-w-0">
+          {recentThreads.map((thread) => (
+            <ThreadItem
               key={thread.id}
-              onClick={() => {
+              thread={thread}
+              projectPath={thread.projectPath}
+              isSelected={selectedThreadId === thread.id}
+              subtitle={thread.projectName}
+              timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t)}
+              onSelect={() => {
                 const store = useThreadStore.getState();
                 if (store.selectedThreadId === thread.id && (!store.activeThread || store.activeThread.id !== thread.id)) {
                   store.selectThread(thread.id);
                 }
                 navigate(`/projects/${thread.projectId}/threads/${thread.id}`);
               }}
-              className={cn(
-                'w-full flex items-center gap-1.5 rounded-md px-2 py-1.5 text-left transition-colors min-w-0',
-                isSelected
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
-              )}
-            >
-              <Icon className={cn('h-3 w-3 flex-shrink-0', s.className)} />
-              <div className="flex flex-col gap-0 min-w-0 flex-1">
-                <span className="text-[11px] leading-tight truncate">{thread.title}</span>
-                <span className="text-[10px] text-muted-foreground truncate">{thread.projectName}</span>
-              </div>
-              <span className="text-[10px] text-muted-foreground flex-shrink-0 tabular-nums">
-                {timeAgo(thread.completedAt ?? thread.createdAt, t)}
-              </span>
-            </button>
-          );
-        })}
-      </div>
-    </div>
+            />
+          ))}
+        </div>
+      </CollapsibleContent>
+    </Collapsible>
   );
 }

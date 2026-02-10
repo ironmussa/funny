@@ -18,30 +18,33 @@ import {
 } from 'lucide-react';
 import { statusConfig, timeAgo } from '@/lib/thread-utils';
 import type { Thread, ThreadStatus } from '@a-parallel/shared';
+import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 
 interface ThreadItemProps {
   thread: Thread;
-  projectId: string;
   projectPath: string;
   isSelected: boolean;
   onSelect: () => void;
-  onArchive: () => void;
-  onDelete: () => void;
+  subtitle?: string;
+  timeValue?: string;
+  onArchive?: () => void;
+  onDelete?: () => void;
 }
 
-export function ThreadItem({ thread, projectId, projectPath, isSelected, onSelect, onArchive, onDelete }: ThreadItemProps) {
+export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle, timeValue, onArchive, onDelete }: ThreadItemProps) {
   const { t } = useTranslation();
   const [openDropdown, setOpenDropdown] = useState(false);
 
   const s = statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending;
   const Icon = s.icon;
   const isRunning = thread.status === 'running' || thread.status === 'waiting';
+  const displayTime = timeValue ?? timeAgo(thread.createdAt, t);
 
   return (
     <div
       className={cn(
-        'group/thread flex items-center rounded-md transition-colors min-w-0',
+        'group/thread w-full flex items-stretch rounded-md transition-colors min-w-0',
         isSelected
           ? 'bg-accent text-accent-foreground'
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
@@ -49,44 +52,37 @@ export function ThreadItem({ thread, projectId, projectPath, isSelected, onSelec
     >
       <button
         onClick={onSelect}
-        className="flex-1 flex flex-col gap-0.5 pl-2 py-1.5 text-left min-w-0"
+        className="flex-1 flex items-center gap-1.5 pl-2 py-1.5 text-left min-w-0 overflow-hidden"
       >
-        <div className="flex items-center gap-1.5 min-w-0">
-          <Icon className={cn('h-3 w-3 flex-shrink-0', s.className)} />
+        <Icon className={cn('h-3 w-3 flex-shrink-0', s.className)} />
+        <div className="flex flex-col gap-0 min-w-0 flex-1">
           <span className="text-[11px] leading-tight truncate">{thread.title}</span>
+          {subtitle && (
+            <span className="text-[10px] text-muted-foreground truncate">{subtitle}</span>
+          )}
         </div>
-        {thread.branch && (
-          <div className="flex items-center gap-1 ml-[18px] min-w-0">
-            <span className="text-[10px] text-muted-foreground truncate">
-              {thread.branch.includes('/') ? thread.branch.split('/').slice(1).join('/') : thread.branch}
-            </span>
-            {thread.baseBranch && (
-              <span className="text-[10px] text-muted-foreground/50 flex-shrink-0">
-                from {thread.baseBranch}
-              </span>
-            )}
-          </div>
-        )}
       </button>
-      <div className="flex-shrink-0 pr-1 flex items-center">
+      <div className="flex-shrink-0 pr-1.5 pl-2 flex items-start justify-end py-1.5 min-w-[2.5rem]">
         <span className={cn(
-          'text-[10px] text-muted-foreground group-hover/thread:hidden',
+          'text-[10px] text-muted-foreground leading-4 h-4 group-hover/thread:hidden',
           openDropdown && 'hidden'
         )}>
-          {timeAgo(thread.createdAt, t)}
+          {displayTime}
         </span>
         <div className={cn(
-          'hidden group-hover/thread:flex items-center',
+          'hidden group-hover/thread:flex items-center h-4',
           openDropdown && '!flex'
         )}>
           <DropdownMenu onOpenChange={setOpenDropdown}>
             <DropdownMenuTrigger asChild>
-              <button
+              <Button
+                variant="ghost"
+                size="icon-xs"
                 onClick={(e) => e.stopPropagation()}
-                className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded-sm hover:bg-accent"
+                className="text-muted-foreground hover:text-foreground"
               >
-                <MoreHorizontal className="h-3 w-3" />
-              </button>
+                <MoreHorizontal className="h-3.5 w-3.5" />
+              </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" side="left">
               <DropdownMenuItem
@@ -145,26 +141,32 @@ export function ThreadItem({ thread, projectId, projectPath, isSelected, onSelec
                 </>
               ) : (
                 <>
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onArchive();
-                    }}
-                  >
-                    <Archive className="h-3.5 w-3.5" />
-                    {t('sidebar.archive')}
-                  </DropdownMenuItem>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onDelete();
-                    }}
-                    className="text-red-400 focus:text-red-400"
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    {t('common.delete')}
-                  </DropdownMenuItem>
+                  {onArchive && (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onArchive();
+                      }}
+                    >
+                      <Archive className="h-3.5 w-3.5" />
+                      {t('sidebar.archive')}
+                    </DropdownMenuItem>
+                  )}
+                  {onDelete && (
+                    <>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onDelete();
+                        }}
+                        className="text-red-400 focus:text-red-400"
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                        {t('common.delete')}
+                      </DropdownMenuItem>
+                    </>
+                  )}
                 </>
               )}
             </DropdownMenuContent>

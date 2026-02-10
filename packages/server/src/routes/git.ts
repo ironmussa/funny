@@ -160,15 +160,14 @@ gitRoutes.post('/:threadId/merge', async (c) => {
   try {
     output = await mergeBranch(project.path, thread.branch, targetBranch);
   } catch (err: any) {
-    console.error('[merge] Failed:', err);
-    return c.json({ error: err.message || 'Merge failed' }, 400);
+    throw BadRequest(err.message || 'Merge failed');
   }
 
   if (parsed.data.push) {
     try {
       await git(['push', 'origin', targetBranch], project.path);
     } catch (err: any) {
-      return c.json({ error: `Merge succeeded but push failed: ${err.message}` }, 400);
+      throw BadRequest(`Merge succeeded but push failed: ${err.message}`);
     }
   }
 

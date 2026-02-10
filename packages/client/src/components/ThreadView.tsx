@@ -4,7 +4,7 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { useAppStore } from '@/stores/app-store';
 import { cn } from '@/lib/utils';
-import { Loader2, Clock, Copy, Check, Send, CheckCircle2, XCircle } from 'lucide-react';
+import { Loader2, Clock, Copy, Check, Send, CheckCircle2, XCircle, ArrowDown } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PromptInput } from './PromptInput';
 import { ToolCallCard } from './ToolCallCard';
@@ -165,6 +165,7 @@ export function ThreadView() {
   const [sending, setSending] = useState(false);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const userHasScrolledUp = useRef(false);
+  const [showScrollDown, setShowScrollDown] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<{ src: string; alt: string }[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -189,45 +190,33 @@ export function ThreadView() {
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = viewport;
-      userHasScrolledUp.current = scrollHeight - scrollTop - clientHeight > 80;
+      const isAtBottom = scrollHeight - scrollTop - clientHeight <= 80;
+      userHasScrolledUp.current = !isAtBottom;
+      setShowScrollDown(!isAtBottom);
     };
 
     viewport.addEventListener('scroll', handleScroll, { passive: true });
     return () => viewport.removeEventListener('scroll', handleScroll);
   }, []);
 
-  // Scroll to bottom whenever content inside the viewport changes size.
-  // A MutationObserver catches async renders (ReactMarkdown, tool cards, images)
-  // that the fingerprint-based effect misses.
+  // Scroll to bottom whenever the fingerprint changes (new messages, status changes).
+  // Only scrolls if the user is already at the bottom (sticky behavior).
   useEffect(() => {
     const viewport = scrollViewportRef.current;
     if (!viewport) return;
 
-    const scrollToBottom = () => {
-      if (!userHasScrolledUp.current) {
-        viewport.scrollTop = viewport.scrollHeight;
-      }
-    };
-
-    // Immediate scroll for the current fingerprint
-    scrollToBottom();
-
-    // Watch for DOM mutations to catch async renders (lazy markdown, image decoding).
-    // The observer is disconnected after a short window so that user-initiated DOM
-    // changes (e.g. switching question-card tabs, collapsing cards) don't trigger
-    // unwanted scroll jumps.
-    const observer = new MutationObserver(() => {
-      requestAnimationFrame(scrollToBottom);
-    });
-    observer.observe(viewport, { childList: true, subtree: true, attributes: true, characterData: true });
-
-    const timer = setTimeout(() => observer.disconnect(), 1500);
-
-    return () => {
-      clearTimeout(timer);
-      observer.disconnect();
-    };
+    if (!userHasScrolledUp.current) {
+      viewport.scrollTop = viewport.scrollHeight;
+    }
   }, [scrollFingerprint]);
+
+  const scrollToBottom = useCallback(() => {
+    const viewport = scrollViewportRef.current;
+    if (!viewport) return;
+    userHasScrolledUp.current = false;
+    setShowScrollDown(false);
+    viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
+  }, []);
 
   // Show new thread input when a project's "+" was clicked
   if (newThreadProjectId && !selectedThreadId) {
@@ -397,6 +386,19 @@ export function ThreadView() {
 
         </div>
       </ScrollArea>
+
+      {/* Scroll to bottom button */}
+      {showScrollDown && (
+        <div className="relative">
+          <button
+            onClick={scrollToBottom}
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 rounded-full bg-secondary border border-border px-3 py-1.5 text-xs text-muted-foreground shadow-md hover:bg-muted transition-colors"
+          >
+            <ArrowDown className="h-3 w-3" />
+            {t('thread.scrollToBottom', 'Scroll to bottom')}
+          </button>
+        </div>
+      )}
 
       {/* Input */}
       <PromptInput

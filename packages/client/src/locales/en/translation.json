@@ -21,7 +21,8 @@
     "settings": "Settings",
     "activeThreads": "Active",
     "recentThreads": "Recent",
-    "searchThreads": "Search threads"
+    "searchThreads": "Search threads",
+    "threadsTitle": "Threads"
   },
   "thread": {
     "status": {
@@ -80,6 +81,7 @@
     "createPR": "Create PR",
     "commitMessage": "Commit message",
     "revertConfirm": "Revert {{paths}}? This cannot be undone.",
+    "revertWarning": "This cannot be undone.",
     "commitFailed": "Commit failed: {{message}}",
     "pushedSuccess": "Pushed successfully",
     "pushFailed": "Push failed: {{message}}",
@@ -235,7 +237,13 @@
     "noThreads": "No threads yet",
     "found": "found",
     "threadCount": "{{count}} thread",
-    "threadCountPlural": "{{count}} threads"
+    "threadCountPlural": "{{count}} threads",
+    "filterStatus": "Status",
+    "filterAll": "All",
+    "filterMode": "Mode",
+    "showArchived": "Archived",
+    "clearFilters": "Clear filters",
+    "archived": "Archived"
   },
   "archived": {
     "searchPlaceholder": "Search archived threads by title, project, branch, or status...",

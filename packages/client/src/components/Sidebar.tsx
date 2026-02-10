@@ -89,16 +89,11 @@ export function Sidebar() {
 
   return (
     <div className="flex flex-col h-full">
-      {/* Header */}
-      <div className="p-3 border-b border-border flex items-center">
-        <h1 className="text-sm font-semibold tracking-tight">{t('app.title')}</h1>
-      </div>
-
       <AddProjectForm onProjectAdded={loadProjects} />
-      <AutomationInboxButton />
-
       {/* Active threads + Project accordion list */}
       <ScrollArea className="flex-1 px-2 pb-2">
+        <AutomationInboxButton />
+        <h2 className="px-2 pt-2 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('sidebar.threadsTitle')}</h2>
         <RunningThreads />
         <RecentThreads />
         {projects.map((project) => (

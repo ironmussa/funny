@@ -1,16 +1,24 @@
+import { Cron } from 'croner';
 import { nanoid } from 'nanoid';
 import type { ClaudeModel, PermissionMode } from '@a-parallel/shared';
 import * as am from './automation-manager.js';
 import * as tm from './thread-manager.js';
 import * as pm from './project-manager.js';
-import * as wm from './worktree-manager.js';
 import { startAgent } from './agent-runner.js';
 import { wsBroker } from './ws-broker.js';
 
-const POLL_INTERVAL_MS = 30_000; // Check every 30 seconds
+// Tools that automations are NOT allowed to use (read-only execution)
+const AUTOMATION_DISALLOWED_TOOLS = ['Edit', 'Write', 'Bash', 'NotebookEdit'];
 
-let pollTimer: ReturnType<typeof setInterval> | null = null;
-let running = false;
+// ── Active cron jobs ─────────────────────────────────────────────
+// Each automation gets its own Cron instance. We track them here
+// so we can stop/reschedule when automations are updated or deleted.
+
+const activeJobs = new Map<string, Cron>();
+
+// Lightweight poll for checking completed runs (no cron needed for this)
+const COMPLETED_RUNS_POLL_MS = 15_000;
+let completedRunsTimer: ReturnType<typeof setInterval> | null = null;
 
 // ── Trigger a single automation run ──────────────────────────────
 
@@ -35,37 +43,17 @@ export async function triggerAutomationRun(automation: {
   const runId = nanoid();
   const now = new Date().toISOString();
 
-  // Create worktree if mode is worktree
-  let worktreePath: string | undefined;
-  let threadBranch: string | undefined;
-
-  if (automation.mode === 'worktree') {
-    const slug = automation.name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').slice(0, 30);
-    const branchName = `auto/${slug}-${threadId.slice(0, 6)}`;
-    try {
-      worktreePath = await wm.createWorktree(
-        project.path,
-        branchName,
-        automation.baseBranch || undefined
-      );
-      threadBranch = branchName;
-    } catch (e: any) {
-      console.error(`[automation-scheduler] Failed to create worktree for automation ${automation.id}:`, e.message);
-      return;
-    }
-  }
-
-  // Create the thread
+  // Automations always run in local mode (no worktree) and read-only
   tm.createThread({
     id: threadId,
     projectId: automation.projectId,
     title: `[Auto] ${automation.name} - ${new Date().toLocaleDateString()}`,
-    mode: automation.mode,
+    mode: 'local',
     permissionMode: automation.permissionMode,
     status: 'pending',
-    branch: threadBranch ?? null,
-    baseBranch: automation.mode === 'worktree' ? (automation.baseBranch ?? null) : null,
-    worktreePath: worktreePath ?? null,
+    branch: null,
+    baseBranch: null,
+    worktreePath: null,
     automationId: automation.id,
     cost: 0,
     archived: 0,
@@ -82,11 +70,8 @@ export async function triggerAutomationRun(automation: {
     startedAt: now,
   });
 
-  // Update automation timing
-  am.updateAutomation(automation.id, {
-    lastRunAt: now,
-    nextRunAt: am.computeNextRunAt(automation.schedule, now),
-  });
+  // Update automation last run time
+  am.updateAutomation(automation.id, { lastRunAt: now });
 
   // Emit WS event
   wsBroker.emit({
@@ -95,14 +80,15 @@ export async function triggerAutomationRun(automation: {
     data: { automationId: automation.id, runId },
   });
 
-  // Start the agent
-  const cwd = worktreePath ?? project.path;
+  // Start the agent (local mode, read-only — no file writes allowed)
   startAgent(
     threadId,
     automation.prompt,
-    cwd,
+    project.path,
     automation.model as ClaudeModel,
     automation.permissionMode as PermissionMode,
+    undefined, // images
+    AUTOMATION_DISALLOWED_TOOLS,
   ).catch((err) => {
     console.error(`[automation-scheduler] Agent error for automation ${automation.id}:`, err);
     am.updateRun(runId, {
@@ -112,6 +98,65 @@ export async function triggerAutomationRun(automation: {
   });
 
   console.log(`[automation-scheduler] Triggered run ${runId} for automation "${automation.name}"`);
+}
+
+// ── Cron job management ──────────────────────────────────────────
+
+/** Schedule a cron job for one automation */
+function scheduleJob(automation: { id: string; schedule: string; enabled: number; name: string }): void {
+  // Remove existing job if any
+  unscheduleJob(automation.id);
+
+  if (!automation.enabled) return;
+
+  try {
+    const job = new Cron(automation.schedule, { name: automation.id }, async () => {
+      // Re-fetch the automation to get latest state (it may have been disabled)
+      const current = am.getAutomation(automation.id);
+      if (!current || !current.enabled) {
+        unscheduleJob(automation.id);
+        return;
+      }
+      await triggerAutomationRun(current);
+    });
+
+    activeJobs.set(automation.id, job);
+
+    const next = job.nextRun();
+    console.log(`[automation-scheduler] Scheduled "${automation.name}" (${automation.schedule}) — next run: ${next?.toISOString() ?? 'never'}`);
+  } catch (e: any) {
+    console.error(`[automation-scheduler] Invalid cron expression for automation ${automation.id}: "${automation.schedule}" — ${e.message}`);
+  }
+}
+
+/** Remove a cron job for an automation */
+function unscheduleJob(automationId: string): void {
+  const existing = activeJobs.get(automationId);
+  if (existing) {
+    existing.stop();
+    activeJobs.delete(automationId);
+  }
+}
+
+/** Get next run time for an automation */
+export function getNextRun(automationId: string): Date | null {
+  const job = activeJobs.get(automationId);
+  return job?.nextRun() ?? null;
+}
+
+// ── Public API for dynamic updates ───────────────────────────────
+// Called by automation-manager when automations are created/updated/deleted
+
+export function onAutomationCreated(automation: { id: string; schedule: string; enabled: number; name: string }): void {
+  scheduleJob(automation);
+}
+
+export function onAutomationUpdated(automation: { id: string; schedule: string; enabled: number; name: string }): void {
+  scheduleJob(automation);
+}
+
+export function onAutomationDeleted(automationId: string): void {
+  unscheduleJob(automationId);
 }
 
 // ── Check completed runs ─────────────────────────────────────────
@@ -139,7 +184,6 @@ async function checkCompletedRuns(): Promise<void> {
         completedAt: thread.completedAt || new Date().toISOString(),
       });
 
-      // Emit WS event for real-time UI update
       wsBroker.emit({
         type: 'automation:run_completed',
         threadId: run.threadId,
@@ -151,12 +195,10 @@ async function checkCompletedRuns(): Promise<void> {
         },
       });
 
-      // Auto-dismiss runs with no findings
       if (!hasFindings) {
         am.updateRun(run.id, { triageStatus: 'dismissed' });
       }
 
-      // Cleanup old runs
       await cleanupOldRuns(run.automationId);
     }
   }
@@ -176,60 +218,40 @@ async function cleanupOldRuns(automationId: string): Promise<void> {
   if (reviewedRuns.length > automation.maxRunHistory) {
     const toRemove = reviewedRuns.slice(automation.maxRunHistory);
     for (const run of toRemove) {
-      const thread = tm.getThread(run.threadId);
-      if (thread?.worktreePath) {
-        const project = pm.getProject(thread.projectId);
-        if (project) {
-          await wm.removeWorktree(project.path, thread.worktreePath).catch(() => {});
-          if (thread.branch) {
-            await wm.removeBranch(project.path, thread.branch).catch(() => {});
-          }
-        }
-      }
-      tm.updateThread(run.threadId, { archived: 1, worktreePath: null, branch: null });
+      tm.updateThread(run.threadId, { archived: 1 });
       am.updateRun(run.id, { status: 'archived' });
     }
-  }
-}
-
-// ── Poll loop ────────────────────────────────────────────────────
-
-async function pollDueAutomations(): Promise<void> {
-  if (running) return;
-  running = true;
-
-  try {
-    // Trigger due automations
-    const dueAutomations = am.getDueAutomations();
-    for (const automation of dueAutomations) {
-      await triggerAutomationRun(automation);
-    }
-
-    // Check for completed runs
-    await checkCompletedRuns();
-  } catch (e) {
-    console.error('[automation-scheduler] Poll error:', e);
-  } finally {
-    running = false;
   }
 }
 
 // ── Lifecycle ────────────────────────────────────────────────────
 
 export function startScheduler(): void {
-  // Recalculate stale schedules from when server was off
-  am.recalculateStaleSchedules();
+  // Schedule cron jobs for all enabled automations
+  const automations = am.listAutomations();
+  for (const automation of automations) {
+    scheduleJob(automation);
+  }
 
-  // Immediate first check
-  pollDueAutomations();
-  pollTimer = setInterval(pollDueAutomations, POLL_INTERVAL_MS);
-  console.log('[automation-scheduler] Started (polling every 30s)');
+  // Start polling for completed runs
+  checkCompletedRuns();
+  completedRunsTimer = setInterval(checkCompletedRuns, COMPLETED_RUNS_POLL_MS);
+
+  console.log(`[automation-scheduler] Started — ${automations.filter(a => a.enabled).length} active job(s)`);
 }
 
 export function stopScheduler(): void {
-  if (pollTimer) {
-    clearInterval(pollTimer);
-    pollTimer = null;
+  // Stop all cron jobs
+  for (const [id, job] of activeJobs) {
+    job.stop();
   }
+  activeJobs.clear();
+
+  // Stop completed-runs polling
+  if (completedRunsTimer) {
+    clearInterval(completedRunsTimer);
+    completedRunsTimer = null;
+  }
+
   console.log('[automation-scheduler] Stopped');
 }

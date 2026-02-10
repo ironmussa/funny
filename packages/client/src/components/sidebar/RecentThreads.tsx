@@ -76,7 +76,7 @@ export function RecentThreads() {
         <span className="truncate font-medium">{t('sidebar.recentThreads')}</span>
       </CollapsibleTrigger>
       <CollapsibleContent className="data-[state=open]:animate-slide-down">
-        <div className="ml-3 border-l border-border/50 pl-1 mt-0.5 space-y-0.5 min-w-0">
+        <div className="ml-3 pl-1 mt-0.5 space-y-0.5 min-w-0">
           {recentThreads.map((thread) => (
             <ThreadItem
               key={thread.id}

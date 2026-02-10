@@ -1,8 +1,7 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAppStore } from '@/stores/app-store';
 import { useAutomationStore } from '@/stores/automation-store';
-import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -33,24 +32,28 @@ import {
   Timer,
   Inbox,
   History,
-  Monitor,
-  GitBranch,
 } from 'lucide-react';
-import type { Automation, AutomationRun, ClaudeModel, ThreadMode, PermissionMode, AutomationSchedule } from '@a-parallel/shared';
+import type { Automation, AutomationRun, ClaudeModel, PermissionMode, AutomationSchedule } from '@a-parallel/shared';
 
 const inputClass =
   'w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring';
 
-const SCHEDULE_OPTIONS: { value: AutomationSchedule; label: string }[] = [
-  { value: '15m', label: 'Every 15 min' },
-  { value: '30m', label: 'Every 30 min' },
-  { value: '1h', label: 'Every hour' },
-  { value: '2h', label: 'Every 2 hours' },
-  { value: '6h', label: 'Every 6 hours' },
-  { value: '12h', label: 'Every 12 hours' },
-  { value: '1d', label: 'Daily' },
-  { value: '7d', label: 'Weekly' },
+const SCHEDULE_PRESETS: { value: string; label: string }[] = [
+  { value: '*/15 * * * *', label: 'Every 15 min' },
+  { value: '*/30 * * * *', label: 'Every 30 min' },
+  { value: '0 * * * *', label: 'Every hour' },
+  { value: '0 */2 * * *', label: 'Every 2 hours' },
+  { value: '0 */6 * * *', label: 'Every 6 hours' },
+  { value: '0 */12 * * *', label: 'Every 12 hours' },
+  { value: '0 9 * * *', label: 'Daily at 9am' },
+  { value: '0 9 * * 1', label: 'Weekly (Mon 9am)' },
 ];
+
+/** Find a friendly label for a cron expression, or show the raw expression */
+function getScheduleLabel(cron: string): string {
+  const preset = SCHEDULE_PRESETS.find(p => p.value === cron);
+  return preset?.label ?? cron;
+}
 
 const MODEL_OPTIONS: { value: ClaudeModel; label: string }[] = [
   { value: 'haiku', label: 'Haiku' },
@@ -93,19 +96,15 @@ interface FormState {
   prompt: string;
   schedule: AutomationSchedule;
   model: ClaudeModel;
-  mode: ThreadMode;
   permissionMode: PermissionMode;
-  baseBranch: string;
 }
 
 const defaultForm: FormState = {
   name: '',
   prompt: '',
-  schedule: '1h',
+  schedule: '0 * * * *',
   model: 'sonnet',
-  mode: 'worktree',
   permissionMode: 'autoEdit',
-  baseBranch: '',
 };
 
 export function AutomationSettings() {
@@ -130,7 +129,6 @@ export function AutomationSettings() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(defaultForm);
-  const [branches, setBranches] = useState<string[]>([]);
   const [runsAutomationId, setRunsAutomationId] = useState<string | null>(null);
   const [showInbox, setShowInbox] = useState(false);
 
@@ -143,27 +141,15 @@ export function AutomationSettings() {
   }, [selectedProjectId, loadAutomations]);
 
   useEffect(() => {
-    loadInbox();
-  }, [loadInbox]);
-
-  const loadBranches = useCallback(async () => {
-    if (!selectedProjectId) return;
-    try {
-      const data = await api.listBranches(selectedProjectId);
-      setBranches(data.branches);
-      if (data.defaultBranch && !form.baseBranch) {
-        setForm(f => ({ ...f, baseBranch: data.defaultBranch! }));
-      }
-    } catch {
-      // ignore
+    if (selectedProjectId) {
+      loadInbox(selectedProjectId);
     }
-  }, [selectedProjectId, form.baseBranch]);
+  }, [selectedProjectId, loadInbox]);
 
   const openCreateDialog = () => {
     setEditingId(null);
     setForm(defaultForm);
     setDialogOpen(true);
-    loadBranches();
   };
 
   const openEditDialog = (a: Automation) => {
@@ -173,16 +159,15 @@ export function AutomationSettings() {
       prompt: a.prompt,
       schedule: a.schedule as AutomationSchedule,
       model: a.model,
-      mode: a.mode,
       permissionMode: a.permissionMode,
-      baseBranch: a.baseBranch || '',
     });
     setDialogOpen(true);
-    loadBranches();
   };
 
-  const handleSave = async () => {
+  const handleSave = async (andTest = false) => {
     if (!selectedProjectId || !form.name.trim() || !form.prompt.trim()) return;
+
+    let automationId: string | null = null;
 
     if (editingId) {
       await updateAutomation(editingId, {
@@ -190,23 +175,25 @@ export function AutomationSettings() {
         prompt: form.prompt.trim(),
         schedule: form.schedule,
         model: form.model,
-        mode: form.mode,
         permissionMode: form.permissionMode,
-        baseBranch: form.baseBranch || undefined,
       });
+      automationId = editingId;
     } else {
-      await createAutomation({
+      const created = await createAutomation({
         projectId: selectedProjectId,
         name: form.name.trim(),
         prompt: form.prompt.trim(),
         schedule: form.schedule,
         model: form.model,
-        mode: form.mode,
         permissionMode: form.permissionMode,
-        baseBranch: form.baseBranch || undefined,
       });
+      automationId = created.id;
     }
     setDialogOpen(false);
+
+    if (andTest && automationId) {
+      await triggerAutomation(automationId);
+    }
   };
 
   const handleToggleEnabled = async (a: Automation) => {
@@ -373,7 +360,7 @@ export function AutomationSettings() {
                       )} />
                       <span className="text-sm font-medium truncate">{a.name}</span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                        {SCHEDULE_OPTIONS.find(s => s.value === a.schedule)?.label || a.schedule}
+                        {getScheduleLabel(a.schedule)}
                       </span>
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                         {a.model}
@@ -537,16 +524,33 @@ export function AutomationSettings() {
             <div className="grid grid-cols-2 gap-3">
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">Schedule</label>
-                <Select value={form.schedule} onValueChange={(v) => setForm(f => ({ ...f, schedule: v as AutomationSchedule }))}>
+                <Select
+                  value={SCHEDULE_PRESETS.some(p => p.value === form.schedule) ? form.schedule : '__custom__'}
+                  onValueChange={(v) => {
+                    if (v !== '__custom__') setForm(f => ({ ...f, schedule: v }));
+                  }}
+                >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {SCHEDULE_OPTIONS.map(opt => (
+                    {SCHEDULE_PRESETS.map(opt => (
                       <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
                     ))}
+                    <SelectItem value="__custom__">Custom cron...</SelectItem>
                   </SelectContent>
                 </Select>
+                {!SCHEDULE_PRESETS.some(p => p.value === form.schedule) && (
+                  <input
+                    className={`${inputClass} mt-1.5 font-mono text-xs`}
+                    placeholder="*/30 * * * *"
+                    value={form.schedule}
+                    onChange={(e) => setForm(f => ({ ...f, schedule: e.target.value }))}
+                  />
+                )}
+                <p className="text-[10px] text-muted-foreground mt-1">
+                  Cron: min hour day month weekday
+                </p>
               </div>
               <div>
                 <label className="text-xs text-muted-foreground block mb-1">Model</label>
@@ -557,42 +561,27 @@ export function AutomationSettings() {
                 />
               </div>
             </div>
-            <div className="grid grid-cols-2 gap-3">
-              <div>
-                <label className="text-xs text-muted-foreground block mb-1">Mode</label>
-                <SegmentedControl
-                  options={[
-                    { value: 'local' as const, label: 'Local', icon: <Monitor className="h-3 w-3" /> },
-                    { value: 'worktree' as const, label: 'Worktree', icon: <GitBranch className="h-3 w-3" /> },
-                  ]}
-                  value={form.mode}
-                  onChange={(v) => setForm(f => ({ ...f, mode: v }))}
-                />
-              </div>
-              {form.mode === 'worktree' && (
-                <div>
-                  <label className="text-xs text-muted-foreground block mb-1">Base Branch</label>
-                  <Select value={form.baseBranch} onValueChange={(v) => setForm(f => ({ ...f, baseBranch: v }))}>
-                    <SelectTrigger className="w-full">
-                      <SelectValue placeholder="Select branch" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {branches.map(b => (
-                        <SelectItem key={b} value={b}>{b}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              )}
-            </div>
+            <p className="text-[10px] text-muted-foreground">
+              Automations run locally in read-only mode (no file writes).
+            </p>
           </div>
           <DialogFooter>
             <Button variant="outline" size="sm" onClick={() => setDialogOpen(false)}>
               Cancel
             </Button>
             <Button
+              variant="outline"
               size="sm"
-              onClick={handleSave}
+              onClick={() => handleSave(true)}
+              disabled={!form.name.trim() || !form.prompt.trim()}
+              className="gap-1.5"
+            >
+              <Play className="h-3 w-3" />
+              {editingId ? 'Save & Test' : 'Create & Test'}
+            </Button>
+            <Button
+              size="sm"
+              onClick={() => handleSave(false)}
               disabled={!form.name.trim() || !form.prompt.trim()}
             >
               {editingId ? 'Save' : 'Create'}

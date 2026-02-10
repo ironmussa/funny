@@ -53,7 +53,7 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
         ) : (
           <Wrench className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
         )}
-        <span className="font-medium text-foreground flex-shrink-0">{label}</span>
+        <span className="font-medium font-mono text-foreground flex-shrink-0">{label}</span>
         {summary && (
           filePath ? (
             <a

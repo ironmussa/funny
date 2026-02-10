@@ -10,9 +10,10 @@ import {
 
 export const automationRoutes = new Hono();
 
-// GET /api/automations/inbox — must be before /:id to avoid conflict
+// GET /api/automations/inbox?projectId=xxx — must be before /:id to avoid conflict
 automationRoutes.get('/inbox', (c) => {
-  const items = am.listPendingReviewRuns();
+  const projectId = c.req.query('projectId');
+  const items = am.listPendingReviewRuns(projectId || undefined);
   return c.json(items);
 });
 

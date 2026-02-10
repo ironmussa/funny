@@ -11,6 +11,7 @@ import { AllThreadsView } from '@/components/AllThreadsView';
 import { ReviewPane } from '@/components/ReviewPane';
 import { TerminalPanel } from '@/components/TerminalPanel';
 import { SettingsDetailView } from '@/components/SettingsDetailView';
+import { AutomationInboxView } from '@/components/AutomationInboxView';
 import { TooltipProvider } from '@/components/ui/tooltip';
 import { Toaster } from 'sonner';
 import { CommandPalette } from '@/components/CommandPalette';
@@ -20,6 +21,7 @@ export function App() {
   const reviewPaneOpen = useAppStore(s => s.reviewPaneOpen);
   const settingsOpen = useAppStore(s => s.settingsOpen);
   const allThreadsProjectId = useAppStore(s => s.allThreadsProjectId);
+  const automationInboxOpen = useAppStore(s => s.automationInboxOpen);
   const navigate = useNavigate();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
@@ -88,7 +90,7 @@ export function App() {
         {/* Main content + terminal */}
         <main className="flex-1 flex flex-col overflow-hidden">
           <div className="flex-1 flex overflow-hidden min-h-0">
-            {settingsOpen ? <SettingsDetailView /> : allThreadsProjectId ? <AllThreadsView /> : <ThreadView />}
+            {settingsOpen ? <SettingsDetailView /> : automationInboxOpen ? <AutomationInboxView /> : allThreadsProjectId ? <AllThreadsView /> : <ThreadView />}
           </div>
           <TerminalPanel />
         </main>

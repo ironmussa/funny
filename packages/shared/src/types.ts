@@ -315,7 +315,8 @@ export interface PluginListResponse {
 
 // ─── Automations ────────────────────────────────────────
 
-export type AutomationSchedule = '15m' | '30m' | '1h' | '2h' | '6h' | '12h' | '1d' | '7d';
+// Cron expression string — e.g. "0 9 * * *" (daily at 9am)
+export type AutomationSchedule = string;
 export type RunTriageStatus = 'pending' | 'reviewed' | 'dismissed';
 
 export interface Automation {
@@ -331,7 +332,6 @@ export interface Automation {
   enabled: boolean;
   maxRunHistory: number;
   lastRunAt?: string;
-  nextRunAt?: string;
   createdAt: string;
   updatedAt: string;
 }

@@ -23,9 +23,9 @@ import { useTranslation } from 'react-i18next';
 import { McpServerSettings } from './McpServerSettings';
 import { SkillsSettings } from './SkillsSettings';
 import { WorktreeSettings } from './WorktreeSettings';
-import { ArchivedThreadsSettings } from './ArchivedThreadsSettings';
 import { StartupCommandsSettings } from './StartupCommandsSettings';
 import { AutomationSettings } from './AutomationSettings';
+import { ArchivedThreadsSettings } from './ArchivedThreadsSettings';
 
 function getLanguageName(code: string): string {
   try {
@@ -223,7 +223,7 @@ export function SettingsDetailView() {
 
       {/* Page content */}
       <ScrollArea className="flex-1 min-h-0">
-        <div className="px-8 pb-8 max-w-2xl">
+        <div className="px-8 py-8 max-w-2xl">
           {page === 'general' ? (
             <GeneralSettings />
           ) : page === 'mcp-server' ? (

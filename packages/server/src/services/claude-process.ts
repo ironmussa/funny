@@ -72,6 +72,7 @@ export interface ClaudeProcessOptions {
   cwd: string;
   model?: string;
   allowedTools?: string[];
+  disallowedTools?: string[];
   maxTurns?: number;
   sessionId?: string;
   permissionMode?: string;
@@ -238,6 +239,11 @@ export class ClaudeProcess extends EventEmitter {
     // allowedTools: comma-separated list of tools to auto-approve
     if (this.options.allowedTools && this.options.allowedTools.length > 0) {
       args.push('--allowedTools', this.options.allowedTools.join(','));
+    }
+
+    // disallowedTools: comma-separated list of tools to block entirely
+    if (this.options.disallowedTools && this.options.disallowedTools.length > 0) {
+      args.push('--disallowedTools', this.options.disallowedTools.join(','));
     }
 
     // If images are provided, use stream-json input format

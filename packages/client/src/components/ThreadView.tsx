@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { motion } from 'motion/react';
 import { useAppStore } from '@/stores/app-store';
 import { cn } from '@/lib/utils';
 import { Loader2, Clock, Copy, Check, Send, CheckCircle2, XCircle, ArrowDown } from 'lucide-react';
@@ -42,10 +43,10 @@ const markdownComponents = {
   code: ({ className, children, ...props }: any) => {
     const isBlock = className?.startsWith('language-');
     return isBlock
-      ? <code className={cn('block bg-muted p-2 rounded text-xs overflow-x-auto', className)} {...props}>{children}</code>
-      : <code className="bg-muted px-1 py-0.5 rounded text-xs" {...props}>{children}</code>;
+      ? <code className={cn('block bg-muted p-2 rounded text-xs font-mono overflow-x-auto', className)} {...props}>{children}</code>
+      : <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono" {...props}>{children}</code>;
   },
-  pre: ({ children }: any) => <pre className="bg-muted rounded p-2 overflow-x-auto my-2">{children}</pre>,
+  pre: ({ children }: any) => <pre className="bg-muted rounded p-2 font-mono overflow-x-auto my-2">{children}</pre>,
 };
 
 const remarkPlugins = [remarkGfm];
@@ -228,7 +229,7 @@ export function ThreadView() {
     );
   }
 
-  if (!selectedThreadId || !activeThread) {
+  if (!selectedThreadId) {
     return (
       <div className="flex-1 flex flex-col h-full min-w-0">
         {selectedProjectId && <ProjectHeader />}
@@ -237,6 +238,17 @@ export function ThreadView() {
             <p className="text-sm">{t('thread.selectOrCreate')}</p>
             <p className="text-xs mt-1">{t('thread.threadsRunParallel')}</p>
           </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (!activeThread) {
+    return (
+      <div className="flex-1 flex flex-col h-full min-w-0">
+        {selectedProjectId && <ProjectHeader />}
+        <div className="flex-1 flex items-center justify-center text-muted-foreground">
+          <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       </div>
     );
@@ -299,10 +311,13 @@ export function ThreadView() {
 
           {activeThread.messages?.flatMap((msg) => [
               msg.content && (
-                <div
+                <motion.div
                   key={msg.id}
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
                   className={cn(
-                    'relative group rounded-lg px-3 py-2 text-sm w-fit max-w-full',
+                    'relative group rounded-lg px-3 py-2 text-sm max-w-[80%]',
                     msg.role === 'user'
                       ? 'ml-auto bg-primary text-primary-foreground'
                       : 'bg-secondary text-secondary-foreground'
@@ -344,44 +359,73 @@ export function ThreadView() {
                       <MessageContent content={msg.content.trim()} />
                     </div>
                   )}
-                </div>
+                </motion.div>
               ),
               ...(msg.toolCalls?.map((tc: any) => (
-                <ToolCallCard
+                <motion.div
                   key={tc.id}
-                  name={tc.name}
-                  input={tc.input}
-                  output={tc.output}
-                  onRespond={(tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode') ? (answer: string) => handleSend(answer, { model: '', mode: '' }) : undefined}
-                />
+                  initial={{ opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                >
+                  <ToolCallCard
+                    name={tc.name}
+                    input={tc.input}
+                    output={tc.output}
+                    onRespond={(tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode') ? (answer: string) => handleSend(answer, { model: '', mode: '' }) : undefined}
+                  />
+                </motion.div>
               )) ?? []),
             ])}
 
           {isRunning && (
-            <div className="flex items-center gap-2 text-muted-foreground text-xs">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.3 }}
+              className="flex items-center gap-2 text-muted-foreground text-xs"
+            >
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               {t('thread.agentWorking')}
-            </div>
+            </motion.div>
           )}
 
           {activeThread.status === 'waiting' && activeThread.waitingReason !== 'question' && (
-            <WaitingActions
-              onSend={(text) => handleSend(text, { model: '', mode: '' })}
-            />
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+            >
+              <WaitingActions
+                onSend={(text) => handleSend(text, { model: '', mode: '' })}
+              />
+            </motion.div>
           )}
 
           {activeThread.resultInfo && !isRunning && (
-            <AgentResultCard
-              status={activeThread.resultInfo.status}
-              cost={activeThread.resultInfo.cost}
-              duration={activeThread.resultInfo.duration}
-            />
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+            >
+              <AgentResultCard
+                status={activeThread.resultInfo.status}
+                cost={activeThread.resultInfo.cost}
+                duration={activeThread.resultInfo.duration}
+              />
+            </motion.div>
           )}
 
           {activeThread.status === 'interrupted' && (
-            <AgentInterruptedCard
-              onContinue={() => handleSend('Continue', { model: '', mode: '' })}
-            />
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+            >
+              <AgentInterruptedCard
+                onContinue={() => handleSend('Continue', { model: '', mode: '' })}
+              />
+            </motion.div>
           )}
 
         </div>

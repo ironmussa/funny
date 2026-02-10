@@ -7,26 +7,20 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   ArrowLeft,
   Settings,
-  Wrench,
-  Palette,
   Server,
   Sparkles,
   GitBranch,
-  Monitor,
   GitFork,
-  Archive,
   Terminal,
   Timer,
+  Archive,
 } from 'lucide-react';
 
 export const settingsItems = [
   { id: 'general', label: 'General', icon: Settings },
-  { id: 'configuration', label: 'Configuration', icon: Wrench },
-  { id: 'personalization', label: 'Personalization', icon: Palette },
   { id: 'mcp-server', label: 'MCP Server', icon: Server },
   { id: 'skills', label: 'Skills', icon: Sparkles },
   { id: 'git', label: 'Git', icon: GitBranch },
-  { id: 'environments', label: 'Environments', icon: Monitor },
   { id: 'worktrees', label: 'Worktrees', icon: GitFork },
   { id: 'startup-commands', label: 'Startup Commands', icon: Terminal },
   { id: 'automations', label: 'Automations', icon: Timer },
@@ -37,12 +31,9 @@ export type SettingsItemId = (typeof settingsItems)[number]['id'];
 
 export const settingsLabelKeys: Record<string, string> = {
   general: 'settings.general',
-  configuration: 'settings.configuration',
-  personalization: 'settings.personalization',
   'mcp-server': 'settings.mcpServer',
   skills: 'settings.skills',
   git: 'settings.gitSettings',
-  environments: 'settings.environments',
   worktrees: 'settings.worktrees',
   'startup-commands': 'startup.title',
   automations: 'settings.automations',
@@ -54,6 +45,12 @@ export function SettingsPanel() {
   const { t } = useTranslation();
   const setSettingsOpen = useAppStore(s => s.setSettingsOpen);
   const activeSettingsPage = useAppStore(s => s.activeSettingsPage);
+  const selectedProjectId = useAppStore(s => s.selectedProjectId);
+
+  const settingsPath = (pageId: string) =>
+    selectedProjectId
+      ? `/projects/${selectedProjectId}/settings/${pageId}`
+      : `/settings/${pageId}`;
 
   return (
     <div className="flex flex-col h-full">
@@ -62,7 +59,10 @@ export function SettingsPanel() {
         <Button
           variant="ghost"
           size="icon-xs"
-          onClick={() => { setSettingsOpen(false); navigate('/'); }}
+          onClick={() => {
+            setSettingsOpen(false);
+            navigate(selectedProjectId ? `/projects/${selectedProjectId}` : '/');
+          }}
           className="text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="h-3.5 w-3.5" />
@@ -78,7 +78,7 @@ export function SettingsPanel() {
             return (
               <button
                 key={item.id}
-                onClick={() => navigate(`/settings/${item.id}`)}
+                onClick={() => navigate(settingsPath(item.id))}
                 className={cn(
                   'w-full flex items-center gap-3 px-4 py-2.5 text-sm text-left transition-colors',
                   activeSettingsPage === item.id

@@ -94,19 +94,19 @@ export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle
         <div className="flex flex-col gap-0 min-w-0 flex-1">
           <span className="text-[11px] leading-tight truncate">{thread.title}</span>
           {subtitle && (
-            <span className="text-[10px] text-muted-foreground truncate">{subtitle}</span>
+            <span className="text-[10px] text-muted-foreground font-mono truncate">{subtitle}</span>
           )}
         </div>
       </button>
-      <div className="flex-shrink-0 pr-1.5 pl-2 flex items-start justify-end py-1.5 min-w-[2.5rem]">
+      <div className="flex-shrink-0 pr-1.5 pl-2 py-1.5 grid place-items-center min-w-[2.5rem]">
         <span className={cn(
-          'text-[10px] text-muted-foreground leading-4 h-4 group-hover/thread:hidden',
+          'col-start-1 row-start-1 text-[10px] text-muted-foreground leading-4 h-4 group-hover/thread:hidden',
           openDropdown && 'hidden'
         )}>
           {displayTime}
         </span>
         <div className={cn(
-          'hidden group-hover/thread:flex items-center h-4',
+          'col-start-1 row-start-1 hidden group-hover/thread:flex items-center h-4',
           openDropdown && '!flex'
         )}>
           <DropdownMenu onOpenChange={setOpenDropdown}>

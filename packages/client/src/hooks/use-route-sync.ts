@@ -4,6 +4,17 @@ import { useAppStore } from '@/stores/app-store';
 import { settingsItems } from '@/components/SettingsPanel';
 
 function parseRoute(pathname: string) {
+  // Project-scoped settings: /projects/:projectId/settings/:pageId
+  const projectSettingsMatch = matchPath('/projects/:projectId/settings/:pageId', pathname);
+  if (projectSettingsMatch) {
+    return {
+      settingsPage: projectSettingsMatch.params.pageId!,
+      projectId: projectSettingsMatch.params.projectId!,
+      threadId: null,
+      allThreads: false,
+    };
+  }
+
   const settingsMatch = matchPath('/settings/:pageId', pathname);
   if (settingsMatch) {
     return {
@@ -67,12 +78,18 @@ export function useRouteSync() {
     if (settingsPage && validSettingsIds.has(settingsPage as any)) {
       if (!store.settingsOpen) store.setSettingsOpen(true);
       if (store.activeSettingsPage !== settingsPage) store.setActiveSettingsPage(settingsPage);
+      if (projectId && projectId !== store.selectedProjectId) store.selectProject(projectId);
       return;
     }
 
     // Close settings if navigating away from /settings
     if (store.settingsOpen) {
       store.setSettingsOpen(false);
+    }
+
+    // Close automation inbox when navigating via URL
+    if (store.automationInboxOpen) {
+      store.setAutomationInboxOpen(false);
     }
 
     if (allThreads && projectId) {

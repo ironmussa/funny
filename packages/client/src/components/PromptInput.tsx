@@ -71,7 +71,7 @@ function WorktreePicker({
           title={currentPath}
         >
           <GitBranch className="h-3 w-3 shrink-0" />
-          <span className="truncate">{displayLabel}</span>
+          <span className="truncate font-mono">{displayLabel}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -79,6 +79,7 @@ function WorktreePicker({
         align="start"
         className="w-80 p-0 flex flex-col"
         style={{ maxHeight: '280px' }}
+        onOpenAutoFocus={(e) => e.preventDefault()}
       >
         <div className="px-3 py-2 border-b border-border bg-muted/30">
           <p className="text-[11px] font-medium text-muted-foreground">
@@ -88,7 +89,7 @@ function WorktreePicker({
 
         <ScrollArea className="flex-1 min-h-0" style={{ maxHeight: '220px' }}>
           <div className="p-1">
-            {loading && (
+            {loading && worktrees.length === 0 && (
               <p className="text-[11px] text-muted-foreground text-center py-3">
                 {t('prompt.loadingWorktrees', 'Loading worktrees...')}
               </p>
@@ -98,7 +99,7 @@ function WorktreePicker({
                 {t('prompt.noWorktrees', 'No worktrees available')}
               </p>
             )}
-            {!loading && worktrees.map((wt) => {
+            {worktrees.map((wt) => {
               const isSelected = wt.path.replace(/\\/g, '/').toLowerCase() === normalizedCurrent;
               return (
                 <button
@@ -114,7 +115,7 @@ function WorktreePicker({
                   <GitBranch className="h-3 w-3 shrink-0 text-blue-400" />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
-                      <span className="font-medium truncate">{wt.branch}</span>
+                      <span className="font-medium font-mono truncate">{wt.branch}</span>
                       {wt.isMain && (
                         <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground leading-none">
                           main
@@ -155,7 +156,7 @@ function BranchPicker({
           className="flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted truncate max-w-[200px]"
         >
           <GitBranch className="h-3 w-3 shrink-0" />
-          <span className="truncate">{selected || t('newThread.selectBranch')}</span>
+          <span className="truncate font-mono">{selected || t('newThread.selectBranch')}</span>
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -185,7 +186,7 @@ function BranchPicker({
                   )}
                 >
                   <GitBranch className="h-3 w-3 shrink-0 text-blue-400" />
-                  <span className="font-medium truncate">{branch}</span>
+                  <span className="font-medium font-mono truncate">{branch}</span>
                   {isSelected && <Check className="h-3 w-3 shrink-0 text-blue-400 ml-auto" />}
                 </button>
               );
@@ -476,7 +477,7 @@ export function PromptInput({
   const defaultPlaceholder = placeholder ?? t('thread.describeTaskDefault');
 
   return (
-    <div className="p-3 border-t border-border md:flex md:justify-center">
+    <div className="pb-3 border-border md:flex md:justify-center">
       <div className="w-full md:w-1/2 md:min-w-[320px]">
         {/* Image previews */}
         {images.length > 0 && (
@@ -540,7 +541,7 @@ export function PromptInput({
                   >
                     <Zap className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
                     <div className="min-w-0">
-                      <div className="font-medium text-xs">/{skill.name}</div>
+                      <div className="font-medium font-mono text-xs">/{skill.name}</div>
                       {skill.description && (
                         <div className="text-xs text-muted-foreground truncate">{skill.description}</div>
                       )}

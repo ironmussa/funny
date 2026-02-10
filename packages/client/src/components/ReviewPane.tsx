@@ -529,8 +529,11 @@ export function ReviewPane() {
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{t('review.revert')}</DialogTitle>
-            <DialogDescription>
-              {t('review.revertConfirm', { paths: revertConfirm?.paths.join(', ') ?? '' })}
+            <DialogDescription asChild>
+              <div>
+                <span className="font-mono text-xs">{revertConfirm?.paths.join(', ')}</span>
+                <p className="mt-1">{t('review.revertWarning')}</p>
+              </div>
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

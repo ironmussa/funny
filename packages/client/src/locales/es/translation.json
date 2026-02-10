@@ -21,7 +21,8 @@
     "settings": "Configuración",
     "activeThreads": "Activos",
     "recentThreads": "Recientes",
-    "searchThreads": "Buscar hilos"
+    "searchThreads": "Buscar hilos",
+    "threadsTitle": "Threads"
   },
   "thread": {
     "status": {
@@ -80,6 +81,7 @@
     "createPR": "Crear PR",
     "commitMessage": "Mensaje del commit",
     "revertConfirm": "¿Revertir {{paths}}? Esta acción no se puede deshacer.",
+    "revertWarning": "Esta acción no se puede deshacer.",
     "commitFailed": "Commit fallido: {{message}}",
     "pushedSuccess": "Enviado exitosamente",
     "pushFailed": "Push fallido: {{message}}",
@@ -235,7 +237,13 @@
     "noThreads": "No hay hilos aún",
     "found": "encontrados",
     "threadCount": "{{count}} hilo",
-    "threadCountPlural": "{{count}} hilos"
+    "threadCountPlural": "{{count}} hilos",
+    "filterStatus": "Estado",
+    "filterAll": "Todos",
+    "filterMode": "Modo",
+    "showArchived": "Archivados",
+    "clearFilters": "Limpiar filtros",
+    "archived": "Archivado"
   },
   "archived": {
     "searchPlaceholder": "Buscar hilos archivados por título, proyecto, rama o estado...",

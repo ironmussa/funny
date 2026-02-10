@@ -12,6 +12,7 @@
   },
   "dependencies": {
     "@a-parallel/shared": "*",
+    "croner": "^10.0.1",
     "drizzle-orm": "^0.38.0",
     "hono": "^4.7.0",
     "nanoid": "^5.0.9",

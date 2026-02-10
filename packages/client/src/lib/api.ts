@@ -84,8 +84,13 @@ export const api = {
     request<{ branches: string[]; defaultBranch: string | null }>(`/projects/${projectId}/branches`),
 
   // Threads
-  listThreads: (projectId?: string) =>
-    request<Thread[]>(`/threads${projectId ? `?projectId=${projectId}` : ''}`),
+  listThreads: (projectId?: string, includeArchived?: boolean) => {
+    const params = new URLSearchParams();
+    if (projectId) params.set('projectId', projectId);
+    if (includeArchived) params.set('includeArchived', 'true');
+    const qs = params.toString();
+    return request<Thread[]>(`/threads${qs ? `?${qs}` : ''}`);
+  },
   getThread: (id: string) => request<ThreadWithMessages>(`/threads/${id}`),
   createThread: (data: {
     projectId: string;
@@ -234,8 +239,8 @@ export const api = {
     request<{ ok: boolean }>(`/automations/${id}/trigger`, { method: 'POST' }),
   listAutomationRuns: (automationId: string) =>
     request<AutomationRun[]>(`/automations/${automationId}/runs`),
-  getAutomationInbox: () =>
-    request<InboxItem[]>('/automations/inbox'),
+  getAutomationInbox: (projectId?: string) =>
+    request<InboxItem[]>(`/automations/inbox${projectId ? `?projectId=${projectId}` : ''}`),
   triageRun: (runId: string, triageStatus: 'pending' | 'reviewed' | 'dismissed') =>
     request<{ ok: boolean }>(`/automations/runs/${runId}/triage`, {
       method: 'PATCH',

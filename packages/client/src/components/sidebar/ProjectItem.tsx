@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { FolderOpen, FolderOpenDot, Plus, Search, Trash2, ChevronRight, MoreHorizontal, Terminal, Settings } from 'lucide-react';
+import { Folder, FolderOpen, FolderOpenDot, Plus, Search, Trash2, MoreHorizontal, Terminal, Settings } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -70,13 +70,11 @@ export function ProjectItem({
         onMouseLeave={() => setHovered(false)}
       >
         <CollapsibleTrigger className="flex-1 flex items-center gap-1.5 px-2 py-1.5 text-xs text-left text-muted-foreground hover:text-foreground min-w-0 transition-colors">
-          <ChevronRight
-            className={cn(
-              'h-3 w-3 flex-shrink-0 transition-transform duration-200',
-              isExpanded && 'rotate-90'
-            )}
-          />
-          <FolderOpen className="h-3.5 w-3.5 flex-shrink-0" />
+          {isExpanded ? (
+            <FolderOpen className="h-3.5 w-3.5 flex-shrink-0" />
+          ) : (
+            <Folder className="h-3.5 w-3.5 flex-shrink-0" />
+          )}
           <span className="truncate font-medium">{project.name}</span>
         </CollapsibleTrigger>
         <div className={cn(
@@ -170,7 +168,7 @@ export function ProjectItem({
               <DropdownMenuItem
                 onClick={(e) => {
                   e.stopPropagation();
-                  navigate('/settings/general');
+                  navigate(`/projects/${project.id}/settings/general`);
                 }}
               >
                 <Settings className="h-3.5 w-3.5" />
@@ -193,7 +191,7 @@ export function ProjectItem({
       </div>
 
       <CollapsibleContent className="data-[state=open]:animate-slide-down">
-        <div className="ml-3 border-l border-border/50 pl-1 mt-0.5 space-y-0.5 min-w-0">
+        <div className="ml-3 pl-1 mt-0.5 space-y-0.5 min-w-0">
           {threads.length === 0 && (
             <p className="text-[10px] text-muted-foreground px-2 py-2">
               {t('sidebar.noThreads')}

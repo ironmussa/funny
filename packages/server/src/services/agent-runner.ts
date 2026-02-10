@@ -287,7 +287,8 @@ export class AgentRunner {
     cwd: string,
     model: ClaudeModel = 'sonnet',
     permissionMode: PermissionMode = 'autoEdit',
-    images?: any[]
+    images?: any[],
+    disallowedTools?: string[],
   ): Promise<void> {
     console.log(`[agent] start thread=${threadId} model=${model} cwd=${cwd}`);
 
@@ -331,6 +332,7 @@ export class AgentRunner {
       model: MODEL_MAP[model],
       permissionMode: PERMISSION_MAP[permissionMode],
       allowedTools: ['Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep'],
+      disallowedTools,
       maxTurns: 30,
       sessionId: thread?.sessionId ?? undefined,
       images,

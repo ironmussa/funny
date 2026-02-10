@@ -1,23 +1,29 @@
 import { useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { Inbox } from 'lucide-react';
 import { useAutomationStore } from '@/stores/automation-store';
+import { useUIStore } from '@/stores/ui-store';
 
 export function AutomationInboxButton() {
-  const navigate = useNavigate();
   const inboxCount = useAutomationStore(s => s.inboxCount);
   const loadInbox = useAutomationStore(s => s.loadInbox);
+  const automationInboxOpen = useUIStore(s => s.automationInboxOpen);
+  const setAutomationInboxOpen = useUIStore(s => s.setAutomationInboxOpen);
 
+  // Always load all inbox items across all projects
   useEffect(() => {
     loadInbox();
-    const interval = setInterval(loadInbox, 60_000);
+    const interval = setInterval(() => loadInbox(), 60_000);
     return () => clearInterval(interval);
   }, [loadInbox]);
 
   return (
     <button
-      onClick={() => navigate('/settings/automations')}
-      className="w-full flex items-center gap-3 px-4 py-2 text-sm text-muted-foreground hover:bg-accent/50 hover:text-foreground transition-colors"
+      onClick={() => setAutomationInboxOpen(!automationInboxOpen)}
+      className={`w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors ${
+        automationInboxOpen
+          ? 'bg-accent text-foreground'
+          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+      }`}
     >
       <Inbox className="h-4 w-4" />
       <span>Automation Inbox</span>

@@ -21,7 +21,8 @@
     "settings": "Configurações",
     "activeThreads": "Ativos",
     "recentThreads": "Recentes",
-    "searchThreads": "Buscar threads"
+    "searchThreads": "Buscar threads",
+    "threadsTitle": "Threads"
   },
   "thread": {
     "status": {
@@ -80,6 +81,7 @@
     "createPR": "Criar PR",
     "commitMessage": "Mensagem do commit",
     "revertConfirm": "Reverter {{paths}}? Esta ação não pode ser desfeita.",
+    "revertWarning": "Esta ação não pode ser desfeita.",
     "commitFailed": "Commit falhou: {{message}}",
     "pushedSuccess": "Enviado com sucesso",
     "pushFailed": "Push falhou: {{message}}",
@@ -235,7 +237,13 @@
     "noThreads": "Nenhuma thread ainda",
     "found": "encontradas",
     "threadCount": "{{count}} thread",
-    "threadCountPlural": "{{count}} threads"
+    "threadCountPlural": "{{count}} threads",
+    "filterStatus": "Status",
+    "filterAll": "Todos",
+    "filterMode": "Modo",
+    "showArchived": "Arquivadas",
+    "clearFilters": "Limpar filtros",
+    "archived": "Arquivada"
   },
   "archived": {
     "searchPlaceholder": "Buscar threads arquivadas por título, projeto, branch ou status...",

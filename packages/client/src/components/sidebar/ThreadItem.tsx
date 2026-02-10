@@ -14,9 +14,11 @@ import {
   MoreHorizontal,
   FolderOpenDot,
   Terminal,
+  Square,
 } from 'lucide-react';
 import { statusConfig, timeAgo } from '@/lib/thread-utils';
 import type { Thread, ThreadStatus } from '@a-parallel/shared';
+import { api } from '@/lib/api';
 
 interface ThreadItemProps {
   thread: Thread;
@@ -34,6 +36,7 @@ export function ThreadItem({ thread, projectId, projectPath, isSelected, onSelec
 
   const s = statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending;
   const Icon = s.icon;
+  const isRunning = thread.status === 'running' || thread.status === 'waiting';
 
   return (
     <div
@@ -72,81 +75,101 @@ export function ThreadItem({ thread, projectId, projectPath, isSelected, onSelec
         )}>
           {timeAgo(thread.createdAt, t)}
         </span>
-        {thread.status !== 'running' && (
-          <div className={cn(
-            'hidden group-hover/thread:flex items-center',
-            openDropdown && '!flex'
-          )}>
-            <DropdownMenu onOpenChange={setOpenDropdown}>
-              <DropdownMenuTrigger asChild>
-                <button
-                  onClick={(e) => e.stopPropagation()}
-                  className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded-sm hover:bg-accent"
-                >
-                  <MoreHorizontal className="h-3 w-3" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="start" side="left">
-                <DropdownMenuItem
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    const folderPath = thread.worktreePath || projectPath;
-                    try {
-                      await fetch('/api/browse/open-directory', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ path: folderPath }),
-                      });
-                    } catch (error) {
-                      console.error('Failed to open directory:', error);
-                    }
-                  }}
-                >
-                  <FolderOpenDot className="h-3.5 w-3.5" />
-                  {t('sidebar.openDirectory')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={async (e) => {
-                    e.stopPropagation();
-                    const folderPath = thread.worktreePath || projectPath;
-                    try {
-                      await fetch('/api/browse/open-terminal', {
-                        method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify({ path: folderPath }),
-                      });
-                    } catch (error) {
-                      console.error('Failed to open terminal:', error);
-                    }
-                  }}
-                >
-                  <Terminal className="h-3.5 w-3.5" />
-                  {t('sidebar.openTerminal')}
-                </DropdownMenuItem>
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onArchive();
-                  }}
-                >
-                  <Archive className="h-3.5 w-3.5" />
-                  {t('sidebar.archive')}
-                </DropdownMenuItem>
-                <DropdownMenuSeparator />
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onDelete();
-                  }}
-                  className="text-red-400 focus:text-red-400"
-                >
-                  <Trash2 className="h-3.5 w-3.5" />
-                  {t('common.delete')}
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        )}
+        <div className={cn(
+          'hidden group-hover/thread:flex items-center',
+          openDropdown && '!flex'
+        )}>
+          <DropdownMenu onOpenChange={setOpenDropdown}>
+            <DropdownMenuTrigger asChild>
+              <button
+                onClick={(e) => e.stopPropagation()}
+                className="text-muted-foreground hover:text-foreground transition-colors p-0.5 rounded-sm hover:bg-accent"
+              >
+                <MoreHorizontal className="h-3 w-3" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" side="left">
+              <DropdownMenuItem
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const folderPath = thread.worktreePath || projectPath;
+                  try {
+                    await fetch('/api/browse/open-directory', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ path: folderPath }),
+                    });
+                  } catch (error) {
+                    console.error('Failed to open directory:', error);
+                  }
+                }}
+              >
+                <FolderOpenDot className="h-3.5 w-3.5" />
+                {t('sidebar.openDirectory')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={async (e) => {
+                  e.stopPropagation();
+                  const folderPath = thread.worktreePath || projectPath;
+                  try {
+                    await fetch('/api/browse/open-terminal', {
+                      method: 'POST',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ path: folderPath }),
+                    });
+                  } catch (error) {
+                    console.error('Failed to open terminal:', error);
+                  }
+                }}
+              >
+                <Terminal className="h-3.5 w-3.5" />
+                {t('sidebar.openTerminal')}
+              </DropdownMenuItem>
+              {isRunning ? (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={async (e) => {
+                      e.stopPropagation();
+                      try {
+                        await api.stopThread(thread.id);
+                      } catch (error) {
+                        console.error('Failed to stop thread:', error);
+                      }
+                    }}
+                    className="text-red-400 focus:text-red-400"
+                  >
+                    <Square className="h-3.5 w-3.5" />
+                    {t('common.stop')}
+                  </DropdownMenuItem>
+                </>
+              ) : (
+                <>
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onArchive();
+                    }}
+                  >
+                    <Archive className="h-3.5 w-3.5" />
+                    {t('sidebar.archive')}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete();
+                    }}
+                    className="text-red-400 focus:text-red-400"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {t('common.delete')}
+                  </DropdownMenuItem>
+                </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </div>
   );

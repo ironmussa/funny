@@ -73,24 +73,30 @@ app.get('/list', (c) => {
   const dirPath = requirePath(c.req.query('path'), 'path query parameter');
   requireAllowedPath(dirPath);
 
-  const entries = readdirSync(dirPath, { withFileTypes: true });
-  const dirs = entries
-    .filter((e) => {
-      if (!e.isDirectory()) return false;
-      // Skip hidden/system folders
-      if (e.name.startsWith('.') || e.name === 'node_modules' || e.name === '$Recycle.Bin' || e.name === 'System Volume Information') return false;
-      return true;
-    })
-    .map((e) => ({
-      name: e.name,
-      path: join(dirPath, e.name),
-    }))
-    .sort((a, b) => a.name.localeCompare(b.name));
+  try {
+    const entries = readdirSync(dirPath, { withFileTypes: true });
+    const dirs = entries
+      .filter((e) => {
+        if (!e.isDirectory()) return false;
+        // Skip hidden/system folders
+        if (e.name.startsWith('.') || e.name === 'node_modules' || e.name === '$Recycle.Bin' || e.name === 'System Volume Information') return false;
+        return true;
+      })
+      .map((e) => ({
+        name: e.name,
+        path: join(dirPath, e.name),
+      }))
+      .sort((a, b) => a.name.localeCompare(b.name));
 
-  const parsed = parsePath(dirPath);
-  const parent = parsed.dir || null;
+    const parsed = parsePath(dirPath);
+    const parent = parsed.dir || null;
 
-  return c.json({ path: dirPath, parent, dirs });
+    return c.json({ path: dirPath, parent, dirs });
+  } catch (error: any) {
+    const parsed = parsePath(dirPath);
+    const parent = parsed.dir || null;
+    return c.json({ path: dirPath, parent, dirs: [], error: error.message });
+  }
 });
 
 // Get git repo name from remote origin for a given path

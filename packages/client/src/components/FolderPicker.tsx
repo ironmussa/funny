@@ -35,13 +35,36 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
   useEffect(() => {
     fetch('/api/browse/roots')
       .then((r) => r.json())
-      .then((data) => {
-        setRoots(data.roots);
-        setHome(data.home);
+      .then(async (data) => {
+        setRoots(data.roots || []);
+        setHome(data.home || '');
         const lastPath = localStorage.getItem('a-parallel:last-browse-path');
-        loadDir(lastPath || data.home);
+        if (lastPath && lastPath !== data.home) {
+          // Try saved path first; fall back to home on error
+          try {
+            const res = await fetch(`/api/browse/list?path=${encodeURIComponent(lastPath)}`);
+            const result = await res.json();
+            if (result.error) {
+              localStorage.removeItem('a-parallel:last-browse-path');
+              loadDir(data.home);
+            } else {
+              setCurrentPath(result.path);
+              setParentPath(result.parent);
+              setDirs(result.dirs);
+              setLoading(false);
+            }
+          } catch {
+            localStorage.removeItem('a-parallel:last-browse-path');
+            loadDir(data.home);
+          }
+        } else {
+          loadDir(data.home);
+        }
       })
-      .catch((e) => setError(e.message));
+      .catch((e) => {
+        setError(e.message);
+        setLoading(false);
+      });
   }, []);
 
   const loadDir = async (path: string) => {
@@ -50,14 +73,14 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
     try {
       const res = await fetch(`/api/browse/list?path=${encodeURIComponent(path)}`);
       const data = await res.json();
+      if (data.path) setCurrentPath(data.path);
+      if (data.parent !== undefined) setParentPath(data.parent);
+      if (data.dirs) setDirs(data.dirs);
       if (data.error) {
         setError(data.error);
         setLoading(false);
         return;
       }
-      setCurrentPath(data.path);
-      setParentPath(data.parent);
-      setDirs(data.dirs);
       localStorage.setItem('a-parallel:last-browse-path', data.path);
     } catch (e: any) {
       setError(e.message);

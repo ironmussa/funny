@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -14,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { FolderOpen, FolderOpenDot, Plus, Search, Trash2, ChevronRight, MoreHorizontal, Terminal } from 'lucide-react';
+import { FolderOpen, FolderOpenDot, Plus, Search, Trash2, ChevronRight, MoreHorizontal, Terminal, Settings } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -51,6 +52,7 @@ export function ProjectItem({
   onDeleteThread,
   onShowAllThreads,
 }: ProjectItemProps) {
+  const navigate = useNavigate();
   const { t } = useTranslation();
   const [hovered, setHovered] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(false);
@@ -164,6 +166,15 @@ export function ProjectItem({
               >
                 <Terminal className="h-3.5 w-3.5" />
                 {t('sidebar.openTerminal')}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={(e) => {
+                  e.stopPropagation();
+                  navigate('/settings/general');
+                }}
+              >
+                <Settings className="h-3.5 w-3.5" />
+                {t('sidebar.settings')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem

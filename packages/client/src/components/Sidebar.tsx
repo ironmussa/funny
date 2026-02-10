@@ -15,12 +15,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { Settings } from 'lucide-react';
 import { AddProjectForm } from './sidebar/AddProjectForm';
 import { AutomationInboxButton } from './sidebar/AutomationInboxButton';
 import { RunningThreads } from './sidebar/RunningThreads';
@@ -96,21 +90,8 @@ export function Sidebar() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="p-3 border-b border-border flex items-center justify-between">
+      <div className="p-3 border-b border-border flex items-center">
         <h1 className="text-sm font-semibold tracking-tight">{t('app.title')}</h1>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => navigate('/settings/general')}
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <Settings className="h-3.5 w-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">{t('sidebar.settings')}</TooltipContent>
-        </Tooltip>
       </div>
 
       <AddProjectForm onProjectAdded={loadProjects} />

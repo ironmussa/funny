@@ -321,7 +321,8 @@
     "delete": "Eliminar",
     "add": "Agregar",
     "save": "Guardar",
-    "loading": "Cargando..."
+    "loading": "Cargando...",
+    "stop": "Detener"
   },
   "dialog": {
     "archiveThread": "Archivar hilo",

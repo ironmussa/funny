@@ -321,7 +321,8 @@
     "delete": "Delete",
     "add": "Add",
     "save": "Save",
-    "loading": "Loading..."
+    "loading": "Loading...",
+    "stop": "Stop"
   },
   "dialog": {
     "archiveThread": "Archive thread",

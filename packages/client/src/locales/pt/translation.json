@@ -321,7 +321,8 @@
     "delete": "Excluir",
     "add": "Adicionar",
     "save": "Salvar",
-    "loading": "Carregando..."
+    "loading": "Carregando...",
+    "stop": "Parar"
   },
   "dialog": {
     "archiveThread": "Arquivar thread",

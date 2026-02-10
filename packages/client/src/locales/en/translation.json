@@ -331,12 +331,16 @@
     "deleteThreadDesc": "Are you sure you want to delete \"{{title}}\"? This action cannot be undone.",
     "deleteProject": "Delete project",
     "deleteProjectDesc": "Are you sure you want to delete the project \"{{name}}\"? All threads in this project will also be removed. This action cannot be undone.",
-    "worktreeWarning": "This thread has a worktree. The branch and worktree will be deleted. Any commits not pushed or merged will be lost."
+    "worktreeWarning": "This thread has a worktree. The branch and worktree will be deleted. Any commits not pushed or merged will be lost.",
+    "deleteWorktree": "Delete worktree",
+    "deleteWorktreeDesc": "Are you sure you want to delete the worktree for branch \"{{branch}}\"? Any uncommitted changes will be lost."
   },
   "toast": {
     "threadArchived": "Thread archived successfully",
     "threadDeleted": "Thread \"{{title}}\" deleted",
-    "projectDeleted": "Project \"{{name}}\" deleted"
+    "projectDeleted": "Project \"{{name}}\" deleted",
+    "worktreeDeleted": "Worktree \"{{branch}}\" deleted",
+    "worktreeDeleteFailed": "Failed to delete worktree: {{message}}"
   },
   "confirm": {
     "notGitRepo": "\"{{path}}\" is not a git repository.\n\nDo you want to initialize it with git init?"

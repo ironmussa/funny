@@ -331,12 +331,16 @@
     "deleteThreadDesc": "¿Estás seguro de que quieres eliminar \"{{title}}\"? Esta acción no se puede deshacer.",
     "deleteProject": "Eliminar proyecto",
     "deleteProjectDesc": "¿Estás seguro de que quieres eliminar el proyecto \"{{name}}\"? Todos los hilos de este proyecto también serán eliminados. Esta acción no se puede deshacer.",
-    "worktreeWarning": "Este hilo tiene un worktree. La rama y el worktree serán eliminados. Los commits no pusheados ni mergeados se perderán."
+    "worktreeWarning": "Este hilo tiene un worktree. La rama y el worktree serán eliminados. Los commits no pusheados ni mergeados se perderán.",
+    "deleteWorktree": "Eliminar worktree",
+    "deleteWorktreeDesc": "¿Estás seguro de que quieres eliminar el worktree de la rama \"{{branch}}\"? Los cambios no commiteados se perderán."
   },
   "toast": {
     "threadArchived": "Hilo archivado exitosamente",
     "threadDeleted": "Hilo \"{{title}}\" eliminado",
-    "projectDeleted": "Proyecto \"{{name}}\" eliminado"
+    "projectDeleted": "Proyecto \"{{name}}\" eliminado",
+    "worktreeDeleted": "Worktree \"{{branch}}\" eliminado",
+    "worktreeDeleteFailed": "Error al eliminar worktree: {{message}}"
   },
   "confirm": {
     "notGitRepo": "\"{{path}}\" no es un repositorio git.\n\n¿Quieres inicializarlo con git init?"

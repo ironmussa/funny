@@ -1,8 +1,17 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { useAppStore } from '@/stores/app-store';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -87,6 +96,7 @@ export function WorktreeSettings() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [removingPath, setRemovingPath] = useState<string | null>(null);
+  const [confirmRemove, setConfirmRemove] = useState<WorktreeInfo | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [branchName, setBranchName] = useState('');
   const [baseBranch, setBaseBranch] = useState('');
@@ -154,14 +164,17 @@ export function WorktreeSettings() {
     }
   };
 
-  const handleRemove = async (worktreePath: string) => {
-    if (!project) return;
+  const handleRemoveConfirmed = async () => {
+    if (!project || !confirmRemove) return;
+    const { path: worktreePath, branch } = confirmRemove;
+    setConfirmRemove(null);
     setRemovingPath(worktreePath);
     try {
       await api.removeWorktree(project.id, worktreePath);
       await loadWorktrees();
+      toast.success(t('toast.worktreeDeleted', { branch }));
     } catch (err: any) {
-      setError(err.message);
+      toast.error(t('toast.worktreeDeleteFailed', { message: err.message }));
     } finally {
       setRemovingPath(null);
     }
@@ -294,13 +307,33 @@ export function WorktreeSettings() {
               <WorktreeCard
                 key={wt.path}
                 worktree={wt}
-                onRemove={() => handleRemove(wt.path)}
+                onRemove={() => setConfirmRemove(wt)}
                 removing={removingPath === wt.path}
               />
             ))}
           </div>
         )}
       </div>
+
+      {/* Confirm remove dialog */}
+      <Dialog open={!!confirmRemove} onOpenChange={(open) => { if (!open) setConfirmRemove(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('dialog.deleteWorktree')}</DialogTitle>
+            <DialogDescription>
+              {t('dialog.deleteWorktreeDesc', { branch: confirmRemove?.branch })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setConfirmRemove(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button variant="destructive" size="sm" onClick={handleRemoveConfirmed}>
+              {t('common.delete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

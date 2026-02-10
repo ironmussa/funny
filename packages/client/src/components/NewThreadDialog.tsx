@@ -30,11 +30,12 @@ export function NewThreadDialog() {
   const selectThread = useAppStore(s => s.selectThread);
 
   const defaultThreadMode = useSettingsStore(s => s.defaultThreadMode);
+  const defaultPrompt = useSettingsStore(s => s.defaultPrompt);
   const [mode, setMode] = useState<'local' | 'worktree'>(defaultThreadMode);
   const [model, setModel] = useState<'sonnet' | 'opus' | 'haiku'>('opus');
   const [branches, setBranches] = useState<string[]>([]);
   const [selectedBranch, setSelectedBranch] = useState('');
-  const [prompt, setPrompt] = useState('');
+  const [prompt, setPrompt] = useState(defaultPrompt);
   const [title, setTitle] = useState('');
   const [creating, setCreating] = useState(false);
 

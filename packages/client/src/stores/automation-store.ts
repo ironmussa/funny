@@ -9,7 +9,7 @@ interface AutomationState {
   selectedAutomationRuns: AutomationRun[];
 
   loadAutomations: (projectId: string) => Promise<void>;
-  loadInbox: (projectId?: string) => Promise<void>;
+  loadInbox: (options?: { projectId?: string; triageStatus?: string }) => Promise<void>;
   loadRuns: (automationId: string) => Promise<void>;
   createAutomation: (data: Parameters<typeof api.createAutomation>[0]) => Promise<Automation>;
   updateAutomation: (id: string, data: Parameters<typeof api.updateAutomation>[1]) => Promise<void>;
@@ -39,9 +39,9 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     }
   },
 
-  loadInbox: async (projectId?) => {
+  loadInbox: async (options?: { projectId?: string; triageStatus?: string }) => {
     try {
-      const inbox = await api.getAutomationInbox(projectId);
+      const inbox = await api.getAutomationInbox(options);
       set({ inbox, inboxCount: inbox.length });
     } catch (e) {
       console.error('[automation-store] Failed to load inbox:', e);

@@ -10,10 +10,14 @@ import {
 
 export const automationRoutes = new Hono();
 
-// GET /api/automations/inbox?projectId=xxx — must be before /:id to avoid conflict
+// GET /api/automations/inbox?projectId=xxx&triageStatus=xxx — must be before /:id to avoid conflict
 automationRoutes.get('/inbox', (c) => {
   const projectId = c.req.query('projectId');
-  const items = am.listPendingReviewRuns(projectId || undefined);
+  const triageStatus = c.req.query('triageStatus');
+  const items = am.listInboxRuns({
+    projectId: projectId || undefined,
+    triageStatus: triageStatus || undefined,
+  });
   return c.json(items);
 });
 

@@ -239,11 +239,22 @@ export const api = {
     request<{ ok: boolean }>(`/automations/${id}/trigger`, { method: 'POST' }),
   listAutomationRuns: (automationId: string) =>
     request<AutomationRun[]>(`/automations/${automationId}/runs`),
-  getAutomationInbox: (projectId?: string) =>
-    request<InboxItem[]>(`/automations/inbox${projectId ? `?projectId=${projectId}` : ''}`),
+  getAutomationInbox: (options?: { projectId?: string; triageStatus?: string }) => {
+    const params = new URLSearchParams();
+    if (options?.projectId) params.append('projectId', options.projectId);
+    if (options?.triageStatus) params.append('triageStatus', options.triageStatus);
+    const query = params.toString();
+    return request<InboxItem[]>(`/automations/inbox${query ? `?${query}` : ''}`);
+  },
   triageRun: (runId: string, triageStatus: 'pending' | 'reviewed' | 'dismissed') =>
     request<{ ok: boolean }>(`/automations/runs/${runId}/triage`, {
       method: 'PATCH',
       body: JSON.stringify({ triageStatus }),
     }),
+
+  // Browse (filesystem)
+  browseRoots: () =>
+    request<{ roots: string[]; home: string }>('/browse/roots'),
+  browseList: (path: string) =>
+    request<{ path: string; parent: string | null; dirs: Array<{ name: string; path: string }>; error?: string }>(`/browse/list?path=${encodeURIComponent(path)}`),
 };

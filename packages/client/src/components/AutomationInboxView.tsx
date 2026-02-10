@@ -15,7 +15,8 @@ import {
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { Check, ChevronsUpDown, Inbox, Settings } from 'lucide-react';
+import { Check, ChevronsUpDown, Inbox, Settings, Search } from 'lucide-react';
+import type { RunTriageStatus } from '@a-parallel/shared';
 
 export function AutomationInboxView() {
   const navigate = useNavigate();
@@ -32,16 +33,35 @@ export function AutomationInboxView() {
 
   const [filterProjectId, setFilterProjectId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const [triageStatusFilter, setTriageStatusFilter] = useState<RunTriageStatus | 'all'>('pending');
+  const [searchQuery, setSearchQuery] = useState('');
 
-  // Always load all inbox items (no project filter)
+  // Load inbox items based on selected triage status filter
   useEffect(() => {
-    loadInbox();
-  }, [loadInbox]);
+    const triageStatus = triageStatusFilter === 'all' ? undefined : triageStatusFilter;
+    loadInbox({ triageStatus });
+  }, [loadInbox, triageStatusFilter]);
 
   const filteredInbox = useMemo(() => {
-    if (!filterProjectId) return inbox;
-    return inbox.filter(item => item.thread.projectId === filterProjectId);
-  }, [inbox, filterProjectId]);
+    let items = inbox;
+
+    // Filter by project
+    if (filterProjectId) {
+      items = items.filter(item => item.thread.projectId === filterProjectId);
+    }
+
+    // Filter by search query
+    if (searchQuery.trim()) {
+      const query = searchQuery.toLowerCase();
+      items = items.filter(item =>
+        item.automation.name.toLowerCase().includes(query) ||
+        item.thread.title.toLowerCase().includes(query) ||
+        item.run.summary?.toLowerCase().includes(query)
+      );
+    }
+
+    return items;
+  }, [inbox, filterProjectId, searchQuery]);
 
   // Build list of projects that have inbox items
   const projectsWithItems = useMemo(() => {
@@ -86,6 +106,55 @@ export function AutomationInboxView() {
           <Settings className="h-3.5 w-3.5" />
           Manage Automations
         </Button>
+      </div>
+
+      {/* Triage Status Filter Tabs */}
+      <div className="flex items-center gap-0 px-6 border-b border-border/40">
+        {(['all', 'pending', 'reviewed', 'dismissed'] as const).map((status) => {
+          const isActive = triageStatusFilter === status;
+          const count = status === 'all'
+            ? inbox.length
+            : inbox.filter(item => item.run.triageStatus === status).length;
+
+          return (
+            <button
+              key={status}
+              onClick={() => setTriageStatusFilter(status)}
+              className={cn(
+                'px-4 py-2 text-xs font-medium transition-colors relative border-b-2',
+                isActive
+                  ? 'text-foreground border-primary'
+                  : 'text-muted-foreground border-transparent hover:text-foreground/80'
+              )}
+            >
+              {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
+              {count > 0 && (
+                <span className={cn(
+                  'ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full',
+                  isActive
+                    ? 'bg-primary/10 text-primary'
+                    : 'bg-muted text-muted-foreground'
+                )}>
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
+
+      {/* Search Bar */}
+      <div className="px-6 py-3 border-b border-border">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <input
+            type="text"
+            placeholder="Search by automation name, thread title, or summary..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="w-full h-8 pl-9 pr-3 text-xs bg-background border border-border rounded-md focus:outline-none focus:ring-1 focus:ring-primary"
+          />
+        </div>
       </div>
 
       {/* Project filter */}
@@ -201,22 +270,26 @@ export function AutomationInboxView() {
                     >
                       View Thread
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={(e) => { e.stopPropagation(); triageRun(run.id, 'dismissed'); }}
-                    >
-                      Dismiss
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={(e) => { e.stopPropagation(); triageRun(run.id, 'reviewed'); }}
-                    >
-                      Mark Reviewed
-                    </Button>
+                    {run.triageStatus === 'pending' && (
+                      <>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={(e) => { e.stopPropagation(); triageRun(run.id, 'dismissed'); }}
+                        >
+                          Dismiss
+                        </Button>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="h-7 text-xs"
+                          onClick={(e) => { e.stopPropagation(); triageRun(run.id, 'reviewed'); }}
+                        >
+                          Mark Reviewed
+                        </Button>
+                      </>
+                    )}
                   </div>
                 </div>
               );

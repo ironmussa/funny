@@ -156,7 +156,11 @@
     "system": "System",
     "threads": "Threads",
     "defaultThreadMode": "Default thread mode",
-    "defaultThreadModeDesc": "Choose whether new threads run locally or in a git worktree"
+    "defaultThreadModeDesc": "Choose whether new threads run locally or in a git worktree",
+    "prompt": "Prompt",
+    "defaultPrompt": "Default prompt",
+    "defaultPromptDesc": "Pre-fill the prompt field when creating a new thread",
+    "defaultPromptPlaceholder": "Enter a default prompt..."
   },
   "skills": {
     "showingFor": "Showing skills for:",

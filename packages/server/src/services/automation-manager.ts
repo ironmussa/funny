@@ -137,16 +137,26 @@ export function getRunByThreadId(threadId: string) {
 
 /** Get pending-review runs, optionally filtered by project */
 export function listPendingReviewRuns(projectId?: string) {
+  return listInboxRuns({ projectId, triageStatus: 'pending' });
+}
+
+/** Get inbox runs with flexible filtering */
+export function listInboxRuns(options?: { projectId?: string; triageStatus?: string }) {
   const conditions = [
-    eq(schema.automationRuns.triageStatus, 'pending'),
     or(
       eq(schema.automationRuns.status, 'completed'),
       eq(schema.automationRuns.status, 'failed'),
     ),
   ];
 
-  if (projectId) {
-    conditions.push(eq(schema.automations.projectId, projectId));
+  // Filter by triage status if specified
+  if (options?.triageStatus) {
+    conditions.push(eq(schema.automationRuns.triageStatus, options.triageStatus));
+  }
+
+  // Filter by project if specified
+  if (options?.projectId) {
+    conditions.push(eq(schema.automations.projectId, options.projectId));
   }
 
   return db.select({

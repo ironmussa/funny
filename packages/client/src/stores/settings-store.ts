@@ -18,9 +18,11 @@ interface SettingsState {
   theme: Theme;
   defaultEditor: Editor;
   defaultThreadMode: ThreadMode;
+  defaultPrompt: string;
   setTheme: (theme: Theme) => void;
   setDefaultEditor: (editor: Editor) => void;
   setDefaultThreadMode: (mode: ThreadMode) => void;
+  setDefaultPrompt: (prompt: string) => void;
 }
 
 function applyTheme(theme: Theme) {
@@ -39,12 +41,14 @@ export const useSettingsStore = create<SettingsState>()(
       theme: 'dark',
       defaultEditor: 'cursor',
       defaultThreadMode: 'worktree',
+      defaultPrompt: '',
       setTheme: (theme) => {
         applyTheme(theme);
         set({ theme });
       },
       setDefaultEditor: (editor) => set({ defaultEditor: editor }),
       setDefaultThreadMode: (mode) => set({ defaultThreadMode: mode }),
+      setDefaultPrompt: (prompt) => set({ defaultPrompt: prompt }),
     }),
     {
       name: 'a-parallel-settings',

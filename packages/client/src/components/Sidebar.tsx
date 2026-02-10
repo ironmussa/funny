@@ -89,7 +89,7 @@ export function Sidebar() {
 
   return (
     <div className="flex flex-col h-full">
-      <AddProjectForm onProjectAdded={loadProjects} />
+      <AddProjectForm />
       {/* Active threads + Project accordion list */}
       <ScrollArea className="flex-1 px-2 pb-2">
         <AutomationInboxButton />

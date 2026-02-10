@@ -10,6 +10,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { api } from '@/lib/api';
 
 interface FolderPickerProps {
   onSelect: (path: string) => void;
@@ -33,8 +34,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
 
   // Load drive roots on mount, restore last path
   useEffect(() => {
-    fetch('/api/browse/roots')
-      .then((r) => r.json())
+    api.browseRoots()
       .then(async (data) => {
         setRoots(data.roots || []);
         setHome(data.home || '');
@@ -42,8 +42,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
         if (lastPath && lastPath !== data.home) {
           // Try saved path first; fall back to home on error
           try {
-            const res = await fetch(`/api/browse/list?path=${encodeURIComponent(lastPath)}`);
-            const result = await res.json();
+            const result = await api.browseList(lastPath);
             if (result.error) {
               localStorage.removeItem('a-parallel:last-browse-path');
               loadDir(data.home);
@@ -71,8 +70,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
     setLoading(true);
     setError('');
     try {
-      const res = await fetch(`/api/browse/list?path=${encodeURIComponent(path)}`);
-      const data = await res.json();
+      const data = await api.browseList(path);
       if (data.path) setCurrentPath(data.path);
       if (data.parent !== undefined) setParentPath(data.parent);
       if (data.dirs) setDirs(data.dirs);

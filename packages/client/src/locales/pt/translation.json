@@ -156,7 +156,11 @@
     "system": "Sistema",
     "threads": "Threads",
     "defaultThreadMode": "Modo de thread padrão",
-    "defaultThreadModeDesc": "Escolha se novas threads rodam localmente ou em um git worktree"
+    "defaultThreadModeDesc": "Escolha se novas threads rodam localmente ou em um git worktree",
+    "prompt": "Prompt",
+    "defaultPrompt": "Prompt padrão",
+    "defaultPromptDesc": "Preenche o campo de prompt ao criar uma nova thread",
+    "defaultPromptPlaceholder": "Digite um prompt padrão..."
   },
   "skills": {
     "showingFor": "Mostrando skills para:",

@@ -156,7 +156,11 @@
     "system": "Sistema",
     "threads": "Hilos",
     "defaultThreadMode": "Modo de hilo predeterminado",
-    "defaultThreadModeDesc": "Elige si los nuevos hilos se ejecutan localmente o en un git worktree"
+    "defaultThreadModeDesc": "Elige si los nuevos hilos se ejecutan localmente o en un git worktree",
+    "prompt": "Prompt",
+    "defaultPrompt": "Prompt predeterminado",
+    "defaultPromptDesc": "Pre-llena el campo de prompt al crear un nuevo hilo",
+    "defaultPromptPlaceholder": "Escribe un prompt predeterminado..."
   },
   "skills": {
     "showingFor": "Mostrando skills para:",

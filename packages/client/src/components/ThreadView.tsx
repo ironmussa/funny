@@ -7,6 +7,7 @@ import { useAppStore } from '@/stores/app-store';
 import { cn } from '@/lib/utils';
 import { Loader2, Clock, Copy, Check, Send, CheckCircle2, XCircle, ArrowDown, ShieldQuestion } from 'lucide-react';
 import { api } from '@/lib/api';
+import { useSettingsStore } from '@/stores/settings-store';
 import { PromptInput } from './PromptInput';
 import { ToolCallCard } from './ToolCallCard';
 import { ToolCallGroup } from './ToolCallGroup';
@@ -345,7 +346,8 @@ export function ThreadView() {
 
     useAppStore.getState().appendOptimisticMessage(activeThread.id, prompt, images);
 
-    const result = await api.sendMessage(activeThread.id, prompt, { model: opts.model || undefined, permissionMode: opts.mode || undefined }, images);
+    const allowedTools = useSettingsStore.getState().allowedTools;
+    const result = await api.sendMessage(activeThread.id, prompt, { model: opts.model || undefined, permissionMode: opts.mode || undefined, allowedTools }, images);
     if (result.isErr()) {
       console.error('Send failed:', result.error);
     }
@@ -364,7 +366,8 @@ export function ThreadView() {
       activeThread.id,
       approved ? `Approved: ${toolName}` : `Denied: ${toolName}`
     );
-    const result = await api.approveTool(activeThread.id, toolName, approved);
+    const allowedTools = useSettingsStore.getState().allowedTools;
+    const result = await api.approveTool(activeThread.id, toolName, approved, allowedTools);
     if (result.isErr()) {
       console.error('Permission approval failed:', result.error);
     }

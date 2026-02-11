@@ -173,7 +173,11 @@
     "prompt": "Prompt",
     "defaultPrompt": "Prompt padrão",
     "defaultPromptDesc": "Preenche o campo de prompt ao criar uma nova thread",
-    "defaultPromptPlaceholder": "Digite um prompt padrão..."
+    "defaultPromptPlaceholder": "Digite um prompt padrão...",
+    "permissions": "Permissões",
+    "toolPermissions": "Permissões de Ferramentas",
+    "toolPermissionsDesc": "Escolha quais ferramentas os agentes podem usar automaticamente. Ferramentas desmarcadas exigirão aprovação.",
+    "resetDefaults": "Restaurar padrões"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",

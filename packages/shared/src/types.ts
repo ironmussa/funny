@@ -284,6 +284,7 @@ export interface CreateThreadRequest {
   permissionMode?: PermissionMode;
   baseBranch?: string;
   prompt: string;
+  allowedTools?: string[];
 }
 
 export interface SendMessageRequest {
@@ -291,6 +292,7 @@ export interface SendMessageRequest {
   model?: ClaudeModel;
   permissionMode?: PermissionMode;
   images?: ImageAttachment[];
+  allowedTools?: string[];
 }
 
 export interface StageRequest {

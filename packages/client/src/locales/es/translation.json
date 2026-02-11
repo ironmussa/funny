@@ -173,7 +173,11 @@
     "prompt": "Prompt",
     "defaultPrompt": "Prompt predeterminado",
     "defaultPromptDesc": "Pre-llena el campo de prompt al crear un nuevo hilo",
-    "defaultPromptPlaceholder": "Escribe un prompt predeterminado..."
+    "defaultPromptPlaceholder": "Escribe un prompt predeterminado...",
+    "permissions": "Permisos",
+    "toolPermissions": "Permisos de Herramientas",
+    "toolPermissionsDesc": "Elige qué herramientas pueden usar los agentes automáticamente. Las herramientas desmarcadas requerirán aprobación.",
+    "resetDefaults": "Restablecer valores predeterminados"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",

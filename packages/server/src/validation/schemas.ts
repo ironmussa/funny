@@ -43,6 +43,7 @@ export const createThreadSchema = z.object({
   baseBranch: z.string().optional(),
   prompt: z.string().min(1, 'prompt is required'),
   images: z.array(imageAttachmentSchema).optional(),
+  allowedTools: z.array(z.string()).optional(),
 });
 
 export const sendMessageSchema = z.object({
@@ -50,6 +51,7 @@ export const sendMessageSchema = z.object({
   model: claudeModelSchema.optional(),
   permissionMode: permissionModeSchema.optional(),
   images: z.array(imageAttachmentSchema).optional(),
+  allowedTools: z.array(z.string()).optional(),
 });
 
 export const updateThreadSchema = z.object({
@@ -168,6 +170,7 @@ export const githubPollSchema = z.object({
 export const approveToolSchema = z.object({
   toolName: z.string().min(1, 'toolName is required'),
   approved: z.boolean(),
+  allowedTools: z.array(z.string()).optional(),
 });
 
 // ── Helper ───────────────────────────────────────────────────────

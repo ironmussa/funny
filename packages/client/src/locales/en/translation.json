@@ -173,7 +173,11 @@
     "prompt": "Prompt",
     "defaultPrompt": "Default prompt",
     "defaultPromptDesc": "Pre-fill the prompt field when creating a new thread",
-    "defaultPromptPlaceholder": "Enter a default prompt..."
+    "defaultPromptPlaceholder": "Enter a default prompt...",
+    "permissions": "Permissions",
+    "toolPermissions": "Tool Permissions",
+    "toolPermissionsDesc": "Choose which tools agents can use automatically. Unchecked tools will require approval.",
+    "resetDefaults": "Reset to defaults"
   },
   "skills": {
     "showingFor": "Showing skills for:",

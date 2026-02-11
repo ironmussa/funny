@@ -14,15 +14,37 @@ const editorLabels: Record<Editor, string> = {
   vim: 'Vim',
 };
 
+export const ALL_STANDARD_TOOLS = [
+  'Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep',
+  'WebSearch', 'WebFetch', 'Task', 'TodoWrite', 'NotebookEdit',
+] as const;
+
+export const TOOL_LABELS: Record<string, string> = {
+  Read: 'tools.readFile',
+  Edit: 'tools.editFile',
+  Write: 'tools.writeFile',
+  Bash: 'tools.runCommand',
+  Glob: 'tools.findFiles',
+  Grep: 'tools.searchCode',
+  WebSearch: 'tools.webSearch',
+  WebFetch: 'tools.fetchUrl',
+  Task: 'tools.subagent',
+  TodoWrite: 'tools.todos',
+  NotebookEdit: 'tools.editNotebook',
+};
+
 interface SettingsState {
   theme: Theme;
   defaultEditor: Editor;
   defaultThreadMode: ThreadMode;
   defaultPrompt: string;
+  allowedTools: string[];
   setTheme: (theme: Theme) => void;
   setDefaultEditor: (editor: Editor) => void;
   setDefaultThreadMode: (mode: ThreadMode) => void;
   setDefaultPrompt: (prompt: string) => void;
+  setAllowedTools: (tools: string[]) => void;
+  toggleTool: (toolName: string) => void;
 }
 
 function applyTheme(theme: Theme) {
@@ -42,6 +64,7 @@ export const useSettingsStore = create<SettingsState>()(
       defaultEditor: 'cursor',
       defaultThreadMode: 'worktree',
       defaultPrompt: '',
+      allowedTools: [...ALL_STANDARD_TOOLS],
       setTheme: (theme) => {
         applyTheme(theme);
         set({ theme });
@@ -49,6 +72,12 @@ export const useSettingsStore = create<SettingsState>()(
       setDefaultEditor: (editor) => set({ defaultEditor: editor }),
       setDefaultThreadMode: (mode) => set({ defaultThreadMode: mode }),
       setDefaultPrompt: (prompt) => set({ defaultPrompt: prompt }),
+      setAllowedTools: (tools) => set({ allowedTools: tools }),
+      toggleTool: (toolName) => set((state) => ({
+        allowedTools: state.allowedTools.includes(toolName)
+          ? state.allowedTools.filter((t) => t !== toolName)
+          : [...state.allowedTools, toolName],
+      })),
     }),
     {
       name: 'a-parallel-settings',

@@ -141,18 +141,19 @@ export const api = {
     baseBranch?: string;
     prompt: string;
     images?: ImageAttachment[];
+    allowedTools?: string[];
   }) => request<Thread>('/threads', { method: 'POST', body: JSON.stringify(data) }),
-  sendMessage: (threadId: string, content: string, opts?: { model?: string; permissionMode?: string }, images?: ImageAttachment[]) =>
+  sendMessage: (threadId: string, content: string, opts?: { model?: string; permissionMode?: string; allowedTools?: string[] }, images?: ImageAttachment[]) =>
     request<{ ok: boolean }>(`/threads/${threadId}/message`, {
       method: 'POST',
-      body: JSON.stringify({ content, model: opts?.model, permissionMode: opts?.permissionMode, images }),
+      body: JSON.stringify({ content, model: opts?.model, permissionMode: opts?.permissionMode, images, allowedTools: opts?.allowedTools }),
     }),
   stopThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/stop`, { method: 'POST' }),
-  approveTool: (threadId: string, toolName: string, approved: boolean) =>
+  approveTool: (threadId: string, toolName: string, approved: boolean, allowedTools?: string[]) =>
     request<{ ok: boolean }>(`/threads/${threadId}/approve-tool`, {
       method: 'POST',
-      body: JSON.stringify({ toolName, approved }),
+      body: JSON.stringify({ toolName, approved, allowedTools }),
     }),
   deleteThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}`, { method: 'DELETE' }),

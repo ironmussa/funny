@@ -14,6 +14,7 @@ export function NewThreadInput() {
   const cancelNewThread = useAppStore(s => s.cancelNewThread);
   const loadThreadsForProject = useAppStore(s => s.loadThreadsForProject);
   const defaultThreadMode = useSettingsStore(s => s.defaultThreadMode);
+  const allowedTools = useSettingsStore(s => s.allowedTools);
 
   const [creating, setCreating] = useState(false);
 
@@ -34,6 +35,7 @@ export function NewThreadInput() {
       baseBranch: opts.baseBranch,
       prompt,
       images,
+      allowedTools,
     });
 
     if (result.isErr()) {

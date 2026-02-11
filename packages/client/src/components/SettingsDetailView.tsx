@@ -1,5 +1,5 @@
 import { useAppStore } from '@/stores/app-store';
-import { useSettingsStore, editorLabels, type Theme, type Editor, type ThreadMode } from '@/stores/settings-store';
+import { useSettingsStore, editorLabels, ALL_STANDARD_TOOLS, TOOL_LABELS, type Theme, type Editor, type ThreadMode } from '@/stores/settings-store';
 import { settingsItems, settingsLabelKeys, type SettingsItemId } from './SettingsPanel';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -18,7 +18,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { Sun, Moon, Monitor, GitBranch } from 'lucide-react';
+import { Sun, Moon, Monitor, GitBranch, RotateCcw } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { McpServerSettings } from './McpServerSettings';
 import { SkillsSettings } from './SkillsSettings';
@@ -92,7 +92,7 @@ function SegmentedControl<T extends string>({
 
 /* ── General settings content ── */
 function GeneralSettings() {
-  const { theme, defaultEditor, defaultThreadMode, defaultPrompt, setTheme, setDefaultEditor, setDefaultThreadMode, setDefaultPrompt } = useSettingsStore();
+  const { theme, defaultEditor, defaultThreadMode, defaultPrompt, allowedTools, setTheme, setDefaultEditor, setDefaultThreadMode, setDefaultPrompt, toggleTool, setAllowedTools } = useSettingsStore();
   const { t, i18n } = useTranslation();
 
   return (
@@ -194,6 +194,45 @@ function GeneralSettings() {
             value={defaultPrompt}
             onChange={(e) => setDefaultPrompt(e.target.value)}
           />
+        </div>
+      </div>
+
+      {/* Permissions */}
+      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2 mt-6">
+        {t('settings.permissions')}
+      </h3>
+      <div className="rounded-lg border border-border/50 overflow-hidden">
+        <div className="px-4 py-3.5">
+          <p className="text-sm font-medium text-foreground">{t('settings.toolPermissions')}</p>
+          <p className="text-xs text-muted-foreground mt-0.5 mb-3">{t('settings.toolPermissionsDesc')}</p>
+          <div className="space-y-1">
+            {ALL_STANDARD_TOOLS.map((tool) => (
+              <label
+                key={tool}
+                className="flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
+              >
+                <input
+                  type="checkbox"
+                  checked={allowedTools.includes(tool)}
+                  onChange={() => toggleTool(tool)}
+                  className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                />
+                <span className="text-sm text-foreground font-mono">{tool}</span>
+                <span className="text-xs text-muted-foreground">
+                  {t(TOOL_LABELS[tool] ?? tool)}
+                </span>
+              </label>
+            ))}
+          </div>
+          <div className="mt-3 flex justify-end">
+            <button
+              onClick={() => setAllowedTools([...ALL_STANDARD_TOOLS])}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+            >
+              <RotateCcw className="h-3 w-3" />
+              {t('settings.resetDefaults')}
+            </button>
+          </div>
         </div>
       </div>
     </>

@@ -69,29 +69,29 @@ export async function getCurrentBranch(cwd: string): Promise<string> {
 }
 
 /**
- * List all branches in the repository.
- * Falls back to remote branches if no local branches exist (e.g. fresh repo with no commits).
+ * List all branches in the repository (local + remote-tracking, deduplicated).
  */
 export async function listBranches(cwd: string): Promise<string[]> {
-  // Try local branches first
+  // Get local branches
   const localOutput = await gitSafe(['branch', '--format=%(refname:short)'], cwd);
-  if (localOutput) {
-    const locals = localOutput.split('\n').map((b) => b.trim()).filter(Boolean);
-    if (locals.length > 0) return locals;
-  }
+  const locals = localOutput
+    ? localOutput.split('\n').map((b) => b.trim()).filter(Boolean)
+    : [];
 
-  // Fall back to remote tracking branches (strip 'origin/' prefix)
+  // Also get remote tracking branches (strip 'origin/' prefix)
+  // This ensures branches like master/main that only exist on the remote are included
   const remoteOutput = await gitSafe(['branch', '-r', '--format=%(refname:short)'], cwd);
-  if (remoteOutput) {
-    const remotes = remoteOutput
-      .split('\n')
-      .map((b) => b.trim())
-      .filter((b) => b && !b.includes('HEAD'))
-      .map((b) => b.replace(/^origin\//, ''));
-    if (remotes.length > 0) return [...new Set(remotes)];
-  }
+  const remotes = remoteOutput
+    ? remoteOutput
+        .split('\n')
+        .map((b) => b.trim())
+        .filter((b) => b && !b.includes('HEAD'))
+        .map((b) => b.replace(/^origin\//, ''))
+    : [];
 
-  return [];
+  // Merge local + remote, deduplicated, locals first
+  const merged = [...new Set([...locals, ...remotes])];
+  return merged;
 }
 
 /**

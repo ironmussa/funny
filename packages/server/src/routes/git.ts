@@ -33,7 +33,8 @@ gitRoutes.get('/status', async (c) => {
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
 
-  const threads = tm.listThreads({ projectId });
+  const userId = c.get('userId') as string;
+  const threads = tm.listThreads({ projectId, userId });
   const worktreeThreads = threads.filter(
     (t) => t.mode === 'worktree' && t.worktreePath && t.branch
   );

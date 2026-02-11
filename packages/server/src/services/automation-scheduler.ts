@@ -73,12 +73,17 @@ export async function triggerAutomationRun(automation: {
   // Update automation last run time
   am.updateAutomation(automation.id, { lastRunAt: now });
 
-  // Emit WS event
-  wsBroker.emit({
-    type: 'automation:run_started',
+  // Emit WS event — look up project userId for per-user filtering
+  const runStartEvent = {
+    type: 'automation:run_started' as const,
     threadId,
     data: { automationId: automation.id, runId },
-  });
+  };
+  if (project.userId && project.userId !== '__local__') {
+    wsBroker.emitToUser(project.userId, runStartEvent);
+  } else {
+    wsBroker.emit(runStartEvent);
+  }
 
   // Start the agent (local mode, read-only — no file writes allowed)
   startAgent(
@@ -184,8 +189,8 @@ async function checkCompletedRuns(): Promise<void> {
         completedAt: thread.completedAt || new Date().toISOString(),
       });
 
-      wsBroker.emit({
-        type: 'automation:run_completed',
+      const runCompleteEvent = {
+        type: 'automation:run_completed' as const,
         threadId: run.threadId,
         data: {
           automationId: run.automationId,
@@ -193,7 +198,13 @@ async function checkCompletedRuns(): Promise<void> {
           hasFindings,
           summary,
         },
-      });
+      };
+      // Emit per-user if thread has userId
+      if (thread.userId && thread.userId !== '__local__') {
+        wsBroker.emitToUser(thread.userId, runCompleteEvent);
+      } else {
+        wsBroker.emit(runCompleteEvent);
+      }
 
       if (!hasFindings) {
         am.updateRun(run.id, { triageStatus: 'dismissed' });

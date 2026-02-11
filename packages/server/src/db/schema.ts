@@ -4,6 +4,7 @@ export const projects = sqliteTable('projects', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   path: text('path').notNull(),
+  userId: text('user_id').notNull().default('__local__'),
   createdAt: text('created_at').notNull(),
 });
 
@@ -12,6 +13,7 @@ export const threads = sqliteTable('threads', {
   projectId: text('project_id')
     .notNull()
     .references(() => projects.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().default('__local__'),
   title: text('title').notNull(),
   mode: text('mode').notNull(), // 'local' | 'worktree'
   permissionMode: text('permission_mode').notNull().default('autoEdit'), // 'plan' | 'autoEdit' | 'confirmEdit'
@@ -65,6 +67,7 @@ export const automations = sqliteTable('automations', {
   projectId: text('project_id')
     .notNull()
     .references(() => projects.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().default('__local__'),
   name: text('name').notNull(),
   prompt: text('prompt').notNull(),
   schedule: text('schedule').notNull(),

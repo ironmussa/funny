@@ -1,9 +1,35 @@
+// ─── Auth ────────────────────────────────────────────────
+
+export type AuthMode = 'local' | 'multi';
+export type UserRole = 'admin' | 'user';
+
+export interface SafeUser {
+  id: string;
+  username: string;
+  displayName: string;
+  role: UserRole;
+}
+
+export interface CreateUserRequest {
+  username: string;
+  password: string;
+  displayName: string;
+  role: UserRole;
+}
+
+export interface UpdateUserRequest {
+  displayName?: string;
+  role?: UserRole;
+  password?: string;
+}
+
 // ─── Projects ────────────────────────────────────────────
 
 export interface Project {
   id: string;
   name: string;
   path: string;
+  userId: string;
   createdAt: string;
 }
 
@@ -19,6 +45,7 @@ export type PermissionMode = 'plan' | 'autoEdit' | 'confirmEdit';
 export interface Thread {
   id: string;
   projectId: string;
+  userId: string;
   title: string;
   mode: ThreadMode;
   status: ThreadStatus;
@@ -334,6 +361,7 @@ export type RunTriageStatus = 'pending' | 'reviewed' | 'dismissed';
 export interface Automation {
   id: string;
   projectId: string;
+  userId: string;
   name: string;
   prompt: string;
   schedule: AutomationSchedule;

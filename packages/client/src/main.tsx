@@ -1,9 +1,11 @@
-import React, { useSyncExternalStore } from 'react';
+import React, { useEffect, useSyncExternalStore } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
 import { MobilePage } from './components/MobilePage';
+import { LoginPage } from './components/LoginPage';
 import { PreviewBrowser } from './components/PreviewBrowser';
+import { useAuthStore } from './stores/auth-store';
 import './globals.css';
 // Eagerly import so the persisted theme is applied before first paint
 import './stores/settings-store';
@@ -25,14 +27,43 @@ function ResponsiveShell() {
   return isMobile ? <MobilePage /> : <App />;
 }
 
+function AuthGate() {
+  const mode = useAuthStore((s) => s.mode);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const isLoading = useAuthStore((s) => s.isLoading);
+  const initialize = useAuthStore((s) => s.initialize);
+
+  useEffect(() => {
+    initialize();
+  }, [initialize]);
+
+  if (isLoading) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-background">
+        <div className="text-muted-foreground text-sm">Loading...</div>
+      </div>
+    );
+  }
+
+  // Multi mode and not authenticated -> show login page
+  if (mode === 'multi' && !isAuthenticated) {
+    return <LoginPage />;
+  }
+
+  // Local mode or authenticated multi -> show app
+  return (
+    <BrowserRouter>
+      <ResponsiveShell />
+    </BrowserRouter>
+  );
+}
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     {isPreviewWindow ? (
       <PreviewBrowser />
     ) : (
-      <BrowserRouter>
-        <ResponsiveShell />
-      </BrowserRouter>
+      <AuthGate />
     )}
   </React.StrictMode>
 );

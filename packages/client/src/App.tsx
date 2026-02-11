@@ -5,7 +5,6 @@ import { useRouteSync } from '@/hooks/use-route-sync';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
 import { setAppNavigate } from '@/stores/thread-store';
-import { initAuth } from '@/lib/api';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { Sidebar } from '@/components/Sidebar';
 import { ThreadView } from '@/components/ThreadView';
@@ -38,9 +37,9 @@ export function App() {
   // Sync URL ↔ store
   useRouteSync();
 
-  // Fetch auth token, then load projects
+  // Load projects on mount (auth already initialized by AuthGate)
   useEffect(() => {
-    initAuth().then(() => loadProjects());
+    loadProjects();
   }, [loadProjects]);
 
   // Global keyboard shortcuts

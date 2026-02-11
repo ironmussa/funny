@@ -71,7 +71,15 @@ export class AgentRunner {
   ) {}
 
   private emitWS(threadId: string, type: WSEvent['type'], data: unknown): void {
-    this.wsBroker.emit({ type, threadId, data } as WSEvent);
+    const event = { type, threadId, data } as WSEvent;
+    // Look up thread's userId for per-user filtering
+    const thread = this.threadManager.getThread(threadId);
+    const userId = thread?.userId;
+    if (userId) {
+      this.wsBroker.emitToUser(userId, event);
+    } else {
+      this.wsBroker.emit(event);
+    }
   }
 
   // ── Message handler ──────────────────────────────────────────

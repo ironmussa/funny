@@ -24,8 +24,9 @@ automationRoutes.get('/inbox', (c) => {
 
 // GET /api/automations?projectId=xxx
 automationRoutes.get('/', (c) => {
+  const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
-  const automations = am.listAutomations(projectId || undefined);
+  const automations = am.listAutomations(projectId || undefined, userId);
   return c.json(automations);
 });
 
@@ -45,7 +46,8 @@ automationRoutes.post('/', async (c) => {
   const project = pm.getProject(parsed.value.projectId);
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
-  const automation = am.createAutomation(parsed.value);
+  const userId = c.get('userId') as string;
+  const automation = am.createAutomation({ ...parsed.value, userId });
   return c.json(automation, 201);
 });
 

@@ -8,6 +8,7 @@ import { rateLimit } from './middleware/rate-limit.js';
 import { autoMigrate } from './db/migrate.js';
 import { markStaleThreadsInterrupted } from './services/thread-manager.js';
 import { getAuthToken, validateToken } from './services/auth-service.js';
+import { getAuthMode } from './lib/auth-mode.js';
 import { authRoutes } from './routes/auth.js';
 import { projectRoutes } from './routes/projects.js';
 import { threadRoutes } from './routes/threads.js';
@@ -23,6 +24,7 @@ import { startScheduler, stopScheduler } from './services/automation-scheduler.j
 
 const port = Number(process.env.PORT) || 3001;
 const clientPort = Number(process.env.CLIENT_PORT) || 5173;
+const authMode = getAuthMode();
 
 const app = new Hono();
 
@@ -41,6 +43,7 @@ app.use(
       'tauri://localhost',
       'https://tauri.localhost',
     ],
+    credentials: true,
   })
 );
 app.use('/api/*', rateLimit({ windowMs: 60_000, max: 1000 }));
@@ -51,8 +54,23 @@ app.get('/api/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Auth mode endpoint (public — client needs this before login)
+app.get('/api/auth/mode', (c) => {
+  return c.json({ mode: authMode });
+});
+
+// Mount Better Auth routes (multi mode only)
+if (authMode === 'multi') {
+  const { auth } = await import('./lib/auth.js');
+  app.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw));
+}
+
+// Mount local auth routes (local mode only — token endpoint)
+if (authMode === 'local') {
+  app.route('/api/auth', authRoutes);
+}
+
 // Mount routes
-app.route('/api/auth', authRoutes);
 app.route('/api/projects', projectRoutes);
 app.route('/api/threads', threadRoutes);
 app.route('/api/git', gitRoutes);
@@ -67,22 +85,41 @@ app.route('/api/automations', automationRoutes);
 autoMigrate();
 markStaleThreadsInterrupted();
 startScheduler();
-getAuthToken(); // Ensure auth token file exists before accepting connections
-// Server started below via Bun.serve()
+
+if (authMode === 'local') {
+  getAuthToken(); // Ensure auth token file exists before accepting connections
+} else {
+  // Multi mode: initialize Better Auth tables and default admin
+  const { initBetterAuth } = await import('./lib/auth.js');
+  await initBetterAuth();
+}
+
+console.log(`[server] Auth mode: ${authMode}`);
 
 const server = Bun.serve({
   port,
   hostname: '127.0.0.1',
   reusePort: true,
-  fetch(req: Request, server: any) {
+  async fetch(req: Request, server: any) {
     // Handle WebSocket upgrade
     const url = new URL(req.url);
     if (url.pathname === '/ws') {
-      const token = url.searchParams.get('token');
-      if (!token || !validateToken(token)) {
-        return new Response('Unauthorized', { status: 401 });
+      if (authMode === 'local') {
+        // Local mode: validate token from query param
+        const token = url.searchParams.get('token');
+        if (!token || !validateToken(token)) {
+          return new Response('Unauthorized', { status: 401 });
+        }
+        if (server.upgrade(req, { data: { userId: '__local__' } })) return;
+      } else {
+        // Multi mode: validate session from cookies
+        const { auth } = await import('./lib/auth.js');
+        const session = await auth.api.getSession({ headers: req.headers });
+        if (!session) {
+          return new Response('Unauthorized', { status: 401 });
+        }
+        if (server.upgrade(req, { data: { userId: session.user.id } })) return;
       }
-      if (server.upgrade(req)) return;
       return new Response('WebSocket upgrade failed', { status: 400 });
     }
     // All other requests handled by Hono
@@ -90,7 +127,8 @@ const server = Bun.serve({
   },
   websocket: {
     open(ws: any) {
-      wsBroker.addClient(ws);
+      const userId = ws.data?.userId ?? '__local__';
+      wsBroker.addClient(ws, userId);
     },
     close(ws: any) {
       wsBroker.removeClient(ws);

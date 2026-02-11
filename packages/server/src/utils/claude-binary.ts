@@ -21,8 +21,11 @@ function findInPath(): string | null {
       timeout: 5_000,
       reject: false,
     });
-    const path = result.stdout.trim().split('\n')[0]?.trim();
-    if (path && existsSync(path)) return path;
+    const lines = result.stdout.trim().split('\n');
+    for (const line of lines) {
+      const p = line.trim();
+      if (p && existsSync(p)) return p;
+    }
   } catch {
     // Not in PATH
   }
@@ -49,6 +52,7 @@ function findInCommonLocations(): string | null {
       candidates.push(join(appData, 'npm', BINARY_NAME));
     }
     if (userProfile) {
+      candidates.push(join(userProfile, '.local', 'bin', BINARY_NAME));
       candidates.push(join(userProfile, '.claude', 'local', BINARY_NAME));
     }
   } else {

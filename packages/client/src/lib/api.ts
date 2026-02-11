@@ -50,6 +50,17 @@ export function getAuthToken(): string | null {
   return authToken;
 }
 
+// ── Auth mode ────────────────────────────────────────────
+let authMode: 'local' | 'multi' | null = null;
+
+export function setAuthMode(mode: 'local' | 'multi') {
+  authMode = mode;
+}
+
+export function getAuthMode() {
+  return authMode;
+}
+
 // ── Request helper ──────────────────────────────────────
 function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainError> {
   return ResultAsync.fromPromise(
@@ -57,14 +68,25 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
-      if (authToken) {
+      // In local mode, use Bearer token; in multi mode, rely on cookies
+      if (authMode !== 'multi' && authToken) {
         headers['Authorization'] = `Bearer ${authToken}`;
       }
       if (init?.headers) {
         Object.assign(headers, init.headers);
       }
-      const res = await fetch(`${BASE}${path}`, { ...init, headers });
+      const res = await fetch(`${BASE}${path}`, {
+        ...init,
+        headers,
+        credentials: authMode === 'multi' ? 'include' : 'same-origin',
+      });
       if (!res.ok) {
+        // On 401 in multi mode, trigger logout
+        if (res.status === 401 && authMode === 'multi') {
+          import('@/stores/auth-store').then(({ useAuthStore }) => {
+            useAuthStore.getState().logout();
+          });
+        }
         const body = await res.json().catch(() => ({}));
         const message = body.error || `HTTP ${res.status}`;
         const type: DomainError['type'] = res.status === 404 ? 'NOT_FOUND'

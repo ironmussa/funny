@@ -402,5 +402,32 @@
     "pushed": "Pushed, pending merge",
     "merged": "Branch merged",
     "clean": "Clean"
+  },
+  "auth": {
+    "signIn": "Sign in",
+    "signingIn": "Signing in...",
+    "signInPrompt": "Sign in to continue",
+    "username": "Username",
+    "usernamePlaceholder": "Enter your username",
+    "password": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "loginFailed": "Login failed. Please check your credentials.",
+    "logout": "Log out"
+  },
+  "users": {
+    "title": "Users",
+    "addUser": "Add user",
+    "username": "Username",
+    "usernamePlaceholder": "Enter username",
+    "displayName": "Display name",
+    "displayNamePlaceholder": "Enter display name",
+    "password": "Password",
+    "passwordPlaceholder": "Enter password",
+    "role": "Role",
+    "roleUser": "User",
+    "roleAdmin": "Admin",
+    "create": "Create user",
+    "creating": "Creating...",
+    "createFailed": "Failed to create user"
   }
 }

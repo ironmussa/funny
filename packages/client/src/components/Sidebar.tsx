@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/stores/app-store';
+import { useAuthStore } from '@/stores/auth-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { SettingsPanel } from './SettingsPanel';
 import { toast } from 'sonner';
@@ -38,6 +39,9 @@ export function Sidebar() {
   const deleteProject = useAppStore(s => s.deleteProject);
   const settingsOpen = useAppStore(s => s.settingsOpen);
   const showAllThreads = useAppStore(s => s.showAllThreads);
+  const authMode = useAuthStore(s => s.mode);
+  const authUser = useAuthStore(s => s.user);
+  const logout = useAuthStore(s => s.logout);
 
   const [archiveConfirm, setArchiveConfirm] = useState<{
     threadId: string;
@@ -184,6 +188,16 @@ export function Sidebar() {
           />
         ))}
       </ScrollArea>
+
+      {/* User section (multi mode only) */}
+      {authMode === 'multi' && authUser && (
+        <div className="border-t border-border px-3 py-2 flex items-center justify-between">
+          <span className="text-sm text-foreground truncate">{authUser.displayName}</span>
+          <Button variant="ghost" size="sm" onClick={logout} className="text-xs text-muted-foreground">
+            {t('auth.logout')}
+          </Button>
+        </div>
+      )}
 
       {/* Archive confirmation dialog */}
       <Dialog

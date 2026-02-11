@@ -31,6 +31,7 @@ export interface IThreadManager {
 
 export interface IWSBroker {
   emit(event: WSEvent): void;
+  emitToUser(userId: string, event: WSEvent): void;
 }
 
 // ── Claude process factory ──────────────────────────────────────

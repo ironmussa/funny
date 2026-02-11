@@ -9,25 +9,30 @@ function escapeLike(value: string): string {
 
 // ── Thread CRUD ──────────────────────────────────────────────────
 
-/** List threads, optionally filtered by projectId and archive status */
+/** List threads, optionally filtered by projectId, userId, and archive status */
 export function listThreads(opts: {
   projectId?: string;
+  userId: string;
   includeArchived?: boolean;
 }) {
-  const { projectId, includeArchived } = opts;
+  const { projectId, userId, includeArchived } = opts;
+  const filters: ReturnType<typeof eq>[] = [];
+
+  // In multi mode, filter by userId; in local mode (userId='__local__'), skip
+  if (userId !== '__local__') {
+    filters.push(eq(schema.threads.userId, userId));
+  }
 
   if (projectId) {
-    const conditions = includeArchived
-      ? eq(schema.threads.projectId, projectId)
-      : and(eq(schema.threads.projectId, projectId), eq(schema.threads.archived, 0));
-    return db.select().from(schema.threads).where(conditions).orderBy(desc(schema.threads.createdAt)).all();
+    filters.push(eq(schema.threads.projectId, projectId));
   }
 
-  if (includeArchived) {
-    return db.select().from(schema.threads).orderBy(desc(schema.threads.createdAt)).all();
+  if (!includeArchived) {
+    filters.push(eq(schema.threads.archived, 0));
   }
 
-  return db.select().from(schema.threads).where(eq(schema.threads.archived, 0)).orderBy(desc(schema.threads.createdAt)).all();
+  const condition = filters.length > 0 ? and(...filters) : undefined;
+  return db.select().from(schema.threads).where(condition).orderBy(desc(schema.threads.createdAt)).all();
 }
 
 /** List archived threads with pagination and search */
@@ -35,21 +40,29 @@ export function listArchivedThreads(opts: {
   page: number;
   limit: number;
   search: string;
+  userId: string;
 }) {
-  const { page, limit, search } = opts;
+  const { page, limit, search, userId } = opts;
   const offset = (page - 1) * limit;
 
   const safeSearch = search ? escapeLike(search) : '';
-  const conditions = search
-    ? and(
-        eq(schema.threads.archived, 1),
-        or(
-          like(schema.threads.title, `%${safeSearch}%`),
-          like(schema.threads.branch, `%${safeSearch}%`),
-          like(schema.threads.status, `%${safeSearch}%`)
-        )
-      )
-    : eq(schema.threads.archived, 1);
+  const filters: ReturnType<typeof eq>[] = [eq(schema.threads.archived, 1)];
+
+  if (userId !== '__local__') {
+    filters.push(eq(schema.threads.userId, userId));
+  }
+
+  if (search) {
+    filters.push(
+      or(
+        like(schema.threads.title, `%${safeSearch}%`),
+        like(schema.threads.branch, `%${safeSearch}%`),
+        like(schema.threads.status, `%${safeSearch}%`)
+      ) as any
+    );
+  }
+
+  const conditions = and(...filters);
 
   const [{ total }] = db
     .select({ total: drizzleCount() })

@@ -4,6 +4,7 @@ import { useAppStore } from '@/stores/app-store';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useAuthStore } from '@/stores/auth-store';
 import {
   ArrowLeft,
   Settings,
@@ -13,9 +14,10 @@ import {
   Terminal,
   Timer,
   Archive,
+  Users,
 } from 'lucide-react';
 
-export const settingsItems = [
+const baseSettingsItems = [
   { id: 'general', label: 'General', icon: Settings },
   { id: 'mcp-server', label: 'MCP Server', icon: Server },
   { id: 'skills', label: 'Skills', icon: Sparkles },
@@ -25,7 +27,8 @@ export const settingsItems = [
   { id: 'archived-threads', label: 'Archived Threads', icon: Archive },
 ] as const;
 
-export type SettingsItemId = (typeof settingsItems)[number]['id'];
+export const settingsItems = baseSettingsItems;
+export type SettingsItemId = (typeof baseSettingsItems)[number]['id'] | 'users';
 
 export const settingsLabelKeys: Record<string, string> = {
   general: 'settings.general',
@@ -35,6 +38,7 @@ export const settingsLabelKeys: Record<string, string> = {
   'startup-commands': 'startup.title',
   automations: 'settings.automations',
   'archived-threads': 'settings.archivedThreads',
+  users: 'users.title',
 };
 
 export function SettingsPanel() {
@@ -43,6 +47,14 @@ export function SettingsPanel() {
   const setSettingsOpen = useAppStore(s => s.setSettingsOpen);
   const activeSettingsPage = useAppStore(s => s.activeSettingsPage);
   const selectedProjectId = useAppStore(s => s.selectedProjectId);
+  const authMode = useAuthStore(s => s.mode);
+  const authUser = useAuthStore(s => s.user);
+
+  // Build items list dynamically (add Users for admin in multi mode)
+  const items: Array<{ id: string; label: string; icon: typeof Settings }> = [...baseSettingsItems];
+  if (authMode === 'multi' && authUser?.role === 'admin') {
+    items.push({ id: 'users', label: 'Users', icon: Users });
+  }
 
   const settingsPath = (pageId: string) =>
     selectedProjectId
@@ -70,7 +82,7 @@ export function SettingsPanel() {
       {/* Menu list */}
       <ScrollArea className="flex-1">
         <div className="py-1">
-          {settingsItems.map((item) => {
+          {items.map((item) => {
             const Icon = item.icon;
             return (
               <button

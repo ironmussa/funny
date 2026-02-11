@@ -23,14 +23,20 @@ async function getSchedulerHooks() {
 
 // ── Automation CRUD ──────────────────────────────────────────────
 
-export function listAutomations(projectId?: string) {
+export function listAutomations(projectId?: string, userId?: string) {
+  const filters: ReturnType<typeof eq>[] = [];
+
   if (projectId) {
-    return db.select().from(schema.automations)
-      .where(eq(schema.automations.projectId, projectId))
-      .orderBy(desc(schema.automations.createdAt))
-      .all();
+    filters.push(eq(schema.automations.projectId, projectId));
   }
+
+  if (userId && userId !== '__local__') {
+    filters.push(eq(schema.automations.userId, userId));
+  }
+
+  const condition = filters.length > 0 ? and(...filters) : undefined;
   return db.select().from(schema.automations)
+    .where(condition)
     .orderBy(desc(schema.automations.createdAt))
     .all();
 }
@@ -48,6 +54,7 @@ export async function createAutomation(data: {
   schedule: string;
   model?: string;
   permissionMode?: string;
+  userId?: string;
 }) {
   const id = nanoid();
   const now = new Date().toISOString();
@@ -55,6 +62,7 @@ export async function createAutomation(data: {
   db.insert(schema.automations).values({
     id,
     projectId: data.projectId,
+    userId: data.userId || '__local__',
     name: data.name,
     prompt: data.prompt,
     schedule: data.schedule,

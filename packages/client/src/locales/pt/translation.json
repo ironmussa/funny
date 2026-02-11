@@ -396,5 +396,32 @@
     "pushed": "Enviado, pendente de merge",
     "merged": "Branch mergeado",
     "clean": "Limpo"
+  },
+  "auth": {
+    "signIn": "Entrar",
+    "signingIn": "Entrando...",
+    "signInPrompt": "Faça login para continuar",
+    "username": "Usuário",
+    "usernamePlaceholder": "Digite seu usuário",
+    "password": "Senha",
+    "passwordPlaceholder": "Digite sua senha",
+    "loginFailed": "Falha no login. Verifique suas credenciais.",
+    "logout": "Sair"
+  },
+  "users": {
+    "title": "Usuários",
+    "addUser": "Adicionar usuário",
+    "username": "Usuário",
+    "usernamePlaceholder": "Digite o usuário",
+    "displayName": "Nome",
+    "displayNamePlaceholder": "Digite o nome",
+    "password": "Senha",
+    "passwordPlaceholder": "Digite a senha",
+    "role": "Função",
+    "roleUser": "Usuário",
+    "roleAdmin": "Admin",
+    "create": "Criar usuário",
+    "creating": "Criando...",
+    "createFailed": "Erro ao criar usuário"
   }
 }

@@ -210,7 +210,7 @@ export function ProjectItem({
               {t('sidebar.noThreads')}
             </p>
           )}
-          {threads.slice(0, 10).map((th) => (
+          {threads.slice(0, 5).map((th) => (
             <ThreadItem
               key={th.id}
               thread={th}
@@ -222,7 +222,7 @@ export function ProjectItem({
               gitStatus={th.mode === 'worktree' ? gitStatusByThread[th.id] : undefined}
             />
           ))}
-          {threads.length > 10 && (
+          {threads.length > 5 && (
             <button
               onClick={onShowAllThreads}
               className="text-[11px] text-muted-foreground hover:text-foreground px-2 py-1.5 transition-colors"

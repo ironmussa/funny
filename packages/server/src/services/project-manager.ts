@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { resolve, isAbsolute } from 'path';
 import { ok, err, type Result } from 'neverthrow';
@@ -7,15 +7,22 @@ import { isGitRepoSync } from '../utils/git-v2.js';
 import { badRequest, notFound, conflict, type DomainError } from '@a-parallel/shared/errors';
 import type { Project } from '@a-parallel/shared';
 
-export function listProjects(): Project[] {
-  return db.select().from(schema.projects).all();
+/**
+ * List projects. In local mode (userId='__local__'), returns all projects.
+ * In multi mode, filters by userId.
+ */
+export function listProjects(userId: string): Project[] {
+  if (userId === '__local__') {
+    return db.select().from(schema.projects).all();
+  }
+  return db.select().from(schema.projects).where(eq(schema.projects.userId, userId)).all();
 }
 
 export function getProject(id: string): Project | undefined {
   return db.select().from(schema.projects).where(eq(schema.projects.id, id)).get();
 }
 
-export function createProject(name: string, rawPath: string): Result<Project, DomainError> {
+export function createProject(name: string, rawPath: string, userId: string): Result<Project, DomainError> {
   if (!isAbsolute(rawPath)) {
     return err(badRequest('Project path must be absolute'));
   }
@@ -25,12 +32,18 @@ export function createProject(name: string, rawPath: string): Result<Project, Do
     return err(badRequest(`Not a git repository: ${path}`));
   }
 
-  const existingPath = db.select().from(schema.projects).where(eq(schema.projects.path, path)).get();
+  // Check for duplicate path (scoped to user in multi mode)
+  const existingPath = userId === '__local__'
+    ? db.select().from(schema.projects).where(eq(schema.projects.path, path)).get()
+    : db.select().from(schema.projects).where(and(eq(schema.projects.path, path), eq(schema.projects.userId, userId))).get();
   if (existingPath) {
     return err(conflict(`A project with this path already exists: ${path}`));
   }
 
-  const existingName = db.select().from(schema.projects).where(eq(schema.projects.name, name)).get();
+  // Check for duplicate name (scoped to user in multi mode)
+  const existingName = userId === '__local__'
+    ? db.select().from(schema.projects).where(eq(schema.projects.name, name)).get()
+    : db.select().from(schema.projects).where(and(eq(schema.projects.name, name), eq(schema.projects.userId, userId))).get();
   if (existingName) {
     return err(conflict(`A project with this name already exists: ${name}`));
   }
@@ -39,6 +52,7 @@ export function createProject(name: string, rawPath: string): Result<Project, Do
     id: nanoid(),
     name,
     path,
+    userId,
     createdAt: new Date().toISOString(),
   };
 

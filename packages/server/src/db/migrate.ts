@@ -163,5 +163,24 @@ export function autoMigrate() {
     )
   `);
 
+  // Add user_id columns for multi-user support
+  try {
+    db.run(sql`ALTER TABLE projects ADD COLUMN user_id TEXT NOT NULL DEFAULT '__local__'`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    db.run(sql`ALTER TABLE threads ADD COLUMN user_id TEXT NOT NULL DEFAULT '__local__'`);
+  } catch {
+    // Column already exists
+  }
+
+  try {
+    db.run(sql`ALTER TABLE automations ADD COLUMN user_id TEXT NOT NULL DEFAULT '__local__'`);
+  } catch {
+    // Column already exists
+  }
+
   console.log('[db] Tables ready');
 }

@@ -46,7 +46,7 @@ vi.mock('@/components/thread/AgentStatusCards', () => ({
 
 beforeEach(() => {
   useAppStore.setState({
-    projects: [{ id: 'p1', name: 'Test', path: '/tmp/test', createdAt: '' }],
+    projects: [{ id: 'p1', name: 'Test', path: '/tmp/test', userId: '__local__', createdAt: '' }],
     selectedProjectId: 'p1',
     selectedThreadId: null,
     activeThread: null,

@@ -20,15 +20,17 @@ function buildCommandWithPort(command: string, port: number): string {
 
 // GET /api/projects
 projectRoutes.get('/', (c) => {
-  const projects = pm.listProjects();
+  const userId = c.get('userId') as string;
+  const projects = pm.listProjects(userId);
   return c.json(projects);
 });
 
 // POST /api/projects
 projectRoutes.post('/', async (c) => {
+  const userId = c.get('userId') as string;
   const raw = await c.req.json();
   const result = validate(createProjectSchema, raw)
-    .andThen(({ name, path }) => pm.createProject(name, path));
+    .andThen(({ name, path }) => pm.createProject(name, path, userId));
   return resultToResponse(c, result, 201);
 });
 

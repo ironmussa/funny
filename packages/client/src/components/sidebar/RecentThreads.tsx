@@ -59,7 +59,7 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
       return new Date(dateB).getTime() - new Date(dateA).getTime();
     });
 
-    return result.slice(0, 10);
+    return result.slice(0, 5);
   }, [threadsByProject, projects]);
 
   if (recentThreads.length === 0) return null;

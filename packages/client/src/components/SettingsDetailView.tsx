@@ -26,6 +26,7 @@ import { WorktreeSettings } from './WorktreeSettings';
 import { StartupCommandsSettings } from './StartupCommandsSettings';
 import { AutomationSettings } from './AutomationSettings';
 import { ArchivedThreadsSettings } from './ArchivedThreadsSettings';
+import { UserManagement } from './settings/UserManagement';
 
 function getLanguageName(code: string): string {
   try {
@@ -255,6 +256,8 @@ export function SettingsDetailView() {
             <AutomationSettings />
           ) : page === 'archived-threads' ? (
             <ArchivedThreadsSettings />
+          ) : page === 'users' ? (
+            <UserManagement />
           ) : (
             <p className="text-sm text-muted-foreground">
               {t('settings.comingSoon', { label })}

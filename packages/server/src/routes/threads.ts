@@ -25,19 +25,21 @@ function slugifyTitle(title: string, maxLength = 40): string {
 
 // GET /api/threads?projectId=xxx&includeArchived=true
 threadRoutes.get('/', (c) => {
+  const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
   const includeArchived = c.req.query('includeArchived') === 'true';
-  const threads = tm.listThreads({ projectId: projectId || undefined, includeArchived });
+  const threads = tm.listThreads({ projectId: projectId || undefined, userId, includeArchived });
   return c.json(threads);
 });
 
 // GET /api/threads/archived?page=1&limit=100&search=xxx
 threadRoutes.get('/archived', (c) => {
+  const userId = c.get('userId') as string;
   const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
   const limit = Math.min(1000, Math.max(1, parseInt(c.req.query('limit') || '100', 10)));
   const search = c.req.query('search')?.trim() || '';
 
-  const { threads, total } = tm.listArchivedThreads({ page, limit, search });
+  const { threads, total } = tm.listArchivedThreads({ page, limit, search, userId });
   return c.json({ threads, total, page, limit });
 });
 
@@ -77,9 +79,11 @@ threadRoutes.post('/', async (c) => {
     threadBranch = branchName;
   }
 
+  const userId = c.get('userId') as string;
   const thread = {
     id: threadId,
     projectId,
+    userId,
     title: title || prompt,
     mode,
     permissionMode: permissionMode || 'autoEdit',

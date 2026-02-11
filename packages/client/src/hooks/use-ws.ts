@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
-import { getAuthToken } from '@/lib/api';
+import { getAuthToken, getAuthMode } from '@/lib/api';
 
 // Module-level singleton to prevent duplicate WebSocket connections
 // (React StrictMode double-mounts effects in development)
@@ -152,24 +152,44 @@ function handleMessage(e: MessageEvent) {
 function connect() {
   if (stopped) return;
 
-  const token = getAuthToken();
-  if (!token) {
-    // Token not yet available (initAuth still in progress), retry shortly
-    reconnectTimer = setTimeout(connect, 500);
-    return;
+  const mode = getAuthMode();
+
+  if (mode === 'local' || !mode) {
+    // Local mode: require token
+    const token = getAuthToken();
+    if (!token) {
+      // Token not yet available (initAuth still in progress), retry shortly
+      reconnectTimer = setTimeout(connect, 500);
+      return;
+    }
+
+    const isTauri = !!(window as any).__TAURI_INTERNALS__;
+    const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
+    const base = isTauri
+      ? `ws://localhost:${serverPort}/ws`
+      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+    const url = `${base}?token=${encodeURIComponent(token)}`;
+    console.log(`[ws] Connecting to ${base}...`);
+
+    const ws = new WebSocket(url);
+    activeWS = ws;
+    setupWS(ws);
+  } else {
+    // Multi mode: no token needed, cookies are sent automatically
+    const isTauri = !!(window as any).__TAURI_INTERNALS__;
+    const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
+    const base = isTauri
+      ? `ws://localhost:${serverPort}/ws`
+      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+    console.log(`[ws] Connecting to ${base}...`);
+
+    const ws = new WebSocket(base);
+    activeWS = ws;
+    setupWS(ws);
   }
+}
 
-  const isTauri = !!(window as any).__TAURI_INTERNALS__;
-  const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
-  const base = isTauri
-    ? `ws://localhost:${serverPort}/ws`
-    : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
-  const url = `${base}?token=${encodeURIComponent(token)}`;
-  console.log(`[ws] Connecting to ${base}...`);
-
-  const ws = new WebSocket(url);
-  activeWS = ws;
-
+function setupWS(ws: WebSocket) {
   ws.onopen = () => {
     console.log('[ws] Connected');
     if (wasConnected) {
@@ -181,8 +201,18 @@ function connect() {
 
   ws.onmessage = handleMessage;
 
-  ws.onclose = () => {
+  ws.onclose = (e) => {
     if (stopped) return;
+    // If closed with 4001 (auth failed), trigger logout in multi mode
+    if (e.code === 4001 || e.code === 1008) {
+      const mode = getAuthMode();
+      if (mode === 'multi') {
+        import('@/stores/auth-store').then(({ useAuthStore }) => {
+          useAuthStore.getState().logout();
+        });
+        return;
+      }
+    }
     console.log('[ws] Disconnected, reconnecting in 2s...');
     reconnectTimer = setTimeout(connect, 2000);
   };

@@ -5,6 +5,7 @@
  */
 
 import { wsBroker } from './ws-broker.js';
+import * as pm from './project-manager.js';
 
 const KILL_GRACE_MS = 3_000;
 
@@ -36,8 +37,17 @@ interface RunningCommand {
 
 const activeCommands = new Map<string, RunningCommand>();
 
-function emitWS(type: string, data: unknown) {
-  wsBroker.emit({ type, threadId: '', data } as any);
+function emitWS(type: string, data: unknown, projectId?: string) {
+  const event = { type, threadId: '', data } as any;
+  // Look up project userId for per-user filtering
+  if (projectId) {
+    const project = pm.getProject(projectId);
+    if (project?.userId && project.userId !== '__local__') {
+      wsBroker.emitToUser(project.userId, event);
+      return;
+    }
+  }
+  wsBroker.emit(event);
 }
 
 export async function startCommand(
@@ -87,12 +97,12 @@ export async function startCommand(
     projectId,
     label,
     status: 'running',
-  });
+  }, projectId);
 
   // Stream stdout
-  readStream(proc.stdout as ReadableStream<Uint8Array>, commandId, 'stdout');
+  readStream(proc.stdout as ReadableStream<Uint8Array>, commandId, 'stdout', projectId);
   // Stream stderr
-  readStream(proc.stderr as ReadableStream<Uint8Array>, commandId, 'stderr');
+  readStream(proc.stderr as ReadableStream<Uint8Array>, commandId, 'stderr', projectId);
 
   // Handle exit
   proc.exited
@@ -106,7 +116,7 @@ export async function startCommand(
         label,
         status: 'exited',
         exitCode,
-      });
+      }, projectId);
     })
     .catch((err) => {
       console.error(`[command-runner] "${label}" error:`, err);
@@ -118,14 +128,15 @@ export async function startCommand(
         label,
         status: 'exited',
         exitCode: 1,
-      });
+      }, projectId);
     });
 }
 
 async function readStream(
   stream: ReadableStream<Uint8Array>,
   commandId: string,
-  channel: 'stdout' | 'stderr'
+  channel: 'stdout' | 'stderr',
+  projectId?: string,
 ): Promise<void> {
   const reader = stream.getReader();
   const decoder = new TextDecoder();
@@ -136,7 +147,7 @@ async function readStream(
       if (done) break;
 
       const text = decoder.decode(value, { stream: true });
-      emitWS('command:output', { commandId, data: text, channel });
+      emitWS('command:output', { commandId, data: text, channel }, projectId);
     }
   } catch {
     // Stream closed — process likely killed
@@ -171,7 +182,7 @@ export async function stopCommand(commandId: string): Promise<void> {
     projectId: entry.projectId,
     label: entry.label,
     status: 'stopped',
-  });
+  }, entry.projectId);
 }
 
 export function getRunningCommands(): string[] {

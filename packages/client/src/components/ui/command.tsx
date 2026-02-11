@@ -2,7 +2,7 @@ import * as React from 'react';
 import { Command as CommandPrimitive } from 'cmdk';
 import { Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle } from '@/components/ui/dialog';
 
 const Command = React.forwardRef<
   React.ComponentRef<typeof CommandPrimitive>,
@@ -23,9 +23,11 @@ function CommandDialog({
   children,
   ...props
 }: React.ComponentProps<typeof Dialog>) {
+  console.log('[CommandDialog] render, open=', props.open);
   return (
     <Dialog {...props}>
-      <DialogContent className="overflow-hidden p-0 shadow-xl [&>button:last-child]:hidden">
+      <DialogContent className="overflow-hidden p-0 shadow-xl [&>button:last-child]:hidden top-[20%] translate-y-0 data-[state=closed]:slide-out-to-top-[20%] data-[state=open]:slide-in-from-top-[20%]">
+        <DialogTitle className="sr-only">Command palette</DialogTitle>
         <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3">
           {children}
         </Command>

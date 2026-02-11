@@ -6,7 +6,8 @@ import { startAgent, stopAgent, isAgentRunning } from '../services/agent-runner.
 import { nanoid } from 'nanoid';
 import { createThreadSchema, sendMessageSchema, updateThreadSchema, validate } from '../validation/schemas.js';
 import { requireThread, requireThreadWithMessages, requireProject } from '../utils/route-helpers.js';
-import { NotFound } from '../middleware/error-handler.js';
+import { resultToResponse } from '../utils/result-response.js';
+import { notFound } from '@a-parallel/shared/errors';
 
 export const threadRoutes = new Hono();
 
@@ -43,17 +44,20 @@ threadRoutes.get('/archived', (c) => {
 // GET /api/threads/:id
 threadRoutes.get('/:id', (c) => {
   const result = requireThreadWithMessages(c.req.param('id'));
-  return c.json(result);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json(result.value);
 });
 
 // POST /api/threads
 threadRoutes.post('/', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(createThreadSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
-  const { projectId, title, mode, model, permissionMode, baseBranch, prompt, images } = parsed.data;
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { projectId, title, mode, model, permissionMode, baseBranch, prompt, images } = parsed.value;
 
-  const project = requireProject(projectId);
+  const projectResult = requireProject(projectId);
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+  const project = projectResult.value;
 
   const threadId = nanoid();
   let worktreePath: string | undefined;
@@ -65,12 +69,12 @@ threadRoutes.post('/', async (c) => {
     const slug = slugifyTitle(title || prompt);
     const projectSlug = slugifyTitle(project.name);
     const branchName = `${projectSlug}/${slug}-${threadId.slice(0, 6)}`;
-    try {
-      worktreePath = await wm.createWorktree(project.path, branchName, resolvedBaseBranch);
-      threadBranch = branchName;
-    } catch (e: any) {
-      return c.json({ error: `Failed to create worktree: ${e.message}` }, 500);
+    const wtResult = await wm.createWorktree(project.path, branchName, resolvedBaseBranch);
+    if (wtResult.isErr()) {
+      return c.json({ error: `Failed to create worktree: ${wtResult.error.message}` }, 500);
     }
+    worktreePath = wtResult.value;
+    threadBranch = branchName;
   }
 
   const thread = {
@@ -89,10 +93,8 @@ threadRoutes.post('/', async (c) => {
 
   tm.createThread(thread);
 
-  // Determine working directory for agent
   const cwd = worktreePath ?? project.path;
 
-  // Start agent asynchronously
   const pMode = permissionMode || 'autoEdit';
   startAgent(threadId, prompt, cwd, model || 'sonnet', pMode, images).catch((err) => {
     console.error(`[agent] Error in thread ${threadId}:`, err);
@@ -107,12 +109,15 @@ threadRoutes.post('/:id/message', async (c) => {
   const id = c.req.param('id');
   const raw = await c.req.json();
   const parsed = validate(sendMessageSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
-  const { content, model, permissionMode, images } = parsed.data;
-  const thread = requireThread(id);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { content, model, permissionMode, images } = parsed.value;
+
+  const threadResult = requireThread(id);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+  const thread = threadResult.value;
 
   const cwd = thread.worktreePath ?? pm.getProject(thread.projectId)?.path;
-  if (!cwd) throw NotFound('Project path not found');
+  if (!cwd) return c.json({ error: 'Project path not found' }, 404);
 
   const effectiveModel = (model || 'sonnet') as import('@a-parallel/shared').ClaudeModel;
   const effectivePermission = (permissionMode || thread.permissionMode || 'autoEdit') as import('@a-parallel/shared').PermissionMode;
@@ -132,17 +137,19 @@ threadRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id');
   const raw = await c.req.json();
   const parsed = validate(updateThreadSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const thread = requireThread(id);
+  const threadResult = requireThread(id);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+  const thread = threadResult.value;
 
   const updates: Record<string, any> = {};
-  if (parsed.data.archived !== undefined) {
-    updates.archived = parsed.data.archived ? 1 : 0;
+  if (parsed.value.archived !== undefined) {
+    updates.archived = parsed.value.archived ? 1 : 0;
   }
 
   // Cleanup worktree + branch when archiving
-  if (parsed.data.archived && thread.worktreePath) {
+  if (parsed.value.archived && thread.worktreePath) {
     const project = pm.getProject(thread.projectId);
     if (project) {
       await wm.removeWorktree(project.path, thread.worktreePath).catch((e) => {
@@ -172,12 +179,10 @@ threadRoutes.delete('/:id', async (c) => {
   const thread = tm.getThread(id);
 
   if (thread) {
-    // Stop agent if running
     if (isAgentRunning(id)) {
       stopAgent(id).catch(console.error);
     }
 
-    // Remove worktree + branch if exists
     if (thread.worktreePath) {
       const project = pm.getProject(thread.projectId);
       if (project) {
@@ -192,7 +197,6 @@ threadRoutes.delete('/:id', async (c) => {
       }
     }
 
-    // Cascade delete handles messages + tool_calls
     tm.deleteThread(id);
   }
 

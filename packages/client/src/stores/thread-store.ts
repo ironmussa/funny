@@ -97,10 +97,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     const promise = (async () => {
       try {
-        const threads = await api.listThreads(projectId);
-        set((state) => ({
-          threadsByProject: { ...state.threadsByProject, [projectId]: threads },
-        }));
+        const result = await api.listThreads(projectId);
+        if (result.isOk()) {
+          set((state) => ({
+            threadsByProject: { ...state.threadsByProject, [projectId]: result.value },
+          }));
+        }
       } finally {
         _threadLoadPromises.delete(projectId);
       }
@@ -117,61 +119,65 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     if (!threadId) return;
 
-    try {
-      const thread = await api.getThread(threadId);
+    const result = await api.getThread(threadId);
 
-      if (getSelectGeneration() !== gen) {
-        clearWSBuffer(threadId);
-        return;
-      }
-
-      const projectId = thread.projectId;
-
-      // Ensure project is expanded and threads are loaded
-      const projectStore = useProjectStore.getState();
-      if (!projectStore.expandedProjects.has(projectId)) {
-        const next = new Set(projectStore.expandedProjects);
-        next.add(projectId);
-        useProjectStore.setState({ expandedProjects: next });
-      }
-      if (!get().threadsByProject[projectId]) {
-        get().loadThreadsForProject(projectId);
-      }
-
-      const buffered = getBufferedInitInfo(threadId);
-      const resultInfo = (thread.status === 'completed' || thread.status === 'failed')
-        ? { status: thread.status as 'completed' | 'failed', cost: thread.cost, duration: 0 }
-        : undefined;
-
-      // Derive waitingReason from the last tool call when reloading a waiting thread
-      let waitingReason: WaitingReason | undefined;
-      if (thread.status === 'waiting' && thread.messages?.length) {
-        for (let i = thread.messages.length - 1; i >= 0; i--) {
-          const tcs = thread.messages[i].toolCalls;
-          if (tcs?.length) {
-            const lastTC = tcs[tcs.length - 1];
-            if (lastTC.name === 'AskUserQuestion') waitingReason = 'question';
-            else if (lastTC.name === 'ExitPlanMode') waitingReason = 'plan';
-            break;
-          }
-        }
-      }
-
-      set({ activeThread: { ...thread, initInfo: buffered || undefined, resultInfo, waitingReason } });
-      useProjectStore.setState({ selectedProjectId: projectId });
-
-      // Replay any WS events that arrived while activeThread was loading
-      flushWSBuffer(threadId, get());
-    } catch {
+    if (result.isErr()) {
       if (getSelectGeneration() === gen) {
-        clearWSBuffer(threadId!);
+        clearWSBuffer(threadId);
         set({ activeThread: null, selectedThreadId: null });
       }
+      return;
     }
+
+    const thread = result.value;
+
+    if (getSelectGeneration() !== gen) {
+      clearWSBuffer(threadId);
+      return;
+    }
+
+    const projectId = thread.projectId;
+
+    // Ensure project is expanded and threads are loaded
+    const projectStore = useProjectStore.getState();
+    if (!projectStore.expandedProjects.has(projectId)) {
+      const next = new Set(projectStore.expandedProjects);
+      next.add(projectId);
+      useProjectStore.setState({ expandedProjects: next });
+    }
+    if (!get().threadsByProject[projectId]) {
+      get().loadThreadsForProject(projectId);
+    }
+
+    const buffered = getBufferedInitInfo(threadId);
+    const resultInfo = (thread.status === 'completed' || thread.status === 'failed')
+      ? { status: thread.status as 'completed' | 'failed', cost: thread.cost, duration: 0 }
+      : undefined;
+
+    // Derive waitingReason from the last tool call when reloading a waiting thread
+    let waitingReason: WaitingReason | undefined;
+    if (thread.status === 'waiting' && thread.messages?.length) {
+      for (let i = thread.messages.length - 1; i >= 0; i--) {
+        const tcs = thread.messages[i].toolCalls;
+        if (tcs?.length) {
+          const lastTC = tcs[tcs.length - 1];
+          if (lastTC.name === 'AskUserQuestion') waitingReason = 'question';
+          else if (lastTC.name === 'ExitPlanMode') waitingReason = 'plan';
+          break;
+        }
+      }
+    }
+
+    set({ activeThread: { ...thread, initInfo: buffered || undefined, resultInfo, waitingReason } });
+    useProjectStore.setState({ selectedProjectId: projectId });
+
+    // Replay any WS events that arrived while activeThread was loading
+    flushWSBuffer(threadId, get());
   },
 
   archiveThread: async (threadId, projectId) => {
-    await api.archiveThread(threadId, true);
+    const result = await api.archiveThread(threadId, true);
+    if (result.isErr()) return;
     cleanupThreadActor(threadId);
     const { threadsByProject, selectedThreadId } = get();
     const projectThreads = threadsByProject[projectId] ?? [];
@@ -188,7 +194,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   deleteThread: async (threadId, projectId) => {
-    await api.deleteThread(threadId);
+    const result = await api.deleteThread(threadId);
+    if (result.isErr()) return;
     cleanupThreadActor(threadId);
     const { threadsByProject, selectedThreadId } = get();
     const projectThreads = threadsByProject[projectId] ?? [];
@@ -242,16 +249,14 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   refreshActiveThread: async () => {
     const { activeThread } = get();
     if (!activeThread) return;
-    try {
-      const thread = await api.getThread(activeThread.id);
-      const resultInfo = activeThread.resultInfo
-        ?? ((thread.status === 'completed' || thread.status === 'failed')
-          ? { status: thread.status as 'completed' | 'failed', cost: thread.cost, duration: 0 }
-          : undefined);
-      set({ activeThread: { ...thread, initInfo: activeThread.initInfo, resultInfo } });
-    } catch {
-      // silently ignore
-    }
+    const result = await api.getThread(activeThread.id);
+    if (result.isErr()) return; // silently ignore
+    const thread = result.value;
+    const resultInfo = activeThread.resultInfo
+      ?? ((thread.status === 'completed' || thread.status === 'failed')
+        ? { status: thread.status as 'completed' | 'failed', cost: thread.cost, duration: 0 }
+        : undefined);
+    set({ activeThread: { ...thread, initInfo: activeThread.initInfo, resultInfo } });
   },
 
   refreshAllLoadedThreads: async () => {

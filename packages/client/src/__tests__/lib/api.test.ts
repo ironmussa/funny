@@ -27,7 +27,8 @@ describe('API Client', () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse([{ id: 'p1', name: 'Test' }]));
 
       const result = await api.listProjects();
-      expect(result).toEqual([{ id: 'p1', name: 'Test' }]);
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toEqual([{ id: 'p1', name: 'Test' }]);
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/projects'),
         expect.objectContaining({ headers: { 'Content-Type': 'application/json' } })
@@ -38,7 +39,8 @@ describe('API Client', () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ id: 'new', name: 'New' }, 201));
 
       const result = await api.createProject('New', '/path');
-      expect(result).toEqual({ id: 'new', name: 'New' });
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toEqual({ id: 'new', name: 'New' });
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/projects'),
         expect.objectContaining({ method: 'POST' })
@@ -48,7 +50,8 @@ describe('API Client', () => {
     test('deleteProject calls DELETE /api/projects/:id', async () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse({ ok: true }));
 
-      await api.deleteProject('p1');
+      const result = await api.deleteProject('p1');
+      expect(result.isOk()).toBe(true);
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/projects/p1'),
         expect.objectContaining({ method: 'DELETE' })
@@ -59,7 +62,8 @@ describe('API Client', () => {
       mockFetch.mockResolvedValueOnce(mockJsonResponse(['main', 'dev']));
 
       const result = await api.listBranches('p1');
-      expect(result).toEqual(['main', 'dev']);
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap()).toEqual(['main', 'dev']);
     });
   });
 
@@ -90,7 +94,8 @@ describe('API Client', () => {
       );
 
       const result = await api.getThread('t1');
-      expect(result.id).toBe('t1');
+      expect(result.isOk()).toBe(true);
+      expect(result._unsafeUnwrap().id).toBe('t1');
     });
 
     test('createThread calls POST /api/threads', async () => {
@@ -203,42 +208,53 @@ describe('API Client', () => {
   });
 
   describe('Error handling', () => {
-    test('throws on non-OK response', async () => {
+    test('returns err on non-OK response', async () => {
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({ error: 'Not found' }, 404)
       );
 
-      await expect(api.getThread('nonexistent')).rejects.toThrow('Not found');
+      const result = await api.getThread('nonexistent');
+      expect(result.isErr()).toBe(true);
+      expect(result._unsafeUnwrapErr().message).toBe('Not found');
+      expect(result._unsafeUnwrapErr().type).toBe('NOT_FOUND');
     });
 
-    test('throws generic error when response has no error field', async () => {
+    test('returns err with generic message when response has no error field', async () => {
       mockFetch.mockResolvedValueOnce(
         new Response('Server Error', { status: 500 })
       );
 
-      await expect(api.listProjects()).rejects.toThrow('HTTP 500');
+      const result = await api.listProjects();
+      expect(result.isErr()).toBe(true);
+      expect(result._unsafeUnwrapErr().message).toBe('HTTP 500');
     });
 
-    test('throws on network failure (fetch rejects)', async () => {
+    test('returns err on network failure (fetch rejects)', async () => {
       mockFetch.mockRejectedValueOnce(new TypeError('Failed to fetch'));
 
-      await expect(api.listProjects()).rejects.toThrow('Failed to fetch');
+      const result = await api.listProjects();
+      expect(result.isErr()).toBe(true);
+      expect(result._unsafeUnwrapErr().message).toContain('Failed to fetch');
     });
 
-    test('throws on 401 Unauthorized', async () => {
+    test('returns err on 401 Unauthorized', async () => {
       mockFetch.mockResolvedValueOnce(
         mockJsonResponse({ error: 'Unauthorized' }, 401)
       );
 
-      await expect(api.listProjects()).rejects.toThrow('Unauthorized');
+      const result = await api.listProjects();
+      expect(result.isErr()).toBe(true);
+      expect(result._unsafeUnwrapErr().message).toBe('Unauthorized');
     });
 
-    test('throws on 503 Service Unavailable with empty body', async () => {
+    test('returns err on 503 Service Unavailable with empty body', async () => {
       mockFetch.mockResolvedValueOnce(
         new Response('', { status: 503 })
       );
 
-      await expect(api.listProjects()).rejects.toThrow('HTTP 503');
+      const result = await api.listProjects();
+      expect(result.isErr()).toBe(true);
+      expect(result._unsafeUnwrapErr().message).toBe('HTTP 503');
     });
 
     test('handles response with Content-Type mismatch', async () => {
@@ -249,7 +265,9 @@ describe('API Client', () => {
         })
       );
 
-      await expect(api.listProjects()).rejects.toThrow('HTTP 500');
+      const result = await api.listProjects();
+      expect(result.isErr()).toBe(true);
+      expect(result._unsafeUnwrapErr().message).toBe('HTTP 500');
     });
   });
 

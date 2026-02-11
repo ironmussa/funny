@@ -6,6 +6,7 @@ import { useGitStatusStore } from '@/stores/git-status-store';
 import { SettingsPanel } from './SettingsPanel';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Dialog,
@@ -33,6 +34,7 @@ export function Sidebar() {
   const startNewThread = useAppStore(s => s.startNewThread);
   const archiveThread = useAppStore(s => s.archiveThread);
   const deleteThread = useAppStore(s => s.deleteThread);
+  const renameProject = useAppStore(s => s.renameProject);
   const deleteProject = useAppStore(s => s.deleteProject);
   const settingsOpen = useAppStore(s => s.settingsOpen);
   const showAllThreads = useAppStore(s => s.showAllThreads);
@@ -48,6 +50,11 @@ export function Sidebar() {
     projectId: string;
     title: string;
     isWorktree?: boolean;
+  } | null>(null);
+  const [renameProjectState, setRenameProjectState] = useState<{
+    projectId: string;
+    currentName: string;
+    newName: string;
   } | null>(null);
   const [deleteProjectConfirm, setDeleteProjectConfirm] = useState<{
     projectId: string;
@@ -73,6 +80,22 @@ export function Sidebar() {
     toast.success(t('toast.threadDeleted', { title }));
     if (wasSelected) navigate(`/projects/${projectId}`);
   }, [deleteThreadConfirm, selectedThreadId, deleteThread, navigate, t]);
+
+  const handleRenameProjectConfirm = useCallback(async () => {
+    if (!renameProjectState) return;
+    const { projectId, newName } = renameProjectState;
+    if (!newName.trim()) {
+      toast.error('Project name cannot be empty');
+      return;
+    }
+    try {
+      await renameProject(projectId, newName.trim());
+      setRenameProjectState(null);
+      toast.success(t('toast.projectRenamed', { name: newName.trim() }));
+    } catch (error: any) {
+      toast.error(error.message || 'Failed to rename project');
+    }
+  }, [renameProjectState, renameProject, t]);
 
   const handleDeleteProjectConfirm = useCallback(async () => {
     if (!deleteProjectConfirm) return;
@@ -129,6 +152,9 @@ export function Sidebar() {
             onNewThread={() => {
               startNewThread(project.id);
               navigate(`/projects/${project.id}`);
+            }}
+            onRenameProject={() => {
+              setRenameProjectState({ projectId: project.id, currentName: project.name, newName: project.name });
             }}
             onDeleteProject={() => {
               setDeleteProjectConfirm({ projectId: project.id, name: project.name });
@@ -210,6 +236,46 @@ export function Sidebar() {
             </Button>
             <Button variant="destructive" size="sm" onClick={handleDeleteThreadConfirm}>
               {t('common.delete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename project dialog */}
+      <Dialog
+        open={!!renameProjectState}
+        onOpenChange={(open) => { if (!open) setRenameProjectState(null); }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('dialog.renameProject')}</DialogTitle>
+            <DialogDescription>
+              {t('dialog.renameProjectDesc', { name: renameProjectState?.currentName })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-2">
+            <Input
+              value={renameProjectState?.newName || ''}
+              onChange={(e) => {
+                if (renameProjectState) {
+                  setRenameProjectState({ ...renameProjectState, newName: e.target.value });
+                }
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  handleRenameProjectConfirm();
+                }
+              }}
+              placeholder={t('sidebar.projectName')}
+              autoFocus
+            />
+          </div>
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setRenameProjectState(null)}>
+              {t('common.cancel')}
+            </Button>
+            <Button size="sm" onClick={handleRenameProjectConfirm}>
+              {t('common.save')}
             </Button>
           </DialogFooter>
         </DialogContent>

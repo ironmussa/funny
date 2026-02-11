@@ -20,35 +20,32 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
     if (get().loadingProjects.has(projectId)) return;
     set((s) => ({ loadingProjects: new Set([...s.loadingProjects, projectId]) }));
 
-    try {
-      const { statuses } = await api.getGitStatuses(projectId);
+    const result = await api.getGitStatuses(projectId);
+    if (result.isOk()) {
       const updates: Record<string, GitStatusInfo> = {};
-      for (const s of statuses) {
+      for (const s of result.value.statuses) {
         updates[s.threadId] = s;
       }
       set((state) => ({
         statusByThread: { ...state.statusByThread, ...updates },
       }));
-    } catch {
-      // Silently ignore — git status is best-effort
-    } finally {
-      set((s) => {
-        const next = new Set(s.loadingProjects);
-        next.delete(projectId);
-        return { loadingProjects: next };
-      });
     }
+    // Silently ignore errors — git status is best-effort
+    set((s) => {
+      const next = new Set(s.loadingProjects);
+      next.delete(projectId);
+      return { loadingProjects: next };
+    });
   },
 
   fetchForThread: async (threadId) => {
-    try {
-      const status = await api.getGitStatus(threadId);
+    const result = await api.getGitStatus(threadId);
+    if (result.isOk()) {
       set((state) => ({
-        statusByThread: { ...state.statusByThread, [threadId]: status },
+        statusByThread: { ...state.statusByThread, [threadId]: result.value },
       }));
-    } catch {
-      // Silently ignore
     }
+    // Silently ignore errors
   },
 
   updateFromWS: (statuses) => {

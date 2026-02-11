@@ -110,27 +110,27 @@ export function WorktreeSettings() {
     if (!project) return;
     setLoading(true);
     setError(null);
-    try {
-      const data = await api.listWorktrees(project.id);
-      setWorktrees(data);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    const result = await api.listWorktrees(project.id);
+    if (result.isOk()) {
+      setWorktrees(result.value);
+    } else {
+      setError(result.error.message);
     }
+    setLoading(false);
   }, [project?.id]);
 
   const loadBranches = useCallback(async () => {
     if (!project) return;
-    try {
-      const data = await api.listBranches(project.id);
+    const result = await api.listBranches(project.id);
+    if (result.isOk()) {
+      const data = result.value;
       setBranches(data.branches);
       if (data.branches.length > 0) {
         setBaseBranch((prev) => prev || data.defaultBranch || data.branches[0]);
       }
-    } catch (err: any) {
-      console.error('Failed to load branches:', err);
-      setError(err.message || 'Failed to load branches');
+    } else {
+      console.error('Failed to load branches:', result.error);
+      setError(result.error.message || 'Failed to load branches');
     }
   }, [project?.id]);
 
@@ -148,20 +148,19 @@ export function WorktreeSettings() {
     }
     setCreating(true);
     setError(null);
-    try {
-      await api.createWorktree({
-        projectId: project.id,
-        branchName: branchName.trim(),
-        baseBranch: effectiveBase,
-      });
+    const result = await api.createWorktree({
+      projectId: project.id,
+      branchName: branchName.trim(),
+      baseBranch: effectiveBase,
+    });
+    if (result.isErr()) {
+      setError(result.error.message);
+    } else {
       await loadWorktrees();
       setBranchName('');
       setShowCreate(false);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setCreating(false);
     }
+    setCreating(false);
   };
 
   const handleRemoveConfirmed = async () => {
@@ -169,15 +168,14 @@ export function WorktreeSettings() {
     const { path: worktreePath, branch } = confirmRemove;
     setConfirmRemove(null);
     setRemovingPath(worktreePath);
-    try {
-      await api.removeWorktree(project.id, worktreePath);
+    const result = await api.removeWorktree(project.id, worktreePath);
+    if (result.isOk()) {
       await loadWorktrees();
       toast.success(t('toast.worktreeDeleted', { branch }));
-    } catch (err: any) {
-      toast.error(t('toast.worktreeDeleteFailed', { message: err.message }));
-    } finally {
-      setRemovingPath(null);
+    } else {
+      toast.error(t('toast.worktreeDeleteFailed', { message: result.error.message }));
     }
+    setRemovingPath(null);
   };
 
   if (!project) {

@@ -1,35 +1,42 @@
-import { execute, executeSync } from './process.js';
+import { ok, err, ResultAsync } from 'neverthrow';
+import { execute, executeSync, ProcessExecutionError } from './process.js';
 import { validatePath, validatePathSync } from './path-validation.js';
+import { processError, internal, badRequest, type DomainError } from '@a-parallel/shared/errors';
 import type { FileDiff, GitSyncState } from '@a-parallel/shared';
 
 /**
- * Execute a git command safely with proper argument escaping
+ * Execute a git command safely with proper argument escaping.
+ * Returns ResultAsync<string, DomainError>.
  */
-export async function git(args: string[], cwd: string): Promise<string> {
-  await validatePath(cwd);
-  const { stdout } = await execute('git', args, { cwd });
-  return stdout.trim();
+export function git(args: string[], cwd: string): ResultAsync<string, DomainError> {
+  return validatePath(cwd).andThen((validCwd) =>
+    ResultAsync.fromPromise(
+      execute('git', args, { cwd: validCwd }),
+      (error) => {
+        if (error instanceof ProcessExecutionError) {
+          return processError(error.message, error.exitCode, error.stderr);
+        }
+        return internal(String(error));
+      }
+    ).map((result) => result.stdout.trim())
+  );
 }
 
 /**
- * Execute a git command that may fail without throwing
+ * Internal helper: git command that returns null on failure instead of Err.
+ * Used for non-critical operations (branch listing, status checks, etc.).
  */
-export async function gitSafe(
-  args: string[],
-  cwd: string
-): Promise<string | null> {
-  try {
-    return await git(args, cwd);
-  } catch {
-    return null;
-  }
+function gitOptional(args: string[], cwd: string): Promise<string | null> {
+  return execute('git', args, { cwd, reject: false })
+    .then((r) => (r.exitCode === 0 && r.stdout.trim()) ? r.stdout.trim() : null)
+    .catch(() => null);
 }
 
 /**
  * Check if a path is a git repository
  */
 export async function isGitRepo(path: string): Promise<boolean> {
-  const result = await gitSafe(['rev-parse', '--is-inside-work-tree'], path);
+  const result = await gitOptional(['rev-parse', '--is-inside-work-tree'], path);
   return result === 'true';
 }
 
@@ -64,70 +71,82 @@ export function isGitRepoSync(path: string): boolean {
 /**
  * Get the current branch name
  */
-export async function getCurrentBranch(cwd: string): Promise<string> {
+export function getCurrentBranch(cwd: string): ResultAsync<string, DomainError> {
   return git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
 }
 
 /**
  * List all branches in the repository.
- * Falls back to remote branches if no local branches exist (e.g. fresh repo with no commits).
+ * Falls back to remote branches if no local branches exist.
  */
-export async function listBranches(cwd: string): Promise<string[]> {
-  // Try local branches first
-  const localOutput = await gitSafe(['branch', '--format=%(refname:short)'], cwd);
-  if (localOutput) {
-    const locals = localOutput.split('\n').map((b) => b.trim()).filter(Boolean);
-    if (locals.length > 0) return locals;
-  }
+export function listBranches(cwd: string): ResultAsync<string[], DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      // Try local branches first
+      const localOutput = await gitOptional(['branch', '--format=%(refname:short)'], cwd);
+      if (localOutput) {
+        const locals = localOutput.split('\n').map((b) => b.trim()).filter(Boolean);
+        if (locals.length > 0) return locals;
+      }
 
-  // Fall back to remote tracking branches (strip 'origin/' prefix)
-  const remoteOutput = await gitSafe(['branch', '-r', '--format=%(refname:short)'], cwd);
-  if (remoteOutput) {
-    const remotes = remoteOutput
-      .split('\n')
-      .map((b) => b.trim())
-      .filter((b) => b && !b.includes('HEAD'))
-      .map((b) => b.replace(/^origin\//, ''));
-    if (remotes.length > 0) return [...new Set(remotes)];
-  }
+      // Fall back to remote tracking branches
+      const remoteOutput = await gitOptional(['branch', '-r', '--format=%(refname:short)'], cwd);
+      if (remoteOutput) {
+        const remotes = remoteOutput
+          .split('\n')
+          .map((b) => b.trim())
+          .filter((b) => b && !b.includes('HEAD'))
+          .map((b) => b.replace(/^origin\//, ''));
+        if (remotes.length > 0) return [...new Set(remotes)];
+      }
 
-  return [];
+      return [];
+    })(),
+    (error) => internal(String(error))
+  );
 }
 
 /**
  * Detect the default branch of the repository.
- * Checks the remote HEAD reference first, then falls back to common branch names.
  */
-export async function getDefaultBranch(cwd: string): Promise<string | null> {
-  const remoteHead = await gitSafe(
-    ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
-    cwd
+export function getDefaultBranch(cwd: string): ResultAsync<string | null, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const remoteHead = await gitOptional(
+        ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
+        cwd
+      );
+      if (remoteHead) {
+        return remoteHead.replace(/^origin\//, '');
+      }
+
+      const branchesResult = await listBranches(cwd);
+      if (branchesResult.isErr()) return null;
+      const branches = branchesResult.value;
+      if (branches.includes('main')) return 'main';
+      if (branches.includes('master')) return 'master';
+      if (branches.includes('develop')) return 'develop';
+
+      return branches.length > 0 ? branches[0] : null;
+    })(),
+    (error) => internal(String(error))
   );
-  if (remoteHead) {
-    return remoteHead.replace(/^origin\//, '');
-  }
-
-  const branches = await listBranches(cwd);
-  if (branches.includes('main')) return 'main';
-  if (branches.includes('master')) return 'master';
-  if (branches.includes('develop')) return 'develop';
-
-  return branches.length > 0 ? branches[0] : null;
 }
 
 /**
  * Get the remote URL for origin
  */
-export async function getRemoteUrl(cwd: string): Promise<string | null> {
-  return gitSafe(['remote', 'get-url', 'origin'], cwd);
+export function getRemoteUrl(cwd: string): ResultAsync<string | null, DomainError> {
+  return ResultAsync.fromPromise(
+    gitOptional(['remote', 'get-url', 'origin'], cwd),
+    (error) => internal(String(error))
+  );
 }
 
 /**
  * Extract repository name from remote URL
  */
 export function extractRepoName(remoteUrl: string): string {
-  // Extract repo name from URL like:
-  // https://github.com/user/repo.git or git@github.com:user/repo.git
   return (
     remoteUrl
       .replace(/\.git$/, '')
@@ -139,115 +158,145 @@ export function extractRepoName(remoteUrl: string): string {
 /**
  * Initialize a new git repository
  */
-export async function initRepo(cwd: string): Promise<void> {
-  await git(['init'], cwd);
+export function initRepo(cwd: string): ResultAsync<void, DomainError> {
+  return git(['init'], cwd).map(() => undefined);
 }
 
 /**
  * Stage files for commit
  */
-export async function stageFiles(cwd: string, paths: string[]): Promise<void> {
-  if (paths.length === 0) return;
-
-  // Use a single command for better performance
-  if (paths.length === 1) {
-    await git(['add', paths[0]], cwd);
-  } else {
-    // For multiple files, add them all at once
-    await git(['add', ...paths], cwd);
-  }
+export function stageFiles(cwd: string, paths: string[]): ResultAsync<void, DomainError> {
+  if (paths.length === 0) return new ResultAsync(Promise.resolve(ok(undefined)));
+  return git(['add', ...paths], cwd).map(() => undefined);
 }
 
 /**
  * Unstage files
  */
-export async function unstageFiles(
-  cwd: string,
-  paths: string[]
-): Promise<void> {
-  if (paths.length === 0) return;
+export function unstageFiles(cwd: string, paths: string[]): ResultAsync<void, DomainError> {
+  if (paths.length === 0) return new ResultAsync(Promise.resolve(ok(undefined)));
 
-  for (const path of paths) {
-    await git(['restore', '--staged', path], cwd);
-  }
+  return ResultAsync.fromPromise(
+    (async () => {
+      for (const path of paths) {
+        const result = await git(['restore', '--staged', path], cwd);
+        if (result.isErr()) throw result.error;
+      }
+    })(),
+    (error) => {
+      if ((error as DomainError).type) return error as DomainError;
+      return internal(String(error));
+    }
+  );
 }
 
 /**
  * Revert changes to files
  */
-export async function revertFiles(cwd: string, paths: string[]): Promise<void> {
-  if (paths.length === 0) return;
+export function revertFiles(cwd: string, paths: string[]): ResultAsync<void, DomainError> {
+  if (paths.length === 0) return new ResultAsync(Promise.resolve(ok(undefined)));
 
-  for (const path of paths) {
-    await git(['checkout', '--', path], cwd);
-  }
+  return ResultAsync.fromPromise(
+    (async () => {
+      for (const path of paths) {
+        const result = await git(['checkout', '--', path], cwd);
+        if (result.isErr()) throw result.error;
+      }
+    })(),
+    (error) => {
+      if ((error as DomainError).type) return error as DomainError;
+      return internal(String(error));
+    }
+  );
 }
 
 /**
  * Create a commit with a message
  */
-export async function commit(cwd: string, message: string): Promise<string> {
+export function commit(cwd: string, message: string): ResultAsync<string, DomainError> {
   return git(['commit', '-m', message], cwd);
 }
 
 /**
  * Push to remote
  */
-export async function push(cwd: string): Promise<string> {
-  const branch = await getCurrentBranch(cwd);
-  return git(['push', '-u', 'origin', branch], cwd);
+export function push(cwd: string): ResultAsync<string, DomainError> {
+  return getCurrentBranch(cwd).andThen((branch) =>
+    git(['push', '-u', 'origin', branch], cwd)
+  );
 }
 
 /**
  * Create a pull request using GitHub CLI
  */
-export async function createPR(
+export function createPR(
   cwd: string,
   title: string,
   body: string,
   baseBranch?: string
-): Promise<string> {
+): ResultAsync<string, DomainError> {
   const args = ['pr', 'create', '--title', title, '--body', body];
   if (baseBranch) {
     args.push('--base', baseBranch);
   }
-  const { stdout } = await execute('gh', args, {
-    cwd,
-    timeout: 30_000,
-  });
-  return stdout.trim();
+  return ResultAsync.fromPromise(
+    execute('gh', args, { cwd, timeout: 30_000 }).then((r) => r.stdout.trim()),
+    (error) => {
+      if (error instanceof ProcessExecutionError) {
+        return processError(error.message, error.exitCode, error.stderr);
+      }
+      return internal(String(error));
+    }
+  );
 }
 
 /**
  * Merge a feature branch into a target branch.
  * Must be run from the main repo directory (not a worktree).
  */
-export async function mergeBranch(
+export function mergeBranch(
   cwd: string,
   featureBranch: string,
   targetBranch: string
-): Promise<string> {
-  const status = await git(['status', '--porcelain'], cwd);
-  if (status.trim()) {
-    throw new Error(
-      'Cannot merge: the main working tree has uncommitted changes. Please commit or stash changes first.'
-    );
-  }
+): ResultAsync<string, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const statusResult = await git(['status', '--porcelain'], cwd);
+      if (statusResult.isErr()) throw statusResult.error;
+      if (statusResult.value.trim()) {
+        throw badRequest(
+          'Cannot merge: the main working tree has uncommitted changes. Please commit or stash changes first.'
+        );
+      }
 
-  const originalBranch = await getCurrentBranch(cwd);
+      const branchResult = await getCurrentBranch(cwd);
+      if (branchResult.isErr()) throw branchResult.error;
+      const originalBranch = branchResult.value;
 
-  try {
-    await git(['checkout', targetBranch], cwd);
-    const output = await git(
-      ['merge', '--no-ff', featureBranch, '-m', `Merge branch '${featureBranch}' into ${targetBranch}`],
-      cwd
-    );
-    return output;
-  } catch (error) {
-    await gitSafe(['merge', '--abort'], cwd);
-    await gitSafe(['checkout', originalBranch], cwd);
-    throw error;
-  }
+      try {
+        const checkoutResult = await git(['checkout', targetBranch], cwd);
+        if (checkoutResult.isErr()) throw checkoutResult.error;
+
+        const mergeResult = await git(
+          ['merge', '--no-ff', featureBranch, '-m', `Merge branch '${featureBranch}' into ${targetBranch}`],
+          cwd
+        );
+        if (mergeResult.isErr()) throw mergeResult.error;
+        return mergeResult.value;
+      } catch (error) {
+        await execute('git', ['merge', '--abort'], { cwd, reject: false });
+        await execute('git', ['checkout', originalBranch], { cwd, reject: false });
+        throw error;
+      }
+    })(),
+    (error) => {
+      if ((error as DomainError).type) return error as DomainError;
+      if (error instanceof ProcessExecutionError) {
+        return processError(error.message, error.exitCode, error.stderr);
+      }
+      return internal(String(error));
+    }
+  );
 }
 
 /**
@@ -277,51 +326,54 @@ function parseStatusLine(line: string): {
 /**
  * Get diff information for all changed files
  */
-export async function getDiff(cwd: string): Promise<FileDiff[]> {
-  // Get staged files
-  const stagedRaw = (await gitSafe(['diff', '--staged', '--name-status'], cwd)) ?? '';
-  const stagedFiles = stagedRaw
-    .split('\n')
-    .filter(Boolean)
-    .map(parseStatusLine)
-    .filter(Boolean) as { status: FileDiff['status']; path: string }[];
+export function getDiff(cwd: string): ResultAsync<FileDiff[], DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const stagedResult = await execute('git', ['diff', '--staged', '--name-status'], { cwd, reject: false });
+      const stagedRaw = stagedResult.exitCode === 0 ? stagedResult.stdout.trim() : '';
+      const stagedFiles = stagedRaw
+        .split('\n')
+        .filter(Boolean)
+        .map(parseStatusLine)
+        .filter(Boolean) as { status: FileDiff['status']; path: string }[];
 
-  // Get unstaged files
-  const unstagedRaw = (await gitSafe(['diff', '--name-status'], cwd)) ?? '';
-  const untrackedRaw =
-    (await gitSafe(['ls-files', '--others', '--exclude-standard'], cwd)) ?? '';
+      const unstagedResult = await execute('git', ['diff', '--name-status'], { cwd, reject: false });
+      const unstagedRaw = unstagedResult.exitCode === 0 ? unstagedResult.stdout.trim() : '';
+      const untrackedResult = await execute('git', ['ls-files', '--others', '--exclude-standard'], { cwd, reject: false });
+      const untrackedRaw = untrackedResult.exitCode === 0 ? untrackedResult.stdout.trim() : '';
 
-  const unstagedFiles = unstagedRaw
-    .split('\n')
-    .filter(Boolean)
-    .map(parseStatusLine)
-    .filter(Boolean) as { status: FileDiff['status']; path: string }[];
+      const unstagedFiles = unstagedRaw
+        .split('\n')
+        .filter(Boolean)
+        .map(parseStatusLine)
+        .filter(Boolean) as { status: FileDiff['status']; path: string }[];
 
-  const untrackedFiles = untrackedRaw
-    .split('\n')
-    .filter(Boolean)
-    .map((p) => ({ status: 'added' as const, path: p.trim() }));
+      const untrackedFiles = untrackedRaw
+        .split('\n')
+        .filter(Boolean)
+        .map((p) => ({ status: 'added' as const, path: p.trim() }));
 
-  const allUnstaged = [...unstagedFiles, ...untrackedFiles];
+      const allUnstaged = [...unstagedFiles, ...untrackedFiles];
 
-  // Build FileDiff array with actual diff content
-  const diffs: FileDiff[] = [];
+      const diffs: FileDiff[] = [];
 
-  // Process staged files
-  for (const f of stagedFiles) {
-    const diffText = (await gitSafe(['diff', '--staged', '--', f.path], cwd)) ?? '';
-    diffs.push({ path: f.path, status: f.status, diff: diffText, staged: true });
-  }
+      for (const f of stagedFiles) {
+        const diffResult = await execute('git', ['diff', '--staged', '--', f.path], { cwd, reject: false });
+        const diffText = diffResult.exitCode === 0 ? diffResult.stdout.trim() : '';
+        diffs.push({ path: f.path, status: f.status, diff: diffText, staged: true });
+      }
 
-  // Process unstaged files
-  for (const f of allUnstaged) {
-    // Skip if already in staged list
-    if (stagedFiles.some((s) => s.path === f.path)) continue;
-    const diffText = (await gitSafe(['diff', '--', f.path], cwd)) ?? '';
-    diffs.push({ path: f.path, status: f.status, diff: diffText, staged: false });
-  }
+      for (const f of allUnstaged) {
+        if (stagedFiles.some((s) => s.path === f.path)) continue;
+        const diffResult = await execute('git', ['diff', '--', f.path], { cwd, reject: false });
+        const diffText = diffResult.exitCode === 0 ? diffResult.stdout.trim() : '';
+        diffs.push({ path: f.path, status: f.status, diff: diffText, staged: false });
+      }
 
-  return diffs;
+      return diffs;
+    })(),
+    (error) => internal(String(error))
+  );
 }
 
 // ─── Git Status Summary ─────────────────────────────────
@@ -335,64 +387,68 @@ export interface GitStatusSummary {
 
 /**
  * Get a summary of the git status for a worktree.
- * @param worktreeCwd - The worktree directory (for dirty/unpushed checks)
- * @param baseBranch - The base branch to check merge status against
- * @param projectCwd - The main repo directory (for merge check, since baseBranch lives there)
  */
-export async function getStatusSummary(
+export function getStatusSummary(
   worktreeCwd: string,
   baseBranch?: string,
   projectCwd?: string
-): Promise<GitStatusSummary> {
-  // 1. Count dirty files (very fast)
-  const porcelain = (await gitSafe(['status', '--porcelain'], worktreeCwd)) ?? '';
-  const dirtyFileCount = porcelain.split('\n').filter(Boolean).length;
+): ResultAsync<GitStatusSummary, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const porcelainResult = await execute('git', ['status', '--porcelain'], { cwd: worktreeCwd, reject: false });
+      const porcelain = porcelainResult.exitCode === 0 ? porcelainResult.stdout.trim() : '';
+      const dirtyFileCount = porcelain.split('\n').filter(Boolean).length;
 
-  // 2. Check remote tracking branch and unpushed commits
-  const branch = await getCurrentBranch(worktreeCwd);
-  const remoteBranch = await gitSafe(
-    ['rev-parse', '--abbrev-ref', `${branch}@{upstream}`],
-    worktreeCwd
+      const branchResult = await getCurrentBranch(worktreeCwd);
+      if (branchResult.isErr()) {
+        return { dirtyFileCount, unpushedCommitCount: 0, hasRemoteBranch: false, isMergedIntoBase: false };
+      }
+      const branch = branchResult.value;
+
+      const remoteResult = await execute(
+        'git', ['rev-parse', '--abbrev-ref', `${branch}@{upstream}`],
+        { cwd: worktreeCwd, reject: false }
+      );
+      const remoteBranch = remoteResult.exitCode === 0 ? remoteResult.stdout.trim() : null;
+      const hasRemoteBranch = remoteBranch !== null;
+
+      let unpushedCommitCount = 0;
+      if (hasRemoteBranch) {
+        const countResult = await execute(
+          'git', ['rev-list', '--count', `${remoteBranch}..HEAD`],
+          { cwd: worktreeCwd, reject: false }
+        );
+        unpushedCommitCount = countResult.exitCode === 0 ? (parseInt(countResult.stdout.trim(), 10) || 0) : 0;
+      } else if (baseBranch) {
+        const countResult = await execute(
+          'git', ['rev-list', '--count', `${baseBranch}..HEAD`],
+          { cwd: worktreeCwd, reject: false }
+        );
+        unpushedCommitCount = countResult.exitCode === 0 ? (parseInt(countResult.stdout.trim(), 10) || 0) : 0;
+      }
+
+      let isMergedIntoBase = false;
+      if (baseBranch && projectCwd) {
+        const mergedResult = await execute(
+          'git', ['branch', '--merged', baseBranch, '--format=%(refname:short)'],
+          { cwd: projectCwd, reject: false }
+        );
+        if (mergedResult.exitCode === 0 && mergedResult.stdout.trim()) {
+          isMergedIntoBase = mergedResult.stdout.trim()
+            .split('\n')
+            .map((b) => b.trim())
+            .includes(branch);
+        }
+      }
+
+      return { dirtyFileCount, unpushedCommitCount, hasRemoteBranch, isMergedIntoBase };
+    })(),
+    (error) => internal(String(error))
   );
-  const hasRemoteBranch = remoteBranch !== null;
-
-  let unpushedCommitCount = 0;
-  if (hasRemoteBranch) {
-    const countStr = await gitSafe(
-      ['rev-list', '--count', `${remoteBranch}..HEAD`],
-      worktreeCwd
-    );
-    unpushedCommitCount = countStr ? parseInt(countStr, 10) || 0 : 0;
-  } else if (baseBranch) {
-    // No remote branch — count commits since branching from base
-    const countStr = await gitSafe(
-      ['rev-list', '--count', `${baseBranch}..HEAD`],
-      worktreeCwd
-    );
-    unpushedCommitCount = countStr ? parseInt(countStr, 10) || 0 : 0;
-  }
-
-  // 3. Check if merged into base branch (run from main repo where baseBranch lives)
-  let isMergedIntoBase = false;
-  if (baseBranch && projectCwd) {
-    const mergedBranches = await gitSafe(
-      ['branch', '--merged', baseBranch, '--format=%(refname:short)'],
-      projectCwd
-    );
-    if (mergedBranches) {
-      isMergedIntoBase = mergedBranches
-        .split('\n')
-        .map((b) => b.trim())
-        .includes(branch);
-    }
-  }
-
-  return { dirtyFileCount, unpushedCommitCount, hasRemoteBranch, isMergedIntoBase };
 }
 
 /**
  * Derive a single sync state from a git status summary.
- * Priority: merged > dirty > unpushed > pushed > clean
  */
 export function deriveGitSyncState(summary: GitStatusSummary): GitSyncState {
   if (summary.isMergedIntoBase) return 'merged';

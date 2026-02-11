@@ -138,6 +138,7 @@ export class AgentRunner {
           }
 
           console.log(`[agent] tool_use: ${block.name} thread=${threadId}`);
+          console.log(`[agent] tool_use input:`, JSON.stringify(block.input, null, 2));
 
           // Ensure there's always a parent assistant message for tool calls
           let parentMsgId = this.currentAssistantMsgId.get(threadId) || cliMap.get(cliMsgId);
@@ -203,6 +204,11 @@ export class AgentRunner {
             if (toolCallId && block.content) {
               // Update DB
               const decodedOutput = decodeUnicodeEscapes(block.content);
+
+              // Log the complete tool result output
+              console.log(`[agent] tool_result: toolCallId=${toolCallId} thread=${threadId}`);
+              console.log(`[agent] tool_result output (${decodedOutput.length} chars):`, decodedOutput);
+
               this.threadManager.updateToolCallOutput(toolCallId, decodedOutput);
               // Notify clients
               this.emitWS(threadId, 'agent:tool_output', {
@@ -264,11 +270,13 @@ export class AgentRunner {
     const project = pm.getProject(thread.projectId);
     if (!project) return;
 
-    const summary = await getStatusSummary(
+    const summaryResult = await getStatusSummary(
       thread.worktreePath,
       thread.baseBranch ?? undefined,
       project.path
     );
+    if (summaryResult.isErr()) return;
+    const summary = summaryResult.value;
 
     this.emitWS(threadId, 'git:status', {
       statuses: [{

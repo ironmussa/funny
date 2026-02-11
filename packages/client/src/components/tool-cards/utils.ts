@@ -121,6 +121,12 @@ export function getSummary(name: string, parsed: Record<string, unknown>, t: (ke
       return parsed.pattern as string ?? null;
     case 'Task':
       return parsed.description as string ?? null;
+    case 'WebSearch':
+      return parsed.query as string ?? null;
+    case 'WebFetch':
+      return parsed.url as string ?? null;
+    case 'NotebookEdit':
+      return parsed.notebook_path as string ?? null;
     case 'TodoWrite': {
       const todos = getTodos(parsed);
       if (!todos) return null;

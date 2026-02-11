@@ -1,7 +1,10 @@
 import { resolve, dirname, basename, normalize } from 'path';
 import { mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
-import { git, gitSafe } from '../utils/git-v2.js';
+import { ok, err, ResultAsync } from 'neverthrow';
+import { git } from '../utils/git-v2.js';
+import { execute } from '../utils/process.js';
+import { badRequest, internal, type DomainError } from '@a-parallel/shared/errors';
 
 const WORKTREE_DIR_NAME = '.a-parallel-worktrees';
 
@@ -19,64 +22,72 @@ export interface WorktreeInfo {
   isMain: boolean;
 }
 
-export async function createWorktree(
+export function createWorktree(
   projectPath: string,
   branchName: string,
   baseBranch?: string
-): Promise<string> {
-  // Verify the repo has at least one commit — worktrees need committed content
-  const hasCommits = await gitSafe(['rev-parse', 'HEAD'], projectPath);
-  if (!hasCommits) {
-    throw new Error(
-      'Cannot create worktree: the repository has no commits yet. Please make an initial commit first.'
-    );
-  }
+): ResultAsync<string, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      // Verify the repo has at least one commit
+      const headResult = await execute('git', ['rev-parse', 'HEAD'], { cwd: projectPath, reject: false });
+      if (headResult.exitCode !== 0) {
+        throw badRequest(
+          'Cannot create worktree: the repository has no commits yet. Please make an initial commit first.'
+        );
+      }
 
-  const base = await getWorktreeBase(projectPath);
-  const worktreePath = resolve(base, branchName.replace(/\//g, '-'));
+      const base = await getWorktreeBase(projectPath);
+      const worktreePath = resolve(base, branchName.replace(/\//g, '-'));
 
-  if (existsSync(worktreePath)) {
-    throw new Error(`Worktree already exists: ${worktreePath}`);
-  }
+      if (existsSync(worktreePath)) {
+        throw badRequest(`Worktree already exists: ${worktreePath}`);
+      }
 
-  // If baseBranch is specified, branch from it; otherwise omit to use HEAD
-  const args = ['worktree', 'add', '-b', branchName, worktreePath];
-  if (baseBranch) args.push(baseBranch);
-  await git(args, projectPath);
-  return worktreePath;
+      const args = ['worktree', 'add', '-b', branchName, worktreePath];
+      if (baseBranch) args.push(baseBranch);
+      const result = await git(args, projectPath);
+      if (result.isErr()) throw result.error;
+      return worktreePath;
+    })(),
+    (error) => {
+      if ((error as DomainError).type) return error as DomainError;
+      return internal(String(error));
+    }
+  );
 }
 
-export async function listWorktrees(projectPath: string): Promise<WorktreeInfo[]> {
-  const output = await git(['worktree', 'list', '--porcelain'], projectPath);
-  const entries: WorktreeInfo[] = [];
-  let current: Partial<WorktreeInfo> = {};
+export function listWorktrees(projectPath: string): ResultAsync<WorktreeInfo[], DomainError> {
+  return git(['worktree', 'list', '--porcelain'], projectPath).map((output) => {
+    const entries: WorktreeInfo[] = [];
+    let current: Partial<WorktreeInfo> = {};
 
-  for (const raw of output.split('\n')) {
-    const line = raw.replace(/\r$/, '');
-    if (line.startsWith('worktree ')) {
-      if (current.path) entries.push(current as WorktreeInfo);
-      current = { path: line.slice('worktree '.length) };
-    } else if (line.startsWith('HEAD ')) {
-      current.commit = line.slice('HEAD '.length);
-    } else if (line.startsWith('branch ')) {
-      current.branch = line.slice('branch refs/heads/'.length);
+    for (const raw of output.split('\n')) {
+      const line = raw.replace(/\r$/, '');
+      if (line.startsWith('worktree ')) {
+        if (current.path) entries.push(current as WorktreeInfo);
+        current = { path: line.slice('worktree '.length) };
+      } else if (line.startsWith('HEAD ')) {
+        current.commit = line.slice('HEAD '.length);
+      } else if (line.startsWith('branch ')) {
+        current.branch = line.slice('branch refs/heads/'.length);
+      }
     }
-  }
 
-  if (current.path) entries.push(current as WorktreeInfo);
+    if (current.path) entries.push(current as WorktreeInfo);
 
-  // Mark the main worktree (the project root itself)
-  const normalizedProject = normalize(projectPath);
-  return entries.map((w) => ({
-    ...w,
-    isMain: normalize(w.path) === normalizedProject,
-  }));
+    const normalizedProject = normalize(projectPath);
+    return entries.map((w) => ({
+      ...w,
+      isMain: normalize(w.path) === normalizedProject,
+    }));
+  });
 }
 
 export async function removeWorktree(projectPath: string, worktreePath: string): Promise<void> {
-  await gitSafe(['worktree', 'remove', '-f', worktreePath], projectPath);
+  await execute('git', ['worktree', 'remove', '-f', worktreePath], { cwd: projectPath, reject: false });
 }
 
 export async function removeBranch(projectPath: string, branchName: string): Promise<void> {
-  await gitSafe(['branch', '-D', branchName], projectPath);
+  await execute('git', ['branch', '-D', branchName], { cwd: projectPath, reject: false });
 }

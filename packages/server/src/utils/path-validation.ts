@@ -1,26 +1,27 @@
 import { resolve, isAbsolute } from 'path';
 import { access } from 'fs/promises';
 import { accessSync } from 'fs';
+import { ok, err, type Result, ResultAsync } from 'neverthrow';
+import { badRequest, forbidden, type DomainError } from '@a-parallel/shared/errors';
 
 /**
- * Validates that a path exists and is accessible (async)
- * @throws Error if path is not absolute or doesn't exist
+ * Validates that a path exists and is accessible (async).
+ * Returns ResultAsync<string, DomainError>.
  */
-export async function validatePath(path: string): Promise<string> {
+export function validatePath(path: string): ResultAsync<string, DomainError> {
   if (!isAbsolute(path)) {
-    throw new Error(`Path must be absolute: ${path}`);
+    return new ResultAsync(Promise.resolve(err(badRequest(`Path must be absolute: ${path}`))));
   }
 
-  try {
-    await access(path);
-    return resolve(path);
-  } catch {
-    throw new Error(`Path does not exist or is not accessible: ${path}`);
-  }
+  return ResultAsync.fromPromise(
+    access(path).then(() => resolve(path)),
+    () => badRequest(`Path does not exist or is not accessible: ${path}`)
+  );
 }
 
 /**
- * Validates that a path exists and is accessible (sync)
+ * Validates that a path exists and is accessible (sync).
+ * Kept as throw-based for startup operations.
  * @throws Error if path is not absolute or doesn't exist
  */
 export function validatePathSync(path: string): string {
@@ -49,15 +50,15 @@ export async function pathExists(path: string): Promise<boolean> {
 }
 
 /**
- * Sanitizes a path to prevent directory traversal attacks
+ * Sanitizes a path to prevent directory traversal attacks.
+ * Returns Result<string, DomainError>.
  */
-export function sanitizePath(basePath: string, userPath: string): string {
+export function sanitizePath(basePath: string, userPath: string): Result<string, DomainError> {
   const normalized = resolve(basePath, userPath);
 
-  // Ensure the resolved path is still within the base path
   if (!normalized.startsWith(basePath)) {
-    throw new Error('Path traversal detected');
+    return err(forbidden('Path traversal detected'));
   }
 
-  return normalized;
+  return ok(normalized);
 }

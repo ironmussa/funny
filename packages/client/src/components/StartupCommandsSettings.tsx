@@ -33,12 +33,11 @@ export function StartupCommandsSettings() {
 
   const loadCommands = useCallback(async () => {
     if (!selectedProjectId) return;
-    try {
-      const cmds = await api.listCommands(selectedProjectId);
-      setCommands(cmds);
-    } catch {
-      // ignore
+    const result = await api.listCommands(selectedProjectId);
+    if (result.isOk()) {
+      setCommands(result.value);
     }
+    // ignore errors
   }, [selectedProjectId]);
 
   useEffect(() => {
@@ -58,25 +57,31 @@ export function StartupCommandsSettings() {
   const handleAdd = async () => {
     if (!selectedProjectId || !label.trim() || !command.trim()) return;
     const portNum = port ? parseInt(port, 10) : null;
-    await api.addCommand(selectedProjectId, label.trim(), command.trim(), portNum, portEnvVar.trim() || null);
-    resetForm();
-    setAdding(false);
-    loadCommands();
+    const result = await api.addCommand(selectedProjectId, label.trim(), command.trim(), portNum, portEnvVar.trim() || null);
+    if (result.isOk()) {
+      resetForm();
+      setAdding(false);
+      loadCommands();
+    }
   };
 
   const handleUpdate = async (cmdId: string) => {
     if (!selectedProjectId || !label.trim() || !command.trim()) return;
     const portNum = port ? parseInt(port, 10) : null;
-    await api.updateCommand(selectedProjectId, cmdId, label.trim(), command.trim(), portNum, portEnvVar.trim() || null);
-    setEditingId(null);
-    resetForm();
-    loadCommands();
+    const result = await api.updateCommand(selectedProjectId, cmdId, label.trim(), command.trim(), portNum, portEnvVar.trim() || null);
+    if (result.isOk()) {
+      setEditingId(null);
+      resetForm();
+      loadCommands();
+    }
   };
 
   const handleDelete = async (cmdId: string) => {
     if (!selectedProjectId) return;
-    await api.deleteCommand(selectedProjectId, cmdId);
-    loadCommands();
+    const result = await api.deleteCommand(selectedProjectId, cmdId);
+    if (result.isOk()) {
+      loadCommands();
+    }
   };
 
   const handleRun = async (cmd: StartupCommand) => {
@@ -91,20 +96,14 @@ export function StartupCommandsSettings() {
       projectId: selectedProjectId,
       port: cmd.port ?? undefined,
     });
-    try {
-      await api.runCommand(selectedProjectId, cmd.id);
-    } catch {
-      // ignore
-    }
+    await api.runCommand(selectedProjectId, cmd.id);
+    // ignore errors
   };
 
   const handleStop = async (cmd: StartupCommand) => {
     if (!selectedProjectId) return;
-    try {
-      await api.stopCommand(selectedProjectId, cmd.id);
-    } catch {
-      // ignore
-    }
+    await api.stopCommand(selectedProjectId, cmd.id);
+    // ignore errors
   };
 
   const startEditing = (cmd: StartupCommand) => {

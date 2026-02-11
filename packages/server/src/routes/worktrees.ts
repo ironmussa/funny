@@ -2,40 +2,50 @@ import { Hono } from 'hono';
 import * as wm from '../services/worktree-manager.js';
 import { createWorktreeSchema, deleteWorktreeSchema, validate } from '../validation/schemas.js';
 import { requireProject } from '../utils/route-helpers.js';
-import { BadRequest } from '../middleware/error-handler.js';
+import { resultToResponse } from '../utils/result-response.js';
+import { badRequest } from '@a-parallel/shared/errors';
+import { err } from 'neverthrow';
 
 export const worktreeRoutes = new Hono();
 
 // GET /api/worktrees?projectId=xxx
 worktreeRoutes.get('/', async (c) => {
   const projectId = c.req.query('projectId');
-  if (!projectId) throw BadRequest('projectId is required');
+  if (!projectId) return resultToResponse(c, err(badRequest('projectId is required')));
 
-  const project = requireProject(projectId);
-  const worktrees = await wm.listWorktrees(project.path);
-  return c.json(worktrees);
+  const projectResult = requireProject(projectId);
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+
+  const worktreesResult = await wm.listWorktrees(projectResult.value.path);
+  if (worktreesResult.isErr()) return resultToResponse(c, worktreesResult);
+  return c.json(worktreesResult.value);
 });
 
 // POST /api/worktrees
 worktreeRoutes.post('/', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(createWorktreeSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
-  const { projectId, branchName, baseBranch } = parsed.data;
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { projectId, branchName, baseBranch } = parsed.value;
 
-  const project = requireProject(projectId);
-  const worktreePath = await wm.createWorktree(project.path, branchName, baseBranch);
-  return c.json({ path: worktreePath, branch: branchName }, 201);
+  const projectResult = requireProject(projectId);
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+
+  const wtResult = await wm.createWorktree(projectResult.value.path, branchName, baseBranch);
+  if (wtResult.isErr()) return resultToResponse(c, wtResult);
+  return c.json({ path: wtResult.value, branch: branchName }, 201);
 });
 
 // DELETE /api/worktrees
 worktreeRoutes.delete('/', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(deleteWorktreeSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
-  const { projectId, worktreePath } = parsed.data;
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { projectId, worktreePath } = parsed.value;
 
-  const project = requireProject(projectId);
-  await wm.removeWorktree(project.path, worktreePath);
+  const projectResult = requireProject(projectId);
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+
+  await wm.removeWorktree(projectResult.value.path, worktreePath);
   return c.json({ ok: true });
 });

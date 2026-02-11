@@ -5,7 +5,7 @@ import { useAppStore } from '@/stores/app-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { ChevronLeft, Archive } from 'lucide-react';
+import { ChevronLeft, Archive, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThreadListView } from '@/components/ThreadListView';
 import { statusConfig, gitSyncStateConfig, getStatusLabels } from '@/lib/thread-utils';
@@ -50,6 +50,8 @@ export function AllThreadsView() {
   const projects = useAppStore(s => s.projects);
   const statusByThread = useGitStatusStore(s => s.statusByThread);
 
+  const isGlobalSearch = allThreadsProjectId === '__all__';
+
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<FilterValue>('all');
@@ -58,8 +60,20 @@ export function AllThreadsView() {
   const [showArchived, setShowArchived] = useState(false);
   const [archivedThreads, setArchivedThreads] = useState<Thread[]>([]);
 
-  const project = projects.find((p) => p.id === allThreadsProjectId);
-  const storeThreads = allThreadsProjectId ? (threadsByProject[allThreadsProjectId] ?? []) : [];
+  const project = isGlobalSearch ? null : projects.find((p) => p.id === allThreadsProjectId);
+  const projectNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const p of projects) map[p.id] = p.name;
+    return map;
+  }, [projects]);
+
+  const storeThreads = useMemo(() => {
+    if (isGlobalSearch) {
+      // Aggregate threads from all projects
+      return Object.values(threadsByProject).flat();
+    }
+    return allThreadsProjectId ? (threadsByProject[allThreadsProjectId] ?? []) : [];
+  }, [isGlobalSearch, allThreadsProjectId, threadsByProject]);
 
   // Fetch archived threads when toggled on
   useEffect(() => {
@@ -67,11 +81,24 @@ export function AllThreadsView() {
       setArchivedThreads([]);
       return;
     }
-    api.listThreads(allThreadsProjectId, true).then((all) => {
-      // Only keep the ones that are archived (store already has non-archived)
-      setArchivedThreads(all.filter((t) => t.archived));
-    }).catch(() => {});
-  }, [showArchived, allThreadsProjectId]);
+    if (isGlobalSearch) {
+      // Fetch archived threads for all projects
+      Promise.all(projects.map(async (p) => {
+        const result = await api.listThreads(p.id, true);
+        return result.isOk() ? result.value : [] as Thread[];
+      }))
+        .then((results) => {
+          setArchivedThreads(results.flat().filter((t) => t.archived));
+        });
+    } else {
+      (async () => {
+        const result = await api.listThreads(allThreadsProjectId, true);
+        if (result.isOk()) {
+          setArchivedThreads(result.value.filter((t) => t.archived));
+        }
+      })();
+    }
+  }, [showArchived, allThreadsProjectId, isGlobalSearch, projects]);
 
   const allThreads = useMemo(() => {
     if (!showArchived) return storeThreads;
@@ -92,7 +119,8 @@ export function AllThreadsView() {
         (t) =>
           t.title.toLowerCase().includes(q) ||
           (t.branch && t.branch.toLowerCase().includes(q)) ||
-          t.status.toLowerCase().includes(q)
+          t.status.toLowerCase().includes(q) ||
+          (isGlobalSearch && projectNameById[t.projectId]?.toLowerCase().includes(q))
       );
     }
 
@@ -115,7 +143,7 @@ export function AllThreadsView() {
     }
 
     return result;
-  }, [allThreads, search, statusFilter, gitFilter, modeFilter, statusByThread]);
+  }, [allThreads, search, statusFilter, gitFilter, modeFilter, statusByThread, isGlobalSearch, projectNameById]);
 
   const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE)));
   const paginated = filtered.slice(
@@ -143,7 +171,7 @@ export function AllThreadsView() {
 
   const hasActiveFilters = statusFilter !== 'all' || gitFilter !== 'all' || modeFilter !== 'all' || showArchived;
 
-  if (!allThreadsProjectId || !project) return null;
+  if (!allThreadsProjectId || (!isGlobalSearch && !project)) return null;
 
   // Compute counts for status filters
   const statusCounts = useMemo(() => {
@@ -178,16 +206,22 @@ export function AllThreadsView() {
           size="icon-xs"
           onClick={() => {
             useAppStore.getState().closeAllThreads();
-            navigate(`/projects/${allThreadsProjectId}`);
+            if (!isGlobalSearch) navigate(`/projects/${allThreadsProjectId}`);
           }}
           className="text-muted-foreground hover:text-foreground"
         >
-          <ChevronLeft className="h-4 w-4" />
+          {isGlobalSearch ? <Search className="h-4 w-4" /> : <ChevronLeft className="h-4 w-4" />}
         </Button>
         <div className="flex-1 min-w-0">
-          <h2 className="text-sm font-medium">{t('allThreads.title')}</h2>
-          <p className="text-xs text-muted-foreground">{project.name} &middot; {allThreads.length} {t('allThreads.threads')}</p>
+          <h2 className="text-sm font-medium">{isGlobalSearch ? t('allThreads.globalTitle') : t('allThreads.title')}</h2>
+          <p className="text-xs text-muted-foreground">
+            {isGlobalSearch
+              ? `${projects.length} ${t('allThreads.projects')} · ${allThreads.length} ${t('allThreads.threads')}`
+              : `${project!.name} · ${allThreads.length} ${t('allThreads.threads')}`
+            }
+          </p>
         </div>
+        <span className="text-[10px] text-muted-foreground hidden sm:block">Ctrl+Shift+F</span>
         {hasActiveFilters && (
           <Button
             variant="ghost"
@@ -289,13 +323,13 @@ export function AllThreadsView() {
           totalCount={filtered.length}
           search={search}
           onSearchChange={handleSearchChange}
-          searchPlaceholder={t('allThreads.searchPlaceholder')}
+          searchPlaceholder={isGlobalSearch ? t('allThreads.globalSearchPlaceholder') : t('allThreads.searchPlaceholder')}
           page={currentPage}
           onPageChange={setPage}
           pageSize={ITEMS_PER_PAGE}
           emptyMessage={t('allThreads.noThreads')}
           searchEmptyMessage={t('allThreads.noMatch')}
-          onThreadClick={(thread) => navigate(`/projects/${allThreadsProjectId}/threads/${thread.id}`)}
+          onThreadClick={(thread) => navigate(`/projects/${thread.projectId}/threads/${thread.id}`)}
           paginationLabel={({ total }) =>
             `${total} ${t('allThreads.threads')}${search || hasActiveFilters ? ` ${t('allThreads.found')}` : ''}`
           }
@@ -304,6 +338,11 @@ export function AllThreadsView() {
             const gitConf = gs ? gitSyncStateConfig[gs.state] : null;
             return (
               <>
+                {isGlobalSearch && projectNameById[thread.projectId] && (
+                  <span className="text-[10px] text-blue-500 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
+                    {projectNameById[thread.projectId]}
+                  </span>
+                )}
                 {thread.archived && (
                   <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
                     <Archive className="h-2.5 w-2.5" />

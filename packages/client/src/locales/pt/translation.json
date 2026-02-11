@@ -7,6 +7,7 @@
     "projects": "Projetos",
     "addProject": "Adicionar projeto",
     "newThread": "Nova thread",
+    "renameProject": "Renomear projeto",
     "deleteProject": "Excluir projeto",
     "openDirectory": "Abrir diretório",
     "openTerminal": "Abrir terminal",
@@ -259,7 +260,10 @@
     "filterMode": "Modo",
     "showArchived": "Arquivadas",
     "clearFilters": "Limpar filtros",
-    "archived": "Arquivada"
+    "archived": "Arquivada",
+    "globalTitle": "Buscar todas as threads",
+    "globalSearchPlaceholder": "Buscar por título, branch, projeto ou status...",
+    "projects": "projetos"
   },
   "archived": {
     "searchPlaceholder": "Buscar threads arquivadas por título, projeto, branch ou status...",
@@ -272,9 +276,11 @@
     "showingRange": "{{from}}-{{to}} de {{total}}"
   },
   "commandPalette": {
-    "searchPlaceholder": "Buscar configurações...",
+    "searchPlaceholder": "Buscar projetos e configurações...",
     "noResults": "Nenhum resultado encontrado.",
-    "settings": "Configurações"
+    "projects": "Projetos",
+    "settings": "Configurações",
+    "noProjects": "Nenhum projeto adicionado ainda."
   },
   "folderPicker": {
     "title": "Selecionar Pasta",
@@ -345,6 +351,8 @@
     "archiveThreadDesc": "Tem certeza de que deseja arquivar \"{{title}}\"? Você pode restaurá-la depois nas Configurações.",
     "deleteThread": "Excluir thread",
     "deleteThreadDesc": "Tem certeza de que deseja excluir \"{{title}}\"? Esta ação não pode ser desfeita.",
+    "renameProject": "Renomear projeto",
+    "renameProjectDesc": "Digite um novo nome para o projeto \"{{name}}\".",
     "deleteProject": "Excluir projeto",
     "deleteProjectDesc": "Tem certeza de que deseja excluir o projeto \"{{name}}\"? Todas as threads deste projeto também serão removidas. Esta ação não pode ser desfeita.",
     "worktreeWarning": "Esta thread tem um worktree. A branch e o worktree serão excluídos. Commits não enviados ou mesclados serão perdidos."
@@ -352,6 +360,7 @@
   "toast": {
     "threadArchived": "Thread arquivada com sucesso",
     "threadDeleted": "Thread \"{{title}}\" excluída",
+    "projectRenamed": "Projeto renomeado para \"{{name}}\"",
     "projectDeleted": "Projeto \"{{name}}\" excluído"
   },
   "confirm": {

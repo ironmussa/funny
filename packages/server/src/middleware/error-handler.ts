@@ -1,31 +1,15 @@
-import type { Context, ErrorHandler } from 'hono';
+import type { ErrorHandler } from 'hono';
 
-/** Application-specific error with HTTP status code */
-export class AppError extends Error {
-  constructor(
-    message: string,
-    public statusCode: number = 500,
-  ) {
-    super(message);
-    this.name = 'AppError';
-  }
-}
-
-/** Convenience factories */
-export const NotFound = (msg: string) => new AppError(msg, 404);
-export const BadRequest = (msg: string) => new AppError(msg, 400);
-export const Forbidden = (msg: string) => new AppError(msg, 403);
-
-/** Hono global error handler — use with app.onError() */
+/**
+ * Hono global error handler — safety net for unexpected errors.
+ *
+ * With neverthrow, most errors are handled via Result types in route handlers.
+ * This handler only catches truly unexpected errors that bypass Result handling.
+ */
 export const handleError: ErrorHandler = (err, c) => {
   const e = err as any;
 
-  // AppError — typed HTTP errors (NotFound, BadRequest, Forbidden, etc.)
-  if (e?.name === 'AppError' && typeof e.statusCode === 'number') {
-    return c.json({ error: e.message }, e.statusCode as any);
-  }
-
-  // ProcessExecutionError — git / CLI command failures
+  // ProcessExecutionError — git / CLI command failures that escaped Result handling
   if (e?.name === 'ProcessExecutionError') {
     console.error('[error-handler] Process error:', e.command, e.stderr);
     return c.json({ error: e.message }, 400);

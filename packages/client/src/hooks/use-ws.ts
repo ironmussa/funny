@@ -28,6 +28,9 @@ let pendingMessages = new Map<string, BufferedMessage>(); // threadId → latest
 let pendingToolOutputs: Array<{ threadId: string; data: any }> = [];
 let rafId: number | null = null;
 
+/** Tool names that are likely to modify files on disk. */
+const FILE_MODIFYING_TOOLS = new Set(['Write', 'Edit', 'Bash']);
+
 function flushBatch() {
   rafId = null;
 
@@ -87,6 +90,10 @@ function handleMessage(e: MessageEvent) {
         flushBatch();
       }
       useAppStore.getState().handleWSResult(threadId, data);
+      // Final review pane refresh when agent finishes
+      import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
+        useReviewPaneStore.getState().notifyDirty(threadId);
+      });
       break;
     case 'agent:tool_call':
       // Flush pending messages first so the parent message exists
@@ -98,6 +105,12 @@ function handleMessage(e: MessageEvent) {
         flushBatch();
       }
       useAppStore.getState().handleWSToolCall(threadId, data);
+      // Signal ReviewPane when file-modifying tools are invoked
+      if (FILE_MODIFYING_TOOLS.has(data.name)) {
+        import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
+          useReviewPaneStore.getState().notifyDirty(threadId);
+        });
+      }
       break;
     case 'agent:error':
       useAppStore.getState().handleWSStatus(threadId, { status: 'failed' });

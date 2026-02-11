@@ -31,15 +31,13 @@ export function ArchivedThreadsSettings() {
 
   const fetchArchived = useCallback(async (p: number, l: number, s: string) => {
     setLoading(true);
-    try {
-      const res = await api.listArchivedThreads({ page: p, limit: l, search: s || undefined });
-      setThreads(res.threads);
-      setTotal(res.total);
-    } catch {
-      // silently ignore
-    } finally {
-      setLoading(false);
+    const result = await api.listArchivedThreads({ page: p, limit: l, search: s || undefined });
+    if (result.isOk()) {
+      setThreads(result.value.threads);
+      setTotal(result.value.total);
     }
+    // silently ignore errors
+    setLoading(false);
   }, []);
 
   useEffect(() => {
@@ -61,27 +59,26 @@ export function ArchivedThreadsSettings() {
   };
 
   const handleUnarchive = async (thread: Thread) => {
-    try {
-      await api.archiveThread(thread.id, false);
+    const result = await api.archiveThread(thread.id, false);
+    if (result.isOk()) {
       setThreads((prev) => prev.filter((t) => t.id !== thread.id));
       setTotal((prev) => prev - 1);
       loadThreadsForProject(thread.projectId);
       toast.success(t('archived.restored', { title: thread.title }));
-    } catch {
+    } else {
       toast.error(t('archived.restoreFailed'));
     }
   };
 
   const handleDelete = async (thread: Thread) => {
     if (!confirm(t('dialog.deleteThreadDesc', { title: thread.title }))) return;
-    try {
-      await api.deleteThread(thread.id);
+    const result = await api.deleteThread(thread.id);
+    if (result.isOk()) {
       setThreads((prev) => prev.filter((t) => t.id !== thread.id));
       setTotal((prev) => prev - 1);
       toast.success(t('toast.threadDeleted', { title: thread.title }));
-    } catch {
-      // silently ignore
     }
+    // silently ignore errors
   };
 
   return (

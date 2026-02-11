@@ -174,7 +174,7 @@ export function AutomationSettings() {
         model: form.model,
         permissionMode: form.permissionMode,
       });
-      automationId = created.id;
+      automationId = created?.id ?? null;
     }
     setDialogOpen(false);
 

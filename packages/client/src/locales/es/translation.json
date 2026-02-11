@@ -7,6 +7,7 @@
     "projects": "Proyectos",
     "addProject": "Agregar proyecto",
     "newThread": "Nuevo hilo",
+    "renameProject": "Renombrar proyecto",
     "deleteProject": "Eliminar proyecto",
     "openDirectory": "Abrir directorio",
     "openTerminal": "Abrir terminal",
@@ -259,7 +260,10 @@
     "filterMode": "Modo",
     "showArchived": "Archivados",
     "clearFilters": "Limpiar filtros",
-    "archived": "Archivado"
+    "archived": "Archivado",
+    "globalTitle": "Buscar todos los hilos",
+    "globalSearchPlaceholder": "Buscar por título, rama, proyecto o estado...",
+    "projects": "proyectos"
   },
   "archived": {
     "searchPlaceholder": "Buscar hilos archivados por título, proyecto, rama o estado...",
@@ -272,9 +276,11 @@
     "showingRange": "{{from}}-{{to}} de {{total}}"
   },
   "commandPalette": {
-    "searchPlaceholder": "Buscar configuración...",
+    "searchPlaceholder": "Buscar proyectos y configuración...",
     "noResults": "No se encontraron resultados.",
-    "settings": "Configuración"
+    "projects": "Proyectos",
+    "settings": "Configuración",
+    "noProjects": "No se han agregado proyectos aún."
   },
   "folderPicker": {
     "title": "Seleccionar Carpeta",
@@ -345,6 +351,8 @@
     "archiveThreadDesc": "¿Estás seguro de que quieres archivar \"{{title}}\"? Puedes restaurarlo después desde Configuración.",
     "deleteThread": "Eliminar hilo",
     "deleteThreadDesc": "¿Estás seguro de que quieres eliminar \"{{title}}\"? Esta acción no se puede deshacer.",
+    "renameProject": "Renombrar proyecto",
+    "renameProjectDesc": "Ingresa un nuevo nombre para el proyecto \"{{name}}\".",
     "deleteProject": "Eliminar proyecto",
     "deleteProjectDesc": "¿Estás seguro de que quieres eliminar el proyecto \"{{name}}\"? Todos los hilos de este proyecto también serán eliminados. Esta acción no se puede deshacer.",
     "worktreeWarning": "Este hilo tiene un worktree. La rama y el worktree serán eliminados. Los commits no pusheados ni mergeados se perderán.",
@@ -354,6 +362,7 @@
   "toast": {
     "threadArchived": "Hilo archivado exitosamente",
     "threadDeleted": "Hilo \"{{title}}\" eliminado",
+    "projectRenamed": "Proyecto renombrado a \"{{name}}\"",
     "projectDeleted": "Proyecto \"{{name}}\" eliminado",
     "worktreeDeleted": "Worktree \"{{branch}}\" eliminado",
     "worktreeDeleteFailed": "Error al eliminar worktree: {{message}}"

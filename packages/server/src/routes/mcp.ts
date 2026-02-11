@@ -7,26 +7,30 @@ import {
 } from '../services/mcp-service.js';
 import { startOAuthFlow, handleOAuthCallback } from '../services/mcp-oauth.js';
 import { addMcpServerSchema, validate } from '../validation/schemas.js';
-import { BadRequest } from '../middleware/error-handler.js';
+import { resultToResponse } from '../utils/result-response.js';
+import { badRequest } from '@a-parallel/shared/errors';
+import { err } from 'neverthrow';
 
 const app = new Hono();
 
 // List MCP servers for a project
 app.get('/servers', async (c) => {
   const projectPath = c.req.query('projectPath');
-  if (!projectPath) throw BadRequest('projectPath query parameter required');
+  if (!projectPath) return resultToResponse(c, err(badRequest('projectPath query parameter required')));
 
-  const servers = await listMcpServers(projectPath);
-  return c.json({ servers });
+  const result = await listMcpServers(projectPath);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ servers: result.value });
 });
 
 // Add an MCP server
 app.post('/servers', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(addMcpServerSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  await addMcpServer(parsed.data);
+  const result = await addMcpServer(parsed.value);
+  if (result.isErr()) return resultToResponse(c, result);
   return c.json({ ok: true });
 });
 
@@ -36,9 +40,10 @@ app.delete('/servers/:name', async (c) => {
   const projectPath = c.req.query('projectPath');
   const scope = c.req.query('scope') as 'project' | 'user' | undefined;
 
-  if (!projectPath) throw BadRequest('projectPath query parameter required');
+  if (!projectPath) return resultToResponse(c, err(badRequest('projectPath query parameter required')));
 
-  await removeMcpServer({ name, projectPath, scope });
+  const result = await removeMcpServer({ name, projectPath, scope });
+  if (result.isErr()) return resultToResponse(c, result);
   return c.json({ ok: true });
 });
 
@@ -53,13 +58,16 @@ app.post('/oauth/start', async (c) => {
   const { serverName, projectPath } = body;
 
   if (!serverName || !projectPath) {
-    throw BadRequest('serverName and projectPath are required');
+    return resultToResponse(c, err(badRequest('serverName and projectPath are required')));
   }
 
-  const servers = await listMcpServers(projectPath);
+  const serversResult = await listMcpServers(projectPath);
+  if (serversResult.isErr()) return resultToResponse(c, serversResult);
+  const servers = serversResult.value;
+
   const server = servers.find((s) => s.name === serverName);
-  if (!server) throw BadRequest(`Server "${serverName}" not found`);
-  if (!server.url) throw BadRequest(`Server "${serverName}" has no URL (only HTTP servers support OAuth)`);
+  if (!server) return resultToResponse(c, err(badRequest(`Server "${serverName}" not found`)));
+  if (!server.url) return resultToResponse(c, err(badRequest(`Server "${serverName}" has no URL (only HTTP servers support OAuth)`)));
 
   const url = new URL(c.req.url);
   const callbackBaseUrl = `${url.protocol}//${url.host}`;
@@ -74,28 +82,28 @@ app.post('/oauth/token', async (c) => {
   const { serverName, projectPath, token } = body;
 
   if (!serverName || !projectPath || !token) {
-    throw BadRequest('serverName, projectPath, and token are required');
+    return resultToResponse(c, err(badRequest('serverName, projectPath, and token are required')));
   }
 
-  const servers = await listMcpServers(projectPath);
+  const serversResult = await listMcpServers(projectPath);
+  if (serversResult.isErr()) return resultToResponse(c, serversResult);
+  const servers = serversResult.value;
+
   const server = servers.find((s) => s.name === serverName);
-  if (!server) throw BadRequest(`Server "${serverName}" not found`);
-  if (!server.url) throw BadRequest(`Server "${serverName}" has no URL`);
+  if (!server) return resultToResponse(c, err(badRequest(`Server "${serverName}" not found`)));
+  if (!server.url) return resultToResponse(c, err(badRequest(`Server "${serverName}" has no URL`)));
 
-  // Remove and re-add with Authorization header
-  try {
-    await removeMcpServer({ name: serverName, projectPath });
-  } catch {
-    // May not exist
-  }
+  // Remove and re-add with Authorization header (best-effort remove)
+  await removeMcpServer({ name: serverName, projectPath });
 
-  await addMcpServer({
+  const addResult = await addMcpServer({
     name: serverName,
     type: 'http',
     url: server.url,
     headers: { Authorization: `Bearer ${token}` },
     projectPath,
   });
+  if (addResult.isErr()) return resultToResponse(c, addResult);
 
   return c.json({ ok: true });
 });

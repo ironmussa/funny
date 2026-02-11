@@ -3,43 +3,46 @@
  * Uses `claude mcp list/add/remove` commands.
  */
 
+import { ResultAsync } from 'neverthrow';
 import { getClaudeBinaryPath } from '../utils/claude-binary.js';
-import { execute } from '../utils/process.js';
+import { execute, ProcessExecutionError } from '../utils/process.js';
+import { processError, internal, type DomainError } from '@a-parallel/shared/errors';
 import type { McpServer, McpServerType } from '@a-parallel/shared';
 
 /**
  * List MCP servers configured for a project.
- * Parses the output of `claude mcp list` (text format).
+ * Returns empty array on failure (best-effort).
  */
-export async function listMcpServers(projectPath: string): Promise<McpServer[]> {
+export function listMcpServers(projectPath: string): ResultAsync<McpServer[], DomainError> {
   const binary = getClaudeBinaryPath();
 
-  try {
-    const result = await execute(binary, ['mcp', 'list'], {
-      cwd: projectPath,
-      reject: false,
-      timeout: 15_000,
-    });
+  return ResultAsync.fromPromise(
+    (async () => {
+      try {
+        const result = await execute(binary, ['mcp', 'list'], {
+          cwd: projectPath,
+          reject: false,
+          timeout: 15_000,
+        });
 
-    const output = result.stdout.trim();
+        const output = result.stdout.trim();
 
-    // "No MCP servers configured" means empty
-    if (!output || output.includes('No MCP servers configured')) {
-      return [];
-    }
+        if (!output || output.includes('No MCP servers configured')) {
+          return [];
+        }
 
-    return parseMcpListOutput(output);
-  } catch (err) {
-    console.error('[mcp-service] Failed to list MCP servers:', err);
-    return [];
-  }
+        return parseMcpListOutput(output);
+      } catch (err) {
+        console.error('[mcp-service] Failed to list MCP servers:', err);
+        return [];
+      }
+    })(),
+    (error) => internal(String(error))
+  );
 }
 
 /**
  * Parse the text output of `claude mcp list`.
- * Handles two known formats:
- *   1. Status format: "name: url/command (TYPE) - status"
- *   2. Table format:  "name  type  url/command  scope"
  */
 function parseMcpListOutput(output: string): McpServer[] {
   const servers: McpServer[] = [];
@@ -49,8 +52,6 @@ function parseMcpListOutput(output: string): McpServer[] {
     const trimmed = line.trim();
     if (!trimmed || trimmed.startsWith('─') || trimmed.startsWith('Name') || trimmed.startsWith('Checking')) continue;
 
-    // Format 1: "server-name: https://url (HTTP) - status text"
-    // or "server-name: command arg1 arg2 (stdio) - status text"
     const statusMatch = trimmed.match(/^(\S+):\s+(.+?)\s+\((HTTP|http|SSE|sse|stdio|STDIO)\)(?:\s*-\s*(.+))?/);
     if (statusMatch) {
       const name = statusMatch[1];
@@ -68,7 +69,6 @@ function parseMcpListOutput(output: string): McpServer[] {
         server.args = cmdParts.slice(1);
       }
 
-      // Parse status
       if (statusText.includes('needs auth') || statusText.includes('authentication')) {
         server.status = 'needs_auth';
       } else if (statusText.includes('error') || statusText.includes('failed')) {
@@ -81,7 +81,6 @@ function parseMcpListOutput(output: string): McpServer[] {
       continue;
     }
 
-    // Format 2: table with double-space separators
     const parts = trimmed.split(/\s{2,}/);
     if (parts.length >= 2) {
       const name = parts[0].trim();
@@ -110,7 +109,7 @@ function parseMcpListOutput(output: string): McpServer[] {
 /**
  * Add an MCP server using the Claude CLI.
  */
-export async function addMcpServer(opts: {
+export function addMcpServer(opts: {
   name: string;
   type: McpServerType;
   command?: string;
@@ -120,42 +119,35 @@ export async function addMcpServer(opts: {
   env?: Record<string, string>;
   scope?: 'project' | 'user';
   projectPath: string;
-}): Promise<void> {
+}): ResultAsync<void, DomainError> {
   const binary = getClaudeBinaryPath();
   const cliArgs: string[] = ['mcp', 'add'];
 
-  // Transport type
   cliArgs.push('--transport', opts.type);
 
-  // Scope
   if (opts.scope) {
     cliArgs.push('--scope', opts.scope);
   }
 
-  // Environment variables
   if (opts.env) {
     for (const [key, value] of Object.entries(opts.env)) {
       cliArgs.push('--env', `${key}=${value}`);
     }
   }
 
-  // Headers (for http)
   if (opts.headers) {
     for (const [key, value] of Object.entries(opts.headers)) {
       cliArgs.push('--header', `${key}: ${value}`);
     }
   }
 
-  // Server name
   cliArgs.push(opts.name);
 
   if (opts.type === 'http' || opts.type === 'sse') {
-    // URL follows the name
     if (opts.url) {
       cliArgs.push(opts.url);
     }
   } else if (opts.type === 'stdio') {
-    // Command and args after --
     cliArgs.push('--');
     if (opts.command) {
       cliArgs.push(opts.command);
@@ -167,20 +159,25 @@ export async function addMcpServer(opts: {
 
   console.log(`[mcp-service] Adding server: ${binary} ${cliArgs.join(' ')}`);
 
-  await execute(binary, cliArgs, {
-    cwd: opts.projectPath,
-    timeout: 30_000,
-  });
+  return ResultAsync.fromPromise(
+    execute(binary, cliArgs, { cwd: opts.projectPath, timeout: 30_000 }).then(() => undefined),
+    (error) => {
+      if (error instanceof ProcessExecutionError) {
+        return processError(error.message, error.exitCode, error.stderr);
+      }
+      return internal(String(error));
+    }
+  );
 }
 
 /**
  * Remove an MCP server using the Claude CLI.
  */
-export async function removeMcpServer(opts: {
+export function removeMcpServer(opts: {
   name: string;
   projectPath: string;
   scope?: 'project' | 'user';
-}): Promise<void> {
+}): ResultAsync<void, DomainError> {
   const binary = getClaudeBinaryPath();
   const cliArgs: string[] = ['mcp', 'remove'];
 
@@ -192,10 +189,15 @@ export async function removeMcpServer(opts: {
 
   console.log(`[mcp-service] Removing server: ${binary} ${cliArgs.join(' ')}`);
 
-  await execute(binary, cliArgs, {
-    cwd: opts.projectPath,
-    timeout: 15_000,
-  });
+  return ResultAsync.fromPromise(
+    execute(binary, cliArgs, { cwd: opts.projectPath, timeout: 15_000 }).then(() => undefined),
+    (error) => {
+      if (error instanceof ProcessExecutionError) {
+        return processError(error.message, error.exitCode, error.stderr);
+      }
+      return internal(String(error));
+    }
+  );
 }
 
 /**

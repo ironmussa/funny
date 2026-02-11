@@ -257,14 +257,13 @@ export function McpServerSettings() {
     if (!projectPath) return;
     setLoading(true);
     setError(null);
-    try {
-      const res = await api.listMcpServers(projectPath);
-      setServers(res.servers);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    const result = await api.listMcpServers(projectPath);
+    if (result.isOk()) {
+      setServers(result.value.servers);
+    } else {
+      setError(result.error.message);
     }
+    setLoading(false);
   }, [projectPath]);
 
   // Load servers when projectPath changes (track previous to avoid duplicate calls)
@@ -280,61 +279,62 @@ export function McpServerSettings() {
   useEffect(() => {
     if (recommendedLoadedRef.current) return;
     recommendedLoadedRef.current = true;
-    api.getRecommendedMcpServers()
-      .then(res => setRecommended(res.servers as unknown as RecommendedServer[]))
-      .catch(() => {});
+    (async () => {
+      const result = await api.getRecommendedMcpServers();
+      if (result.isOk()) setRecommended(result.value.servers as unknown as RecommendedServer[]);
+    })();
   }, []);
 
   const handleRemove = async (name: string) => {
     if (!projectPath) return;
     setRemovingName(name);
-    try {
-      await api.removeMcpServer(name, projectPath);
+    const result = await api.removeMcpServer(name, projectPath);
+    if (result.isErr()) {
+      setError(result.error.message);
+    } else {
       await loadServers();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setRemovingName(null);
     }
+    setRemovingName(null);
   };
 
   const handleInstallRecommended = async (server: RecommendedServer) => {
     if (!projectPath) return;
     setInstallingName(server.name);
-    try {
-      await api.addMcpServer({
-        name: server.name,
-        type: server.type,
-        url: server.url,
-        command: server.command,
-        args: server.args,
-        projectPath,
-      });
+    const result = await api.addMcpServer({
+      name: server.name,
+      type: server.type,
+      url: server.url,
+      command: server.command,
+      args: server.args,
+      projectPath,
+    });
+    if (result.isErr()) {
+      setError(result.error.message);
+    } else {
       await loadServers();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setInstallingName(null);
     }
+    setInstallingName(null);
   };
 
   const handleAddCustom = async () => {
     if (!projectPath || !addName) return;
     setAdding(true);
     setError(null);
-    try {
-      const data: any = {
-        name: addName,
-        type: addType,
-        projectPath,
-      };
-      if (addType === 'http' || addType === 'sse') {
-        data.url = addUrl;
-      } else {
-        data.command = addCommand;
-        data.args = addArgs.split(/\s+/).filter(Boolean);
-      }
-      await api.addMcpServer(data);
+    const data: any = {
+      name: addName,
+      type: addType,
+      projectPath,
+    };
+    if (addType === 'http' || addType === 'sse') {
+      data.url = addUrl;
+    } else {
+      data.command = addCommand;
+      data.args = addArgs.split(/\s+/).filter(Boolean);
+    }
+    const result = await api.addMcpServer(data);
+    if (result.isErr()) {
+      setError(result.error.message);
+    } else {
       await loadServers();
       // Reset form
       setAddName('');
@@ -342,70 +342,68 @@ export function McpServerSettings() {
       setAddCommand('');
       setAddArgs('');
       setShowAddForm(false);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setAdding(false);
     }
+    setAdding(false);
   };
 
   const handleAuthenticate = async (server: McpServer) => {
     if (!projectPath) return;
     setAuthenticatingName(server.name);
     setError(null);
-    try {
-      const { authUrl } = await api.startMcpOAuth(server.name, projectPath);
-
-      const width = 600;
-      const height = 700;
-      const left = window.screenX + (window.innerWidth - width) / 2;
-      const top = window.screenY + (window.innerHeight - height) / 2;
-      const popup = window.open(
-        authUrl,
-        'mcp-oauth',
-        `width=${width},height=${height},left=${left},top=${top},popup=yes`,
-      );
-
-      const handleMessage = (event: MessageEvent) => {
-        if (event.data?.type === 'mcp-oauth-callback') {
-          window.removeEventListener('message', handleMessage);
-          setAuthenticatingName(null);
-          if (event.data.success) {
-            loadServers();
-          } else {
-            setError(event.data.error || t('mcp.authFailed'));
-          }
-        }
-      };
-      window.addEventListener('message', handleMessage);
-
-      // Fallback: detect popup closed manually
-      const checkClosed = setInterval(() => {
-        if (popup && popup.closed) {
-          clearInterval(checkClosed);
-          window.removeEventListener('message', handleMessage);
-          setAuthenticatingName(null);
-          loadServers();
-        }
-      }, 500);
-    } catch (err: any) {
-      setError(err.message);
+    const result = await api.startMcpOAuth(server.name, projectPath);
+    if (result.isErr()) {
+      setError(result.error.message);
       setAuthenticatingName(null);
+      return;
     }
+
+    const { authUrl } = result.value;
+
+    const width = 600;
+    const height = 700;
+    const left = window.screenX + (window.innerWidth - width) / 2;
+    const top = window.screenY + (window.innerHeight - height) / 2;
+    const popup = window.open(
+      authUrl,
+      'mcp-oauth',
+      `width=${width},height=${height},left=${left},top=${top},popup=yes`,
+    );
+
+    const handleMessage = (event: MessageEvent) => {
+      if (event.data?.type === 'mcp-oauth-callback') {
+        window.removeEventListener('message', handleMessage);
+        setAuthenticatingName(null);
+        if (event.data.success) {
+          loadServers();
+        } else {
+          setError(event.data.error || t('mcp.authFailed'));
+        }
+      }
+    };
+    window.addEventListener('message', handleMessage);
+
+    // Fallback: detect popup closed manually
+    const checkClosed = setInterval(() => {
+      if (popup && popup.closed) {
+        clearInterval(checkClosed);
+        window.removeEventListener('message', handleMessage);
+        setAuthenticatingName(null);
+        loadServers();
+      }
+    }, 500);
   };
 
   const handleSetToken = async (server: McpServer, token: string) => {
     if (!projectPath) return;
     setSettingTokenName(server.name);
     setError(null);
-    try {
-      await api.setMcpToken(server.name, projectPath, token);
+    const result = await api.setMcpToken(server.name, projectPath, token);
+    if (result.isErr()) {
+      setError(result.error.message);
+    } else {
       await loadServers();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSettingTokenName(null);
     }
+    setSettingTokenName(null);
   };
 
   const installedNames = new Set(servers.map((s) => s.name));

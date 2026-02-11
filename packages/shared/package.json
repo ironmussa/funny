@@ -6,6 +6,7 @@
   "main": "./src/types.ts",
   "types": "./src/types.ts",
   "exports": {
-    ".": "./src/types.ts"
+    ".": "./src/types.ts",
+    "./errors": "./src/errors.ts"
   }
 }

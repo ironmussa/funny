@@ -3,6 +3,7 @@ import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '../helpers/render';
 import { ReviewPane } from '@/components/ReviewPane';
 import { useAppStore } from '@/stores/app-store';
+import { okAsync } from 'neverthrow';
 
 // ── Mocks ───────────────────────────────────────────────────────
 
@@ -15,16 +16,16 @@ vi.mock('react-i18next', () => ({
 
 vi.mock('@/lib/api', () => ({
   api: {
-    getDiff: vi.fn().mockResolvedValue([]),
-    stageFiles: vi.fn().mockResolvedValue({}),
-    unstageFiles: vi.fn().mockResolvedValue({}),
-    revertFiles: vi.fn().mockResolvedValue({}),
-    commit: vi.fn().mockResolvedValue({}),
-    generateCommitMessage: vi.fn().mockResolvedValue({ message: 'feat: add feature' }),
-    push: vi.fn().mockResolvedValue({}),
-    createPR: vi.fn().mockResolvedValue({}),
-    merge: vi.fn().mockResolvedValue({}),
-    listBranches: vi.fn().mockResolvedValue({ branches: ['main'], defaultBranch: 'main' }),
+    getDiff: vi.fn().mockReturnValue(okAsync([])),
+    stageFiles: vi.fn().mockReturnValue(okAsync({})),
+    unstageFiles: vi.fn().mockReturnValue(okAsync({})),
+    revertFiles: vi.fn().mockReturnValue(okAsync({})),
+    commit: vi.fn().mockReturnValue(okAsync({})),
+    generateCommitMessage: vi.fn().mockReturnValue(okAsync({ message: 'feat: add feature' })),
+    push: vi.fn().mockReturnValue(okAsync({})),
+    createPR: vi.fn().mockReturnValue(okAsync({})),
+    merge: vi.fn().mockReturnValue(okAsync({})),
+    listBranches: vi.fn().mockReturnValue(okAsync({ branches: ['main'], defaultBranch: 'main' })),
   },
 }));
 
@@ -76,7 +77,7 @@ beforeEach(() => {
 
 describe('ReviewPane', () => {
   test('shows no changes message when diff is empty', async () => {
-    mockApi.getDiff.mockResolvedValueOnce([]);
+    mockApi.getDiff.mockReturnValueOnce(okAsync([]));
     renderWithProviders(<ReviewPane />);
 
     await waitFor(() => {
@@ -85,10 +86,10 @@ describe('ReviewPane', () => {
   });
 
   test('renders file list from diffs', async () => {
-    mockApi.getDiff.mockResolvedValueOnce([
+    mockApi.getDiff.mockReturnValueOnce(okAsync([
       { path: 'src/index.ts', status: 'modified', staged: false, diff: '--- a\n+++ b\n@@ -1 +1 @@\n-old\n+new' },
       { path: 'src/utils.ts', status: 'added', staged: true, diff: '+++ b\n+new file' },
-    ]);
+    ]));
 
     renderWithProviders(<ReviewPane />);
 
@@ -104,12 +105,12 @@ describe('ReviewPane', () => {
 
   test('stage button calls API and refreshes', async () => {
     mockApi.getDiff
-      .mockResolvedValueOnce([
+      .mockReturnValueOnce(okAsync([
         { path: 'src/index.ts', status: 'modified', staged: false, diff: '-old\n+new' },
-      ])
-      .mockResolvedValueOnce([
+      ]))
+      .mockReturnValueOnce(okAsync([
         { path: 'src/index.ts', status: 'modified', staged: true, diff: '-old\n+new' },
-      ]);
+      ]));
 
     renderWithProviders(<ReviewPane />);
 
@@ -131,12 +132,12 @@ describe('ReviewPane', () => {
 
   test('unstage button calls API and refreshes', async () => {
     mockApi.getDiff
-      .mockResolvedValueOnce([
+      .mockReturnValueOnce(okAsync([
         { path: 'src/index.ts', status: 'modified', staged: true, diff: '-old\n+new' },
-      ])
-      .mockResolvedValueOnce([
+      ]))
+      .mockReturnValueOnce(okAsync([
         { path: 'src/index.ts', status: 'modified', staged: false, diff: '-old\n+new' },
-      ]);
+      ]));
 
     renderWithProviders(<ReviewPane />);
 
@@ -158,10 +159,10 @@ describe('ReviewPane', () => {
 
   test('commit flow: enter message and commit', async () => {
     mockApi.getDiff
-      .mockResolvedValueOnce([
+      .mockReturnValueOnce(okAsync([
         { path: 'src/index.ts', status: 'modified', staged: true, diff: '-old\n+new' },
-      ])
-      .mockResolvedValueOnce([]);
+      ]))
+      .mockReturnValueOnce(okAsync([]));
 
     renderWithProviders(<ReviewPane />);
 
@@ -180,7 +181,7 @@ describe('ReviewPane', () => {
 
   test('push calls API and shows toast on success', async () => {
     // No uncommitted changes
-    mockApi.getDiff.mockResolvedValueOnce([]);
+    mockApi.getDiff.mockReturnValueOnce(okAsync([]));
 
     renderWithProviders(<ReviewPane />);
 
@@ -200,7 +201,7 @@ describe('ReviewPane', () => {
   });
 
   test('shows branch context with merge target', async () => {
-    mockApi.getDiff.mockResolvedValueOnce([]);
+    mockApi.getDiff.mockReturnValueOnce(okAsync([]));
 
     renderWithProviders(<ReviewPane />);
 

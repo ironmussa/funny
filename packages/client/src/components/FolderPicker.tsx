@@ -34,55 +34,54 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
 
   // Load drive roots on mount, restore last path
   useEffect(() => {
-    api.browseRoots()
-      .then(async (data) => {
-        setRoots(data.roots || []);
-        setHome(data.home || '');
-        const lastPath = localStorage.getItem('a-parallel:last-browse-path');
-        if (lastPath && lastPath !== data.home) {
-          // Try saved path first; fall back to home on error
-          try {
-            const result = await api.browseList(lastPath);
-            if (result.error) {
-              localStorage.removeItem('a-parallel:last-browse-path');
-              loadDir(data.home);
-            } else {
-              setCurrentPath(result.path);
-              setParentPath(result.parent);
-              setDirs(result.dirs);
-              setLoading(false);
-            }
-          } catch {
-            localStorage.removeItem('a-parallel:last-browse-path');
-            loadDir(data.home);
-          }
-        } else {
-          loadDir(data.home);
-        }
-      })
-      .catch((e) => {
-        setError(e.message);
+    (async () => {
+      const rootsResult = await api.browseRoots();
+      if (rootsResult.isErr()) {
+        setError(rootsResult.error.message);
         setLoading(false);
-      });
+        return;
+      }
+      const data = rootsResult.value;
+      setRoots(data.roots || []);
+      setHome(data.home || '');
+      const lastPath = localStorage.getItem('a-parallel:last-browse-path');
+      if (lastPath && lastPath !== data.home) {
+        // Try saved path first; fall back to home on error
+        const listResult = await api.browseList(lastPath);
+        if (listResult.isErr() || listResult.value.error) {
+          localStorage.removeItem('a-parallel:last-browse-path');
+          loadDir(data.home);
+        } else {
+          setCurrentPath(listResult.value.path);
+          setParentPath(listResult.value.parent);
+          setDirs(listResult.value.dirs);
+          setLoading(false);
+        }
+      } else {
+        loadDir(data.home);
+      }
+    })();
   }, []);
 
   const loadDir = async (path: string) => {
     setLoading(true);
     setError('');
-    try {
-      const data = await api.browseList(path);
-      if (data.path) setCurrentPath(data.path);
-      if (data.parent !== undefined) setParentPath(data.parent);
-      if (data.dirs) setDirs(data.dirs);
-      if (data.error) {
-        setError(data.error);
-        setLoading(false);
-        return;
-      }
-      localStorage.setItem('a-parallel:last-browse-path', data.path);
-    } catch (e: any) {
-      setError(e.message);
+    const result = await api.browseList(path);
+    if (result.isErr()) {
+      setError(result.error.message);
+      setLoading(false);
+      return;
     }
+    const data = result.value;
+    if (data.path) setCurrentPath(data.path);
+    if (data.parent !== undefined) setParentPath(data.parent);
+    if (data.dirs) setDirs(data.dirs);
+    if (data.error) {
+      setError(data.error);
+      setLoading(false);
+      return;
+    }
+    localStorage.setItem('a-parallel:last-browse-path', data.path);
     setLoading(false);
   };
 

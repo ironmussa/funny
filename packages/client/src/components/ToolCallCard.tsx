@@ -29,6 +29,14 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
   const todos = isTodo ? getTodos(parsed) : null;
   const filePath = getFilePath(name, parsed);
 
+  // Truncated output preview for collapsed cards
+  const outputPreview = useMemo(() => {
+    if (!output || expanded) return null;
+    const firstLine = output.split('\n').find(l => l.trim())?.trim();
+    if (!firstLine) return null;
+    return firstLine.length > 120 ? firstLine.slice(0, 120) + '…' : firstLine;
+  }, [output, expanded]);
+
   // Specialized cards
   if (isPlan) return <PlanCard parsed={parsed} output={output} onRespond={onRespond} />;
   if (name === 'Bash') return <BashCard parsed={parsed} output={output} />;
@@ -71,6 +79,13 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
           )
         )}
       </button>
+      {!expanded && outputPreview && (
+        <div className="px-3 pb-1.5 -mt-0.5">
+          <p className="text-[10px] font-mono text-muted-foreground/70 truncate leading-tight">
+            → {outputPreview}
+          </p>
+        </div>
+      )}
       {expanded && (
         <div className="px-3 pb-2 pt-0 border-t border-border/40 overflow-hidden">
           {isTodo && todos ? (

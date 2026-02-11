@@ -98,7 +98,7 @@ export function MobilePage() {
           />
         )}
       </div>
-      <Toaster position="top-center" theme="dark" />
+      <Toaster position="top-center" theme="dark" duration={2000} />
     </>
   );
 }
@@ -252,24 +252,25 @@ function NewThreadView({
     if (creating) return;
     setCreating(true);
 
-    try {
-      const thread = await api.createThread({
-        projectId,
-        title: prompt.slice(0, 200),
-        mode: (opts.threadMode as 'local' | 'worktree') || defaultThreadMode,
-        model: opts.model,
-        permissionMode: opts.mode,
-        baseBranch: opts.baseBranch,
-        prompt,
-        images,
-      });
+    const result = await api.createThread({
+      projectId,
+      title: prompt.slice(0, 200),
+      mode: (opts.threadMode as 'local' | 'worktree') || defaultThreadMode,
+      model: opts.model,
+      permissionMode: opts.mode,
+      baseBranch: opts.baseBranch,
+      prompt,
+      images,
+    });
 
-      await loadThreadsForProject(projectId);
-      onCreated(thread.id);
-    } catch (e: any) {
-      toast.error(e.message);
+    if (result.isErr()) {
+      toast.error(result.error.message);
       setCreating(false);
+      return;
     }
+
+    await loadThreadsForProject(projectId);
+    onCreated(result.value.id);
   };
 
   return (
@@ -374,21 +375,18 @@ function ChatView({
 
     useAppStore.getState().appendOptimisticMessage(activeThread.id, prompt, images);
 
-    try {
-      await api.sendMessage(activeThread.id, prompt, { model: opts.model || undefined, permissionMode: opts.mode || undefined }, images);
-    } catch (e: any) {
-      console.error('Send failed:', e);
-    } finally {
-      setSending(false);
+    const result = await api.sendMessage(activeThread.id, prompt, { model: opts.model || undefined, permissionMode: opts.mode || undefined }, images);
+    if (result.isErr()) {
+      console.error('Send failed:', result.error);
     }
+    setSending(false);
   };
 
   const handleStop = async () => {
     if (!activeThread) return;
-    try {
-      await api.stopThread(activeThread.id);
-    } catch (e: any) {
-      console.error('Stop failed:', e);
+    const result = await api.stopThread(activeThread.id);
+    if (result.isErr()) {
+      console.error('Stop failed:', result.error);
     }
   };
 

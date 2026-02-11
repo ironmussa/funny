@@ -5,23 +5,21 @@ import * as wm from '../services/worktree-manager.js';
 import { validate, mergeSchema, stageFilesSchema, commitSchema, createPRSchema } from '../validation/schemas.js';
 import { sanitizePath } from '../utils/path-validation.js';
 import { requireThread, requireThreadCwd, requireProject } from '../utils/route-helpers.js';
-import { BadRequest } from '../middleware/error-handler.js';
+import { resultToResponse } from '../utils/result-response.js';
+import { badRequest } from '@a-parallel/shared/errors';
 import { getClaudeBinaryPath } from '../utils/claude-binary.js';
 import { execute } from '../utils/process.js';
+import { err } from 'neverthrow';
 
 export const gitRoutes = new Hono();
 
 /**
  * Validate that all file paths stay within the working directory.
- * Prevents directory traversal attacks (e.g. "../../etc/passwd").
  */
 function validateFilePaths(cwd: string, paths: string[]): string | null {
   for (const p of paths) {
-    try {
-      sanitizePath(cwd, p);
-    } catch {
-      return `Invalid path: ${p}`;
-    }
+    const result = sanitizePath(cwd, p);
+    if (result.isErr()) return `Invalid path: ${p}`;
   }
   return null;
 }
@@ -31,7 +29,10 @@ gitRoutes.get('/status', async (c) => {
   const projectId = c.req.query('projectId');
   if (!projectId) return c.json({ error: 'projectId required' }, 400);
 
-  const project = requireProject(projectId);
+  const projectResult = requireProject(projectId);
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+  const project = projectResult.value;
+
   const threads = tm.listThreads({ projectId });
   const worktreeThreads = threads.filter(
     (t) => t.mode === 'worktree' && t.worktreePath && t.branch
@@ -39,11 +40,13 @@ gitRoutes.get('/status', async (c) => {
 
   const results = await Promise.allSettled(
     worktreeThreads.map(async (thread) => {
-      const summary = await getStatusSummary(
+      const summaryResult = await getStatusSummary(
         thread.worktreePath!,
         thread.baseBranch ?? undefined,
         project.path
       );
+      if (summaryResult.isErr()) return null;
+      const summary = summaryResult.value;
       return {
         threadId: thread.id,
         state: deriveGitSyncState(summary),
@@ -54,7 +57,8 @@ gitRoutes.get('/status', async (c) => {
 
   const statuses = results
     .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
-    .map((r) => r.value);
+    .map((r) => r.value)
+    .filter(Boolean);
 
   return c.json({ statuses });
 });
@@ -62,18 +66,22 @@ gitRoutes.get('/status', async (c) => {
 // GET /api/git/:threadId/status — single thread git status
 gitRoutes.get('/:threadId/status', async (c) => {
   const threadId = c.req.param('threadId');
-  const thread = requireThread(threadId);
+  const threadResult = requireThread(threadId);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+  const thread = threadResult.value;
 
-  if (thread.mode !== 'worktree' || !thread.worktreePath) {
-    return c.json({ error: 'Not a worktree thread' }, 400);
-  }
+  const projectResult = requireProject(thread.projectId);
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+  const project = projectResult.value;
 
-  const project = requireProject(thread.projectId);
-  const summary = await getStatusSummary(
-    thread.worktreePath,
+  const cwd = thread.worktreePath || project.path;
+  const summaryResult = await getStatusSummary(
+    cwd,
     thread.baseBranch ?? undefined,
     project.path
   );
+  if (summaryResult.isErr()) return resultToResponse(c, summaryResult);
+  const summary = summaryResult.value;
 
   return c.json({
     threadId,
@@ -84,97 +92,122 @@ gitRoutes.get('/:threadId/status', async (c) => {
 
 // GET /api/git/:threadId/diff
 gitRoutes.get('/:threadId/diff', async (c) => {
-  const cwd = requireThreadCwd(c.req.param('threadId'));
-  const diffs = await getDiff(cwd);
-  return c.json(diffs);
+  const cwdResult = requireThreadCwd(c.req.param('threadId'));
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const diffResult = await getDiff(cwdResult.value);
+  if (diffResult.isErr()) return resultToResponse(c, diffResult);
+  return c.json(diffResult.value);
 });
 
 // POST /api/git/:threadId/stage
 gitRoutes.post('/:threadId/stage', async (c) => {
-  const cwd = requireThreadCwd(c.req.param('threadId'));
+  const cwdResult = requireThreadCwd(c.req.param('threadId'));
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
 
   const raw = await c.req.json().catch(() => ({}));
   const parsed = validate(stageFilesSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const pathError = validateFilePaths(cwd, parsed.data.paths);
+  const pathError = validateFilePaths(cwd, parsed.value.paths);
   if (pathError) return c.json({ error: pathError }, 400);
 
-  await stageFiles(cwd, parsed.data.paths);
+  const result = await stageFiles(cwd, parsed.value.paths);
+  if (result.isErr()) return resultToResponse(c, result);
   return c.json({ ok: true });
 });
 
 // POST /api/git/:threadId/unstage
 gitRoutes.post('/:threadId/unstage', async (c) => {
-  const cwd = requireThreadCwd(c.req.param('threadId'));
+  const cwdResult = requireThreadCwd(c.req.param('threadId'));
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
 
   const raw = await c.req.json().catch(() => ({}));
   const parsed = validate(stageFilesSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const pathError = validateFilePaths(cwd, parsed.data.paths);
+  const pathError = validateFilePaths(cwd, parsed.value.paths);
   if (pathError) return c.json({ error: pathError }, 400);
 
-  await unstageFiles(cwd, parsed.data.paths);
+  const result = await unstageFiles(cwd, parsed.value.paths);
+  if (result.isErr()) return resultToResponse(c, result);
   return c.json({ ok: true });
 });
 
 // POST /api/git/:threadId/revert
 gitRoutes.post('/:threadId/revert', async (c) => {
-  const cwd = requireThreadCwd(c.req.param('threadId'));
+  const cwdResult = requireThreadCwd(c.req.param('threadId'));
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
 
   const raw = await c.req.json().catch(() => ({}));
   const parsed = validate(stageFilesSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const pathError = validateFilePaths(cwd, parsed.data.paths);
+  const pathError = validateFilePaths(cwd, parsed.value.paths);
   if (pathError) return c.json({ error: pathError }, 400);
 
-  await revertFiles(cwd, parsed.data.paths);
+  const result = await revertFiles(cwd, parsed.value.paths);
+  if (result.isErr()) return resultToResponse(c, result);
   return c.json({ ok: true });
 });
 
 // POST /api/git/:threadId/commit
 gitRoutes.post('/:threadId/commit', async (c) => {
-  const cwd = requireThreadCwd(c.req.param('threadId'));
+  const cwdResult = requireThreadCwd(c.req.param('threadId'));
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
 
   const raw = await c.req.json().catch(() => ({}));
   const parsed = validate(commitSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const result = await commit(cwd, parsed.data.message);
-  return c.json({ ok: true, output: result });
+  const result = await commit(cwd, parsed.value.message);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ ok: true, output: result.value });
 });
 
 // POST /api/git/:threadId/push
 gitRoutes.post('/:threadId/push', async (c) => {
-  const cwd = requireThreadCwd(c.req.param('threadId'));
-  const result = await push(cwd);
-  return c.json({ ok: true, output: result });
+  const cwdResult = requireThreadCwd(c.req.param('threadId'));
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const result = await push(cwdResult.value);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ ok: true, output: result.value });
 });
 
 // POST /api/git/:threadId/pr
 gitRoutes.post('/:threadId/pr', async (c) => {
   const threadId = c.req.param('threadId');
-  const cwd = requireThreadCwd(threadId);
+  const cwdResult = requireThreadCwd(threadId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
   const thread = tm.getThread(threadId);
 
   const raw = await c.req.json().catch(() => ({}));
   const parsed = validate(createPRSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const url = await createPR(cwd, parsed.data.title, parsed.data.body, thread?.baseBranch ?? undefined);
-  return c.json({ ok: true, url });
+  const result = await createPR(cwd, parsed.value.title, parsed.value.body, thread?.baseBranch ?? undefined);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ ok: true, url: result.value });
 });
 
 // POST /api/git/:threadId/generate-commit-message
 gitRoutes.post('/:threadId/generate-commit-message', async (c) => {
-  const cwd = requireThreadCwd(c.req.param('threadId'));
-  const diffs = await getDiff(cwd);
+  const cwdResult = requireThreadCwd(c.req.param('threadId'));
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+
+  const diffResult = await getDiff(cwd);
+  if (diffResult.isErr()) return resultToResponse(c, diffResult);
+  const diffs = diffResult.value;
   const staged = diffs.filter(d => d.staged);
 
   if (staged.length === 0) {
-    throw BadRequest('No staged files to generate a commit message for');
+    return resultToResponse(c, err(badRequest('No staged files to generate a commit message for')));
   }
 
   const diffSummary = staged
@@ -196,43 +229,42 @@ gitRoutes.post('/:threadId/generate-commit-message', async (c) => {
 // POST /api/git/:threadId/merge
 gitRoutes.post('/:threadId/merge', async (c) => {
   const threadId = c.req.param('threadId');
-  const thread = requireThread(threadId);
+  const threadResult = requireThread(threadId);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+  const thread = threadResult.value;
 
   if (thread.mode !== 'worktree' || !thread.branch) {
-    throw BadRequest('Merge is only available for worktree threads');
+    return resultToResponse(c, err(badRequest('Merge is only available for worktree threads')));
   }
 
-  const project = requireProject(thread.projectId);
+  const projectResult = requireProject(thread.projectId);
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+  const project = projectResult.value;
 
   const raw = await c.req.json().catch(() => ({}));
   const parsed = validate(mergeSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const targetBranch = parsed.data.targetBranch || thread.baseBranch;
+  const targetBranch = parsed.value.targetBranch || thread.baseBranch;
   if (!targetBranch) {
-    throw BadRequest('No target branch specified and no baseBranch set on thread');
+    return resultToResponse(c, err(badRequest('No target branch specified and no baseBranch set on thread')));
   }
 
-  let output: string;
-  try {
-    output = await mergeBranch(project.path, thread.branch, targetBranch);
-  } catch (err: any) {
-    throw BadRequest(err.message || 'Merge failed');
-  }
+  const mergeResult = await mergeBranch(project.path, thread.branch, targetBranch);
+  if (mergeResult.isErr()) return resultToResponse(c, mergeResult);
 
-  if (parsed.data.push) {
-    try {
-      await git(['push', 'origin', targetBranch], project.path);
-    } catch (err: any) {
-      throw BadRequest(`Merge succeeded but push failed: ${err.message}`);
+  if (parsed.value.push) {
+    const pushResult = await git(['push', 'origin', targetBranch], project.path);
+    if (pushResult.isErr()) {
+      return resultToResponse(c, err(badRequest(`Merge succeeded but push failed: ${pushResult.error.message}`)));
     }
   }
 
-  if (parsed.data.cleanup && thread.worktreePath) {
+  if (parsed.value.cleanup && thread.worktreePath) {
     await wm.removeWorktree(project.path, thread.worktreePath).catch(console.warn);
     await wm.removeBranch(project.path, thread.branch).catch(console.warn);
     tm.updateThread(threadId, { worktreePath: null, branch: null });
   }
 
-  return c.json({ ok: true, output });
+  return c.json({ ok: true, output: mergeResult.value });
 });

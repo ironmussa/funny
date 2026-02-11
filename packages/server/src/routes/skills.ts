@@ -7,6 +7,7 @@ import {
   RECOMMENDED_SKILLS,
 } from '../services/skills-service.js';
 import { addSkillSchema, validate } from '../validation/schemas.js';
+import { resultToResponse } from '../utils/result-response.js';
 
 const app = new Hono();
 
@@ -22,9 +23,9 @@ app.get('/', (c) => {
 app.post('/', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(addSkillSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  await addSkill(parsed.data.identifier);
+  await addSkill(parsed.value.identifier);
   return c.json({ ok: true });
 });
 

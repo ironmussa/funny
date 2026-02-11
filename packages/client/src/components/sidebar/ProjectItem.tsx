@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { Folder, FolderOpen, FolderOpenDot, Plus, Search, Trash2, MoreHorizontal, Terminal, Settings } from 'lucide-react';
+import { Folder, FolderOpen, FolderOpenDot, Plus, Search, Trash2, MoreHorizontal, Terminal, Settings, Pencil } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -32,6 +32,7 @@ interface ProjectItemProps {
   selectedThreadId: string | null;
   onToggle: () => void;
   onNewThread: () => void;
+  onRenameProject: () => void;
   onDeleteProject: () => void;
   onSelectThread: (threadId: string) => void;
   onArchiveThread: (threadId: string, title: string) => void;
@@ -46,6 +47,7 @@ export function ProjectItem({
   selectedThreadId,
   onToggle,
   onNewThread,
+  onRenameProject,
   onDeleteProject,
   onSelectThread,
   onArchiveThread,
@@ -158,6 +160,15 @@ export function ProjectItem({
                   {t('sidebar.settings')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onRenameProject();
+                  }}
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                  {t('sidebar.renameProject')}
+                </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();

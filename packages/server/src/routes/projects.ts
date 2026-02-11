@@ -3,9 +3,9 @@ import * as pm from '../services/project-manager.js';
 import * as sc from '../services/startup-commands-service.js';
 import { listBranches, getDefaultBranch } from '../utils/git-v2.js';
 import { startCommand, stopCommand, isCommandRunning } from '../services/command-runner.js';
-import { createProjectSchema, createCommandSchema, validate } from '../validation/schemas.js';
+import { createProjectSchema, renameProjectSchema, createCommandSchema, validate } from '../validation/schemas.js';
 import { requireProject } from '../utils/route-helpers.js';
-import { NotFound } from '../middleware/error-handler.js';
+import { resultToResponse } from '../utils/result-response.js';
 
 export const projectRoutes = new Hono();
 
@@ -27,16 +27,18 @@ projectRoutes.get('/', (c) => {
 // POST /api/projects
 projectRoutes.post('/', async (c) => {
   const raw = await c.req.json();
-  const parsed = validate(createProjectSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
-  const { name, path } = parsed.data;
+  const result = validate(createProjectSchema, raw)
+    .andThen(({ name, path }) => pm.createProject(name, path));
+  return resultToResponse(c, result, 201);
+});
 
-  try {
-    const project = pm.createProject(name, path);
-    return c.json(project, 201);
-  } catch (e: any) {
-    return c.json({ error: e.message }, 400);
-  }
+// PATCH /api/projects/:id
+projectRoutes.patch('/:id', async (c) => {
+  const id = c.req.param('id');
+  const raw = await c.req.json();
+  const result = validate(renameProjectSchema, raw)
+    .andThen(({ name }) => pm.renameProject(id, name));
+  return resultToResponse(c, result);
 });
 
 // DELETE /api/projects/:id
@@ -48,13 +50,19 @@ projectRoutes.delete('/:id', (c) => {
 
 // GET /api/projects/:id/branches
 projectRoutes.get('/:id/branches', async (c) => {
-  const project = requireProject(c.req.param('id'));
+  const projectResult = requireProject(c.req.param('id'));
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
-  const [branches, defaultBranch] = await Promise.all([
+  const project = projectResult.value;
+  const [branchesResult, defaultBranchResult] = await Promise.all([
     listBranches(project.path),
     getDefaultBranch(project.path),
   ]);
-  return c.json({ branches, defaultBranch });
+
+  if (branchesResult.isErr()) return resultToResponse(c, branchesResult);
+  if (defaultBranchResult.isErr()) return resultToResponse(c, defaultBranchResult);
+
+  return c.json({ branches: branchesResult.value, defaultBranch: defaultBranchResult.value });
 });
 
 // ─── Startup Commands ───────────────────────────────────
@@ -71,8 +79,8 @@ projectRoutes.post('/:id/commands', async (c) => {
   const projectId = c.req.param('id');
   const raw = await c.req.json();
   const parsed = validate(createCommandSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
-  const { label, command, port, portEnvVar } = parsed.data;
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { label, command, port, portEnvVar } = parsed.value;
 
   const entry = sc.createCommand({ projectId, label, command, port, portEnvVar });
   return c.json(entry, 201);
@@ -83,8 +91,8 @@ projectRoutes.put('/:id/commands/:cmdId', async (c) => {
   const cmdId = c.req.param('cmdId');
   const raw = await c.req.json();
   const parsed = validate(createCommandSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
-  const { label, command, port, portEnvVar } = parsed.data;
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { label, command, port, portEnvVar } = parsed.value;
 
   sc.updateCommand(cmdId, { label, command, port, portEnvVar });
   return c.json({ ok: true });
@@ -104,10 +112,12 @@ projectRoutes.post('/:id/commands/:cmdId/start', async (c) => {
   const projectId = c.req.param('id');
   const cmdId = c.req.param('cmdId');
 
-  const project = requireProject(projectId);
+  const projectResult = requireProject(projectId);
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+  const project = projectResult.value;
 
   const cmd = sc.getCommand(cmdId);
-  if (!cmd) throw NotFound('Command not found');
+  if (!cmd) return c.json({ error: 'Command not found' }, 404);
 
   const finalCommand = cmd.port ? buildCommandWithPort(cmd.command, cmd.port) : cmd.command;
   const extraEnv: Record<string, string> = {};

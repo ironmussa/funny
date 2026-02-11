@@ -11,7 +11,7 @@ interface AutomationState {
   loadAutomations: (projectId: string) => Promise<void>;
   loadInbox: (options?: { projectId?: string; triageStatus?: string }) => Promise<void>;
   loadRuns: (automationId: string) => Promise<void>;
-  createAutomation: (data: Parameters<typeof api.createAutomation>[0]) => Promise<Automation>;
+  createAutomation: (data: Parameters<typeof api.createAutomation>[0]) => Promise<Automation | null>;
   updateAutomation: (id: string, data: Parameters<typeof api.updateAutomation>[1]) => Promise<void>;
   deleteAutomation: (id: string, projectId: string) => Promise<void>;
   triggerAutomation: (id: string) => Promise<void>;
@@ -29,37 +29,40 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   selectedAutomationRuns: [],
 
   loadAutomations: async (projectId) => {
-    try {
-      const automations = await api.listAutomations(projectId);
-      set(state => ({
-        automationsByProject: { ...state.automationsByProject, [projectId]: automations },
-      }));
-    } catch (e) {
-      console.error('[automation-store] Failed to load automations:', e);
-    }
+    const result = await api.listAutomations(projectId);
+    result.match(
+      (automations) => {
+        set(state => ({
+          automationsByProject: { ...state.automationsByProject, [projectId]: automations },
+        }));
+      },
+      (error) => console.error('[automation-store] Failed to load automations:', error.message),
+    );
   },
 
   loadInbox: async (options?: { projectId?: string; triageStatus?: string }) => {
-    try {
-      const inbox = await api.getAutomationInbox(options);
-      const pendingCount = inbox.filter(item => item.run.triageStatus === 'pending').length;
-      set({ inbox, inboxCount: pendingCount });
-    } catch (e) {
-      console.error('[automation-store] Failed to load inbox:', e);
-    }
+    const result = await api.getAutomationInbox(options);
+    result.match(
+      (inbox) => {
+        const pendingCount = inbox.filter(item => item.run.triageStatus === 'pending').length;
+        set({ inbox, inboxCount: pendingCount });
+      },
+      (error) => console.error('[automation-store] Failed to load inbox:', error.message),
+    );
   },
 
   loadRuns: async (automationId) => {
-    try {
-      const runs = await api.listAutomationRuns(automationId);
-      set({ selectedAutomationRuns: runs });
-    } catch (e) {
-      console.error('[automation-store] Failed to load runs:', e);
-    }
+    const result = await api.listAutomationRuns(automationId);
+    result.match(
+      (runs) => set({ selectedAutomationRuns: runs }),
+      (error) => console.error('[automation-store] Failed to load runs:', error.message),
+    );
   },
 
   createAutomation: async (data) => {
-    const automation = await api.createAutomation(data);
+    const result = await api.createAutomation(data);
+    if (result.isErr()) return null;
+    const automation = result.value;
     const projectId = data.projectId;
     set(state => ({
       automationsByProject: {
@@ -71,7 +74,9 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   },
 
   updateAutomation: async (id, data) => {
-    const updated = await api.updateAutomation(id, data);
+    const result = await api.updateAutomation(id, data);
+    if (result.isErr()) return;
+    const updated = result.value;
     set(state => {
       const newByProject = { ...state.automationsByProject };
       for (const [pid, automations] of Object.entries(newByProject)) {
@@ -82,7 +87,8 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   },
 
   deleteAutomation: async (id, projectId) => {
-    await api.deleteAutomation(id);
+    const result = await api.deleteAutomation(id);
+    if (result.isErr()) return;
     set(state => ({
       automationsByProject: {
         ...state.automationsByProject,
@@ -93,10 +99,12 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
 
   triggerAutomation: async (id) => {
     await api.triggerAutomation(id);
+    // Result is fire-and-forget; error handling not needed
   },
 
   triageRun: async (runId, status) => {
-    await api.triageRun(runId, status);
+    const result = await api.triageRun(runId, status);
+    if (result.isErr()) return;
     set(state => {
       const updatedInbox = state.inbox.map(item =>
         item.run.id === runId

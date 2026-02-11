@@ -7,6 +7,7 @@ import { cn } from '@/lib/utils';
 import { ReactDiffViewer, DIFF_VIEWER_STYLES } from './tool-cards/utils';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
 import {
   Dialog,
   DialogContent,
@@ -122,14 +123,14 @@ export function ReviewPane() {
   useEffect(() => {
     if (activeThread?.mode === 'worktree' && activeThread?.branch && !activeThread?.baseBranch && activeThread?.projectId) {
       api.listBranches(activeThread.projectId)
-        .then(data => setDefaultBranch(data.defaultBranch))
-        .catch(() => { });
+        .then(result => { if (result.isOk()) setDefaultBranch(result.value.defaultBranch); });
     }
   }, [activeThread?.projectId, activeThread?.mode, activeThread?.branch, activeThread?.baseBranch]);
 
   const mergeTarget = activeThread?.baseBranch || defaultBranch;
   const hasUncommittedChanges = diffs.length > 0;
   const hasStagedFiles = diffs.some(d => d.staged);
+  const hasStagedChanges = hasStagedFiles; // Only staged files block push/PR/merge
 
   const gitStatus = useGitStatusStore(s => threadId ? s.statusByThread[threadId] : undefined);
   const hasCommitsToPush = (gitStatus?.unpushedCommitCount ?? 0) > 0;
@@ -138,113 +139,117 @@ export function ReviewPane() {
   const refresh = async () => {
     if (!threadId) return;
     setLoading(true);
-    try {
-      const data = await api.getDiff(threadId);
+    const result = await api.getDiff(threadId);
+    if (result.isOk()) {
+      const data = result.value;
       setDiffs(data);
       if (data.length > 0 && !selectedFile) {
         setSelectedFile(data[0].path);
       }
-    } catch (e: any) {
-      console.error('Failed to load diff:', e);
-    } finally {
-      setLoading(false);
+    } else {
+      console.error('Failed to load diff:', result.error);
     }
+    setLoading(false);
   };
 
   useEffect(() => {
     refresh();
+    // Fetch git status on mount
+    if (threadId) {
+      useGitStatusStore.getState().fetchForThread(threadId);
+    }
   }, [threadId]);
+
+  // Auto-refresh diffs when agent modifies files (debounced 2s)
+  useAutoRefreshDiff(threadId, refresh, 2000);
 
   const selectedDiff = diffs.find((d) => d.path === selectedFile);
 
   const handleStage = async (paths: string[]) => {
     if (!threadId) return;
-    try {
-      await api.stageFiles(threadId, paths);
-      await refresh();
-    } catch (e: any) {
-      toast.error(t('review.stageFailed', { message: e.message }));
+    const result = await api.stageFiles(threadId, paths);
+    if (result.isErr()) {
+      toast.error(t('review.stageFailed', { message: result.error.message }));
+      return;
     }
+    await refresh();
   };
 
   const handleUnstage = async (paths: string[]) => {
     if (!threadId) return;
-    try {
-      await api.unstageFiles(threadId, paths);
-      await refresh();
-    } catch (e: any) {
-      toast.error(t('review.unstageFailed', { message: e.message }));
+    const result = await api.unstageFiles(threadId, paths);
+    if (result.isErr()) {
+      toast.error(t('review.unstageFailed', { message: result.error.message }));
+      return;
     }
+    await refresh();
   };
 
   const handleRevert = async (paths: string[]) => {
     if (!threadId) return;
-    try {
-      await api.revertFiles(threadId, paths);
-      await refresh();
-    } catch (e: any) {
-      toast.error(t('review.revertFailed', { message: e.message }));
+    const result = await api.revertFiles(threadId, paths);
+    if (result.isErr()) {
+      toast.error(t('review.revertFailed', { message: result.error.message }));
+      return;
     }
+    await refresh();
   };
 
   const handleCommit = async () => {
     if (!threadId || !commitMsg.trim()) return;
-    try {
-      await api.commit(threadId, commitMsg);
-      setCommitMsg('');
-      toast.success(t('review.commitSuccess'));
-      await refresh();
-      useGitStatusStore.getState().fetchForThread(threadId);
-    } catch (e: any) {
-      toast.error(t('review.commitFailed', { message: e.message }));
+    const result = await api.commit(threadId, commitMsg);
+    if (result.isErr()) {
+      toast.error(t('review.commitFailed', { message: result.error.message }));
+      return;
     }
+    setCommitMsg('');
+    toast.success(t('review.commitSuccess'));
+    await refresh();
+    useGitStatusStore.getState().fetchForThread(threadId);
   };
 
   const handleGenerateCommitMsg = async () => {
     if (!threadId || generatingMsg) return;
     setGeneratingMsg(true);
-    try {
-      const { message } = await api.generateCommitMessage(threadId);
-      setCommitMsg(message);
-    } catch (e: any) {
-      toast.error(t('review.generateFailed', { message: e.message }));
-    } finally {
-      setGeneratingMsg(false);
+    const result = await api.generateCommitMessage(threadId);
+    if (result.isOk()) {
+      setCommitMsg(result.value.message);
+    } else {
+      toast.error(t('review.generateFailed', { message: result.error.message }));
     }
+    setGeneratingMsg(false);
   };
 
   const handlePush = async () => {
     if (!threadId) return;
     setPushing(true);
-    try {
-      await api.push(threadId);
+    const result = await api.push(threadId);
+    if (result.isOk()) {
       toast.success(t('review.pushedSuccess'));
       useGitStatusStore.getState().fetchForThread(threadId);
-    } catch (e: any) {
-      toast.error(t('review.pushFailed', { message: e.message }));
-    } finally {
-      setPushing(false);
+    } else {
+      toast.error(t('review.pushFailed', { message: result.error.message }));
     }
+    setPushing(false);
   };
 
   const handleMerge = async (opts?: { push?: boolean; cleanup?: boolean }) => {
     if (!threadId || !activeThread?.branch || !mergeTarget) return;
 
     setMerging(true);
-    try {
-      await api.merge(threadId, {
-        targetBranch: mergeTarget,
-        push: opts?.push ?? false,
-        cleanup: opts?.cleanup ?? false,
-      });
+    const result = await api.merge(threadId, {
+      targetBranch: mergeTarget,
+      push: opts?.push ?? false,
+      cleanup: opts?.cleanup ?? false,
+    });
+    if (result.isOk()) {
       toast.success(t('review.mergeSuccess', { branch: activeThread.branch, target: mergeTarget }));
       await refresh();
       useGitStatusStore.getState().fetchForThread(threadId);
-    } catch (e: any) {
-      toast.error(t('review.mergeFailed', { message: e.message }));
-    } finally {
-      setMerging(false);
+    } else {
+      toast.error(t('review.mergeFailed', { message: result.error.message }));
     }
+    setMerging(false);
   };
 
   return (
@@ -440,14 +445,14 @@ export function ReviewPane() {
                     variant="ghost"
                     size="icon-sm"
                     onClick={handlePush}
-                    disabled={pushing || hasUncommittedChanges || !hasCommitsToPush}
+                    disabled={pushing || hasStagedChanges || !hasCommitsToPush}
                   >
                     <Upload className={cn('h-3.5 w-3.5', pushing && 'animate-spin')} />
                   </Button>
                 </span>
               </TooltipTrigger>
               <TooltipContent>
-                {hasUncommittedChanges
+                {hasStagedChanges
                   ? t('review.commitFirst')
                   : !hasCommitsToPush
                     ? t('review.nothingToPush')
@@ -463,14 +468,14 @@ export function ReviewPane() {
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => { setPrTitle(''); setPrDialog(true); }}
-                    disabled={hasUncommittedChanges || !hasCommitsToPush}
+                    disabled={hasStagedChanges || !hasCommitsToPush}
                   >
                     <GitPullRequest className="h-3.5 w-3.5" />
                   </Button>
                 </span>
               </TooltipTrigger>
               <TooltipContent>
-                {hasUncommittedChanges
+                {hasStagedChanges
                   ? t('review.commitFirst')
                   : !hasCommitsToPush
                     ? t('review.nothingToPush')
@@ -490,14 +495,14 @@ export function ReviewPane() {
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => setMergeConfirm({})}
-                      disabled={merging || hasUncommittedChanges || !hasCommitsToPush}
+                      disabled={merging || hasStagedChanges || !hasCommitsToPush}
                     >
                       <GitMerge className="h-3.5 w-3.5" />
                     </Button>
                   </span>
                 </TooltipTrigger>
                 <TooltipContent>
-                  {hasUncommittedChanges
+                  {hasStagedChanges
                     ? t('review.commitFirst')
                     : !hasCommitsToPush
                       ? t('review.nothingToPush')
@@ -582,7 +587,7 @@ export function ReviewPane() {
                 const body = activeThread?.branch
                   ? `Branch: \`${activeThread.branch}\`\nBase: \`${activeThread.baseBranch || 'default'}\``
                   : '';
-                api.createPR(threadId, prTitle, body).then(() => toast.success(t('review.prCreated'))).catch((err: any) => toast.error(err.message));
+                api.createPR(threadId, prTitle, body).then((result) => result.match(() => toast.success(t('review.prCreated')), (error) => toast.error(error.message)));
               }
             }}
             autoFocus
@@ -597,7 +602,7 @@ export function ReviewPane() {
               const body = activeThread?.branch
                 ? `Branch: \`${activeThread.branch}\`\nBase: \`${activeThread.baseBranch || 'default'}\``
                 : '';
-              api.createPR(threadId, prTitle, body).then(() => toast.success(t('review.prCreated'))).catch((err: any) => toast.error(err.message));
+              api.createPR(threadId, prTitle, body).then((result) => result.match(() => toast.success(t('review.prCreated')), (error) => toast.error(error.message)));
             }}>
               {t('review.createPR')}
             </Button>

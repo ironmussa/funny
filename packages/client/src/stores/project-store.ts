@@ -13,6 +13,7 @@ interface ProjectState {
   loadProjects: () => Promise<void>;
   toggleProject: (projectId: string) => void;
   selectProject: (projectId: string | null) => void;
+  renameProject: (projectId: string, name: string) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
 }
 
@@ -30,7 +31,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
     _loadProjectsPromise = (async () => {
       try {
-        const projects = await api.listProjects();
+        const result = await api.listProjects();
+        if (result.isErr()) return;
+        const projects = result.value;
         set({ projects });
 
         // Load threads for all projects so Running/Recent sections work immediately
@@ -87,8 +90,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     }
   },
 
+  renameProject: async (projectId, name) => {
+    const result = await api.renameProject(projectId, name);
+    if (result.isErr()) return;
+    const { projects } = get();
+    set({
+      projects: projects.map((p) => (p.id === projectId ? result.value : p)),
+    });
+  },
+
   deleteProject: async (projectId) => {
-    await api.deleteProject(projectId);
+    const result = await api.deleteProject(projectId);
+    if (result.isErr()) return;
     const { projects, expandedProjects, selectedProjectId } = get();
     const nextExpanded = new Set(expandedProjects);
     nextExpanded.delete(projectId);

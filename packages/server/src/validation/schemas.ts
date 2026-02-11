@@ -1,4 +1,6 @@
 import { z } from 'zod';
+import { ok, err, type Result } from 'neverthrow';
+import { validationErr, type DomainError } from '@a-parallel/shared/errors';
 
 // ── Enums ────────────────────────────────────────────────────────
 
@@ -22,6 +24,10 @@ const imageAttachmentSchema = z.object({
 export const createProjectSchema = z.object({
   name: z.string().min(1, 'name is required'),
   path: z.string().min(1, 'path is required'),
+});
+
+export const renameProjectSchema = z.object({
+  name: z.string().min(1, 'name is required'),
 });
 
 export const createThreadSchema = z.object({
@@ -144,12 +150,12 @@ export const updateRunTriageSchema = z.object({
 
 // ── Helper ───────────────────────────────────────────────────────
 
-/** Validate request body; returns parsed data or a 400 Response */
-export function validate<T>(schema: z.ZodType<T>, data: unknown): { success: true; data: T } | { success: false; error: string } {
+/** Validate request body; returns Result<T, DomainError> */
+export function validate<T>(schema: z.ZodType<T>, data: unknown): Result<T, DomainError> {
   const result = schema.safeParse(data);
   if (!result.success) {
     const firstIssue = result.error.issues[0];
-    return { success: false, error: firstIssue?.message ?? 'Invalid request body' };
+    return err(validationErr(firstIssue?.message ?? 'Invalid request body'));
   }
-  return { success: true, data: result.data };
+  return ok(result.data);
 }

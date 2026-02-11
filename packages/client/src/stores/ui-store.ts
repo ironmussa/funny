@@ -20,6 +20,7 @@ interface UIState {
   closeAllThreads: () => void;
   setAutomationInboxOpen: (open: boolean) => void;
   setAddProjectOpen: (open: boolean) => void;
+  showGlobalSearch: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -72,5 +73,11 @@ export const useUIStore = create<UIState>((set) => ({
 
   closeAllThreads: () => {
     set({ allThreadsProjectId: null });
+  },
+
+  showGlobalSearch: () => {
+    invalidateSelectThread();
+    useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+    set({ allThreadsProjectId: '__all__', newThreadProjectId: null, automationInboxOpen: false, addProjectOpen: false, settingsOpen: false });
   },
 }));

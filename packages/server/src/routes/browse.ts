@@ -4,53 +4,54 @@ import { join, parse as parsePath, resolve, normalize } from 'path';
 import { homedir, platform } from 'os';
 import { getRemoteUrl, extractRepoName, initRepo } from '../utils/git-v2.js';
 import * as pm from '../services/project-manager.js';
-import { BadRequest, Forbidden } from '../middleware/error-handler.js';
+import { resultToResponse } from '../utils/result-response.js';
 
 const app = new Hono();
 
 /**
- * Check if a path is within an allowed directory:
- * - The user's home directory (and subtrees)
- * - Any registered project path (and subtrees)
- * - Ancestor directories of registered projects (so the folder picker can navigate to them)
+ * Check if a path is within an allowed directory.
  */
 function isPathAllowed(targetPath: string): boolean {
   const normalizedTarget = normalize(resolve(targetPath));
 
-  // Allow anything under the user's home directory
   const home = normalize(resolve(homedir()));
   if (normalizedTarget.startsWith(home)) return true;
 
-  // Allow registered project paths (and their subtrees) and ancestor directories
   const projects = pm.listProjects();
   for (const project of projects) {
     const projectPath = normalize(resolve(project.path));
-    // Target is inside or equal to a project path
     if (normalizedTarget.startsWith(projectPath)) return true;
-    // Target is an ancestor of a project path (e.g. browsing C:\ to reach C:\Users\x\project)
     if (projectPath.startsWith(normalizedTarget)) return true;
   }
 
   return false;
 }
 
-/** Throw 403 if path is not in an allowed directory */
-function requireAllowedPath(path: string): void {
+/** Return 403 response if path is not in an allowed directory */
+function checkAllowedPath(path: string): Response | null {
   if (!isPathAllowed(path)) {
-    throw Forbidden('Access denied: path is outside allowed directories');
+    return new Response(JSON.stringify({ error: 'Access denied: path is outside allowed directories' }), {
+      status: 403,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
+  return null;
 }
 
-/** Require a non-empty string from a query param or body field, throw 400 if missing */
-function requirePath(value: string | undefined, label = 'path'): string {
-  if (!value) throw BadRequest(`${label} is required`);
+/** Return 400 response if value is missing */
+function checkRequired(value: string | undefined, label = 'path'): string | Response {
+  if (!value) {
+    return new Response(JSON.stringify({ error: `${label} is required` }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json' },
+    });
+  }
   return value;
 }
 
 // List drives (Windows) or root dirs
 app.get('/roots', (c) => {
   try {
-    // On Windows, list available drive letters
     const drives: string[] = [];
     for (let i = 65; i <= 90; i++) {
       const letter = String.fromCharCode(i);
@@ -70,15 +71,18 @@ app.get('/roots', (c) => {
 
 // List subdirectories of a given path
 app.get('/list', (c) => {
-  const dirPath = requirePath(c.req.query('path'), 'path query parameter');
-  requireAllowedPath(dirPath);
+  const dirPathOrRes = checkRequired(c.req.query('path'), 'path query parameter');
+  if (dirPathOrRes instanceof Response) return dirPathOrRes;
+  const dirPath = dirPathOrRes;
+
+  const denied = checkAllowedPath(dirPath);
+  if (denied) return denied;
 
   try {
     const entries = readdirSync(dirPath, { withFileTypes: true });
     const dirs = entries
       .filter((e) => {
         if (!e.isDirectory()) return false;
-        // Skip hidden/system folders
         if (e.name.startsWith('.') || e.name === 'node_modules' || e.name === '$Recycle.Bin' || e.name === 'System Volume Information') return false;
         return true;
       })
@@ -101,42 +105,43 @@ app.get('/list', (c) => {
 
 // Get git repo name from remote origin for a given path
 app.get('/repo-name', async (c) => {
-  const dirPath = requirePath(c.req.query('path'), 'path query parameter');
-  requireAllowedPath(dirPath);
+  const dirPathOrRes = checkRequired(c.req.query('path'), 'path query parameter');
+  if (dirPathOrRes instanceof Response) return dirPathOrRes;
+  const dirPath = dirPathOrRes;
 
-  try {
-    const remoteUrl = await getRemoteUrl(dirPath);
+  const denied = checkAllowedPath(dirPath);
+  if (denied) return denied;
 
-    if (remoteUrl) {
-      const name = extractRepoName(remoteUrl);
-      return c.json({ name });
-    }
-
-    // No remote — fall back to folder name
-    const folderName = dirPath.split(/[\\/]/).filter(Boolean).pop() || '';
-    return c.json({ name: folderName });
-  } catch {
-    // Not a git repo or error — fall back to folder name
-    const folderName = dirPath.split(/[\\/]/).filter(Boolean).pop() || '';
-    return c.json({ name: folderName });
+  const remoteResult = await getRemoteUrl(dirPath);
+  if (remoteResult.isOk() && remoteResult.value) {
+    const name = extractRepoName(remoteResult.value);
+    return c.json({ name });
   }
+
+  const folderName = dirPath.split(/[\\/]/).filter(Boolean).pop() || '';
+  return c.json({ name: folderName });
 });
 
 // Initialize a git repo at the given path
 app.post('/git-init', async (c) => {
   const { path: dirPath } = await c.req.json<{ path: string }>();
-  requirePath(dirPath, 'path');
-  requireAllowedPath(dirPath);
+  if (!dirPath) return c.json({ error: 'path is required' }, 400);
 
-  await initRepo(dirPath);
+  const denied = checkAllowedPath(dirPath);
+  if (denied) return denied;
+
+  const result = await initRepo(dirPath);
+  if (result.isErr()) return resultToResponse(c, result);
   return c.json({ ok: true });
 });
 
 // Open directory in file explorer
 app.post('/open-directory', async (c) => {
   const { path: dirPath } = await c.req.json<{ path: string }>();
-  requirePath(dirPath, 'path');
-  requireAllowedPath(dirPath);
+  if (!dirPath) return c.json({ error: 'path is required' }, 400);
+
+  const denied = checkAllowedPath(dirPath);
+  if (denied) return denied;
 
   const os = platform();
   let cmd: string;
@@ -163,8 +168,10 @@ app.post('/open-directory', async (c) => {
 // Open terminal at directory
 app.post('/open-terminal', async (c) => {
   const { path: dirPath } = await c.req.json<{ path: string }>();
-  requirePath(dirPath, 'path');
-  requireAllowedPath(dirPath);
+  if (!dirPath) return c.json({ error: 'path is required' }, 400);
+
+  const denied = checkAllowedPath(dirPath);
+  if (denied) return denied;
 
   const os = platform();
   let cmd: string;

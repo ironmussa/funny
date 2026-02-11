@@ -149,11 +149,8 @@ function CommandTabContent({
 
   const handleStop = async () => {
     if (projectId) {
-      try {
-        await api.stopCommand(projectId, commandId);
-      } catch {
-        // ignore
-      }
+      await api.stopCommand(projectId, commandId);
+      // ignore errors
     }
   };
 

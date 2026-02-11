@@ -19,12 +19,9 @@ export function AddProjectView() {
   const handleAddProject = async () => {
     if (!newProjectName || !newProjectPath || isCreating) return;
     setIsCreating(true);
-    try {
-      await api.createProject(newProjectName, newProjectPath);
-      await loadProjects();
-      setAddProjectOpen(false);
-    } catch (e: any) {
-      if (e.message?.includes('Not a git repository')) {
+    const result = await api.createProject(newProjectName, newProjectPath);
+    if (result.isErr()) {
+      if (result.error.message?.includes('Not a git repository')) {
         const init = confirm(
           t('confirm.notGitRepo', { path: newProjectPath })
         );
@@ -35,19 +32,29 @@ export function AddProjectView() {
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({ path: newProjectPath }),
             });
-            await api.createProject(newProjectName, newProjectPath);
-            await loadProjects();
-            setAddProjectOpen(false);
           } catch (initErr: any) {
             toast.error(initErr.message);
+            setIsCreating(false);
+            return;
           }
+          const retryResult = await api.createProject(newProjectName, newProjectPath);
+          if (retryResult.isErr()) {
+            toast.error(retryResult.error.message);
+            setIsCreating(false);
+            return;
+          }
+          await loadProjects();
+          setAddProjectOpen(false);
         }
       } else {
-        toast.error(e.message);
+        toast.error(result.error.message);
       }
-    } finally {
       setIsCreating(false);
+      return;
     }
+    await loadProjects();
+    setAddProjectOpen(false);
+    setIsCreating(false);
   };
 
   return (

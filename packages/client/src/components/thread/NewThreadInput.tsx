@@ -25,25 +25,26 @@ export function NewThreadInput() {
     if (!newThreadProjectId || creating) return;
     setCreating(true);
 
-    try {
-      const thread = await api.createThread({
-        projectId: newThreadProjectId,
-        title: prompt.slice(0, 200),
-        mode: (opts.threadMode as 'local' | 'worktree') || defaultThreadMode,
-        model: opts.model,
-        permissionMode: opts.mode,
-        baseBranch: opts.baseBranch,
-        prompt,
-        images,
-      });
+    const result = await api.createThread({
+      projectId: newThreadProjectId,
+      title: prompt.slice(0, 200),
+      mode: (opts.threadMode as 'local' | 'worktree') || defaultThreadMode,
+      model: opts.model,
+      permissionMode: opts.mode,
+      baseBranch: opts.baseBranch,
+      prompt,
+      images,
+    });
 
-      await loadThreadsForProject(newThreadProjectId);
+    if (result.isErr()) {
+      toast.error(result.error.message);
       setCreating(false);
-      navigate(`/projects/${newThreadProjectId}/threads/${thread.id}`);
-    } catch (e: any) {
-      toast.error(e.message);
-      setCreating(false);
+      return;
     }
+
+    await loadThreadsForProject(newThreadProjectId);
+    setCreating(false);
+    navigate(`/projects/${newThreadProjectId}/threads/${result.value.id}`);
   };
 
   return (

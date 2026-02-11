@@ -168,10 +168,12 @@ function WorktreePicker({
   useEffect(() => {
     if (!fetchTrigger) return;
     setLoading(true);
-    api.listWorktrees(projectId)
-      .then((data) => setWorktrees(data))
-      .catch(() => setWorktrees([]))
-      .finally(() => setLoading(false));
+    (async () => {
+      const result = await api.listWorktrees(projectId);
+      if (result.isOk()) setWorktrees(result.value);
+      else setWorktrees([]);
+      setLoading(false);
+    })();
   }, [fetchTrigger, projectId]);
 
   const normalizedCurrent = currentPath.replace(/\\/g, '/').toLowerCase();
@@ -326,27 +328,33 @@ export function PromptInput({
   const effectiveProjectId = propProjectId || selectedProjectId;
   useEffect(() => {
     if (isNewThread && effectiveProjectId) {
-      api.listBranches(effectiveProjectId).then((data) => {
-        setNewThreadBranches(data.branches);
-        if (data.defaultBranch) {
-          setSelectedBranch(data.defaultBranch);
-        } else if (data.branches.length > 0) {
-          setSelectedBranch(data.branches[0]);
+      (async () => {
+        const result = await api.listBranches(effectiveProjectId);
+        if (result.isOk()) {
+          const data = result.value;
+          setNewThreadBranches(data.branches);
+          if (data.defaultBranch) {
+            setSelectedBranch(data.defaultBranch);
+          } else if (data.branches.length > 0) {
+            setSelectedBranch(data.branches[0]);
+          }
+        } else {
+          setNewThreadBranches([]);
         }
-      }).catch(() => setNewThreadBranches([]));
+      })();
     }
   }, [isNewThread, effectiveProjectId]);
 
   // Fetch skills once when the menu first opens
   const loadSkills = useCallback(async () => {
     if (skillsLoaded) return;
-    try {
-      const projectPath = selectedProjectId
-        ? projects.find((p) => p.id === selectedProjectId)?.path
-        : undefined;
-      const res = await api.listSkills(projectPath);
+    const projectPath = selectedProjectId
+      ? projects.find((p) => p.id === selectedProjectId)?.path
+      : undefined;
+    const result = await api.listSkills(projectPath);
+    if (result.isOk()) {
       // Deduplicate: if a skill exists at both global and project scope, keep only the project-level one
-      const allSkills = res.skills ?? [];
+      const allSkills = result.value.skills ?? [];
       const deduped = new Map<string, Skill>();
       for (const skill of allSkills) {
         const existing = deduped.get(skill.name);
@@ -355,7 +363,7 @@ export function PromptInput({
         }
       }
       setSkills(Array.from(deduped.values()));
-    } catch {
+    } else {
       setSkills([]);
     }
     setSkillsLoaded(true);
@@ -451,6 +459,16 @@ export function PromptInput({
         setShowSlashMenu(false);
         return;
       }
+    }
+
+    // Shift+Tab: cycle through modes (plan → autoEdit → confirmEdit → plan)
+    if (e.key === 'Tab' && e.shiftKey) {
+      e.preventDefault();
+      setMode((current) => {
+        const idx = modes.findIndex((m) => m.value === current);
+        return modes[(idx + 1) % modes.length].value;
+      });
+      return;
     }
 
     if (e.key === 'Enter' && !e.shiftKey) {

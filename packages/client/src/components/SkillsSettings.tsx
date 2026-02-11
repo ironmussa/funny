@@ -239,35 +239,31 @@ export function SkillsSettings() {
   const loadSkills = useCallback(async () => {
     setLoading(true);
     setError(null);
-    try {
-      const res = await api.listSkills(projectPath || undefined);
-      setSkills(res.skills);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setLoading(false);
+    const result = await api.listSkills(projectPath || undefined);
+    if (result.isOk()) {
+      setSkills(result.value.skills);
+    } else {
+      setError(result.error.message);
     }
+    setLoading(false);
   }, [projectPath]);
 
   const loadPlugins = useCallback(async () => {
     setLoadingPlugins(true);
-    try {
-      const res = await api.listPlugins();
-      setPlugins(res.plugins);
-    } catch {
-      // Silently fail — plugins are optional
-    } finally {
-      setLoadingPlugins(false);
+    const result = await api.listPlugins();
+    if (result.isOk()) {
+      setPlugins(result.value.plugins);
     }
+    // Silently fail — plugins are optional
+    setLoadingPlugins(false);
   }, []);
 
   const loadRecommended = useCallback(async () => {
-    try {
-      const res = await api.getRecommendedSkills();
-      setRecommended(res.skills as unknown as RecommendedSkill[]);
-    } catch {
-      // Silently fail
+    const result = await api.getRecommendedSkills();
+    if (result.isOk()) {
+      setRecommended(result.value.skills as unknown as RecommendedSkill[]);
     }
+    // Silently fail
   }, []);
 
   useEffect(() => {
@@ -284,42 +280,39 @@ export function SkillsSettings() {
 
   const handleRemove = async (name: string) => {
     setRemovingName(name);
-    try {
-      await api.removeSkill(name);
+    const result = await api.removeSkill(name);
+    if (result.isErr()) {
+      setError(result.error.message);
+    } else {
       await loadSkills();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setRemovingName(null);
     }
+    setRemovingName(null);
   };
 
   const handleInstallRecommended = async (skill: RecommendedSkill) => {
     setInstallingId(skill.identifier);
-    try {
-      await api.addSkill(skill.identifier);
+    const result = await api.addSkill(skill.identifier);
+    if (result.isErr()) {
+      setError(result.error.message);
+    } else {
       await loadSkills();
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setInstallingId(null);
     }
+    setInstallingId(null);
   };
 
   const handleAddCustom = async () => {
     if (!customId.trim()) return;
     setAddingCustom(true);
     setError(null);
-    try {
-      await api.addSkill(customId.trim());
+    const result = await api.addSkill(customId.trim());
+    if (result.isErr()) {
+      setError(result.error.message);
+    } else {
       await loadSkills();
       setCustomId('');
       setShowCustom(false);
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setAddingCustom(false);
     }
+    setAddingCustom(false);
   };
 
   const projectSkills = skills.filter((s) => s.scope === 'project');

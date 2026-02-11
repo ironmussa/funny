@@ -1,41 +1,42 @@
 /**
- * Route helper utilities — throw AppError instead of returning inline JSON errors.
- * These are used in route handlers to reduce boilerplate for common lookups.
+ * Route helper utilities — return Result<T, DomainError> for common lookups.
  */
 
+import { ok, err, type Result } from 'neverthrow';
 import * as tm from '../services/thread-manager.js';
 import * as pm from '../services/project-manager.js';
-import { NotFound } from '../middleware/error-handler.js';
+import { notFound, type DomainError } from '@a-parallel/shared/errors';
 
-/** Get a thread by ID or throw 404 */
-export function requireThread(id: string) {
+/** Get a thread by ID or return Err(NOT_FOUND) */
+export function requireThread(id: string): Result<ReturnType<typeof tm.getThread> & {}, DomainError> {
   const thread = tm.getThread(id);
-  if (!thread) throw NotFound('Thread not found');
-  return thread;
+  if (!thread) return err(notFound('Thread not found'));
+  return ok(thread);
 }
 
-/** Get a thread with messages by ID or throw 404 */
-export function requireThreadWithMessages(id: string) {
+/** Get a thread with messages by ID or return Err(NOT_FOUND) */
+export function requireThreadWithMessages(id: string): Result<NonNullable<ReturnType<typeof tm.getThreadWithMessages>>, DomainError> {
   const result = tm.getThreadWithMessages(id);
-  if (!result) throw NotFound('Thread not found');
-  return result;
+  if (!result) return err(notFound('Thread not found'));
+  return ok(result);
 }
 
-/** Get a project by ID or throw 404 */
-export function requireProject(id: string) {
+/** Get a project by ID or return Err(NOT_FOUND) */
+export function requireProject(id: string): Result<NonNullable<ReturnType<typeof pm.getProject>>, DomainError> {
   const project = pm.getProject(id);
-  if (!project) throw NotFound('Project not found');
-  return project;
+  if (!project) return err(notFound('Project not found'));
+  return ok(project);
 }
 
 /**
- * Resolve the working directory for a thread or throw 404.
+ * Resolve the working directory for a thread or return Err(NOT_FOUND).
  * Returns worktreePath if set, otherwise the project path.
  */
-export function requireThreadCwd(threadId: string): string {
-  const thread = requireThread(threadId);
-  if (thread.worktreePath) return thread.worktreePath;
-  const project = pm.getProject(thread.projectId);
-  if (!project) throw NotFound('Project not found');
-  return project.path;
+export function requireThreadCwd(threadId: string): Result<string, DomainError> {
+  return requireThread(threadId).andThen((thread) => {
+    if (thread.worktreePath) return ok(thread.worktreePath);
+    const project = pm.getProject(thread.projectId);
+    if (!project) return err(notFound('Project not found'));
+    return ok(project.path);
+  });
 }

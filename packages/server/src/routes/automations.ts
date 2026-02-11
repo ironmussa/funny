@@ -7,6 +7,7 @@ import {
   updateAutomationSchema,
   updateRunTriageSchema,
 } from '../validation/schemas.js';
+import { resultToResponse } from '../utils/result-response.js';
 
 export const automationRoutes = new Hono();
 
@@ -39,13 +40,12 @@ automationRoutes.get('/:id', (c) => {
 automationRoutes.post('/', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(createAutomationSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  // Validate project exists
-  const project = pm.getProject(parsed.data.projectId);
+  const project = pm.getProject(parsed.value.projectId);
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
-  const automation = am.createAutomation(parsed.data);
+  const automation = am.createAutomation(parsed.value);
   return c.json(automation, 201);
 });
 
@@ -57,10 +57,10 @@ automationRoutes.patch('/:id', async (c) => {
 
   const raw = await c.req.json();
   const parsed = validate(updateAutomationSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
   const updates: Record<string, any> = {};
-  for (const [key, value] of Object.entries(parsed.data)) {
+  for (const [key, value] of Object.entries(parsed.value)) {
     if (value !== undefined) {
       if (key === 'enabled') {
         updates.enabled = value ? 1 : 0;
@@ -109,8 +109,8 @@ automationRoutes.patch('/runs/:runId/triage', async (c) => {
   const runId = c.req.param('runId');
   const raw = await c.req.json();
   const parsed = validate(updateRunTriageSchema, raw);
-  if (!parsed.success) return c.json({ error: parsed.error }, 400);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  am.updateRun(runId, { triageStatus: parsed.data.triageStatus });
+  am.updateRun(runId, { triageStatus: parsed.value.triageStatus });
   return c.json({ ok: true });
 });

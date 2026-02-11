@@ -1,3 +1,6 @@
+import { ResultAsync } from 'neverthrow';
+import type { DomainError } from '@a-parallel/shared/errors';
+import { internal } from '@a-parallel/shared/errors';
 import type {
   Project,
   Thread,
@@ -21,7 +24,7 @@ const isTauri = !!(window as any).__TAURI_INTERNALS__;
 const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
 const BASE = isTauri ? `http://localhost:${serverPort}/api` : '/api';
 
-// ── Auth token ──────────────────────────────────────────────────
+// ── Auth token ──────────────────────────────────────────
 let authToken: string | null = null;
 
 /** Fetch the auth token from the server. Call once at app startup. */
@@ -47,36 +50,39 @@ export function getAuthToken(): string | null {
   return authToken;
 }
 
-// ── API Error ───────────────────────────────────────────────────
-
-export class ApiError extends Error {
-  constructor(
-    message: string,
-    public status: number,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
-
-// ── Request helper ──────────────────────────────────────────────
-async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-  };
-  if (authToken) {
-    headers['Authorization'] = `Bearer ${authToken}`;
-  }
-  // Merge any caller-provided headers
-  if (init?.headers) {
-    Object.assign(headers, init.headers);
-  }
-  const res = await fetch(`${BASE}${path}`, { ...init, headers });
-  if (!res.ok) {
-    const body = await res.json().catch(() => ({}));
-    throw new ApiError(body.error || `HTTP ${res.status}`, res.status);
-  }
-  return res.json();
+// ── Request helper ──────────────────────────────────────
+function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (authToken) {
+        headers['Authorization'] = `Bearer ${authToken}`;
+      }
+      if (init?.headers) {
+        Object.assign(headers, init.headers);
+      }
+      const res = await fetch(`${BASE}${path}`, { ...init, headers });
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const message = body.error || `HTTP ${res.status}`;
+        const type: DomainError['type'] = res.status === 404 ? 'NOT_FOUND'
+          : res.status === 403 ? 'FORBIDDEN'
+          : res.status === 409 ? 'CONFLICT'
+          : res.status >= 500 ? 'INTERNAL'
+          : 'BAD_REQUEST';
+        throw { type, message } as DomainError;
+      }
+      return res.json() as Promise<T>;
+    })(),
+    (error): DomainError => {
+      if (typeof error === 'object' && error !== null && 'type' in error) {
+        return error as DomainError;
+      }
+      return internal(String(error));
+    }
+  );
 }
 
 export const api = {
@@ -84,6 +90,8 @@ export const api = {
   listProjects: () => request<Project[]>('/projects'),
   createProject: (name: string, path: string) =>
     request<Project>('/projects', { method: 'POST', body: JSON.stringify({ name, path }) }),
+  renameProject: (id: string, name: string) =>
+    request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
   deleteProject: (id: string) => request<{ ok: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
   listBranches: (projectId: string) =>
     request<{ branches: string[]; defaultBranch: string | null }>(`/projects/${projectId}/branches`),

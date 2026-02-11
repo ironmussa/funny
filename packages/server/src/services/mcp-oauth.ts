@@ -317,19 +317,18 @@ export async function handleOAuthCallback(
       .run();
 
     // Update Claude CLI config: remove and re-add with Authorization header
-    try {
-      await removeMcpServer({ name: pending.serverName, projectPath: pending.projectPath });
-    } catch {
-      // May not exist, that's fine
-    }
+    await removeMcpServer({ name: pending.serverName, projectPath: pending.projectPath });
 
-    await addMcpServer({
+    const addResult = await addMcpServer({
       name: pending.serverName,
       type: 'http',
       url: pending.serverUrl,
       headers: { Authorization: `Bearer ${tokens.access_token}` },
       projectPath: pending.projectPath,
     });
+    if (addResult.isErr()) {
+      throw new Error(addResult.error.message);
+    }
 
     return { serverName: pending.serverName, success: true };
   } catch (err: any) {

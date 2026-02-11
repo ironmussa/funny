@@ -163,10 +163,9 @@ export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle
                   <DropdownMenuItem
                     onClick={async (e) => {
                       e.stopPropagation();
-                      try {
-                        await api.stopThread(thread.id);
-                      } catch (error) {
-                        console.error('Failed to stop thread:', error);
+                      const result = await api.stopThread(thread.id);
+                      if (result.isErr()) {
+                        console.error('Failed to stop thread:', result.error);
                       }
                     }}
                     className="text-red-400 focus:text-red-400"

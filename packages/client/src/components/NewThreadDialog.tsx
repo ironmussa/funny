@@ -44,14 +44,19 @@ export function NewThreadDialog() {
   // Load branches and detect default branch when dialog opens
   useEffect(() => {
     if (newThreadProjectId) {
-      api.listBranches(newThreadProjectId).then((data) => {
-        setBranches(data.branches);
-        if (data.defaultBranch) {
-          setSelectedBranch(data.defaultBranch);
-        } else if (data.branches.length > 0) {
-          setSelectedBranch(data.branches[0]);
+      api.listBranches(newThreadProjectId).then((result) => {
+        if (result.isOk()) {
+          const data = result.value;
+          setBranches(data.branches);
+          if (data.defaultBranch) {
+            setSelectedBranch(data.defaultBranch);
+          } else if (data.branches.length > 0) {
+            setSelectedBranch(data.branches[0]);
+          }
+        } else {
+          console.error(result.error);
         }
-      }).catch(console.error);
+      });
     }
   }, [newThreadProjectId]);
 
@@ -59,24 +64,25 @@ export function NewThreadDialog() {
     if (!prompt || !newThreadProjectId || creating) return;
     setCreating(true);
 
-    try {
-      const thread = await api.createThread({
-        projectId: newThreadProjectId,
-        title: title || prompt,
-        mode,
-        model,
-        baseBranch: mode === 'worktree' ? selectedBranch || undefined : undefined,
-        prompt,
-      });
+    const result = await api.createThread({
+      projectId: newThreadProjectId,
+      title: title || prompt,
+      mode,
+      model,
+      baseBranch: mode === 'worktree' ? selectedBranch || undefined : undefined,
+      prompt,
+    });
 
-      await loadThreadsForProject(newThreadProjectId);
-      await selectThread(thread.id);
-      cancelNewThread();
-    } catch (e: any) {
-      toast.error(e.message);
-    } finally {
+    if (result.isErr()) {
+      toast.error(result.error.message);
       setCreating(false);
+      return;
     }
+
+    await loadThreadsForProject(newThreadProjectId);
+    await selectThread(result.value.id);
+    cancelNewThread();
+    setCreating(false);
   };
 
   return (

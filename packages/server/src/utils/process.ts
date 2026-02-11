@@ -1,3 +1,12 @@
+import { ResultAsync } from 'neverthrow';
+import { processError, internal, type DomainError } from '@a-parallel/shared/errors';
+
+export interface ProcessResult {
+  stdout: string;
+  stderr: string;
+  exitCode: number;
+}
+
 export interface ProcessOptions {
   cwd?: string;
   timeout?: number;
@@ -132,4 +141,23 @@ export async function executeWithLogging(
     console.error(`[exec] fail ${command} (${duration}ms)`, error);
     throw error;
   }
+}
+
+/**
+ * Execute a command returning ResultAsync instead of throwing
+ */
+export function executeResult(
+  command: string,
+  args: string[],
+  options: ProcessOptions = {}
+): ResultAsync<ProcessResult, DomainError> {
+  return ResultAsync.fromPromise(
+    execute(command, args, options),
+    (error) => {
+      if (error instanceof ProcessExecutionError) {
+        return processError(error.message, error.exitCode, error.stderr);
+      }
+      return internal(String(error));
+    }
+  );
 }

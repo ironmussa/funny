@@ -1,5 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { useAppStore } from '@/stores/app-store';
+import { okAsync, errAsync } from 'neverthrow';
+import type { DomainError } from '@a-parallel/shared/errors';
 
 // Mock the api module
 vi.mock('@/lib/api', () => ({
@@ -53,7 +55,8 @@ describe('AppStore', () => {
       const mockProjects = [
         { id: 'p1', name: 'Project 1', path: '/tmp/p1', createdAt: '2024-01-01' },
       ];
-      mockApi.listProjects.mockResolvedValueOnce(mockProjects);
+      mockApi.listProjects.mockReturnValueOnce(okAsync(mockProjects) as any);
+      mockApi.listThreads.mockReturnValue(okAsync([]) as any);
 
       await useAppStore.getState().loadProjects();
       expect(useAppStore.getState().projects).toEqual(mockProjects);
@@ -65,7 +68,7 @@ describe('AppStore', () => {
       const mockThreads = [
         { id: 't1', projectId: 'p1', title: 'Thread 1', status: 'completed' },
       ];
-      mockApi.listThreads.mockResolvedValueOnce(mockThreads as any);
+      mockApi.listThreads.mockReturnValueOnce(okAsync(mockThreads) as any);
 
       await useAppStore.getState().loadThreadsForProject('p1');
       expect(useAppStore.getState().threadsByProject['p1']).toEqual(mockThreads);
@@ -74,7 +77,7 @@ describe('AppStore', () => {
 
   describe('toggleProject', () => {
     test('expands a collapsed project', () => {
-      mockApi.listThreads.mockResolvedValueOnce([]);
+      mockApi.listThreads.mockReturnValueOnce(okAsync([]) as any);
 
       useAppStore.getState().toggleProject('p1');
       expect(useAppStore.getState().expandedProjects.has('p1')).toBe(true);
@@ -90,14 +93,14 @@ describe('AppStore', () => {
 
   describe('selectProject', () => {
     test('sets selectedProjectId', () => {
-      mockApi.listThreads.mockResolvedValueOnce([]);
+      mockApi.listThreads.mockReturnValueOnce(okAsync([]) as any);
 
       useAppStore.getState().selectProject('p1');
       expect(useAppStore.getState().selectedProjectId).toBe('p1');
     });
 
     test('expands the project', () => {
-      mockApi.listThreads.mockResolvedValueOnce([]);
+      mockApi.listThreads.mockReturnValueOnce(okAsync([]) as any);
 
       useAppStore.getState().selectProject('p1');
       expect(useAppStore.getState().expandedProjects.has('p1')).toBe(true);
@@ -120,8 +123,8 @@ describe('AppStore', () => {
         messages: [],
         status: 'completed',
       };
-      mockApi.getThread.mockResolvedValueOnce(mockThread as any);
-      mockApi.listThreads.mockResolvedValueOnce([]);
+      mockApi.getThread.mockReturnValueOnce(okAsync(mockThread) as any);
+      mockApi.listThreads.mockReturnValueOnce(okAsync([]) as any);
 
       await useAppStore.getState().selectThread('t1');
       // selectThread enriches the thread with initInfo, resultInfo, waitingReason
@@ -137,7 +140,8 @@ describe('AppStore', () => {
     });
 
     test('clears on fetch error', async () => {
-      mockApi.getThread.mockRejectedValueOnce(new Error('Not found'));
+      const error: DomainError = { type: 'NOT_FOUND', message: 'Not found' };
+      mockApi.getThread.mockReturnValueOnce(errAsync(error) as any);
 
       await useAppStore.getState().selectThread('nonexistent');
       expect(useAppStore.getState().activeThread).toBeNull();
@@ -175,7 +179,7 @@ describe('AppStore', () => {
 
   describe('archiveThread', () => {
     test('removes thread from list and clears selection', async () => {
-      mockApi.archiveThread.mockResolvedValueOnce({} as any);
+      mockApi.archiveThread.mockReturnValueOnce(okAsync({}) as any);
 
       useAppStore.setState({
         selectedThreadId: 't1',
@@ -493,7 +497,7 @@ describe('AppStore', () => {
     });
 
     test('archiveThread does not clear selection for different thread', async () => {
-      mockApi.archiveThread.mockResolvedValueOnce({} as any);
+      mockApi.archiveThread.mockReturnValueOnce(okAsync({}) as any);
 
       useAppStore.setState({
         selectedThreadId: 't2',
@@ -518,7 +522,8 @@ describe('AppStore', () => {
     });
 
     test('refreshActiveThread silently handles API error', async () => {
-      mockApi.getThread.mockRejectedValueOnce(new Error('Server down'));
+      const error: DomainError = { type: 'INTERNAL', message: 'Server down' };
+      mockApi.getThread.mockReturnValueOnce(errAsync(error) as any);
 
       useAppStore.setState({
         activeThread: { id: 't1', messages: [] } as any,
@@ -540,7 +545,7 @@ describe('AppStore', () => {
     });
 
     test('toggleProject loads threads on first expand', () => {
-      mockApi.listThreads.mockResolvedValueOnce([]);
+      mockApi.listThreads.mockReturnValueOnce(okAsync([]) as any);
 
       useAppStore.getState().toggleProject('p1');
       expect(mockApi.listThreads).toHaveBeenCalledWith('p1');

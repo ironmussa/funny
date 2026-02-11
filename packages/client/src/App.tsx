@@ -45,17 +45,35 @@ export function App() {
 
   // Global keyboard shortcuts
   useEffect(() => {
+    const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown })
+      .__TAURI_INTERNALS__;
+
+    console.log('[App] Registering keydown handler', new Error().stack);
     const handler = (e: KeyboardEvent) => {
-      // Ctrl+K for command palette
+      // Ctrl+K for command palette (toggle)
       if (e.ctrlKey && e.key === 'k') {
         e.preventDefault();
-        setCommandPaletteOpen((prev) => !prev);
+        e.stopPropagation();
+        console.log('[App] Ctrl+K pressed, toggling command palette');
+        setCommandPaletteOpen(prev => {
+          console.log('[App] setCommandPaletteOpen prev=', prev, '-> next=', !prev);
+          return !prev;
+        });
         return;
       }
 
-      // Ctrl+` to toggle terminal
+      // Ctrl+Shift+F for global thread search
+      if (e.ctrlKey && e.shiftKey && e.key === 'F') {
+        e.preventDefault();
+        e.stopPropagation();
+        useUIStore.getState().showGlobalSearch();
+        return;
+      }
+
+      // Ctrl+` to toggle terminal (only in Tauri mode)
       if (e.ctrlKey && e.key === '`') {
         e.preventDefault();
+        if (!isTauri) return; // Terminal panel only works in Tauri desktop app
         const store = useTerminalStore.getState();
         const { selectedProjectId, projects } = useProjectStore.getState();
         if (!selectedProjectId) return;
@@ -80,7 +98,10 @@ export function App() {
       }
     };
     window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
+    return () => {
+      console.log('[App] Removing keydown handler');
+      window.removeEventListener('keydown', handler);
+    };
   }, []);
 
   return (
@@ -107,8 +128,8 @@ export function App() {
         )}
       </div>
 
-      <Toaster position="bottom-left" theme="dark" />
-      <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
+      <Toaster position="bottom-left" theme="dark" duration={2000} />
+      {commandPaletteOpen && <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />}
     </TooltipProvider>
   );
 }

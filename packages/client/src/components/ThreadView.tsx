@@ -175,18 +175,21 @@ function buildGroupedRenderItems(messages: any[]): RenderItem[] {
     }
   }
 
+  // Tool calls that should never be grouped (interactive, need individual response)
+  const noGroup = new Set(['AskUserQuestion', 'ExitPlanMode']);
+
   // Group consecutive same-type tool calls (across message boundaries)
   const grouped: RenderItem[] = [];
   for (const item of flat) {
     if (item.type === 'toolcall') {
       const last = grouped[grouped.length - 1];
-      if (last?.type === 'toolcall' && (last as any).tc.name === item.tc.name) {
+      if (!noGroup.has(item.tc.name) && last?.type === 'toolcall' && (last as any).tc.name === item.tc.name) {
         grouped[grouped.length - 1] = {
           type: 'toolcall-group',
           name: item.tc.name,
           calls: [(last as any).tc, item.tc],
         };
-      } else if (last?.type === 'toolcall-group' && last.name === item.tc.name) {
+      } else if (!noGroup.has(item.tc.name) && last?.type === 'toolcall-group' && last.name === item.tc.name) {
         last.calls.push(item.tc);
       } else {
         grouped.push(item);
@@ -302,20 +305,17 @@ export function ThreadView() {
 
     useAppStore.getState().appendOptimisticMessage(activeThread.id, prompt, images);
 
-    try {
-      await api.sendMessage(activeThread.id, prompt, { model: opts.model || undefined, permissionMode: opts.mode || undefined }, images);
-    } catch (e: any) {
-      console.error('Send failed:', e);
-    } finally {
-      setSending(false);
+    const result = await api.sendMessage(activeThread.id, prompt, { model: opts.model || undefined, permissionMode: opts.mode || undefined }, images);
+    if (result.isErr()) {
+      console.error('Send failed:', result.error);
     }
+    setSending(false);
   };
 
   const handleStop = async () => {
-    try {
-      await api.stopThread(activeThread.id);
-    } catch (e: any) {
-      console.error('Stop failed:', e);
+    const result = await api.stopThread(activeThread.id);
+    if (result.isErr()) {
+      console.error('Stop failed:', result.error);
     }
   };
 

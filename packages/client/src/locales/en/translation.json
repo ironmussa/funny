@@ -7,6 +7,7 @@
     "projects": "Projects",
     "addProject": "Add project",
     "newThread": "New thread",
+    "renameProject": "Rename project",
     "deleteProject": "Delete project",
     "openDirectory": "Open directory",
     "openTerminal": "Open terminal",
@@ -259,7 +260,10 @@
     "filterMode": "Mode",
     "showArchived": "Archived",
     "clearFilters": "Clear filters",
-    "archived": "Archived"
+    "archived": "Archived",
+    "globalTitle": "Search all threads",
+    "globalSearchPlaceholder": "Search by title, branch, project, or status...",
+    "projects": "projects"
   },
   "archived": {
     "searchPlaceholder": "Search archived threads by title, project, branch, or status...",
@@ -272,9 +276,11 @@
     "showingRange": "{{from}}-{{to}} of {{total}}"
   },
   "commandPalette": {
-    "searchPlaceholder": "Search settings...",
+    "searchPlaceholder": "Search projects and settings...",
     "noResults": "No results found.",
-    "settings": "Settings"
+    "projects": "Projects",
+    "settings": "Settings",
+    "noProjects": "No projects added yet."
   },
   "folderPicker": {
     "title": "Select Folder",
@@ -345,6 +351,8 @@
     "archiveThreadDesc": "Are you sure you want to archive \"{{title}}\"? You can restore it later from Settings.",
     "deleteThread": "Delete thread",
     "deleteThreadDesc": "Are you sure you want to delete \"{{title}}\"? This action cannot be undone.",
+    "renameProject": "Rename project",
+    "renameProjectDesc": "Enter a new name for the project \"{{name}}\".",
     "deleteProject": "Delete project",
     "deleteProjectDesc": "Are you sure you want to delete the project \"{{name}}\"? All threads in this project will also be removed. This action cannot be undone.",
     "worktreeWarning": "This thread has a worktree. The branch and worktree will be deleted. Any commits not pushed or merged will be lost.",
@@ -354,6 +362,7 @@
   "toast": {
     "threadArchived": "Thread archived successfully",
     "threadDeleted": "Thread \"{{title}}\" deleted",
+    "projectRenamed": "Project renamed to \"{{name}}\"",
     "projectDeleted": "Project \"{{name}}\" deleted",
     "worktreeDeleted": "Worktree \"{{branch}}\" deleted",
     "worktreeDeleteFailed": "Failed to delete worktree: {{message}}"

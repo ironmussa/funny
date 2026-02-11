@@ -1,16 +1,20 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
-import { FolderOpen, Loader2, Plus } from 'lucide-react';
+import { FolderOpen, Loader2, Plus, Github } from 'lucide-react';
 import { FolderPicker } from './FolderPicker';
+import { CloneRepoView } from './CloneRepoView';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { useAppStore } from '@/stores/app-store';
+
+type AddMode = 'local' | 'github';
 
 export function AddProjectView() {
   const { t } = useTranslation();
   const loadProjects = useAppStore(s => s.loadProjects);
   const setAddProjectOpen = useAppStore(s => s.setAddProjectOpen);
+  const [mode, setMode] = useState<AddMode>('local');
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectPath, setNewProjectPath] = useState('');
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
@@ -65,69 +69,99 @@ export function AddProjectView() {
             <Plus className="h-6 w-6 text-primary" />
           </div>
           <h2 className="text-xl font-semibold">{t('sidebar.addProject')}</h2>
-          <p className="text-sm text-muted-foreground">
-            {t('sidebar.addProjectDescription', { defaultValue: 'Enter the project name and select the folder path.' })}
-          </p>
         </div>
 
-        <div className="space-y-4">
-          <div>
-            <label className="text-sm font-medium mb-1.5 block">
-              {t('sidebar.projectName')}
-            </label>
-            <input
-              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-1 focus:ring-ring"
-              placeholder={t('sidebar.projectName')}
-              value={newProjectName}
-              onChange={(e) => setNewProjectName(e.target.value)}
-              autoFocus
-            />
-          </div>
-          <div>
-            <label className="text-sm font-medium mb-1.5 block">
-              {t('sidebar.absolutePath')}
-            </label>
-            <div className="flex gap-2">
+        {/* Tab toggle */}
+        <div className="flex gap-1 rounded-lg bg-muted p-1">
+          <button
+            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              mode === 'local'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setMode('local')}
+          >
+            <FolderOpen className="h-3.5 w-3.5" />
+            {t('github.localFolder')}
+          </button>
+          <button
+            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+              mode === 'github'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground hover:text-foreground'
+            }`}
+            onClick={() => setMode('github')}
+          >
+            <Github className="h-3.5 w-3.5" />
+            {t('github.cloneFromGithub')}
+          </button>
+        </div>
+
+        {mode === 'local' ? (
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground text-center">
+              {t('sidebar.addProjectDescription', { defaultValue: 'Enter the project name and select the folder path.' })}
+            </p>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                {t('sidebar.projectName')}
+              </label>
               <input
-                className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-1 focus:ring-ring"
-                placeholder={t('sidebar.absolutePath')}
-                value={newProjectPath}
-                onChange={(e) => setNewProjectPath(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-1 focus:ring-ring"
+                placeholder={t('sidebar.projectName')}
+                value={newProjectName}
+                onChange={(e) => setNewProjectName(e.target.value)}
+                autoFocus
               />
+            </div>
+            <div>
+              <label className="text-sm font-medium mb-1.5 block">
+                {t('sidebar.absolutePath')}
+              </label>
+              <div className="flex gap-2">
+                <input
+                  className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-1 focus:ring-ring"
+                  placeholder={t('sidebar.absolutePath')}
+                  value={newProjectPath}
+                  onChange={(e) => setNewProjectPath(e.target.value)}
+                />
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setFolderPickerOpen(true)}
+                  title={t('sidebar.browseFolder')}
+                >
+                  <FolderOpen className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+            <div className="flex gap-2 pt-2">
               <Button
                 variant="outline"
-                size="sm"
-                onClick={() => setFolderPickerOpen(true)}
-                title={t('sidebar.browseFolder')}
+                className="flex-1"
+                onClick={() => setAddProjectOpen(false)}
               >
-                <FolderOpen className="h-4 w-4" />
+                {t('common.cancel', { defaultValue: 'Cancel' })}
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleAddProject}
+                disabled={isCreating || !newProjectName || !newProjectPath}
+              >
+                {isCreating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    {t('common.loading')}
+                  </>
+                ) : (
+                  t('sidebar.add')
+                )}
               </Button>
             </div>
           </div>
-          <div className="flex gap-2 pt-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => setAddProjectOpen(false)}
-            >
-              {t('common.cancel', { defaultValue: 'Cancel' })}
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={handleAddProject}
-              disabled={isCreating || !newProjectName || !newProjectPath}
-            >
-              {isCreating ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                  {t('common.loading')}
-                </>
-              ) : (
-                t('sidebar.add')
-              )}
-            </Button>
-          </div>
-        </div>
+        ) : (
+          <CloneRepoView />
+        )}
       </div>
 
       {folderPickerOpen && (

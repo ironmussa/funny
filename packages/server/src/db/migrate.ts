@@ -201,5 +201,12 @@ export function autoMigrate() {
     // Column already exists
   }
 
+  // Add sort_order column to projects
+  try {
+    db.run(sql`ALTER TABLE projects ADD COLUMN sort_order INTEGER NOT NULL DEFAULT 0`);
+  } catch {
+    // Column already exists
+  }
+
   console.log('[db] Tables ready');
 }

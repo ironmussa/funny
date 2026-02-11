@@ -80,26 +80,47 @@ export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle
     >
       <button
         onClick={onSelect}
-        className="flex-1 flex items-center gap-1.5 pl-2 py-1.5 text-left min-w-0 overflow-hidden"
+        className="flex-1 flex items-center gap-1.5 pl-2 py-1 text-left min-w-0 overflow-hidden"
       >
-        {gitTooltip ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Icon className={cn('h-3 w-3 flex-shrink-0', s.className)} />
-            </TooltipTrigger>
-            <TooltipContent side="right" className="text-xs">
-              {gitTooltip}
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          <Icon className={cn('h-3 w-3 flex-shrink-0', s.className)} />
-        )}
+        <div className="relative h-3 w-3 flex-shrink-0">
+          {/* Status icon – hidden on hover when pin is available */}
+          <span className={cn(
+            'absolute inset-0',
+            onPin && !isRunning && 'group-hover/thread:hidden'
+          )}>
+            {gitTooltip ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Icon className={cn('h-3 w-3', s.className)} />
+                </TooltipTrigger>
+                <TooltipContent side="right" className="text-xs">
+                  {gitTooltip}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Icon className={cn('h-3 w-3', s.className)} />
+            )}
+          </span>
+          {/* Pin toggle – shown on hover */}
+          {onPin && !isRunning && (
+            <span
+              className="absolute inset-0 hidden group-hover/thread:flex items-center justify-center cursor-pointer text-muted-foreground hover:text-foreground"
+              onClick={(e) => {
+                e.stopPropagation();
+                onPin();
+              }}
+            >
+              {thread.pinned ? (
+                <PinOff className="h-3 w-3" />
+              ) : (
+                <Pin className="h-3 w-3" />
+              )}
+            </span>
+          )}
+        </div>
         <div className="flex flex-col gap-0 min-w-0 flex-1">
           <div className="flex items-center gap-1">
             <span className="text-[11px] leading-tight truncate">{thread.title}</span>
-            {!!thread.pinned && (
-              <Pin className="h-2.5 w-2.5 flex-shrink-0 text-muted-foreground" />
-            )}
           </div>
           {subtitle && (
             <span className="text-[10px] text-muted-foreground font-mono truncate">{subtitle}</span>
@@ -128,7 +149,7 @@ export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle
                 <MoreHorizontal className="h-3.5 w-3.5" />
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="left">
+            <DropdownMenuContent align="start" side="bottom">
               <DropdownMenuItem
                 onClick={async (e) => {
                   e.stopPropagation();
@@ -184,26 +205,6 @@ export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle
                 </>
               ) : (
                 <>
-                  {onPin && (
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onPin();
-                      }}
-                    >
-                      {thread.pinned ? (
-                        <>
-                          <PinOff className="h-3.5 w-3.5" />
-                          {t('sidebar.unpin')}
-                        </>
-                      ) : (
-                        <>
-                          <Pin className="h-3.5 w-3.5" />
-                          {t('sidebar.pin')}
-                        </>
-                      )}
-                    </DropdownMenuItem>
-                  )}
                   {onArchive && (
                     <DropdownMenuItem
                       onClick={(e) => {

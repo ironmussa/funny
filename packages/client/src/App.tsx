@@ -6,7 +6,7 @@ import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
 import { setAppNavigate } from '@/stores/thread-store';
 import { useTerminalStore } from '@/stores/terminal-store';
-import { Sidebar } from '@/components/Sidebar';
+import { AppSidebar } from '@/components/Sidebar';
 import { ThreadView } from '@/components/ThreadView';
 import { AllThreadsView } from '@/components/AllThreadsView';
 import { ReviewPane } from '@/components/ReviewPane';
@@ -14,7 +14,7 @@ import { TerminalPanel } from '@/components/TerminalPanel';
 import { SettingsDetailView } from '@/components/SettingsDetailView';
 import { AutomationInboxView } from '@/components/AutomationInboxView';
 import { AddProjectView } from '@/components/AddProjectView';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { Toaster } from 'sonner';
 import { CommandPalette } from '@/components/CommandPalette';
 
@@ -104,31 +104,37 @@ export function App() {
   }, []);
 
   return (
-    <TooltipProvider delayDuration={300} disableHoverableContent>
-      <div className="flex h-screen overflow-hidden">
-        {/* Sidebar */}
-        <aside className="w-80 flex-shrink-0 border-r border-border flex flex-col">
-          <Sidebar />
-        </aside>
+    <SidebarProvider
+      defaultOpen={true}
+      style={
+        {
+          '--sidebar-width': '20rem',
+        } as React.CSSProperties
+      }
+      className="h-screen overflow-hidden"
+    >
+      <AppSidebar />
 
+      <SidebarInset className="flex flex-col overflow-hidden">
         {/* Main content + terminal */}
-        <main className="flex-1 flex flex-col overflow-hidden">
+        <div className="flex-1 flex overflow-hidden min-h-0">
           <div className="flex-1 flex overflow-hidden min-h-0">
             {settingsOpen ? <SettingsDetailView /> : automationInboxOpen ? <AutomationInboxView /> : addProjectOpen ? <AddProjectView /> : allThreadsProjectId ? <AllThreadsView /> : <ThreadView />}
           </div>
-          <TerminalPanel />
-        </main>
 
-        {/* Review pane */}
-        {reviewPaneOpen && !settingsOpen && (
-          <aside className="w-[clamp(420px,40vw,960px)] flex-shrink-0 border-l border-border overflow-hidden">
-            <ReviewPane />
-          </aside>
-        )}
-      </div>
+          {/* Review pane */}
+          {reviewPaneOpen && !settingsOpen && (
+            <aside className="w-[clamp(420px,40vw,960px)] flex-shrink-0 border-l border-border overflow-hidden">
+              <ReviewPane />
+            </aside>
+          )}
+        </div>
+
+        <TerminalPanel />
+      </SidebarInset>
 
       <Toaster position="bottom-left" theme="dark" duration={2000} />
       {commandPaletteOpen && <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />}
-    </TooltipProvider>
+    </SidebarProvider>
   );
 }

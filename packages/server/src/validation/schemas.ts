@@ -30,6 +30,10 @@ export const renameProjectSchema = z.object({
   name: z.string().min(1, 'name is required'),
 });
 
+export const reorderProjectsSchema = z.object({
+  projectIds: z.array(z.string().min(1)).min(1, 'projectIds must not be empty'),
+});
+
 export const createThreadSchema = z.object({
   projectId: z.string().min(1),
   title: z.string().optional().default(''),
@@ -147,6 +151,23 @@ export const updateAutomationSchema = z.object({
 
 export const updateRunTriageSchema = z.object({
   triageStatus: z.enum(['pending', 'reviewed', 'dismissed']),
+});
+
+// ── GitHub ──────────────────────────────────────────────────────
+
+export const cloneRepoSchema = z.object({
+  cloneUrl: z.string().url('Valid clone URL required'),
+  destinationPath: z.string().min(1, 'Destination path is required'),
+  name: z.string().optional(),
+});
+
+export const githubPollSchema = z.object({
+  deviceCode: z.string().min(1, 'device_code is required'),
+});
+
+export const approveToolSchema = z.object({
+  toolName: z.string().min(1, 'toolName is required'),
+  approved: z.boolean(),
 });
 
 // ── Helper ───────────────────────────────────────────────────────

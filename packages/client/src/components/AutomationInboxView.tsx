@@ -4,6 +4,7 @@ import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useAutomationStore } from '@/stores/automation-store';
 import { useUIStore } from '@/stores/ui-store';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
   Command,
@@ -96,9 +97,9 @@ export function AutomationInboxView() {
             Automation Inbox
           </h2>
           {inboxCount > 0 && (
-            <span className="bg-primary text-primary-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
+            <Badge className="h-5 min-w-5 justify-center rounded-full px-1 text-[10px] leading-none">
               {inboxCount}
-            </span>
+            </Badge>
           )}
         </div>
         <Button

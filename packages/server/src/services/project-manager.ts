@@ -1,10 +1,10 @@
-import { eq, and } from 'drizzle-orm';
+import { eq, and, asc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { resolve, isAbsolute } from 'path';
 import { ok, err, type Result } from 'neverthrow';
 import { db, schema } from '../db/index.js';
 import { isGitRepoSync } from '../utils/git-v2.js';
-import { badRequest, notFound, conflict, type DomainError } from '@a-parallel/shared/errors';
+import { badRequest, notFound, conflict, internal, type DomainError } from '@a-parallel/shared/errors';
 import type { Project } from '@a-parallel/shared';
 
 /**
@@ -13,9 +13,14 @@ import type { Project } from '@a-parallel/shared';
  */
 export function listProjects(userId: string): Project[] {
   if (userId === '__local__') {
-    return db.select().from(schema.projects).all();
+    return db.select().from(schema.projects)
+      .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt))
+      .all();
   }
-  return db.select().from(schema.projects).where(eq(schema.projects.userId, userId)).all();
+  return db.select().from(schema.projects)
+    .where(eq(schema.projects.userId, userId))
+    .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt))
+    .all();
 }
 
 export function getProject(id: string): Project | undefined {
@@ -48,11 +53,17 @@ export function createProject(name: string, rawPath: string, userId: string): Re
     return err(conflict(`A project with this name already exists: ${name}`));
   }
 
+  // Get existing project count to assign sortOrder
+  const existing = userId === '__local__'
+    ? db.select().from(schema.projects).all()
+    : db.select().from(schema.projects).where(eq(schema.projects.userId, userId)).all();
+
   const project: Project = {
     id: nanoid(),
     name,
     path,
     userId,
+    sortOrder: existing.length,
     createdAt: new Date().toISOString(),
   };
 
@@ -77,4 +88,24 @@ export function renameProject(id: string, name: string): Result<Project, DomainE
 
 export function deleteProject(id: string): void {
   db.delete(schema.projects).where(eq(schema.projects.id, id)).run();
+}
+
+export function reorderProjects(userId: string, projectIds: string[]): Result<void, DomainError> {
+  try {
+    db.transaction((tx) => {
+      for (let i = 0; i < projectIds.length; i++) {
+        tx.update(schema.projects)
+          .set({ sortOrder: i })
+          .where(
+            userId === '__local__'
+              ? eq(schema.projects.id, projectIds[i])
+              : and(eq(schema.projects.id, projectIds[i]), eq(schema.projects.userId, userId))
+          )
+          .run();
+      }
+    });
+    return ok(undefined);
+  } catch (e) {
+    return err(internal(`Failed to reorder projects: ${e}`));
+  }
 }

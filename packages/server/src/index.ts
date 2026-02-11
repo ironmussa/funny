@@ -20,6 +20,7 @@ import pluginRoutes from './routes/plugins.js';
 import { worktreeRoutes } from './routes/worktrees.js';
 import { automationRoutes } from './routes/automations.js';
 import { profileRoutes } from './routes/profile.js';
+import { githubRoutes } from './routes/github.js';
 import { wsBroker } from './services/ws-broker.js';
 import { startScheduler, stopScheduler } from './services/automation-scheduler.js';
 
@@ -86,6 +87,7 @@ app.route('/api/plugins', pluginRoutes);
 app.route('/api/worktrees', worktreeRoutes);
 app.route('/api/automations', automationRoutes);
 app.route('/api/profile', profileRoutes);
+app.route('/api/github', githubRoutes);
 
 // Auto-create tables on startup, then start server
 autoMigrate();

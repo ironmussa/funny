@@ -69,7 +69,11 @@
     "describeTaskDefault": "Describe the task...",
     "acceptContinue": "Continue",
     "reject": "Don't do that",
-    "waitingInputPlaceholder": "Type instructions or feedback..."
+    "waitingInputPlaceholder": "Type instructions or feedback...",
+    "permissionRequired": "Tool permission required",
+    "permissionMessage": "Claude wants to use {{tool}}. Would you like to allow it?",
+    "approvePermission": "Allow",
+    "denyPermission": "Deny"
   },
   "review": {
     "title": "Review",
@@ -434,6 +438,37 @@
     "saved": "Profile saved",
     "saveFailed": "Failed to save profile",
     "saving": "Saving..."
+  },
+  "github": {
+    "connectGithub": "Connect to GitHub",
+    "connectDesc": "Authenticate with GitHub to browse and clone your repositories",
+    "connected": "Connected as {{login}}",
+    "disconnect": "Disconnect",
+    "disconnected": "GitHub disconnected",
+    "localFolder": "Local Folder",
+    "cloneFromGithub": "Clone from GitHub",
+    "deviceFlow": {
+      "title": "GitHub Authorization",
+      "desc": "Enter this code on GitHub to authorize",
+      "openGithub": "Open GitHub",
+      "waitingAuth": "Waiting for authorization...",
+      "expired": "Authorization expired. Please try again.",
+      "denied": "Authorization was denied."
+    },
+    "repos": {
+      "title": "Your Repositories",
+      "searchPlaceholder": "Search repositories...",
+      "noRepos": "No repositories found",
+      "loadMore": "Load more"
+    },
+    "clone": {
+      "destination": "Clone destination",
+      "destinationDesc": "Choose where to clone the repository",
+      "projectName": "Project name",
+      "cloneAndCreate": "Clone & Create Project",
+      "cloning": "Cloning {{repo}}...",
+      "success": "Repository cloned and project created!"
+    }
   },
   "users": {
     "title": "Users",

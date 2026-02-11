@@ -1,0 +1,114 @@
+.logo3d-wrapper {
+  --logo-scale: 1;
+  --logo-glow: 1;
+  --cube-size: 8px;
+  --spacing: var(--cube-size);
+  perspective: 400px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: calc(var(--cube-size) * 3 * var(--logo-scale) + 20px);
+  height: calc(var(--cube-size) * 4 * var(--logo-scale) + 16px);
+}
+
+.logo3d-container {
+  width: calc(var(--cube-size) * 3);
+  height: calc(var(--cube-size) * 4);
+  position: relative;
+  transform-style: preserve-3d;
+  transform: scale(var(--logo-scale)) rotateX(-30deg) rotateY(45deg);
+  animation: logo3d-float 10s ease-in-out infinite;
+}
+
+@keyframes logo3d-float {
+  0%, 100% { transform: scale(var(--logo-scale)) rotateX(-30deg) rotateY(45deg) translateY(0); }
+  50% { transform: scale(var(--logo-scale)) rotateX(-30deg) rotateY(45deg) translateY(-3px); }
+}
+
+/* Color shift animation — cycles hue for that JoJo dramatic flair */
+@keyframes logo3d-hue-shift {
+  0%   { filter: hue-rotate(0deg); }
+  50%  { filter: hue-rotate(25deg); }
+  100% { filter: hue-rotate(0deg); }
+}
+
+.logo3d-block {
+  position: absolute;
+  width: var(--cube-size);
+  height: var(--cube-size);
+  transform-style: preserve-3d;
+  animation: logo3d-hue-shift 8s ease-in-out infinite;
+}
+
+/* Stagger the hue animation per block for a flowing wave effect */
+.logo3d-b1 { transform: translate3d(0, 0, 0); animation-delay: 0s; }
+.logo3d-b2 { transform: translate3d(var(--spacing), 0, 0); animation-delay: 0.4s; }
+.logo3d-b3 { transform: translate3d(calc(var(--spacing) * 2), 0, 0); animation-delay: 0.8s; }
+.logo3d-b4 { transform: translate3d(0, var(--spacing), 0); animation-delay: 0.6s; }
+.logo3d-b5 { transform: translate3d(0, calc(var(--spacing) * 2), 0); animation-delay: 1.2s; }
+.logo3d-b6 { transform: translate3d(var(--spacing), calc(var(--spacing) * 2), 0); animation-delay: 1.6s; }
+.logo3d-b7 { transform: translate3d(0, calc(var(--spacing) * 3), 0); animation-delay: 1.8s; }
+
+.logo3d-cube {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  transform-style: preserve-3d;
+}
+
+.logo3d-face {
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+  background: var(--block-color);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+
+/* ===== Lit faces with intense glow ===== */
+
+.logo3d-top {
+  transform: rotateX(90deg) translateZ(calc(var(--cube-size) / 2));
+  filter: brightness(1.4) saturate(1.3);
+  box-shadow:
+    0 0 calc(6px * var(--logo-glow)) var(--block-glow),
+    0 0 calc(12px * var(--logo-glow)) var(--block-glow),
+    inset 0 0 calc(3px * var(--logo-glow)) rgba(255, 255, 255, 0.3);
+}
+
+.logo3d-front {
+  transform: rotateY(0deg) translateZ(calc(var(--cube-size) / 2));
+  filter: brightness(1.05) saturate(1.2);
+  box-shadow:
+    0 0 calc(5px * var(--logo-glow)) var(--block-glow),
+    0 0 calc(10px * var(--logo-glow)) var(--block-glow),
+    inset 0 0 calc(2px * var(--logo-glow)) rgba(255, 255, 255, 0.2);
+}
+
+.logo3d-right {
+  transform: rotateY(90deg) translateZ(calc(var(--cube-size) / 2));
+  filter: brightness(0.8) saturate(1.1);
+  box-shadow:
+    0 0 calc(4px * var(--logo-glow)) var(--block-glow),
+    0 0 calc(8px * var(--logo-glow)) var(--block-glow);
+}
+
+/* ===== Shadow faces — darker but still glowing ===== */
+
+.logo3d-back {
+  transform: rotateY(180deg) translateZ(calc(var(--cube-size) / 2));
+  filter: brightness(0.45) saturate(0.8);
+  box-shadow: 0 0 calc(3px * var(--logo-glow)) var(--block-glow);
+}
+
+.logo3d-left {
+  transform: rotateY(-90deg) translateZ(calc(var(--cube-size) / 2));
+  filter: brightness(0.55) saturate(0.9);
+  box-shadow: 0 0 calc(3px * var(--logo-glow)) var(--block-glow);
+}
+
+.logo3d-bottom {
+  transform: rotateX(-90deg) translateZ(calc(var(--cube-size) / 2));
+  filter: brightness(0.35) saturate(0.7);
+  box-shadow: 0 0 calc(2px * var(--logo-glow)) var(--block-glow);
+}

@@ -24,6 +24,8 @@ import {
 import type { Project, Thread } from '@a-parallel/shared';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { ThreadItem } from './ThreadItem';
+import { useSortable } from '@dnd-kit/sortable';
+import { CSS } from '@dnd-kit/utilities';
 
 interface ProjectItemProps {
   project: Project;
@@ -62,18 +64,38 @@ export function ProjectItem({
   const [openDropdown, setOpenDropdown] = useState(false);
   const gitStatusByThread = useGitStatusStore((s) => s.statusByThread);
 
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: project.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
   return (
     <Collapsible
       open={isExpanded}
       onOpenChange={onToggle}
-      className="mb-1 min-w-0"
+      className="min-w-0"
     >
       <div
-        className="flex items-center rounded-md hover:bg-accent/50 transition-colors"
+        ref={setNodeRef}
+        style={style}
+        className="flex items-center rounded-md hover:bg-accent/50 transition-colors select-none"
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        <CollapsibleTrigger className="flex-1 flex items-center gap-1.5 px-2 py-1.5 text-xs text-left text-muted-foreground hover:text-foreground min-w-0 transition-colors">
+        <CollapsibleTrigger {...attributes} {...listeners} className={cn(
+          "flex-1 flex items-center gap-1.5 px-2 py-1 text-xs text-left text-muted-foreground hover:text-foreground min-w-0 transition-colors",
+          isDragging ? "cursor-grabbing" : "cursor-pointer"
+        )}>
           {isExpanded ? (
             <FolderOpen className="h-3.5 w-3.5 flex-shrink-0" />
           ) : (
@@ -81,7 +103,7 @@ export function ProjectItem({
           )}
           <span className="truncate font-medium">{project.name}</span>
         </CollapsibleTrigger>
-        <div className="flex items-center mr-1 gap-0.5">
+        <div className="flex items-center mr-1.5 gap-0.5">
           <div className={cn(
             'flex items-center gap-0.5 transition-opacity',
             hovered || openDropdown

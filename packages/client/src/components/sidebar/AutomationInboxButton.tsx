@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react';
 import { Inbox } from 'lucide-react';
+import { Badge } from '@/components/ui/badge';
 import { useAutomationStore } from '@/stores/automation-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -32,9 +33,9 @@ export function AutomationInboxButton() {
       <Inbox className="h-4 w-4" />
       <span>Automation Inbox</span>
       {inboxCount > 0 && (
-        <span className="ml-auto bg-primary text-primary-foreground text-xs rounded-full px-1.5 py-0.5 min-w-[20px] text-center">
+        <Badge className="ml-auto h-5 min-w-5 justify-center rounded-full px-1 text-[10px] leading-none">
           {inboxCount}
-        </span>
+        </Badge>
       )}
     </button>
   );

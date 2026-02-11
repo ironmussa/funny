@@ -69,7 +69,11 @@
     "describeTaskDefault": "Descreva a tarefa...",
     "acceptContinue": "Continuar",
     "reject": "Não faça isso",
-    "waitingInputPlaceholder": "Digite instruções ou feedback..."
+    "waitingInputPlaceholder": "Digite instruções ou feedback...",
+    "permissionRequired": "Permissão de ferramenta necessária",
+    "permissionMessage": "Claude quer usar {{tool}}. Deseja permitir?",
+    "approvePermission": "Permitir",
+    "denyPermission": "Negar"
   },
   "review": {
     "title": "Revisão",
@@ -428,6 +432,37 @@
     "saved": "Perfil salvo",
     "saveFailed": "Erro ao salvar perfil",
     "saving": "Salvando..."
+  },
+  "github": {
+    "connectGithub": "Conectar ao GitHub",
+    "connectDesc": "Autentique com o GitHub para explorar e clonar seus repositórios",
+    "connected": "Conectado como {{login}}",
+    "disconnect": "Desconectar",
+    "disconnected": "GitHub desconectado",
+    "localFolder": "Pasta Local",
+    "cloneFromGithub": "Clonar do GitHub",
+    "deviceFlow": {
+      "title": "Autorização do GitHub",
+      "desc": "Digite este código no GitHub para autorizar",
+      "openGithub": "Abrir GitHub",
+      "waitingAuth": "Aguardando autorização...",
+      "expired": "A autorização expirou. Tente novamente.",
+      "denied": "A autorização foi negada."
+    },
+    "repos": {
+      "title": "Seus Repositórios",
+      "searchPlaceholder": "Buscar repositórios...",
+      "noRepos": "Nenhum repositório encontrado",
+      "loadMore": "Carregar mais"
+    },
+    "clone": {
+      "destination": "Destino da clonagem",
+      "destinationDesc": "Escolha onde clonar o repositório",
+      "projectName": "Nome do projeto",
+      "cloneAndCreate": "Clonar e Criar Projeto",
+      "cloning": "Clonando {{repo}}...",
+      "success": "Repositório clonado e projeto criado!"
+    }
   },
   "users": {
     "title": "Usuários",

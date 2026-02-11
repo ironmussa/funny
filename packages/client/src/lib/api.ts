@@ -20,6 +20,7 @@ import type {
   InboxItem,
   UserProfile,
   UpdateProfileRequest,
+  GitHubRepo,
 } from '@a-parallel/shared';
 
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
@@ -117,6 +118,8 @@ export const api = {
   renameProject: (id: string, name: string) =>
     request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
   deleteProject: (id: string) => request<{ ok: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
+  reorderProjects: (projectIds: string[]) =>
+    request<void>('/projects/reorder', { method: 'PUT', body: JSON.stringify({ projectIds }) }),
   listBranches: (projectId: string) =>
     request<{ branches: string[]; defaultBranch: string | null }>(`/projects/${projectId}/branches`),
 
@@ -146,6 +149,11 @@ export const api = {
     }),
   stopThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/stop`, { method: 'POST' }),
+  approveTool: (threadId: string, toolName: string, approved: boolean) =>
+    request<{ ok: boolean }>(`/threads/${threadId}/approve-tool`, {
+      method: 'POST',
+      body: JSON.stringify({ toolName, approved }),
+    }),
   deleteThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}`, { method: 'DELETE' }),
   archiveThread: (threadId: string, archived: boolean) =>
@@ -314,4 +322,34 @@ export const api = {
     request<{ roots: string[]; home: string }>('/browse/roots'),
   browseList: (path: string) =>
     request<{ path: string; parent: string | null; dirs: Array<{ name: string; path: string }>; error?: string }>(`/browse/list?path=${encodeURIComponent(path)}`),
+
+  // GitHub
+  githubStatus: () =>
+    request<{ connected: boolean; login?: string }>('/github/status'),
+  githubStartDevice: () =>
+    request<{ device_code: string; user_code: string; verification_uri: string; expires_in: number; interval: number }>(
+      '/github/oauth/device', { method: 'POST' }
+    ),
+  githubPoll: (deviceCode: string) =>
+    request<{ status: 'pending' | 'success' | 'expired' | 'denied'; scopes?: string; interval?: number }>(
+      '/github/oauth/poll', { method: 'POST', body: JSON.stringify({ deviceCode }) }
+    ),
+  githubDisconnect: () =>
+    request<{ ok: boolean }>('/github/oauth/disconnect', { method: 'DELETE' }),
+  githubUser: () =>
+    request<{ login: string; avatar_url: string; name: string | null }>('/github/user'),
+  githubRepos: (params?: { page?: number; per_page?: number; search?: string; sort?: string }) => {
+    const p = new URLSearchParams();
+    if (params?.page) p.set('page', String(params.page));
+    if (params?.per_page) p.set('per_page', String(params.per_page));
+    if (params?.search) p.set('search', params.search);
+    if (params?.sort) p.set('sort', params.sort);
+    const qs = p.toString();
+    return request<{ repos: GitHubRepo[]; hasMore: boolean }>(`/github/repos${qs ? `?${qs}` : ''}`);
+  },
+  cloneRepo: (cloneUrl: string, destinationPath: string, name?: string) =>
+    request<Project>('/github/clone', {
+      method: 'POST',
+      body: JSON.stringify({ cloneUrl, destinationPath, name }),
+    }),
 };

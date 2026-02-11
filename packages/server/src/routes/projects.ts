@@ -3,7 +3,7 @@ import * as pm from '../services/project-manager.js';
 import * as sc from '../services/startup-commands-service.js';
 import { listBranches, getDefaultBranch } from '../utils/git-v2.js';
 import { startCommand, stopCommand, isCommandRunning } from '../services/command-runner.js';
-import { createProjectSchema, renameProjectSchema, createCommandSchema, validate } from '../validation/schemas.js';
+import { createProjectSchema, renameProjectSchema, reorderProjectsSchema, createCommandSchema, validate } from '../validation/schemas.js';
 import { requireProject } from '../utils/route-helpers.js';
 import { resultToResponse } from '../utils/result-response.js';
 
@@ -47,6 +47,16 @@ projectRoutes.patch('/:id', async (c) => {
 projectRoutes.delete('/:id', (c) => {
   const id = c.req.param('id');
   pm.deleteProject(id);
+  return c.json({ ok: true });
+});
+
+// PUT /api/projects/reorder
+projectRoutes.put('/reorder', async (c) => {
+  const userId = c.get('userId') as string;
+  const raw = await c.req.json();
+  const result = validate(reorderProjectsSchema, raw)
+    .andThen(({ projectIds }) => pm.reorderProjects(userId, projectIds));
+  if (result.isErr()) return resultToResponse(c, result);
   return c.json({ ok: true });
 });
 

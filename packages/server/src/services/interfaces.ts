@@ -25,6 +25,7 @@ export interface IThreadManager {
   }): string;
   updateToolCallOutput(id: string, output: string): void;
   findToolCall(messageId: string, name: string, input: string): { id: string } | undefined;
+  getToolCall(id: string): { id: string; name: string; input: string; output?: string } | undefined;
 }
 
 // ── WebSocket broker ────────────────────────────────────────────

@@ -42,6 +42,7 @@ export interface ThreadWithMessages extends Thread {
   initInfo?: AgentInitInfo;
   resultInfo?: AgentResultInfo;
   waitingReason?: WaitingReason;
+  pendingPermission?: { toolName: string };
 }
 
 export interface ThreadState {
@@ -155,21 +156,28 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       ? { status: thread.status as 'completed' | 'failed', cost: thread.cost, duration: 0 }
       : undefined;
 
-    // Derive waitingReason from the last tool call when reloading a waiting thread
+    // Derive waitingReason and pendingPermission from the last tool call when reloading a waiting thread
     let waitingReason: WaitingReason | undefined;
+    let pendingPermission: { toolName: string } | undefined;
     if (thread.status === 'waiting' && thread.messages?.length) {
       for (let i = thread.messages.length - 1; i >= 0; i--) {
         const tcs = thread.messages[i].toolCalls;
         if (tcs?.length) {
           const lastTC = tcs[tcs.length - 1];
-          if (lastTC.name === 'AskUserQuestion') waitingReason = 'question';
-          else if (lastTC.name === 'ExitPlanMode') waitingReason = 'plan';
+          if (lastTC.name === 'AskUserQuestion') {
+            waitingReason = 'question';
+          } else if (lastTC.name === 'ExitPlanMode') {
+            waitingReason = 'plan';
+          } else if (lastTC.output && /permission|hasn't been granted|not in the allowed tools/i.test(lastTC.output)) {
+            waitingReason = 'permission';
+            pendingPermission = { toolName: lastTC.name };
+          }
           break;
         }
       }
     }
 
-    set({ activeThread: { ...thread, initInfo: buffered || undefined, resultInfo, waitingReason } });
+    set({ activeThread: { ...thread, initInfo: buffered || undefined, resultInfo, waitingReason, pendingPermission } });
     useProjectStore.setState({ selectedProjectId: projectId });
 
     // Replay any WS events that arrived while activeThread was loading
@@ -241,6 +249,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
           ...activeThread,
           status: newStatus,
           waitingReason: undefined,
+          pendingPermission: undefined,
           messages: [
             ...activeThread.messages,
             {

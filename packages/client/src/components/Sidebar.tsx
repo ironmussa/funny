@@ -8,7 +8,12 @@ import { SettingsPanel } from './SettingsPanel';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
+  SidebarHeader,
+} from '@/components/ui/sidebar';
 import {
   Dialog,
   DialogContent,
@@ -17,13 +22,35 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { AddProjectForm } from './sidebar/AddProjectForm';
+import { Plus, Folder } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { AutomationInboxButton } from './sidebar/AutomationInboxButton';
-import { RunningThreads } from './sidebar/RunningThreads';
-import { RecentThreads } from './sidebar/RecentThreads';
+import { ThreadList } from './sidebar/ThreadList';
 import { ProjectItem } from './sidebar/ProjectItem';
+import { Logo3D } from './Logo3D';
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  DragOverlay,
+  type DragEndEvent,
+  type DragStartEvent,
+} from '@dnd-kit/core';
+import {
+  SortableContext,
+  sortableKeyboardCoordinates,
+  verticalListSortingStrategy,
+  arrayMove,
+} from '@dnd-kit/sortable';
 
-export function Sidebar() {
+export function AppSidebar() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const projects = useAppStore(s => s.projects);
@@ -38,8 +65,10 @@ export function Sidebar() {
   const deleteThread = useAppStore(s => s.deleteThread);
   const renameProject = useAppStore(s => s.renameProject);
   const deleteProject = useAppStore(s => s.deleteProject);
+  const reorderProjects = useAppStore(s => s.reorderProjects);
   const settingsOpen = useAppStore(s => s.settingsOpen);
   const showAllThreads = useAppStore(s => s.showAllThreads);
+  const setAddProjectOpen = useAppStore(s => s.setAddProjectOpen);
   const authMode = useAuthStore(s => s.mode);
   const authUser = useAuthStore(s => s.user);
   const logout = useAuthStore(s => s.logout);
@@ -65,6 +94,40 @@ export function Sidebar() {
     projectId: string;
     name: string;
   } | null>(null);
+
+  // Drag & drop state
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+    document.body.classList.add('dragging');
+  }, []);
+
+  const handleDragEnd = useCallback((event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+    document.body.classList.remove('dragging');
+
+    if (!over || active.id === over.id) return;
+
+    const oldIndex = projects.findIndex((p) => p.id === active.id);
+    const newIndex = projects.findIndex((p) => p.id === over.id);
+    if (oldIndex === -1 || newIndex === -1) return;
+
+    const reordered = arrayMove(projects, oldIndex, newIndex);
+    reorderProjects(reordered.map((p) => p.id));
+  }, [projects, reorderProjects]);
+
+  const handleDragCancel = useCallback(() => {
+    setActiveId(null);
+    document.body.classList.remove('dragging');
+  }, []);
+
+  const activeProject = projects.find((p) => p.id === activeId);
 
   const handleArchiveConfirm = useCallback(async () => {
     if (!archiveConfirm) return;
@@ -116,25 +179,79 @@ export function Sidebar() {
   }
 
   return (
-    <div className="flex flex-col h-full">
-      <AddProjectForm />
-      {/* Active threads + Project accordion list */}
-      <ScrollArea className="flex-1 px-2 pb-2">
-        <AutomationInboxButton />
-        <h2 className="px-2 pt-2 pb-1 text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('sidebar.threadsTitle')}</h2>
-        <RunningThreads />
-        <RecentThreads
-          onArchiveThread={(threadId, projectId, title, isWorktree) => {
-            setArchiveConfirm({ threadId, projectId, title, isWorktree });
-          }}
-          onDeleteThread={(threadId, projectId, title, isWorktree) => {
-            setDeleteThreadConfirm({ threadId, projectId, title, isWorktree });
-          }}
-        />
-        {projects.map((project) => (
-          <ProjectItem
-            key={project.id}
-            project={project}
+    <Sidebar collapsible="offcanvas">
+      {/* Logo area */}
+      <SidebarHeader className="px-4 py-3">
+        <div className="flex items-center gap-2">
+          <Logo3D scale={0.75} glow={0.3} />
+          <span className="text-sm font-semibold tracking-tight">a-parallel</span>
+        </div>
+      </SidebarHeader>
+
+      {/* Active threads section (own scroll) */}
+      <div className="flex flex-col max-h-[40%] min-h-0 shrink-0">
+        <div className="px-2">
+          <AutomationInboxButton />
+        </div>
+        <div className="flex items-center justify-between px-4 pt-2 pb-1 h-8">
+          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('sidebar.threadsTitle')}</h2>
+        </div>
+        <div className="overflow-y-auto min-h-0 px-2 pb-2">
+          <ThreadList
+            onArchiveThread={(threadId, projectId, title, isWorktree) => {
+              setArchiveConfirm({ threadId, projectId, title, isWorktree });
+            }}
+            onDeleteThread={(threadId, projectId, title, isWorktree) => {
+              setDeleteThreadConfirm({ threadId, projectId, title, isWorktree });
+            }}
+          />
+        </div>
+      </div>
+
+      {/* Projects header (fixed, outside scroll) */}
+      <div className="flex items-center justify-between px-4 pt-2 pb-1 h-8 shrink-0">
+        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('sidebar.projects')}</h2>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setAddProjectOpen(true)}
+              className="text-muted-foreground"
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{t('sidebar.addProject')}</TooltipContent>
+        </Tooltip>
+      </div>
+
+      {/* Projects list (fills remaining space, own scroll) */}
+      <SidebarContent className="px-2 pb-2">
+        {projects.length === 0 && (
+          <button
+            onClick={() => setAddProjectOpen(true)}
+            className="w-full text-left px-2 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          >
+            {t('sidebar.noProjects')}
+          </button>
+        )}
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+          onDragCancel={handleDragCancel}
+        >
+          <SortableContext
+            items={projects.map((p) => p.id)}
+            strategy={verticalListSortingStrategy}
+          >
+            <div className="flex flex-col gap-1.5">
+            {projects.map((project) => (
+              <ProjectItem
+                key={project.id}
+                project={project}
             threads={threadsByProject[project.id] ?? []}
             isExpanded={expandedProjects.has(project.id)}
             selectedThreadId={selectedThreadId}
@@ -191,16 +308,29 @@ export function Sidebar() {
             }}
           />
         ))}
-      </ScrollArea>
+        </div>
+          </SortableContext>
+          <DragOverlay>
+            {activeProject && (
+              <div className="px-2 py-1 text-xs bg-sidebar rounded-md shadow-md border border-border flex items-center gap-1.5 cursor-grabbing">
+                <Folder className="h-3.5 w-3.5 flex-shrink-0" />
+                <span className="truncate font-medium">{activeProject.name}</span>
+              </div>
+            )}
+          </DragOverlay>
+        </DndContext>
+      </SidebarContent>
 
       {/* User section (multi mode only) */}
       {authMode === 'multi' && authUser && (
-        <div className="border-t border-border px-3 py-2 flex items-center justify-between">
-          <span className="text-sm text-foreground truncate">{authUser.displayName}</span>
-          <Button variant="ghost" size="sm" onClick={logout} className="text-xs text-muted-foreground">
-            {t('auth.logout')}
-          </Button>
-        </div>
+        <SidebarFooter>
+          <div className="flex items-center justify-between px-1">
+            <span className="text-sm text-sidebar-foreground truncate">{authUser.displayName}</span>
+            <Button variant="ghost" size="sm" onClick={logout} className="text-xs text-muted-foreground">
+              {t('auth.logout')}
+            </Button>
+          </div>
+        </SidebarFooter>
       )}
 
       {/* Archive confirmation dialog */}
@@ -321,6 +451,6 @@ export function Sidebar() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
-    </div>
+    </Sidebar>
   );
 }

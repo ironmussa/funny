@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Send, Square, Loader2, Image as ImageIcon, X, Zap, GitBranch, Check, Monitor } from 'lucide-react';
+import { ArrowUp, Square, Loader2, Image as ImageIcon, X, Zap, GitBranch, Check, Monitor } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -66,14 +66,59 @@ function SearchablePicker({
 }) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
+  const [highlightIndex, setHighlightIndex] = useState(-1);
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   const filtered = search
     ? items.filter((item) => item.label.toLowerCase().includes(search.toLowerCase()))
     : items;
 
+  // Reset highlight when filtered list changes
+  useEffect(() => {
+    setHighlightIndex(-1);
+  }, [search]);
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (filtered.length > 0) {
+        setHighlightIndex(0);
+        itemRefs.current[0]?.focus();
+        itemRefs.current[0]?.scrollIntoView({ block: 'nearest' });
+      }
+    }
+  };
+
+  const handleItemKeyDown = (e: React.KeyboardEvent, i: number) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (i < filtered.length - 1) {
+        setHighlightIndex(i + 1);
+        itemRefs.current[i + 1]?.focus();
+        itemRefs.current[i + 1]?.scrollIntoView({ block: 'nearest' });
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (i > 0) {
+        setHighlightIndex(i - 1);
+        itemRefs.current[i - 1]?.focus();
+        itemRefs.current[i - 1]?.scrollIntoView({ block: 'nearest' });
+      } else {
+        setHighlightIndex(-1);
+        searchInputRef.current?.focus();
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      onSelect(filtered[i].key);
+      setOpen(false);
+      setSearch('');
+    }
+  };
+
   return (
-    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) setSearch(''); }}>
+    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setSearch(''); setHighlightIndex(-1); } }}>
       <PopoverTrigger asChild>
         <button
           className={triggerClassName ?? 'flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted truncate max-w-[300px]'}
@@ -99,12 +144,13 @@ function SearchablePicker({
             type="text"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
             placeholder={searchPlaceholder}
             className="w-full bg-transparent text-[11px] placeholder:text-muted-foreground focus:outline-none"
           />
         </div>
         <ScrollArea className="flex-1 min-h-0" style={{ maxHeight: '240px' }}>
-          <div className="p-1">
+          <div className="p-1" ref={listRef}>
             {loading && items.length === 0 && loadingText && (
               <p className="text-[11px] text-muted-foreground text-center py-3">{loadingText}</p>
             )}
@@ -114,15 +160,21 @@ function SearchablePicker({
             {!loading && items.length > 0 && filtered.length === 0 && (
               <p className="text-[11px] text-muted-foreground text-center py-3">{noMatchText}</p>
             )}
-            {filtered.map((item) => (
+            {filtered.map((item, i) => (
               <button
                 key={item.key}
+                ref={(el) => { itemRefs.current[i] = el; }}
                 onClick={() => { onSelect(item.key); setOpen(false); setSearch(''); }}
+                onKeyDown={(e) => handleItemKeyDown(e, i)}
+                onFocus={() => setHighlightIndex(i)}
+                onMouseEnter={() => { setHighlightIndex(i); itemRefs.current[i]?.focus(); }}
                 className={cn(
-                  'w-full flex items-center gap-2 rounded px-2 py-1.5 text-left text-[11px] transition-colors',
-                  item.isSelected
+                  'w-full flex items-center gap-2 rounded px-2 py-1.5 text-left text-[11px] transition-colors outline-none',
+                  i === highlightIndex
                     ? 'bg-accent text-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                    : item.isSelected
+                      ? 'bg-accent/50 text-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                 )}
               >
                 <GitBranch className="h-3 w-3 shrink-0 text-blue-400" />
@@ -729,7 +781,7 @@ export function PromptInput({
                     {loading ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
                     ) : (
-                      <Send className="h-3.5 w-3.5" />
+                      <ArrowUp className="h-3.5 w-3.5" />
                     )}
                   </Button>
                 )}
@@ -768,7 +820,7 @@ export function PromptInput({
                   {loading ? (
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   ) : (
-                    <Send className="h-3.5 w-3.5" />
+                    <ArrowUp className="h-3.5 w-3.5" />
                   )}
                 </Button>
               )}

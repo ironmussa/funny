@@ -27,6 +27,11 @@ const MODEL_MAP: Record<ClaudeModel, string> = {
   haiku: 'claude-haiku-4-5-20251001',
 };
 
+const DEFAULT_ALLOWED_TOOLS = [
+  'Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep',
+  'WebSearch', 'WebFetch', 'Task', 'TodoWrite', 'NotebookEdit',
+];
+
 /**
  * Decode literal Unicode escape sequences (\uXXXX) that may appear
  * in CLI output when the text was double-encoded or the CLI emits
@@ -63,6 +68,9 @@ export class AgentRunner {
 
   // Track threads where the last tool call was AskUserQuestion or ExitPlanMode
   private pendingUserInput = new Map<string, WaitingReason>();
+
+  // Track pending permission requests per thread
+  private pendingPermissionRequest = new Map<string, { toolName: string; toolUseId: string }>();
 
   constructor(
     private threadManager: IThreadManager,
@@ -223,6 +231,23 @@ export class AgentRunner {
                 toolCallId,
                 output: decodedOutput,
               });
+
+              // Detect permission denial pattern
+              const permissionDeniedMatch = decodedOutput.match(
+                /(?:requested permissions? to use|hasn't been granted|hasn't granted|permission.*denied|not in the allowed tools list)/i
+              );
+
+              if (permissionDeniedMatch) {
+                // Extract the tool name from the DB
+                const tc = this.threadManager.getToolCall(toolCallId);
+                if (tc?.name) {
+                  console.log(`[agent] permission denied detected: tool=${tc.name} thread=${threadId}`);
+                  this.pendingPermissionRequest.set(threadId, {
+                    toolName: tc.name,
+                    toolUseId: block.tool_use_id,
+                  });
+                }
+              }
             }
           }
         }
@@ -241,7 +266,14 @@ export class AgentRunner {
 
       // If the last tool call was AskUserQuestion or ExitPlanMode, Claude is
       // waiting for user input — use 'waiting' instead of 'completed'.
-      const waitingReason = this.pendingUserInput.get(threadId);
+      let waitingReason = this.pendingUserInput.get(threadId);
+      const permReq = this.pendingPermissionRequest.get(threadId);
+
+      // If no other waiting reason but we have a permission request, set waiting reason
+      if (!waitingReason && permReq) {
+        waitingReason = 'permission';
+      }
+
       const isWaitingForUser = !!waitingReason;
       const finalStatus = isWaitingForUser
         ? 'waiting'
@@ -262,7 +294,13 @@ export class AgentRunner {
         duration: msg.duration_ms,
         status: finalStatus,
         ...(waitingReason ? { waitingReason } : {}),
+        ...(permReq ? { permissionRequest: { toolName: permReq.toolName } } : {}),
       });
+
+      // Clear permission request after emitting (don't delete before emit!)
+      if (permReq) {
+        this.pendingPermissionRequest.delete(threadId);
+      }
 
       // Emit git status for worktree threads (async, non-blocking)
       this.emitGitStatus(threadId).catch(() => {});
@@ -305,6 +343,7 @@ export class AgentRunner {
     permissionMode: PermissionMode = 'autoEdit',
     images?: any[],
     disallowedTools?: string[],
+    allowedTools?: string[],
   ): Promise<void> {
     console.log(`[agent] start thread=${threadId} model=${model} cwd=${cwd}`);
 
@@ -342,12 +381,13 @@ export class AgentRunner {
     const thread = this.threadManager.getThread(threadId);
 
     // Spawn claude CLI process
+    const effectiveAllowedTools = allowedTools ?? DEFAULT_ALLOWED_TOOLS;
     const claudeProcess = this.processFactory.create({
       prompt,
       cwd,
       model: MODEL_MAP[model],
       permissionMode: PERMISSION_MAP[permissionMode],
-      allowedTools: ['Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep'],
+      allowedTools: effectiveAllowedTools,
       disallowedTools,
       maxTurns: 30,
       sessionId: thread?.sessionId ?? undefined,
@@ -436,6 +476,7 @@ export class AgentRunner {
     this.processedToolUseIds.delete(threadId);
     this.cliToDbMsgId.delete(threadId);
     this.pendingUserInput.delete(threadId);
+    this.pendingPermissionRequest.delete(threadId);
   }
 }
 

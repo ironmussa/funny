@@ -5,7 +5,7 @@ import remarkGfm from 'remark-gfm';
 import { motion } from 'motion/react';
 import { useAppStore } from '@/stores/app-store';
 import { cn } from '@/lib/utils';
-import { Loader2, Clock, Copy, Check, Send, CheckCircle2, XCircle, ArrowDown } from 'lucide-react';
+import { Loader2, Clock, Copy, Check, Send, CheckCircle2, XCircle, ArrowDown, ShieldQuestion } from 'lucide-react';
 import { api } from '@/lib/api';
 import { PromptInput } from './PromptInput';
 import { ToolCallCard } from './ToolCallCard';
@@ -152,6 +152,46 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
         >
           <Send className="h-3 w-3" />
           {t('thread.send')}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+export function PermissionApprovalCard({
+  toolName,
+  onApprove,
+  onDeny
+}: {
+  toolName: string;
+  onApprove: () => void;
+  onDeny: () => void;
+}) {
+  const { t } = useTranslation();
+
+  return (
+    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2.5">
+      <div className="flex items-center gap-2 text-amber-400 text-xs">
+        <ShieldQuestion className="h-3.5 w-3.5" />
+        {t('thread.permissionRequired')}
+      </div>
+      <p className="text-xs text-foreground">
+        {t('thread.permissionMessage', { tool: toolName })}
+      </p>
+      <div className="flex gap-2">
+        <button
+          onClick={onApprove}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          {t('thread.approvePermission')}
+        </button>
+        <button
+          onClick={onDeny}
+          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-muted text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+        >
+          <XCircle className="h-3.5 w-3.5" />
+          {t('thread.denyPermission')}
         </button>
       </div>
     </div>
@@ -319,6 +359,17 @@ export function ThreadView() {
     }
   };
 
+  const handlePermissionApproval = async (toolName: string, approved: boolean) => {
+    useAppStore.getState().appendOptimisticMessage(
+      activeThread.id,
+      approved ? `Approved: ${toolName}` : `Denied: ${toolName}`
+    );
+    const result = await api.approveTool(activeThread.id, toolName, approved);
+    if (result.isErr()) {
+      console.error('Permission approval failed:', result.error);
+    }
+  };
+
   const isRunning = activeThread.status === 'running';
 
   return (
@@ -457,7 +508,21 @@ export function ThreadView() {
             </motion.div>
           )}
 
-          {activeThread.status === 'waiting' && activeThread.waitingReason !== 'question' && (
+          {activeThread.status === 'waiting' && activeThread.waitingReason === 'permission' && activeThread.pendingPermission && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+            >
+              <PermissionApprovalCard
+                toolName={activeThread.pendingPermission.toolName}
+                onApprove={() => handlePermissionApproval(activeThread.pendingPermission!.toolName, true)}
+                onDeny={() => handlePermissionApproval(activeThread.pendingPermission!.toolName, false)}
+              />
+            </motion.div>
+          )}
+
+          {activeThread.status === 'waiting' && activeThread.waitingReason !== 'question' && activeThread.waitingReason !== 'permission' && (
             <motion.div
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}

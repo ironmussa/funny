@@ -235,3 +235,8 @@ export function findToolCall(messageId: string, name: string, input: string) {
     ))
     .get();
 }
+
+/** Get a single tool call by ID */
+export function getToolCall(id: string) {
+  return db.select().from(schema.toolCalls).where(eq(schema.toolCalls.id, id)).get();
+}

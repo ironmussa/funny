@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
 import { statusConfig, timeAgo, getStatusLabels } from '@/lib/thread-utils';
@@ -51,6 +51,49 @@ export function ThreadListView({
 }: ThreadListViewProps) {
   const { t } = useTranslation();
   const statusLabels = getStatusLabels(t);
+  const [highlightIndex, setHighlightIndex] = useState(-1);
+  const itemRefs = useRef<(HTMLElement | null)[]>([]);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Reset highlight when threads or search change
+  useEffect(() => {
+    setHighlightIndex(-1);
+  }, [search, threads]);
+
+  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
+    if (!onThreadClick || threads.length === 0) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightIndex(0);
+      itemRefs.current[0]?.focus();
+      itemRefs.current[0]?.scrollIntoView({ block: 'nearest' });
+    }
+  }, [threads, onThreadClick]);
+
+  const handleItemKeyDown = useCallback((e: React.KeyboardEvent, i: number) => {
+    if (!onThreadClick) return;
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      if (i < threads.length - 1) {
+        setHighlightIndex(i + 1);
+        itemRefs.current[i + 1]?.focus();
+        itemRefs.current[i + 1]?.scrollIntoView({ block: 'nearest' });
+      }
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      if (i > 0) {
+        setHighlightIndex(i - 1);
+        itemRefs.current[i - 1]?.focus();
+        itemRefs.current[i - 1]?.scrollIntoView({ block: 'nearest' });
+      } else {
+        setHighlightIndex(-1);
+        searchInputRef.current?.focus();
+      }
+    } else if (e.key === 'Enter') {
+      e.preventDefault();
+      onThreadClick(threads[i]);
+    }
+  }, [threads, onThreadClick]);
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -65,10 +108,12 @@ export function ThreadListView({
         <div className="relative flex-1">
           <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
           <input
+            ref={searchInputRef}
             type="text"
             placeholder={searchPlaceholder}
             value={search}
             onChange={(e) => onSearchChange(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
             autoFocus={autoFocusSearch}
             className="w-full rounded-md border border-input bg-background pl-8 pr-3 py-1.5 text-xs transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-1 focus:ring-ring"
           />
@@ -100,7 +145,7 @@ export function ThreadListView({
         </div>
       ) : (
         <div className="rounded-lg border border-border/50 overflow-y-auto min-h-0 flex-1">
-          {threads.map((thread) => {
+          {threads.map((thread, i) => {
             const s = statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending;
             const Icon = s.icon;
             const Wrapper = onThreadClick ? 'button' : 'div';
@@ -108,10 +153,15 @@ export function ThreadListView({
             return (
               <Wrapper
                 key={thread.id}
+                ref={(el: HTMLElement | null) => { itemRefs.current[i] = el; }}
                 {...(onThreadClick ? { onClick: () => onThreadClick(thread) } : {})}
+                onKeyDown={(e: React.KeyboardEvent) => handleItemKeyDown(e, i)}
+                onFocus={() => setHighlightIndex(i)}
+                onMouseEnter={() => { setHighlightIndex(i); itemRefs.current[i]?.focus(); }}
                 className={cn(
-                  'w-full flex items-center gap-3 px-3 py-2.5 border-b border-border/50 last:border-b-0 group',
-                  onThreadClick && 'text-left hover:bg-accent/50 transition-colors'
+                  'w-full flex items-center gap-3 px-3 py-2.5 border-b border-border/50 last:border-b-0 group outline-none',
+                  onThreadClick && 'text-left hover:bg-accent/50 transition-colors',
+                  i === highlightIndex && 'bg-accent/50'
                 )}
               >
                 <Icon className={cn('h-4 w-4 flex-shrink-0', s.className)} />

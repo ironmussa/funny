@@ -4,7 +4,7 @@ import * as pm from '../services/project-manager.js';
 import * as wm from '../services/worktree-manager.js';
 import { startAgent, stopAgent, isAgentRunning } from '../services/agent-runner.js';
 import { nanoid } from 'nanoid';
-import { createThreadSchema, sendMessageSchema, updateThreadSchema, validate } from '../validation/schemas.js';
+import { createThreadSchema, sendMessageSchema, updateThreadSchema, approveToolSchema, validate } from '../validation/schemas.js';
 import { requireThread, requireThreadWithMessages, requireProject } from '../utils/route-helpers.js';
 import { resultToResponse } from '../utils/result-response.js';
 import { notFound } from '@a-parallel/shared/errors';
@@ -133,6 +133,57 @@ threadRoutes.post('/:id/message', async (c) => {
 // POST /api/threads/:id/stop
 threadRoutes.post('/:id/stop', async (c) => {
   await stopAgent(c.req.param('id'));
+  return c.json({ ok: true });
+});
+
+// POST /api/threads/:id/approve-tool
+threadRoutes.post('/:id/approve-tool', async (c) => {
+  const id = c.req.param('id');
+  const raw = await c.req.json();
+  const parsed = validate(approveToolSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { toolName, approved } = parsed.value;
+
+  const threadResult = requireThread(id);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+  const thread = threadResult.value;
+
+  const cwd = thread.worktreePath ?? pm.getProject(thread.projectId)?.path;
+  if (!cwd) return c.json({ error: 'Project path not found' }, 404);
+
+  const baseTools = [
+    'Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep',
+    'WebSearch', 'WebFetch', 'Task', 'TodoWrite', 'NotebookEdit',
+  ];
+
+  if (approved) {
+    // Add the approved tool to allowedTools and resume
+    if (!baseTools.includes(toolName)) {
+      baseTools.push(toolName);
+    }
+    const message = `The user has approved the use of ${toolName}. Please proceed with using it.`;
+    startAgent(
+      id,
+      message,
+      cwd,
+      thread.model as import('@a-parallel/shared').ClaudeModel || 'sonnet',
+      thread.permissionMode as import('@a-parallel/shared').PermissionMode || 'autoEdit',
+      undefined,
+      undefined,
+      baseTools
+    ).catch(console.error);
+  } else {
+    // User denied permission
+    const message = `The user denied permission to use ${toolName}. Please continue without it.`;
+    startAgent(
+      id,
+      message,
+      cwd,
+      thread.model as import('@a-parallel/shared').ClaudeModel || 'sonnet',
+      thread.permissionMode as import('@a-parallel/shared').PermissionMode || 'autoEdit'
+    ).catch(console.error);
+  }
+
   return c.json({ ok: true });
 });
 

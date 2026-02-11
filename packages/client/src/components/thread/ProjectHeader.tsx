@@ -18,6 +18,8 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
+import { SidebarTrigger } from '@/components/ui/sidebar';
+import { Separator } from '@/components/ui/separator';
 
 export const ProjectHeader = memo(function ProjectHeader() {
   const { t } = useTranslation();
@@ -42,6 +44,9 @@ export const ProjectHeader = memo(function ProjectHeader() {
   return (
     <div className="px-4 py-2 border-b border-border">
       <div className="flex items-center justify-between">
+        <div className="flex items-center gap-2 min-w-0">
+          <SidebarTrigger className="-ml-1" />
+          <Separator orientation="vertical" className="h-4" />
         <Breadcrumb className="min-w-0">
           <BreadcrumbList>
             {project && (
@@ -61,6 +66,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
             )}
           </BreadcrumbList>
         </Breadcrumb>
+        </div>
         <div className="flex items-center gap-2">
           {isTauri && runningWithPort.length > 0 && (
             <Tooltip>

@@ -41,6 +41,32 @@ export interface UpdateProfileRequest {
   githubToken?: string | null;
 }
 
+// ─── GitHub ──────────────────────────────────────────────
+
+export interface GitHubRepo {
+  id: number;
+  full_name: string;
+  name: string;
+  description: string | null;
+  private: boolean;
+  html_url: string;
+  clone_url: string;
+  language: string | null;
+  updated_at: string;
+  stargazers_count: number;
+  default_branch: string;
+  owner: {
+    login: string;
+    avatar_url: string;
+  };
+}
+
+export interface CloneRepoRequest {
+  cloneUrl: string;
+  destinationPath: string;
+  name?: string;
+}
+
 // ─── Projects ────────────────────────────────────────────
 
 export interface Project {
@@ -48,6 +74,7 @@ export interface Project {
   name: string;
   path: string;
   userId: string;
+  sortOrder: number;
   createdAt: string;
 }
 
@@ -55,7 +82,7 @@ export interface Project {
 
 export type ThreadMode = 'local' | 'worktree';
 export type ThreadStatus = 'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'stopped' | 'interrupted';
-export type WaitingReason = 'question' | 'plan';
+export type WaitingReason = 'question' | 'plan' | 'permission';
 
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku';
 export type PermissionMode = 'plan' | 'autoEdit' | 'confirmEdit';
@@ -151,6 +178,7 @@ export interface WSStatusData {
 export interface WSResultData {
   status?: ThreadStatus;
   waitingReason?: WaitingReason;
+  permissionRequest?: { toolName: string };
   cost?: number;
   duration?: number;
   result?: string;

@@ -192,6 +192,38 @@ All persistent data lives under `~/.a-parallel/`:
 
 ---
 
+## Configuration
+
+All environment variables are optional. Copy `packages/server/.env.example` to `packages/server/.env` and adjust as needed.
+
+| Variable | Default | Description |
+|---|---|---|
+| `PORT` | `3001` | Server port |
+| `HOST` | `127.0.0.1` | Bind address. Use `0.0.0.0` for remote access |
+| `CLIENT_PORT` | `5173` | Client port (used to build CORS origins) |
+| `CORS_ORIGIN` | — | Custom CORS origins, comma-separated. Overrides the default `localhost` origins |
+| `AUTH_MODE` | `local` | `local` (single user, no login) or `multi` (multi-user with login page) |
+| `CLAUDE_BINARY_PATH` | — | Explicit path to the Claude CLI binary. Overrides auto-detection |
+| `GITHUB_CLIENT_ID` | — | GitHub OAuth App client ID. Required for the **Clone from GitHub** feature |
+
+### GitHub Integration (Clone from GitHub)
+
+To enable cloning repositories directly from the UI:
+
+1. Go to [github.com/settings/applications/new](https://github.com/settings/applications/new)
+2. Fill in a name (e.g. `a-parallel`) and a homepage URL
+3. Check **Enable Device Flow**
+4. Click **Register application**
+5. Copy the **Client ID** and set it in your `.env`:
+
+```bash
+GITHUB_CLIENT_ID=Ov23liXxXxXxXxXxXxXx
+```
+
+Users can then click **Clone from GitHub** when adding a project, authorize via a one-time code, and browse/clone their repositories (including private ones).
+
+---
+
 ## Development
 
 ```bash

@@ -1,9 +1,9 @@
 import {
   Clock,
   Loader2,
+  CircleStop,
   CheckCircle2,
   XCircle,
-  Square,
   AlertTriangle,
   CircleDot,
   ArrowUpCircle,
@@ -18,7 +18,7 @@ export const statusConfig: Record<ThreadStatus, { icon: typeof Clock; className:
   waiting: { icon: Clock, className: 'text-amber-400' },
   completed: { icon: CheckCircle2, className: 'text-green-400' },
   failed: { icon: XCircle, className: 'text-red-400' },
-  stopped: { icon: Square, className: 'text-gray-400' },
+  stopped: { icon: CircleStop, className: 'text-gray-400' },
   interrupted: { icon: AlertTriangle, className: 'text-orange-400' },
 };
 

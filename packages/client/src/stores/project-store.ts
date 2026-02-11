@@ -15,6 +15,7 @@ interface ProjectState {
   selectProject: (projectId: string | null) => void;
   renameProject: (projectId: string, name: string) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
+  reorderProjects: (projectIds: string[]) => Promise<void>;
 }
 
 let _loadProjectsPromise: Promise<void> | null = null;
@@ -113,5 +114,23 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       expandedProjects: nextExpanded,
       ...(selectedProjectId === projectId ? { selectedProjectId: null } : {}),
     });
+  },
+
+  reorderProjects: async (projectIds) => {
+    const { projects } = get();
+    // Optimistic update: reorder local array immediately
+    const projectMap = new Map(projects.map((p) => [p.id, p]));
+    const reordered = projectIds
+      .map((id) => projectMap.get(id))
+      .filter((p): p is Project => !!p);
+
+    set({ projects: reordered });
+
+    // Persist to server
+    const result = await api.reorderProjects(projectIds);
+    if (result.isErr()) {
+      // Revert on failure
+      set({ projects });
+    }
   },
 }));

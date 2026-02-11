@@ -5,6 +5,7 @@ export const projects = sqliteTable('projects', {
   name: text('name').notNull(),
   path: text('path').notNull(),
   userId: text('user_id').notNull().default('__local__'),
+  sortOrder: integer('sort_order').notNull().default(0),
   createdAt: text('created_at').notNull(),
 });
 

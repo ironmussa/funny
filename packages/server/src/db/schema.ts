@@ -95,3 +95,20 @@ export const automationRuns = sqliteTable('automation_runs', {
   startedAt: text('started_at').notNull(),
   completedAt: text('completed_at'),
 });
+
+export const mcpOauthTokens = sqliteTable('mcp_oauth_tokens', {
+  id: text('id').primaryKey(),
+  serverName: text('server_name').notNull(),
+  projectPath: text('project_path').notNull(),
+  serverUrl: text('server_url').notNull(),
+  accessToken: text('access_token').notNull(),
+  refreshToken: text('refresh_token'),
+  tokenType: text('token_type').notNull().default('Bearer'),
+  expiresAt: text('expires_at'),
+  scope: text('scope'),
+  tokenEndpoint: text('token_endpoint'),
+  clientId: text('client_id'),
+  clientSecret: text('client_secret'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});

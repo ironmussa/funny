@@ -36,14 +36,18 @@ export function AutomationInboxView() {
   const [triageStatusFilter, setTriageStatusFilter] = useState<RunTriageStatus | 'all'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
 
-  // Load inbox items based on selected triage status filter
+  // Always load all inbox items so tab counts stay accurate; filter client-side
   useEffect(() => {
-    const triageStatus = triageStatusFilter === 'all' ? undefined : triageStatusFilter;
-    loadInbox({ triageStatus });
-  }, [loadInbox, triageStatusFilter]);
+    loadInbox();
+  }, [loadInbox]);
 
   const filteredInbox = useMemo(() => {
     let items = inbox;
+
+    // Filter by triage status
+    if (triageStatusFilter !== 'all') {
+      items = items.filter(item => item.run.triageStatus === triageStatusFilter);
+    }
 
     // Filter by project
     if (filterProjectId) {
@@ -61,7 +65,7 @@ export function AutomationInboxView() {
     }
 
     return items;
-  }, [inbox, filterProjectId, searchQuery]);
+  }, [inbox, triageStatusFilter, filterProjectId, searchQuery]);
 
   // Build list of projects that have inbox items
   const projectsWithItems = useMemo(() => {

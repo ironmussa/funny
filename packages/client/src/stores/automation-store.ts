@@ -42,7 +42,8 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   loadInbox: async (options?: { projectId?: string; triageStatus?: string }) => {
     try {
       const inbox = await api.getAutomationInbox(options);
-      set({ inbox, inboxCount: inbox.length });
+      const pendingCount = inbox.filter(item => item.run.triageStatus === 'pending').length;
+      set({ inbox, inboxCount: pendingCount });
     } catch (e) {
       console.error('[automation-store] Failed to load inbox:', e);
     }
@@ -96,10 +97,15 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
 
   triageRun: async (runId, status) => {
     await api.triageRun(runId, status);
-    set(state => ({
-      inbox: state.inbox.filter(item => item.run.id !== runId),
-      inboxCount: Math.max(0, state.inboxCount - 1),
-    }));
+    set(state => {
+      const updatedInbox = state.inbox.map(item =>
+        item.run.id === runId
+          ? { ...item, run: { ...item.run, triageStatus: status } }
+          : item
+      );
+      const pendingCount = updatedInbox.filter(item => item.run.triageStatus === 'pending').length;
+      return { inbox: updatedInbox, inboxCount: pendingCount };
+    });
   },
 
   handleRunStarted: (_data) => {

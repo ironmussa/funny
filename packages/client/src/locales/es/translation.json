@@ -78,10 +78,12 @@
     "revert": "Revertir",
     "commit": "Confirmar",
     "push": "Enviar",
+    "pushing": "Enviando...",
     "createPR": "Crear PR",
     "commitMessage": "Mensaje del commit",
     "revertConfirm": "¿Revertir {{paths}}? Esta acción no se puede deshacer.",
     "revertWarning": "Esta acción no se puede deshacer.",
+    "commitSuccess": "Cambios confirmados exitosamente",
     "commitFailed": "Commit fallido: {{message}}",
     "pushedSuccess": "Enviado exitosamente",
     "pushFailed": "Push fallido: {{message}}",
@@ -205,7 +207,12 @@
     "recommendedServers": "Servidores Recomendados",
     "install": "Instalar",
     "installed": "Instalado",
-    "installing": "Instalando..."
+    "installing": "Instalando...",
+    "needsAuth": "Sin autenticar",
+    "authHint": "Este servidor requiere autenticacion OAuth.",
+    "authenticate": "Autenticar",
+    "authenticating": "Autenticando...",
+    "authFailed": "La autenticacion fallo. Intenta de nuevo."
   },
   "tools": {
     "readFile": "Leer Archivo",

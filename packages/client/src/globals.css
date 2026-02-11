@@ -121,6 +121,32 @@
   .prose > *:last-child { margin-bottom: 0; }
 
 
+  /* Sonner toast close button – inside the toast, aligned right */
+  [data-sonner-toaster] {
+    --toast-close-button-start: unset;
+    --toast-close-button-end: 0;
+    --toast-close-button-transform: translate(0, 0);
+  }
+  [data-sonner-toast][data-styled=true] [data-close-button] {
+    top: 50%;
+    right: 8px;
+    transform: translateY(-50%);
+    border: none;
+    background: transparent;
+    color: inherit;
+    opacity: 0.5;
+    height: 24px;
+    width: 24px;
+  }
+  [data-sonner-toast][data-styled=true]:hover [data-close-button]:hover {
+    opacity: 1;
+    background: transparent;
+    border: none;
+  }
+  [data-sonner-toast][data-styled=true] {
+    padding-right: 36px;
+  }
+
   /* Terminal panel xterm.js overrides */
   .xterm {
     padding: 4px;

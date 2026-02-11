@@ -199,6 +199,11 @@ export const api = {
     request<{ ok: boolean }>(`/mcp/servers/${encodeURIComponent(name)}?projectPath=${encodeURIComponent(projectPath)}`, { method: 'DELETE' }),
   getRecommendedMcpServers: () =>
     request<{ servers: McpServer[] }>('/mcp/recommended'),
+  startMcpOAuth: (serverName: string, projectPath: string) =>
+    request<{ authUrl: string }>('/mcp/oauth/start', {
+      method: 'POST',
+      body: JSON.stringify({ serverName, projectPath }),
+    }),
 
   // Worktrees
   listWorktrees: (projectId: string) =>

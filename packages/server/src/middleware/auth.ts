@@ -2,7 +2,7 @@ import type { Context, Next } from 'hono';
 import { validateToken } from '../services/auth-service.js';
 
 /** Paths that are exempt from bearer auth */
-const EXEMPT_PATHS = new Set(['/api/auth/token', '/api/health']);
+const EXEMPT_PATHS = new Set(['/api/auth/token', '/api/health', '/api/mcp/oauth/callback']);
 
 /**
  * Bearer token authentication middleware.

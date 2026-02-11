@@ -9,7 +9,7 @@ export function AutomationInboxButton() {
   const automationInboxOpen = useUIStore(s => s.automationInboxOpen);
   const setAutomationInboxOpen = useUIStore(s => s.setAutomationInboxOpen);
 
-  // Always load all inbox items across all projects
+  // Load all inbox items; inboxCount is derived as pending count in the store
   useEffect(() => {
     loadInbox();
     const interval = setInterval(() => loadInbox(), 60_000);

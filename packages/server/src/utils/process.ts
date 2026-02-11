@@ -3,6 +3,7 @@ export interface ProcessOptions {
   timeout?: number;
   env?: Record<string, string>;
   reject?: boolean; // false = don't throw on non-zero exit
+  stdin?: string; // data to write to stdin
 }
 
 export class ProcessExecutionError extends Error {

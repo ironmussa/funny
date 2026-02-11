@@ -78,10 +78,12 @@
     "revert": "Revert",
     "commit": "Commit",
     "push": "Push",
+    "pushing": "Pushing...",
     "createPR": "Create PR",
     "commitMessage": "Commit message",
     "revertConfirm": "Revert {{paths}}? This cannot be undone.",
     "revertWarning": "This cannot be undone.",
+    "commitSuccess": "Changes committed successfully",
     "commitFailed": "Commit failed: {{message}}",
     "pushedSuccess": "Pushed successfully",
     "pushFailed": "Push failed: {{message}}",
@@ -205,7 +207,12 @@
     "recommendedServers": "Recommended Servers",
     "install": "Install",
     "installed": "Installed",
-    "installing": "Installing..."
+    "installing": "Installing...",
+    "needsAuth": "Needs auth",
+    "authHint": "This server requires OAuth authentication.",
+    "authenticate": "Authenticate",
+    "authenticating": "Authenticating...",
+    "authFailed": "Authentication failed. Please try again."
   },
   "tools": {
     "readFile": "Read File",

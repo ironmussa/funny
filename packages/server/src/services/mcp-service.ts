@@ -37,21 +37,51 @@ export async function listMcpServers(projectPath: string): Promise<McpServer[]> 
 
 /**
  * Parse the text output of `claude mcp list`.
- * Format is typically:
- *   - server-name: type(command/url) [scope]
- * or a table/structured text format.
+ * Handles two known formats:
+ *   1. Status format: "name: url/command (TYPE) - status"
+ *   2. Table format:  "name  type  url/command  scope"
  */
 function parseMcpListOutput(output: string): McpServer[] {
   const servers: McpServer[] = [];
   const lines = output.split('\n').filter((l) => l.trim());
 
   for (const line of lines) {
-    // Try to parse lines like: "  server-name  stdio  npx -y @package  local"
-    // or "  server-name  http  https://url  user"
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('─') || trimmed.startsWith('Name')) continue;
+    if (!trimmed || trimmed.startsWith('─') || trimmed.startsWith('Name') || trimmed.startsWith('Checking')) continue;
 
-    // Split by multiple spaces (table format)
+    // Format 1: "server-name: https://url (HTTP) - status text"
+    // or "server-name: command arg1 arg2 (stdio) - status text"
+    const statusMatch = trimmed.match(/^(\S+):\s+(.+?)\s+\((HTTP|http|SSE|sse|stdio|STDIO)\)(?:\s*-\s*(.+))?/);
+    if (statusMatch) {
+      const name = statusMatch[1];
+      const value = statusMatch[2].trim();
+      const type = statusMatch[3].toLowerCase() as McpServerType;
+      const statusText = statusMatch[4]?.trim().toLowerCase() || '';
+
+      const server: McpServer = { name, type };
+
+      if (type === 'http' || type === 'sse') {
+        server.url = value;
+      } else if (type === 'stdio') {
+        const cmdParts = value.split(/\s+/);
+        server.command = cmdParts[0];
+        server.args = cmdParts.slice(1);
+      }
+
+      // Parse status
+      if (statusText.includes('needs auth') || statusText.includes('authentication')) {
+        server.status = 'needs_auth';
+      } else if (statusText.includes('error') || statusText.includes('failed')) {
+        server.status = 'error';
+      } else if (statusText) {
+        server.status = 'ok';
+      }
+
+      servers.push(server);
+      continue;
+    }
+
+    // Format 2: table with double-space separators
     const parts = trimmed.split(/\s{2,}/);
     if (parts.length >= 2) {
       const name = parts[0].trim();

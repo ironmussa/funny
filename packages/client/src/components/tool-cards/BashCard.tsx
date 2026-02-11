@@ -24,7 +24,7 @@ export function BashCard({ parsed, output }: { parsed: Record<string, unknown>; 
           )}
         />
         <Terminal className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-        <span className="font-medium text-foreground flex-shrink-0">{t('tools.runCommand')}</span>
+        <span className="font-medium font-mono text-foreground flex-shrink-0">{t('tools.runCommand')}</span>
         {!expanded && command && (
           <span className="text-muted-foreground truncate font-mono text-[11px] min-w-0 flex-1">
             {command}

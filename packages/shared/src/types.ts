@@ -244,6 +244,7 @@ export interface McpServer {
   url?: string;
   headers?: Record<string, string>;
   env?: Record<string, string>;
+  status?: 'ok' | 'needs_auth' | 'error';
 }
 
 export interface McpListResponse {
@@ -260,6 +261,17 @@ export interface McpAddRequest {
   env?: Record<string, string>;
   scope?: 'project' | 'user';
   projectPath: string;
+}
+
+// ─── MCP OAuth ──────────────────────────────────────────
+
+export interface McpOAuthStartRequest {
+  serverName: string;
+  projectPath: string;
+}
+
+export interface McpOAuthStartResponse {
+  authUrl: string;
 }
 
 export interface McpRemoveRequest {

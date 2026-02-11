@@ -144,5 +144,24 @@ export function autoMigrate() {
     )
   `);
 
+  db.run(sql`
+    CREATE TABLE IF NOT EXISTS mcp_oauth_tokens (
+      id TEXT PRIMARY KEY,
+      server_name TEXT NOT NULL,
+      project_path TEXT NOT NULL,
+      server_url TEXT NOT NULL,
+      access_token TEXT NOT NULL,
+      refresh_token TEXT,
+      token_type TEXT NOT NULL DEFAULT 'Bearer',
+      expires_at TEXT,
+      scope TEXT,
+      token_endpoint TEXT,
+      client_id TEXT,
+      client_secret TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
+    )
+  `);
+
   console.log('[db] Tables ready');
 }

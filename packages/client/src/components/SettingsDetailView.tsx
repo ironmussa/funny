@@ -223,7 +223,7 @@ export function SettingsDetailView() {
           <BreadcrumbList>
             {selectedProject && (
               <BreadcrumbItem>
-                <BreadcrumbLink className="text-xs truncate cursor-default">
+                <BreadcrumbLink className="text-sm truncate cursor-default">
                   {selectedProject.name}
                 </BreadcrumbLink>
               </BreadcrumbItem>

@@ -22,6 +22,7 @@ import {
   Server,
   ChevronDown,
   ChevronUp,
+  ShieldAlert,
 } from 'lucide-react';
 import type { McpServer, McpServerType } from '@a-parallel/shared';
 
@@ -60,38 +61,76 @@ function InstalledServerCard({
   server,
   onRemove,
   removing,
+  onAuthenticate,
+  authenticating,
 }: {
   server: McpServer;
   onRemove: () => void;
   removing: boolean;
+  onAuthenticate?: () => void;
+  authenticating?: boolean;
 }) {
+  const { t } = useTranslation();
+
   return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-md border border-border/50 bg-card">
-      <div className="flex items-center gap-3 min-w-0">
-        <Server className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-        <div className="min-w-0">
-          <div className="flex items-center gap-2">
-            <span className="text-sm font-medium truncate">{server.name}</span>
-            <TypeBadge type={server.type} />
+    <div className={cn(
+      "flex flex-col gap-1.5 px-3 py-2.5 rounded-md border bg-card",
+      server.status === 'needs_auth' ? 'border-amber-500/40' : 'border-border/50'
+    )}>
+      <div className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3 min-w-0">
+          <Server className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-medium truncate">{server.name}</span>
+              <TypeBadge type={server.type} />
+              {server.status === 'needs_auth' && (
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500">
+                  <ShieldAlert className="h-2.5 w-2.5" />
+                  {t('mcp.needsAuth')}
+                </span>
+              )}
+            </div>
+            <p className="text-xs text-muted-foreground truncate mt-0.5">
+              {server.url || [server.command, ...(server.args || [])].join(' ')}
+            </p>
           </div>
-          <p className="text-xs text-muted-foreground truncate mt-0.5">
-            {server.url || [server.command, ...(server.args || [])].join(' ')}
-          </p>
         </div>
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={onRemove}
+          disabled={removing}
+          className="text-muted-foreground hover:text-destructive flex-shrink-0"
+        >
+          {removing ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <Trash2 className="h-3.5 w-3.5" />
+          )}
+        </Button>
       </div>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={onRemove}
-        disabled={removing}
-        className="text-muted-foreground hover:text-destructive flex-shrink-0"
-      >
-        {removing ? (
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-        ) : (
-          <Trash2 className="h-3.5 w-3.5" />
-        )}
-      </Button>
+      {server.status === 'needs_auth' && (
+        <div className="flex items-center justify-between pl-7 gap-2">
+          <p className="text-[11px] text-amber-500/80">
+            {t('mcp.authHint')}
+          </p>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={onAuthenticate}
+            disabled={authenticating}
+            className="text-xs h-6 px-2 border-amber-500/40 text-amber-500 hover:bg-amber-500/10 flex-shrink-0"
+          >
+            {authenticating ? (
+              <Loader2 className="h-3 w-3 animate-spin mr-1" />
+            ) : (
+              <ShieldAlert className="h-3 w-3 mr-1" />
+            )}
+            {authenticating ? t('mcp.authenticating') : t('mcp.authenticate')}
+          </Button>
+        </div>
+      )}
     </div>
   );
 }
@@ -147,6 +186,7 @@ export function McpServerSettings() {
   const [error, setError] = useState<string | null>(null);
   const [removingName, setRemovingName] = useState<string | null>(null);
   const [installingName, setInstallingName] = useState<string | null>(null);
+  const [authenticatingName, setAuthenticatingName] = useState<string | null>(null);
   const [showAddForm, setShowAddForm] = useState(false);
 
   // Add form state
@@ -261,6 +301,51 @@ export function McpServerSettings() {
       setError(err.message);
     } finally {
       setAdding(false);
+    }
+  };
+
+  const handleAuthenticate = async (server: McpServer) => {
+    if (!projectPath) return;
+    setAuthenticatingName(server.name);
+    setError(null);
+    try {
+      const { authUrl } = await api.startMcpOAuth(server.name, projectPath);
+
+      const width = 600;
+      const height = 700;
+      const left = window.screenX + (window.innerWidth - width) / 2;
+      const top = window.screenY + (window.innerHeight - height) / 2;
+      const popup = window.open(
+        authUrl,
+        'mcp-oauth',
+        `width=${width},height=${height},left=${left},top=${top},popup=yes`,
+      );
+
+      const handleMessage = (event: MessageEvent) => {
+        if (event.data?.type === 'mcp-oauth-callback') {
+          window.removeEventListener('message', handleMessage);
+          setAuthenticatingName(null);
+          if (event.data.success) {
+            loadServers();
+          } else {
+            setError(event.data.error || t('mcp.authFailed'));
+          }
+        }
+      };
+      window.addEventListener('message', handleMessage);
+
+      // Fallback: detect popup closed manually
+      const checkClosed = setInterval(() => {
+        if (popup && popup.closed) {
+          clearInterval(checkClosed);
+          window.removeEventListener('message', handleMessage);
+          setAuthenticatingName(null);
+          loadServers();
+        }
+      }, 500);
+    } catch (err: any) {
+      setError(err.message);
+      setAuthenticatingName(null);
     }
   };
 
@@ -420,6 +505,8 @@ export function McpServerSettings() {
                 server={server}
                 onRemove={() => handleRemove(server.name)}
                 removing={removingName === server.name}
+                onAuthenticate={() => handleAuthenticate(server)}
+                authenticating={authenticatingName === server.name}
               />
             ))}
           </div>

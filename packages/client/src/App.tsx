@@ -105,7 +105,7 @@ export function App() {
         )}
       </div>
 
-      <Toaster position="bottom-right" theme="dark" />
+      <Toaster position="bottom-right" theme="dark" closeButton />
       <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
     </TooltipProvider>
   );

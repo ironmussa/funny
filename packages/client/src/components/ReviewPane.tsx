@@ -108,6 +108,7 @@ export function ReviewPane() {
   const [commitMsg, setCommitMsg] = useState('');
   const [loading, setLoading] = useState(false);
   const [merging, setMerging] = useState(false);
+  const [pushing, setPushing] = useState(false);
   const [revertConfirm, setRevertConfirm] = useState<{ paths: string[] } | null>(null);
   const [mergeConfirm, setMergeConfirm] = useState<{ push?: boolean; cleanup?: boolean } | null>(null);
   const [prDialog, setPrDialog] = useState(false);
@@ -187,6 +188,7 @@ export function ReviewPane() {
     try {
       await api.commit(threadId, commitMsg);
       setCommitMsg('');
+      toast.success(t('review.commitSuccess'));
       await refresh();
       useGitStatusStore.getState().fetchForThread(threadId);
     } catch (e: any) {
@@ -209,12 +211,15 @@ export function ReviewPane() {
 
   const handlePush = async () => {
     if (!threadId) return;
+    setPushing(true);
     try {
       await api.push(threadId);
       toast.success(t('review.pushedSuccess'));
       useGitStatusStore.getState().fetchForThread(threadId);
     } catch (e: any) {
       toast.error(t('review.pushFailed', { message: e.message }));
+    } finally {
+      setPushing(false);
     }
   };
 
@@ -241,7 +246,7 @@ export function ReviewPane() {
   return (
     <div className="flex flex-col h-full animate-slide-in-right">
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-2 border-b border-border">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border">
         <div className="flex items-center gap-2">
           <h3 className="text-sm font-medium">{t('review.title')}</h3>
           <Tooltip>
@@ -433,10 +438,10 @@ export function ReviewPane() {
                   size="sm"
                   className="w-full h-8 text-xs"
                   onClick={handlePush}
-                  disabled={hasUncommittedChanges}
+                  disabled={pushing || hasUncommittedChanges}
                 >
-                  <Upload className="h-3 w-3 mr-1" />
-                  {t('review.push')}
+                  <Upload className={cn('h-3 w-3 mr-1', pushing && 'animate-spin')} />
+                  {pushing ? t('review.pushing') : t('review.push')}
                 </Button>
               </span>
             </TooltipTrigger>

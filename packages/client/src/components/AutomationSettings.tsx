@@ -30,7 +30,6 @@ import {
   Play,
   Pause,
   Timer,
-  Inbox,
   History,
 } from 'lucide-react';
 import type { Automation, AutomationRun, ClaudeModel, PermissionMode, AutomationSchedule } from '@a-parallel/shared';
@@ -119,10 +118,6 @@ export function AutomationSettings() {
   const updateAutomation = useAutomationStore(s => s.updateAutomation);
   const deleteAutomation = useAutomationStore(s => s.deleteAutomation);
   const triggerAutomation = useAutomationStore(s => s.triggerAutomation);
-  const inbox = useAutomationStore(s => s.inbox);
-  const inboxCount = useAutomationStore(s => s.inboxCount);
-  const loadInbox = useAutomationStore(s => s.loadInbox);
-  const triageRun = useAutomationStore(s => s.triageRun);
   const selectedAutomationRuns = useAutomationStore(s => s.selectedAutomationRuns);
   const loadRuns = useAutomationStore(s => s.loadRuns);
 
@@ -130,8 +125,6 @@ export function AutomationSettings() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(defaultForm);
   const [runsAutomationId, setRunsAutomationId] = useState<string | null>(null);
-  const [showInbox, setShowInbox] = useState(false);
-
   const automations = selectedProjectId ? (automationsByProject[selectedProjectId] || []) : [];
 
   useEffect(() => {
@@ -139,12 +132,6 @@ export function AutomationSettings() {
       loadAutomations(selectedProjectId);
     }
   }, [selectedProjectId, loadAutomations]);
-
-  useEffect(() => {
-    if (selectedProjectId) {
-      loadInbox(selectedProjectId);
-    }
-  }, [selectedProjectId, loadInbox]);
 
   const openCreateDialog = () => {
     setEditingId(null);
@@ -233,107 +220,19 @@ export function AutomationSettings() {
             {project && <span className="font-medium text-foreground">{project.name}</span>}
           </span>
         </div>
-        <div className="flex items-center gap-2">
-          <Button
-            variant={showInbox ? 'default' : 'outline'}
-            size="sm"
-            className="h-7 text-xs gap-1.5"
-            onClick={() => setShowInbox(!showInbox)}
-          >
-            <Inbox className="h-3.5 w-3.5" />
-            Inbox
-            {inboxCount > 0 && (
-              <span className="ml-1 bg-primary-foreground text-primary text-[10px] rounded-full px-1.5 min-w-[16px] text-center">
-                {inboxCount}
-              </span>
-            )}
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            className="h-7 text-xs gap-1.5"
-            onClick={openCreateDialog}
-          >
-            <Plus className="h-3.5 w-3.5" />
-            Create
-          </Button>
-        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7 text-xs gap-1.5"
+          onClick={openCreateDialog}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Create
+        </Button>
       </div>
 
-      {/* Inbox view */}
-      {showInbox && (
-        <div className="space-y-2">
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
-            Pending Review
-          </h3>
-          {inbox.length === 0 ? (
-            <p className="text-sm text-muted-foreground py-4 text-center">No pending reviews.</p>
-          ) : (
-            inbox.map(({ run, automation, thread }) => (
-              <div
-                key={run.id}
-                className="rounded-lg border border-border/50 bg-card p-3 space-y-2"
-              >
-                <div className="flex items-center justify-between">
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{automation.name}</p>
-                    <p className="text-xs text-muted-foreground truncate">{thread.title}</p>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <span className={cn(
-                      'text-[10px] px-1.5 py-0.5 rounded-full',
-                      run.hasFindings
-                        ? 'bg-amber-500/10 text-amber-500'
-                        : 'bg-muted text-muted-foreground'
-                    )}>
-                      {run.hasFindings ? 'Has findings' : 'No findings'}
-                    </span>
-                    <span className="text-[10px] text-muted-foreground">
-                      {run.completedAt ? new Date(run.completedAt).toLocaleString() : ''}
-                    </span>
-                  </div>
-                </div>
-                {run.summary && (
-                  <p className="text-xs text-muted-foreground line-clamp-2">{run.summary}</p>
-                )}
-                <div className="flex items-center gap-2 justify-end">
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 text-xs"
-                    onClick={() => {
-                      navigate(`/projects/${thread.projectId}/threads/${thread.id}`);
-                    }}
-                  >
-                    View Thread
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 text-xs"
-                    onClick={() => triageRun(run.id, 'dismissed')}
-                  >
-                    Dismiss
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="h-6 text-xs"
-                    onClick={() => triageRun(run.id, 'reviewed')}
-                  >
-                    Mark Reviewed
-                  </Button>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
       {/* Automation list */}
-      {!showInbox && (
-        <>
-          {automations.length === 0 ? (
+      {automations.length === 0 ? (
             <div className="text-center py-8">
               <p className="text-sm text-muted-foreground mb-3">No automations yet.</p>
               <Button
@@ -491,8 +390,6 @@ export function AutomationSettings() {
                 )}
               </div>
             ))
-          )}
-        </>
       )}
 
       {/* Create/Edit Dialog */}

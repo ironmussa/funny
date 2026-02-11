@@ -9,7 +9,6 @@ import {
   Settings,
   Server,
   Sparkles,
-  GitBranch,
   GitFork,
   Terminal,
   Timer,
@@ -20,7 +19,6 @@ export const settingsItems = [
   { id: 'general', label: 'General', icon: Settings },
   { id: 'mcp-server', label: 'MCP Server', icon: Server },
   { id: 'skills', label: 'Skills', icon: Sparkles },
-  { id: 'git', label: 'Git', icon: GitBranch },
   { id: 'worktrees', label: 'Worktrees', icon: GitFork },
   { id: 'startup-commands', label: 'Startup Commands', icon: Terminal },
   { id: 'automations', label: 'Automations', icon: Timer },
@@ -33,7 +31,6 @@ export const settingsLabelKeys: Record<string, string> = {
   general: 'settings.general',
   'mcp-server': 'settings.mcpServer',
   skills: 'settings.skills',
-  git: 'settings.gitSettings',
   worktrees: 'settings.worktrees',
   'startup-commands': 'startup.title',
   automations: 'settings.automations',
@@ -55,7 +52,7 @@ export function SettingsPanel() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="p-3 border-b border-border flex items-center gap-2">
+      <div className="px-4 py-2 border-b border-border flex items-center gap-2">
         <Button
           variant="ghost"
           size="icon-xs"
@@ -67,7 +64,7 @@ export function SettingsPanel() {
         >
           <ArrowLeft className="h-3.5 w-3.5" />
         </Button>
-        <h1 className="text-sm font-semibold tracking-tight">{t('settings.title')}</h1>
+        <h1 className="text-sm font-medium">{t('settings.title')}</h1>
       </div>
 
       {/* Menu list */}

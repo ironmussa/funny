@@ -275,14 +275,10 @@ export function ThreadView() {
     setCurrentSnapshotIdx(-1);
   }, [activeThread?.id]);
 
-  // Derive displayed snapshot:
-  // - If scroll handler has detected a position (>= 0), use that
-  // - Otherwise (initial load / no scroll yet), show latest snapshot
-  const currentSnapshot = snapshots.length === 0
-    ? null
-    : currentSnapshotIdx >= 0 && currentSnapshotIdx < snapshots.length
-      ? snapshots[currentSnapshotIdx]
-      : snapshots[snapshots.length - 1];
+  // Derive displayed snapshot — only when scroll handler has detected a position
+  const currentSnapshot = currentSnapshotIdx >= 0 && currentSnapshotIdx < snapshots.length
+    ? snapshots[currentSnapshotIdx]
+    : null;
 
   const openLightbox = useCallback((images: { src: string; alt: string }[], index: number) => {
     setLightboxImages(images);
@@ -309,19 +305,25 @@ export function ThreadView() {
       setShowScrollDown(!isAtBottom);
 
       // Update current TodoWrite snapshot based on scroll position
-      // When at bottom, always show the latest snapshot
-      if (isAtBottom) {
+      const todoEls = document.querySelectorAll<HTMLElement>('[data-todo-snapshot]');
+      if (todoEls.length === 0) {
         setCurrentSnapshotIdx(-1);
         return;
       }
 
-      const todoEls = document.querySelectorAll<HTMLElement>('[data-todo-snapshot]');
-      if (todoEls.length === 0) return;
-
       const viewportRect = viewport.getBoundingClientRect();
       const threshold = viewportRect.top + viewportRect.height * 0.5;
-      let latestIdx = -1;
 
+      // Range check: only show panel when midpoint is within the TodoWrite range
+      const firstRect = todoEls[0].getBoundingClientRect();
+      const lastRect = todoEls[todoEls.length - 1].getBoundingClientRect();
+      if (threshold < firstRect.top || threshold > lastRect.bottom + 150) {
+        setCurrentSnapshotIdx(-1);
+        return;
+      }
+
+      // Find the latest snapshot whose element is above the viewport midpoint
+      let latestIdx = -1;
       todoEls.forEach((el) => {
         const rect = el.getBoundingClientRect();
         if (rect.top <= threshold) {
@@ -330,9 +332,7 @@ export function ThreadView() {
         }
       });
 
-      if (latestIdx >= 0) {
-        setCurrentSnapshotIdx(latestIdx);
-      }
+      setCurrentSnapshotIdx(latestIdx >= 0 ? latestIdx : -1);
     };
 
     viewport.addEventListener('scroll', handleScroll, { passive: true });
@@ -434,7 +434,7 @@ export function ThreadView() {
 
       {/* Floating TODO Panel */}
       <AnimatePresence>
-        {currentSnapshot && !todoPanelDismissed && (
+        {currentSnapshot && !todoPanelDismissed && currentSnapshot.progress.completed < currentSnapshot.progress.total && (
           <TodoPanel
             todos={currentSnapshot.todos}
             progress={currentSnapshot.progress}

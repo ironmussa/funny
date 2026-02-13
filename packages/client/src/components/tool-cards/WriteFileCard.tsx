@@ -13,7 +13,7 @@ export function WriteFileCard({ parsed, hideLabel }: { parsed: Record<string, un
   const fileName = filePath ? getFileName(filePath) : 'unknown';
 
   return (
-    <div className={cn("text-sm max-w-full overflow-hidden", !hideLabel && "rounded-md border border-border/60 bg-muted/30")}>
+    <div className="text-sm max-w-full overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs hover:bg-accent/30 transition-colors rounded-md overflow-hidden"
@@ -25,12 +25,12 @@ export function WriteFileCard({ parsed, hideLabel }: { parsed: Record<string, un
           )}
         />
         {!hideLabel && <FileText className="h-3 w-3 flex-shrink-0 text-muted-foreground" />}
-        {!hideLabel && <span className="font-medium text-foreground flex-shrink-0">{t('tools.writeFile')}</span>}
+        {!hideLabel && <span className="font-medium font-mono text-foreground flex-shrink-0">{t('tools.writeFile')}</span>}
         {filePath && (
           <a
             href={toVscodeUri(filePath)}
             onClick={(e) => e.stopPropagation()}
-            className="text-muted-foreground truncate font-mono text-[11px] min-w-0 hover:text-primary hover:underline"
+            className="text-muted-foreground truncate font-mono text-xs min-w-0 hover:text-primary hover:underline"
             title={t('tools.openInVSCode', { path: filePath })}
           >
             {filePath}
@@ -40,15 +40,15 @@ export function WriteFileCard({ parsed, hideLabel }: { parsed: Record<string, un
       {expanded && content != null && (
         <div className="border-t border-border/40 overflow-hidden">
           <div className="flex items-center justify-between px-3 py-1 bg-background/50 border-b border-border/30">
-            <span className="text-[10px] font-medium text-muted-foreground">{fileName}</span>
+            <span className="text-xs font-medium text-muted-foreground">{fileName}</span>
             {ext && (
-              <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
+              <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-mono">
                 {ext}
               </span>
             )}
           </div>
           <div className="overflow-x-auto max-h-80 overflow-y-auto">
-            <pre className="px-3 py-2 font-mono text-[11px] text-foreground/80 leading-relaxed whitespace-pre-wrap break-all">
+            <pre className="px-3 py-2 font-mono text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap break-all">
               {content}
             </pre>
           </div>

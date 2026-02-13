@@ -6,6 +6,8 @@ import { MobilePage } from './components/MobilePage';
 import { LoginPage } from './components/LoginPage';
 import { PreviewBrowser } from './components/PreviewBrowser';
 import { useAuthStore } from './stores/auth-store';
+import '@fontsource/geist-sans';
+import '@fontsource/geist-mono';
 import './globals.css';
 // Eagerly import so the persisted theme is applied before first paint
 import './stores/settings-store';

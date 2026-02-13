@@ -12,7 +12,7 @@ export function BashCard({ parsed, output, hideLabel }: { parsed: Record<string,
   const htmlOutput = useMemo(() => output ? ansiConverter.toHtml(output) : null, [ansiConverter, output]);
 
   return (
-    <div className={cn("text-sm max-w-full overflow-hidden", !hideLabel && "rounded-md border border-border/60 bg-muted/30")}>
+    <div className="text-sm max-w-full overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs hover:bg-accent/30 transition-colors rounded-md overflow-hidden"
@@ -26,7 +26,7 @@ export function BashCard({ parsed, output, hideLabel }: { parsed: Record<string,
         {!hideLabel && <Terminal className="h-3 w-3 flex-shrink-0 text-muted-foreground" />}
         {!hideLabel && <span className="font-medium font-mono text-foreground flex-shrink-0">{t('tools.runCommand')}</span>}
         {!expanded && command && (
-          <span className="text-muted-foreground truncate font-mono text-[11px] min-w-0 flex-1">
+          <span className="text-muted-foreground truncate font-mono text-xs min-w-0 flex-1">
             {command}
           </span>
         )}
@@ -34,23 +34,23 @@ export function BashCard({ parsed, output, hideLabel }: { parsed: Record<string,
       {expanded && command && (
         <div className="border-t border-border/40 overflow-hidden px-3 py-2 space-y-2">
           <div>
-            <div className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">{t('tools.input')}</div>
-            <div className="rounded bg-background/80 border border-border/40 px-2.5 py-1.5 font-mono text-[11px] overflow-x-auto">
+            <div className="text-xs font-semibold text-muted-foreground uppercase mb-1">{t('tools.input')}</div>
+            <div className="rounded bg-background/80 border border-border/40 px-2.5 py-1.5 font-mono text-sm overflow-x-auto">
               <pre className="whitespace-pre-wrap break-all text-foreground leading-relaxed">{command}</pre>
             </div>
           </div>
 
           <div>
-            <div className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">{t('tools.output')}</div>
+            <div className="text-xs font-semibold text-muted-foreground uppercase mb-1">{t('tools.output')}</div>
             {htmlOutput ? (
               <div className="rounded bg-background/80 border border-border/40 px-2.5 py-1.5 overflow-x-auto max-h-60 overflow-y-auto">
                 <pre
-                  className="font-mono text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap break-all"
+                  className="font-mono text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-all"
                   dangerouslySetInnerHTML={{ __html: htmlOutput }}
                 />
               </div>
             ) : (
-              <div className="text-[11px] text-muted-foreground/50 italic py-1">
+              <div className="text-sm text-muted-foreground/50 italic py-1">
                 {t('tools.waitingForOutput')}
               </div>
             )}

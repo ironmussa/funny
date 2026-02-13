@@ -2,9 +2,18 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/stores/app-store';
 import { useTerminalStore } from '@/stores/terminal-store';
+import { editorLabels, type Editor } from '@/stores/settings-store';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
-import { GitBranch, GitCommit, GitCompare, Globe, Terminal } from 'lucide-react';
+import { GitCommit, GitCompare, Globe, Terminal, ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { api } from '@/lib/api';
+import { toast } from 'sonner';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import {
   Tooltip,
   TooltipContent,
@@ -68,7 +77,13 @@ export const ProjectHeader = memo(function ProjectHeader() {
 
   if (!selectedProjectId) return null;
 
-  const showWorktreeInfo = activeThread && activeThread.branch;
+  const handleOpenInEditor = async (editor: Editor) => {
+    if (!project) return;
+    const result = await api.openInEditor(project.path, editor);
+    if (result.isErr()) {
+      toast.error(t('sidebar.openInEditorError', 'Failed to open in editor'));
+    }
+  };
 
   return (
     <div className="px-4 py-2 border-b border-border">
@@ -120,19 +135,33 @@ export const ProjectHeader = memo(function ProjectHeader() {
               <TooltipContent>{t('preview.openPreview')}</TooltipContent>
             </Tooltip>
           )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setReviewPaneOpen(!reviewPaneOpen)}
-                className={reviewPaneOpen ? 'text-primary' : 'text-muted-foreground'}
-              >
-                <GitCompare className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('review.title')}</TooltipContent>
-          </Tooltip>
+          <DropdownMenu>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    className="text-muted-foreground"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+              </TooltipTrigger>
+              <TooltipContent>{t('sidebar.openInEditor', 'Open in Editor')}</TooltipContent>
+            </Tooltip>
+            <DropdownMenuContent align="end">
+              {(Object.keys(editorLabels) as Editor[]).map((editor) => (
+                <DropdownMenuItem
+                  key={editor}
+                  onClick={() => handleOpenInEditor(editor)}
+                  className="cursor-pointer"
+                >
+                  {editorLabels[editor]}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <CommitButton />
           <Tooltip>
             <TooltipTrigger asChild>
@@ -169,21 +198,21 @@ export const ProjectHeader = memo(function ProjectHeader() {
             </TooltipTrigger>
             <TooltipContent>{t('terminal.toggle', 'Toggle Terminal')}</TooltipContent>
           </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setReviewPaneOpen(!reviewPaneOpen)}
+                className={reviewPaneOpen ? 'text-primary' : 'text-muted-foreground'}
+              >
+                <GitCompare className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t('review.title')}</TooltipContent>
+          </Tooltip>
         </div>
       </div>
-      {showWorktreeInfo && (
-        <div className="flex items-center gap-3 text-[11px] text-muted-foreground">
-          {activeThread.branch && (
-            <span className="flex items-center gap-1 min-w-0">
-              <GitBranch className="h-3 w-3 flex-shrink-0" />
-              <span className="truncate">{activeThread.branch}</span>
-              {activeThread.baseBranch && (
-                <span className="text-muted-foreground/50 flex-shrink-0">from {activeThread.baseBranch}</span>
-              )}
-            </span>
-          )}
-        </div>
-      )}
     </div>
   );
 });

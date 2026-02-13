@@ -19,7 +19,6 @@ interface TerminalState {
   tabs: TerminalTab[];
   activeTabId: string | null;
   panelVisible: boolean;
-  panelHeight: number;
   /** Output buffer per commandId for server-managed commands */
   commandOutput: Record<string, string>;
   /** PTY data callbacks: ptyId -> callback function */
@@ -31,7 +30,6 @@ interface TerminalState {
   markExited: (id: string) => void;
   setPanelVisible: (visible: boolean) => void;
   togglePanel: () => void;
-  setPanelHeight: (height: number) => void;
   appendCommandOutput: (commandId: string, data: string) => void;
   markCommandExited: (commandId: string) => void;
   registerPtyCallback: (ptyId: string, callback: (data: string) => void) => void;
@@ -43,7 +41,6 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   tabs: [],
   activeTabId: null,
   panelVisible: false,
-  panelHeight: 300,
   commandOutput: {},
   ptyDataCallbacks: {},
 
@@ -86,9 +83,6 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
   togglePanel: () =>
     set((state) => ({ panelVisible: !state.panelVisible })),
-
-  setPanelHeight: (height) =>
-    set({ panelHeight: Math.max(150, Math.min(height, 600)) }),
 
   appendCommandOutput: (commandId, data) =>
     set((state) => ({

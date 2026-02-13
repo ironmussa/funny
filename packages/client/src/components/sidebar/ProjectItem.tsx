@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { Folder, FolderOpen, FolderOpenDot, Plus, Search, Trash2, MoreHorizontal, Terminal, Settings, Pencil } from 'lucide-react';
+import { Folder, FolderOpen, FolderOpenDot, Search, Trash2, MoreHorizontal, Terminal, Settings, Pencil } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -106,7 +106,7 @@ export function ProjectItem({
           ) : (
             <Folder className="h-3.5 w-3.5 flex-shrink-0" />
           )}
-          <span className="truncate font-medium">{project.name}</span>
+          <span className="truncate font-medium text-xs">{project.name}</span>
         </CollapsibleTrigger>
         <div className="flex items-center mr-2 gap-0.5">
           <div className={cn(
@@ -211,31 +211,13 @@ export function ProjectItem({
               </DropdownMenuContent>
             </DropdownMenu>
           </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onNewThread();
-                }}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {t('sidebar.newThread')}
-            </TooltipContent>
-          </Tooltip>
         </div>
       </div>
 
       <CollapsibleContent className="data-[state=open]:animate-slide-down">
         <div className="ml-3 pl-1 mt-0.5 space-y-0.5 min-w-0">
           {threads.length === 0 && (
-            <p className="text-[10px] text-muted-foreground px-2 py-2">
+            <p className="text-xs text-muted-foreground px-2 py-2">
               {t('sidebar.noThreads')}
             </p>
           )}
@@ -262,7 +244,7 @@ export function ProjectItem({
           {threads.length > 5 && (
             <button
               onClick={onShowAllThreads}
-              className="text-[11px] text-muted-foreground hover:text-foreground px-2 py-1.5 transition-colors"
+              className="text-sm text-muted-foreground hover:text-foreground px-2 py-1.5 transition-colors"
             >
               {t('sidebar.viewAll')}
             </button>

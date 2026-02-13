@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/stores/app-store';
-import { useSettingsStore } from '@/stores/settings-store';
+import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { PromptInput } from '../PromptInput';
@@ -15,7 +15,7 @@ export function NewThreadInput() {
   const cancelNewThread = useAppStore(s => s.cancelNewThread);
   const loadThreadsForProject = useAppStore(s => s.loadThreadsForProject);
   const defaultThreadMode = useSettingsStore(s => s.defaultThreadMode);
-  const allowedTools = useSettingsStore(s => s.allowedTools);
+  const toolPermissions = useSettingsStore(s => s.toolPermissions);
 
   const [creating, setCreating] = useState(false);
 
@@ -53,6 +53,7 @@ export function NewThreadInput() {
     }
 
     // Normal mode: create and execute thread
+    const { allowedTools, disallowedTools } = deriveToolLists(toolPermissions);
     const result = await api.createThread({
       projectId: newThreadProjectId,
       title: prompt.slice(0, 200),
@@ -63,6 +64,7 @@ export function NewThreadInput() {
       prompt,
       images,
       allowedTools,
+      disallowedTools,
     });
 
     if (result.isErr()) {

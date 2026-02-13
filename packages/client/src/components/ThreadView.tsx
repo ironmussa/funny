@@ -7,7 +7,7 @@ import { useAppStore } from '@/stores/app-store';
 import { cn } from '@/lib/utils';
 import { Loader2, Clock, Copy, Check, Send, CheckCircle2, XCircle, ArrowDown, ShieldQuestion } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useSettingsStore } from '@/stores/settings-store';
+import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { PromptInput } from './PromptInput';
 import { ToolCallCard } from './ToolCallCard';
 import { ToolCallGroup } from './ToolCallGroup';
@@ -300,9 +300,10 @@ export function ThreadView() {
 
     const handleScroll = () => {
       const { scrollTop, scrollHeight, clientHeight } = viewport;
+      const hasOverflow = scrollHeight > clientHeight + 10;
       const isAtBottom = scrollHeight - scrollTop - clientHeight <= 80;
       userHasScrolledUp.current = !isAtBottom;
-      setShowScrollDown(!isAtBottom);
+      setShowScrollDown(hasOverflow && !isAtBottom);
 
       // Update current TodoWrite snapshot based on scroll position
       const todoEls = document.querySelectorAll<HTMLElement>('[data-todo-snapshot]');
@@ -359,6 +360,11 @@ export function ThreadView() {
     if (!userHasScrolledUp.current) {
       viewport.scrollTop = viewport.scrollHeight;
     }
+    // Hide scroll-to-bottom button if content doesn't overflow
+    const hasOverflow = viewport.scrollHeight > viewport.clientHeight + 10;
+    if (!hasOverflow) {
+      setShowScrollDown(false);
+    }
   }, [scrollFingerprint]);
 
   const scrollToBottom = useCallback(() => {
@@ -410,8 +416,8 @@ export function ThreadView() {
 
     useAppStore.getState().appendOptimisticMessage(activeThread.id, prompt, images);
 
-    const allowedTools = useSettingsStore.getState().allowedTools;
-    const result = await api.sendMessage(activeThread.id, prompt, { model: opts.model || undefined, permissionMode: opts.mode || undefined, allowedTools }, images);
+    const { allowedTools, disallowedTools } = deriveToolLists(useSettingsStore.getState().toolPermissions);
+    const result = await api.sendMessage(activeThread.id, prompt, { model: opts.model || undefined, permissionMode: opts.mode || undefined, allowedTools, disallowedTools }, images);
     if (result.isErr()) {
       console.error('Send failed:', result.error);
     }
@@ -430,8 +436,8 @@ export function ThreadView() {
       activeThread.id,
       approved ? `Approved: ${toolName}` : `Denied: ${toolName}`
     );
-    const allowedTools = useSettingsStore.getState().allowedTools;
-    const result = await api.approveTool(activeThread.id, toolName, approved, allowedTools);
+    const { allowedTools, disallowedTools } = deriveToolLists(useSettingsStore.getState().toolPermissions);
+    const result = await api.approveTool(activeThread.id, toolName, approved, allowedTools, disallowedTools);
     if (result.isErr()) {
       console.error('Permission approval failed:', result.error);
     }
@@ -493,7 +499,7 @@ export function ThreadView() {
                 <span className="font-medium shrink-0">{t('initInfo.tools')}</span>
                 <span className="font-mono flex flex-wrap gap-1">
                   {activeThread.initInfo.tools.map((tool) => (
-                    <span key={tool} className="bg-secondary px-1.5 py-0.5 rounded text-[10px]">
+                    <span key={tool} className="bg-secondary px-1.5 py-0.5 rounded text-xs">
                       {tool}
                     </span>
                   ))}
@@ -512,19 +518,14 @@ export function ThreadView() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.3, ease: 'easeOut' }}
                     className={cn(
-                      'relative group rounded-lg px-3 py-2 text-sm max-w-[80%]',
+                      'relative group text-sm max-w-[80%]',
                       msg.role === 'user'
-                        ? 'ml-auto bg-primary text-primary-foreground'
-                        : 'bg-secondary text-secondary-foreground'
+                        ? 'ml-auto rounded-lg px-3 py-2 bg-primary text-primary-foreground'
+                        : 'text-foreground'
                     )}
                   >
                     {msg.role !== 'user' && (
                       <CopyButton content={msg.content} />
-                    )}
-                    {msg.role !== 'user' && (
-                      <span className="text-[10px] font-medium uppercase text-muted-foreground block mb-0.5">
-                        {msg.role}
-                      </span>
                     )}
                     {msg.images && msg.images.length > 0 && (() => {
                       const allImages = msg.images!.map((i: any, j: number) => ({
@@ -550,7 +551,7 @@ export function ThreadView() {
                         {msg.content.trim()}
                       </pre>
                     ) : (
-                      <div className="text-xs leading-relaxed break-words overflow-x-auto">
+                      <div className="text-sm leading-relaxed break-words overflow-x-auto">
                         <MessageContent content={msg.content.trim()} />
                       </div>
                     )}

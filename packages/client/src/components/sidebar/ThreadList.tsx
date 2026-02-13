@@ -36,7 +36,7 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
 
     for (const [projectId, projectThreads] of Object.entries(threadsByProject)) {
       for (const thread of projectThreads) {
-        if (VISIBLE_STATUSES.includes(thread.status)) {
+        if (VISIBLE_STATUSES.includes(thread.status) && !thread.archived) {
           const project = projectMap.get(projectId);
           result.push({
             ...thread,

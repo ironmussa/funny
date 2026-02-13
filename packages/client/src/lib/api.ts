@@ -144,6 +144,7 @@ export const api = {
     prompt: string;
     images?: ImageAttachment[];
     allowedTools?: string[];
+    disallowedTools?: string[];
   }) => request<Thread>('/threads', { method: 'POST', body: JSON.stringify(data) }),
   createIdleThread: (data: {
     projectId: string;
@@ -152,17 +153,17 @@ export const api = {
     baseBranch?: string;
     prompt?: string;
   }) => request<Thread>('/threads/idle', { method: 'POST', body: JSON.stringify(data) }),
-  sendMessage: (threadId: string, content: string, opts?: { model?: string; permissionMode?: string; allowedTools?: string[] }, images?: ImageAttachment[]) =>
+  sendMessage: (threadId: string, content: string, opts?: { model?: string; permissionMode?: string; allowedTools?: string[]; disallowedTools?: string[] }, images?: ImageAttachment[]) =>
     request<{ ok: boolean }>(`/threads/${threadId}/message`, {
       method: 'POST',
-      body: JSON.stringify({ content, model: opts?.model, permissionMode: opts?.permissionMode, images, allowedTools: opts?.allowedTools }),
+      body: JSON.stringify({ content, model: opts?.model, permissionMode: opts?.permissionMode, images, allowedTools: opts?.allowedTools, disallowedTools: opts?.disallowedTools }),
     }),
   stopThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/stop`, { method: 'POST' }),
-  approveTool: (threadId: string, toolName: string, approved: boolean, allowedTools?: string[]) =>
+  approveTool: (threadId: string, toolName: string, approved: boolean, allowedTools?: string[], disallowedTools?: string[]) =>
     request<{ ok: boolean }>(`/threads/${threadId}/approve-tool`, {
       method: 'POST',
-      body: JSON.stringify({ toolName, approved, allowedTools }),
+      body: JSON.stringify({ toolName, approved, allowedTools, disallowedTools }),
     }),
   deleteThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}`, { method: 'DELETE' }),
@@ -337,6 +338,11 @@ export const api = {
     request<{ roots: string[]; home: string }>('/browse/roots'),
   browseList: (path: string) =>
     request<{ path: string; parent: string | null; dirs: Array<{ name: string; path: string }>; error?: string }>(`/browse/list?path=${encodeURIComponent(path)}`),
+  openInEditor: (path: string, editor: string) =>
+    request<{ ok: boolean }>('/browse/open-in-editor', {
+      method: 'POST',
+      body: JSON.stringify({ path, editor }),
+    }),
 
   // GitHub
   githubStatus: () =>

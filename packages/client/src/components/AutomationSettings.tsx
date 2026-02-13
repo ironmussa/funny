@@ -258,16 +258,16 @@ export function AutomationSettings() {
                         a.enabled ? 'bg-green-400' : 'bg-muted-foreground/30'
                       )} />
                       <span className="text-sm font-medium truncate">{a.name}</span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                         {getScheduleLabel(a.schedule)}
                       </span>
-                      <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
+                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
                         {a.model}
                       </span>
                     </div>
                     <p className="text-xs text-muted-foreground truncate mt-0.5 pl-4">{a.prompt}</p>
                     {a.lastRunAt && (
-                      <p className="text-[10px] text-muted-foreground/70 mt-0.5 pl-4">
+                      <p className="text-xs text-muted-foreground/70 mt-0.5 pl-4">
                         Last run: {new Date(a.lastRunAt).toLocaleString()}
                       </p>
                     )}
@@ -368,7 +368,7 @@ export function AutomationSettings() {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="h-5 text-[10px] px-1.5"
+                            className="h-5 text-xs px-1.5"
                             onClick={() => {
                               navigate(`/projects/${selectedProjectId}/threads/${run.threadId}`);
                             }}
@@ -381,7 +381,7 @@ export function AutomationSettings() {
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="h-5 text-[10px] w-full"
+                      className="h-5 text-xs w-full"
                       onClick={() => setRunsAutomationId(null)}
                     >
                       Close
@@ -445,7 +445,7 @@ export function AutomationSettings() {
                     onChange={(e) => setForm(f => ({ ...f, schedule: e.target.value }))}
                   />
                 )}
-                <p className="text-[10px] text-muted-foreground mt-1">
+                <p className="text-xs text-muted-foreground mt-1">
                   Cron: min hour day month weekday
                 </p>
               </div>
@@ -458,7 +458,7 @@ export function AutomationSettings() {
                 />
               </div>
             </div>
-            <p className="text-[10px] text-muted-foreground">
+            <p className="text-xs text-muted-foreground">
               Automations run locally in read-only mode (no file writes).
             </p>
           </div>

@@ -103,7 +103,7 @@ export function ArchivedThreadsSettings() {
         emptyMessage={t('archived.noArchived')}
         searchEmptyMessage={t('allThreads.noMatch')}
         renderExtraBadges={(thread) => (
-          <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded truncate max-w-[150px]">
+          <span className="text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded truncate max-w-[150px]">
             {projectMap[thread.projectId]?.name ?? '—'}
           </span>
         )}

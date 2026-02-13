@@ -4,6 +4,7 @@ import { getStatusLabels } from '@/lib/thread-utils';
 import type { ThreadStatus } from '@a-parallel/shared';
 
 const badgeStyles: Record<ThreadStatus, string> = {
+  idle: 'bg-gray-500/20 text-gray-400',
   pending: 'bg-yellow-500/20 text-yellow-400',
   running: 'bg-blue-500/20 text-blue-400',
   waiting: 'bg-amber-500/20 text-amber-400',

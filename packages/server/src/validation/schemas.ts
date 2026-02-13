@@ -50,6 +50,7 @@ export const createThreadSchema = z.object({
   prompt: z.string().min(1, 'prompt is required'),
   images: z.array(imageAttachmentSchema).optional(),
   allowedTools: z.array(z.string()).optional(),
+  disallowedTools: z.array(z.string()).optional(),
 });
 
 export const createIdleThreadSchema = z.object({
@@ -66,6 +67,7 @@ export const sendMessageSchema = z.object({
   permissionMode: permissionModeSchema.optional(),
   images: z.array(imageAttachmentSchema).optional(),
   allowedTools: z.array(z.string()).optional(),
+  disallowedTools: z.array(z.string()).optional(),
 });
 
 export const updateThreadSchema = z.object({
@@ -190,6 +192,7 @@ export const approveToolSchema = z.object({
   toolName: z.string().min(1, 'toolName is required'),
   approved: z.boolean(),
   allowedTools: z.array(z.string()).optional(),
+  disallowedTools: z.array(z.string()).optional(),
 });
 
 // ── Helper ───────────────────────────────────────────────────────

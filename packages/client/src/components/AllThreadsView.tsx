@@ -3,7 +3,6 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/stores/app-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
-import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { ChevronLeft, Archive, Search, ArrowUp, ArrowDown, LayoutList, Columns3 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -34,7 +33,7 @@ function FilterChip({
     <button
       onClick={onClick}
       className={cn(
-        'px-2 py-0.5 text-[11px] rounded-full border transition-colors whitespace-nowrap',
+        'px-2 py-0.5 text-xs rounded-full border transition-colors whitespace-nowrap',
         active
           ? 'bg-accent text-accent-foreground border-accent-foreground/20'
           : 'bg-transparent text-muted-foreground border-border hover:bg-accent/50 hover:text-foreground',
@@ -62,7 +61,6 @@ export function AllThreadsView() {
   const [gitFilter, setGitFilter] = useState<FilterValue>('all');
   const [modeFilter, setModeFilter] = useState<FilterValue>('all');
   const [showArchived, setShowArchived] = useState(false);
-  const [archivedThreads, setArchivedThreads] = useState<Thread[]>([]);
   const [sortField, setSortField] = useState<SortField>('updated');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
   const [viewMode, setViewMode] = useState<'list' | 'board'>(() => {
@@ -71,6 +69,11 @@ export function AllThreadsView() {
   });
 
   const project = isGlobalSearch ? null : projects.find((p) => p.id === allThreadsProjectId);
+  const projectInfoById = useMemo(() => {
+    const map: Record<string, { name: string; color?: string }> = {};
+    for (const p of projects) map[p.id] = { name: p.name, color: p.color };
+    return map;
+  }, [projects]);
   const projectNameById = useMemo(() => {
     const map: Record<string, string> = {};
     for (const p of projects) map[p.id] = p.name;
@@ -85,37 +88,13 @@ export function AllThreadsView() {
     return allThreadsProjectId ? (threadsByProject[allThreadsProjectId] ?? []) : [];
   }, [isGlobalSearch, allThreadsProjectId, threadsByProject]);
 
-  // Fetch archived threads when toggled on
-  useEffect(() => {
-    if (!showArchived || !allThreadsProjectId) {
-      setArchivedThreads([]);
-      return;
-    }
-    if (isGlobalSearch) {
-      // Fetch archived threads for all projects
-      Promise.all(projects.map(async (p) => {
-        const result = await api.listThreads(p.id, true);
-        return result.isOk() ? result.value : [] as Thread[];
-      }))
-        .then((results) => {
-          setArchivedThreads(results.flat().filter((t) => t.archived));
-        });
-    } else {
-      (async () => {
-        const result = await api.listThreads(allThreadsProjectId, true);
-        if (result.isOk()) {
-          setArchivedThreads(result.value.filter((t) => t.archived));
-        }
-      })();
-    }
-  }, [showArchived, allThreadsProjectId, isGlobalSearch, projects]);
-
   const allThreads = useMemo(() => {
-    if (!showArchived) return storeThreads;
-    // Merge: store threads + archived threads (avoid duplicates)
-    const ids = new Set(storeThreads.map((t) => t.id));
-    return [...storeThreads, ...archivedThreads.filter((t) => !ids.has(t.id))];
-  }, [storeThreads, archivedThreads, showArchived]);
+    // Board view always includes archived (they appear in the archived column)
+    if (viewMode === 'board') return storeThreads;
+    // List view: filter out archived unless showArchived is toggled on
+    if (showArchived) return storeThreads;
+    return storeThreads.filter((t) => !t.archived);
+  }, [storeThreads, showArchived, viewMode]);
 
   const statusLabels = getStatusLabels(t);
 
@@ -293,7 +272,7 @@ export function AllThreadsView() {
       <div className="px-4 py-2 border-b border-border/50 space-y-1.5">
         {/* Status row */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-12 flex-shrink-0">
+          <span className="text-xs text-muted-foreground uppercase tracking-wider w-12 flex-shrink-0">
             {t('allThreads.filterStatus')}
           </span>
           <FilterChip
@@ -317,7 +296,7 @@ export function AllThreadsView() {
 
         {/* Git status row */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-12 flex-shrink-0">
+          <span className="text-xs text-muted-foreground uppercase tracking-wider w-12 flex-shrink-0">
             Git
           </span>
           <FilterChip
@@ -341,7 +320,7 @@ export function AllThreadsView() {
 
         {/* Sort row */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-12 flex-shrink-0">
+          <span className="text-xs text-muted-foreground uppercase tracking-wider w-12 flex-shrink-0">
             {t('allThreads.sortLabel')}
           </span>
           <FilterChip
@@ -358,7 +337,7 @@ export function AllThreadsView() {
           <button
             onClick={() => { setSortDir(d => d === 'desc' ? 'asc' : 'desc'); setPage(1); }}
             className={cn(
-              'inline-flex items-center gap-1 px-2 py-0.5 text-[11px] rounded-full border transition-colors whitespace-nowrap',
+              'inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full border transition-colors whitespace-nowrap',
               'bg-accent text-accent-foreground border-accent-foreground/20'
             )}
           >
@@ -371,7 +350,7 @@ export function AllThreadsView() {
 
         {/* Mode + Archived row */}
         <div className="flex items-center gap-1.5 flex-wrap">
-          <span className="text-[10px] text-muted-foreground uppercase tracking-wider w-12 flex-shrink-0">
+          <span className="text-xs text-muted-foreground uppercase tracking-wider w-12 flex-shrink-0">
             {t('allThreads.filterMode')}
           </span>
           <FilterChip
@@ -445,23 +424,29 @@ export function AllThreadsView() {
             const gitConf = gs ? gitSyncStateConfig[gs.state] : null;
             return (
               <>
-                {isGlobalSearch && projectNameById[thread.projectId] && (
-                  <span className="text-[10px] text-blue-500 dark:text-blue-400 bg-blue-500/10 px-1.5 py-0.5 rounded">
-                    {projectNameById[thread.projectId]}
+                {isGlobalSearch && projectInfoById[thread.projectId] && (
+                  <span
+                    className="text-xs px-1.5 py-0.5 rounded"
+                    style={{
+                      backgroundColor: projectInfoById[thread.projectId].color ? `${projectInfoById[thread.projectId].color}1A` : '#3b82f61A',
+                      color: projectInfoById[thread.projectId].color || '#3b82f6',
+                    }}
+                  >
+                    {projectInfoById[thread.projectId].name}
                   </span>
                 )}
                 {!!thread.archived && (
-                  <span className="inline-flex items-center gap-0.5 text-[10px] text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                  <span className="inline-flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
                     <Archive className="h-2.5 w-2.5" />
                     {t('allThreads.archived')}
                   </span>
                 )}
                 {gitConf && (
-                  <span className={cn('text-[10px] px-1.5 py-0.5 rounded bg-secondary', gitConf.className)}>
+                  <span className={cn('text-xs px-1.5 py-0.5 rounded bg-secondary', gitConf.className)}>
                     {t(gitConf.labelKey)}
                   </span>
                 )}
-                <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
+                <span className="text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
                   {t(`thread.mode.${thread.mode}`)}
                 </span>
               </>

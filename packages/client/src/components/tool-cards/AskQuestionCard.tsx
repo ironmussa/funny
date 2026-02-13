@@ -54,16 +54,16 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
   const allAnswered = questions.every((_, i) => (selections.get(i)?.size ?? 0) > 0);
 
   return (
-    <div className={cn("text-sm max-w-full overflow-hidden", !hideLabel && "rounded-md border border-border/60 bg-muted/30")}>
+    <div className="text-sm max-w-full overflow-hidden">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
         {!hideLabel && <MessageCircleQuestion className="h-3 w-3 flex-shrink-0 text-muted-foreground" />}
         {!hideLabel && <span className="font-medium text-foreground">{t('tools.question')}</span>}
-        <span className="text-muted-foreground text-[11px]">
+        <span className="text-muted-foreground text-sm">
           {questions.length} {questions.length > 1 ? t('tools.questionsPlural') : t('tools.questions')}
         </span>
         {submitted && (
-          <span className="flex-shrink-0 text-[10px] px-1.5 py-0.5 rounded bg-green-500/20 text-green-600 font-medium ml-auto">
+          <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-600 font-medium ml-auto">
             {t('tools.answered')}
           </span>
         )}
@@ -78,7 +78,7 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
                 key={i}
                 onClick={() => setActiveTab(i)}
                 className={cn(
-                  'px-3 py-1.5 text-[11px] font-medium transition-colors relative',
+                  'px-3 py-1.5 text-sm font-medium transition-colors relative',
                   i === activeTab
                     ? 'text-foreground'
                     : 'text-muted-foreground hover:text-foreground/80'
@@ -130,7 +130,7 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
                   </div>
                   <div className="min-w-0">
                     <span className="text-xs font-medium text-foreground">{opt.label}</span>
-                    <p className="text-[11px] text-muted-foreground leading-snug">{opt.description}</p>
+                    <p className="text-sm text-muted-foreground leading-snug">{opt.description}</p>
                   </div>
                 </button>
               );
@@ -144,7 +144,7 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
                 onClick={handleSubmit}
                 disabled={!allAnswered}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium transition-colors',
+                  'flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-colors',
                   allAnswered
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                     : 'bg-muted text-muted-foreground cursor-not-allowed'

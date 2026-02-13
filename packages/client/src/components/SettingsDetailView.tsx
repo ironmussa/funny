@@ -1,6 +1,7 @@
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, editorLabels, ALL_STANDARD_TOOLS, TOOL_LABELS, type Theme, type Editor, type ThreadMode } from '@/stores/settings-store';
+import type { ToolPermission } from '@a-parallel/shared';
 import { settingsItems, settingsLabelKeys, type SettingsItemId } from './SettingsPanel';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -160,7 +161,7 @@ function ProjectColorPicker({ projectId, currentColor }: { projectId: string; cu
           >
             {!currentColor && (
               <div className="h-full w-full rounded-md bg-gradient-to-br from-muted-foreground/10 to-muted-foreground/30 flex items-center justify-center">
-                <span className="text-[10px] text-muted-foreground">—</span>
+                <span className="text-xs text-muted-foreground">—</span>
               </div>
             )}
           </div>
@@ -180,7 +181,7 @@ function ProjectColorPicker({ projectId, currentColor }: { projectId: string; cu
 
 /* ── General settings content ── */
 function GeneralSettings() {
-  const { theme, defaultEditor, defaultThreadMode, allowedTools, setTheme, setDefaultEditor, setDefaultThreadMode, toggleTool, setAllowedTools } = useSettingsStore();
+  const { theme, defaultEditor, defaultThreadMode, toolPermissions, setTheme, setDefaultEditor, setDefaultThreadMode, setToolPermission, resetToolPermissions } = useSettingsStore();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
   const projects = useAppStore((s) => s.projects);
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
@@ -293,26 +294,31 @@ function GeneralSettings() {
           <p className="text-xs text-muted-foreground mt-0.5 mb-3">{t('settings.toolPermissionsDesc')}</p>
           <div className="space-y-1">
             {ALL_STANDARD_TOOLS.map((tool) => (
-              <label
+              <div
                 key={tool}
-                className="flex items-center gap-3 px-2 py-1.5 rounded-md hover:bg-muted/50 cursor-pointer transition-colors"
+                className="flex items-center justify-between gap-3 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors"
               >
-                <input
-                  type="checkbox"
-                  checked={allowedTools.includes(tool)}
-                  onChange={() => toggleTool(tool)}
-                  className="h-3.5 w-3.5 rounded border-border accent-primary cursor-pointer"
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="text-sm text-foreground font-mono">{tool}</span>
+                  <span className="text-xs text-muted-foreground">
+                    {t(TOOL_LABELS[tool] ?? tool)}
+                  </span>
+                </div>
+                <SegmentedControl<ToolPermission>
+                  value={toolPermissions[tool] ?? 'allow'}
+                  onChange={(v) => setToolPermission(tool, v)}
+                  options={[
+                    { value: 'allow', label: t('settings.allow') },
+                    { value: 'ask', label: t('settings.ask') },
+                    { value: 'deny', label: t('settings.deny') },
+                  ]}
                 />
-                <span className="text-sm text-foreground font-mono">{tool}</span>
-                <span className="text-xs text-muted-foreground">
-                  {t(TOOL_LABELS[tool] ?? tool)}
-                </span>
-              </label>
+              </div>
             ))}
           </div>
           <div className="mt-3 flex justify-end">
             <button
-              onClick={() => setAllowedTools([...ALL_STANDARD_TOOLS])}
+              onClick={() => resetToolPermissions()}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               <RotateCcw className="h-3 w-3" />

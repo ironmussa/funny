@@ -23,7 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Folder, Columns3, BarChart3 } from 'lucide-react';
+import { Plus, Folder, FolderPlus, Columns3, BarChart3 } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -57,6 +57,7 @@ export function AppSidebar() {
   const projects = useAppStore(s => s.projects);
   const threadsByProject = useAppStore(s => s.threadsByProject);
   const selectedThreadId = useAppStore(s => s.selectedThreadId);
+  const selectedProjectId = useAppStore(s => s.selectedProjectId);
   const expandedProjects = useAppStore(s => s.expandedProjects);
   const toggleProject = useAppStore(s => s.toggleProject);
   const loadProjects = useAppStore(s => s.loadProjects);
@@ -252,7 +253,7 @@ export function AppSidebar() {
               onClick={() => setAddProjectOpen(true)}
               className="text-muted-foreground"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <FolderPlus className="h-3.5 w-3.5" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top">{t('sidebar.addProject')}</TooltipContent>
@@ -285,24 +286,18 @@ export function AppSidebar() {
               <ProjectItem
                 key={project.id}
                 project={project}
-            threads={threadsByProject[project.id] ?? []}
+            threads={(threadsByProject[project.id] ?? []).filter((t) => !t.archived)}
             isExpanded={expandedProjects.has(project.id)}
             selectedThreadId={selectedThreadId}
             onToggle={() => {
               const wasExpanded = expandedProjects.has(project.id);
-              toggleProject(project.id);
-              if (wasExpanded) {
-                navigate('/');
-              } else {
-                // Fetch git statuses for worktree threads when expanding
-                useGitStatusStore.getState().fetchForProject(project.id);
-                const projectThreads = threadsByProject[project.id];
-                if (projectThreads && projectThreads.length > 0) {
-                  navigate(`/projects/${project.id}/threads/${projectThreads[0].id}`);
-                } else {
-                  navigate(`/projects/${project.id}`);
-                }
+              if (!wasExpanded) {
+                toggleProject(project.id);
               }
+              // Always open new thread creation screen
+              useGitStatusStore.getState().fetchForProject(project.id);
+              startNewThread(project.id);
+              navigate(`/projects/${project.id}`);
             }}
             onNewThread={() => {
               startNewThread(project.id);

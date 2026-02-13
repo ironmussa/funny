@@ -52,7 +52,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
           animate={{ scale: 1 }}
           transition={{ duration: 0.2 }}
           className={cn(
-            'text-[10px] font-mono px-1.5 py-0.5 rounded-full transition-colors duration-300',
+            'text-xs font-mono px-1.5 py-0.5 rounded-full transition-colors duration-300',
             allDone ? 'bg-green-500/15 text-green-500' : 'bg-muted text-muted-foreground'
           )}
         >

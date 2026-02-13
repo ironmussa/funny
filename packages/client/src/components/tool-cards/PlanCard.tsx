@@ -3,7 +3,6 @@ import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { FileCode2, Check } from 'lucide-react';
-import { cn } from '@/lib/utils';
 
 export function PlanCard({ parsed, output, onRespond, hideLabel }: { parsed: Record<string, unknown>; output?: string; onRespond?: (answer: string) => void; hideLabel?: boolean }) {
   const { t } = useTranslation();
@@ -19,7 +18,7 @@ export function PlanCard({ parsed, output, onRespond, hideLabel }: { parsed: Rec
   };
 
   return (
-    <div className={cn("text-xs max-w-full overflow-hidden", !hideLabel && "rounded-md border border-border/60 bg-muted/30")}>
+    <div className="text-xs max-w-full overflow-hidden">
       {/* Header */}
       {!hideLabel && (
         <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
@@ -34,11 +33,11 @@ export function PlanCard({ parsed, output, onRespond, hideLabel }: { parsed: Rec
           prose-headings:text-foreground prose-headings:font-semibold
           prose-h1:text-xs prose-h1:mb-1.5 prose-h1:mt-0
           prose-h2:text-xs prose-h2:mb-1 prose-h2:mt-2.5
-          prose-h3:text-[11px] prose-h3:mb-1 prose-h3:mt-2
+          prose-h3:text-sm prose-h3:mb-1 prose-h3:mt-2
           prose-p:text-xs prose-p:text-muted-foreground prose-p:leading-relaxed prose-p:my-0.5
-          prose-li:text-[11px] prose-li:text-muted-foreground prose-li:leading-relaxed prose-li:my-0
+          prose-li:text-sm prose-li:text-muted-foreground prose-li:leading-relaxed prose-li:my-0
           prose-ul:my-0.5 prose-ol:my-0.5
-          prose-code:text-[10px] prose-code:bg-background/80 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-foreground
+          prose-code:text-xs prose-code:bg-background/80 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-foreground
           prose-pre:bg-background/80 prose-pre:rounded prose-pre:p-2 prose-pre:my-1
           prose-strong:text-foreground
         ">
@@ -53,7 +52,7 @@ export function PlanCard({ parsed, output, onRespond, hideLabel }: { parsed: Rec
         <div className="border-t border-border/40 px-3 py-2 flex justify-end">
           <button
             onClick={handleAccept}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-[11px] font-medium bg-muted-foreground/20 text-foreground/80 hover:bg-muted-foreground/30 transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium bg-muted-foreground/20 text-foreground/80 hover:bg-muted-foreground/30 transition-colors"
           >
             <Check className="h-3 w-3" />
             {t('tools.acceptPlan')}

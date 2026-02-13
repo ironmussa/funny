@@ -53,7 +53,7 @@ function InstalledSkillCard({
             </p>
           )}
           <div className="flex items-center gap-2 mt-1">
-            <span className="text-[10px] text-muted-foreground/70">
+            <span className="text-xs text-muted-foreground/70">
               {skill.source}
             </span>
             {skill.sourceUrl && (
@@ -61,13 +61,13 @@ function InstalledSkillCard({
                 href={skill.sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-[10px] text-muted-foreground/70 hover:text-foreground inline-flex items-center gap-0.5"
+                className="text-xs text-muted-foreground/70 hover:text-foreground inline-flex items-center gap-0.5"
               >
                 <ExternalLink className="h-2.5 w-2.5" />
               </a>
             )}
             {skill.installedAt && (
-              <span className="text-[10px] text-muted-foreground/70">
+              <span className="text-xs text-muted-foreground/70">
                 installed {new Date(skill.installedAt).toLocaleDateString()}
               </span>
             )}
@@ -113,7 +113,7 @@ function RecommendedSkillCard({
           <span className="text-sm font-medium">{skill.name}</span>
         </div>
         <p className="text-xs text-muted-foreground mt-0.5">{skill.description}</p>
-        <p className="text-[10px] text-muted-foreground/70 mt-0.5 font-mono">
+        <p className="text-xs text-muted-foreground/70 mt-0.5 font-mono">
           {skill.identifier}
         </p>
       </div>
@@ -167,7 +167,7 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-medium truncate">{plugin.name}</span>
                   {hasCommands && (
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+                    <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
                       {plugin.commands.length} {plugin.commands.length === 1 ? t('plugins.command') : t('plugins.commands')}
                     </span>
                   )}
@@ -179,12 +179,12 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
                 )}
                 <div className="flex items-center gap-2 mt-1">
                   {plugin.author && (
-                    <span className="text-[10px] text-muted-foreground/70">
+                    <span className="text-xs text-muted-foreground/70">
                       {t('plugins.by')} {plugin.author}
                     </span>
                   )}
                   {plugin.installedAt && (
-                    <span className="text-[10px] text-muted-foreground/70">
+                    <span className="text-xs text-muted-foreground/70">
                       installed {new Date(plugin.installedAt).toLocaleDateString()}
                     </span>
                   )}
@@ -389,7 +389,7 @@ export function SkillsSettings() {
         {showCustom && (
           <div className="rounded-lg border border-border/50 p-3 mb-3 space-y-2 bg-muted/30">
             <label className="text-xs text-muted-foreground block">
-              {t('skills.skillIdentifier')} (e.g. <code className="text-[10px] bg-muted px-1 py-0.5 rounded">owner/repo@skill-name</code>)
+              {t('skills.skillIdentifier')} (e.g. <code className="text-xs bg-muted px-1 py-0.5 rounded">owner/repo@skill-name</code>)
             </label>
             <div className="flex gap-2">
               <input
@@ -446,7 +446,7 @@ export function SkillsSettings() {
           <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             {t('plugins.installedPlugins')}
           </h3>
-          <span className="text-[10px] text-muted-foreground/60">
+          <span className="text-xs text-muted-foreground/60">
             {t('plugins.managedByClaudeCode')}
           </span>
         </div>

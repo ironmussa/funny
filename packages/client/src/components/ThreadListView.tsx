@@ -190,16 +190,16 @@ export function ThreadListView({
                   <div className="flex items-center gap-2 mt-0.5">
                     {renderExtraBadges?.(thread)}
                     {thread.branch && (
-                      <span className="text-[10px] text-muted-foreground bg-secondary px-1.5 py-0.5 rounded truncate max-w-[150px]">
+                      <span className="text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded truncate max-w-[150px]">
                         {thread.branch}
                       </span>
                     )}
-                    <span className="text-[10px] text-muted-foreground">
+                    <span className="text-xs text-muted-foreground">
                       {statusLabels[thread.status as ThreadStatus]}
                     </span>
                   </div>
                 </div>
-                <span className="text-[10px] text-muted-foreground flex-shrink-0 hidden sm:inline">
+                <span className="text-xs text-muted-foreground flex-shrink-0 hidden sm:inline">
                   {timeAgo(thread.completedAt ?? thread.createdAt, t)}
                 </span>
                 {renderActions?.(thread)}
@@ -212,7 +212,7 @@ export function ThreadListView({
       {/* Pagination */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between flex-shrink-0">
-          <span className="text-[11px] text-muted-foreground">
+          <span className="text-sm text-muted-foreground">
             {paginationLabel({ from, to, total: totalCount })}
           </span>
           <div className="flex items-center gap-1.5">
@@ -224,7 +224,7 @@ export function ThreadListView({
             >
               <ChevronLeft className="h-3.5 w-3.5" />
             </Button>
-            <span className="text-[11px] text-muted-foreground px-2">
+            <span className="text-sm text-muted-foreground px-2">
               {currentPage} / {totalPages}
             </span>
             <Button

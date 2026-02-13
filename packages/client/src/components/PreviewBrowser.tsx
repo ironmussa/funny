@@ -118,7 +118,7 @@ export function PreviewBrowser() {
               onClick={() => setActiveTabId(tab.commandId)}
             >
               <span className="truncate">{tab.label}</span>
-              <span className="text-[10px] text-muted-foreground/60 flex-shrink-0">:{tab.port}</span>
+              <span className="text-xs text-muted-foreground/60 flex-shrink-0">:{tab.port}</span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -135,7 +135,7 @@ export function PreviewBrowser() {
         {/* Actions */}
         {activeTab && (
           <div className="flex items-center gap-1 px-2 flex-shrink-0">
-            <span className="text-[10px] text-muted-foreground font-mono mr-1">
+            <span className="text-xs text-muted-foreground font-mono mr-1">
               localhost:{activeTab.port}
             </span>
             <button

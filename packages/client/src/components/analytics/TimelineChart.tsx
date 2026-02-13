@@ -79,23 +79,24 @@ export function TimelineChart({ created, completed, movedToReview, movedToDone, 
   }
 
   // Format date labels based on groupBy granularity
-  const formatDate = (date: string) => {
+  const formatDate = (date: any) => {
+    const dateStr = String(date);
     if (groupBy === 'year') {
-      return date; // Already in YYYY format
+      return dateStr; // Already in YYYY format
     }
     if (groupBy === 'month') {
       // Format: YYYY-MM -> MMM YYYY
-      const [year, month] = date.split('-');
+      const [year, month] = dateStr.split('-');
       const d = new Date(parseInt(year), parseInt(month) - 1, 1);
       return d.toLocaleDateString('default', { month: 'short', year: 'numeric' });
     }
     if (groupBy === 'week') {
       // Format: YYYY-WXX -> Week XX, YYYY
-      const match = date.match(/(\d{4})-W(\d+)/);
+      const match = dateStr.match(/(\d{4})-W(\d+)/);
       if (match) {
         return `W${match[2]}, ${match[1]}`;
       }
-      return date;
+      return dateStr;
     }
     // Day format: YYYY-MM-DD -> DD/MM
     const d = new Date(date + 'T00:00:00');

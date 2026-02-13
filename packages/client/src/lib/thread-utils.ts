@@ -12,6 +12,7 @@ import {
   LayoutList,
   Play,
   Eye,
+  Archive,
 } from 'lucide-react';
 import type { ThreadStatus, GitSyncState, ThreadStage } from '@a-parallel/shared';
 
@@ -31,6 +32,7 @@ export const stageConfig: Record<ThreadStage, { icon: typeof Clock; className: s
   in_progress: { icon: Play, className: 'text-blue-400', labelKey: 'kanban.inProgress' },
   review: { icon: Eye, className: 'text-amber-400', labelKey: 'kanban.review' },
   done: { icon: CheckCircle2, className: 'text-green-400', labelKey: 'kanban.done' },
+  archived: { icon: Archive, className: 'text-gray-400', labelKey: 'kanban.archived' },
 };
 
 export function timeAgo(dateStr: string, t: (key: string, opts?: any) => string): string {

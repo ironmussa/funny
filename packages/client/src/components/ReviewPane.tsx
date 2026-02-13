@@ -214,7 +214,7 @@ export function ReviewPane() {
               >
                 <Icon className="h-3.5 w-3.5 flex-shrink-0" />
                 <span className="flex-1 truncate font-mono">{f.path}</span>
-                <span className={cn('text-[10px]', f.staged ? 'text-green-400' : 'text-yellow-400')}>
+                <span className={cn('text-xs', f.staged ? 'text-green-400' : 'text-yellow-400')}>
                   {f.staged ? t('review.staged') : t('review.unstaged')}
                 </span>
                 <div className="flex gap-0.5">
@@ -269,7 +269,7 @@ export function ReviewPane() {
       <ScrollArea className="flex-1 w-full">
         {selectedDiff ? (
           selectedDiff.diff ? (
-            <div className="text-xs [&_.diff-container]:font-mono [&_.diff-container]:text-[11px] [&_table]:w-max [&_td:last-child]:w-auto [&_td:last-child]:min-w-0">
+            <div className="text-xs [&_.diff-container]:font-mono [&_.diff-container]:text-sm [&_table]:w-max [&_td:last-child]:w-auto [&_td:last-child]:min-w-0">
               <Suspense fallback={<div className="p-2 text-xs text-muted-foreground">Loading diff...</div>}>
                 <MemoizedDiffView diff={selectedDiff.diff} />
               </Suspense>

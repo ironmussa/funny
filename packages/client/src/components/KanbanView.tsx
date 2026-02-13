@@ -14,7 +14,7 @@ import { useAppStore } from '@/stores/app-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
-import { useSettingsStore } from '@/stores/settings-store';
+import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { stageConfig, statusConfig, gitSyncStateConfig, timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -36,7 +36,7 @@ interface KanbanViewProps {
   search?: string;
 }
 
-const STAGES: ThreadStage[] = ['backlog', 'in_progress', 'review', 'done'];
+const STAGES: ThreadStage[] = ['backlog', 'in_progress', 'review', 'done', 'archived'];
 
 function KanbanCard({ thread, projectInfo, onDelete, search }: { thread: Thread; projectInfo?: { name: string; color?: string }; onDelete: (thread: Thread) => void; search?: string }) {
   const { t } = useTranslation();
@@ -54,13 +54,13 @@ function KanbanCard({ thread, projectInfo, onDelete, search }: { thread: Thread;
       getInitialData: () => ({
         type: 'kanban-card',
         threadId: thread.id,
-        sourceStage: thread.stage || 'backlog',
+        sourceStage: thread.archived ? 'archived' : (thread.stage || 'backlog'),
         projectId: thread.projectId,
       }),
       onDragStart: () => setIsDragging(true),
       onDrop: () => setIsDragging(false),
     });
-  }, [thread.id, thread.stage, thread.projectId]);
+  }, [thread.id, thread.stage, thread.archived, thread.projectId]);
 
   const StatusIcon = statusConfig[thread.status].icon;
   const statusClassName = statusConfig[thread.status].className;
@@ -94,7 +94,7 @@ function KanbanCard({ thread, projectInfo, onDelete, search }: { thread: Thread;
 
       {projectInfo && (
         <span
-          className="text-[10px] px-1.5 py-0.5 rounded inline-block mb-1"
+          className="text-xs px-1.5 py-0.5 rounded inline-block mb-1"
           style={{
             backgroundColor: projectInfo.color ? `${projectInfo.color}1A` : '#3b82f61A',
             color: projectInfo.color || '#3b82f6',
@@ -105,39 +105,26 @@ function KanbanCard({ thread, projectInfo, onDelete, search }: { thread: Thread;
       )}
       <HighlightText text={thread.title} query={search || ''} className="text-xs font-medium mb-1.5 line-clamp-3 pr-5 block" />
 
-      <div className="flex items-center gap-1.5 flex-wrap">
-        <div className="flex items-center gap-1">
-          <StatusIcon className={cn('h-3 w-3', statusClassName)} />
-          <span className="text-[10px] text-muted-foreground">
+      <div className="flex items-center justify-between gap-1.5">
+        <div className="flex items-center gap-1 min-w-0">
+          <StatusIcon className={cn('h-3 w-3 shrink-0', statusClassName)} />
+          <span className="text-xs text-muted-foreground truncate">
             {t(`thread.status.${thread.status}`)}
           </span>
+          {gitConf && GitIcon && (
+            <GitIcon className={cn('h-3 w-3 shrink-0', gitConf.className)} />
+          )}
         </div>
-
-        {gitConf && GitIcon && (
-          <div className="flex items-center gap-1">
-            <GitIcon className={cn('h-3 w-3', gitConf.className)} />
-            <span className="text-[10px] text-muted-foreground">
-              {t(gitConf.labelKey)}
-            </span>
-          </div>
-        )}
-      </div>
-
-      <div className="flex items-center justify-between mt-1.5">
-        <span className="text-[10px] text-muted-foreground">
-          {timeAgo(thread.completedAt || thread.createdAt, t)}
-        </span>
-        {thread.cost > 0 && (
-          <span className="text-[10px] text-muted-foreground">
-            ${thread.cost.toFixed(3)}
-          </span>
-        )}
+        <div className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
+          <span>{timeAgo(thread.completedAt || thread.createdAt, t)}</span>
+          {thread.cost > 0 && <span>${thread.cost.toFixed(3)}</span>}
+        </div>
       </div>
     </div>
   );
 }
 
-function AddThreadButton({ projectId, projects, onSelect }: { projectId?: string; projects: Project[]; onSelect: (projectId: string) => void }) {
+function AddThreadButton({ projectId, projects, onSelect }: { projectId?: string; projects: Project[]; onSelect: (projectId: string) => void; }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState('');
@@ -212,7 +199,7 @@ function AddThreadButton({ projectId, projects, onSelect }: { projectId?: string
   );
 }
 
-function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, projects, onAddThread, search }: { stage: ThreadStage; threads: Thread[]; projectInfoById?: Record<string, { name: string; color?: string }>; onDelete: (thread: Thread) => void; projectId?: string; projects: Project[]; onAddThread: (projectId: string) => void; search?: string }) {
+function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, projects, onAddThread, search }: { stage: ThreadStage; threads: Thread[]; projectInfoById?: Record<string, { name: string; color?: string }>; onDelete: (thread: Thread) => void; projectId?: string; projects: Project[]; onAddThread: (projectId: string, stage: ThreadStage) => void; search?: string }) {
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const [isDraggedOver, setIsDraggedOver] = useState(false);
@@ -246,8 +233,8 @@ function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, pr
         <StageIcon className={cn('h-4 w-4', stageClassName)} />
         <span className="font-medium text-sm">{t(stageConfig[stage].labelKey)}</span>
         <span className="text-xs text-muted-foreground">({threads.length})</span>
-        {projects.length > 0 && stage !== 'review' && stage !== 'done' && (
-          <AddThreadButton projectId={projectId} projects={projects} onSelect={onAddThread} />
+        {projects.length > 0 && stage !== 'review' && stage !== 'done' && stage !== 'archived' && (
+          <AddThreadButton projectId={projectId} projects={projects} onSelect={(pid) => onAddThread(pid, stage)} />
         )}
       </div>
 
@@ -268,12 +255,14 @@ export function KanbanView({ threads, projectId, search }: KanbanViewProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const updateThreadStage = useThreadStore((s) => s.updateThreadStage);
+  const archiveThread = useThreadStore((s) => s.archiveThread);
+  const unarchiveThread = useThreadStore((s) => s.unarchiveThread);
   const deleteThread = useThreadStore((s) => s.deleteThread);
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const projects = useAppStore((s) => s.projects);
   const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
   const defaultThreadMode = useSettingsStore((s) => s.defaultThreadMode);
-  const allowedTools = useSettingsStore((s) => s.allowedTools);
+  const toolPermissions = useSettingsStore((s) => s.toolPermissions);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{
     threadId: string;
@@ -284,10 +273,12 @@ export function KanbanView({ threads, projectId, search }: KanbanViewProps) {
 
   const [slideUpOpen, setSlideUpOpen] = useState(false);
   const [slideUpProjectId, setSlideUpProjectId] = useState<string | undefined>(undefined);
+  const [slideUpStage, setSlideUpStage] = useState<ThreadStage>('backlog');
   const [creating, setCreating] = useState(false);
 
-  const handleAddThread = useCallback((threadProjectId: string) => {
+  const handleAddThread = useCallback((threadProjectId: string, stage: ThreadStage) => {
     setSlideUpProjectId(threadProjectId);
+    setSlideUpStage(stage);
     setSlideUpOpen(true);
   }, []);
 
@@ -320,29 +311,52 @@ export function KanbanView({ threads, projectId, search }: KanbanViewProps) {
 
     const threadMode = (opts.threadMode as 'local' | 'worktree') || defaultThreadMode;
 
-    const result = await api.createThread({
-      projectId: slideUpProjectId,
-      title: prompt.slice(0, 200),
-      mode: threadMode,
-      model: opts.model,
-      permissionMode: opts.mode,
-      baseBranch: opts.baseBranch,
-      prompt,
-      images,
-      allowedTools,
-    });
+    if (slideUpStage === 'backlog') {
+      // Create idle thread (backlog)
+      const result = await api.createIdleThread({
+        projectId: slideUpProjectId,
+        title: prompt.slice(0, 200),
+        mode: threadMode,
+        baseBranch: opts.baseBranch,
+        prompt,
+      });
 
-    if (result.isErr()) {
-      toast.error(result.error.message);
+      if (result.isErr()) {
+        toast.error(result.error.message);
+        setCreating(false);
+        return;
+      }
+
+      await loadThreadsForProject(slideUpProjectId);
       setCreating(false);
-      return;
-    }
+      toast.success(t('toast.threadCreated', { title: prompt.slice(0, 200) }));
+    } else {
+      // Create and execute thread (in_progress)
+      const { allowedTools, disallowedTools } = deriveToolLists(toolPermissions);
+      const result = await api.createThread({
+        projectId: slideUpProjectId,
+        title: prompt.slice(0, 200),
+        mode: threadMode,
+        model: opts.model,
+        permissionMode: opts.mode,
+        baseBranch: opts.baseBranch,
+        prompt,
+        images,
+        allowedTools,
+        disallowedTools,
+      });
 
-    await loadThreadsForProject(slideUpProjectId);
-    setCreating(false);
-    toast.success(t('toast.threadCreated', { title: prompt.slice(0, 200) }));
-    navigate(`/projects/${slideUpProjectId}/threads/${result.value.id}`);
-  }, [slideUpProjectId, creating, defaultThreadMode, allowedTools, loadThreadsForProject, navigate, t]);
+      if (result.isErr()) {
+        toast.error(result.error.message);
+        setCreating(false);
+        return;
+      }
+
+      await loadThreadsForProject(slideUpProjectId);
+      setCreating(false);
+      toast.success(t('toast.threadCreated', { title: prompt.slice(0, 200) }));
+    }
+  }, [slideUpProjectId, slideUpStage, creating, defaultThreadMode, toolPermissions, loadThreadsForProject, t]);
 
   const projectInfoById = useMemo(() => {
     if (projectId) return undefined;
@@ -357,10 +371,11 @@ export function KanbanView({ threads, projectId, search }: KanbanViewProps) {
       in_progress: [],
       review: [],
       done: [],
+      archived: [],
     };
 
     for (const thread of threads) {
-      const stage = thread.stage || 'backlog';
+      const stage = thread.archived ? 'archived' : (thread.stage || 'backlog');
       if (map[stage]) {
         map[stage].push(thread);
       }
@@ -399,9 +414,18 @@ export function KanbanView({ threads, projectId, search }: KanbanViewProps) {
       if (newStage === sourceStage) return;
 
       const targetProjectId = projectId || threadProjectId;
-      updateThreadStage(threadId, targetProjectId, newStage);
+
+      if (newStage === 'archived') {
+        // Dragging to archived column → archive the thread
+        archiveThread(threadId, targetProjectId);
+      } else if (sourceStage === 'archived') {
+        // Dragging from archived column → unarchive and set new stage
+        unarchiveThread(threadId, targetProjectId, newStage);
+      } else {
+        updateThreadStage(threadId, targetProjectId, newStage);
+      }
     },
-    [projectId, updateThreadStage]
+    [projectId, updateThreadStage, archiveThread, unarchiveThread]
   );
 
   useEffect(() => {

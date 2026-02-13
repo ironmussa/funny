@@ -41,7 +41,7 @@ function TypeBadge({ type }: { type: McpServerType }) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium uppercase tracking-wider',
+        'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium uppercase tracking-wider',
         type === 'http'
           ? 'bg-blue-500/10 text-blue-500'
           : type === 'sse'
@@ -93,7 +93,7 @@ function InstalledServerCard({
               <span className="text-sm font-medium truncate">{server.name}</span>
               <TypeBadge type={server.type} />
               {server.status === 'needs_auth' && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-amber-500/10 text-amber-500">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-500/10 text-amber-500">
                   <ShieldAlert className="h-2.5 w-2.5" />
                   {t('mcp.needsAuth')}
                 </span>

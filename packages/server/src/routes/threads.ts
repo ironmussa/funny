@@ -114,7 +114,7 @@ threadRoutes.post('/', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(createThreadSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { projectId, title, mode, model, permissionMode, baseBranch, prompt, images, allowedTools } = parsed.value;
+  const { projectId, title, mode, model, permissionMode, baseBranch, prompt, images, allowedTools, disallowedTools } = parsed.value;
 
   const projectResult = requireProject(projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
@@ -165,7 +165,7 @@ threadRoutes.post('/', async (c) => {
   const cwd = worktreePath ?? project.path;
 
   const pMode = permissionMode || 'autoEdit';
-  startAgent(threadId, prompt, cwd, model || 'sonnet', pMode, images, undefined, allowedTools).catch((err) => {
+  startAgent(threadId, prompt, cwd, model || 'sonnet', pMode, images, disallowedTools, allowedTools).catch((err) => {
     console.error(`[agent] Error in thread ${threadId}:`, err);
     tm.updateThread(threadId, { status: 'failed', completedAt: new Date().toISOString() });
   });
@@ -179,7 +179,7 @@ threadRoutes.post('/:id/message', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(sendMessageSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { content, model, permissionMode, images, allowedTools } = parsed.value;
+  const { content, model, permissionMode, images, allowedTools, disallowedTools } = parsed.value;
 
   const threadResult = requireThread(id);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
@@ -191,7 +191,7 @@ threadRoutes.post('/:id/message', async (c) => {
   const effectiveModel = (model || 'sonnet') as import('@a-parallel/shared').ClaudeModel;
   const effectivePermission = (permissionMode || thread.permissionMode || 'autoEdit') as import('@a-parallel/shared').PermissionMode;
 
-  startAgent(id, content, cwd, effectiveModel, effectivePermission, images, undefined, allowedTools).catch(console.error);
+  startAgent(id, content, cwd, effectiveModel, effectivePermission, images, disallowedTools, allowedTools).catch(console.error);
   return c.json({ ok: true });
 });
 
@@ -207,7 +207,7 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(approveToolSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { toolName, approved, allowedTools: clientAllowedTools } = parsed.value;
+  const { toolName, approved, allowedTools: clientAllowedTools, disallowedTools: clientDisallowedTools } = parsed.value;
 
   const threadResult = requireThread(id);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
@@ -223,10 +223,11 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
   ];
 
   if (approved) {
-    // Add the approved tool to allowedTools and resume
+    // Add the approved tool to allowedTools and remove from disallowedTools
     if (!tools.includes(toolName)) {
       tools.push(toolName);
     }
+    const disallowed = clientDisallowedTools?.filter(t => t !== toolName);
     const message = `The user has approved the use of ${toolName}. Please proceed with using it.`;
     startAgent(
       id,
@@ -235,7 +236,7 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
       thread.model as import('@a-parallel/shared').ClaudeModel || 'sonnet',
       thread.permissionMode as import('@a-parallel/shared').PermissionMode || 'autoEdit',
       undefined,
-      undefined,
+      disallowed,
       tools
     ).catch(console.error);
   } else {
@@ -248,7 +249,7 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
       thread.model as import('@a-parallel/shared').ClaudeModel || 'sonnet',
       thread.permissionMode as import('@a-parallel/shared').PermissionMode || 'autoEdit',
       undefined,
-      undefined,
+      clientDisallowedTools,
       clientAllowedTools
     ).catch(console.error);
   }

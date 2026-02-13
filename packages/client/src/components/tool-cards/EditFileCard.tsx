@@ -17,7 +17,7 @@ export function EditFileCard({ parsed, hideLabel }: { parsed: Record<string, unk
   }, [filePath, oldString, newString]);
 
   return (
-    <div className={cn("text-sm w-full min-w-0 overflow-hidden", !hideLabel && "rounded-md border border-border/60 bg-muted/30")}>
+    <div className="text-sm w-full min-w-0 overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs hover:bg-accent/30 transition-colors rounded-md overflow-hidden"
@@ -29,12 +29,12 @@ export function EditFileCard({ parsed, hideLabel }: { parsed: Record<string, unk
           )}
         />
         {!hideLabel && <FilePen className="h-3 w-3 flex-shrink-0 text-muted-foreground" />}
-        {!hideLabel && <span className="font-medium text-foreground flex-shrink-0">{t('tools.editFile')}</span>}
+        {!hideLabel && <span className="font-medium font-mono text-foreground flex-shrink-0">{t('tools.editFile')}</span>}
         {filePath && (
           <a
             href={toVscodeUri(filePath)}
             onClick={(e) => e.stopPropagation()}
-            className="text-muted-foreground truncate font-mono text-[11px] min-w-0 hover:text-primary hover:underline"
+            className="text-muted-foreground truncate font-mono text-xs min-w-0 hover:text-primary hover:underline"
             title={t('tools.openInVSCode', { path: filePath })}
           >
             {filePath}
@@ -43,7 +43,7 @@ export function EditFileCard({ parsed, hideLabel }: { parsed: Record<string, unk
       </button>
       {expanded && hasDiff && (
         <div className="border-t border-border/40 overflow-hidden">
-          <div className="text-xs max-h-80 overflow-y-auto overflow-x-auto [&_.diff-container]:font-mono [&_.diff-container]:text-[11px]">
+          <div className="text-xs max-h-80 overflow-y-auto overflow-x-auto [&_.diff-container]:font-mono [&_.diff-container]:text-sm">
             <Suspense fallback={<div className="p-2 text-xs text-muted-foreground">Loading diff...</div>}>
               <ReactDiffViewer
                 oldValue={oldString || ''}

@@ -97,7 +97,7 @@ export function AutomationInboxView() {
             Automation Inbox
           </h2>
           {inboxCount > 0 && (
-            <Badge className="h-5 min-w-5 justify-center rounded-full px-1 text-[10px] leading-none">
+            <Badge className="h-5 min-w-5 justify-center rounded-full px-1 text-xs leading-none">
               {inboxCount}
             </Badge>
           )}
@@ -135,7 +135,7 @@ export function AutomationInboxView() {
               {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
               {count > 0 && (
                 <span className={cn(
-                  'ml-1.5 text-[10px] px-1.5 py-0.5 rounded-full',
+                  'ml-1.5 text-xs px-1.5 py-0.5 rounded-full',
                   isActive
                     ? 'bg-primary/10 text-primary'
                     : 'bg-muted text-muted-foreground'
@@ -247,14 +247,14 @@ export function AutomationInboxView() {
                     </div>
                     <div className="flex items-center gap-2">
                       <span className={cn(
-                        'text-[10px] px-1.5 py-0.5 rounded-full',
+                        'text-xs px-1.5 py-0.5 rounded-full',
                         run.hasFindings
                           ? 'bg-amber-500/10 text-amber-500'
                           : 'bg-muted text-muted-foreground'
                       )}>
                         {run.hasFindings ? 'Has findings' : 'No findings'}
                       </span>
-                      <span className="text-[10px] text-muted-foreground">
+                      <span className="text-xs text-muted-foreground">
                         {run.completedAt ? new Date(run.completedAt).toLocaleString() : ''}
                       </span>
                     </div>

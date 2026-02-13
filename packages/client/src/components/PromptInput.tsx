@@ -121,7 +121,7 @@ function SearchablePicker({
     <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setSearch(''); setHighlightIndex(-1); } }}>
       <PopoverTrigger asChild>
         <button
-          className={triggerClassName ?? 'flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted truncate max-w-[300px]'}
+          className={triggerClassName ?? 'flex items-center gap-1 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted truncate max-w-[300px]'}
           title={triggerTitle}
         >
           <GitBranch className="h-3 w-3 shrink-0" />
@@ -136,7 +136,7 @@ function SearchablePicker({
         onOpenAutoFocus={(e) => { e.preventDefault(); searchInputRef.current?.focus(); }}
       >
         <div className="px-3 py-2 border-b border-border bg-muted/30">
-          <p className="text-[11px] font-medium text-muted-foreground">{label}</p>
+          <p className="text-sm font-medium text-muted-foreground">{label}</p>
         </div>
         <div className="px-2 py-1.5 border-b border-border">
           <input
@@ -146,19 +146,19 @@ function SearchablePicker({
             onChange={(e) => setSearch(e.target.value)}
             onKeyDown={handleSearchKeyDown}
             placeholder={searchPlaceholder}
-            className="w-full bg-transparent text-[11px] placeholder:text-muted-foreground focus:outline-none"
+            className="w-full bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
           />
         </div>
         <ScrollArea className="flex-1 min-h-0" style={{ maxHeight: '240px' }}>
           <div className="p-1" ref={listRef}>
             {loading && items.length === 0 && loadingText && (
-              <p className="text-[11px] text-muted-foreground text-center py-3">{loadingText}</p>
+              <p className="text-sm text-muted-foreground text-center py-3">{loadingText}</p>
             )}
             {!loading && items.length === 0 && emptyText && (
-              <p className="text-[11px] text-muted-foreground text-center py-3">{emptyText}</p>
+              <p className="text-sm text-muted-foreground text-center py-3">{emptyText}</p>
             )}
             {!loading && items.length > 0 && filtered.length === 0 && (
-              <p className="text-[11px] text-muted-foreground text-center py-3">{noMatchText}</p>
+              <p className="text-sm text-muted-foreground text-center py-3">{noMatchText}</p>
             )}
             {filtered.map((item, i) => (
               <button
@@ -169,7 +169,7 @@ function SearchablePicker({
                 onFocus={() => setHighlightIndex(i)}
                 onMouseEnter={() => { setHighlightIndex(i); itemRefs.current[i]?.focus(); }}
                 className={cn(
-                  'w-full flex items-center gap-2 rounded px-2 py-1.5 text-left text-[11px] transition-colors outline-none',
+                  'w-full flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors outline-none',
                   i === highlightIndex
                     ? 'bg-accent text-foreground'
                     : item.isSelected
@@ -188,7 +188,7 @@ function SearchablePicker({
                     )}
                   </div>
                   {item.detail && (
-                    <span className="text-[10px] text-muted-foreground/70 truncate block font-mono">
+                    <span className="text-xs text-muted-foreground/70 truncate block font-mono">
                       {item.detail}
                     </span>
                   )}
@@ -286,7 +286,7 @@ function BranchPicker({
       searchPlaceholder={t('newThread.searchBranches', 'Search branches...')}
       noMatchText={t('newThread.noBranchesMatch', 'No branches match')}
       onSelect={(branch) => onChange(branch)}
-      triggerClassName="flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted truncate max-w-[200px]"
+      triggerClassName="flex items-center gap-1 px-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted truncate max-w-[200px]"
       width="w-64"
     />
   );
@@ -715,7 +715,7 @@ export function PromptInput({
                     onChange={setCwdOverride}
                   />
                 ) : (activeThread?.branch || localCurrentBranch) ? (
-                  <span className="flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground truncate max-w-[300px]">
+                  <span className="flex items-center gap-1 px-2 py-1 text-sm text-muted-foreground truncate max-w-[300px]">
                     <GitBranch className="h-3 w-3 shrink-0" />
                     <span className="truncate font-mono">{activeThread?.branch || localCurrentBranch}</span>
                   </span>
@@ -727,7 +727,7 @@ export function PromptInput({
                     <button
                       onClick={() => setThreadMode('local')}
                       className={cn(
-                        'px-2 py-1 text-[11px] flex items-center gap-1 transition-colors',
+                        'px-2 py-1 text-sm flex items-center gap-1 transition-colors',
                         threadMode === 'local' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
                       )}
                     >
@@ -737,7 +737,7 @@ export function PromptInput({
                     <button
                       onClick={() => setThreadMode('worktree')}
                       className={cn(
-                        'px-2 py-1 text-[11px] flex items-center gap-1 transition-colors',
+                        'px-2 py-1 text-sm flex items-center gap-1 transition-colors',
                         threadMode === 'worktree' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
                       )}
                     >
@@ -746,7 +746,7 @@ export function PromptInput({
                     </button>
                   </div>
                   {threadMode === 'local' && newThreadCurrentBranch && (
-                    <span className="flex items-center gap-1 px-2 py-1 text-[11px] text-muted-foreground truncate max-w-[300px]">
+                    <span className="flex items-center gap-1 px-2 py-1 text-sm text-muted-foreground truncate max-w-[300px]">
                       <GitBranch className="h-3 w-3 shrink-0" />
                       <span className="truncate font-mono">{newThreadCurrentBranch}</span>
                     </span>

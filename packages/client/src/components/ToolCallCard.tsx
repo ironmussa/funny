@@ -49,7 +49,7 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
   if (name === 'AskUserQuestion') return <AskQuestionCard parsed={parsed} onRespond={onRespond} hideLabel={hideLabel} />;
 
   return (
-    <div className={cn("text-sm max-w-full overflow-hidden", !hideLabel && "rounded-md border border-border/60 bg-muted/30")}>
+    <div className="text-sm max-w-full overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs hover:bg-accent/30 transition-colors rounded-md overflow-hidden"
@@ -75,13 +75,13 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
             <a
               href={toVscodeUri(filePath)}
               onClick={(e) => e.stopPropagation()}
-              className="text-muted-foreground truncate font-mono text-[11px] min-w-0 hover:text-primary hover:underline"
+              className="text-muted-foreground truncate font-mono text-sm min-w-0 hover:text-primary hover:underline"
               title={t('tools.openInVSCode', { path: filePath })}
             >
               {summary}
             </a>
           ) : (
-            <span className="text-muted-foreground truncate font-mono text-[11px] min-w-0">
+            <span className="text-muted-foreground truncate font-mono text-sm min-w-0">
               {summary}
             </span>
           )
@@ -89,7 +89,7 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
       </button>
       {!expanded && outputPreview && (
         <div className="px-3 pb-1.5 -mt-0.5">
-          <p className="text-[10px] font-mono text-muted-foreground/70 truncate leading-tight">
+          <p className="text-xs font-mono text-muted-foreground/70 truncate leading-tight">
             → {outputPreview}
           </p>
         </div>
@@ -103,9 +103,9 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
               <div className="space-y-1.5 mt-1.5">
                 {Object.entries(parsed).map(([key, value]) => (
                   <div key={key}>
-                    <div className="text-[10px] font-semibold text-muted-foreground uppercase mb-0.5">{key}</div>
+                    <div className="text-xs font-semibold text-muted-foreground uppercase mb-0.5">{key}</div>
                     <div className="rounded bg-background/80 border border-border/40 px-2.5 py-1.5 overflow-x-auto">
-                      <pre className="font-mono text-[11px] text-foreground/80 leading-relaxed whitespace-pre-wrap break-all">
+                      <pre className="font-mono text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap break-all">
                         {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
                       </pre>
                     </div>
@@ -114,9 +114,9 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
               </div>
               {output && (
                 <div className="mt-2">
-                  <div className="text-[10px] font-semibold text-muted-foreground uppercase mb-1">{t('tools.output')}</div>
+                  <div className="text-xs font-semibold text-muted-foreground uppercase mb-1">{t('tools.output')}</div>
                   <div className="rounded bg-background/80 border border-border/40 px-2.5 py-1.5 overflow-x-auto max-h-60 overflow-y-auto">
-                    <pre className="font-mono text-[11px] text-muted-foreground leading-relaxed whitespace-pre-wrap break-all">{output}</pre>
+                    <pre className="font-mono text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-all">{output}</pre>
                   </div>
                 </div>
               )}
@@ -124,7 +124,7 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
                 <div className="flex justify-end pt-2">
                   <button
                     onClick={() => onRespond('Accepted')}
-                    className="flex items-center gap-1.5 px-3 py-1 rounded-md text-[11px] font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                    className="flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
                   >
                     <Check className="h-3 w-3" />
                     {t('tools.respond')}

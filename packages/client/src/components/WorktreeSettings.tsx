@@ -57,12 +57,12 @@ function WorktreeCard({
           </div>
           <div className="flex items-center gap-2 mt-0.5">
             <FolderOpen className="h-3 w-3 text-muted-foreground/70 flex-shrink-0" />
-            <span className="text-[10px] text-muted-foreground/70 truncate font-mono">
+            <span className="text-xs text-muted-foreground/70 truncate font-mono">
               {worktree.path}
             </span>
           </div>
           {worktree.commit && (
-            <span className="text-[10px] text-muted-foreground/70 font-mono">
+            <span className="text-xs text-muted-foreground/70 font-mono">
               {worktree.commit.slice(0, 8)}
             </span>
           )}

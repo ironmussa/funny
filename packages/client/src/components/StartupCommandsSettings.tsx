@@ -267,10 +267,10 @@ export function StartupCommandsSettings() {
               <span className="text-xs text-muted-foreground font-mono truncate block mt-0.5">{cmd.command}</span>
               <div className="flex items-center gap-3 mt-1">
                 {cmd.portEnvVar && (
-                  <span className="text-[10px] font-mono text-purple-400">{cmd.portEnvVar}</span>
+                  <span className="text-xs font-mono text-purple-400">{cmd.portEnvVar}</span>
                 )}
                 {cmd.port && (
-                  <span className="text-[10px] font-mono text-blue-400">:{cmd.port}</span>
+                  <span className="text-xs font-mono text-blue-400">:{cmd.port}</span>
                 )}
               </div>
             </div>

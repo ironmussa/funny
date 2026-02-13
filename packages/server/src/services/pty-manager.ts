@@ -1,26 +1,124 @@
 /**
- * PtyManager — spawns and manages interactive PTY sessions.
- * Streams data to clients via WebSocket (wsBroker).
+ * PtyManager — spawns and manages interactive PTY sessions via a helper Node.js process.
+ * This architecture avoids compatibility issues between Bun and node-pty on Windows.
  */
 
-import * as pty from 'node-pty';
+import { spawn, type ChildProcess } from 'child_process';
+import { join } from 'path';
+import { createInterface } from 'readline';
 import { wsBroker } from './ws-broker.js';
 
-const isWindows = process.platform === 'win32';
+let helperProcess: ChildProcess | null = null;
+let helperStdin: any = null; // Type as any to avoid strict stream types mismatch
+const pendingSpawns = new Set<string>();
 
-const defaultShell = isWindows ? 'powershell.exe' : (process.env.SHELL || 'bash');
+// Ensure helper is running
+function ensureHelper() {
+  if (helperProcess && !helperProcess.killed) return;
 
-interface PtySession {
-  process: pty.IPty;
-  userId: string;
-  /** Unique instance id to distinguish old vs new PTY with the same logical id */
-  instanceId: number;
-  /** Set to true when the underlying socket closes — writes must be skipped */
-  dead: boolean;
+  const helperPath = join(import.meta.dir, 'pty-helper.mjs');
+  console.log(`[pty-manager] Spawning helper process: node ${helperPath}`);
+
+  helperProcess = spawn('node', [helperPath], {
+    stdio: ['pipe', 'pipe', 'inherit'], // Pipe stdin/stdout, inherit stderr for logs
+    windowsHide: true,
+  });
+
+  helperStdin = helperProcess.stdin;
+
+  if (helperProcess.stdout) {
+    const rl = createInterface({
+      input: helperProcess.stdout,
+      terminal: false,
+    });
+
+    rl.on('line', (line) => {
+      if (!line.trim()) return;
+      try {
+        const msg = JSON.parse(line);
+        handleHelperMessage(msg);
+      } catch (err) {
+        console.error('[pty-manager] Failed to parse helper output:', line, err);
+      }
+    });
+  }
+
+  helperProcess.on('exit', (code) => {
+    console.warn(`[pty-manager] Helper process exited with code ${code}`);
+    helperProcess = null;
+    helperStdin = null;
+    // We might want to restart it immediately or on next demand
+    // For now, let next action trigger restart
+  });
 }
 
-let nextInstanceId = 1;
-const activePtys = new Map<string, PtySession>();
+function handleHelperMessage(msg: any) {
+  const { type, data } = msg;
+
+  switch (type) {
+    case 'pty:data':
+      if (data.ptyId) {
+        // If the PTY is associated with a specific user (we don't track user mapping easily here anymore 
+        // without complex state, so we broadcast to all sessions for now or check if we can retrieve it).
+        // 
+        // In the original code we had:
+        // if (userId && userId !== '__local__') wsBroker.emitToUser(userId, event);
+        // else wsBroker.emit(event);
+        //
+        // To keep it simple and since we lost the direct userId context in this event stream 
+        // (unless we store it in a map in this file), let's store it.
+
+        const session = activeSessions.get(data.ptyId);
+        const event = {
+          type: 'pty:data' as const,
+          threadId: '',
+          data: { ptyId: data.ptyId, data: data.data },
+        };
+
+        if (session?.userId && session.userId !== '__local__') {
+          wsBroker.emitToUser(session.userId, event);
+        } else {
+          wsBroker.emit(event);
+        }
+      }
+      break;
+
+    case 'pty:exit':
+      if (data.ptyId) {
+        const session = activeSessions.get(data.ptyId);
+        console.log(`[pty-manager] PTY ${data.ptyId} exited with code ${data.exitCode}`);
+
+        const event = {
+          type: 'pty:exit' as const,
+          threadId: '',
+          data: { ptyId: data.ptyId, exitCode: data.exitCode },
+        };
+
+        if (session?.userId && session.userId !== '__local__') {
+          wsBroker.emitToUser(session.userId, event);
+        } else {
+          wsBroker.emit(event);
+        }
+
+        activeSessions.delete(data.ptyId);
+      }
+      break;
+  }
+}
+
+// Track sessions just for user mapping
+interface SessionMeta {
+  userId: string;
+  cwd: string;
+}
+const activeSessions = new Map<string, SessionMeta>();
+
+function sendToHelper(type: string, args: any) {
+  ensureHelper();
+  if (helperStdin) {
+    helperStdin.write(JSON.stringify({ type, ...args }) + '\n');
+  }
+}
 
 export function spawnPty(
   id: string,
@@ -29,120 +127,34 @@ export function spawnPty(
   rows: number,
   userId: string,
 ): void {
-  // If a PTY with this ID already exists, keep it alive.
-  // Killing and re-spawning on Windows causes CTRL_C to propagate
-  // to the new process, killing it immediately.
-  if (activePtys.has(id)) {
-    return;
-  }
+  if (activeSessions.has(id)) return;
 
-  console.log(`[pty-manager] Spawning PTY ${id} in ${cwd} (${cols}x${rows})`);
+  console.log(`[pty-manager] Requesting spawn PTY ${id}`);
+  activeSessions.set(id, { userId, cwd });
 
-  const ptyProcess = pty.spawn(defaultShell, [], {
-    name: 'xterm-256color',
-    cols,
-    rows,
-    cwd,
-    env: process.env as Record<string, string>,
-  });
-
-  // node-pty's WindowsTerminal re-throws socket errors unless the Terminal
-  // EventEmitter has >= 2 'error' listeners (see windowsTerminal.js L92).
-  // Adding two listeners prevents the unhandled throw when the socket closes
-  // during kill/respawn race conditions.
-  const ptyEmitter = ptyProcess as unknown as import('events').EventEmitter;
-  const onPtyError = (err: Error) => {
-    console.warn(`[pty-manager] PTY ${id} error: ${(err as any).code ?? err.message}`);
-  };
-  ptyEmitter.on('error', onPtyError);
-  ptyEmitter.on('error', onPtyError);
-
-  const myInstanceId = nextInstanceId++;
-  const session: PtySession = { process: ptyProcess, userId, instanceId: myInstanceId, dead: false };
-  activePtys.set(id, session);
-
-  // Track socket closure so we can skip writes to dead PTYs.
-  // Bun throws native socket errors that bypass JS try/catch.
-  const internalSocket = (ptyProcess as any)._socket;
-  if (internalSocket) {
-    internalSocket.on('close', () => { session.dead = true; });
-  }
-
-  ptyProcess.onData((data: string) => {
-    // Guard: ignore data from a replaced PTY instance
-    const current = activePtys.get(id);
-    if (!current || current.instanceId !== myInstanceId) return;
-
-    const event = {
-      type: 'pty:data' as const,
-      threadId: '',
-      data: { ptyId: id, data },
-    };
-    if (userId && userId !== '__local__') {
-      wsBroker.emitToUser(userId, event);
-    } else {
-      wsBroker.emit(event);
-    }
-  });
-
-  ptyProcess.onExit(({ exitCode }) => {
-    // Only act if this is still the current instance —
-    // a newer PTY may have already replaced us under the same id.
-    const current = activePtys.get(id);
-    if (!current || current.instanceId !== myInstanceId) {
-      // Stale exit from a replaced PTY — ignore silently
-      return;
-    }
-    console.log(`[pty-manager] PTY ${id} exited with code ${exitCode}`);
-    activePtys.delete(id);
-    const event = {
-      type: 'pty:exit' as const,
-      threadId: '',
-      data: { ptyId: id, exitCode },
-    };
-    if (userId && userId !== '__local__') {
-      wsBroker.emitToUser(userId, event);
-    } else {
-      wsBroker.emit(event);
-    }
-  });
+  sendToHelper('spawn', { id, cwd, cols, rows, env: process.env });
 }
 
 export function writePty(id: string, data: string): void {
-  const session = activePtys.get(id);
-  if (!session || session.dead) return;
-  try {
-    session.process.write(data);
-  } catch {
-    session.dead = true;
-  }
+  sendToHelper('write', { id, data });
 }
 
 export function resizePty(id: string, cols: number, rows: number): void {
-  const session = activePtys.get(id);
-  if (!session || session.dead) return;
-  try {
-    session.process.resize(cols, rows);
-  } catch {
-    session.dead = true;
-  }
+  sendToHelper('resize', { id, cols, rows });
 }
 
 export function killPty(id: string): void {
-  const session = activePtys.get(id);
-  if (session) {
-    console.log(`[pty-manager] Killing PTY ${id}`);
-    activePtys.delete(id);
-    try {
-      session.process.kill();
-    } catch {
-      // Already dead — ignore
-    }
-  }
+  console.log(`[pty-manager] Requesting kill PTY ${id}`);
+  sendToHelper('kill', { id });
+  activeSessions.delete(id);
 }
 
 export function killAllPtys(): void {
-  for (const [id] of activePtys) {
-    killPty(id);
+  // If we kill the helper, all children die (usually)
+  if (helperProcess) {
+    helperProcess.kill();
+    helperProcess = null;
+    helperStdin = null;
   }
+  activeSessions.clear();
 }

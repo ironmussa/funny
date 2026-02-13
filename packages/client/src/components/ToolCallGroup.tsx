@@ -25,7 +25,7 @@ export function ToolCallGroup({ name, calls, onRespond }: ToolCallGroupProps) {
   const isTodo = name === 'TodoWrite';
 
   return (
-    <div className="rounded-md border border-border/60 bg-muted/30 text-sm max-w-full overflow-hidden">
+    <div className="text-sm max-w-full overflow-hidden">
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs hover:bg-accent/30 transition-colors rounded-md overflow-hidden"
@@ -42,7 +42,7 @@ export function ToolCallGroup({ name, calls, onRespond }: ToolCallGroupProps) {
           <Wrench className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
         )}
         <span className="font-medium font-mono text-foreground flex-shrink-0">{label}</span>
-        <span className="inline-flex items-center justify-center bg-muted-foreground/20 text-muted-foreground px-1.5 rounded-full text-[10px] font-medium leading-4">
+        <span className="inline-flex items-center justify-center bg-muted-foreground/20 text-muted-foreground px-1.5 rounded-full text-xs font-medium leading-4">
           ×{calls.length}
         </span>
       </button>

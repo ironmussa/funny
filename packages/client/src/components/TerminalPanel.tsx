@@ -1,6 +1,5 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { AnimatePresence, motion } from 'motion/react';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useAppStore } from '@/stores/app-store';
 import { api } from '@/lib/api';
@@ -20,6 +19,7 @@ import {
   ChevronDown,
   ChevronUp,
   Square,
+  GripHorizontal,
 } from 'lucide-react';
 
 const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown })
@@ -167,6 +167,7 @@ function WebTerminalTabContent({
           cursor: '#fafafa',
           selectionBackground: '#264f78',
         },
+        convertEol: true,
         scrollback: 5000,
       });
 
@@ -333,18 +334,17 @@ export function TerminalPanel() {
   const {
     tabs,
     activeTabId,
-    panelHeight,
     panelVisible,
     addTab,
     removeTab,
     setActiveTab,
-    setPanelHeight,
     togglePanel,
   } = useTerminalStore();
   const projects = useAppStore(s => s.projects);
   const selectedProjectId = useAppStore(s => s.selectedProjectId);
 
   const [dragging, setDragging] = useState(false);
+  const [panelHeight, setPanelHeight] = useState(300);
   const panelRef = useRef<HTMLDivElement>(null);
 
   // Filter tabs to only show the current project's terminals
@@ -361,8 +361,6 @@ export function TerminalPanel() {
     return visibleTabs[visibleTabs.length - 1]?.id ?? null;
   }, [activeTabId, visibleTabs]);
 
-  const hasAnyTabs = visibleTabs.length > 0;
-
   const handleMouseDown = useCallback(
     (e: React.MouseEvent) => {
       e.preventDefault();
@@ -372,7 +370,7 @@ export function TerminalPanel() {
 
       const onMouseMove = (ev: MouseEvent) => {
         const delta = startY - ev.clientY;
-        setPanelHeight(startHeight + delta);
+        setPanelHeight(Math.max(150, Math.min(startHeight + delta, 600)));
       };
 
       const onMouseUp = () => {
@@ -384,7 +382,7 @@ export function TerminalPanel() {
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
     },
-    [panelHeight, setPanelHeight]
+    [panelHeight]
   );
 
   const handleNewTerminal = useCallback(() => {
@@ -399,7 +397,7 @@ export function TerminalPanel() {
       cwd,
       alive: true,
       projectId: selectedProjectId,
-      type: isTauri ? undefined : 'pty', // Web mode uses PTY type
+      type: isTauri ? undefined : 'pty',
     });
   }, [projects, selectedProjectId, visibleTabs.length, addTab]);
 
@@ -410,24 +408,28 @@ export function TerminalPanel() {
     [removeTab]
   );
 
-  // Only show when explicitly toggled visible from the header button
+  // Don't render at all if no tabs and not visible
   if (!panelVisible && !isTauri) return null;
 
   return (
     <div
       ref={panelRef}
-      className="flex flex-col border-t border-border"
-      style={{ height: panelVisible ? panelHeight : 'auto' }}
+      className={cn(
+        'flex flex-col border-t border-border transition-[height] duration-200 ease-out overflow-hidden',
+      )}
+      style={{ height: panelVisible ? panelHeight : 32 }}
     >
-      {/* Resize handle */}
+      {/* Drag handle */}
       {panelVisible && (
         <div
           className={cn(
-            'h-1 cursor-row-resize hover:bg-primary/20 transition-colors flex-shrink-0',
+            'flex items-center justify-center h-2 cursor-row-resize hover:bg-primary/20 transition-colors flex-shrink-0 group',
             dragging && 'bg-primary/30'
           )}
           onMouseDown={handleMouseDown}
-        />
+        >
+          <GripHorizontal className="h-3 w-3 text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors" />
+        </div>
       )}
 
       {/* Tab bar */}
@@ -469,7 +471,7 @@ export function TerminalPanel() {
             >
               <span>{tab.label}</span>
               {!tab.alive && (
-                <span className="text-[10px] text-yellow-400">{t('terminal.exited')}</span>
+                <span className="text-xs text-yellow-400">{t('terminal.exited')}</span>
               )}
               <X
                 className="h-3 w-3 ml-1 opacity-60 hover:opacity-100"
@@ -497,52 +499,39 @@ export function TerminalPanel() {
       </div>
 
       {/* Terminal content area */}
-      <AnimatePresence>
-        {panelVisible && (
-          <motion.div
-            key="terminal-content"
-            initial={{ height: 0, opacity: 0 }}
-            animate={{ height: 'auto', opacity: 1 }}
-            exit={{ height: 0, opacity: 0 }}
-            transition={{ duration: 0.2, ease: 'easeOut' }}
-            className="flex-1 bg-[#09090b] overflow-hidden min-h-0"
-          >
-            {visibleTabs.length === 0 ? (
-              <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
-                {t('terminal.noProcesses')}
-              </div>
-            ) : (
-              /* Render ALL tabs to keep PTY sessions alive across project switches,
-                 but only show the active tab from the current project */
-              tabs.map((tab) =>
-                tab.commandId ? (
-                  <CommandTabContent
-                    key={tab.id}
-                    commandId={tab.commandId}
-                    projectId={tab.projectId}
-                    active={tab.id === effectiveActiveTabId}
-                    alive={tab.alive}
-                  />
-                ) : tab.type === 'pty' ? (
-                  <WebTerminalTabContent
-                    key={tab.id}
-                    id={tab.id}
-                    cwd={tab.cwd}
-                    active={tab.id === effectiveActiveTabId}
-                  />
-                ) : isTauri ? (
-                  <TauriTerminalTabContent
-                    key={tab.id}
-                    id={tab.id}
-                    cwd={tab.cwd}
-                    active={tab.id === effectiveActiveTabId}
-                  />
-                ) : null
-              )
-            )}
-          </motion.div>
+      <div className="flex-1 bg-[#09090b] overflow-hidden min-h-0">
+        {visibleTabs.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
+            {t('terminal.noProcesses')}
+          </div>
+        ) : (
+          tabs.map((tab) =>
+            tab.commandId ? (
+              <CommandTabContent
+                key={tab.id}
+                commandId={tab.commandId}
+                projectId={tab.projectId}
+                active={tab.id === effectiveActiveTabId}
+                alive={tab.alive}
+              />
+            ) : tab.type === 'pty' ? (
+              <WebTerminalTabContent
+                key={tab.id}
+                id={tab.id}
+                cwd={tab.cwd}
+                active={tab.id === effectiveActiveTabId}
+              />
+            ) : isTauri ? (
+              <TauriTerminalTabContent
+                key={tab.id}
+                id={tab.id}
+                cwd={tab.cwd}
+                active={tab.id === effectiveActiveTabId}
+              />
+            ) : null
+          )
         )}
-      </AnimatePresence>
+      </div>
     </div>
   );
 }

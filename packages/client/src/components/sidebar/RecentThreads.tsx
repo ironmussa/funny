@@ -42,7 +42,7 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
 
     for (const [projectId, threads] of Object.entries(threadsByProject)) {
       for (const thread of threads) {
-        if (FINISHED_STATUSES.includes(thread.status)) {
+        if (FINISHED_STATUSES.includes(thread.status) && !thread.archived) {
           const project = projectMap.get(projectId);
           result.push({
             ...thread,

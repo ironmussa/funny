@@ -436,7 +436,7 @@ function ChatView({
                   >
                     {msg.role !== 'user' && <CopyButton content={msg.content} />}
                     {msg.role !== 'user' && (
-                      <span className="text-[10px] font-medium uppercase text-muted-foreground block mb-0.5">
+                      <span className="text-xs font-medium uppercase text-muted-foreground block mb-0.5">
                         {msg.role}
                       </span>
                     )}

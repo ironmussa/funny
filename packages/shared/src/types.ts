@@ -83,7 +83,7 @@ export interface Project {
 
 export type ThreadMode = 'local' | 'worktree';
 export type ThreadStatus = 'idle' | 'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'stopped' | 'interrupted';
-export type ThreadStage = 'backlog' | 'in_progress' | 'review' | 'done';
+export type ThreadStage = 'backlog' | 'in_progress' | 'review' | 'done' | 'archived';
 export type WaitingReason = 'question' | 'plan' | 'permission';
 
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku';
@@ -303,6 +303,8 @@ export interface CreateProjectRequest {
   path: string;
 }
 
+export type ToolPermission = 'allow' | 'ask' | 'deny';
+
 export interface CreateThreadRequest {
   title: string;
   mode: ThreadMode;
@@ -311,6 +313,7 @@ export interface CreateThreadRequest {
   baseBranch?: string;
   prompt: string;
   allowedTools?: string[];
+  disallowedTools?: string[];
 }
 
 export interface SendMessageRequest {
@@ -319,6 +322,7 @@ export interface SendMessageRequest {
   permissionMode?: PermissionMode;
   images?: ImageAttachment[];
   allowedTools?: string[];
+  disallowedTools?: string[];
 }
 
 export interface StageRequest {

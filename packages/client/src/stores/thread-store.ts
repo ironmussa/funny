@@ -53,6 +53,7 @@ export interface ThreadState {
   loadThreadsForProject: (projectId: string) => Promise<void>;
   selectThread: (threadId: string | null) => Promise<void>;
   archiveThread: (threadId: string, projectId: string) => Promise<void>;
+  unarchiveThread: (threadId: string, projectId: string, stage: ThreadStage) => Promise<void>;
   pinThread: (threadId: string, projectId: string, pinned: boolean) => Promise<void>;
   updateThreadStage: (threadId: string, projectId: string, stage: ThreadStage) => Promise<void>;
   deleteThread: (threadId: string, projectId: string) => Promise<void>;
@@ -100,7 +101,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     const promise = (async () => {
       try {
-        const result = await api.listThreads(projectId);
+        const result = await api.listThreads(projectId, true);
         if (result.isOk()) {
           set((state) => ({
             threadsByProject: { ...state.threadsByProject, [projectId]: result.value },
@@ -189,18 +190,35 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const result = await api.archiveThread(threadId, true);
     if (result.isErr()) return;
     cleanupThreadActor(threadId);
-    const { threadsByProject, selectedThreadId } = get();
+    const { threadsByProject, activeThread } = get();
     const projectThreads = threadsByProject[projectId] ?? [];
     set({
       threadsByProject: {
         ...threadsByProject,
-        [projectId]: projectThreads.filter((t) => t.id !== threadId),
+        [projectId]: projectThreads.map((t) =>
+          t.id === threadId ? { ...t, archived: true } : t
+        ),
       },
+      activeThread: activeThread?.id === threadId ? { ...activeThread, archived: true } : activeThread,
     });
-    if (selectedThreadId === threadId) {
-      set({ selectedThreadId: null, activeThread: null });
-      useProjectStore.setState({ selectedProjectId: null });
-    }
+  },
+
+  unarchiveThread: async (threadId, projectId, stage) => {
+    const result = await api.archiveThread(threadId, false);
+    if (result.isErr()) return;
+    // Also update the stage
+    await api.updateThreadStage(threadId, stage);
+    const { threadsByProject, activeThread } = get();
+    const projectThreads = threadsByProject[projectId] ?? [];
+    set({
+      threadsByProject: {
+        ...threadsByProject,
+        [projectId]: projectThreads.map((t) =>
+          t.id === threadId ? { ...t, archived: false, stage } : t
+        ),
+      },
+      activeThread: activeThread?.id === threadId ? { ...activeThread, archived: false, stage } : activeThread,
+    });
   },
 
   pinThread: async (threadId, projectId, pinned) => {

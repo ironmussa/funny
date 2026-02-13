@@ -165,6 +165,39 @@ app.post('/open-directory', async (c) => {
   return c.json({ ok: true });
 });
 
+// Open project in editor
+app.post('/open-in-editor', async (c) => {
+  const { path: dirPath, editor } = await c.req.json<{ path: string; editor: string }>();
+  if (!dirPath) return c.json({ error: 'path is required' }, 400);
+  if (!editor) return c.json({ error: 'editor is required' }, 400);
+
+  const denied = checkAllowedPath(dirPath);
+  if (denied) return denied;
+
+  const editorCommands: Record<string, { cmd: string; args: string[] }> = {
+    vscode: { cmd: 'code', args: [dirPath] },
+    cursor: { cmd: 'cursor', args: [dirPath] },
+    windsurf: { cmd: 'windsurf', args: [dirPath] },
+    zed: { cmd: 'zed', args: [dirPath] },
+    sublime: { cmd: 'subl', args: [dirPath] },
+    vim: platform() === 'win32'
+      ? { cmd: 'cmd', args: ['/c', 'start', 'cmd', '/k', 'vim', dirPath] }
+      : { cmd: 'x-terminal-emulator', args: ['-e', 'vim', dirPath] },
+  };
+
+  const editorConfig = editorCommands[editor];
+  if (!editorConfig) return c.json({ error: `Unknown editor: ${editor}` }, 400);
+
+  try {
+    Bun.spawn([editorConfig.cmd, ...editorConfig.args], {
+      stdio: ['ignore', 'ignore', 'ignore'],
+    });
+    return c.json({ ok: true });
+  } catch (error: any) {
+    return c.json({ error: `Failed to open editor: ${error.message}` }, 500);
+  }
+});
+
 // Open terminal at directory
 app.post('/open-terminal', async (c) => {
   const { path: dirPath } = await c.req.json<{ path: string }>();

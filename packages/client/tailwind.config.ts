@@ -5,6 +5,10 @@ const config: Config = {
   content: ['./index.html', './src/**/*.{ts,tsx}'],
   theme: {
   	extend: {
+  		fontFamily: {
+  			sans: ['Geist Sans Variable', 'sans-serif'],
+  			mono: ['Geist Mono Variable', 'ui-monospace', 'monospace']
+  		},
   		colors: {
   			border: 'hsl(var(--border))',
   			input: 'hsl(var(--input))',

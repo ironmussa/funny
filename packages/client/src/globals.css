@@ -163,10 +163,6 @@
     padding-right: 36px;
   }
 
-  /* Force grabbing cursor globally during dnd-kit drag */
-  body.dragging, body.dragging * {
-    cursor: grabbing !important;
-  }
 
   /* Terminal panel xterm.js overrides */
   .xterm {

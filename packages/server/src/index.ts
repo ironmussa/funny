@@ -32,7 +32,7 @@ import * as ptyManager from './services/pty-manager.js';
 // Resolve client dist directory (works both in dev and when installed via npm)
 const clientDistDir = resolve(
   import.meta.dir,
-  '..', '..', '..', 'client', 'dist'
+  '..', '..', 'client', 'dist'
 );
 
 const port = Number(process.env.PORT) || 3001;

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
@@ -24,8 +24,7 @@ import {
 import type { Project, Thread } from '@a-parallel/shared';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { ThreadItem } from './ThreadItem';
-import { useSortable } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 
 interface ProjectItemProps {
   project: Project;
@@ -64,20 +63,32 @@ export function ProjectItem({
   const [openDropdown, setOpenDropdown] = useState(false);
   const gitStatusByThread = useGitStatusStore((s) => s.statusByThread);
 
-  const {
-    attributes,
-    listeners,
-    setNodeRef,
-    transform,
-    transition,
-    isDragging,
-  } = useSortable({ id: project.id });
+  const dragRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [isDropTarget, setIsDropTarget] = useState(false);
 
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : 1,
-  };
+  useEffect(() => {
+    const el = dragRef.current;
+    if (!el) return;
+
+    const cleanupDrag = draggable({
+      element: el,
+      getInitialData: () => ({ type: 'sidebar-project', projectId: project.id }),
+      onDragStart: () => setIsDragging(true),
+      onDrop: () => setIsDragging(false),
+    });
+
+    const cleanupDrop = dropTargetForElements({
+      element: el,
+      getData: () => ({ type: 'sidebar-project', projectId: project.id }),
+      canDrop: ({ source }) => source.data.type === 'sidebar-project' && source.data.projectId !== project.id,
+      onDragEnter: () => setIsDropTarget(true),
+      onDragLeave: () => setIsDropTarget(false),
+      onDrop: () => setIsDropTarget(false),
+    });
+
+    return () => { cleanupDrag(); cleanupDrop(); };
+  }, [project.id]);
 
   return (
     <Collapsible
@@ -86,13 +97,16 @@ export function ProjectItem({
       className="min-w-0"
     >
       <div
-        ref={setNodeRef}
-        style={style}
-        className="flex items-center rounded-md hover:bg-accent/50 transition-colors select-none"
+        ref={dragRef}
+        className={cn(
+          "flex items-center rounded-md hover:bg-accent/50 transition-colors select-none",
+          isDragging && "opacity-50",
+          isDropTarget && "ring-2 ring-ring"
+        )}
         onMouseEnter={() => setHovered(true)}
         onMouseLeave={() => setHovered(false)}
       >
-        <CollapsibleTrigger {...attributes} {...listeners} className={cn(
+        <CollapsibleTrigger className={cn(
           "flex-1 flex items-center gap-1.5 px-2 py-1 text-xs text-left text-muted-foreground hover:text-foreground min-w-0 transition-colors",
           isDragging ? "cursor-grabbing" : "cursor-pointer"
         )}>

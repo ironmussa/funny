@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/stores/app-store';
@@ -23,7 +23,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Plus, Folder, FolderPlus, Columns3, BarChart3 } from 'lucide-react';
+import { Plus, FolderPlus, Columns3, BarChart3 } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -33,23 +33,7 @@ import { AutomationInboxButton } from './sidebar/AutomationInboxButton';
 import { ThreadList } from './sidebar/ThreadList';
 import { ProjectItem } from './sidebar/ProjectItem';
 import { Logo3D } from './Logo3D';
-import {
-  DndContext,
-  closestCenter,
-  KeyboardSensor,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragOverlay,
-  type DragEndEvent,
-  type DragStartEvent,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  sortableKeyboardCoordinates,
-  verticalListSortingStrategy,
-  arrayMove,
-} from '@dnd-kit/sortable';
+import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 
 export function AppSidebar() {
   const navigate = useNavigate();
@@ -98,39 +82,33 @@ export function AppSidebar() {
     name: string;
   } | null>(null);
 
-  // Drag & drop state
-  const [activeId, setActiveId] = useState<string | null>(null);
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 3 } }),
-    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
-  );
+  // Drag & drop: monitor for project reordering
+  useEffect(() => {
+    return monitorForElements({
+      onDrop: ({ source, location }) => {
+        const targets = location.current.dropTargets;
+        if (!targets.length) return;
+        if (source.data.type !== 'sidebar-project') return;
 
-  const handleDragStart = useCallback((event: DragStartEvent) => {
-    setActiveId(event.active.id as string);
-    document.body.classList.add('dragging');
-  }, []);
+        const targetData = targets[0].data;
+        if (targetData.type !== 'sidebar-project') return;
 
-  const handleDragEnd = useCallback((event: DragEndEvent) => {
-    const { active, over } = event;
-    setActiveId(null);
-    document.body.classList.remove('dragging');
+        const sourceId = source.data.projectId as string;
+        const targetId = targetData.projectId as string;
+        if (sourceId === targetId) return;
 
-    if (!over || active.id === over.id) return;
+        const oldIndex = projects.findIndex((p) => p.id === sourceId);
+        const newIndex = projects.findIndex((p) => p.id === targetId);
+        if (oldIndex === -1 || newIndex === -1) return;
 
-    const oldIndex = projects.findIndex((p) => p.id === active.id);
-    const newIndex = projects.findIndex((p) => p.id === over.id);
-    if (oldIndex === -1 || newIndex === -1) return;
-
-    const reordered = arrayMove(projects, oldIndex, newIndex);
-    reorderProjects(reordered.map((p) => p.id));
+        // Reorder: move source to target's position
+        const reordered = [...projects];
+        const [moved] = reordered.splice(oldIndex, 1);
+        reordered.splice(newIndex, 0, moved);
+        reorderProjects(reordered.map((p) => p.id));
+      },
+    });
   }, [projects, reorderProjects]);
-
-  const handleDragCancel = useCallback(() => {
-    setActiveId(null);
-    document.body.classList.remove('dragging');
-  }, []);
-
-  const activeProject = projects.find((p) => p.id === activeId);
 
   const handleArchiveConfirm = useCallback(async () => {
     if (!archiveConfirm) return;
@@ -270,90 +248,62 @@ export function AppSidebar() {
             {t('sidebar.noProjects')}
           </button>
         )}
-        <DndContext
-          sensors={sensors}
-          collisionDetection={closestCenter}
-          onDragStart={handleDragStart}
-          onDragEnd={handleDragEnd}
-          onDragCancel={handleDragCancel}
-        >
-          <SortableContext
-            items={projects.map((p) => p.id)}
-            strategy={verticalListSortingStrategy}
-          >
-            <div className="flex flex-col gap-1.5">
-            {projects.map((project) => (
-              <ProjectItem
-                key={project.id}
-                project={project}
-            threads={(threadsByProject[project.id] ?? []).filter((t) => !t.archived)}
-            isExpanded={expandedProjects.has(project.id)}
-            selectedThreadId={selectedThreadId}
-            onToggle={() => {
-              const wasExpanded = expandedProjects.has(project.id);
-              if (!wasExpanded) {
-                toggleProject(project.id);
-              }
-              // Always open new thread creation screen
-              useGitStatusStore.getState().fetchForProject(project.id);
-              startNewThread(project.id);
-              navigate(`/projects/${project.id}`);
-            }}
-            onNewThread={() => {
-              startNewThread(project.id);
-              navigate(`/projects/${project.id}`);
-            }}
-            onRenameProject={() => {
-              setRenameProjectState({ projectId: project.id, currentName: project.name, newName: project.name });
-            }}
-            onDeleteProject={() => {
-              setDeleteProjectConfirm({ projectId: project.id, name: project.name });
-            }}
-            onSelectThread={(threadId) => {
-              const store = useAppStore.getState();
-              // If already on this thread's URL but activeThread didn't load, re-select directly
-              if (store.selectedThreadId === threadId && (!store.activeThread || store.activeThread.id !== threadId)) {
-                store.selectThread(threadId);
-              }
-              navigate(`/projects/${project.id}/threads/${threadId}`);
-            }}
-            onArchiveThread={(threadId, title) => {
-              const threads = threadsByProject[project.id] ?? [];
-              const th = threads.find(t => t.id === threadId);
-              setArchiveConfirm({ threadId, projectId: project.id, title, isWorktree: th?.mode === 'worktree' && !!th?.branch });
-            }}
-            onPinThread={(threadId, pinned) => {
-              pinThread(threadId, project.id, pinned);
-            }}
-            onDeleteThread={(threadId, title) => {
-              const threads = threadsByProject[project.id] ?? [];
-              const th = threads.find(t => t.id === threadId);
-              setDeleteThreadConfirm({ threadId, projectId: project.id, title, isWorktree: th?.mode === 'worktree' && !!th?.branch });
-            }}
-            onShowAllThreads={() => {
-              showAllThreads(project.id);
-              navigate(`/projects/${project.id}/threads`);
-            }}
-          />
-        ))}
+        <div className="flex flex-col gap-1.5">
+          {projects.map((project) => (
+            <ProjectItem
+              key={project.id}
+              project={project}
+              threads={(threadsByProject[project.id] ?? []).filter((t) => !t.archived)}
+              isExpanded={expandedProjects.has(project.id)}
+              selectedThreadId={selectedThreadId}
+              onToggle={() => {
+                const wasExpanded = expandedProjects.has(project.id);
+                if (!wasExpanded) {
+                  toggleProject(project.id);
+                }
+                // Always open new thread creation screen
+                useGitStatusStore.getState().fetchForProject(project.id);
+                startNewThread(project.id);
+                navigate(`/projects/${project.id}`);
+              }}
+              onNewThread={() => {
+                startNewThread(project.id);
+                navigate(`/projects/${project.id}`);
+              }}
+              onRenameProject={() => {
+                setRenameProjectState({ projectId: project.id, currentName: project.name, newName: project.name });
+              }}
+              onDeleteProject={() => {
+                setDeleteProjectConfirm({ projectId: project.id, name: project.name });
+              }}
+              onSelectThread={(threadId) => {
+                const store = useAppStore.getState();
+                // If already on this thread's URL but activeThread didn't load, re-select directly
+                if (store.selectedThreadId === threadId && (!store.activeThread || store.activeThread.id !== threadId)) {
+                  store.selectThread(threadId);
+                }
+                navigate(`/projects/${project.id}/threads/${threadId}`);
+              }}
+              onArchiveThread={(threadId, title) => {
+                const threads = threadsByProject[project.id] ?? [];
+                const th = threads.find(t => t.id === threadId);
+                setArchiveConfirm({ threadId, projectId: project.id, title, isWorktree: th?.mode === 'worktree' && !!th?.branch });
+              }}
+              onPinThread={(threadId, pinned) => {
+                pinThread(threadId, project.id, pinned);
+              }}
+              onDeleteThread={(threadId, title) => {
+                const threads = threadsByProject[project.id] ?? [];
+                const th = threads.find(t => t.id === threadId);
+                setDeleteThreadConfirm({ threadId, projectId: project.id, title, isWorktree: th?.mode === 'worktree' && !!th?.branch });
+              }}
+              onShowAllThreads={() => {
+                showAllThreads(project.id);
+                navigate(`/projects/${project.id}/threads`);
+              }}
+            />
+          ))}
         </div>
-          </SortableContext>
-          <DragOverlay>
-            {activeProject && (
-              <div className="px-2 py-1 text-xs bg-sidebar rounded-md shadow-md border border-border flex items-center gap-1.5 cursor-grabbing">
-                {activeProject.color ? (
-                  <div
-                    className="h-3.5 w-3.5 rounded-sm flex-shrink-0"
-                    style={{ backgroundColor: activeProject.color }}
-                  />
-                ) : (
-                  <Folder className="h-3.5 w-3.5 flex-shrink-0" />
-                )}
-                <span className="truncate font-medium">{activeProject.name}</span>
-              </div>
-            )}
-          </DragOverlay>
-        </DndContext>
       </SidebarContent>
 
       {/* User section (multi mode only) */}

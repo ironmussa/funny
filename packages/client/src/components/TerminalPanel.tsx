@@ -43,7 +43,6 @@ function TauriTerminalTabContent({
     let cleanup: (() => void) | null = null;
 
     (async () => {
-      // Lazy-load xterm so it doesn't break in browser mode
       const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
         import('@xterm/xterm'),
         import('@xterm/addon-fit'),
@@ -64,7 +63,6 @@ function TauriTerminalTabContent({
           cursor: '#fafafa',
           selectionBackground: '#264f78',
         },
-        convertEol: true,
         scrollback: 5000,
       });
 
@@ -145,7 +143,6 @@ function WebTerminalTabContent({
     let cleanup: (() => void) | null = null;
 
     (async () => {
-      // Lazy-load xterm
       const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
         import('@xterm/xterm'),
         import('@xterm/addon-fit'),
@@ -154,7 +151,6 @@ function WebTerminalTabContent({
       // @ts-ignore - CSS import handled by Vite bundler
       await import('@xterm/xterm/css/xterm.css');
 
-      // Bail out if the effect was cleaned up while we were loading
       if (cancelled || !containerRef.current) return;
 
       const terminal = new Terminal({
@@ -167,7 +163,6 @@ function WebTerminalTabContent({
           cursor: '#fafafa',
           selectionBackground: '#264f78',
         },
-        convertEol: true,
         scrollback: 5000,
       });
 
@@ -182,12 +177,10 @@ function WebTerminalTabContent({
         terminal.focus();
       });
 
-      // Register callback to receive PTY data from WebSocket
       registerPtyCallback(id, (data: string) => {
         terminal.write(data);
       });
 
-      // Send keyboard input to server
       const onDataDisposable = terminal.onData((data) => {
         const ws = getActiveWS();
         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -195,7 +188,6 @@ function WebTerminalTabContent({
         }
       });
 
-      // Send resize events to server
       const onResizeDisposable = terminal.onResize(({ rows, cols }) => {
         const ws = getActiveWS();
         if (ws && ws.readyState === WebSocket.OPEN) {
@@ -203,7 +195,6 @@ function WebTerminalTabContent({
         }
       });
 
-      // Spawn PTY on server
       const dims = fitAddon.proposeDimensions();
       const ws = getActiveWS();
       if (ws && ws.readyState === WebSocket.OPEN) {
@@ -213,15 +204,21 @@ function WebTerminalTabContent({
         }));
       }
 
-      // Auto-resize on container resize
+      // Debounce resize to avoid rapid reflows that cause screen jumping
+      let resizeRaf: number | null = null;
       const resizeObserver = new ResizeObserver(() => {
         if (containerRef.current?.offsetParent !== null) {
-          fitAddon.fit();
+          if (resizeRaf) cancelAnimationFrame(resizeRaf);
+          resizeRaf = requestAnimationFrame(() => {
+            resizeRaf = null;
+            fitAddon.fit();
+          });
         }
       });
       resizeObserver.observe(containerRef.current!);
 
       cleanup = () => {
+        if (resizeRaf) cancelAnimationFrame(resizeRaf);
         resizeObserver.disconnect();
         unregisterPtyCallback(id);
         onDataDisposable.dispose();
@@ -229,7 +226,6 @@ function WebTerminalTabContent({
         termRef.current = null;
         terminal.dispose();
 
-        // Kill PTY on server
         const ws = getActiveWS();
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'pty:kill', data: { id } }));
@@ -243,8 +239,6 @@ function WebTerminalTabContent({
     };
   }, [id, cwd, registerPtyCallback, unregisterPtyCallback]);
 
-  // Re-fit and focus when this tab becomes active (fixes canvas corruption
-  // caused by xterm being in a display:none container while inactive)
   useEffect(() => {
     if (active && termRef.current) {
       const { terminal, fitAddon } = termRef.current;
@@ -283,7 +277,6 @@ function CommandTabContent({
   const ansiConverter = useMemo(() => new AnsiToHtml({ fg: '#fafafa', bg: '#09090b', newline: true, escapeXML: true }), []);
   const htmlOutput = useMemo(() => ansiConverter.toHtml(output || 'Waiting for output...'), [ansiConverter, output]);
 
-  // Auto-scroll to bottom when new output arrives
   useEffect(() => {
     if (active && scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
@@ -293,7 +286,6 @@ function CommandTabContent({
   const handleStop = async () => {
     if (projectId) {
       await api.stopCommand(projectId, commandId);
-      // ignore errors
     }
   };
 
@@ -329,6 +321,8 @@ function CommandTabContent({
   );
 }
 
+const PANEL_HEIGHT = 300;
+
 export function TerminalPanel() {
   const { t } = useTranslation();
   const {
@@ -344,16 +338,13 @@ export function TerminalPanel() {
   const selectedProjectId = useAppStore(s => s.selectedProjectId);
 
   const [dragging, setDragging] = useState(false);
-  const [panelHeight, setPanelHeight] = useState(300);
-  const panelRef = useRef<HTMLDivElement>(null);
+  const [panelHeight, setPanelHeight] = useState(PANEL_HEIGHT);
 
-  // Filter tabs to only show the current project's terminals
   const visibleTabs = useMemo(
     () => tabs.filter((t) => t.projectId === selectedProjectId),
     [tabs, selectedProjectId]
   );
 
-  // If the active tab isn't in the visible set, pick the last visible one
   const effectiveActiveTabId = useMemo(() => {
     if (activeTabId && visibleTabs.some((t) => t.id === activeTabId)) {
       return activeTabId;
@@ -408,19 +399,16 @@ export function TerminalPanel() {
     [removeTab]
   );
 
-  // Don't render at all if no tabs and not visible
   if (!panelVisible && !isTauri) return null;
 
   return (
     <div
-      ref={panelRef}
-      className={cn(
-        'flex flex-col border-t border-border transition-[height] duration-200 ease-out overflow-hidden',
-      )}
-      style={{ height: panelVisible ? panelHeight : 32 }}
+      className="flex flex-col border-t border-border bg-background flex-shrink-0 overflow-hidden"
+      style={{
+        height: panelVisible ? panelHeight : 0,
+      }}
     >
-      {/* Drag handle */}
-      {panelVisible && (
+        {/* Drag handle */}
         <div
           className={cn(
             'flex items-center justify-center h-2 cursor-row-resize hover:bg-primary/20 transition-colors flex-shrink-0 group',
@@ -430,108 +418,103 @@ export function TerminalPanel() {
         >
           <GripHorizontal className="h-3 w-3 text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors" />
         </div>
-      )}
 
-      {/* Tab bar */}
-      <div className="flex items-center gap-0.5 px-2 h-8 bg-secondary/50 border-b border-border flex-shrink-0">
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button variant="ghost" size="icon-xs" onClick={togglePanel}>
-              {panelVisible ? (
+        {/* Tab bar */}
+        <div className="flex items-center gap-0.5 px-2 h-8 bg-secondary/50 border-b border-border flex-shrink-0">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="ghost" size="icon-xs" onClick={togglePanel}>
                 <ChevronDown className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronUp className="h-3.5 w-3.5" />
-              )}
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>
-            {panelVisible ? t('terminal.hideTerminal') : t('terminal.showTerminal')}
-          </TooltipContent>
-        </Tooltip>
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>
+              {t('terminal.hideTerminal')}
+            </TooltipContent>
+          </Tooltip>
 
-        <TerminalIcon className="h-3.5 w-3.5 text-muted-foreground ml-1" />
-        <span className="text-xs text-muted-foreground font-medium ml-1">
-          {t('terminal.title')}
-        </span>
+          <TerminalIcon className="h-3.5 w-3.5 text-muted-foreground ml-1" />
+          <span className="text-xs text-muted-foreground font-medium ml-1">
+            {t('terminal.title')}
+          </span>
 
-        <div className="flex-1 flex items-center gap-0.5 ml-2 overflow-x-auto">
-          {visibleTabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => {
-                setActiveTab(tab.id);
-                if (!panelVisible) togglePanel();
-              }}
-              className={cn(
-                'flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors whitespace-nowrap',
-                effectiveActiveTabId === tab.id
-                  ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:bg-accent/50'
-              )}
-            >
-              <span>{tab.label}</span>
-              {!tab.alive && (
-                <span className="text-xs text-yellow-400">{t('terminal.exited')}</span>
-              )}
-              <X
-                className="h-3 w-3 ml-1 opacity-60 hover:opacity-100"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  handleCloseTab(tab.id);
+          <div className="flex-1 flex items-center gap-0.5 ml-2 overflow-x-auto">
+            {visibleTabs.map((tab) => (
+              <button
+                key={tab.id}
+                onClick={() => {
+                  setActiveTab(tab.id);
+                  if (!panelVisible) togglePanel();
                 }}
-              />
-            </button>
-          ))}
+                className={cn(
+                  'flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors whitespace-nowrap',
+                  effectiveActiveTabId === tab.id
+                    ? 'bg-accent text-accent-foreground'
+                    : 'text-muted-foreground hover:bg-accent/50'
+                )}
+              >
+                <span>{tab.label}</span>
+                {!tab.alive && (
+                  <span className="text-xs text-yellow-400">{t('terminal.exited')}</span>
+                )}
+                <X
+                  className="h-3 w-3 ml-1 opacity-60 hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    handleCloseTab(tab.id);
+                  }}
+                />
+              </button>
+            ))}
+          </div>
+
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={handleNewTerminal}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t('terminal.newTerminal')}</TooltipContent>
+          </Tooltip>
         </div>
 
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={handleNewTerminal}
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent>{t('terminal.newTerminal')}</TooltipContent>
-        </Tooltip>
-      </div>
-
-      {/* Terminal content area */}
-      <div className="flex-1 bg-[#09090b] overflow-hidden min-h-0">
-        {visibleTabs.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
-            {t('terminal.noProcesses')}
-          </div>
-        ) : (
-          tabs.map((tab) =>
-            tab.commandId ? (
-              <CommandTabContent
-                key={tab.id}
-                commandId={tab.commandId}
-                projectId={tab.projectId}
-                active={tab.id === effectiveActiveTabId}
-                alive={tab.alive}
-              />
-            ) : tab.type === 'pty' ? (
-              <WebTerminalTabContent
-                key={tab.id}
-                id={tab.id}
-                cwd={tab.cwd}
-                active={tab.id === effectiveActiveTabId}
-              />
-            ) : isTauri ? (
-              <TauriTerminalTabContent
-                key={tab.id}
-                id={tab.id}
-                cwd={tab.cwd}
-                active={tab.id === effectiveActiveTabId}
-              />
-            ) : null
-          )
-        )}
-      </div>
+        {/* Terminal content area */}
+        <div className="flex-1 bg-[#09090b] overflow-hidden min-h-0">
+          {visibleTabs.length === 0 ? (
+            <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
+              {t('terminal.noProcesses')}
+            </div>
+          ) : (
+            tabs.map((tab) =>
+              tab.commandId ? (
+                <CommandTabContent
+                  key={tab.id}
+                  commandId={tab.commandId}
+                  projectId={tab.projectId}
+                  active={tab.id === effectiveActiveTabId}
+                  alive={tab.alive}
+                />
+              ) : tab.type === 'pty' ? (
+                <WebTerminalTabContent
+                  key={tab.id}
+                  id={tab.id}
+                  cwd={tab.cwd}
+                  active={tab.id === effectiveActiveTabId}
+                />
+              ) : isTauri ? (
+                <TauriTerminalTabContent
+                  key={tab.id}
+                  id={tab.id}
+                  cwd={tab.cwd}
+                  active={tab.id === effectiveActiveTabId}
+                />
+              ) : null
+            )
+          )}
+        </div>
     </div>
   );
 }

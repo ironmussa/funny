@@ -162,9 +162,9 @@ export function ReviewPane() {
   return (
     <div className="flex flex-col h-full">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border">
+      <div className="flex items-center justify-between px-4 py-3 border-b border-sidebar-border">
         <div className="flex items-center gap-2">
-          <h3 className="text-sm font-medium">{t('review.title')}</h3>
+          <h3 className="text-xs font-semibold text-sidebar-foreground uppercase tracking-wider">{t('review.title')}</h3>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -195,7 +195,7 @@ export function ReviewPane() {
       </div>
 
       {/* File list */}
-      <ScrollArea className="border-b border-border max-h-48">
+      <ScrollArea className="border-b border-sidebar-border max-h-48">
         {diffs.length === 0 ? (
           <p className="text-xs text-muted-foreground p-3">{t('review.noChanges')}</p>
         ) : (
@@ -207,8 +207,8 @@ export function ReviewPane() {
                 className={cn(
                   'flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer transition-colors',
                   selectedFile === f.path
-                    ? 'bg-accent text-accent-foreground'
-                    : 'hover:bg-accent/50 text-muted-foreground'
+                    ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                    : 'hover:bg-sidebar-accent/50 text-muted-foreground'
                 )}
                 onClick={() => setSelectedFile(f.path)}
               >

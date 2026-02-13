@@ -14,8 +14,10 @@ import { useAppStore } from '@/stores/app-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { stageConfig, statusConfig, gitSyncStateConfig, timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -26,6 +28,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { SlideUpPrompt } from '@/components/SlideUpPrompt';
 
 interface KanbanViewProps {
   threads: Thread[];
@@ -268,7 +271,9 @@ export function KanbanView({ threads, projectId, search }: KanbanViewProps) {
   const deleteThread = useThreadStore((s) => s.deleteThread);
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const projects = useAppStore((s) => s.projects);
-  const startNewThread = useUIStore((s) => s.startNewThread);
+  const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
+  const defaultThreadMode = useSettingsStore((s) => s.defaultThreadMode);
+  const allowedTools = useSettingsStore((s) => s.allowedTools);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{
     threadId: string;
@@ -277,9 +282,14 @@ export function KanbanView({ threads, projectId, search }: KanbanViewProps) {
     isWorktree?: boolean;
   } | null>(null);
 
+  const [slideUpOpen, setSlideUpOpen] = useState(false);
+  const [slideUpProjectId, setSlideUpProjectId] = useState<string | undefined>(undefined);
+  const [creating, setCreating] = useState(false);
+
   const handleAddThread = useCallback((threadProjectId: string) => {
-    startNewThread(threadProjectId, true);
-  }, [startNewThread]);
+    setSlideUpProjectId(threadProjectId);
+    setSlideUpOpen(true);
+  }, []);
 
   const handleDeleteRequest = useCallback((thread: Thread) => {
     setDeleteConfirm({
@@ -299,6 +309,40 @@ export function KanbanView({ threads, projectId, search }: KanbanViewProps) {
     toast.success(t('toast.threadDeleted', { title }));
     if (wasSelected) navigate(`/projects/${threadProjectId}`);
   }, [deleteConfirm, selectedThreadId, deleteThread, navigate, t]);
+
+  const handlePromptSubmit = useCallback(async (
+    prompt: string,
+    opts: { model: string; mode: string; threadMode?: string; baseBranch?: string },
+    images?: any[]
+  ) => {
+    if (!slideUpProjectId || creating) return;
+    setCreating(true);
+
+    const threadMode = (opts.threadMode as 'local' | 'worktree') || defaultThreadMode;
+
+    const result = await api.createThread({
+      projectId: slideUpProjectId,
+      title: prompt.slice(0, 200),
+      mode: threadMode,
+      model: opts.model,
+      permissionMode: opts.mode,
+      baseBranch: opts.baseBranch,
+      prompt,
+      images,
+      allowedTools,
+    });
+
+    if (result.isErr()) {
+      toast.error(result.error.message);
+      setCreating(false);
+      return;
+    }
+
+    await loadThreadsForProject(slideUpProjectId);
+    setCreating(false);
+    toast.success(t('toast.threadCreated', { title: prompt.slice(0, 200) }));
+    navigate(`/projects/${slideUpProjectId}/threads/${result.value.id}`);
+  }, [slideUpProjectId, creating, defaultThreadMode, allowedTools, loadThreadsForProject, navigate, t]);
 
   const projectInfoById = useMemo(() => {
     if (projectId) return undefined;
@@ -398,6 +442,14 @@ export function KanbanView({ threads, projectId, search }: KanbanViewProps) {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      <SlideUpPrompt
+        open={slideUpOpen}
+        onClose={() => setSlideUpOpen(false)}
+        onSubmit={handlePromptSubmit}
+        loading={creating}
+        projectId={slideUpProjectId}
+      />
     </>
   );
 }

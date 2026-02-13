@@ -343,6 +343,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ path, editor }),
     }),
+  repoName: (path: string) =>
+    request<{ name: string }>(`/browse/repo-name?path=${encodeURIComponent(path)}`),
+  gitInit: (path: string) =>
+    request<{ ok: boolean }>('/browse/git-init', {
+      method: 'POST',
+      body: JSON.stringify({ path }),
+    }),
 
   // GitHub
   githubStatus: () =>

@@ -68,6 +68,20 @@ export function autoMigrate() {
     // Column already exists
   }
 
+  // Add model column to messages (tracks which Claude model was used)
+  try {
+    db.run(sql`ALTER TABLE messages ADD COLUMN model TEXT`);
+  } catch {
+    // Column already exists
+  }
+
+  // Add permission_mode column to messages
+  try {
+    db.run(sql`ALTER TABLE messages ADD COLUMN permission_mode TEXT`);
+  } catch {
+    // Column already exists
+  }
+
   db.run(sql`
     CREATE TABLE IF NOT EXISTS tool_calls (
       id TEXT PRIMARY KEY,

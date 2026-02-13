@@ -21,7 +21,7 @@ export function NewThreadInput() {
 
   const handleCreate = async (
     prompt: string,
-    opts: { model: string; mode: string; threadMode?: string; baseBranch?: string },
+    opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; sendToBacklog?: boolean },
     images?: any[]
   ) => {
     if (!newThreadProjectId || creating) return;
@@ -29,8 +29,8 @@ export function NewThreadInput() {
 
     const threadMode = (opts.threadMode as 'local' | 'worktree') || defaultThreadMode;
 
-    // If idle-only mode, create idle thread without executing
-    if (newThreadIdleOnly) {
+    // If idle-only mode or sendToBacklog toggle, create idle thread without executing
+    if (newThreadIdleOnly || opts.sendToBacklog) {
       const result = await api.createIdleThread({
         projectId: newThreadProjectId,
         title: prompt.slice(0, 200),

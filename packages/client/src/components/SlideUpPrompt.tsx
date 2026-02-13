@@ -13,7 +13,7 @@ interface SlideUpPromptProps {
   onClose: () => void;
   onSubmit: (
     prompt: string,
-    opts: { model: string; mode: string; threadMode?: string; baseBranch?: string },
+    opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; sendToBacklog?: boolean },
     images?: any[]
   ) => void;
   loading?: boolean;
@@ -31,7 +31,7 @@ export function SlideUpPrompt({
 
   const handleSubmit = async (
     prompt: string,
-    opts: { model: string; mode: string; threadMode?: string; baseBranch?: string },
+    opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; sendToBacklog?: boolean },
     images?: any[]
   ) => {
     await onSubmit(prompt, opts, images);

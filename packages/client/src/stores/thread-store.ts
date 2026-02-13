@@ -5,7 +5,7 @@
  */
 
 import { create } from 'zustand';
-import type { Thread, MessageRole, ThreadStatus, ThreadStage, WaitingReason } from '@a-parallel/shared';
+import type { Thread, MessageRole, ThreadStatus, ThreadStage, WaitingReason, ClaudeModel, PermissionMode } from '@a-parallel/shared';
 import { api } from '@/lib/api';
 import { useUIStore } from './ui-store';
 import { useProjectStore } from './project-store';
@@ -57,7 +57,7 @@ export interface ThreadState {
   pinThread: (threadId: string, projectId: string, pinned: boolean) => Promise<void>;
   updateThreadStage: (threadId: string, projectId: string, stage: ThreadStage) => Promise<void>;
   deleteThread: (threadId: string, projectId: string) => Promise<void>;
-  appendOptimisticMessage: (threadId: string, content: string, images?: any[]) => void;
+  appendOptimisticMessage: (threadId: string, content: string, images?: any[], model?: ClaudeModel, permissionMode?: PermissionMode) => void;
   refreshActiveThread: () => Promise<void>;
   refreshAllLoadedThreads: () => Promise<void>;
   clearProjectThreads: (projectId: string) => void;
@@ -270,7 +270,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     }
   },
 
-  appendOptimisticMessage: (threadId, content, images) => {
+  appendOptimisticMessage: (threadId, content, images, model, permissionMode) => {
     const { activeThread, threadsByProject } = get();
     if (activeThread?.id === threadId) {
       const pid = activeThread.projectId;
@@ -294,6 +294,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
               content,
               images,
               timestamp: new Date().toISOString(),
+              model,
+              permissionMode,
             },
           ],
         },

@@ -463,6 +463,8 @@ export class AgentRunner {
           role: 'user',
           content: prompt,
           images: images ? JSON.stringify(images) : null,
+          model,
+          permissionMode,
         });
 
         // Respond to the stored can_use_tool request with the user's answer
@@ -531,6 +533,8 @@ export class AgentRunner {
       role: 'user',
       content: prompt,
       images: images ? JSON.stringify(images) : null,
+      model,
+      permissionMode,
     });
 
     // Check if we're resuming a previous session
@@ -619,8 +623,29 @@ export class AgentRunner {
       this.resultReceived.delete(threadId);
     });
 
-    // Start the process
-    claudeProcess.start();
+    // Start the process (this may throw if Claude CLI is not installed)
+    try {
+      claudeProcess.start();
+    } catch (err: any) {
+      // If Claude CLI is not installed, fail immediately with a clear error
+      console.error(`[agent] Failed to start Claude process for thread=${threadId}:`, err.message);
+
+      // Clean up
+      this.activeAgents.delete(threadId);
+      this.threadManager.updateThread(threadId, {
+        status: 'failed',
+        completedAt: new Date().toISOString()
+      });
+
+      // Notify client
+      this.emitWS(threadId, 'agent:error', {
+        error: err.message || 'Failed to start Claude CLI process'
+      });
+      this.emitWS(threadId, 'agent:status', { status: 'failed' });
+
+      // Re-throw so the route handler can catch it
+      throw err;
+    }
   }
 
   async stopAgent(threadId: string): Promise<void> {

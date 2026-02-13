@@ -373,7 +373,13 @@ function ChatView({
     if (!activeThread || sending) return;
     setSending(true);
 
-    useAppStore.getState().appendOptimisticMessage(activeThread.id, prompt, images);
+    useAppStore.getState().appendOptimisticMessage(
+      activeThread.id,
+      prompt,
+      images,
+      opts.model as any,
+      opts.mode as any
+    );
 
     const result = await api.sendMessage(activeThread.id, prompt, { model: opts.model || undefined, permissionMode: opts.mode || undefined }, images);
     if (result.isErr()) {
@@ -453,9 +459,24 @@ function ChatView({
                       </div>
                     )}
                     {msg.role === 'user' ? (
-                      <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed break-words overflow-x-auto">
-                        {msg.content.trim()}
-                      </pre>
+                      <>
+                        <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed break-words overflow-x-auto">
+                          {msg.content.trim()}
+                        </pre>
+                        {(msg.model || msg.permissionMode) && (
+                          <div className="flex gap-1.5 mt-1.5 text-[10px] text-primary-foreground/60 font-medium">
+                            {msg.model && (
+                              <span>{t(`thread.model.${msg.model}`)}</span>
+                            )}
+                            {msg.model && msg.permissionMode && (
+                              <span>·</span>
+                            )}
+                            {msg.permissionMode && (
+                              <span>{t(`prompt.${msg.permissionMode}`)}</span>
+                            )}
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="text-xs leading-relaxed break-words overflow-x-auto">
                         <MessageContent content={msg.content.trim()} />

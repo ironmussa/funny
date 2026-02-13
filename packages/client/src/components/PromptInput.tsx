@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowUp, Square, Loader2, Image as ImageIcon, X, Zap, GitBranch, Check, Monitor } from 'lucide-react';
+import { ArrowUp, Square, Loader2, Image as ImageIcon, X, Zap, GitBranch, Check, Monitor, Inbox } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -293,7 +293,7 @@ function BranchPicker({
 }
 
 interface PromptInputProps {
-  onSubmit: (prompt: string, opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; cwd?: string }, images?: ImageAttachment[]) => void;
+  onSubmit: (prompt: string, opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; cwd?: string; sendToBacklog?: boolean }, images?: ImageAttachment[]) => void;
   onStop?: () => void;
   loading?: boolean;
   running?: boolean;
@@ -335,6 +335,7 @@ export function PromptInput({
   const [newThreadBranches, setNewThreadBranches] = useState<string[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [images, setImages] = useState<ImageAttachment[]>([]);
+  const [sendToBacklog, setSendToBacklog] = useState(false);
   const [localCurrentBranch, setLocalCurrentBranch] = useState<string | null>(null);
   const [newThreadCurrentBranch, setNewThreadCurrentBranch] = useState<string | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
@@ -499,7 +500,7 @@ export function PromptInput({
       {
         model,
         mode,
-        ...(isNewThread ? { threadMode, baseBranch: threadMode === 'worktree' ? selectedBranch : undefined } : {}),
+        ...(isNewThread ? { threadMode, baseBranch: threadMode === 'worktree' ? selectedBranch : undefined, sendToBacklog } : {}),
         cwd: cwdOverride || undefined,
       },
       images.length > 0 ? images : undefined
@@ -784,6 +785,21 @@ export function PromptInput({
                   ))}
                 </SelectContent>
               </Select>
+              {isNewThread && (
+                <button
+                  onClick={() => setSendToBacklog((v) => !v)}
+                  className={cn(
+                    'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors',
+                    sendToBacklog
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                  )}
+                  title={t('prompt.sendToBacklog')}
+                >
+                  <Inbox className="h-3 w-3" />
+                  {t('prompt.backlog')}
+                </button>
+              )}
               {/* On desktop: image + send stay in this row */}
               <div className="hidden md:flex items-center gap-1 ml-auto">
                 <Button

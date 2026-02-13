@@ -41,6 +41,8 @@ export const messages = sqliteTable('messages', {
   role: text('role').notNull(), // 'user' | 'assistant' | 'system'
   content: text('content').notNull(),
   images: text('images'), // JSON-encoded ImageAttachment[]
+  model: text('model'), // Claude model used for this message (user messages only)
+  permissionMode: text('permission_mode'), // Permission mode used for this message (user messages only)
   timestamp: text('timestamp').notNull(),
 });
 

@@ -76,7 +76,9 @@
     "permissionRequired": "Permissão de ferramenta necessária",
     "permissionMessage": "Claude quer usar {{tool}}. Deseja permitir?",
     "approvePermission": "Permitir",
-    "denyPermission": "Negar"
+    "denyPermission": "Negar",
+    "startTask": "Iniciar Tarefa",
+    "orTypeNewPrompt": "Ou digite um novo prompt abaixo..."
   },
   "review": {
     "title": "Revisão",
@@ -310,8 +312,12 @@
     "title": "Selecionar Pasta",
     "loading": "Carregando...",
     "up": "Subir",
+    "back": "Voltar",
+    "forward": "Avançar",
     "home": "Início",
     "noSubdirs": "Sem subdiretórios",
+    "searchPlaceholder": "Filtrar pastas...",
+    "noResults": "Nenhuma pasta encontrada",
     "cancel": "Cancelar",
     "selectFolder": "Selecionar esta pasta"
   },
@@ -389,7 +395,9 @@
     "projectDeleted": "Projeto \"{{name}}\" excluído"
   },
   "confirm": {
-    "notGitRepo": "\"{{path}}\" não é um repositório git.\n\nDeseja inicializá-lo com git init?"
+    "notGitRepo": "\"{{path}}\" não é um repositório git.\n\nDeseja inicializá-lo com git init?",
+    "gitInitTitle": "Inicializar repositório Git",
+    "gitInitAction": "Inicializar"
   },
   "time": {
     "now": "agora",
@@ -413,7 +421,9 @@
     "askBeforeEdits": "Perguntar Antes de Editar",
     "addImage": "Adicionar imagem",
     "stopAgent": "Parar agente",
-    "loadingSkills": "Carregando skills..."
+    "loadingSkills": "Carregando skills...",
+    "backlog": "Backlog",
+    "sendToBacklog": "Enviar para o backlog em vez de executar imediatamente"
   },
   "gitStatus": {
     "dirty": "Alterações não commitadas",

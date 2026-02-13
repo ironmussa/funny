@@ -165,10 +165,32 @@ threadRoutes.post('/', async (c) => {
   const cwd = worktreePath ?? project.path;
 
   const pMode = permissionMode || 'autoEdit';
-  startAgent(threadId, prompt, cwd, model || 'sonnet', pMode, images, disallowedTools, allowedTools).catch((err) => {
-    console.error(`[agent] Error in thread ${threadId}:`, err);
-    tm.updateThread(threadId, { status: 'failed', completedAt: new Date().toISOString() });
-  });
+
+  // Start agent and handle errors (especially Claude CLI not installed)
+  try {
+    await startAgent(threadId, prompt, cwd, model || 'sonnet', pMode, images, disallowedTools, allowedTools);
+  } catch (err: any) {
+    // If startAgent throws (e.g. Claude CLI not found), return error to client
+    console.error(`[agent] Failed to start agent for thread ${threadId}:`, err);
+
+    // Check if it's a binary-not-found error
+    const isBinaryError = err.message?.includes('Could not find the claude CLI binary') ||
+                          err.message?.includes('CLAUDE_BINARY_PATH');
+
+    if (isBinaryError) {
+      return c.json({
+        error: 'Claude CLI not installed',
+        message: 'The Claude Code CLI is not installed or not found in PATH. Please install it from https://docs.anthropic.com/en/docs/agents/overview',
+        details: err.message
+      }, 503); // 503 Service Unavailable
+    }
+
+    // Other errors
+    return c.json({
+      error: 'Failed to start agent',
+      message: err.message || 'Unknown error occurred while starting the agent'
+    }, 500);
+  }
 
   return c.json(thread, 201);
 });
@@ -191,7 +213,36 @@ threadRoutes.post('/:id/message', async (c) => {
   const effectiveModel = (model || 'sonnet') as import('@a-parallel/shared').ClaudeModel;
   const effectivePermission = (permissionMode || thread.permissionMode || 'autoEdit') as import('@a-parallel/shared').PermissionMode;
 
-  startAgent(id, content, cwd, effectiveModel, effectivePermission, images, disallowedTools, allowedTools).catch(console.error);
+  // Auto-move idle backlog threads to in_progress when a message is sent
+  if (thread.status === 'idle' && thread.stage === 'backlog') {
+    tm.updateThread(id, { stage: 'in_progress' });
+  }
+
+  // Start agent and handle errors (especially Claude CLI not installed)
+  try {
+    await startAgent(id, content, cwd, effectiveModel, effectivePermission, images, disallowedTools, allowedTools);
+  } catch (err: any) {
+    console.error(`[agent] Failed to start agent for thread ${id}:`, err);
+
+    // Check if it's a binary-not-found error
+    const isBinaryError = err.message?.includes('Could not find the claude CLI binary') ||
+                          err.message?.includes('CLAUDE_BINARY_PATH');
+
+    if (isBinaryError) {
+      return c.json({
+        error: 'Claude CLI not installed',
+        message: 'The Claude Code CLI is not installed or not found in PATH. Please install it from https://docs.anthropic.com/en/docs/agents/overview',
+        details: err.message
+      }, 503);
+    }
+
+    // Other errors
+    return c.json({
+      error: 'Failed to start agent',
+      message: err.message || 'Unknown error occurred while starting the agent'
+    }, 500);
+  }
+
   return c.json({ ok: true });
 });
 
@@ -222,36 +273,58 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
     'WebSearch', 'WebFetch', 'Task', 'TodoWrite', 'NotebookEdit',
   ];
 
-  if (approved) {
-    // Add the approved tool to allowedTools and remove from disallowedTools
-    if (!tools.includes(toolName)) {
-      tools.push(toolName);
+  try {
+    if (approved) {
+      // Add the approved tool to allowedTools and remove from disallowedTools
+      if (!tools.includes(toolName)) {
+        tools.push(toolName);
+      }
+      const disallowed = clientDisallowedTools?.filter(t => t !== toolName);
+      const message = `The user has approved the use of ${toolName}. Please proceed with using it.`;
+      await startAgent(
+        id,
+        message,
+        cwd,
+        thread.model as import('@a-parallel/shared').ClaudeModel || 'sonnet',
+        thread.permissionMode as import('@a-parallel/shared').PermissionMode || 'autoEdit',
+        undefined,
+        disallowed,
+        tools
+      );
+    } else {
+      // User denied permission
+      const message = `The user denied permission to use ${toolName}. Please continue without it.`;
+      await startAgent(
+        id,
+        message,
+        cwd,
+        thread.model as import('@a-parallel/shared').ClaudeModel || 'sonnet',
+        thread.permissionMode as import('@a-parallel/shared').PermissionMode || 'autoEdit',
+        undefined,
+        clientDisallowedTools,
+        clientAllowedTools
+      );
     }
-    const disallowed = clientDisallowedTools?.filter(t => t !== toolName);
-    const message = `The user has approved the use of ${toolName}. Please proceed with using it.`;
-    startAgent(
-      id,
-      message,
-      cwd,
-      thread.model as import('@a-parallel/shared').ClaudeModel || 'sonnet',
-      thread.permissionMode as import('@a-parallel/shared').PermissionMode || 'autoEdit',
-      undefined,
-      disallowed,
-      tools
-    ).catch(console.error);
-  } else {
-    // User denied permission
-    const message = `The user denied permission to use ${toolName}. Please continue without it.`;
-    startAgent(
-      id,
-      message,
-      cwd,
-      thread.model as import('@a-parallel/shared').ClaudeModel || 'sonnet',
-      thread.permissionMode as import('@a-parallel/shared').PermissionMode || 'autoEdit',
-      undefined,
-      clientDisallowedTools,
-      clientAllowedTools
-    ).catch(console.error);
+  } catch (err: any) {
+    console.error(`[agent] Failed to start agent for thread ${id}:`, err);
+
+    // Check if it's a binary-not-found error
+    const isBinaryError = err.message?.includes('Could not find the claude CLI binary') ||
+                          err.message?.includes('CLAUDE_BINARY_PATH');
+
+    if (isBinaryError) {
+      return c.json({
+        error: 'Claude CLI not installed',
+        message: 'The Claude Code CLI is not installed or not found in PATH. Please install it from https://docs.anthropic.com/en/docs/agents/overview',
+        details: err.message
+      }, 503);
+    }
+
+    // Other errors
+    return c.json({
+      error: 'Failed to start agent',
+      message: err.message || 'Unknown error occurred while starting the agent'
+    }, 500);
   }
 
   return c.json({ ok: true });

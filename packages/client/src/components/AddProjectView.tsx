@@ -2,6 +2,14 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { FolderOpen, Loader2, Plus, Github } from 'lucide-react';
 import { FolderPicker } from './FolderPicker';
 import { CloneRepoView } from './CloneRepoView';
@@ -21,6 +29,28 @@ export function AddProjectView() {
   const [newProjectPath, setNewProjectPath] = useState('');
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [gitInitDialogOpen, setGitInitDialogOpen] = useState(false);
+
+  const handleGitInit = async () => {
+    setGitInitDialogOpen(false);
+    setIsCreating(true);
+    const initResult = await api.gitInit(newProjectPath);
+    if (initResult.isErr()) {
+      toast.error(initResult.error.message);
+      setIsCreating(false);
+      return;
+    }
+    const retryResult = await api.createProject(newProjectName, newProjectPath);
+    if (retryResult.isErr()) {
+      toast.error(retryResult.error.message);
+      setIsCreating(false);
+      return;
+    }
+    await loadProjects();
+    setAddProjectOpen(false);
+    navigate(`/projects/${retryResult.value.id}`);
+    setIsCreating(false);
+  };
 
   const handleAddProject = async () => {
     if (!newProjectName || !newProjectPath || isCreating) return;
@@ -28,34 +58,11 @@ export function AddProjectView() {
     const result = await api.createProject(newProjectName, newProjectPath);
     if (result.isErr()) {
       if (result.error.message?.includes('Not a git repository')) {
-        const init = confirm(
-          t('confirm.notGitRepo', { path: newProjectPath })
-        );
-        if (init) {
-          try {
-            await fetch('/api/browse/git-init', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ path: newProjectPath }),
-            });
-          } catch (initErr: any) {
-            toast.error(initErr.message);
-            setIsCreating(false);
-            return;
-          }
-          const retryResult = await api.createProject(newProjectName, newProjectPath);
-          if (retryResult.isErr()) {
-            toast.error(retryResult.error.message);
-            setIsCreating(false);
-            return;
-          }
-          await loadProjects();
-          setAddProjectOpen(false);
-          navigate(`/projects/${retryResult.value.id}`);
-        }
-      } else {
-        toast.error(result.error.message);
+        setIsCreating(false);
+        setGitInitDialogOpen(true);
+        return;
       }
+      toast.error(result.error.message);
       setIsCreating(false);
       return;
     }
@@ -174,11 +181,10 @@ export function AddProjectView() {
             setNewProjectPath(path);
             setFolderPickerOpen(false);
             if (!newProjectName) {
-              try {
-                const res = await fetch(`/api/browse/repo-name?path=${encodeURIComponent(path)}`);
-                const data = await res.json();
-                if (data.name) setNewProjectName(data.name);
-              } catch {
+              const result = await api.repoName(path);
+              if (result.isOk() && result.value.name) {
+                setNewProjectName(result.value.name);
+              } else {
                 const folderName = path.split(/[\\/]/).filter(Boolean).pop() || '';
                 setNewProjectName(folderName);
               }
@@ -187,6 +193,25 @@ export function AddProjectView() {
           onClose={() => setFolderPickerOpen(false)}
         />
       )}
+
+      <Dialog open={gitInitDialogOpen} onOpenChange={setGitInitDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t('confirm.gitInitTitle', { defaultValue: 'Initialize Git Repository' })}</DialogTitle>
+            <DialogDescription>
+              {t('confirm.notGitRepo', { path: newProjectPath })}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGitInitDialogOpen(false)}>
+              {t('common.cancel', { defaultValue: 'Cancel' })}
+            </Button>
+            <Button onClick={handleGitInit}>
+              {t('confirm.gitInitAction', { defaultValue: 'Initialize' })}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

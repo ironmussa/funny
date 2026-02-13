@@ -38,7 +38,7 @@ interface KanbanViewProps {
 
 const STAGES: ThreadStage[] = ['backlog', 'in_progress', 'review', 'done', 'archived'];
 
-function KanbanCard({ thread, projectInfo, onDelete, search }: { thread: Thread; projectInfo?: { name: string; color?: string }; onDelete: (thread: Thread) => void; search?: string }) {
+function KanbanCard({ thread, projectInfo, onDelete, search, ghost }: { thread: Thread; projectInfo?: { name: string; color?: string }; onDelete: (thread: Thread) => void; search?: string; ghost?: boolean }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const statusByThread = useGitStatusStore((s) => s.statusByThread);
@@ -74,7 +74,8 @@ function KanbanCard({ thread, projectInfo, onDelete, search }: { thread: Thread;
       ref={ref}
       className={cn(
         'group/card relative rounded-md border bg-card p-2.5 cursor-pointer transition-opacity',
-        isDragging && 'opacity-40'
+        isDragging && 'opacity-40',
+        ghost && !isDragging && 'opacity-50 hover:opacity-80'
       )}
       onClick={() => {
         if (!isDragging) {
@@ -244,7 +245,7 @@ function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, pr
             {t('kanban.emptyColumn')}
           </div>
         ) : (
-          threads.map((thread) => <KanbanCard key={thread.id} thread={thread} projectInfo={projectInfoById?.[thread.projectId]} onDelete={onDelete} search={search} />)
+          threads.map((thread) => <KanbanCard key={thread.id} thread={thread} projectInfo={projectInfoById?.[thread.projectId]} onDelete={onDelete} search={search} ghost={stage === 'archived'} />)
         )}
       </div>
     </div>
@@ -303,15 +304,16 @@ export function KanbanView({ threads, projectId, search }: KanbanViewProps) {
 
   const handlePromptSubmit = useCallback(async (
     prompt: string,
-    opts: { model: string; mode: string; threadMode?: string; baseBranch?: string },
+    opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; sendToBacklog?: boolean },
     images?: any[]
   ) => {
     if (!slideUpProjectId || creating) return;
     setCreating(true);
 
     const threadMode = (opts.threadMode as 'local' | 'worktree') || defaultThreadMode;
+    const toBacklog = opts.sendToBacklog || slideUpStage === 'backlog';
 
-    if (slideUpStage === 'backlog') {
+    if (toBacklog) {
       // Create idle thread (backlog)
       const result = await api.createIdleThread({
         projectId: slideUpProjectId,

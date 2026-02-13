@@ -5,9 +5,10 @@ import remarkGfm from 'remark-gfm';
 import { motion, AnimatePresence } from 'motion/react';
 import { useAppStore } from '@/stores/app-store';
 import { cn } from '@/lib/utils';
-import { Loader2, Clock, Copy, Check, Send, CheckCircle2, XCircle, ArrowDown, ShieldQuestion } from 'lucide-react';
+import { Loader2, Clock, Copy, Check, Send, CheckCircle2, XCircle, ArrowDown, ShieldQuestion, Play } from 'lucide-react';
 import { api } from '@/lib/api';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
+import { useThreadStore } from '@/stores/thread-store';
 import { PromptInput } from './PromptInput';
 import { ToolCallCard } from './ToolCallCard';
 import { ToolCallGroup } from './ToolCallGroup';
@@ -275,6 +276,16 @@ export function ThreadView() {
     setCurrentSnapshotIdx(-1);
   }, [activeThread?.id]);
 
+  // Scroll to bottom when opening or switching threads
+  useEffect(() => {
+    const viewport = scrollViewportRef.current;
+    if (!viewport || !activeThread) return;
+
+    // Reset the scroll-up flag and scroll to bottom
+    userHasScrolledUp.current = false;
+    viewport.scrollTop = viewport.scrollHeight;
+  }, [activeThread?.id]);
+
   // Derive displayed snapshot — only when scroll handler has detected a position
   const currentSnapshot = currentSnapshotIdx >= 0 && currentSnapshotIdx < snapshots.length
     ? snapshots[currentSnapshotIdx]
@@ -386,9 +397,16 @@ export function ThreadView() {
   }
 
   if (!selectedThreadId) {
+    if (selectedProjectId) {
+      return (
+        <div className="flex-1 flex flex-col h-full min-w-0">
+          <ProjectHeader />
+          <NewThreadInput />
+        </div>
+      );
+    }
     return (
       <div className="flex-1 flex flex-col h-full min-w-0">
-        {selectedProjectId && <ProjectHeader />}
         <div className="flex-1 flex items-center justify-center text-muted-foreground">
           <div className="text-center">
             <p className="text-sm">{t('thread.selectOrCreate')}</p>
@@ -414,7 +432,13 @@ export function ThreadView() {
     if (sending) return;
     setSending(true);
 
-    useAppStore.getState().appendOptimisticMessage(activeThread.id, prompt, images);
+    useAppStore.getState().appendOptimisticMessage(
+      activeThread.id,
+      prompt,
+      images,
+      opts.model as any,
+      opts.mode as any
+    );
 
     const { allowedTools, disallowedTools } = deriveToolLists(useSettingsStore.getState().toolPermissions);
     const result = await api.sendMessage(activeThread.id, prompt, { model: opts.model || undefined, permissionMode: opts.mode || undefined, allowedTools, disallowedTools }, images);
@@ -446,7 +470,80 @@ export function ThreadView() {
   const isRunning = activeThread.status === 'running';
   const isIdle = activeThread.status === 'idle';
 
-  // Idle thread: show prompt input to start
+  // Idle thread in backlog: show prompt input (with optional start button for saved prompts)
+  if (isIdle && activeThread.stage === 'backlog') {
+    const handleStartTask = async () => {
+      await useThreadStore.getState().updateThreadStage(
+        activeThread.id,
+        activeThread.projectId,
+        'in_progress'
+      );
+    };
+
+    const handleSendFromBacklog = async (prompt: string, opts: { model: string; mode: string }, images?: any[]) => {
+      if (sending) return;
+      setSending(true);
+
+      // Move to in_progress when sending a prompt from backlog
+      await useThreadStore.getState().updateThreadStage(
+        activeThread.id,
+        activeThread.projectId,
+        'in_progress'
+      );
+
+      useAppStore.getState().appendOptimisticMessage(
+        activeThread.id,
+        prompt,
+        images,
+        opts.model as any,
+        opts.mode as any
+      );
+
+      const { allowedTools, disallowedTools } = deriveToolLists(useSettingsStore.getState().toolPermissions);
+      const result = await api.sendMessage(activeThread.id, prompt, { model: opts.model || undefined, permissionMode: opts.mode || undefined, allowedTools, disallowedTools }, images);
+      if (result.isErr()) {
+        console.error('Send failed:', result.error);
+      }
+      setSending(false);
+    };
+
+    return (
+      <div className="flex-1 flex flex-col h-full min-w-0">
+        <ProjectHeader />
+        <div className="flex-1 flex flex-col justify-center px-4">
+          <div className="mx-auto max-w-2xl w-full space-y-4 mb-8">
+            <div className="text-center space-y-2">
+              <p className="text-sm font-medium text-foreground">{activeThread.title}</p>
+              {activeThread.initialPrompt && (
+                <>
+                  <p className="text-xs text-muted-foreground whitespace-pre-wrap">{activeThread.initialPrompt}</p>
+                  <button
+                    onClick={handleStartTask}
+                    className="inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+                  >
+                    <Play className="h-4 w-4" />
+                    {t('thread.startTask')}
+                  </button>
+                </>
+              )}
+              {!activeThread.initialPrompt && (
+                <p className="text-xs text-muted-foreground">{t('thread.describeTask')}</p>
+              )}
+            </div>
+          </div>
+        </div>
+        <PromptInput
+          onSubmit={handleSendFromBacklog}
+          loading={sending}
+          isNewThread
+          projectId={activeThread.projectId}
+          placeholder={activeThread.initialPrompt ? t('thread.orTypeNewPrompt') : t('thread.describeTask')}
+        />
+      </div>
+    );
+  }
+
+  // Idle thread (not backlog): show prompt input to start
   if (isIdle) {
     return (
       <div className="flex-1 flex flex-col h-full min-w-0">
@@ -547,9 +644,24 @@ export function ThreadView() {
                       );
                     })()}
                     {msg.role === 'user' ? (
-                      <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed break-words overflow-x-auto max-h-80 overflow-y-auto">
-                        {msg.content.trim()}
-                      </pre>
+                      <>
+                        <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed break-words overflow-x-auto max-h-80 overflow-y-auto">
+                          {msg.content.trim()}
+                        </pre>
+                        {(msg.model || msg.permissionMode) && (
+                          <div className="flex gap-1.5 mt-1.5 text-[10px] text-primary-foreground/60 font-medium">
+                            {msg.model && (
+                              <span>{t(`thread.model.${msg.model}`)}</span>
+                            )}
+                            {msg.model && msg.permissionMode && (
+                              <span>·</span>
+                            )}
+                            {msg.permissionMode && (
+                              <span>{t(`prompt.${msg.permissionMode}`)}</span>
+                            )}
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <div className="text-sm leading-relaxed break-words overflow-x-auto">
                         <MessageContent content={msg.content.trim()} />

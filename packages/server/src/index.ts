@@ -28,6 +28,7 @@ import { analyticsRoutes } from './routes/analytics.js';
 import { wsBroker } from './services/ws-broker.js';
 import { startScheduler, stopScheduler } from './services/automation-scheduler.js';
 import * as ptyManager from './services/pty-manager.js';
+import { checkClaudeBinaryAvailability } from './utils/claude-binary.js';
 
 // Resolve client dist directory (works both in dev and when installed via npm)
 const clientDistDir = resolve(
@@ -127,6 +128,17 @@ if (authMode === 'local') {
 }
 
 console.log(`[server] Auth mode: ${authMode}`);
+
+// Check Claude CLI availability at startup
+const claudeBinaryCheck = checkClaudeBinaryAvailability();
+if (!claudeBinaryCheck.available) {
+  console.warn('[server] WARNING: Claude CLI is not installed or not found in PATH');
+  console.warn(`[server] ${claudeBinaryCheck.error}`);
+  console.warn('[server] Agent features will not work until Claude CLI is installed');
+  console.warn('[server] Install from: https://docs.anthropic.com/en/docs/agents/overview');
+} else {
+  console.log(`[server] Claude CLI: ${claudeBinaryCheck.path}`);
+}
 
 const server = Bun.serve({
   port,

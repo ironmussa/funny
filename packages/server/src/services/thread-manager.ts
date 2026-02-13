@@ -208,6 +208,8 @@ export function insertMessage(data: {
   role: string;
   content: string;
   images?: string | null;
+  model?: string | null;
+  permissionMode?: string | null;
 }): string {
   const id = nanoid();
   db.insert(schema.messages)
@@ -217,6 +219,8 @@ export function insertMessage(data: {
       role: data.role,
       content: data.content,
       images: data.images ?? null,
+      model: data.model ?? null,
+      permissionMode: data.permissionMode ?? null,
       timestamp: new Date().toISOString(),
     })
     .run();

@@ -76,7 +76,9 @@
     "permissionRequired": "Tool permission required",
     "permissionMessage": "Claude wants to use {{tool}}. Would you like to allow it?",
     "approvePermission": "Allow",
-    "denyPermission": "Deny"
+    "denyPermission": "Deny",
+    "startTask": "Start Task",
+    "orTypeNewPrompt": "Or type a new prompt below..."
   },
   "review": {
     "title": "Review",
@@ -310,8 +312,12 @@
     "title": "Select Folder",
     "loading": "Loading...",
     "up": "Up",
+    "back": "Back",
+    "forward": "Forward",
     "home": "Home",
     "noSubdirs": "No subdirectories",
+    "searchPlaceholder": "Filter folders...",
+    "noResults": "No matching folders",
     "cancel": "Cancel",
     "selectFolder": "Select this folder"
   },
@@ -393,7 +399,9 @@
     "worktreeDeleteFailed": "Failed to delete worktree: {{message}}"
   },
   "confirm": {
-    "notGitRepo": "\"{{path}}\" is not a git repository.\n\nDo you want to initialize it with git init?"
+    "notGitRepo": "\"{{path}}\" is not a git repository.\n\nDo you want to initialize it with git init?",
+    "gitInitTitle": "Initialize Git Repository",
+    "gitInitAction": "Initialize"
   },
   "time": {
     "now": "now",
@@ -419,7 +427,9 @@
     "stopAgent": "Stop agent",
     "loadingSkills": "Loading skills...",
     "searchWorktrees": "Search worktrees...",
-    "noWorktreesMatch": "No worktrees match"
+    "noWorktreesMatch": "No worktrees match",
+    "backlog": "Backlog",
+    "sendToBacklog": "Send to backlog instead of running immediately"
   },
   "gitStatus": {
     "dirty": "Uncommitted changes",

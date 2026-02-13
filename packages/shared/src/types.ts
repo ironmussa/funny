@@ -131,6 +131,10 @@ export interface Message {
   content: string;
   images?: ImageAttachment[];
   timestamp: string;
+  /** Model used when this user message was sent */
+  model?: ClaudeModel;
+  /** Permission mode used when this user message was sent */
+  permissionMode?: PermissionMode;
 }
 
 // ─── Thread with Messages ────────────────────────────────

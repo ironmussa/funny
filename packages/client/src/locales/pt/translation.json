@@ -429,7 +429,10 @@
     "stopAgent": "Parar agente",
     "loadingSkills": "Carregando skills...",
     "backlog": "Backlog",
-    "sendToBacklog": "Enviar para o backlog em vez de executar imediatamente"
+    "sendToBacklog": "Enviar para o backlog em vez de executar imediatamente",
+    "loadingFiles": "Carregando arquivos...",
+    "noFilesMatch": "Nenhum arquivo encontrado",
+    "moreFilesHint": "Digite para filtrar..."
   },
   "gitStatus": {
     "dirty": "Alterações não commitadas",

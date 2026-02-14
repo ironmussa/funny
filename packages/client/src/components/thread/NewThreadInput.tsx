@@ -21,7 +21,7 @@ export function NewThreadInput() {
 
   const handleCreate = async (
     prompt: string,
-    opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; sendToBacklog?: boolean },
+    opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; sendToBacklog?: boolean; fileReferences?: { path: string }[] },
     images?: any[]
   ) => {
     if (!newThreadProjectId || creating) return;
@@ -65,6 +65,7 @@ export function NewThreadInput() {
       images,
       allowedTools,
       disallowedTools,
+      fileReferences: opts.fileReferences,
     });
 
     if (result.isErr()) {

@@ -435,7 +435,10 @@
     "searchWorktrees": "Search worktrees...",
     "noWorktreesMatch": "No worktrees match",
     "backlog": "Backlog",
-    "sendToBacklog": "Send to backlog instead of running immediately"
+    "sendToBacklog": "Send to backlog instead of running immediately",
+    "loadingFiles": "Loading files...",
+    "noFilesMatch": "No files match",
+    "moreFilesHint": "Type to narrow results..."
   },
   "gitStatus": {
     "dirty": "Uncommitted changes",

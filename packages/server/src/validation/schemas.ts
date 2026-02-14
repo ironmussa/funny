@@ -20,6 +20,12 @@ const imageAttachmentSchema = z.object({
   }),
 });
 
+// ── File references ──────────────────────────────────────────────
+
+const fileReferenceSchema = z.object({
+  path: z.string().min(1),
+});
+
 // ── Request body schemas ─────────────────────────────────────────
 
 export const createProjectSchema = z.object({
@@ -51,6 +57,7 @@ export const createThreadSchema = z.object({
   images: z.array(imageAttachmentSchema).optional(),
   allowedTools: z.array(z.string()).optional(),
   disallowedTools: z.array(z.string()).optional(),
+  fileReferences: z.array(fileReferenceSchema).max(20).optional(),
 });
 
 export const createIdleThreadSchema = z.object({
@@ -68,6 +75,7 @@ export const sendMessageSchema = z.object({
   images: z.array(imageAttachmentSchema).optional(),
   allowedTools: z.array(z.string()).optional(),
   disallowedTools: z.array(z.string()).optional(),
+  fileReferences: z.array(fileReferenceSchema).max(20).optional(),
 });
 
 export const updateThreadSchema = z.object({

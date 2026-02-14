@@ -504,7 +504,7 @@ export function ThreadView() {
     );
   }
 
-  const handleSend = async (prompt: string, opts: { model: string; mode: string }, images?: any[]) => {
+  const handleSend = async (prompt: string, opts: { model: string; mode: string; fileReferences?: { path: string }[] }, images?: any[]) => {
     if (sending) return;
     setSending(true);
 
@@ -517,7 +517,7 @@ export function ThreadView() {
     );
 
     const { allowedTools, disallowedTools } = deriveToolLists(useSettingsStore.getState().toolPermissions);
-    const result = await api.sendMessage(activeThread.id, prompt, { model: opts.model || undefined, permissionMode: opts.mode || undefined, allowedTools, disallowedTools }, images);
+    const result = await api.sendMessage(activeThread.id, prompt, { model: opts.model || undefined, permissionMode: opts.mode || undefined, allowedTools, disallowedTools, fileReferences: opts.fileReferences }, images);
     if (result.isErr()) {
       console.error('Send failed:', result.error);
     }

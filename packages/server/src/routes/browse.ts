@@ -3,6 +3,7 @@ import { readdirSync } from 'fs';
 import { join, parse as parsePath, resolve, normalize } from 'path';
 import { homedir, platform } from 'os';
 import { getRemoteUrl, extractRepoName, initRepo } from '../utils/git-v2.js';
+import { execute } from '../utils/process.js';
 import * as pm from '../services/project-manager.js';
 import { resultToResponse } from '../utils/result-response.js';
 
@@ -227,6 +228,48 @@ app.post('/open-terminal', async (c) => {
   });
 
   return c.json({ ok: true });
+});
+
+// List files in a git repository (respects .gitignore)
+app.get('/files', async (c) => {
+  const dirPathOrRes = checkRequired(c.req.query('path'), 'path query parameter');
+  if (dirPathOrRes instanceof Response) return dirPathOrRes;
+  const dirPath = dirPathOrRes;
+
+  const denied = checkAllowedPath(dirPath);
+  if (denied) return denied;
+
+  const query = c.req.query('query') || '';
+
+  try {
+    const result = await execute('git', [
+      'ls-files',
+      '--cached',
+      '--others',
+      '--exclude-standard',
+    ], { cwd: dirPath, reject: false, timeout: 10_000 });
+
+    if (result.exitCode !== 0) {
+      return c.json({ files: [], truncated: false, error: 'Not a git repository or git error' });
+    }
+
+    let files = result.stdout
+      .split('\n')
+      .map(f => f.trim())
+      .filter(Boolean);
+
+    if (query) {
+      const lowerQuery = query.toLowerCase();
+      files = files.filter(f => f.toLowerCase().includes(lowerQuery));
+    }
+
+    const truncated = files.length > 200;
+    files = files.slice(0, 200);
+
+    return c.json({ files, truncated });
+  } catch (error: any) {
+    return c.json({ files: [], truncated: false, error: error.message });
+  }
 });
 
 export default app;

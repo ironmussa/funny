@@ -9,6 +9,7 @@ import { requireThread, requireThreadWithMessages, requireProject } from '../uti
 import { resultToResponse } from '../utils/result-response.js';
 import { notFound } from '@a-parallel/shared/errors';
 import { getCurrentBranch } from '../utils/git-v2.js';
+import { augmentPromptWithFiles } from '../utils/file-mentions.js';
 
 export const threadRoutes = new Hono();
 
@@ -115,7 +116,7 @@ threadRoutes.post('/', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(createThreadSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { projectId, title, mode, model, permissionMode, baseBranch, prompt, images, allowedTools, disallowedTools } = parsed.value;
+  const { projectId, title, mode, model, permissionMode, baseBranch, prompt, images, allowedTools, disallowedTools, fileReferences } = parsed.value;
 
   const projectResult = requireProject(projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
@@ -168,9 +169,12 @@ threadRoutes.post('/', async (c) => {
 
   const pMode = permissionMode || 'autoEdit';
 
+  // Augment prompt with file contents if file references were provided
+  const augmentedPrompt = await augmentPromptWithFiles(prompt, fileReferences, cwd);
+
   // Start agent and handle errors (especially Claude CLI not installed)
   try {
-    await startAgent(threadId, prompt, cwd, model || 'sonnet', pMode, images, disallowedTools, allowedTools);
+    await startAgent(threadId, augmentedPrompt, cwd, model || 'sonnet', pMode, images, disallowedTools, allowedTools);
   } catch (err: any) {
     // If startAgent throws (e.g. Claude CLI not found), return error to client
     console.error(`[agent] Failed to start agent for thread ${threadId}:`, err);
@@ -203,7 +207,7 @@ threadRoutes.post('/:id/message', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(sendMessageSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { content, model, permissionMode, images, allowedTools, disallowedTools } = parsed.value;
+  const { content, model, permissionMode, images, allowedTools, disallowedTools, fileReferences } = parsed.value;
 
   const threadResult = requireThread(id);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
@@ -232,9 +236,12 @@ threadRoutes.post('/:id/message', async (c) => {
     tm.updateThread(id, { stage: 'in_progress' });
   }
 
+  // Augment prompt with file contents if file references were provided
+  const augmentedContent = await augmentPromptWithFiles(content, fileReferences, cwd);
+
   // Start agent and handle errors (especially Claude CLI not installed)
   try {
-    await startAgent(id, content, cwd, effectiveModel, effectivePermission, images, disallowedTools, allowedTools);
+    await startAgent(id, augmentedContent, cwd, effectiveModel, effectivePermission, images, disallowedTools, allowedTools);
   } catch (err: any) {
     console.error(`[agent] Failed to start agent for thread ${id}:`, err);
 

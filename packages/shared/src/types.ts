@@ -287,6 +287,8 @@ export interface GitStatusInfo {
   unpushedCommitCount: number;
   hasRemoteBranch: boolean;
   isMergedIntoBase: boolean;
+  linesAdded: number;
+  linesDeleted: number;
 }
 
 export interface WSGitStatusData {

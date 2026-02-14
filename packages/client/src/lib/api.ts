@@ -145,6 +145,7 @@ export const api = {
     images?: ImageAttachment[];
     allowedTools?: string[];
     disallowedTools?: string[];
+    fileReferences?: { path: string }[];
   }) => request<Thread>('/threads', { method: 'POST', body: JSON.stringify(data) }),
   createIdleThread: (data: {
     projectId: string;
@@ -153,10 +154,10 @@ export const api = {
     baseBranch?: string;
     prompt?: string;
   }) => request<Thread>('/threads/idle', { method: 'POST', body: JSON.stringify(data) }),
-  sendMessage: (threadId: string, content: string, opts?: { model?: string; permissionMode?: string; allowedTools?: string[]; disallowedTools?: string[] }, images?: ImageAttachment[]) =>
+  sendMessage: (threadId: string, content: string, opts?: { model?: string; permissionMode?: string; allowedTools?: string[]; disallowedTools?: string[]; fileReferences?: { path: string }[] }, images?: ImageAttachment[]) =>
     request<{ ok: boolean }>(`/threads/${threadId}/message`, {
       method: 'POST',
-      body: JSON.stringify({ content, model: opts?.model, permissionMode: opts?.permissionMode, images, allowedTools: opts?.allowedTools, disallowedTools: opts?.disallowedTools }),
+      body: JSON.stringify({ content, model: opts?.model, permissionMode: opts?.permissionMode, images, allowedTools: opts?.allowedTools, disallowedTools: opts?.disallowedTools, fileReferences: opts?.fileReferences }),
     }),
   stopThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/stop`, { method: 'POST' }),
@@ -350,6 +351,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ path }),
     }),
+  browseFiles: (path: string, query?: string) => {
+    const params = new URLSearchParams({ path });
+    if (query) params.set('query', query);
+    return request<{ files: string[]; truncated: boolean }>(`/browse/files?${params.toString()}`);
+  },
 
   // GitHub
   githubStatus: () =>

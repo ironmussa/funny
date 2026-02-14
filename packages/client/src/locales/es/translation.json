@@ -433,7 +433,10 @@
     "stopAgent": "Detener agente",
     "loadingSkills": "Cargando skills...",
     "backlog": "Backlog",
-    "sendToBacklog": "Enviar al backlog en lugar de ejecutar inmediatamente"
+    "sendToBacklog": "Enviar al backlog en lugar de ejecutar inmediatamente",
+    "loadingFiles": "Cargando archivos...",
+    "noFilesMatch": "No hay archivos",
+    "moreFilesHint": "Escribe para filtrar..."
   },
   "gitStatus": {
     "dirty": "Cambios sin commitear",

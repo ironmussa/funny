@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ArrowUp, Square, Loader2, Image as ImageIcon, X, Zap, GitBranch, Check, Monitor, Inbox } from 'lucide-react';
+import { ArrowUp, Square, Loader2, Image as ImageIcon, X, Zap, GitBranch, Check, Monitor, Inbox, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -293,7 +293,7 @@ function BranchPicker({
 }
 
 interface PromptInputProps {
-  onSubmit: (prompt: string, opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; cwd?: string; sendToBacklog?: boolean }, images?: ImageAttachment[]) => void;
+  onSubmit: (prompt: string, opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; cwd?: string; sendToBacklog?: boolean; fileReferences?: { path: string }[] }, images?: ImageAttachment[]) => void;
   onStop?: () => void;
   loading?: boolean;
   running?: boolean;
@@ -367,6 +367,19 @@ export function PromptInput({
   const [slashFilter, setSlashFilter] = useState('');
   const [slashIndex, setSlashIndex] = useState(0);
   const slashMenuRef = useRef<HTMLDivElement>(null);
+
+  // File mention state
+  const [showMentionMenu, setShowMentionMenu] = useState(false);
+  const [mentionFilter, setMentionFilter] = useState('');
+  const [mentionIndex, setMentionIndex] = useState(0);
+  const [mentionFiles, setMentionFiles] = useState<string[]>([]);
+  const [mentionLoading, setMentionLoading] = useState(false);
+  const [mentionTruncated, setMentionTruncated] = useState(false);
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  const mentionMenuRef = useRef<HTMLDivElement>(null);
+  const mentionStartPosRef = useRef<number>(-1);
+  const loadFilesTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
   const projects = useAppStore(s => s.projects);
   const selectedProjectId = useAppStore(s => s.selectedProjectId);
   const selectedThreadId = useAppStore(s => s.selectedThreadId);
@@ -506,6 +519,56 @@ export function PromptInput({
     textareaRef.current?.focus();
   }, []);
 
+  // Load files for @ mention with debounce
+  const loadFiles = useCallback((query: string) => {
+    if (loadFilesTimeoutRef.current) clearTimeout(loadFilesTimeoutRef.current);
+    loadFilesTimeoutRef.current = setTimeout(async () => {
+      const path = cwdOverride || threadCwd;
+      if (!path) return;
+      setMentionLoading(true);
+      const result = await api.browseFiles(path, query || undefined);
+      if (result.isOk()) {
+        setMentionFiles(result.value.files);
+        setMentionTruncated(result.value.truncated);
+      }
+      setMentionLoading(false);
+    }, 150);
+  }, [cwdOverride, threadCwd]);
+
+  // Handle @ mention trigger detection
+  const handleMentionDetection = useCallback((value: string, cursorPos: number) => {
+    const textBeforeCursor = value.slice(0, cursorPos);
+    const mentionMatch = textBeforeCursor.match(/@([^\s@]*)$/);
+    if (mentionMatch) {
+      const query = mentionMatch[1];
+      setMentionFilter(query);
+      setShowMentionMenu(true);
+      setMentionIndex(0);
+      mentionStartPosRef.current = cursorPos - mentionMatch[0].length;
+      loadFiles(query);
+    } else {
+      setShowMentionMenu(false);
+    }
+  }, [loadFiles]);
+
+  // Select a file from the mention menu
+  const selectMentionFile = useCallback((filePath: string) => {
+    const before = prompt.slice(0, mentionStartPosRef.current);
+    const afterCursor = prompt.slice(mentionStartPosRef.current + mentionFilter.length + 1); // +1 for @
+    const newPrompt = `${before}@${filePath} ${afterCursor}`;
+    setPrompt(newPrompt);
+    setSelectedFiles(prev => prev.includes(filePath) ? prev : [...prev, filePath]);
+    setShowMentionMenu(false);
+    textareaRef.current?.focus();
+  }, [prompt, mentionFilter]);
+
+  // Scroll mention menu selection into view
+  useEffect(() => {
+    if (!showMentionMenu || !mentionMenuRef.current) return;
+    const activeItem = mentionMenuRef.current.children[mentionIndex] as HTMLElement | undefined;
+    activeItem?.scrollIntoView({ block: 'nearest' });
+  }, [mentionIndex, showMentionMenu]);
+
   // Focus when switching threads or when agent stops running
   useEffect(() => {
     textareaRef.current?.focus();
@@ -534,14 +597,40 @@ export function PromptInput({
         mode,
         ...(isNewThread ? { threadMode, baseBranch: threadMode === 'worktree' ? selectedBranch : undefined, sendToBacklog } : {}),
         cwd: cwdOverride || undefined,
+        fileReferences: selectedFiles.length > 0 ? selectedFiles.map(p => ({ path: p })) : undefined,
       },
       images.length > 0 ? images : undefined
     );
     setPrompt('');
     setImages([]);
+    setSelectedFiles([]);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
+    // Handle @ mention menu navigation
+    if (showMentionMenu && mentionFiles.length > 0) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setMentionIndex((i) => (i + 1) % mentionFiles.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setMentionIndex((i) => (i - 1 + mentionFiles.length) % mentionFiles.length);
+        return;
+      }
+      if (e.key === 'Enter' || e.key === 'Tab') {
+        e.preventDefault();
+        selectMentionFile(mentionFiles[mentionIndex]);
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setShowMentionMenu(false);
+        return;
+      }
+    }
+
     // Handle slash menu navigation
     if (showSlashMenu && filteredSkills.length > 0) {
       if (e.key === 'ArrowDown') {
@@ -678,6 +767,49 @@ export function PromptInput({
 
         {/* Textarea + bottom toolbar */}
         <div className="relative rounded-md border border-input bg-background focus-within:ring-1 focus-within:ring-ring transition-[border-color,box-shadow] duration-150">
+          {/* File mention dropdown */}
+          {showMentionMenu && (
+            <div
+              ref={mentionMenuRef}
+              className="absolute bottom-full left-0 mb-1 w-full max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md z-50"
+            >
+              {mentionLoading && mentionFiles.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  {t('prompt.loadingFiles', 'Loading files...')}
+                </div>
+              ) : mentionFiles.length === 0 ? (
+                <div className="px-3 py-2 text-xs text-muted-foreground">
+                  {t('prompt.noFilesMatch', 'No files match')}
+                </div>
+              ) : (
+                <>
+                  {mentionFiles.map((file, i) => (
+                    <button
+                      key={file}
+                      className={cn(
+                        'w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent transition-colors',
+                        i === mentionIndex && 'bg-accent',
+                        selectedFiles.includes(file) && 'text-primary'
+                      )}
+                      onMouseDown={(e) => {
+                        e.preventDefault();
+                        selectMentionFile(file);
+                      }}
+                      onMouseEnter={() => setMentionIndex(i)}
+                    >
+                      <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+                      <span className="font-mono text-xs truncate">{file}</span>
+                    </button>
+                  ))}
+                  {mentionTruncated && (
+                    <div className="px-3 py-1.5 text-xs text-muted-foreground border-t border-border">
+                      {t('prompt.moreFilesHint', 'Type to narrow results...')}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
           {/* Slash command dropdown */}
           {showSlashMenu && (
             <div
@@ -720,12 +852,36 @@ export function PromptInput({
             style={{ minHeight: '4.5rem' }}
             placeholder={running ? t('thread.agentWorkingQueue') : defaultPlaceholder}
             value={prompt}
-            onChange={(e) => setPrompt(e.target.value)}
+            onChange={(e) => {
+              setPrompt(e.target.value);
+              handleMentionDetection(e.target.value, e.target.selectionStart ?? e.target.value.length);
+            }}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
             rows={1}
             disabled={loading}
           />
+          {/* Selected file mention chips */}
+          {selectedFiles.length > 0 && (
+            <div className="px-2 py-1 flex flex-wrap gap-1 border-t border-border/50">
+              {selectedFiles.map((file) => (
+                <span
+                  key={file}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-mono bg-muted rounded text-muted-foreground"
+                  title={file}
+                >
+                  <FileText className="h-3 w-3 shrink-0" />
+                  {file.split('/').pop()}
+                  <button
+                    onClick={() => setSelectedFiles(prev => prev.filter(f => f !== file))}
+                    className="hover:text-destructive ml-0.5"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           {/* Bottom toolbar */}
           <input
             ref={fileInputRef}

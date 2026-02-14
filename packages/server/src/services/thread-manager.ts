@@ -174,6 +174,22 @@ export function updateThread(
     }
   }
 
+  // Record archiving/unarchiving as a stage transition
+  if (updates.archived !== undefined) {
+    const currentThread = db.select({ stage: schema.threads.stage, archived: schema.threads.archived })
+      .from(schema.threads)
+      .where(eq(schema.threads.id, id))
+      .get();
+
+    if (currentThread) {
+      if (updates.archived === 1 && currentThread.archived === 0) {
+        recordStageChange(id, currentThread.stage, 'archived');
+      } else if (updates.archived === 0 && currentThread.archived === 1) {
+        recordStageChange(id, 'archived', updates.stage ?? currentThread.stage);
+      }
+    }
+  }
+
   db.update(schema.threads).set(updates).where(eq(schema.threads.id, id)).run();
 }
 

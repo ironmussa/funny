@@ -276,14 +276,18 @@ export function PermissionApprovalCard({
   );
 }
 
-type RenderItem =
-  | { type: 'message'; msg: any }
+type ToolItem =
   | { type: 'toolcall'; tc: any }
   | { type: 'toolcall-group'; name: string; calls: any[] };
 
+type RenderItem =
+  | { type: 'message'; msg: any }
+  | ToolItem
+  | { type: 'toolcall-run'; items: ToolItem[] };
+
 function buildGroupedRenderItems(messages: any[]): RenderItem[] {
   // Flatten all messages into a single stream of items
-  const flat: RenderItem[] = [];
+  const flat: ({ type: 'message'; msg: any } | { type: 'toolcall'; tc: any })[] = [];
   for (const msg of messages) {
     // Only add message bubble if there's actual text content
     // Tool calls are handled separately below
@@ -319,7 +323,24 @@ function buildGroupedRenderItems(messages: any[]): RenderItem[] {
     }
   }
 
-  return grouped;
+  // Wrap consecutive tool call items into a single toolcall-run for tighter spacing
+  const final: RenderItem[] = [];
+  for (const item of grouped) {
+    if (item.type === 'toolcall' || item.type === 'toolcall-group') {
+      const last = final[final.length - 1];
+      if (last?.type === 'toolcall-run') {
+        last.items.push(item);
+      } else if (last?.type === 'toolcall' || last?.type === 'toolcall-group') {
+        final[final.length - 1] = { type: 'toolcall-run', items: [last, item] };
+      } else {
+        final.push(item);
+      }
+    } else {
+      final.push(item);
+    }
+  }
+
+  return final;
 }
 
 export function ThreadView() {
@@ -610,6 +631,53 @@ export function ThreadView() {
           )}
 
           {buildGroupedRenderItems(activeThread.messages ?? []).map((item) => {
+              const renderToolItem = (ti: ToolItem) => {
+                if (ti.type === 'toolcall') {
+                  const tc = ti.tc;
+                  return (
+                    <motion.div
+                      key={tc.id}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, ease: 'easeOut' }}
+                      className={(tc.name === 'AskUserQuestion' || tc.name === 'TodoWrite') ? 'border border-border rounded-lg' : undefined}
+                      {...(snapshotMap.has(tc.id) ? { 'data-todo-snapshot': snapshotMap.get(tc.id) } : {})}
+                    >
+                      <ToolCallCard
+                        name={tc.name}
+                        input={tc.input}
+                        output={tc.output}
+                        onRespond={(tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode') ? (answer: string) => handleSend(answer, { model: '', mode: '' }) : undefined}
+                      />
+                    </motion.div>
+                  );
+                }
+                if (ti.type === 'toolcall-group') {
+                  const groupSnapshotIdx = ti.name === 'TodoWrite'
+                    ? Math.max(...ti.calls.map((c: any) => snapshotMap.get(c.id) ?? -1))
+                    : -1;
+                  return (
+                    <motion.div
+                      key={ti.calls[0].id}
+                      initial={{ opacity: 0, y: 6 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ duration: 0.25, ease: 'easeOut' }}
+                      className={(ti.name === 'AskUserQuestion' || ti.name === 'TodoWrite') ? 'border border-border rounded-lg' : undefined}
+                      {...(groupSnapshotIdx >= 0 ? { 'data-todo-snapshot': groupSnapshotIdx } : {})}
+                    >
+                      <ToolCallGroup
+                        name={ti.name}
+                        calls={ti.calls}
+                        onRespond={(ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode')
+                          ? (answer: string) => handleSend(answer, { model: '', mode: '' })
+                          : undefined}
+                      />
+                    </motion.div>
+                  );
+                }
+                return null;
+              };
+
               if (item.type === 'message') {
                 const msg = item.msg;
                 return (
@@ -675,46 +743,14 @@ export function ThreadView() {
                   </motion.div>
                 );
               }
-              if (item.type === 'toolcall') {
-                const tc = item.tc;
-                return (
-                  <motion.div
-                    key={tc.id}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.25, ease: 'easeOut' }}
-                    className={tc.name === 'AskUserQuestion' ? 'border border-border rounded-lg' : undefined}
-                    {...(snapshotMap.has(tc.id) ? { 'data-todo-snapshot': snapshotMap.get(tc.id) } : {})}
-                  >
-                    <ToolCallCard
-                      name={tc.name}
-                      input={tc.input}
-                      output={tc.output}
-                      onRespond={(tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode') ? (answer: string) => handleSend(answer, { model: '', mode: '' }) : undefined}
-                    />
-                  </motion.div>
-                );
+              if (item.type === 'toolcall' || item.type === 'toolcall-group') {
+                return renderToolItem(item);
               }
-              if (item.type === 'toolcall-group') {
-                const groupSnapshotIdx = item.name === 'TodoWrite'
-                  ? Math.max(...item.calls.map((c: any) => snapshotMap.get(c.id) ?? -1))
-                  : -1;
+              if (item.type === 'toolcall-run') {
                 return (
-                  <motion.div
-                    key={item.calls[0].id}
-                    initial={{ opacity: 0, y: 6 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.25, ease: 'easeOut' }}
-                    {...(groupSnapshotIdx >= 0 ? { 'data-todo-snapshot': groupSnapshotIdx } : {})}
-                  >
-                    <ToolCallGroup
-                      name={item.name}
-                      calls={item.calls}
-                      onRespond={(item.name === 'AskUserQuestion' || item.name === 'ExitPlanMode')
-                        ? (answer: string) => handleSend(answer, { model: '', mode: '' })
-                        : undefined}
-                    />
-                  </motion.div>
+                  <div key={item.items[0].type === 'toolcall' ? item.items[0].tc.id : item.items[0].calls[0].id} className="space-y-1">
+                    {item.items.map(renderToolItem)}
+                  </div>
                 );
               }
               return null;

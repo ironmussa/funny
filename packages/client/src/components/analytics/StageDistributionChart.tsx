@@ -10,6 +10,7 @@ const COLORS: Record<string, string> = {
   in_progress: '#3b82f6',
   review: '#f59e0b',
   done: '#22c55e',
+  archived: '#8b5cf6',
 };
 
 export function StageDistributionChart({ data }: Props) {
@@ -20,6 +21,7 @@ export function StageDistributionChart({ data }: Props) {
     in_progress: 'analytics.inProgress',
     review: 'analytics.review',
     done: 'analytics.done',
+    archived: 'analytics.archived',
   };
 
   const chartData = Object.entries(data)
@@ -67,8 +69,10 @@ export function StageDistributionChart({ data }: Props) {
               border: '1px solid hsl(var(--border))',
               borderRadius: '6px',
               fontSize: '12px',
-              color: 'hsl(var(--foreground))',
+              color: 'hsl(var(--popover-foreground))',
             }}
+            itemStyle={{ color: 'hsl(var(--popover-foreground))' }}
+            labelStyle={{ color: 'hsl(var(--popover-foreground))' }}
           />
         </PieChart>
       </ResponsiveContainer>

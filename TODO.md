@@ -1,6 +1,10 @@
 # TODO
 
 ## Tareas Pendientes
+- [ ] Skills
+- [ ] Preview
+- [ ] Log de depuracion
+
 - [ ] Esta tenindo problemas para salir del plan mode y esta repitiendo las pregutnas
 - [ ] Poder configurar diferentes puertos fácilmente en los diferentes worktree
 - [ ] Conectar el profiler para que la AI pueda consultar la AI en caso de errores

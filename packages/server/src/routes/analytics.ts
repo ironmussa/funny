@@ -83,7 +83,7 @@ analyticsRoutes.get('/overview', (c) => {
     baseFilters.push(eq(schema.threads.userId, userId));
   }
 
-  // Current stage distribution (all non-archived threads)
+  // Current stage distribution (non-archived threads by stage)
   const stageRows = db
     .select({
       stage: schema.threads.stage,
@@ -94,11 +94,19 @@ analyticsRoutes.get('/overview', (c) => {
     .groupBy(schema.threads.stage)
     .all();
 
+  // Count archived threads separately
+  const archivedResult = db
+    .select({ count: sql<number>`COUNT(*)` })
+    .from(schema.threads)
+    .where(and(...baseFilters, eq(schema.threads.archived, 1)))
+    .get();
+
   const distribution: Record<string, number> = {
     backlog: 0,
     in_progress: 0,
     review: 0,
     done: 0,
+    archived: archivedResult?.count ?? 0,
   };
   for (const row of stageRows) {
     distribution[row.stage] = row.count;
@@ -153,6 +161,19 @@ analyticsRoutes.get('/overview', (c) => {
     ))
     .get();
 
+  // Count transitions TO archived within time range
+  const movedToArchivedResult = db
+    .select({ count: sql<number>`COUNT(DISTINCT ${schema.stageHistory.threadId})` })
+    .from(schema.stageHistory)
+    .innerJoin(schema.threads, eq(schema.stageHistory.threadId, schema.threads.id))
+    .where(and(
+      ...baseFilters,
+      eq(schema.stageHistory.toStage, 'archived'),
+      gte(schema.stageHistory.changedAt, range.start),
+      lt(schema.stageHistory.changedAt, range.end),
+    ))
+    .get();
+
   // Total cost in time range
   const costResult = db
     .select({ total: sql<number>`COALESCE(SUM(${schema.threads.cost}), 0)` })
@@ -170,6 +191,7 @@ analyticsRoutes.get('/overview', (c) => {
     completedCount: completedResult?.count ?? 0,
     movedToReviewCount: movedToReviewResult?.count ?? 0,
     movedToDoneCount: movedToDoneResult?.count ?? 0,
+    movedToArchivedCount: movedToArchivedResult?.count ?? 0,
     totalCost: costResult?.total ?? 0,
     timeRange: range,
   });
@@ -267,11 +289,31 @@ analyticsRoutes.get('/timeline', (c) => {
     .orderBy(dateBucketDone)
     .all();
 
+  // Tasks moved to archived by date
+  const dateBucketArchived = dateBucket(schema.stageHistory.changedAt, groupBy, tzMod);
+  const movedToArchivedByDate = db
+    .select({
+      date: dateBucketArchived.as('date'),
+      count: sql<number>`COUNT(DISTINCT ${schema.stageHistory.threadId})`,
+    })
+    .from(schema.stageHistory)
+    .innerJoin(schema.threads, eq(schema.stageHistory.threadId, schema.threads.id))
+    .where(and(
+      ...baseFilters,
+      eq(schema.stageHistory.toStage, 'archived'),
+      gte(schema.stageHistory.changedAt, range.start),
+      lt(schema.stageHistory.changedAt, range.end),
+    ))
+    .groupBy(dateBucketArchived)
+    .orderBy(dateBucketArchived)
+    .all();
+
   return c.json({
     createdByDate,
     completedByDate,
     movedToReviewByDate,
     movedToDoneByDate,
+    movedToArchivedByDate,
     timeRange: range,
     groupBy,
   });

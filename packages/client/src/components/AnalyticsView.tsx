@@ -17,7 +17,7 @@ import { TimelineChart } from './analytics/TimelineChart';
 import { MetricCard } from './analytics/MetricCard';
 import { TimeRangeSelector, type TimeRange } from './analytics/TimeRangeSelector';
 import { GroupBySelector, type GroupBy } from './analytics/GroupBySelector';
-import { ChevronLeft, Plus, CheckCircle2, Eye, LayoutList, DollarSign } from 'lucide-react';
+import { ChevronLeft, Plus, CheckCircle2, Eye, LayoutList, DollarSign, Archive } from 'lucide-react';
 
 interface OverviewData {
   currentStageDistribution: Record<string, number>;
@@ -25,6 +25,7 @@ interface OverviewData {
   completedCount: number;
   movedToReviewCount: number;
   movedToDoneCount: number;
+  movedToArchivedCount: number;
   totalCost: number;
   timeRange: { start: string; end: string };
 }
@@ -34,6 +35,7 @@ interface TimelineData {
   completedByDate: Array<{ date: string; count: number }>;
   movedToReviewByDate: Array<{ date: string; count: number }>;
   movedToDoneByDate: Array<{ date: string; count: number }>;
+  movedToArchivedByDate: Array<{ date: string; count: number }>;
   timeRange: { start: string; end: string };
 }
 
@@ -128,7 +130,7 @@ export function AnalyticsView() {
           ) : (
             <>
               {/* Metric Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
                 <MetricCard
                   title={t('analytics.tasksCreated')}
                   value={overview.createdCount}
@@ -152,6 +154,12 @@ export function AnalyticsView() {
                   value={overview.movedToDoneCount}
                   icon={<LayoutList className="h-3.5 w-3.5" />}
                   color="violet"
+                />
+                <MetricCard
+                  title={t('analytics.movedToArchived')}
+                  value={overview.movedToArchivedCount}
+                  icon={<Archive className="h-3.5 w-3.5" />}
+                  color="red"
                 />
               </div>
 
@@ -190,6 +198,7 @@ export function AnalyticsView() {
                     completed={timeline.completedByDate}
                     movedToReview={timeline.movedToReviewByDate}
                     movedToDone={timeline.movedToDoneByDate}
+                    movedToArchived={timeline.movedToArchivedByDate ?? []}
                     groupBy={groupBy}
                   />
                 </div>

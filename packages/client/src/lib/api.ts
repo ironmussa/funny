@@ -255,9 +255,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(opts ?? {}),
     }),
-  generateCommitMessage: (threadId: string) =>
+  generateCommitMessage: (threadId: string, includeUnstaged?: boolean) =>
     request<{ title: string; body: string }>(`/git/${threadId}/generate-commit-message`, {
       method: 'POST',
+      body: JSON.stringify({ includeUnstaged: includeUnstaged ?? false }),
     }),
   getGitStatuses: (projectId: string) =>
     request<{ statuses: GitStatusInfo[] }>(`/git/status?projectId=${projectId}`),

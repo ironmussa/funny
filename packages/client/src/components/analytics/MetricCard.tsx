@@ -4,7 +4,7 @@ interface Props {
   title: string;
   value: number | string;
   icon: React.ReactNode;
-  color: 'blue' | 'green' | 'amber' | 'gray' | 'violet';
+  color: 'blue' | 'green' | 'amber' | 'gray' | 'violet' | 'red';
 }
 
 const colorClasses: Record<string, string> = {
@@ -13,6 +13,7 @@ const colorClasses: Record<string, string> = {
   amber: 'bg-amber-500/10 text-amber-500',
   gray: 'bg-gray-500/10 text-gray-500',
   violet: 'bg-violet-500/10 text-violet-500',
+  red: 'bg-red-500/10 text-red-500',
 };
 
 export function MetricCard({ title, value, icon, color }: Props) {

@@ -491,6 +491,8 @@
     "inProgress": "In Progress",
     "review": "Review",
     "done": "Done",
+    "archived": "Archived",
+    "movedToArchived": "Moved to Archived",
     "groupByDay": "Day",
     "groupByWeek": "Week",
     "groupByMonth": "Month",

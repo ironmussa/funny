@@ -221,16 +221,19 @@ gitRoutes.post('/:threadId/generate-commit-message', async (c) => {
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
+  const body = await c.req.json().catch(() => ({}));
+  const includeUnstaged = body?.includeUnstaged === true;
+
   const diffResult = await getDiff(cwd);
   if (diffResult.isErr()) return resultToResponse(c, diffResult);
   const diffs = diffResult.value;
-  const staged = diffs.filter(d => d.staged);
+  const relevantDiffs = includeUnstaged ? diffs : diffs.filter(d => d.staged);
 
-  if (staged.length === 0) {
-    return resultToResponse(c, err(badRequest('No staged files to generate a commit message for')));
+  if (relevantDiffs.length === 0) {
+    return resultToResponse(c, err(badRequest('No files to generate a commit message for')));
   }
 
-  let diffSummary = staged
+  let diffSummary = relevantDiffs
     .map(d => `--- ${d.status}: ${d.path} ---\n${d.diff || '(no diff)'}`)
     .join('\n\n');
 
@@ -241,7 +244,7 @@ gitRoutes.post('/:threadId/generate-commit-message', async (c) => {
     diffSummary = diffSummary.slice(0, MAX_DIFF_LEN) + '\n\n... (diff truncated for length)';
   }
 
-  const prompt = `You are a commit message generator. Based on the following staged git diff, generate a commit title and a commit body.
+  const prompt = `You are a commit message generator. Based on the following git diff, generate a commit title and a commit body.
 
 Rules:
 - The title must use conventional commits style (e.g. "feat: ...", "fix: ...", "refactor: ..."), be concise (max 72 chars), and summarize the change.
@@ -335,9 +338,9 @@ ${diffSummary}`;
   const bodyMatch = trimmed.match(/^BODY:\s*([\s\S]+)/m);
 
   const title = titleMatch?.[1]?.trim() || trimmed.split('\n')[0];
-  const body = bodyMatch?.[1]?.trim() || '';
+  const commitBody = bodyMatch?.[1]?.trim() || '';
 
-  return c.json({ title, body });
+  return c.json({ title, body: commitBody });
 });
 
 // POST /api/git/:threadId/merge

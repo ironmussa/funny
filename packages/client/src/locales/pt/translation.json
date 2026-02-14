@@ -485,6 +485,8 @@
     "inProgress": "Em Progresso",
     "review": "Revisão",
     "done": "Concluído",
+    "archived": "Arquivados",
+    "movedToArchived": "Movidas para Arquivados",
     "groupByDay": "Dia",
     "groupByWeek": "Semana",
     "groupByMonth": "Mês",

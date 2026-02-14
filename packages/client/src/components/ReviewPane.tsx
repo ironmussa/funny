@@ -170,9 +170,9 @@ export function ReviewPane() {
           <h3 className="text-xs font-semibold text-sidebar-foreground uppercase tracking-wider">{t('review.title')}</h3>
           {diffs.length > 0 && (
             <div className="flex items-center gap-1.5">
-              <span className="text-[10px] font-medium text-green-400">{stagedCount} staged</span>
-              <span className="text-[10px] text-muted-foreground">|</span>
-              <span className="text-[10px] font-medium text-yellow-400">{unstagedCount} unstaged</span>
+              <span className="text-sm font-medium text-green-400">{stagedCount} staged</span>
+              <span className="text-sm text-muted-foreground">|</span>
+              <span className="text-sm font-medium text-yellow-400">{unstagedCount} unstaged</span>
             </div>
           )}
           <Tooltip>

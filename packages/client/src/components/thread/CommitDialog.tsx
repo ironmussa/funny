@@ -89,7 +89,9 @@ export function CommitDialog({ open, onOpenChange }: CommitDialogProps) {
   const [actionInProgress, setActionInProgress] = useState<'commit' | 'commit-push' | 'commit-pr' | null>(null);
   const [selectedAction, setSelectedAction] = useState<'commit' | 'commit-push' | 'commit-pr'>('commit');
 
+  const gitStatus = useGitStatusStore(s => threadId ? s.statusByThread[threadId] : undefined);
   const stagedFiles = allFiles.filter(f => f.staged);
+  const unstagedFiles = allFiles.filter(f => !f.staged);
   const hasMessage = commitTitle.trim().length > 0;
   const canCommit = includeUnstaged
     ? allFiles.length > 0 && hasMessage && !actionInProgress
@@ -107,6 +109,7 @@ export function CommitDialog({ open, onOpenChange }: CommitDialogProps) {
   useEffect(() => {
     if (open) {
       refreshDiffs();
+      if (threadId) useGitStatusStore.getState().fetchForThread(threadId);
       setCommitTitle('');
       setCommitBody('');
       setActionInProgress(null);
@@ -116,7 +119,7 @@ export function CommitDialog({ open, onOpenChange }: CommitDialogProps) {
   const handleGenerateCommitMsg = async () => {
     if (!threadId || generatingMsg) return;
     setGeneratingMsg(true);
-    const result = await api.generateCommitMessage(threadId);
+    const result = await api.generateCommitMessage(threadId, includeUnstaged);
     if (result.isOk()) {
       setCommitTitle(result.value.title);
       setCommitBody(result.value.body);
@@ -289,12 +292,27 @@ export function CommitDialog({ open, onOpenChange }: CommitDialogProps) {
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('review.commitDialogTitle', 'Commit Changes')}</DialogTitle>
-          {activeThread?.branch && (
-            <DialogDescription className="flex items-center gap-1.5 text-xs">
-              <GitBranch className="h-3 w-3" />
-              <span className="font-mono">{activeThread.branch}</span>
-            </DialogDescription>
-          )}
+          <DialogDescription className="flex items-center gap-3 text-xs">
+            {activeThread?.branch && (
+              <span className="flex items-center gap-1.5">
+                <GitBranch className="h-3 w-3" />
+                <span className="font-mono">{activeThread.branch}</span>
+              </span>
+            )}
+            {allFiles.length > 0 && (
+              <span className="flex items-center gap-1.5">
+                <span className="font-medium text-green-400">{stagedFiles.length} staged</span>
+                <span className="text-muted-foreground">|</span>
+                <span className="font-medium text-yellow-400">{unstagedFiles.length} unstaged</span>
+              </span>
+            )}
+            {gitStatus && (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0) && (
+              <span className="flex items-center gap-1.5 font-mono">
+                <span className="text-green-400">+{gitStatus.linesAdded}</span>
+                <span className="text-red-400">-{gitStatus.linesDeleted}</span>
+              </span>
+            )}
+          </DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">

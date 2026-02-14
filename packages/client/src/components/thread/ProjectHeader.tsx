@@ -32,7 +32,7 @@ import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
 import { CommitDialog } from './CommitDialog';
 
-function CommitButton() {
+function CommitButton({ disabled }: { disabled?: boolean }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(false);
 
@@ -44,6 +44,7 @@ function CommitButton() {
             variant="ghost"
             size="icon-sm"
             onClick={() => setOpen(true)}
+            disabled={disabled}
             className={open ? 'text-primary' : 'text-muted-foreground'}
           >
             <GitCommit className="h-4 w-4" />
@@ -199,7 +200,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
               </TooltipContent>
             </Tooltip>
           )}
-          <CommitButton />
+          <CommitButton disabled={!gitStatus || gitStatus.dirtyFileCount === 0} />
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

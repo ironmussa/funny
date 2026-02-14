@@ -1,5 +1,6 @@
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { useAppStore } from '@/stores/app-store';
 import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
@@ -13,7 +14,6 @@ import {
   Trash2,
   Plus,
   Loader2,
-  AlertCircle,
   Download,
   Sparkles,
   ExternalLink,
@@ -224,7 +224,6 @@ export function SkillsSettings() {
   const [recommended, setRecommended] = useState<RecommendedSkill[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingPlugins, setLoadingPlugins] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [removingName, setRemovingName] = useState<string | null>(null);
   const [installingId, setInstallingId] = useState<string | null>(null);
   const [showCustom, setShowCustom] = useState(false);
@@ -238,12 +237,11 @@ export function SkillsSettings() {
 
   const loadSkills = useCallback(async () => {
     setLoading(true);
-    setError(null);
     const result = await api.listSkills(projectPath || undefined);
     if (result.isOk()) {
       setSkills(result.value.skills);
     } else {
-      setError(result.error.message);
+      toast.error(result.error.message);
     }
     setLoading(false);
   }, [projectPath]);
@@ -282,7 +280,7 @@ export function SkillsSettings() {
     setRemovingName(name);
     const result = await api.removeSkill(name);
     if (result.isErr()) {
-      setError(result.error.message);
+      toast.error(result.error.message);
     } else {
       await loadSkills();
     }
@@ -293,7 +291,7 @@ export function SkillsSettings() {
     setInstallingId(skill.identifier);
     const result = await api.addSkill(skill.identifier);
     if (result.isErr()) {
-      setError(result.error.message);
+      toast.error(result.error.message);
     } else {
       await loadSkills();
     }
@@ -303,10 +301,9 @@ export function SkillsSettings() {
   const handleAddCustom = async () => {
     if (!customId.trim()) return;
     setAddingCustom(true);
-    setError(null);
     const result = await api.addSkill(customId.trim());
     if (result.isErr()) {
-      setError(result.error.message);
+      toast.error(result.error.message);
     } else {
       await loadSkills();
       setCustomId('');
@@ -331,17 +328,6 @@ export function SkillsSettings() {
               {projects.find((p) => p.path === projectPath)?.name || projectPath}
             </span>
           </span>
-        </div>
-      )}
-
-      {/* Error banner */}
-      {error && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-destructive/10 text-destructive text-xs">
-          <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
-          <span>{error}</span>
-          <button onClick={() => setError(null)} className="ml-auto text-xs underline">
-            {t('skills.dismiss')}
-          </button>
         </div>
       )}
 

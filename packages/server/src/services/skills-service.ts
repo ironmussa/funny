@@ -118,16 +118,35 @@ export function listProjectSkills(projectPath: string): Skill[] {
 }
 
 /**
+ * Strip ANSI escape codes from a string.
+ */
+function stripAnsi(str: string): string {
+  // eslint-disable-next-line no-control-regex
+  return str.replace(/\x1b\[[0-9;]*m/g, '').replace(/\x1b\[\?[0-9;]*[a-zA-Z]/g, '');
+}
+
+/**
  * Install a skill via `npx skills add`.
  * Identifier format: owner/repo@skill-name
  */
 export async function addSkill(identifier: string): Promise<void> {
   console.log(`[skills-service] Installing skill: ${identifier}`);
 
-  await execute('npx', ['--yes', 'skills', 'add', identifier, '-g', '-y'], {
-    cwd: homedir(),
-    timeout: 60_000,
-  });
+  try {
+    await execute('npx', ['--yes', 'skills', 'add', identifier, '-g', '-y'], {
+      cwd: homedir(),
+      timeout: 60_000,
+    });
+  } catch (err: any) {
+    const raw = stripAnsi(err?.stderr || err?.stdout || err?.message || String(err)).trim();
+    const lines = raw.split('\n').filter((l: string) => l.trim());
+    // Look for the most descriptive error line (e.g. "No matching skills found for: ...")
+    const errorLine = lines.find((l: string) =>
+      /no matching|not found|error|failed|invalid|does not exist/i.test(l)
+    );
+    const meaningful = errorLine || lines[0] || raw;
+    throw new Error(`Failed to install skill "${identifier}": ${meaningful}`);
+  }
 }
 
 /**
@@ -177,14 +196,19 @@ export const RECOMMENDED_SKILLS = [
     identifier: 'vercel-labs/skills@find-skills',
   },
   {
-    name: 'nextjs-best-practices',
-    description: 'Next.js App Router patterns, server components, and best practices',
-    identifier: 'vercel-labs/agent-skills@nextjs-best-practices',
+    name: 'react-best-practices',
+    description: 'React and Next.js performance optimization guidelines from Vercel',
+    identifier: 'vercel-labs/agent-skills@react-best-practices',
   },
   {
-    name: 'vercel-react-best-practices',
-    description: 'React best practices and patterns from Vercel',
-    identifier: 'vercel-labs/agent-skills@vercel-react-best-practices',
+    name: 'web-design-guidelines',
+    description: 'UI audits for accessibility, performance, and UX standards',
+    identifier: 'vercel-labs/agent-skills@web-design-guidelines',
+  },
+  {
+    name: 'composition-patterns',
+    description: 'React component API design and compound component patterns',
+    identifier: 'vercel-labs/agent-skills@composition-patterns',
   },
   {
     name: 'remotion-best-practices',
@@ -192,23 +216,18 @@ export const RECOMMENDED_SKILLS = [
     identifier: 'remotion-dev/skills@remotion-best-practices',
   },
   {
-    name: 'supabase',
-    description: 'Supabase database, auth, and real-time patterns',
-    identifier: 'anthropics/skills@supabase',
+    name: 'frontend-design',
+    description: 'Frontend design patterns and best practices',
+    identifier: 'anthropics/skills@frontend-design',
   },
   {
-    name: 'firebase',
-    description: 'Firebase integration and architecture patterns',
-    identifier: 'anthropics/skills@firebase',
+    name: 'webapp-testing',
+    description: 'Web application testing strategies and patterns',
+    identifier: 'anthropics/skills@webapp-testing',
   },
   {
-    name: 'tailwindcss',
-    description: 'Tailwind CSS utility-first styling patterns',
-    identifier: 'anthropics/skills@tailwindcss',
-  },
-  {
-    name: 'playwright-testing',
-    description: 'End-to-end testing with Playwright',
-    identifier: 'anthropics/skills@playwright-testing',
+    name: 'mcp-builder',
+    description: 'Build Model Context Protocol servers and tools',
+    identifier: 'anthropics/skills@mcp-builder',
   },
 ];

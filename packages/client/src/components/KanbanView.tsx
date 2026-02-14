@@ -8,6 +8,11 @@ import {
   monitorForElements,
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { Plus, Search, Trash2 } from 'lucide-react';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import type { Thread, ThreadStage, Project } from '@a-parallel/shared';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { useAppStore } from '@/stores/app-store';
@@ -113,7 +118,14 @@ function KanbanCard({ thread, projectInfo, onDelete, search, ghost }: { thread: 
             {t(`thread.status.${thread.status}`)}
           </span>
           {gitConf && GitIcon && (
-            <GitIcon className={cn('h-3 w-3 shrink-0', gitConf.className)} />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <GitIcon className={cn('h-3 w-3 shrink-0', gitConf.className)} />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                {t(gitConf.labelKey)}
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
         <div className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">

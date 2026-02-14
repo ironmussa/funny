@@ -21,10 +21,11 @@ interface Props {
   completed: DataPoint[];
   movedToReview: DataPoint[];
   movedToDone: DataPoint[];
+  movedToArchived: DataPoint[];
   groupBy?: 'day' | 'week' | 'month' | 'year';
 }
 
-export function TimelineChart({ created, completed, movedToReview, movedToDone, groupBy = 'day' }: Props) {
+export function TimelineChart({ created, completed, movedToReview, movedToDone, movedToArchived, groupBy = 'day' }: Props) {
   const { t } = useTranslation();
 
   const chartData = useMemo(() => {
@@ -34,41 +35,43 @@ export function TimelineChart({ created, completed, movedToReview, movedToDone, 
       completed: number;
       movedToReview: number;
       movedToDone: number;
+      movedToArchived: number;
     }>();
 
+    const empty = { created: 0, completed: 0, movedToReview: 0, movedToDone: 0, movedToArchived: 0 };
+
     for (const item of created) {
-      dateMap.set(item.date, { date: item.date, created: item.count, completed: 0, movedToReview: 0, movedToDone: 0 });
+      const existing = dateMap.get(item.date);
+      if (existing) { existing.created = item.count; }
+      else { dateMap.set(item.date, { ...empty, date: item.date, created: item.count }); }
     }
 
     for (const item of completed) {
       const existing = dateMap.get(item.date);
-      if (existing) {
-        existing.completed = item.count;
-      } else {
-        dateMap.set(item.date, { date: item.date, created: 0, completed: item.count, movedToReview: 0, movedToDone: 0 });
-      }
+      if (existing) { existing.completed = item.count; }
+      else { dateMap.set(item.date, { ...empty, date: item.date, completed: item.count }); }
     }
 
     for (const item of movedToReview) {
       const existing = dateMap.get(item.date);
-      if (existing) {
-        existing.movedToReview = item.count;
-      } else {
-        dateMap.set(item.date, { date: item.date, created: 0, completed: 0, movedToReview: item.count, movedToDone: 0 });
-      }
+      if (existing) { existing.movedToReview = item.count; }
+      else { dateMap.set(item.date, { ...empty, date: item.date, movedToReview: item.count }); }
     }
 
     for (const item of movedToDone) {
       const existing = dateMap.get(item.date);
-      if (existing) {
-        existing.movedToDone = item.count;
-      } else {
-        dateMap.set(item.date, { date: item.date, created: 0, completed: 0, movedToReview: 0, movedToDone: item.count });
-      }
+      if (existing) { existing.movedToDone = item.count; }
+      else { dateMap.set(item.date, { ...empty, date: item.date, movedToDone: item.count }); }
+    }
+
+    for (const item of movedToArchived) {
+      const existing = dateMap.get(item.date);
+      if (existing) { existing.movedToArchived = item.count; }
+      else { dateMap.set(item.date, { ...empty, date: item.date, movedToArchived: item.count }); }
     }
 
     return Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date));
-  }, [created, completed, movedToReview, movedToDone]);
+  }, [created, completed, movedToReview, movedToDone, movedToArchived]);
 
   if (chartData.length === 0) {
     return (
@@ -160,6 +163,13 @@ export function TimelineChart({ created, completed, movedToReview, movedToDone, 
           dataKey="movedToDone"
           fill="#8b5cf6"
           name={t('analytics.movedToDone')}
+          radius={[3, 3, 0, 0]}
+          maxBarSize={32}
+        />
+        <Bar
+          dataKey="movedToArchived"
+          fill="#ef4444"
+          name={t('analytics.movedToArchived')}
           radius={[3, 3, 0, 0]}
           maxBarSize={32}
         />

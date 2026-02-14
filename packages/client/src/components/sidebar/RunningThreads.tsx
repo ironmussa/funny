@@ -60,7 +60,7 @@ export function RunningThreads() {
             isExpanded && 'rotate-90'
           )}
         />
-        <span className="h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse flex-shrink-0" />
+        <span className="h-1.5 w-1.5 rounded-full bg-status-info animate-pulse flex-shrink-0" />
         <span className="truncate font-medium">{t('sidebar.activeThreads')} ({runningThreads.length})</span>
       </CollapsibleTrigger>
       <CollapsibleContent className="data-[state=open]:animate-slide-down">

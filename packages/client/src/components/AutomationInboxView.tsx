@@ -249,7 +249,7 @@ export function AutomationInboxView() {
                       <span className={cn(
                         'text-xs px-1.5 py-0.5 rounded-full',
                         run.hasFindings
-                          ? 'bg-amber-500/10 text-amber-500'
+                          ? 'bg-status-warning/10 text-status-warning/80'
                           : 'bg-muted text-muted-foreground'
                       )}>
                         {run.hasFindings ? 'Has findings' : 'No findings'}

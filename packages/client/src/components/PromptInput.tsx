@@ -177,7 +177,7 @@ function SearchablePicker({
                       : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                 )}
               >
-                <GitBranch className="h-3 w-3 shrink-0 text-blue-400" />
+                <GitBranch className="h-3 w-3 shrink-0 text-status-info" />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="font-medium font-mono truncate">{item.label}</span>
@@ -193,7 +193,7 @@ function SearchablePicker({
                     </span>
                   )}
                 </div>
-                {item.isSelected && <Check className="h-3 w-3 shrink-0 text-blue-400" />}
+                {item.isSelected && <Check className="h-3 w-3 shrink-0 text-status-info" />}
               </button>
             ))}
           </div>

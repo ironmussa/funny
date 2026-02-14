@@ -299,7 +299,7 @@ function CommandTabContent({
                 variant="ghost"
                 size="icon-xs"
                 onClick={handleStop}
-                className="text-red-400 hover:text-red-300"
+                className="text-status-error hover:text-status-error/80"
               >
                 <Square className="h-3 w-3" />
               </Button>
@@ -454,7 +454,7 @@ export function TerminalPanel() {
               >
                 <span>{tab.label}</span>
                 {!tab.alive && (
-                  <span className="text-xs text-yellow-400">{t('terminal.exited')}</span>
+                  <span className="text-xs text-status-pending">{t('terminal.exited')}</span>
                 )}
                 <X
                   className="h-3 w-3 ml-1 opacity-60 hover:opacity-100"

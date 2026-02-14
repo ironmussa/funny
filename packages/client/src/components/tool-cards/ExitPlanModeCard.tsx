@@ -37,11 +37,11 @@ export function ExitPlanModeCard({ onRespond }: { onRespond?: (answer: string) =
   return (
     <div className="text-sm max-w-full overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
-        <FileCode2 className="h-3 w-3 flex-shrink-0 text-amber-400" />
+        <FileCode2 className="h-3 w-3 flex-shrink-0 text-status-warning" />
         <span className="font-medium text-foreground">{t('tools.plan')}</span>
         <span className="text-muted-foreground">{t('thread.planWaitingForResponse')}</span>
         {submitted && (
-          <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-600 font-medium ml-auto">
+          <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded bg-status-success/10 text-status-success/80 font-medium ml-auto">
             {t('tools.answered')}
           </span>
         )}

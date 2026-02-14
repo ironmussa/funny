@@ -15,6 +15,16 @@ const config: Config = {
   			ring: 'hsl(var(--ring))',
   			background: 'hsl(var(--background))',
   			foreground: 'hsl(var(--foreground))',
+  			status: {
+  				success: 'hsl(var(--status-success) / <alpha-value>)',
+  				error: 'hsl(var(--status-error) / <alpha-value>)',
+  				warning: 'hsl(var(--status-warning) / <alpha-value>)',
+  				info: 'hsl(var(--status-info) / <alpha-value>)',
+  				pending: 'hsl(var(--status-pending) / <alpha-value>)',
+  				interrupted: 'hsl(var(--status-interrupted) / <alpha-value>)',
+  				neutral: 'hsl(var(--status-neutral) / <alpha-value>)',
+  				violet: 'hsl(var(--status-violet) / <alpha-value>)',
+  			},
   			primary: {
   				DEFAULT: 'hsl(var(--primary))',
   				foreground: 'hsl(var(--primary-foreground))'
@@ -60,6 +70,16 @@ const config: Config = {
   			sm: 'calc(var(--radius) - 4px)'
   		},
   		keyframes: {
+  			'thinking': {
+  				'0%, 80%, 100%': {
+  					opacity: '0.3',
+  					transform: 'scale(0.8)'
+  				},
+  				'40%': {
+  					opacity: '1',
+  					transform: 'scale(1)'
+  				}
+  			},
   			'fade-in': {
   				from: {
   					opacity: '0'

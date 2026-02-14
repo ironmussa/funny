@@ -203,10 +203,10 @@ function connect() {
 function setupWS(ws: WebSocket) {
   ws.onopen = () => {
     console.log('[ws] Connected');
-    if (wasConnected) {
-      console.log('[ws] Reconnected — re-syncing all loaded threads');
-      useAppStore.getState().refreshAllLoadedThreads();
-    }
+    // Always re-sync loaded threads on connect — events may have been lost
+    // while disconnected (e.g. agent:result emitted when 0 clients were connected)
+    console.log('[ws] Syncing all loaded threads with server');
+    useAppStore.getState().refreshAllLoadedThreads();
     wasConnected = true;
   };
 

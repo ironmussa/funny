@@ -255,7 +255,7 @@ export function AutomationSettings() {
                     <div className="flex items-center gap-2">
                       <span className={cn(
                         'h-2 w-2 rounded-full flex-shrink-0',
-                        a.enabled ? 'bg-green-400' : 'bg-muted-foreground/30'
+                        a.enabled ? 'bg-status-success/80' : 'bg-muted-foreground/30'
                       )} />
                       <span className="text-sm font-medium truncate">{a.name}</span>
                       <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
@@ -280,7 +280,7 @@ export function AutomationSettings() {
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => handleTrigger(a)}
-                          className="text-green-400 hover:text-green-300"
+                          className="text-status-success/80 hover:text-status-success"
                         >
                           <Play className="h-3.5 w-3.5" />
                         </Button>
@@ -332,7 +332,7 @@ export function AutomationSettings() {
                           variant="ghost"
                           size="icon-sm"
                           onClick={() => handleDelete(a)}
-                          className="text-muted-foreground hover:text-red-400"
+                          className="text-muted-foreground hover:text-status-error"
                         >
                           <Trash2 className="h-3.5 w-3.5" />
                         </Button>
@@ -356,9 +356,9 @@ export function AutomationSettings() {
                           <div className="flex items-center gap-2 min-w-0">
                             <span className={cn(
                               'h-1.5 w-1.5 rounded-full flex-shrink-0',
-                              run.status === 'running' ? 'bg-blue-400 animate-pulse' :
-                              run.status === 'completed' ? 'bg-green-400' :
-                              run.status === 'failed' ? 'bg-red-400' : 'bg-muted-foreground/30'
+                              run.status === 'running' ? 'bg-status-info animate-pulse' :
+                              run.status === 'completed' ? 'bg-status-success/80' :
+                              run.status === 'failed' ? 'bg-status-error' : 'bg-muted-foreground/30'
                             )} />
                             <span className="text-muted-foreground truncate">
                               {new Date(run.startedAt).toLocaleString()}

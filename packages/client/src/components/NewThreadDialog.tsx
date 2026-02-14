@@ -199,9 +199,9 @@ export function NewThreadDialog() {
                                 : 'text-muted-foreground hover:bg-accent hover:text-foreground'
                             )}
                           >
-                            <GitBranch className="h-3.5 w-3.5 shrink-0 text-blue-400" />
+                            <GitBranch className="h-3.5 w-3.5 shrink-0 text-status-info" />
                             <span className="font-mono truncate">{b}</span>
-                            {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-blue-400 ml-auto" />}
+                            {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-status-info ml-auto" />}
                           </button>
                         );
                       })}

@@ -485,7 +485,7 @@ export function KanbanView({ threads, projectId, search }: KanbanViewProps) {
             </DialogDescription>
           </DialogHeader>
           {deleteConfirm?.isWorktree && (
-            <p className="text-xs text-amber-500 bg-amber-500/10 rounded-md px-3 py-2">
+            <p className="text-xs text-status-warning/80 bg-status-warning/10 rounded-md px-3 py-2">
               {t('dialog.worktreeWarning')}
             </p>
           )}

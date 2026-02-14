@@ -8,12 +8,12 @@ interface Props {
 }
 
 const colorClasses: Record<string, string> = {
-  blue: 'bg-blue-500/10 text-blue-500',
-  green: 'bg-green-500/10 text-green-500',
-  amber: 'bg-amber-500/10 text-amber-500',
-  gray: 'bg-gray-500/10 text-gray-500',
-  violet: 'bg-violet-500/10 text-violet-500',
-  red: 'bg-red-500/10 text-red-500',
+  blue: 'bg-status-info/10 text-status-info/80',
+  green: 'bg-status-success/10 text-status-success/80',
+  amber: 'bg-status-warning/10 text-status-warning/80',
+  gray: 'bg-status-neutral/10 text-status-neutral/80',
+  violet: 'bg-status-violet/10 text-status-violet/80',
+  red: 'bg-status-error/10 text-status-error/80',
 };
 
 export function MetricCard({ title, value, icon, color }: Props) {

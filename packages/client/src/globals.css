@@ -32,6 +32,16 @@
     --sidebar-accent-foreground: 240 5.9% 10%;
     --sidebar-border: 220 13% 91%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Status colors (HSL without function wrapper) */
+    --status-success: 142 69% 58%;
+    --status-error: 0 84% 60%;
+    --status-warning: 38 92% 50%;
+    --status-info: 217 91% 60%;
+    --status-pending: 48 96% 53%;
+    --status-interrupted: 25 95% 53%;
+    --status-neutral: 220 9% 46%;
+    --status-violet: 263 70% 50%;
   }
 
   .dark {
@@ -63,6 +73,16 @@
     --sidebar-accent-foreground: 240 4.8% 95.9%;
     --sidebar-border: 240 3.7% 15.9%;
     --sidebar-ring: 217.2 91.2% 59.8%;
+
+    /* Status colors (dark mode) */
+    --status-success: 142 69% 58%;
+    --status-error: 0 84% 60%;
+    --status-warning: 38 92% 50%;
+    --status-info: 217 91% 60%;
+    --status-pending: 48 96% 53%;
+    --status-interrupted: 25 95% 53%;
+    --status-neutral: 220 9% 46%;
+    --status-violet: 263 70% 50%;
   }
 }
 

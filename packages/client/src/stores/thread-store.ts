@@ -422,7 +422,18 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       ?? ((thread.status === 'completed' || thread.status === 'failed')
         ? { status: thread.status as 'completed' | 'failed', cost: thread.cost, duration: 0 }
         : undefined);
-    set({ activeThread: { ...thread, initInfo: activeThread.initInfo, resultInfo } });
+    // Clear waitingReason/pendingPermission if server status is no longer waiting
+    // (handles case where agent:result WS event was lost during disconnect)
+    const isServerWaiting = thread.status === 'waiting';
+    set({
+      activeThread: {
+        ...thread,
+        initInfo: activeThread.initInfo,
+        resultInfo,
+        waitingReason: isServerWaiting ? activeThread.waitingReason : undefined,
+        pendingPermission: isServerWaiting ? activeThread.pendingPermission : undefined,
+      },
+    });
   },
 
   refreshAllLoadedThreads: async () => {

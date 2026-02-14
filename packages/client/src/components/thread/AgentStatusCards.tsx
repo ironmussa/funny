@@ -18,15 +18,15 @@ export function AgentResultCard({ status, cost, duration }: { status: 'completed
     <div className={cn(
       'rounded-lg border px-3 py-2 text-xs flex items-center gap-3',
       isSuccess
-        ? 'border-green-500/30 bg-green-500/5'
-        : 'border-red-500/30 bg-red-500/5'
+        ? 'border-status-success/20 bg-status-success/5'
+        : 'border-status-error/20 bg-status-error/5'
     )}>
       {isSuccess ? (
-        <CheckCircle2 className="h-4 w-4 text-green-500 flex-shrink-0" />
+        <CheckCircle2 className="h-4 w-4 text-status-success/80 flex-shrink-0" />
       ) : (
-        <XCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
+        <XCircle className="h-4 w-4 text-status-error/80 flex-shrink-0" />
       )}
-      <span className={cn('font-medium', isSuccess ? 'text-green-500' : 'text-red-500')}>
+      <span className={cn('font-medium', isSuccess ? 'text-status-success/80' : 'text-status-error/80')}>
         {isSuccess ? t('thread.taskCompleted') : t('thread.taskFailed')}
       </span>
       <div className="flex items-center gap-3 ml-auto text-muted-foreground">
@@ -45,10 +45,10 @@ export function AgentInterruptedCard({ onContinue }: { onContinue?: () => void }
   const { t } = useTranslation();
 
   return (
-    <div className="rounded-lg border border-orange-500/30 bg-orange-500/5 px-3 py-2 text-xs flex items-center gap-3">
-      <AlertTriangle className="h-4 w-4 text-orange-400 flex-shrink-0" />
+    <div className="rounded-lg border border-status-interrupted/20 bg-status-interrupted/5 px-3 py-2 text-xs flex items-center gap-3">
+      <AlertTriangle className="h-4 w-4 text-status-interrupted/80 flex-shrink-0" />
       <div>
-        <span className="font-medium text-orange-400">{t('thread.taskInterrupted')}</span>
+        <span className="font-medium text-status-interrupted/80">{t('thread.taskInterrupted')}</span>
         <p className="text-muted-foreground mt-0.5">
           {t('thread.serverRestarted')}
         </p>
@@ -70,10 +70,10 @@ export function AgentStoppedCard({ onContinue }: { onContinue?: () => void }) {
   const { t } = useTranslation();
 
   return (
-    <div className="rounded-lg border border-blue-500/30 bg-blue-500/5 px-3 py-2 text-xs flex items-center gap-3">
-      <XCircle className="h-4 w-4 text-blue-400 flex-shrink-0" />
+    <div className="rounded-lg border border-status-info/20 bg-status-info/5 px-3 py-2 text-xs flex items-center gap-3">
+      <XCircle className="h-4 w-4 text-status-info/80 flex-shrink-0" />
       <div>
-        <span className="font-medium text-blue-400">{t('thread.taskStopped')}</span>
+        <span className="font-medium text-status-info/80">{t('thread.taskStopped')}</span>
         <p className="text-muted-foreground mt-0.5">
           {t('thread.manuallyStopped')}
         </p>

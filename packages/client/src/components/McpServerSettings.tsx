@@ -43,10 +43,10 @@ function TypeBadge({ type }: { type: McpServerType }) {
       className={cn(
         'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium uppercase tracking-wider',
         type === 'http'
-          ? 'bg-blue-500/10 text-blue-500'
+          ? 'bg-status-info/10 text-status-info/80'
           : type === 'sse'
-            ? 'bg-amber-500/10 text-amber-500'
-            : 'bg-green-500/10 text-green-500'
+            ? 'bg-status-warning/10 text-status-warning/80'
+            : 'bg-status-success/10 text-status-success/80'
       )}
     >
       {type === 'stdio' ? (
@@ -83,7 +83,7 @@ function InstalledServerCard({
   return (
     <div className={cn(
       "flex flex-col gap-1.5 px-3 py-2.5 rounded-md border bg-card",
-      server.status === 'needs_auth' ? 'border-amber-500/40' : 'border-border/50'
+      server.status === 'needs_auth' ? 'border-status-warning/40' : 'border-border/50'
     )}>
       <div className="flex items-center justify-between gap-3">
         <div className="flex items-center gap-3 min-w-0">
@@ -93,7 +93,7 @@ function InstalledServerCard({
               <span className="text-sm font-medium truncate">{server.name}</span>
               <TypeBadge type={server.type} />
               {server.status === 'needs_auth' && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-500/10 text-amber-500">
+                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-status-warning/10 text-status-warning/80">
                   <ShieldAlert className="h-2.5 w-2.5" />
                   {t('mcp.needsAuth')}
                 </span>
@@ -126,7 +126,7 @@ function InstalledServerCard({
               size="sm"
               onClick={onAuthenticate}
               disabled={authenticating || settingToken}
-              className="text-xs h-6 px-2 border-amber-500/40 text-amber-500 hover:bg-amber-500/10"
+              className="text-xs h-6 px-2 border-status-warning/30 text-status-warning/80 hover:bg-status-warning/10"
             >
               {authenticating ? (
                 <Loader2 className="h-3 w-3 animate-spin mr-1" />

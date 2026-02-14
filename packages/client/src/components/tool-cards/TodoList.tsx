@@ -8,9 +8,9 @@ export function TodoList({ todos }: { todos: TodoItem[] }) {
       {todos.map((todo, i) => (
         <div key={i} className="flex items-start gap-2">
           {todo.status === 'completed' ? (
-            <CircleCheck className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-green-500" />
+            <CircleCheck className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-status-success/80" />
           ) : todo.status === 'in_progress' ? (
-            <CircleDot className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-blue-400 animate-pulse" />
+            <CircleDot className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-status-info animate-pulse" />
           ) : (
             <Circle className="h-3.5 w-3.5 mt-0.5 flex-shrink-0 text-muted-foreground/50" />
           )}

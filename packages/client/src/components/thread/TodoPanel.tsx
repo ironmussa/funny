@@ -53,7 +53,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
           transition={{ duration: 0.2 }}
           className={cn(
             'text-xs font-mono px-1.5 py-0.5 rounded-full transition-colors duration-300',
-            allDone ? 'bg-green-500/15 text-green-500' : 'bg-muted text-muted-foreground'
+            allDone ? 'bg-status-success/10 text-status-success/80' : 'bg-muted text-muted-foreground'
           )}
         >
           {progress.completed}/{progress.total}
@@ -82,7 +82,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
               <motion.div
                 className={cn(
                   'h-full rounded-full',
-                  allDone ? 'bg-green-500' : 'bg-blue-400'
+                  allDone ? 'bg-status-success/80' : 'bg-status-info/80'
                 )}
                 initial={false}
                 animate={{ width: `${pct}%` }}
@@ -110,9 +110,9 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
                     transition={{ duration: 0.25, ease: 'easeOut' }}
                   >
                     {todo.status === 'completed' ? (
-                      <CircleCheck className="h-3.5 w-3.5 text-green-500" />
+                      <CircleCheck className="h-3.5 w-3.5 text-status-success/80" />
                     ) : todo.status === 'in_progress' ? (
-                      <CircleDot className="h-3.5 w-3.5 text-blue-400 animate-pulse" />
+                      <CircleDot className="h-3.5 w-3.5 text-status-info animate-pulse" />
                     ) : (
                       <Circle className="h-3.5 w-3.5 text-muted-foreground/50" />
                     )}

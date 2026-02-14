@@ -373,7 +373,7 @@ export function AllThreadsView() {
             label={t('allThreads.showArchived')}
             active={showArchived}
             onClick={() => { setShowArchived(!showArchived); setPage(1); }}
-            className={showArchived ? 'bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400' : ''}
+            className={showArchived ? 'bg-status-warning/10 border-status-warning/20 text-status-warning/80' : ''}
           />
         </div>
       </div>
@@ -436,7 +436,7 @@ export function AllThreadsView() {
                   </span>
                 )}
                 {!!thread.archived && (
-                  <span className="inline-flex items-center gap-0.5 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 px-1.5 py-0.5 rounded">
+                  <span className="inline-flex items-center gap-0.5 text-xs text-status-warning/80 bg-status-warning/10 px-1.5 py-0.5 rounded">
                     <Archive className="h-2.5 w-2.5" />
                     {t('allThreads.archived')}
                   </span>

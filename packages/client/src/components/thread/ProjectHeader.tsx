@@ -110,7 +110,7 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
             <Button
               variant="ghost"
               size="icon-sm"
-              className={anyRunning ? 'text-green-400' : 'text-muted-foreground'}
+              className={anyRunning ? 'text-status-success' : 'text-muted-foreground'}
             >
               <Rocket className="h-4 w-4" />
             </Button>
@@ -135,7 +135,7 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       {isRunning && (
-                        <Loader2 className="h-3 w-3 animate-spin text-green-400 flex-shrink-0" />
+                        <Loader2 className="h-3 w-3 animate-spin text-status-success flex-shrink-0" />
                       )}
                       <span className="text-sm truncate">{cmd.label}</span>
                     </div>
@@ -146,7 +146,7 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
                       variant="ghost"
                       size="icon-xs"
                       onClick={() => handleStop(cmd)}
-                      className="text-red-400 hover:text-red-300 flex-shrink-0"
+                      className="text-status-error hover:text-status-error/80 flex-shrink-0"
                     >
                       <Square className="h-3 w-3" />
                     </Button>
@@ -155,7 +155,7 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
                       variant="ghost"
                       size="icon-xs"
                       onClick={() => handleRun(cmd)}
-                      className="text-green-400 hover:text-green-300 flex-shrink-0"
+                      className="text-status-success hover:text-status-success/80 flex-shrink-0"
                     >
                       <Play className="h-3 w-3" />
                     </Button>
@@ -183,7 +183,8 @@ export const ProjectHeader = memo(function ProjectHeader() {
   const terminalPanelVisible = useTerminalStore(s => s.panelVisible);
   const setPanelVisible = useTerminalStore(s => s.setPanelVisible);
   const addTab = useTerminalStore(s => s.addTab);
-  const statusByThread = useGitStatusStore(s => s.statusByThread);
+  const activeThreadId = activeThread?.id;
+  const gitStatus = useGitStatusStore(s => activeThreadId ? s.statusByThread[activeThreadId] : undefined);
   const fetchForThread = useGitStatusStore(s => s.fetchForThread);
 
   const projectId = activeThread?.projectId ?? selectedProjectId;
@@ -192,22 +193,14 @@ export const ProjectHeader = memo(function ProjectHeader() {
   const runningWithPort = tabs.filter(
     (tab) => tab.projectId === projectId && tab.commandId && tab.alive && tab.port
   );
-
-  const gitStatus = activeThread ? statusByThread[activeThread.id] : undefined;
   const showGitStats = gitStatus && (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0);
 
   // Fetch git status when activeThread changes
   useEffect(() => {
     if (activeThread) {
-      console.log('Fetching git status for thread:', activeThread.id);
       fetchForThread(activeThread.id);
     }
   }, [activeThread?.id, fetchForThread]);
-
-  // Debug: log git status
-  if (activeThread && gitStatus) {
-    console.log('Git Status for thread:', activeThread.id, gitStatus);
-  }
 
   if (!selectedProjectId) return null;
 
@@ -269,7 +262,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                       commandLabel: cmd.label,
                     });
                   }}
-                  className="text-blue-400 hover:text-blue-300"
+                  className="text-status-info hover:text-status-info/80"
                 >
                   <Globe className="h-4 w-4" />
                 </Button>
@@ -366,8 +359,8 @@ export const ProjectHeader = memo(function ProjectHeader() {
               >
                 {showGitStats ? (
                   <div className="flex items-center gap-2 text-xs font-semibold">
-                    <span className="text-green-500">+{gitStatus.linesAdded}</span>
-                    <span className="text-red-500">-{gitStatus.linesDeleted}</span>
+                    <span className="text-status-success">+{gitStatus.linesAdded}</span>
+                    <span className="text-status-error">-{gitStatus.linesDeleted}</span>
                   </div>
                 ) : (
                   <GitCompare className="h-4 w-4" />

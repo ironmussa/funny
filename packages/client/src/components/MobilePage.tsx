@@ -504,14 +504,18 @@ function ChatView({
               ])}
 
               {isRunning && (
-                <div className="flex items-center gap-2 text-muted-foreground text-xs">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  {t('thread.agentWorking')}
+                <div className="flex items-center gap-2.5 text-muted-foreground text-sm py-1">
+                  <div className="flex items-center gap-1">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-[thinking_1.4s_ease-in-out_infinite]" />
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-[thinking_1.4s_ease-in-out_0.2s_infinite]" />
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-[thinking_1.4s_ease-in-out_0.4s_infinite]" />
+                  </div>
+                  <span className="text-xs">{t('thread.agentWorking')}</span>
                 </div>
               )}
 
               {activeThread.status === 'waiting' && activeThread.waitingReason === 'question' && (
-                <div className="flex items-center gap-2 text-amber-500 text-xs">
+                <div className="flex items-center gap-2 text-status-warning/80 text-xs">
                   <ShieldQuestion className="h-3.5 w-3.5 animate-pulse" />
                   {t('thread.waitingForResponse')}
                 </div>

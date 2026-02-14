@@ -264,6 +264,7 @@ export class AgentMessageHandler {
       duration: msg.duration_ms,
       status: finalStatus,
       stage: threadWithStage?.stage,
+      ...(finalStatus === 'failed' ? { errorReason: msg.subtype } : {}),
       ...(waitingReason ? { waitingReason } : {}),
       ...(permReq ? { permissionRequest: { toolName: permReq.toolName } } : {}),
     });

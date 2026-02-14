@@ -301,15 +301,15 @@ export function CommitDialog({ open, onOpenChange }: CommitDialogProps) {
             )}
             {allFiles.length > 0 && (
               <span className="flex items-center gap-1.5">
-                <span className="font-medium text-green-400">{stagedFiles.length} staged</span>
+                <span className="font-medium text-status-success">{stagedFiles.length} staged</span>
                 <span className="text-muted-foreground">|</span>
-                <span className="font-medium text-yellow-400">{unstagedFiles.length} unstaged</span>
+                <span className="font-medium text-status-pending">{unstagedFiles.length} unstaged</span>
               </span>
             )}
             {gitStatus && (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0) && (
               <span className="flex items-center gap-1.5 font-mono">
-                <span className="text-green-400">+{gitStatus.linesAdded}</span>
-                <span className="text-red-400">-{gitStatus.linesDeleted}</span>
+                <span className="text-status-success">+{gitStatus.linesAdded}</span>
+                <span className="text-status-error">-{gitStatus.linesDeleted}</span>
               </span>
             )}
           </DialogDescription>

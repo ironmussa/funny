@@ -42,7 +42,7 @@ function InstalledSkillCard({
   return (
     <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-md border border-border/50 bg-card">
       <div className="flex items-center gap-3 min-w-0">
-        <Sparkles className="h-4 w-4 text-amber-500 flex-shrink-0" />
+        <Sparkles className="h-4 w-4 text-status-warning flex-shrink-0" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium truncate">{skill.name}</span>

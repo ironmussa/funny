@@ -110,7 +110,7 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
         ) : status?.available ? (
           <>
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-green-400" />
+              <CheckCircle2 className="h-5 w-5 text-status-success" />
               <span className="text-sm font-medium text-foreground">
                 Claude CLI found
               </span>
@@ -129,7 +129,7 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
         ) : (
           <>
             <div className="flex items-center gap-2">
-              <XCircle className="h-5 w-5 text-red-400" />
+              <XCircle className="h-5 w-5 text-status-error" />
               <span className="text-sm font-medium text-foreground">
                 Claude CLI not found
               </span>
@@ -173,7 +173,7 @@ function DoneSlide({ onFinish }: { onFinish: () => void }) {
   return (
     <>
       <div className="text-center space-y-3">
-        <CheckCircle2 className="h-10 w-10 text-green-400 mx-auto" />
+        <CheckCircle2 className="h-10 w-10 text-status-success mx-auto" />
         <h2 className="text-lg font-semibold text-foreground">
           You're all set!
         </h2>

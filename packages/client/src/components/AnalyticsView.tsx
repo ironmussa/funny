@@ -170,7 +170,7 @@ export function AnalyticsView() {
                     <p className="text-xs text-muted-foreground">{t('analytics.totalCost')}</p>
                     <p className="text-xl font-bold mt-1">${overview.totalCost.toFixed(4)}</p>
                   </div>
-                  <div className="p-2 rounded-md bg-green-500/10 text-green-500">
+                  <div className="p-2 rounded-md bg-status-success/10 text-status-success/80">
                     <DollarSign className="h-4 w-4" />
                   </div>
                 </div>

@@ -214,7 +214,7 @@ export function ProjectItem({
                     e.stopPropagation();
                     onDeleteProject();
                   }}
-                  className="text-red-400 focus:text-red-400"
+                  className="text-status-error focus:text-status-error"
                 >
                   <Trash2 className="h-3.5 w-3.5" />
                   {t('sidebar.deleteProject')}

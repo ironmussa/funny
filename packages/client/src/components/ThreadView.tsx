@@ -107,8 +107,8 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
   };
 
   return (
-    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2.5">
-      <div className="flex items-center gap-2 text-amber-400 text-xs">
+    <div className="rounded-lg border border-status-warning/20 bg-status-warning/5 p-3 space-y-2.5">
+      <div className="flex items-center gap-2 text-status-warning/80 text-xs">
         <Clock className="h-3.5 w-3.5" />
         {t('thread.waitingForResponse')}
       </div>
@@ -180,8 +180,8 @@ export function PlanWaitingActions({ onSend }: { onSend: (text: string) => void 
   };
 
   return (
-    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2.5">
-      <div className="flex items-center gap-2 text-amber-400 text-xs">
+    <div className="rounded-lg border border-status-warning/20 bg-status-warning/5 p-3 space-y-2.5">
+      <div className="flex items-center gap-2 text-status-warning/80 text-xs">
         <Clock className="h-3.5 w-3.5" />
         {t('thread.planWaitingForResponse')}
       </div>
@@ -248,8 +248,8 @@ export function PermissionApprovalCard({
   const { t } = useTranslation();
 
   return (
-    <div className="rounded-lg border border-amber-500/30 bg-amber-500/5 p-3 space-y-2.5">
-      <div className="flex items-center gap-2 text-amber-400 text-xs">
+    <div className="rounded-lg border border-status-warning/20 bg-status-warning/5 p-3 space-y-2.5">
+      <div className="flex items-center gap-2 text-status-warning/80 text-xs">
         <ShieldQuestion className="h-3.5 w-3.5" />
         {t('thread.permissionRequired')}
       </div>
@@ -758,13 +758,17 @@ export function ThreadView() {
 
           {isRunning && (
             <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ duration: 0.3 }}
-              className="flex items-center gap-2 text-muted-foreground text-xs"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className="flex items-center gap-2.5 text-muted-foreground text-sm py-1"
             >
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-              {t('thread.agentWorking')}
+              <div className="flex items-center gap-1">
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-[thinking_1.4s_ease-in-out_infinite]" />
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-[thinking_1.4s_ease-in-out_0.2s_infinite]" />
+                <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-[thinking_1.4s_ease-in-out_0.4s_infinite]" />
+              </div>
+              <span className="text-xs">{t('thread.agentWorking')}</span>
             </motion.div>
           )}
 
@@ -773,7 +777,7 @@ export function ThreadView() {
               initial={{ opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, ease: 'easeOut' }}
-              className="flex items-center gap-2 text-amber-500 text-xs"
+              className="flex items-center gap-2 text-status-warning/80 text-xs"
             >
               <ShieldQuestion className="h-3.5 w-3.5 animate-pulse" />
               {t('thread.waitingForResponse')}

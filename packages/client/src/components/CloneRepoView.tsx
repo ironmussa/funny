@@ -354,7 +354,7 @@ export function CloneRepoView() {
               <div className="flex items-center gap-2">
                 <span className="text-sm font-medium truncate">{repo.full_name}</span>
                 {repo.private ? (
-                  <Lock className="h-3 w-3 text-yellow-500 flex-shrink-0" />
+                  <Lock className="h-3 w-3 text-status-pending flex-shrink-0" />
                 ) : (
                   <Globe className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                 )}
@@ -419,7 +419,7 @@ export function CloneRepoView() {
         <div className="rounded-md border border-border p-3 space-y-1">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">{selectedRepo.full_name}</span>
-            {selectedRepo.private && <Lock className="h-3 w-3 text-yellow-500" />}
+            {selectedRepo.private && <Lock className="h-3 w-3 text-status-pending" />}
           </div>
           {selectedRepo.description && (
             <p className="text-xs text-muted-foreground">{selectedRepo.description}</p>

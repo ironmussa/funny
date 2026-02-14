@@ -271,7 +271,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
         {/* Directory listing */}
         <ScrollArea className="flex-1 p-2">
           {error && (
-            <p className="text-xs text-red-400 px-2 py-1">{error}</p>
+            <p className="text-xs text-status-error px-2 py-1">{error}</p>
           )}
           {loading && !error && (
             <p className="text-xs text-muted-foreground px-2 py-4 text-center">{t('folderPicker.loading')}</p>
@@ -288,7 +288,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
               onClick={() => loadDir(dir.path)}
               className="w-full flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground hover:bg-accent hover:text-foreground transition-colors"
             >
-              <Folder className="h-3.5 w-3.5 flex-shrink-0 text-blue-400" />
+              <Folder className="h-3.5 w-3.5 flex-shrink-0 text-status-info" />
               <span className="truncate">{dir.name}</span>
               <ChevronRight className="h-3 w-3 flex-shrink-0 ml-auto opacity-40" />
             </button>

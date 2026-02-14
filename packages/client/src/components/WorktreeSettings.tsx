@@ -50,7 +50,7 @@ function WorktreeCard({
   return (
     <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-md border border-border/50 bg-card">
       <div className="flex items-center gap-3 min-w-0">
-        <GitFork className="h-4 w-4 text-blue-500 flex-shrink-0" />
+        <GitFork className="h-4 w-4 text-status-info flex-shrink-0" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium truncate">{worktree.branch}</span>
@@ -232,7 +232,7 @@ export function WorktreeSettings() {
         {/* Create form */}
         {showCreate && (
           branches.length === 0 ? (
-            <div className="flex items-center gap-2 px-3 py-2 mb-3 rounded-md bg-yellow-500/10 text-yellow-600 dark:text-yellow-400 text-xs">
+            <div className="flex items-center gap-2 px-3 py-2 mb-3 rounded-md bg-status-pending/10 text-status-pending/80 text-xs">
               <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
               <span>No branches found. Make sure the project has at least one commit.</span>
             </div>

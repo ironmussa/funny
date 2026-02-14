@@ -5,6 +5,7 @@ import { api } from '@/lib/api';
 interface GitStatusState {
   statusByThread: Record<string, GitStatusInfo>;
   loadingProjects: Set<string>;
+  _loadingThreads: Set<string>;
 
   fetchForProject: (projectId: string) => Promise<void>;
   fetchForThread: (threadId: string) => Promise<void>;
@@ -15,6 +16,7 @@ interface GitStatusState {
 export const useGitStatusStore = create<GitStatusState>((set, get) => ({
   statusByThread: {},
   loadingProjects: new Set(),
+  _loadingThreads: new Set(),
 
   fetchForProject: async (projectId) => {
     if (get().loadingProjects.has(projectId)) return;
@@ -39,13 +41,22 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
   },
 
   fetchForThread: async (threadId) => {
-    const result = await api.getGitStatus(threadId);
-    if (result.isOk()) {
-      set((state) => ({
-        statusByThread: { ...state.statusByThread, [threadId]: result.value },
-      }));
+    if (get()._loadingThreads.has(threadId)) return;
+    set((s) => ({ _loadingThreads: new Set([...s._loadingThreads, threadId]) }));
+    try {
+      const result = await api.getGitStatus(threadId);
+      if (result.isOk()) {
+        set((state) => ({
+          statusByThread: { ...state.statusByThread, [threadId]: result.value },
+        }));
+      }
+    } finally {
+      set((s) => {
+        const next = new Set(s._loadingThreads);
+        next.delete(threadId);
+        return { _loadingThreads: next };
+      });
     }
-    // Silently ignore errors
   },
 
   updateFromWS: (statuses) => {

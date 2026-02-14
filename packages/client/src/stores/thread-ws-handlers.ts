@@ -299,16 +299,23 @@ export function handleWSResult(
   }
 
   // Toast notification
-  notifyThreadResult(threadId, resultStatus, updatedProject, get);
+  notifyThreadResult(threadId, resultStatus, updatedProject, get, data.errorReason);
 }
 
 // ── Toast helper ────────────────────────────────────────────────
+
+const ERROR_REASON_MESSAGES: Record<string, string> = {
+  error_max_turns: 'Max turns reached — send a follow-up to continue',
+  error_max_budget_usd: 'Budget limit exceeded',
+  error_during_execution: 'Error during execution',
+};
 
 function notifyThreadResult(
   threadId: string,
   resultStatus: ThreadStatus,
   updatedProject: { pid: string; threads: Thread[] } | null,
-  get: Get
+  get: Get,
+  errorReason?: string
 ): void {
   let threadTitle = 'Thread';
   let projectId: string | null = null;
@@ -346,6 +353,7 @@ function notifyThreadResult(
   if (resultStatus === 'completed') {
     toast.success(`"${truncated}" completed`, toastOpts);
   } else if (resultStatus === 'failed') {
-    toast.error(`"${truncated}" failed`, toastOpts);
+    const reason = errorReason ? ERROR_REASON_MESSAGES[errorReason] ?? errorReason : 'Unknown error';
+    toast.error(`"${truncated}" failed: ${reason}`, { ...toastOpts, duration: 8000 });
   }
 }

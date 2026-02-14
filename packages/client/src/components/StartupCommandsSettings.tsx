@@ -216,7 +216,7 @@ export function StartupCommandsSettings() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 {isRunning && (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-green-400 flex-shrink-0" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin text-status-success flex-shrink-0" />
                 )}
                 <span className="text-sm font-medium truncate">{cmd.label}</span>
               </div>
@@ -232,7 +232,7 @@ export function StartupCommandsSettings() {
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => handleStop(cmd)}
-                      className="text-red-400 hover:text-red-300"
+                      className="text-status-error hover:text-status-error/80"
                     >
                       <Square className="h-3.5 w-3.5" />
                     </Button>
@@ -246,7 +246,7 @@ export function StartupCommandsSettings() {
                       variant="ghost"
                       size="icon-sm"
                       onClick={() => handleRun(cmd)}
-                      className="text-green-400 hover:text-green-300"
+                      className="text-status-success hover:text-status-success/80"
                     >
                       <Play className="h-3.5 w-3.5" />
                     </Button>
@@ -273,7 +273,7 @@ export function StartupCommandsSettings() {
                     variant="ghost"
                     size="icon-sm"
                     onClick={() => handleDelete(cmd.id)}
-                    className="text-muted-foreground hover:text-red-400"
+                    className="text-muted-foreground hover:text-status-error"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
                   </Button>

@@ -138,7 +138,7 @@ export class AgentRunner {
       permissionMode: effectivePermissionMode,
       allowedTools: effectiveAllowedTools,
       disallowedTools,
-      maxTurns: 30,
+      maxTurns: 200,
       sessionId: thread?.sessionId ?? undefined,
       images,
     });

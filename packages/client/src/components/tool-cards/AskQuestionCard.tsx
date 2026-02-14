@@ -120,7 +120,7 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
           {questions.length} {questions.length > 1 ? t('tools.questionsPlural') : t('tools.questions')}
         </span>
         {submitted && (
-          <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-600 font-medium ml-auto">
+          <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded bg-status-success/10 text-status-success/80 font-medium ml-auto">
             {t('tools.answered')}
           </span>
         )}
@@ -143,7 +143,7 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
               >
                 {q.header}
                 {selections.get(i)?.size ? (
-                  <Check className="inline h-2.5 w-2.5 ml-1 text-green-500" />
+                  <Check className="inline h-2.5 w-2.5 ml-1 text-status-success/80" />
                 ) : null}
                 {i === activeTab && (
                   <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary rounded-full" />

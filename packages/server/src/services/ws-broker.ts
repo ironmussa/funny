@@ -18,11 +18,13 @@ class WSBroker {
   emitToUser(userId: string, event: WSEvent): void {
     const payload = JSON.stringify(event);
     const dead: ServerWebSocket<unknown>[] = [];
+    let sent = 0;
 
     for (const [ws, uid] of this.clients) {
       if (uid !== userId) continue;
       try {
         ws.send(payload);
+        sent++;
       } catch {
         dead.push(ws);
       }
@@ -30,6 +32,10 @@ class WSBroker {
 
     for (const ws of dead) {
       this.clients.delete(ws);
+    }
+
+    if (sent === 0 && event.type === 'agent:result') {
+      console.warn(`[ws] agent:result for thread=${event.threadId} sent to 0 clients (userId=${userId}, total=${this.clients.size})`);
     }
   }
 
@@ -37,10 +43,12 @@ class WSBroker {
   emit(event: WSEvent): void {
     const payload = JSON.stringify(event);
     const dead: ServerWebSocket<unknown>[] = [];
+    let sent = 0;
 
     for (const [ws] of this.clients) {
       try {
         ws.send(payload);
+        sent++;
       } catch {
         dead.push(ws);
       }
@@ -48,6 +56,10 @@ class WSBroker {
 
     for (const ws of dead) {
       this.clients.delete(ws);
+    }
+
+    if (sent === 0 && event.type === 'agent:result') {
+      console.warn(`[ws] agent:result for thread=${event.threadId} sent to 0 clients (broadcast, total=${this.clients.size})`);
     }
   }
 

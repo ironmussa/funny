@@ -4,14 +4,14 @@ import { getStatusLabels } from '@/lib/thread-utils';
 import type { ThreadStatus } from '@a-parallel/shared';
 
 const badgeStyles: Record<ThreadStatus, string> = {
-  idle: 'bg-gray-500/20 text-gray-400',
-  pending: 'bg-yellow-500/20 text-yellow-400',
-  running: 'bg-blue-500/20 text-blue-400',
-  waiting: 'bg-amber-500/20 text-amber-400',
-  completed: 'bg-green-500/20 text-green-400',
-  failed: 'bg-red-500/20 text-red-400',
-  stopped: 'bg-gray-500/20 text-gray-400',
-  interrupted: 'bg-orange-500/20 text-orange-400',
+  idle: 'bg-status-neutral/10 text-status-neutral/80',
+  pending: 'bg-status-pending/10 text-status-pending/80',
+  running: 'bg-status-info/10 text-status-info/80',
+  waiting: 'bg-status-warning/10 text-status-warning/80',
+  completed: 'bg-status-success/10 text-status-success/80',
+  failed: 'bg-status-error/10 text-status-error/80',
+  stopped: 'bg-status-neutral/10 text-status-neutral/80',
+  interrupted: 'bg-status-interrupted/10 text-status-interrupted/80',
 };
 
 export function StatusBadge({ status }: { status: ThreadStatus }) {
@@ -27,10 +27,10 @@ export function StatusBadge({ status }: { status: ThreadStatus }) {
       )}
     >
       {status === 'running' && (
-        <span className="mr-1 h-1.5 w-1.5 rounded-full bg-blue-400 animate-pulse" />
+        <span className="mr-1 h-1.5 w-1.5 rounded-full bg-status-info animate-pulse" />
       )}
       {status === 'waiting' && (
-        <span className="mr-1 h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+        <span className="mr-1 h-1.5 w-1.5 rounded-full bg-status-warning animate-pulse" />
       )}
       {statusLabels[status]}
     </span>

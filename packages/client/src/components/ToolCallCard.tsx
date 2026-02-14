@@ -10,6 +10,7 @@ import { BashCard } from './tool-cards/BashCard';
 import { WriteFileCard } from './tool-cards/WriteFileCard';
 import { EditFileCard } from './tool-cards/EditFileCard';
 import { ReadFileCard } from './tool-cards/ReadFileCard';
+import { ExitPlanModeCard } from './tool-cards/ExitPlanModeCard';
 
 interface ToolCallCardProps {
   name: string;
@@ -47,6 +48,7 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
   if (name === 'Write') return <WriteFileCard parsed={parsed} hideLabel={hideLabel} />;
   if (name === 'Edit') return <EditFileCard parsed={parsed} hideLabel={hideLabel} />;
   if (name === 'AskUserQuestion') return <AskQuestionCard parsed={parsed} onRespond={onRespond} hideLabel={hideLabel} />;
+  if (name === 'ExitPlanMode') return <ExitPlanModeCard onRespond={onRespond} />;
 
   return (
     <div className="text-sm max-w-full overflow-hidden">

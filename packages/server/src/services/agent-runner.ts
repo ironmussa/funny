@@ -210,8 +210,14 @@ export class AgentRunner {
           if (block.name === 'AskUserQuestion') {
             this.pendingUserInput.set(threadId, 'question');
             this.lastToolUseId.set(threadId, block.id);
+            // Immediately transition to 'waiting' so the UI shows the question state
+            // right away — don't wait for the can_use_tool control request
+            this.threadManager.updateThread(threadId, { status: 'waiting' });
+            this.emitWS(threadId, 'agent:status', { status: 'waiting', waitingReason: 'question' });
           } else if (block.name === 'ExitPlanMode') {
             this.pendingUserInput.set(threadId, 'plan');
+            this.threadManager.updateThread(threadId, { status: 'waiting' });
+            this.emitWS(threadId, 'agent:status', { status: 'waiting', waitingReason: 'plan' });
           } else {
             this.pendingUserInput.delete(threadId);
           }
@@ -682,6 +688,26 @@ export class AgentRunner {
    * Clean up all in-memory state for a thread.
    * Call when deleting/archiving a thread.
    */
+  /**
+   * Kill all active agent processes. Called during server shutdown.
+   */
+  async stopAllAgents(): Promise<void> {
+    const entries = [...this.activeAgents.entries()];
+    if (entries.length === 0) return;
+    console.log(`[agent] Stopping ${entries.length} active agent(s)...`);
+    await Promise.allSettled(
+      entries.map(async ([threadId, proc]) => {
+        try {
+          await proc.kill();
+        } catch (e) {
+          console.error(`[agent] Error killing agent for thread ${threadId}:`, e);
+        }
+        this.activeAgents.delete(threadId);
+      })
+    );
+    console.log('[agent] All agents stopped.');
+  }
+
   cleanupThreadState(threadId: string): void {
     this.activeAgents.delete(threadId);
     this.resultReceived.delete(threadId);
@@ -704,5 +730,6 @@ const defaultRunner = new AgentRunner(
 
 export const startAgent = defaultRunner.startAgent.bind(defaultRunner);
 export const stopAgent = defaultRunner.stopAgent.bind(defaultRunner);
+export const stopAllAgents = defaultRunner.stopAllAgents.bind(defaultRunner);
 export const isAgentRunning = defaultRunner.isAgentRunning.bind(defaultRunner);
 export const cleanupThreadState = defaultRunner.cleanupThreadState.bind(defaultRunner);

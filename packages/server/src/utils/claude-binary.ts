@@ -123,6 +123,10 @@ export function validateClaudeBinary(binaryPath: string): string {
  */
 let cachedBinaryPath: string | null = null;
 
+export function resetBinaryCache(): void {
+  cachedBinaryPath = null;
+}
+
 export function getClaudeBinaryPath(): string {
   if (!cachedBinaryPath) {
     cachedBinaryPath = resolveClaudeBinary();

@@ -17,8 +17,6 @@ export function createCommand(data: {
   projectId: string;
   label: string;
   command: string;
-  port?: number | null;
-  portEnvVar?: string | null;
 }) {
   const existing = db
     .select()
@@ -31,8 +29,8 @@ export function createCommand(data: {
     projectId: data.projectId,
     label: data.label,
     command: data.command,
-    port: data.port ?? null,
-    portEnvVar: data.portEnvVar?.trim() || null,
+    port: null,
+    portEnvVar: null,
     sortOrder: existing.length,
     createdAt: new Date().toISOString(),
   };
@@ -45,15 +43,11 @@ export function createCommand(data: {
 export function updateCommand(cmdId: string, data: {
   label: string;
   command: string;
-  port?: number | null;
-  portEnvVar?: string | null;
 }) {
   db.update(schema.startupCommands)
     .set({
       label: data.label,
       command: data.command,
-      port: data.port ?? null,
-      portEnvVar: data.portEnvVar?.trim() || null,
     })
     .where(eq(schema.startupCommands.id, cmdId))
     .run();

@@ -259,8 +259,6 @@ export interface StartupCommand {
   projectId: string;
   label: string;
   command: string;
-  port?: number | null;
-  portEnvVar?: string | null;
   sortOrder: number;
   createdAt: string;
 }

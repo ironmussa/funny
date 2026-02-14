@@ -164,7 +164,7 @@ export function AppSidebar() {
   }
 
   return (
-    <Sidebar collapsible="offcanvas">
+    <Sidebar collapsible="offcanvas" className="select-none">
       {/* Logo area */}
       <SidebarHeader className="px-4 py-3">
         <div className="flex items-center justify-between">

@@ -53,7 +53,7 @@ export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle
     ? gitSyncStateConfig[gitStatus.state]
     : (statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending);
   const Icon = s.icon;
-  const isRunning = thread.status === 'running' || thread.status === 'waiting';
+  const isRunning = thread.status === 'running';
   const displayTime = timeValue ?? timeAgo(thread.createdAt, t);
 
   // Build tooltip text for git status
@@ -186,7 +186,7 @@ export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle
                 <Terminal className="h-3.5 w-3.5" />
                 {t('sidebar.openTerminal')}
               </DropdownMenuItem>
-              {isRunning ? (
+              {isRunning && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem
@@ -203,34 +203,31 @@ export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle
                     {t('common.stop')}
                   </DropdownMenuItem>
                 </>
-              ) : (
+              )}
+              {onArchive && (
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onArchive();
+                  }}
+                >
+                  <Archive className="h-3.5 w-3.5" />
+                  {t('sidebar.archive')}
+                </DropdownMenuItem>
+              )}
+              {onDelete && (
                 <>
-                  {onArchive && (
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onArchive();
-                      }}
-                    >
-                      <Archive className="h-3.5 w-3.5" />
-                      {t('sidebar.archive')}
-                    </DropdownMenuItem>
-                  )}
-                  {onDelete && (
-                    <>
-                      <DropdownMenuSeparator />
-                      <DropdownMenuItem
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onDelete();
-                        }}
-                        className="text-red-400 focus:text-red-400"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                        {t('common.delete')}
-                      </DropdownMenuItem>
-                    </>
-                  )}
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onDelete();
+                    }}
+                    className="text-red-400 focus:text-red-400"
+                  >
+                    <Trash2 className="h-3.5 w-3.5" />
+                    {t('common.delete')}
+                  </DropdownMenuItem>
                 </>
               )}
             </DropdownMenuContent>

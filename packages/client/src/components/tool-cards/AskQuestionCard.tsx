@@ -190,7 +190,7 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
                   </div>
                   <div className="min-w-0">
                     <span className="text-xs font-medium text-foreground">{opt.label}</span>
-                    <p className="text-sm text-muted-foreground leading-snug">{opt.description}</p>
+                    <p className="text-xs text-muted-foreground leading-snug">{opt.description}</p>
                   </div>
                 </button>
               );
@@ -242,7 +242,7 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
                   return next;
                 })}
                 placeholder={t('tools.otherPlaceholder')}
-                className="w-full rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-xs text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 resize-none min-h-[60px]"
+                className="w-full rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 resize-none min-h-[60px]"
                 rows={2}
               />
             )}
@@ -262,7 +262,7 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
                   onClick={() => setActiveTab((prev) => prev + 1)}
                   disabled={!currentTabAnswered}
                   className={cn(
-                    'flex items-center gap-1 px-3 py-1 rounded-md text-sm font-medium transition-colors',
+                    'flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
                     currentTabAnswered
                       ? 'bg-primary/15 text-primary hover:bg-primary/25 animate-pulse'
                       : 'bg-muted text-muted-foreground cursor-not-allowed'
@@ -278,7 +278,7 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
                 onClick={handleSubmit}
                 disabled={!allAnswered}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-colors ml-auto',
+                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ml-auto',
                   allAnswered
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                     : 'bg-muted text-muted-foreground cursor-not-allowed'

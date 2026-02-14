@@ -9,24 +9,6 @@ import * as pm from './project-manager.js';
 
 const KILL_GRACE_MS = 3_000;
 
-async function killPort(port: number): Promise<void> {
-  const isWindows = process.platform === 'win32';
-  const shell = isWindows ? 'cmd' : 'sh';
-  const shellFlag = isWindows ? '/c' : '-c';
-  const cmd = `npx kill-port ${port}`;
-
-  console.log(`[command-runner] Killing processes on port ${port}...`);
-  try {
-    const proc = Bun.spawn([shell, shellFlag, cmd], {
-      stdout: 'ignore',
-      stderr: 'ignore',
-    });
-    await proc.exited;
-  } catch {
-    // Ignore errors — port may not be in use
-  }
-}
-
 interface RunningCommand {
   proc: ReturnType<typeof Bun.spawn>;
   commandId: string;
@@ -56,17 +38,10 @@ export async function startCommand(
   cwd: string,
   projectId: string,
   label: string,
-  extraEnv?: Record<string, string>,
-  port?: number | null
 ): Promise<void> {
   // Kill existing instance of same command if running
   if (activeCommands.has(commandId)) {
     await stopCommand(commandId);
-  }
-
-  // If a port is specified, kill any process using it before starting
-  if (port) {
-    await killPort(port);
   }
 
   const isWindows = process.platform === 'win32';
@@ -79,7 +54,7 @@ export async function startCommand(
     cwd,
     stdout: 'pipe',
     stderr: 'pipe',
-    env: { ...process.env, FORCE_COLOR: '1', ...extraEnv },
+    env: { ...process.env, FORCE_COLOR: '1' },
   });
 
   const entry: RunningCommand = {

@@ -283,6 +283,7 @@ export function SkillsSettings() {
       toast.error(result.error.message);
     } else {
       await loadSkills();
+      toast.success(`Skill "${name}" removed`);
     }
     setRemovingName(null);
   };
@@ -294,18 +295,21 @@ export function SkillsSettings() {
       toast.error(result.error.message);
     } else {
       await loadSkills();
+      toast.success(`Skill "${skill.name}" installed successfully`);
     }
     setInstallingId(null);
   };
 
   const handleAddCustom = async () => {
-    if (!customId.trim()) return;
+    const id = customId.trim();
+    if (!id) return;
     setAddingCustom(true);
-    const result = await api.addSkill(customId.trim());
+    const result = await api.addSkill(id);
     if (result.isErr()) {
       toast.error(result.error.message);
     } else {
       await loadSkills();
+      toast.success(`Skill "${id}" installed successfully`);
       setCustomId('');
       setShowCustom(false);
     }

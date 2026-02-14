@@ -1,11 +1,11 @@
-import { memo, useState, useEffect } from 'react';
+import { memo, useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/stores/app-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { editorLabels, type Editor } from '@/stores/settings-store';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
-import { GitCommit, GitCompare, Globe, Terminal, ExternalLink, Pin, PinOff } from 'lucide-react';
+import { GitCommit, GitCompare, Globe, Terminal, ExternalLink, Pin, PinOff, Rocket, Play, Square, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -21,6 +21,11 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
+import {
   Breadcrumb,
   BreadcrumbList,
   BreadcrumbItem,
@@ -31,6 +36,7 @@ import {
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import { Separator } from '@/components/ui/separator';
 import { CommitDialog } from './CommitDialog';
+import type { StartupCommand } from '@a-parallel/shared';
 
 function CommitButton({ disabled }: { disabled?: boolean }) {
   const { t } = useTranslation();
@@ -54,6 +60,113 @@ function CommitButton({ disabled }: { disabled?: boolean }) {
       </Tooltip>
       <CommitDialog open={open} onOpenChange={setOpen} />
     </>
+  );
+}
+
+function StartupCommandsPopover({ projectId }: { projectId: string }) {
+  const { t } = useTranslation();
+  const [commands, setCommands] = useState<StartupCommand[]>([]);
+  const [open, setOpen] = useState(false);
+
+  const tabs = useTerminalStore((s) => s.tabs);
+  const runningIds = new Set<string>();
+  for (const tab of tabs) {
+    if (tab.commandId && tab.alive) runningIds.add(tab.commandId);
+  }
+
+  const loadCommands = useCallback(async () => {
+    const result = await api.listCommands(projectId);
+    if (result.isOk()) setCommands(result.value);
+  }, [projectId]);
+
+  useEffect(() => {
+    if (open) loadCommands();
+  }, [open, loadCommands]);
+
+  const handleRun = async (cmd: StartupCommand) => {
+    const store = useTerminalStore.getState();
+    store.addTab({
+      id: crypto.randomUUID(),
+      label: cmd.label,
+      cwd: '',
+      alive: true,
+      commandId: cmd.id,
+      projectId,
+    });
+    await api.runCommand(projectId, cmd.id);
+  };
+
+  const handleStop = async (cmd: StartupCommand) => {
+    await api.stopCommand(projectId, cmd.id);
+  };
+
+  const anyRunning = commands.some((cmd) => runningIds.has(cmd.id));
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-sm"
+              className={anyRunning ? 'text-green-400' : 'text-muted-foreground'}
+            >
+              <Rocket className="h-4 w-4" />
+            </Button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{t('startup.title', 'Startup Commands')}</TooltipContent>
+      </Tooltip>
+      <PopoverContent align="end" className="w-64 p-2">
+        {commands.length === 0 ? (
+          <p className="text-xs text-muted-foreground text-center py-3">
+            {t('startup.noCommands')}
+          </p>
+        ) : (
+          <div className="space-y-1">
+            {commands.map((cmd) => {
+              const isRunning = runningIds.has(cmd.id);
+              return (
+                <div
+                  key={cmd.id}
+                  className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-accent/50 transition-colors"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-1.5">
+                      {isRunning && (
+                        <Loader2 className="h-3 w-3 animate-spin text-green-400 flex-shrink-0" />
+                      )}
+                      <span className="text-sm truncate">{cmd.label}</span>
+                    </div>
+                    <span className="text-xs text-muted-foreground font-mono truncate block mt-0.5">{cmd.command}</span>
+                  </div>
+                  {isRunning ? (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => handleStop(cmd)}
+                      className="text-red-400 hover:text-red-300 flex-shrink-0"
+                    >
+                      <Square className="h-3 w-3" />
+                    </Button>
+                  ) : (
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => handleRun(cmd)}
+                      className="text-green-400 hover:text-green-300 flex-shrink-0"
+                    >
+                      <Play className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -109,7 +222,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
   return (
     <div className="px-4 py-2 border-b border-border">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 min-w-0 max-w-[50%]">
           <SidebarTrigger className="-ml-1" />
           <Separator orientation="vertical" className="h-4" />
         <Breadcrumb className="min-w-0">
@@ -123,17 +236,25 @@ export const ProjectHeader = memo(function ProjectHeader() {
             )}
             {project && activeThread && <BreadcrumbSeparator />}
             {activeThread && (
-              <BreadcrumbItem className="overflow-hidden">
-                <BreadcrumbPage className="text-sm truncate">
-                  {activeThread.title}
-                </BreadcrumbPage>
+              <BreadcrumbItem className="overflow-hidden flex-1">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div className="block w-full cursor-default">
+                      <BreadcrumbPage className="text-sm truncate block">
+                        {activeThread.title}
+                      </BreadcrumbPage>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>{activeThread.title}</TooltipContent>
+                </Tooltip>
               </BreadcrumbItem>
             )}
           </BreadcrumbList>
         </Breadcrumb>
         </div>
         <div className="flex items-center gap-2">
-          {isTauri && runningWithPort.length > 0 && (
+          <StartupCommandsPopover projectId={projectId!} />
+          {runningWithPort.length > 0 && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

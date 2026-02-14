@@ -100,8 +100,6 @@ export const createPRSchema = z.object({
 export const createCommandSchema = z.object({
   label: z.string().min(1, 'label is required'),
   command: z.string().min(1, 'command is required'),
-  port: z.number().nullable().optional(),
-  portEnvVar: z.string().nullable().optional(),
 });
 
 export const createWorktreeSchema = z.object({

@@ -31,10 +31,10 @@ export function AutomationInboxButton() {
           navigate('/inbox');
         }
       }}
-      className={`w-full flex items-center gap-3 px-2 py-2 text-sm rounded-md transition-colors ${
+      className={`w-full flex items-center gap-2 p-2 text-sm rounded-md transition-colors ${
         automationInboxOpen
-          ? 'bg-accent text-foreground'
-          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+          ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+          : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
       }`}
     >
       <Inbox className="h-4 w-4" />

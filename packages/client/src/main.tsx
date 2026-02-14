@@ -1,4 +1,4 @@
-import React, { useEffect, useSyncExternalStore } from 'react';
+import React, { lazy, Suspense, useEffect, useSyncExternalStore } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 import { App } from './App';
@@ -6,12 +6,17 @@ import { MobilePage } from './components/MobilePage';
 import { LoginPage } from './components/LoginPage';
 import { PreviewBrowser } from './components/PreviewBrowser';
 import { useAuthStore } from './stores/auth-store';
+import { useSettingsStore } from './stores/settings-store';
 import '@fontsource/geist-sans';
 import '@fontsource/geist-mono';
 import './globals.css';
 // Eagerly import so the persisted theme is applied before first paint
 import './stores/settings-store';
 import './i18n/config';
+
+const SetupWizard = lazy(() =>
+  import('./components/SetupWizard').then((m) => ({ default: m.SetupWizard }))
+);
 
 // The preview window sets this flag via Tauri's initialization_script
 const isPreviewWindow = !!(window as unknown as { __PREVIEW_MODE__: unknown }).__PREVIEW_MODE__;
@@ -34,6 +39,7 @@ function AuthGate() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   const initialize = useAuthStore((s) => s.initialize);
+  const setupCompleted = useSettingsStore((s) => s.setupCompleted);
 
   useEffect(() => {
     initialize();
@@ -50,6 +56,19 @@ function AuthGate() {
   // Multi mode and not authenticated -> show login page
   if (mode === 'multi' && !isAuthenticated) {
     return <LoginPage />;
+  }
+
+  // Setup not completed -> show setup wizard
+  if (!setupCompleted) {
+    return (
+      <Suspense fallback={
+        <div className="flex min-h-screen items-center justify-center bg-background">
+          <div className="text-muted-foreground text-sm">Loading...</div>
+        </div>
+      }>
+        <SetupWizard />
+      </Suspense>
+    );
   }
 
   // Local mode or authenticated multi -> show app

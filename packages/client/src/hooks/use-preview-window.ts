@@ -42,7 +42,11 @@ export function usePreviewWindow() {
     port: number;
     commandLabel: string;
   }) => {
-    if (!isTauri) return;
+    // In browser mode, simply open a new tab with the localhost URL
+    if (!isTauri) {
+      window.open(`http://localhost:${opts.port}`, '_blank');
+      return;
+    }
 
     const store = usePreviewStore.getState();
     const tab = {

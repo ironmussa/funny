@@ -270,9 +270,9 @@ export function ProjectItem({
               projectPath={project.path}
               isSelected={selectedThreadId === th.id}
               onSelect={() => onSelectThread(th.id)}
-              onArchive={() => onArchiveThread(th.id, th.title)}
+              onArchive={th.status === 'running' ? undefined : () => onArchiveThread(th.id, th.title)}
               onPin={() => onPinThread(th.id, !th.pinned)}
-              onDelete={() => onDeleteThread(th.id, th.title)}
+              onDelete={th.status === 'running' ? undefined : () => onDeleteThread(th.id, th.title)}
               gitStatus={th.mode === 'worktree' ? gitStatusByThread[th.id] : undefined}
             />
           ))}

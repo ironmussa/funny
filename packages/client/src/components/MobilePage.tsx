@@ -19,11 +19,12 @@ import {
   Send,
   CheckCircle2,
   XCircle,
+  ShieldQuestion,
 } from 'lucide-react';
 import { PromptInput } from './PromptInput';
 import { ToolCallCard } from './ToolCallCard';
 import { StatusBadge } from './StatusBadge';
-import { MessageContent, CopyButton, WaitingActions, PlanWaitingActions } from './ThreadView';
+import { MessageContent, CopyButton, WaitingActions } from './ThreadView';
 import { AgentResultCard, AgentInterruptedCard } from './thread/AgentStatusCards';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
@@ -509,10 +510,11 @@ function ChatView({
                 </div>
               )}
 
-              {activeThread.status === 'waiting' && activeThread.waitingReason === 'plan' && (
-                <PlanWaitingActions
-                  onSend={(text) => handleSend(text, { model: '', mode: '' })}
-                />
+              {activeThread.status === 'waiting' && activeThread.waitingReason === 'question' && (
+                <div className="flex items-center gap-2 text-amber-500 text-xs">
+                  <ShieldQuestion className="h-3.5 w-3.5 animate-pulse" />
+                  {t('thread.waitingForResponse')}
+                </div>
               )}
 
               {activeThread.status === 'waiting' && activeThread.waitingReason !== 'question' && activeThread.waitingReason !== 'plan' && (

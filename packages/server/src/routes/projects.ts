@@ -9,15 +9,6 @@ import { resultToResponse } from '../utils/result-response.js';
 
 export const projectRoutes = new Hono();
 
-function buildCommandWithPort(command: string, port: number): string {
-  const trimmed = command.trimStart();
-  const usesPackageManager = /^(npm|npx|pnpm|yarn|bun)\s/.test(trimmed);
-  if (usesPackageManager) {
-    return `${command} -- --port ${port}`;
-  }
-  return `${command} --port ${port}`;
-}
-
 // GET /api/projects
 projectRoutes.get('/', (c) => {
   const userId = c.get('userId') as string;
@@ -98,9 +89,9 @@ projectRoutes.post('/:id/commands', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(createCommandSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { label, command, port, portEnvVar } = parsed.value;
+  const { label, command } = parsed.value;
 
-  const entry = sc.createCommand({ projectId, label, command, port, portEnvVar });
+  const entry = sc.createCommand({ projectId, label, command });
   return c.json(entry, 201);
 });
 
@@ -137,12 +128,7 @@ projectRoutes.post('/:id/commands/:cmdId/start', async (c) => {
   const cmd = sc.getCommand(cmdId);
   if (!cmd) return c.json({ error: 'Command not found' }, 404);
 
-  const finalCommand = cmd.port ? buildCommandWithPort(cmd.command, cmd.port) : cmd.command;
-  const extraEnv: Record<string, string> = {};
-  if (cmd.port && cmd.portEnvVar) {
-    extraEnv[cmd.portEnvVar] = String(cmd.port);
-  }
-  await startCommand(cmdId, finalCommand, project.path, projectId, cmd.label, extraEnv, cmd.port);
+  await startCommand(cmdId, cmd.command, project.path, projectId, cmd.label);
   return c.json({ ok: true });
 });
 

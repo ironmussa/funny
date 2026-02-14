@@ -85,8 +85,8 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
               }
               navigate(`/projects/${thread.projectId}/threads/${thread.id}`);
             }}
-            onArchive={isRunning ? undefined : () => onArchiveThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch)}
-            onDelete={isRunning ? undefined : () => onDeleteThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch)}
+            onArchive={thread.status === 'running' ? undefined : () => onArchiveThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch)}
+            onDelete={thread.status === 'running' ? undefined : () => onDeleteThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch)}
           />
         );
       })}

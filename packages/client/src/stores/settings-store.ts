@@ -43,11 +43,13 @@ interface SettingsState {
   defaultEditor: Editor;
   defaultThreadMode: ThreadMode;
   toolPermissions: Record<string, ToolPermission>;
+  setupCompleted: boolean;
   setTheme: (theme: Theme) => void;
   setDefaultEditor: (editor: Editor) => void;
   setDefaultThreadMode: (mode: ThreadMode) => void;
   setToolPermission: (toolName: string, permission: ToolPermission) => void;
   resetToolPermissions: () => void;
+  completeSetup: () => void;
 }
 
 /** Derive allowedTools and disallowedTools arrays from the permissions record. */
@@ -82,6 +84,7 @@ export const useSettingsStore = create<SettingsState>()(
       defaultEditor: 'cursor',
       defaultThreadMode: 'worktree',
       toolPermissions: { ...DEFAULT_TOOL_PERMISSIONS },
+      setupCompleted: false,
       setTheme: (theme) => {
         applyTheme(theme);
         set({ theme });
@@ -92,10 +95,11 @@ export const useSettingsStore = create<SettingsState>()(
         toolPermissions: { ...state.toolPermissions, [toolName]: permission },
       })),
       resetToolPermissions: () => set({ toolPermissions: { ...DEFAULT_TOOL_PERMISSIONS } }),
+      completeSetup: () => set({ setupCompleted: true }),
     }),
     {
       name: 'a-parallel-settings',
-      version: 2,
+      version: 3,
       migrate: (persisted: any, version: number) => {
         if (version < 2) {
           // Old format had allowedTools: string[]
@@ -105,7 +109,12 @@ export const useSettingsStore = create<SettingsState>()(
             toolPermissions[tool] = oldAllowed.includes(tool) ? 'allow' : 'ask';
           }
           const { allowedTools: _removed, ...rest } = persisted;
-          return { ...rest, toolPermissions };
+          persisted = { ...rest, toolPermissions };
+          version = 2;
+        }
+        if (version < 3) {
+          // Existing users already have setup done — skip wizard
+          return { ...persisted, setupCompleted: true };
         }
         return persisted as any;
       },

@@ -268,15 +268,15 @@ export const api = {
   // Startup Commands
   listCommands: (projectId: string) =>
     request<StartupCommand[]>(`/projects/${projectId}/commands`),
-  addCommand: (projectId: string, label: string, command: string, port?: number | null, portEnvVar?: string | null) =>
+  addCommand: (projectId: string, label: string, command: string) =>
     request<StartupCommand>(`/projects/${projectId}/commands`, {
       method: 'POST',
-      body: JSON.stringify({ label, command, port: port || null, portEnvVar: portEnvVar || null }),
+      body: JSON.stringify({ label, command }),
     }),
-  updateCommand: (projectId: string, cmdId: string, label: string, command: string, port?: number | null, portEnvVar?: string | null) =>
+  updateCommand: (projectId: string, cmdId: string, label: string, command: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/commands/${cmdId}`, {
       method: 'PUT',
-      body: JSON.stringify({ label, command, port: port || null, portEnvVar: portEnvVar || null }),
+      body: JSON.stringify({ label, command }),
     }),
   deleteCommand: (projectId: string, cmdId: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/commands/${cmdId}`, { method: 'DELETE' }),
@@ -433,4 +433,8 @@ export const api = {
     const qs = params.toString();
     return request<any>(`/analytics/timeline${qs ? `?${qs}` : ''}`);
   },
+
+  // Setup
+  setupStatus: () =>
+    request<{ claudeCli: { available: boolean; path: string | null; error: string | null; version: string | null } }>('/setup/status'),
 };

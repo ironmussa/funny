@@ -27,8 +27,9 @@ import { githubRoutes } from './routes/github.js';
 import { analyticsRoutes } from './routes/analytics.js';
 import { wsBroker } from './services/ws-broker.js';
 import { startScheduler, stopScheduler } from './services/automation-scheduler.js';
+import { stopAllAgents } from './services/agent-runner.js';
 import * as ptyManager from './services/pty-manager.js';
-import { checkClaudeBinaryAvailability } from './utils/claude-binary.js';
+import { checkClaudeBinaryAvailability, resetBinaryCache, validateClaudeBinary } from './utils/claude-binary.js';
 
 // Resolve client dist directory (works both in dev and when installed via npm)
 const clientDistDir = resolve(
@@ -70,6 +71,24 @@ app.use('/api/*', authMiddleware);
 // Health check
 app.get('/api/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// Setup status endpoint — checks Claude CLI availability
+app.get('/api/setup/status', (c) => {
+  resetBinaryCache();
+  const result = checkClaudeBinaryAvailability();
+  let version: string | null = null;
+  if (result.available && result.path) {
+    try { version = validateClaudeBinary(result.path); } catch {}
+  }
+  return c.json({
+    claudeCli: {
+      available: result.available,
+      path: result.path ?? null,
+      error: result.error ?? null,
+      version,
+    },
+  });
 });
 
 // Auth mode endpoint (public — client needs this before login)
@@ -143,7 +162,6 @@ if (!claudeBinaryCheck.available) {
 const server = Bun.serve({
   port,
   hostname: host,
-  reusePort: true,
   async fetch(req: Request, server: any) {
     // Handle WebSocket upgrade
     const url = new URL(req.url);
@@ -206,10 +224,11 @@ const server = Bun.serve({
   },
 });
 
-// Graceful shutdown — close the server so the port is released immediately
-function shutdown() {
+// Graceful shutdown — kill agents and close the server so the port is released immediately
+async function shutdown() {
   console.log('[server] Shutting down...');
   stopScheduler();
+  await stopAllAgents();
   server.stop(true);
   process.exit(0);
 }

@@ -640,7 +640,7 @@ export function ThreadView() {
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.25, ease: 'easeOut' }}
-                      className={(tc.name === 'AskUserQuestion' || tc.name === 'TodoWrite') ? 'border border-border rounded-lg' : undefined}
+                      className={(tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode' || tc.name === 'TodoWrite') ? 'border border-border rounded-lg' : undefined}
                       {...(snapshotMap.has(tc.id) ? { 'data-todo-snapshot': snapshotMap.get(tc.id) } : {})}
                     >
                       <ToolCallCard
@@ -662,7 +662,7 @@ export function ThreadView() {
                       initial={{ opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.25, ease: 'easeOut' }}
-                      className={(ti.name === 'AskUserQuestion' || ti.name === 'TodoWrite') ? 'border border-border rounded-lg' : undefined}
+                      className={(ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode' || ti.name === 'TodoWrite') ? 'border border-border rounded-lg' : undefined}
                       {...(groupSnapshotIdx >= 0 ? { 'data-todo-snapshot': groupSnapshotIdx } : {})}
                     >
                       <ToolCallGroup
@@ -768,6 +768,18 @@ export function ThreadView() {
             </motion.div>
           )}
 
+          {activeThread.status === 'waiting' && activeThread.waitingReason === 'question' && (
+            <motion.div
+              initial={{ opacity: 0, y: 6 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.25, ease: 'easeOut' }}
+              className="flex items-center gap-2 text-amber-500 text-xs"
+            >
+              <ShieldQuestion className="h-3.5 w-3.5 animate-pulse" />
+              {t('thread.waitingForResponse')}
+            </motion.div>
+          )}
+
           {activeThread.status === 'waiting' && activeThread.waitingReason === 'permission' && activeThread.pendingPermission && (
             <motion.div
               initial={{ opacity: 0, y: 6 }}
@@ -778,18 +790,6 @@ export function ThreadView() {
                 toolName={activeThread.pendingPermission.toolName}
                 onApprove={() => handlePermissionApproval(activeThread.pendingPermission!.toolName, true)}
                 onDeny={() => handlePermissionApproval(activeThread.pendingPermission!.toolName, false)}
-              />
-            </motion.div>
-          )}
-
-          {activeThread.status === 'waiting' && activeThread.waitingReason === 'plan' && (
-            <motion.div
-              initial={{ opacity: 0, y: 6 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25, ease: 'easeOut' }}
-            >
-              <PlanWaitingActions
-                onSend={(text) => handleSend(text, { model: activeThread.model, mode: activeThread.permissionMode })}
               />
             </motion.div>
           )}

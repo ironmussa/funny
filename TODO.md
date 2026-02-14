@@ -2,8 +2,8 @@
 
 ## Tareas Pendientes
 - [x] Skills
-- [ ] Hacer intro de configuracion
-- [ ] Preview
+- [x] Hacer intro de configuracion
+- [x] Preview
 - [ ] Log de depuracion
 
 - [ ] Esta tenindo problemas para salir del plan mode y esta repitiendo las pregutnas
@@ -14,3 +14,9 @@
 - Crear una gente que corrar la auditoria de seguriar y de arquitectura cada x cantidad de tiempo
 - Crear aplicacion movil
 - En la arquitectura pedir como se manejan los erresores, como se manejan los usuarios y los exponecial back off.
+
+To test de Intro, from the console
+const settings = JSON.parse(localStorage.getItem('a-parallel-settings'));
+settings.state.setupCompleted = false;
+localStorage.setItem('a-parallel-settings', JSON.stringify(settings));
+location.reload();

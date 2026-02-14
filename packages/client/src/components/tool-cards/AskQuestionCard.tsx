@@ -1,6 +1,6 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MessageCircleQuestion, Check, Send, PenLine } from 'lucide-react';
+import { MessageCircleQuestion, Check, Send, PenLine, ChevronRight } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { getQuestions } from './utils';
 
@@ -70,10 +70,24 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
   const activeSelections = selections.get(activeTab) || new Set<number>();
   const isOtherSelected = activeSelections.has(OTHER_INDEX);
   const otherText = otherTexts.get(activeTab) || '';
-  // +1 for the "Other" option always present
-  const maxOptions = questions.length > 1
-    ? Math.max(...questions.map((q) => q.options.length + 1))
-    : 0;
+
+  // Calculate max height needed across all tabs (including "Other" option and textarea)
+  const maxContentHeight = useMemo(() => {
+    return questions.reduce((max, q, qIndex) => {
+      // Base height: options + "Other" button
+      const optionsCount = q.options.length + 1; // +1 for "Other"
+      let height = optionsCount * 40; // approximate height per option (py-1.5 + gap)
+
+      // Add height for "Other" textarea if selected for this question
+      const qSelections = selections.get(qIndex);
+      if (qSelections?.has(OTHER_INDEX)) {
+        height += 70; // textarea min-height + margins
+      }
+
+      return Math.max(max, height);
+    }, 0);
+  }, [questions, selections]);
+
   const allAnswered = questions.every((_, i) => {
     const sel = selections.get(i);
     if (!sel || sel.size === 0) return false;
@@ -83,6 +97,18 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
     }
     return true;
   });
+
+  const currentTabAnswered = (() => {
+    const sel = selections.get(activeTab);
+    if (!sel || sel.size === 0) return false;
+    if (sel.has(OTHER_INDEX) && sel.size === 1) {
+      return (otherTexts.get(activeTab)?.trim().length ?? 0) > 0;
+    }
+    return true;
+  })();
+
+  const isLastTab = activeTab === questions.length - 1;
+  const showNext = questions.length > 1 && !isLastTab && !submitted;
 
   return (
     <div className="text-sm max-w-full overflow-hidden">
@@ -128,13 +154,13 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
         )}
 
         {/* Active question */}
-        <div className="px-3 py-2 space-y-2 max-h-80 overflow-y-auto">
+        <div className="px-3 py-2 space-y-2">
           <p className="text-xs text-foreground leading-relaxed">{activeQ.question}</p>
 
           {/* Options — use min-height from the tallest question to prevent layout shift */}
           <div
             className="space-y-1"
-            style={maxOptions > 0 ? { minHeight: `${maxOptions * 36}px` } : undefined}
+            style={maxContentHeight > 0 ? { minHeight: `${maxContentHeight}px` } : undefined}
           >
             {activeQ.options.map((opt, oi) => {
               const isSelected = activeSelections.has(oi);
@@ -175,9 +201,9 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
               onClick={() => toggleOption(activeTab, OTHER_INDEX, activeQ.multiSelect)}
               disabled={submitted}
               className={cn(
-                'flex items-start gap-2 w-full text-left rounded-md px-2.5 py-1.5 transition-colors border',
+                'flex items-start gap-2 w-full text-left rounded-md px-2.5 py-1.5 transition-all border',
                 isOtherSelected
-                  ? 'border-primary/50 bg-primary/10'
+                  ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
                   : 'border-border/40 bg-background/50 hover:border-border hover:bg-accent/30',
                 submitted && 'opacity-70 cursor-default'
               )}
@@ -194,8 +220,14 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
                 )}
               </div>
               <div className="min-w-0 flex items-center gap-1.5">
-                <PenLine className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                <span className="text-xs font-medium text-foreground">{t('tools.other')}</span>
+                <PenLine className={cn(
+                  'h-3 w-3 flex-shrink-0 transition-colors',
+                  isOtherSelected ? 'text-primary' : 'text-muted-foreground'
+                )} />
+                <span className={cn(
+                  'text-xs font-medium transition-colors',
+                  isOtherSelected ? 'text-foreground' : 'text-foreground'
+                )}>{t('tools.other')}</span>
               </div>
             </button>
 
@@ -221,14 +253,32 @@ export function AskQuestionCard({ parsed, onRespond, hideLabel }: { parsed: Reco
             )}
           </div>
 
-          {/* Submit button */}
+          {/* Action buttons */}
           {onRespond && !submitted && (
-            <div className="flex justify-end pt-1">
+            <div className="flex items-center pt-1">
+              {/* Next button — bottom-left */}
+              {showNext && (
+                <button
+                  onClick={() => setActiveTab((prev) => prev + 1)}
+                  disabled={!currentTabAnswered}
+                  className={cn(
+                    'flex items-center gap-1 px-3 py-1 rounded-md text-sm font-medium transition-colors',
+                    currentTabAnswered
+                      ? 'bg-primary/15 text-primary hover:bg-primary/25 animate-pulse'
+                      : 'bg-muted text-muted-foreground cursor-not-allowed'
+                  )}
+                >
+                  {t('tools.next')}
+                  <ChevronRight className="h-3 w-3" />
+                </button>
+              )}
+
+              {/* Submit button — bottom-right */}
               <button
                 onClick={handleSubmit}
                 disabled={!allAnswered}
                 className={cn(
-                  'flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-colors',
+                  'flex items-center gap-1.5 px-3 py-1 rounded-md text-sm font-medium transition-colors ml-auto',
                   allAnswered
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90'
                     : 'bg-muted text-muted-foreground cursor-not-allowed'

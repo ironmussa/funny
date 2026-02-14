@@ -1,6 +1,7 @@
 import { ResultAsync } from 'neverthrow';
 import type { DomainError } from '@a-parallel/shared/errors';
 import { internal } from '@a-parallel/shared/errors';
+import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 import type {
   Project,
   Thread,
@@ -68,6 +69,13 @@ export function getAuthMode() {
 function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
+      const cb = useCircuitBreakerStore.getState();
+
+      // Fail fast if circuit is open
+      if (cb.state === 'open') {
+        throw internal('Server unavailable (circuit open)');
+      }
+
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
@@ -78,11 +86,20 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
       if (init?.headers) {
         Object.assign(headers, init.headers);
       }
-      const res = await fetch(`${BASE}${path}`, {
-        ...init,
-        headers,
-        credentials: authMode === 'multi' ? 'include' : 'same-origin',
-      });
+
+      let res: Response;
+      try {
+        res = await fetch(`${BASE}${path}`, {
+          ...init,
+          headers,
+          credentials: authMode === 'multi' ? 'include' : 'same-origin',
+        });
+      } catch (networkError) {
+        // Network error (server down, no connectivity, etc.)
+        useCircuitBreakerStore.getState().recordFailure();
+        throw internal(String(networkError));
+      }
+
       if (!res.ok) {
         // On 401 in multi mode, trigger logout
         if (res.status === 401 && authMode === 'multi') {
@@ -90,6 +107,12 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
             useAuthStore.getState().logout();
           });
         }
+
+        // 5xx errors trigger the circuit breaker; 4xx do NOT
+        if (res.status >= 500) {
+          useCircuitBreakerStore.getState().recordFailure();
+        }
+
         const body = await res.json().catch(() => ({}));
         const message = body.error || `HTTP ${res.status}`;
         const type: DomainError['type'] = res.status === 404 ? 'NOT_FOUND'
@@ -99,6 +122,10 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
           : 'BAD_REQUEST';
         throw { type, message } as DomainError;
       }
+
+      // Successful response — reset circuit breaker
+      useCircuitBreakerStore.getState().recordSuccess();
+
       return res.json() as Promise<T>;
     })(),
     (error): DomainError => {
@@ -392,6 +419,7 @@ export const api = {
     const params = new URLSearchParams();
     if (projectId) params.set('projectId', projectId);
     if (timeRange) params.set('timeRange', timeRange);
+    params.set('tz', String(new Date().getTimezoneOffset()));
     const qs = params.toString();
     return request<any>(`/analytics/overview${qs ? `?${qs}` : ''}`);
   },
@@ -400,6 +428,7 @@ export const api = {
     if (projectId) params.set('projectId', projectId);
     if (timeRange) params.set('timeRange', timeRange);
     if (groupBy) params.set('groupBy', groupBy);
+    params.set('tz', String(new Date().getTimezoneOffset()));
     const qs = params.toString();
     return request<any>(`/analytics/timeline${qs ? `?${qs}` : ''}`);
   },

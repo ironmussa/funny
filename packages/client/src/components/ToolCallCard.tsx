@@ -50,50 +50,52 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
 
   return (
     <div className="text-sm max-w-full overflow-hidden">
-      <button
+      <div
+        className="hover:bg-accent/30 transition-colors rounded-md cursor-pointer"
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs hover:bg-accent/30 transition-colors rounded-md overflow-hidden"
       >
-        <ChevronRight
-          className={cn(
-            'h-3 w-3 flex-shrink-0 text-muted-foreground transition-transform duration-150',
-            expanded && 'rotate-90'
+        <div className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs overflow-hidden">
+          <ChevronRight
+            className={cn(
+              'h-3 w-3 flex-shrink-0 text-muted-foreground transition-transform duration-150',
+              expanded && 'rotate-90'
+            )}
+          />
+          {!hideLabel && (
+            isTodo ? (
+              <ListTodo className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+            ) : (
+              <Wrench className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+            )
           )}
-        />
-        {!hideLabel && (
-          isTodo ? (
-            <ListTodo className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-          ) : (
-            <Wrench className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-          )
-        )}
-        {!hideLabel && (
-          <span className="font-medium font-mono text-foreground flex-shrink-0">{label}</span>
-        )}
-        {summary && (
-          filePath ? (
-            <a
-              href={toVscodeUri(filePath)}
-              onClick={(e) => e.stopPropagation()}
-              className="text-muted-foreground truncate font-mono text-sm min-w-0 hover:text-primary hover:underline"
-              title={t('tools.openInVSCode', { path: filePath })}
-            >
-              {summary}
-            </a>
-          ) : (
-            <span className="text-muted-foreground truncate font-mono text-sm min-w-0">
-              {summary}
-            </span>
-          )
-        )}
-      </button>
-      {!expanded && outputPreview && (
-        <div className="px-3 pb-1.5 -mt-0.5">
-          <p className="text-xs font-mono text-muted-foreground/70 truncate leading-tight">
-            → {outputPreview}
-          </p>
+          {!hideLabel && (
+            <span className="font-medium font-mono text-foreground flex-shrink-0">{label}</span>
+          )}
+          {summary && (
+            filePath ? (
+              <a
+                href={toVscodeUri(filePath)}
+                onClick={(e) => e.stopPropagation()}
+                className="text-muted-foreground truncate font-mono text-sm min-w-0 hover:text-primary hover:underline"
+                title={t('tools.openInVSCode', { path: filePath })}
+              >
+                {summary}
+              </a>
+            ) : (
+              <span className="text-muted-foreground truncate font-mono text-sm min-w-0">
+                {summary}
+              </span>
+            )
+          )}
         </div>
-      )}
+        {!expanded && outputPreview && (
+          <div className="px-3 pb-1.5 -mt-0.5">
+            <p className="text-xs font-mono text-muted-foreground/70 truncate leading-tight">
+              → {outputPreview}
+            </p>
+          </div>
+        )}
+      </div>
       {expanded && (
         <div className="px-3 pb-2 pt-0 border-t border-border/40 overflow-hidden">
           {isTodo && todos ? (

@@ -271,7 +271,8 @@
     "waitingForOutput": "Aguardando saída...",
     "openInVSCode": "Abrir no VS Code: {{path}}",
     "other": "Outra",
-    "otherPlaceholder": "Escreva sua resposta..."
+    "otherPlaceholder": "Escreva sua resposta...",
+    "next": "Próximo"
   },
   "allThreads": {
     "title": "Todas as threads",
@@ -457,7 +458,8 @@
     "emptyColumn": "Sem threads",
     "addThread": "Adicionar thread",
     "searchProject": "Buscar projeto...",
-    "titlePlaceholder": "Título da thread..."
+    "titlePlaceholder": "Título da thread...",
+    "loadMore": "Carregar mais {{count}}"
   },
   "analytics": {
     "title": "Analíticas",
@@ -552,6 +554,15 @@
     "title": "Tarefas",
     "minimize": "Minimizar",
     "expand": "Expandir",
+    "dismiss": "Fechar"
+  },
+  "circuitBreaker": {
+    "title": "Servidor Inacessível",
+    "description": "Não foi possível conectar ao servidor. Ele pode estar fora do ar ou sua conexão de rede pode estar interrompida.",
+    "attemptingReconnect": "Tentando reconectar...",
+    "willRetryAutomatically": "O app tentará novamente automaticamente em alguns segundos.",
+    "retryNow": "Tentar Agora",
+    "reconnecting": "Reconectando...",
     "dismiss": "Fechar"
   },
   "users": {

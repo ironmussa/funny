@@ -585,7 +585,7 @@ export function ThreadView() {
 
       {/* Messages */}
       <ScrollArea className="flex-1 px-4" viewportRef={scrollViewportRef}>
-        <div className="mx-auto max-w-3xl min-w-[320px] space-y-3 overflow-hidden py-4">
+        <div className="mx-auto max-w-3xl min-w-[320px] space-y-4 overflow-hidden py-4">
           {activeThread.initInfo && (
             <div className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground space-y-1">
               <div className="flex items-center gap-2">
@@ -683,6 +683,7 @@ export function ThreadView() {
                     initial={{ opacity: 0, y: 6 }}
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ duration: 0.25, ease: 'easeOut' }}
+                    className={tc.name === 'AskUserQuestion' ? 'border border-border rounded-lg' : undefined}
                     {...(snapshotMap.has(tc.id) ? { 'data-todo-snapshot': snapshotMap.get(tc.id) } : {})}
                   >
                     <ToolCallCard

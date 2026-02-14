@@ -6,9 +6,8 @@ import { validate, mergeSchema, stageFilesSchema, commitSchema, createPRSchema }
 import { sanitizePath } from '../utils/path-validation.js';
 import { requireThread, requireThreadCwd, requireProject } from '../utils/route-helpers.js';
 import { resultToResponse } from '../utils/result-response.js';
-import { badRequest } from '@a-parallel/shared/errors';
-import { getClaudeBinaryPath } from '../utils/claude-binary.js';
-import { execute } from '../utils/process.js';
+import { badRequest, internal } from '@a-parallel/shared/errors';
+import { ClaudeProcess, type CLIMessage } from '../services/claude-process.js';
 import { err } from 'neverthrow';
 import { getAuthMode } from '../lib/auth-mode.js';
 import { getGitIdentity, getGithubToken } from '../services/profile-service.js';
@@ -231,9 +230,16 @@ gitRoutes.post('/:threadId/generate-commit-message', async (c) => {
     return resultToResponse(c, err(badRequest('No staged files to generate a commit message for')));
   }
 
-  const diffSummary = staged
+  let diffSummary = staged
     .map(d => `--- ${d.status}: ${d.path} ---\n${d.diff || '(no diff)'}`)
     .join('\n\n');
+
+  // Truncate diff to stay within command-line length limits (~32k on Windows).
+  // Reserve space for the prompt template and CLI args.
+  const MAX_DIFF_LEN = 20_000;
+  if (diffSummary.length > MAX_DIFF_LEN) {
+    diffSummary = diffSummary.slice(0, MAX_DIFF_LEN) + '\n\n... (diff truncated for length)';
+  }
 
   const prompt = `You are a commit message generator. Based on the following staged git diff, generate a commit title and a commit body.
 
@@ -248,18 +254,87 @@ No quotes, no markdown, no extra explanation.
 
 ${diffSummary}`;
 
-  const binaryPath = getClaudeBinaryPath();
-  const { stdout } = await execute(binaryPath, ['--print'], {
+  // Use ClaudeProcess (same NDJSON stream-json protocol as agent-runner)
+  const claudeProc = new ClaudeProcess({
+    prompt,
     cwd,
-    timeout: 60_000,
-    stdin: prompt,
+    maxTurns: 1,
+    permissionMode: 'plan', // read-only, no tools needed
   });
 
-  const output = stdout.trim();
-  const titleMatch = output.match(/^TITLE:\s*(.+)/m);
-  const bodyMatch = output.match(/^BODY:\s*([\s\S]+)/m);
+  const output = await new Promise<string>((resolve, reject) => {
+    const timeout = setTimeout(() => {
+      claudeProc.kill();
+      reject(new Error('Timed out waiting for commit message generation'));
+    }, 60_000);
 
-  const title = titleMatch?.[1]?.trim() || output.split('\n')[0];
+    let resultText = '';
+
+    claudeProc.on('message', (msg: CLIMessage) => {
+      // Collect text from assistant messages
+      if (msg.type === 'assistant') {
+        const text = msg.message.content
+          .filter((b): b is { type: 'text'; text: string } => 'text' in b && !!b.text)
+          .map((b) => b.text)
+          .join('\n');
+        if (text) resultText = text;
+      }
+      // On result, resolve with the collected text
+      if (msg.type === 'result') {
+        clearTimeout(timeout);
+        resolve(msg.result || resultText);
+      }
+    });
+
+    // Auto-approve any control requests (permissions)
+    claudeProc.on('control_request', (msg: any) => {
+      const subtype = msg.request?.subtype;
+      if (subtype === 'hook_callback' || subtype === 'can_use_tool') {
+        claudeProc.sendControlResponse({
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: msg.request_id,
+            response: { behavior: 'allow', updatedInput: msg.request?.input },
+          },
+        });
+      }
+    });
+
+    claudeProc.on('error', (e: Error) => {
+      clearTimeout(timeout);
+      reject(e);
+    });
+
+    claudeProc.on('exit', (code: number | null) => {
+      clearTimeout(timeout);
+      if (resultText) {
+        resolve(resultText);
+      } else {
+        reject(new Error(`Claude process exited with code ${code} without producing output`));
+      }
+    });
+
+    try {
+      claudeProc.start();
+    } catch (e: any) {
+      clearTimeout(timeout);
+      reject(e);
+    }
+  }).catch((e) => {
+    console.error('[generate-commit-message] ClaudeProcess error:', e.message);
+    return null;
+  });
+
+  if (!output) {
+    return resultToResponse(c, err(internal('Failed to generate commit message')));
+  }
+
+  const trimmed = output.trim();
+  const titleMatch = trimmed.match(/^TITLE:\s*(.+)/m);
+  const bodyMatch = trimmed.match(/^BODY:\s*([\s\S]+)/m);
+
+  const title = titleMatch?.[1]?.trim() || trimmed.split('\n')[0];
   const body = bodyMatch?.[1]?.trim() || '';
 
   return c.json({ title, body });

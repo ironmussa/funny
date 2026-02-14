@@ -354,6 +354,7 @@ export function PromptInput({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
 
   // Load initial prompt when prop changes (e.g. navigating to a backlog thread)
   useEffect(() => {
@@ -686,6 +687,62 @@ export function PromptInput({
     }
   };
 
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Check if dragged items include files
+    if (e.dataTransfer.types.includes('Files')) {
+      setIsDragging(true);
+    }
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    // Only set to false if we're leaving the textarea container itself
+    if (e.currentTarget === e.target) {
+      setIsDragging(false);
+    }
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragging(false);
+
+    if (loading || running) return;
+
+    const items = e.dataTransfer?.items;
+    if (!items) return;
+
+    for (const item of Array.from(items)) {
+      // Handle images
+      if (item.type.startsWith('image/')) {
+        const file = item.getAsFile();
+        if (file) {
+          await addImageFile(file);
+        }
+      }
+      // Handle file paths (from file explorer)
+      else if (item.kind === 'file') {
+        const file = item.getAsFile();
+        if (file) {
+          // Get relative path if possible, or use absolute path
+          const filePath = (file as any).path || file.name;
+
+          // Add to selected files if not already added
+          if (!selectedFiles.includes(filePath)) {
+            setSelectedFiles(prev => [...prev, filePath]);
+            // Optionally add to prompt text as well
+            setPrompt(prev => prev ? `${prev} @${filePath}` : `@${filePath}`);
+          }
+        }
+      }
+    }
+  };
+
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files) return;
@@ -729,7 +786,7 @@ export function PromptInput({
   const defaultPlaceholder = placeholder ?? t('thread.describeTaskDefault');
 
   return (
-    <div className="pb-3 border-border md:flex md:justify-center">
+    <div className="py-3 border-border md:flex md:justify-center">
       <div className="w-full md:max-w-3xl md:min-w-[320px] mx-auto">
         {/* Image previews */}
         {images.length > 0 && (
@@ -766,7 +823,17 @@ export function PromptInput({
         />
 
         {/* Textarea + bottom toolbar */}
-        <div className="relative rounded-md border border-input bg-background focus-within:ring-1 focus-within:ring-ring transition-[border-color,box-shadow] duration-150">
+        <div
+          className={cn(
+            "relative rounded-md border bg-background transition-[border-color,box-shadow] duration-150",
+            isDragging
+              ? "border-primary border-2 ring-2 ring-primary/20"
+              : "border-input focus-within:ring-1 focus-within:ring-ring"
+          )}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
           {/* File mention dropdown */}
           {showMentionMenu && (
             <div

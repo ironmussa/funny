@@ -19,6 +19,7 @@ import { SidebarProvider, SidebarInset, Sidebar, SidebarContent } from '@/compon
 import { Toaster } from 'sonner';
 import { TOAST_DURATION } from '@/lib/utils';
 import { CommandPalette } from '@/components/CommandPalette';
+import { CircuitBreakerDialog } from '@/components/CircuitBreakerDialog';
 
 export function App() {
   const loadProjects = useProjectStore(s => s.loadProjects);
@@ -140,6 +141,7 @@ export function App() {
       </SidebarProvider>
 
       <Toaster position="bottom-right" theme="dark" duration={TOAST_DURATION} />
+      <CircuitBreakerDialog />
       {commandPaletteOpen && <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />}
     </SidebarProvider>
   );

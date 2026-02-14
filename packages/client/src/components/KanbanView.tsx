@@ -204,6 +204,7 @@ function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, pr
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const [isDraggedOver, setIsDraggedOver] = useState(false);
+  const [visibleCount, setVisibleCount] = useState(20);
 
   useEffect(() => {
     const el = ref.current;
@@ -219,8 +220,16 @@ function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, pr
     });
   }, [stage]);
 
+  // Reset visible count when threads change (e.g., search/filter)
+  useEffect(() => {
+    setVisibleCount(20);
+  }, [threads.length]);
+
   const StageIcon = stageConfig[stage].icon;
   const stageClassName = stageConfig[stage].className;
+
+  const visibleThreads = threads.slice(0, visibleCount);
+  const hasMore = threads.length > visibleCount;
 
   return (
     <div
@@ -245,7 +254,17 @@ function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, pr
             {t('kanban.emptyColumn')}
           </div>
         ) : (
-          threads.map((thread) => <KanbanCard key={thread.id} thread={thread} projectInfo={projectInfoById?.[thread.projectId]} onDelete={onDelete} search={search} ghost={stage === 'archived'} />)
+          <>
+            {visibleThreads.map((thread) => <KanbanCard key={thread.id} thread={thread} projectInfo={projectInfoById?.[thread.projectId]} onDelete={onDelete} search={search} ghost={stage === 'archived'} />)}
+            {hasMore && (
+              <button
+                onClick={() => setVisibleCount((prev) => prev + 20)}
+                className="w-full py-2 text-xs text-muted-foreground hover:text-foreground hover:bg-accent rounded-md transition-colors"
+              >
+                {t('kanban.loadMore', { count: Math.min(20, threads.length - visibleCount) })}
+              </button>
+            )}
+          </>
         )}
       </div>
     </div>

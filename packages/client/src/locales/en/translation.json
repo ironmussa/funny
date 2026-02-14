@@ -271,7 +271,8 @@
     "waitingForOutput": "Waiting for output...",
     "openInVSCode": "Open in VS Code: {{path}}",
     "other": "Other",
-    "otherPlaceholder": "Write your answer..."
+    "otherPlaceholder": "Write your answer...",
+    "next": "Next"
   },
   "allThreads": {
     "title": "All threads",
@@ -463,7 +464,8 @@
     "emptyColumn": "No threads",
     "addThread": "Add thread",
     "searchProject": "Search project...",
-    "titlePlaceholder": "Thread title..."
+    "titlePlaceholder": "Thread title...",
+    "loadMore": "Load {{count}} more"
   },
   "analytics": {
     "title": "Analytics",
@@ -558,6 +560,15 @@
     "title": "Tasks",
     "minimize": "Minimize",
     "expand": "Expand",
+    "dismiss": "Dismiss"
+  },
+  "circuitBreaker": {
+    "title": "Server Unreachable",
+    "description": "Unable to connect to the server. It may be down or your network connection may be interrupted.",
+    "attemptingReconnect": "Attempting to reconnect...",
+    "willRetryAutomatically": "The app will retry automatically in a few seconds.",
+    "retryNow": "Retry Now",
+    "reconnecting": "Reconnecting...",
     "dismiss": "Dismiss"
   },
   "users": {

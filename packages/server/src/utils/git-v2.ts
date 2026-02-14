@@ -401,6 +401,8 @@ export interface GitStatusSummary {
   unpushedCommitCount: number;
   hasRemoteBranch: boolean;
   isMergedIntoBase: boolean;
+  linesAdded: number;
+  linesDeleted: number;
 }
 
 /**
@@ -459,7 +461,47 @@ export function getStatusSummary(
         }
       }
 
-      return { dirtyFileCount, unpushedCommitCount, hasRemoteBranch, isMergedIntoBase };
+      // Get lines added/deleted using git diff --numstat
+      let linesAdded = 0;
+      let linesDeleted = 0;
+
+      // Count staged changes
+      const stagedNumstatResult = await execute(
+        'git', ['diff', '--staged', '--numstat'],
+        { cwd: worktreeCwd, reject: false }
+      );
+      if (stagedNumstatResult.exitCode === 0 && stagedNumstatResult.stdout.trim()) {
+        const lines = stagedNumstatResult.stdout.trim().split('\n');
+        for (const line of lines) {
+          const parts = line.split('\t');
+          if (parts.length >= 2) {
+            const added = parseInt(parts[0], 10);
+            const deleted = parseInt(parts[1], 10);
+            if (!isNaN(added)) linesAdded += added;
+            if (!isNaN(deleted)) linesDeleted += deleted;
+          }
+        }
+      }
+
+      // Count unstaged changes
+      const unstagedNumstatResult = await execute(
+        'git', ['diff', '--numstat'],
+        { cwd: worktreeCwd, reject: false }
+      );
+      if (unstagedNumstatResult.exitCode === 0 && unstagedNumstatResult.stdout.trim()) {
+        const lines = unstagedNumstatResult.stdout.trim().split('\n');
+        for (const line of lines) {
+          const parts = line.split('\t');
+          if (parts.length >= 2) {
+            const added = parseInt(parts[0], 10);
+            const deleted = parseInt(parts[1], 10);
+            if (!isNaN(added)) linesAdded += added;
+            if (!isNaN(deleted)) linesDeleted += deleted;
+          }
+        }
+      }
+
+      return { dirtyFileCount, unpushedCommitCount, hasRemoteBranch, isMergedIntoBase, linesAdded, linesDeleted };
     })(),
     (error) => internal(String(error))
   );

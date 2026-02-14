@@ -7,23 +7,39 @@ export const analyticsRoutes = new Hono();
 type TimeRange = 'day' | 'week' | 'month' | 'all';
 type GroupBy = 'day' | 'week' | 'month' | 'year';
 
-/** Returns a SQL expression that buckets a date column by the requested granularity */
-function dateBucket(column: ReturnType<typeof sql>, groupBy: GroupBy) {
+/**
+ * Converts a browser getTimezoneOffset() value (minutes) to an SQLite modifier
+ * string. getTimezoneOffset() returns positive values for west of UTC (e.g. 300
+ * for UTC-5) so we negate it before formatting.
+ */
+function tzOffsetToModifier(offsetMinutes: number): string {
+  const total = -offsetMinutes; // flip sign: JS offset 300 → UTC-5 → -300 → '-05:00'
+  const sign = total >= 0 ? '+' : '-';
+  const abs = Math.abs(total);
+  const h = String(Math.floor(abs / 60)).padStart(2, '0');
+  const m = String(abs % 60).padStart(2, '0');
+  return `${sign}${h}:${m}`;
+}
+
+/** Returns a SQL expression that buckets a date column by the requested granularity, adjusted to the user's local timezone. */
+function dateBucket(column: ReturnType<typeof sql>, groupBy: GroupBy, tzMod: string) {
   switch (groupBy) {
     case 'week':
-      return sql`strftime('%Y-W%W', ${column})`;
+      return sql`strftime('%Y-W%W', datetime(${column}, ${tzMod}))`;
     case 'month':
-      return sql`strftime('%Y-%m', ${column})`;
+      return sql`strftime('%Y-%m', datetime(${column}, ${tzMod}))`;
     case 'year':
-      return sql`strftime('%Y', ${column})`;
+      return sql`strftime('%Y', datetime(${column}, ${tzMod}))`;
     case 'day':
     default:
-      return sql`DATE(${column})`;
+      return sql`DATE(${column}, ${tzMod})`;
   }
 }
 
-function getDateRange(timeRange?: string, startDate?: string, endDate?: string) {
+function getDateRange(timeRange?: string, offsetMinutes = 0, startDate?: string, endDate?: string) {
+  // Build "now" in the user's local time so day boundaries align with their clock
   const now = new Date();
+
   const end = endDate ? new Date(endDate) : now;
 
   let start: Date;
@@ -49,13 +65,14 @@ function getDateRange(timeRange?: string, startDate?: string, endDate?: string) 
   return { start: start.toISOString(), end: end.toISOString() };
 }
 
-// GET /api/analytics/overview?projectId=xxx&timeRange=month
+// GET /api/analytics/overview?projectId=xxx&timeRange=month&tz=300
 analyticsRoutes.get('/overview', (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
   const timeRange = c.req.query('timeRange');
+  const offsetMinutes = parseInt(c.req.query('tz') || '0', 10) || 0;
 
-  const range = getDateRange(timeRange);
+  const range = getDateRange(timeRange, offsetMinutes);
 
   // Build base filters
   const baseFilters = [];
@@ -158,14 +175,16 @@ analyticsRoutes.get('/overview', (c) => {
   });
 });
 
-// GET /api/analytics/timeline?projectId=xxx&timeRange=month&groupBy=week
+// GET /api/analytics/timeline?projectId=xxx&timeRange=month&groupBy=week&tz=300
 analyticsRoutes.get('/timeline', (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
   const timeRange = c.req.query('timeRange');
   const groupBy = (c.req.query('groupBy') || 'day') as GroupBy;
+  const offsetMinutes = parseInt(c.req.query('tz') || '0', 10) || 0;
+  const tzMod = tzOffsetToModifier(offsetMinutes);
 
-  const range = getDateRange(timeRange);
+  const range = getDateRange(timeRange, offsetMinutes);
 
   const baseFilters = [];
   if (projectId) {
@@ -176,7 +195,7 @@ analyticsRoutes.get('/timeline', (c) => {
   }
 
   // Tasks created by date
-  const dateBucketCreated = dateBucket(schema.threads.createdAt, groupBy);
+  const dateBucketCreated = dateBucket(schema.threads.createdAt, groupBy, tzMod);
   const createdByDate = db
     .select({
       date: dateBucketCreated.as('date'),
@@ -193,7 +212,7 @@ analyticsRoutes.get('/timeline', (c) => {
     .all();
 
   // Tasks completed by date
-  const dateBucketCompleted = dateBucket(schema.threads.completedAt, groupBy);
+  const dateBucketCompleted = dateBucket(schema.threads.completedAt, groupBy, tzMod);
   const completedByDate = db
     .select({
       date: dateBucketCompleted.as('date'),
@@ -211,7 +230,7 @@ analyticsRoutes.get('/timeline', (c) => {
     .all();
 
   // Tasks moved to review by date
-  const dateBucketReview = dateBucket(schema.stageHistory.changedAt, groupBy);
+  const dateBucketReview = dateBucket(schema.stageHistory.changedAt, groupBy, tzMod);
   const movedToReviewByDate = db
     .select({
       date: dateBucketReview.as('date'),
@@ -230,7 +249,7 @@ analyticsRoutes.get('/timeline', (c) => {
     .all();
 
   // Tasks moved to done by date
-  const dateBucketDone = dateBucket(schema.stageHistory.changedAt, groupBy);
+  const dateBucketDone = dateBucket(schema.stageHistory.changedAt, groupBy, tzMod);
   const movedToDoneByDate = db
     .select({
       date: dateBucketDone.as('date'),

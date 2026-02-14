@@ -1,7 +1,8 @@
-import { memo, useState } from 'react';
+import { memo, useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/stores/app-store';
 import { useTerminalStore } from '@/stores/terminal-store';
+import { useGitStatusStore } from '@/stores/git-status-store';
 import { editorLabels, type Editor } from '@/stores/settings-store';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
 import { GitCommit, GitCompare, Globe, Terminal, ExternalLink, Pin, PinOff } from 'lucide-react';
@@ -68,6 +69,8 @@ export const ProjectHeader = memo(function ProjectHeader() {
   const terminalPanelVisible = useTerminalStore(s => s.panelVisible);
   const setPanelVisible = useTerminalStore(s => s.setPanelVisible);
   const addTab = useTerminalStore(s => s.addTab);
+  const statusByThread = useGitStatusStore(s => s.statusByThread);
+  const fetchForThread = useGitStatusStore(s => s.fetchForThread);
 
   const projectId = activeThread?.projectId ?? selectedProjectId;
   const project = projects.find(p => p.id === projectId);
@@ -75,6 +78,22 @@ export const ProjectHeader = memo(function ProjectHeader() {
   const runningWithPort = tabs.filter(
     (tab) => tab.projectId === projectId && tab.commandId && tab.alive && tab.port
   );
+
+  const gitStatus = activeThread ? statusByThread[activeThread.id] : undefined;
+  const showGitStats = gitStatus && (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0);
+
+  // Fetch git status when activeThread changes
+  useEffect(() => {
+    if (activeThread) {
+      console.log('Fetching git status for thread:', activeThread.id);
+      fetchForThread(activeThread.id);
+    }
+  }, [activeThread?.id, fetchForThread]);
+
+  // Debug: log git status
+  if (activeThread && gitStatus) {
+    console.log('Git Status for thread:', activeThread.id, gitStatus);
+  }
 
   if (!selectedProjectId) return null;
 
@@ -220,11 +239,17 @@ export const ProjectHeader = memo(function ProjectHeader() {
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-sm"
                 onClick={() => setReviewPaneOpen(!reviewPaneOpen)}
-                className={reviewPaneOpen ? 'text-primary' : 'text-muted-foreground'}
+                className={`${showGitStats ? 'h-8 px-2' : 'h-8 w-8'} ${reviewPaneOpen ? 'text-primary' : 'text-muted-foreground'}`}
               >
-                <GitCompare className="h-4 w-4" />
+                {showGitStats ? (
+                  <div className="flex items-center gap-2 text-xs font-semibold">
+                    <span className="text-green-500">+{gitStatus.linesAdded}</span>
+                    <span className="text-red-500">-{gitStatus.linesDeleted}</span>
+                  </div>
+                ) : (
+                  <GitCompare className="h-4 w-4" />
+                )}
               </Button>
             </TooltipTrigger>
             <TooltipContent>{t('review.title')}</TooltipContent>

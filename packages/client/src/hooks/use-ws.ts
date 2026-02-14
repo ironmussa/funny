@@ -141,6 +141,7 @@ function handleMessage(e: MessageEvent) {
       break;
     }
     case 'git:status': {
+      console.log('[ws] git:status received:', data.statuses);
       import('@/stores/git-status-store').then(({ useGitStatusStore }) => {
         useGitStatusStore.getState().updateFromWS(data.statuses);
       });

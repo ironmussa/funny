@@ -292,26 +292,32 @@ export function CommitDialog({ open, onOpenChange }: CommitDialogProps) {
       <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>{t('review.commitDialogTitle', 'Commit Changes')}</DialogTitle>
-          <DialogDescription className="flex items-center gap-3 text-xs">
-            {activeThread?.branch && (
-              <span className="flex items-center gap-1.5">
-                <GitBranch className="h-3 w-3" />
-                <span className="font-mono">{activeThread.branch}</span>
-              </span>
-            )}
-            {allFiles.length > 0 && (
-              <span className="flex items-center gap-1.5">
-                <span className="font-medium text-status-success">{stagedFiles.length} staged</span>
-                <span className="text-muted-foreground">|</span>
-                <span className="font-medium text-status-pending">{unstagedFiles.length} unstaged</span>
-              </span>
-            )}
-            {gitStatus && (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0) && (
-              <span className="flex items-center gap-1.5 font-mono">
-                <span className="text-status-success">+{gitStatus.linesAdded}</span>
-                <span className="text-status-error">-{gitStatus.linesDeleted}</span>
-              </span>
-            )}
+          <DialogDescription asChild>
+            <div className="flex flex-col gap-1.5 text-xs">
+              {activeThread?.branch && (
+                <span className="flex items-center gap-1.5 truncate">
+                  <GitBranch className="h-3 w-3 shrink-0" />
+                  <span className="font-mono truncate">{activeThread.branch}</span>
+                </span>
+              )}
+              {allFiles.length > 0 && (
+                <span className="flex items-center gap-3">
+                  <span className="flex items-center gap-3">
+                    <span className="font-medium text-status-success">{stagedFiles.length} staged</span>
+                    <span className="font-medium text-status-pending">{unstagedFiles.length} unstaged</span>
+                  </span>
+                  <span className="text-muted-foreground">
+                    {allFiles.length} {allFiles.length === 1 ? 'file' : 'files'}
+                  </span>
+                </span>
+              )}
+              {gitStatus && (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0) && (
+                <span className="flex items-center gap-1.5 font-mono">
+                  <span className="text-status-success">+{gitStatus.linesAdded}</span>
+                  <span className="text-status-error">-{gitStatus.linesDeleted}</span>
+                </span>
+              )}
+            </div>
           </DialogDescription>
         </DialogHeader>
 

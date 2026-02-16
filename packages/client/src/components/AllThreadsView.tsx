@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/stores/app-store';
@@ -12,6 +12,7 @@ import { ThreadListView } from '@/components/ThreadListView';
 import { KanbanView } from '@/components/KanbanView';
 import { statusConfig, gitSyncStateConfig, getStatusLabels } from '@/lib/thread-utils';
 import { normalize } from '@/components/ui/highlight-text';
+import { api } from '@/lib/api';
 import type { Thread, ThreadStatus, GitSyncState } from '@a-parallel/shared';
 
 const ITEMS_PER_PAGE = 20;
@@ -109,6 +110,41 @@ export function AllThreadsView() {
     return (saved === 'board' || saved === 'list') ? saved : 'list';
   });
 
+  // Content search: debounced server call to find threads matching by message content
+  // Stores threadId → snippet so we can display matching text on cards
+  const [contentMatches, setContentMatches] = useState<Map<string, string>>(new Map());
+  const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => {
+    // Clear previous timer
+    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+
+    const q = search.trim();
+    if (!q) {
+      setContentMatches(new Map());
+      return;
+    }
+
+    // Debounce 300ms to avoid hammering the server on every keystroke
+    searchTimerRef.current = setTimeout(() => {
+      const projectId = isGlobalSearch ? undefined : (allThreadsProjectId || undefined);
+      api.searchThreadContent(q, projectId).then((res) => {
+        if (res.isOk()) {
+          const map = new Map<string, string>();
+          const { threadIds, snippets } = res.value;
+          for (const id of threadIds) {
+            map.set(id, snippets[id] || '');
+          }
+          setContentMatches(map);
+        }
+      });
+    }, 300);
+
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
+  }, [search, isGlobalSearch, allThreadsProjectId]);
+
   const project = isGlobalSearch ? null : projects.find((p) => p.id === allThreadsProjectId);
   const projectInfoById = useMemo(() => {
     const map: Record<string, { name: string; color?: string }> = {};
@@ -142,7 +178,7 @@ export function AllThreadsView() {
   const filtered = useMemo(() => {
     let result = allThreads;
 
-    // Text search (accent-insensitive)
+    // Text search (accent-insensitive) — matches title, branch, status, project name, OR message content
     if (search.trim()) {
       const q = normalize(search);
       result = result.filter(
@@ -150,7 +186,8 @@ export function AllThreadsView() {
           normalize(t.title).includes(q) ||
           (t.branch && normalize(t.branch).includes(q)) ||
           normalize(t.status).includes(q) ||
-          (isGlobalSearch && projectNameById[t.projectId] && normalize(projectNameById[t.projectId]).includes(q))
+          (isGlobalSearch && projectNameById[t.projectId] && normalize(projectNameById[t.projectId]).includes(q)) ||
+          contentMatches.has(t.id)
       );
     }
 
@@ -185,7 +222,7 @@ export function AllThreadsView() {
     });
 
     return result;
-  }, [allThreads, search, statusFilter, gitFilter, modeFilter, statusByThread, isGlobalSearch, projectNameById, sortField, sortDir]);
+  }, [allThreads, search, statusFilter, gitFilter, modeFilter, statusByThread, isGlobalSearch, projectNameById, sortField, sortDir, contentMatches]);
 
   const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE)));
   const paginated = filtered.slice(
@@ -439,7 +476,7 @@ export function AllThreadsView() {
       <div className="flex-1 min-h-0 flex flex-col">
         {viewMode === 'board' ? (
           <div className="flex-1 min-h-0">
-            <KanbanView threads={filtered} projectId={isGlobalSearch ? undefined : allThreadsProjectId} search={search} />
+            <KanbanView threads={filtered} projectId={isGlobalSearch ? undefined : allThreadsProjectId} search={search} contentSnippets={contentMatches} />
           </div>
         ) : (
           <div className="px-4 py-3 h-full">

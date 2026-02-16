@@ -553,19 +553,25 @@ export function ThreadView() {
         }
       }
 
-      // Determine the sticky user message (most recent one scrolled above viewport top)
-      const userMsgEls = document.querySelectorAll<HTMLElement>('[data-user-msg]');
-      if (userMsgEls.length === 0) {
+      // Determine the sticky user message (most recent one scrolled above viewport top).
+      // Hide sticky when near the top of the scroll and there are no older messages to load,
+      // since the user can already see the beginning of the conversation.
+      if (scrollTop < 80 && !hasMore) {
         setStickyUserMsgId(null);
       } else {
-        const stickyThreshold = viewportRect.top + 8;
-        let latestAboveId: string | null = null;
-        userMsgEls.forEach((el) => {
-          if (el.getBoundingClientRect().bottom < stickyThreshold) {
-            latestAboveId = el.dataset.userMsg!;
-          }
-        });
-        setStickyUserMsgId(latestAboveId);
+        const userMsgEls = document.querySelectorAll<HTMLElement>('[data-user-msg]');
+        if (userMsgEls.length === 0) {
+          setStickyUserMsgId(null);
+        } else {
+          const stickyThreshold = viewportRect.top + 8;
+          let latestAboveId: string | null = null;
+          userMsgEls.forEach((el) => {
+            if (el.getBoundingClientRect().bottom < stickyThreshold) {
+              latestAboveId = el.dataset.userMsg!;
+            }
+          });
+          setStickyUserMsgId(latestAboveId);
+        }
       }
     };
 
@@ -709,8 +715,8 @@ export function ThreadView() {
     return (
       <div className="flex-1 flex flex-col h-full min-w-0">
         <ProjectHeader />
-        <div className="flex-1 flex items-center justify-center text-muted-foreground">
-          <div className="text-center">
+        <div className="flex-1 flex items-center justify-center text-muted-foreground px-6">
+          <div className="text-center max-w-3xl">
             <p className="text-sm font-medium mb-1">{activeThread.title}</p>
             <p className="text-xs">{t('thread.describeTask')}</p>
           </div>

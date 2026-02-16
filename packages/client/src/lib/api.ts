@@ -169,6 +169,11 @@ export const api = {
     const qs = params.toString();
     return request<Thread[]>(`/threads${qs ? `?${qs}` : ''}`);
   },
+  searchThreadContent: (query: string, projectId?: string) => {
+    const params = new URLSearchParams({ q: query });
+    if (projectId) params.set('projectId', projectId);
+    return request<{ threadIds: string[]; snippets: Record<string, string> }>(`/threads/search/content?${params.toString()}`);
+  },
   getThread: (id: string, messageLimit?: number) => {
     const params = messageLimit ? `?messageLimit=${messageLimit}` : '';
     return request<ThreadWithMessages>(`/threads/${id}${params}`);

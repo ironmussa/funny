@@ -788,7 +788,7 @@ export function PromptInput({
   const defaultPlaceholder = placeholder ?? t('thread.describeTaskDefault');
 
   return (
-    <div className="py-3 border-border flex justify-center px-4">
+    <div className="py-3 border-border flex justify-center px-4 sm:px-6">
       <div className="w-full max-w-3xl min-w-0">
         {/* Image previews */}
         {images.length > 0 && (

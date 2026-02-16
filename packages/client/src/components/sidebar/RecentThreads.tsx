@@ -100,8 +100,8 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
                 }
                 navigate(`/projects/${thread.projectId}/threads/${thread.id}`);
               }}
-              onArchive={() => onArchiveThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch)}
-              onDelete={() => onDeleteThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch)}
+              onArchive={() => onArchiveThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch && thread.provider !== 'external')}
+              onDelete={() => onDeleteThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch && thread.provider !== 'external')}
             />
           ))}
         </div>

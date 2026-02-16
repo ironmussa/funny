@@ -1,8 +1,8 @@
 import { useState, useEffect, useMemo, memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -38,6 +38,7 @@ import {
   Sparkles,
   Loader2,
   Check,
+  Undo2,
 } from 'lucide-react';
 import type { FileDiff } from '@a-parallel/shared';
 
@@ -103,10 +104,29 @@ const MemoizedDiffView = memo(function MemoizedDiffView({ diff, splitView = fals
 
 export function ReviewPane() {
   const { t } = useTranslation();
-  const activeThread = useAppStore(s => s.activeThread);
-  const setReviewPaneOpen = useAppStore(s => s.setReviewPaneOpen);
+  const setReviewPaneOpen = useUIStore(s => s.setReviewPaneOpen);
   const selectedProjectId = useProjectStore(s => s.selectedProjectId);
-  const threadsByProject = useThreadStore(s => s.threadsByProject);
+
+  // Derive effectiveThreadId with a stable selector that only returns a string,
+  // avoiding re-renders when unrelated thread/store fields change.
+  const effectiveThreadId = useThreadStore(s => {
+    const threadId = s.activeThread?.id;
+    if (threadId) return threadId;
+    if (!selectedProjectId) return undefined;
+    const threads = s.threadsByProject[selectedProjectId];
+    return threads?.[0]?.id;
+  });
+
+  // The git context key identifies the working directory for diffs.
+  // Worktree threads each have their own path; local threads share the project path.
+  // Only reset/refresh when this actually changes (not on every thread switch).
+  const gitContextKey = useThreadStore(s => {
+    const wt = s.activeThread?.worktreePath;
+    if (wt) return wt;
+    // Local mode threads share the project directory — use projectId as key
+    return s.activeThread?.projectId ?? selectedProjectId ?? '';
+  });
+
   const [diffs, setDiffs] = useState<FileDiff[]>([]);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -118,17 +138,6 @@ export function ReviewPane() {
   const [generatingMsg, setGeneratingMsg] = useState(false);
   const [selectedAction, setSelectedAction] = useState<'commit' | 'commit-push' | 'commit-pr'>('commit');
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
-
-  // Use active thread, or fall back to first thread of selected project
-  const threadId = activeThread?.id;
-  const fallbackThreadId = useMemo(() => {
-    if (threadId) return threadId;
-    if (!selectedProjectId) return undefined;
-    const threads = threadsByProject[selectedProjectId];
-    return threads?.[0]?.id;
-  }, [threadId, selectedProjectId, threadsByProject]);
-
-  const effectiveThreadId = fallbackThreadId;
 
   const refresh = async () => {
     if (!effectiveThreadId) return;
@@ -164,7 +173,8 @@ export function ReviewPane() {
     setLoading(false);
   };
 
-  // Reset state and refresh when thread or project changes
+  // Reset state and refresh only when the git working directory changes.
+  // Switching between threads that share the same branch/worktree won't re-fetch.
   useEffect(() => {
     setDiffs([]);
     setSelectedFile(null);
@@ -173,7 +183,7 @@ export function ReviewPane() {
     setCommitBody('');
     setFileSearch('');
     refresh();
-  }, [effectiveThreadId, selectedProjectId]);
+  }, [gitContextKey]);
 
   // Auto-refresh diffs when agent modifies files (debounced 2s)
   useAutoRefreshDiff(effectiveThreadId, refresh, 2000);
@@ -300,6 +310,18 @@ export function ReviewPane() {
     setCommitBody('');
     setActionInProgress(null);
     await refresh();
+  };
+
+  const handleRevertFile = async (path: string) => {
+    if (!effectiveThreadId) return;
+    const confirmed = window.confirm(t('review.revertConfirm', { paths: path }));
+    if (!confirmed) return;
+    const result = await api.revertFiles(effectiveThreadId, [path]);
+    if (result.isErr()) {
+      toast.error(t('review.revertFailed', { message: result.error.message }));
+    } else {
+      await refresh();
+    }
   };
 
   const canCommit = checkedFiles.size > 0 && commitTitle.trim().length > 0 && !actionInProgress;
@@ -443,7 +465,7 @@ export function ReviewPane() {
                   <div
                     key={f.path}
                     className={cn(
-                      'flex items-center gap-1.5 px-4 py-1 text-xs cursor-pointer transition-colors',
+                      'group flex items-center gap-1.5 px-4 py-1 text-xs cursor-pointer transition-colors',
                       selectedFile === f.path
                         ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                         : 'hover:bg-sidebar-accent/50 text-muted-foreground'
@@ -462,6 +484,17 @@ export function ReviewPane() {
                       {isChecked && <Check className="h-2.5 w-2.5" />}
                     </button>
                     <span className="flex-1 truncate font-mono text-[11px]">{f.path}</span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleRevertFile(f.path); }}
+                          className="hidden group-hover:flex items-center justify-center h-4 w-4 rounded text-muted-foreground hover:text-destructive transition-colors flex-shrink-0"
+                        >
+                          <Undo2 className="h-3 w-3" />
+                        </button>
+                      </TooltipTrigger>
+                      <TooltipContent side="left">{t('review.revert')}</TooltipContent>
+                    </Tooltip>
                     <span className={cn(
                       'text-[10px] font-medium flex-shrink-0',
                       f.status === 'added' && 'text-status-success',
@@ -488,31 +521,32 @@ export function ReviewPane() {
                 disabled={!!actionInProgress}
                 className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               />
-              <div className="relative">
+              <div className="rounded-md border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
                 <textarea
-                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 pb-6 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
-                  rows={5}
+                  className="w-full px-2 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none resize-none bg-transparent"
+                  rows={7}
                   placeholder={t('review.commitBody')}
                   value={commitBody}
                   onChange={(e) => setCommitBody(e.target.value)}
                   disabled={!!actionInProgress}
                 />
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      className="absolute bottom-1.5 left-1.5"
-                      onClick={handleGenerateCommitMsg}
-                      disabled={diffs.length === 0 || generatingMsg || !!actionInProgress}
-                    >
-                      <Sparkles className={cn('h-2.5 w-2.5', generatingMsg && 'animate-pulse')} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    {generatingMsg ? t('review.generatingCommitMsg') : t('review.generateCommitMsg')}
-                  </TooltipContent>
-                </Tooltip>
+                <div className="flex items-center px-1.5 py-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={handleGenerateCommitMsg}
+                        disabled={diffs.length === 0 || generatingMsg || !!actionInProgress}
+                      >
+                        <Sparkles className={cn('h-2.5 w-2.5', generatingMsg && 'animate-pulse')} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {generatingMsg ? t('review.generatingCommitMsg') : t('review.generateCommitMsg')}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
               </div>
               <div className="grid grid-cols-3 gap-1">
                 {([

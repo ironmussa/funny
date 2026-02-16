@@ -14,7 +14,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import type { Thread, ThreadStage, Project } from '@a-parallel/shared';
-import { HighlightText } from '@/components/ui/highlight-text';
+import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { useAppStore } from '@/stores/app-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -41,11 +41,12 @@ interface KanbanViewProps {
   threads: Thread[];
   projectId?: string;
   search?: string;
+  contentSnippets?: Map<string, string>;
 }
 
 const STAGES: ThreadStage[] = ['backlog', 'in_progress', 'review', 'done', 'archived'];
 
-function KanbanCard({ thread, projectInfo, onDelete, search, ghost }: { thread: Thread; projectInfo?: { name: string; color?: string }; onDelete: (thread: Thread) => void; search?: string; ghost?: boolean }) {
+function KanbanCard({ thread, projectInfo, onDelete, search, ghost, contentSnippet }: { thread: Thread; projectInfo?: { name: string; color?: string }; onDelete: (thread: Thread) => void; search?: string; ghost?: boolean; contentSnippet?: string }) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const statusByThread = useGitStatusStore((s) => s.statusByThread);
@@ -112,6 +113,13 @@ function KanbanCard({ thread, projectInfo, onDelete, search, ghost }: { thread: 
         </span>
       )}
       <HighlightText text={thread.title} query={search || ''} className="text-xs font-medium mb-1.5 line-clamp-3 pr-5 block" />
+      {contentSnippet && search && !normalize(thread.title).includes(normalize(search)) && (
+        <HighlightText
+          text={contentSnippet}
+          query={search}
+          className="text-[11px] text-muted-foreground mb-1.5 line-clamp-2 block italic"
+        />
+      )}
 
       <div className="flex items-center justify-between gap-1.5">
         <div className="flex items-center gap-1 min-w-0">
@@ -229,7 +237,7 @@ function AddThreadButton({ projectId, projects, onSelect }: { projectId?: string
   );
 }
 
-function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, projects, onAddThread, search }: { stage: ThreadStage; threads: Thread[]; projectInfoById?: Record<string, { name: string; color?: string }>; onDelete: (thread: Thread) => void; projectId?: string; projects: Project[]; onAddThread: (projectId: string, stage: ThreadStage) => void; search?: string }) {
+function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, projects, onAddThread, search, contentSnippets }: { stage: ThreadStage; threads: Thread[]; projectInfoById?: Record<string, { name: string; color?: string }>; onDelete: (thread: Thread) => void; projectId?: string; projects: Project[]; onAddThread: (projectId: string, stage: ThreadStage) => void; search?: string; contentSnippets?: Map<string, string> }) {
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
   const [isDraggedOver, setIsDraggedOver] = useState(false);
@@ -284,7 +292,7 @@ function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, pr
           </div>
         ) : (
           <>
-            {visibleThreads.map((thread) => <KanbanCard key={thread.id} thread={thread} projectInfo={projectInfoById?.[thread.projectId]} onDelete={onDelete} search={search} ghost={stage === 'archived'} />)}
+            {visibleThreads.map((thread) => <KanbanCard key={thread.id} thread={thread} projectInfo={projectInfoById?.[thread.projectId]} onDelete={onDelete} search={search} ghost={stage === 'archived'} contentSnippet={contentSnippets?.get(thread.id)} />)}
             {hasMore && (
               <button
                 onClick={() => setVisibleCount((prev) => prev + 20)}
@@ -300,7 +308,7 @@ function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, pr
   );
 }
 
-export function KanbanView({ threads, projectId, search }: KanbanViewProps) {
+export function KanbanView({ threads, projectId, search, contentSnippets }: KanbanViewProps) {
   const { t } = useTranslation();
   useMinuteTick();
   const navigate = useNavigate();
@@ -490,7 +498,7 @@ export function KanbanView({ threads, projectId, search }: KanbanViewProps) {
     <>
       <div className="flex gap-3 h-full overflow-x-auto p-4">
         {STAGES.map((stage) => (
-          <KanbanColumn key={stage} stage={stage} threads={threadsByStage[stage]} projectInfoById={projectInfoById} onDelete={handleDeleteRequest} projectId={projectId} projects={projects} onAddThread={handleAddThread} search={search} />
+          <KanbanColumn key={stage} stage={stage} threads={threadsByStage[stage]} projectInfoById={projectInfoById} onDelete={handleDeleteRequest} projectId={projectId} projects={projects} onAddThread={handleAddThread} search={search} contentSnippets={contentSnippets} />
         ))}
       </div>
 

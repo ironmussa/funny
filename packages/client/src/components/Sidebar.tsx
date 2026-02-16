@@ -301,7 +301,7 @@ export function AppSidebar() {
               onArchiveThread={(threadId, title) => {
                 const threads = threadsByProject[project.id] ?? [];
                 const th = threads.find(t => t.id === threadId);
-                setArchiveConfirm({ threadId, projectId: project.id, title, isWorktree: th?.mode === 'worktree' && !!th?.branch });
+                setArchiveConfirm({ threadId, projectId: project.id, title, isWorktree: th?.mode === 'worktree' && !!th?.branch && th?.provider !== 'external' });
               }}
               onPinThread={(threadId, pinned) => {
                 pinThread(threadId, project.id, pinned);
@@ -309,7 +309,7 @@ export function AppSidebar() {
               onDeleteThread={(threadId, title) => {
                 const threads = threadsByProject[project.id] ?? [];
                 const th = threads.find(t => t.id === threadId);
-                setDeleteThreadConfirm({ threadId, projectId: project.id, title, isWorktree: th?.mode === 'worktree' && !!th?.branch });
+                setDeleteThreadConfirm({ threadId, projectId: project.id, title, isWorktree: th?.mode === 'worktree' && !!th?.branch && th?.provider !== 'external' });
               }}
               onShowAllThreads={() => {
                 showAllThreads(project.id);

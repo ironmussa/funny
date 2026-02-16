@@ -389,6 +389,57 @@ export function deleteComment(commentId: string) {
   db.delete(schema.threadComments).where(eq(schema.threadComments.id, commentId)).run();
 }
 
+/** Search for thread IDs whose messages contain the given query string.
+ *  Returns a Set of thread IDs that match. Only searches assistant messages. */
+export function searchThreadIdsByContent(opts: {
+  query: string;
+  projectId?: string;
+  userId: string;
+}): Map<string, string> {
+  const { query, projectId, userId } = opts;
+  if (!query.trim()) return new Map();
+
+  const safeQuery = escapeLike(query.trim());
+
+  // Build a query that joins messages → threads, filtering by content LIKE
+  // Returns one snippet per thread (first matching message fragment)
+  const filters: ReturnType<typeof eq>[] = [
+    like(schema.messages.content, `%${safeQuery}%`),
+  ];
+
+  if (userId !== '__local__') {
+    filters.push(eq(schema.threads.userId, userId));
+  }
+  if (projectId) {
+    filters.push(eq(schema.threads.projectId, projectId));
+  }
+
+  const rows = db
+    .select({ threadId: schema.messages.threadId, content: schema.messages.content })
+    .from(schema.messages)
+    .innerJoin(schema.threads, eq(schema.messages.threadId, schema.threads.id))
+    .where(and(...filters))
+    .all();
+
+  // Deduplicate by threadId, extract a snippet around the match
+  const result = new Map<string, string>();
+  const queryLower = query.trim().toLowerCase();
+  for (const row of rows) {
+    if (result.has(row.threadId)) continue;
+    const idx = row.content.toLowerCase().indexOf(queryLower);
+    if (idx === -1) continue;
+    // Extract ~80 chars around the match
+    const start = Math.max(0, idx - 30);
+    const end = Math.min(row.content.length, idx + queryLower.length + 50);
+    let snippet = row.content.slice(start, end).replace(/\n/g, ' ');
+    if (start > 0) snippet = '…' + snippet;
+    if (end < row.content.length) snippet = snippet + '…';
+    result.set(row.threadId, snippet);
+  }
+
+  return result;
+}
+
 /** Get comment counts for a list of thread IDs */
 export function getCommentCounts(threadIds: string[]): Map<string, number> {
   if (threadIds.length === 0) return new Map();

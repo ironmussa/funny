@@ -46,6 +46,16 @@ threadRoutes.get('/archived', (c) => {
   return c.json({ threads, total, page, limit });
 });
 
+// GET /api/threads/search/content?q=xxx&projectId=xxx
+threadRoutes.get('/search/content', (c) => {
+  const userId = c.get('userId') as string;
+  const q = c.req.query('q')?.trim() || '';
+  const projectId = c.req.query('projectId');
+  if (!q) return c.json({ threadIds: [], snippets: {} });
+  const matches = tm.searchThreadIdsByContent({ query: q, projectId: projectId || undefined, userId });
+  return c.json({ threadIds: [...matches.keys()], snippets: Object.fromEntries(matches) });
+});
+
 // GET /api/threads/:id?messageLimit=50
 threadRoutes.get('/:id', (c) => {
   const messageLimitParam = c.req.query('messageLimit');
@@ -415,8 +425,8 @@ threadRoutes.patch('/:id', async (c) => {
 
   const fromStage = thread.stage;
 
-  // Cleanup worktree + branch when archiving
-  if (parsed.value.archived && thread.worktreePath) {
+  // Cleanup worktree + branch when archiving (skip for external threads)
+  if (parsed.value.archived && thread.worktreePath && thread.provider !== 'external') {
     const project = pm.getProject(thread.projectId);
     if (project) {
       await removeWorktree(project.path, thread.worktreePath).catch((e) => {
@@ -523,7 +533,8 @@ threadRoutes.delete('/:id', async (c) => {
       stopAgent(id).catch(console.error);
     }
 
-    if (thread.worktreePath) {
+    // Only remove worktree/branch for non-external threads (we don't control external worktrees)
+    if (thread.worktreePath && thread.provider !== 'external') {
       const project = pm.getProject(thread.projectId);
       if (project) {
         await removeWorktree(project.path, thread.worktreePath).catch((e) => {

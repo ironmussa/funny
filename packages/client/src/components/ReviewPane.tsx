@@ -44,6 +44,7 @@ import {
   Search,
   X,
   GitCommit,
+  GitMerge,
   Upload,
   GitPullRequest,
   Sparkles,
@@ -157,8 +158,10 @@ export function ReviewPane() {
   const [commitTitle, setCommitTitle] = useState('');
   const [commitBody, setCommitBody] = useState('');
   const [generatingMsg, setGeneratingMsg] = useState(false);
-  const [selectedAction, setSelectedAction] = useState<'commit' | 'commit-push' | 'commit-pr'>('commit');
+  const [selectedAction, setSelectedAction] = useState<'commit' | 'commit-push' | 'commit-pr' | 'commit-merge'>('commit');
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
+
+  const isWorktree = useThreadStore(s => s.activeThread?.mode === 'worktree');
 
   const fileListRef = useRef<HTMLDivElement>(null);
 
@@ -366,6 +369,16 @@ export function ReviewPane() {
       } else {
         toast.success(t('review.prCreated'));
       }
+    } else if (selectedAction === 'commit-merge') {
+      const mergeResult = await api.merge(effectiveThreadId, { cleanup: true });
+      if (mergeResult.isErr()) {
+        toast.error(t('review.mergeFailed', { message: mergeResult.error.message }));
+        setActionInProgress(null);
+        await refresh();
+        return;
+      }
+      const target = useThreadStore.getState().activeThread?.baseBranch || 'base';
+      toast.success(t('review.commitAndMergeSuccess', { target }));
     }
 
     setCommitTitle('');
@@ -729,11 +742,12 @@ export function ReviewPane() {
                   </Tooltip>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-1">
+              <div className={cn('grid gap-1', isWorktree ? 'grid-cols-4' : 'grid-cols-3')}>
                 {([
                   { value: 'commit' as const, icon: GitCommit, label: t('review.commit', 'Commit') },
                   { value: 'commit-push' as const, icon: Upload, label: t('review.commitAndPush', 'Commit & Push') },
                   { value: 'commit-pr' as const, icon: GitPullRequest, label: t('review.commitAndCreatePR', 'Commit & Create PR') },
+                  ...(isWorktree ? [{ value: 'commit-merge' as const, icon: GitMerge, label: t('review.commitAndMerge', 'Commit & Merge') }] : []),
                 ]).map(({ value, icon: ActionIcon, label }) => (
                   <button
                     key={value}

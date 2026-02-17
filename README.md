@@ -10,7 +10,9 @@ funny is a web UI for orchestrating multiple [Claude Code](https://claude.ai/cod
 - **Git worktree isolation** — Each agent gets its own isolated working directory
 - **Real-time monitoring** — WebSocket-based live updates for all agent activities
 - **Git integration** — Built-in diff viewer, staging, commits, and PR creation
-- **Dual authentication modes** — Single-user local mode or multi-user with Better Auth
+- **Kanban board** — Drag-and-drop task management with columns (backlog, in progress, review, done, archived)
+- **Search** — Find threads by title, branch name, status, or message content with real-time filtering
+- **Analytics dashboard** — Track task creation, completion rates, stage distribution, and cost metrics over time
 - **MCP support** — Model Context Protocol integration
 - **Automation scheduling** — Cron-based recurring tasks
 
@@ -54,14 +56,11 @@ bun start
 ### Starting the Server
 
 ```bash
-# Default (local mode, port 3001)
+# Default (port 3001)
 funny
 
 # Custom port
 funny --port 8080
-
-# Multi-user mode
-funny --auth-mode multi
 
 # Show all options
 funny --help
@@ -73,7 +72,6 @@ funny --help
 |--------|-------------|---------|
 | `-p, --port <port>` | Server port | `3001` |
 | `-h, --host <host>` | Server host | `127.0.0.1` |
-| `--auth-mode <mode>` | Authentication mode (`local` or `multi`) | `local` |
 | `--help` | Show help message | - |
 
 ### Environment Variables
@@ -82,36 +80,40 @@ funny --help
 |----------|-------------|---------|
 | `PORT` | Server port | `3001` |
 | `HOST` | Server hostname | `127.0.0.1` |
-| `AUTH_MODE` | Authentication mode (`local` or `multi`) | `local` |
 | `CORS_ORIGIN` | Custom CORS origins (comma-separated) | Auto-configured |
 
-## Authentication Modes
+## Kanban Board
 
-### Local Mode (default)
+Threads can be visualized and managed as a Kanban board with five columns:
 
-Single-user mode with automatic bearer token authentication. Perfect for personal use.
+- **Backlog** — Tasks waiting to be started
+- **In Progress** — Tasks currently being worked on
+- **Review** — Tasks ready for code review
+- **Done** — Completed tasks
+- **Archived** — Archived tasks
 
-- No login page
-- Token auto-generated at `~/.funny/auth-token`
-- All data stored locally
+Drag and drop cards between columns to update their stage. Cards show thread status, git sync state, cost, and time since last update. Pinned threads appear first in each column. You can create new threads directly from the board and switch between list and board views.
 
-### Multi-User Mode
+## Search & Filtering
 
-Multiple users with login page and admin-managed accounts.
+Find threads quickly using the search bar. Search matches against:
 
-```bash
-AUTH_MODE=multi funny
-```
+- **Thread title**
+- **Branch name**
+- **Thread status**
+- **Message content** (server-side full-text search with content snippets)
 
-Default admin credentials:
-- **Username:** `admin`
-- **Password:** `admin`
+Results highlight matching text. Combine search with filters for status, git state, and mode to narrow results further. Filters sync to URL query parameters so you can share filtered views.
 
-Features:
-- Cookie-based sessions (7-day expiry)
-- Per-user data isolation
-- Admin user management
-- Per-user git identity and GitHub tokens
+## Analytics
+
+The analytics dashboard provides an overview of task activity and costs:
+
+- **Metric cards** — Tasks created, completed, moved to review/done/archived, and total cost
+- **Stage distribution chart** — Pie chart showing current distribution of threads across stages
+- **Timeline chart** — Bar chart showing task activity over time, grouped by day/week/month/year
+
+Filter analytics by project and time range (day, week, month, or all-time).
 
 ## Development
 
@@ -153,7 +155,6 @@ bun test
 - Hono (HTTP framework)
 - [Claude Agent SDK](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk) (`@anthropic-ai/claude-agent-sdk`)
 - Drizzle ORM + SQLite
-- Better Auth (multi-user mode)
 - WebSocket (real-time updates)
 
 **Client:**
@@ -170,9 +171,7 @@ All data is stored in:
 ```
 ~/.funny/
 ├── data.db           # SQLite database (projects, threads, messages)
-├── auth-token        # Local mode bearer token
-├── auth-secret       # Multi-user mode session secret
-└── encryption.key    # GitHub token encryption key (multi-user)
+└── auth-token        # Bearer token for authentication
 ```
 
 ## Git Worktrees

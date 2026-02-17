@@ -1,5 +1,5 @@
 {
-  "name": "a-parallel",
+  "name": "funny",
   "version": "0.1.0",
   "private": false,
   "description": "Codex App clone powered by Claude Code — parallel agent orchestration with git worktrees",
@@ -7,10 +7,10 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/anthropics/a-parallel.git"
+    "url": "https://github.com/anthropics/funny.git"
   },
   "bin": {
-    "a-parallel": "./bin/a-parallel.js"
+    "funny": "./bin/funny.js"
   },
   "files": [
     "bin",
@@ -27,7 +27,7 @@
     "packages/*"
   ],
   "scripts": {
-    "start": "bun ./bin/a-parallel.js",
+    "start": "bun ./bin/funny.js",
     "dev": "concurrently --kill-others \"bun run --cwd packages/server dev\" \"bun run --cwd packages/client dev\"",
     "dev:server": "bun run --cwd packages/server dev",
     "dev:client": "bun run --cwd packages/client dev",

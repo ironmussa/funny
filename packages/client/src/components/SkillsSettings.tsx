@@ -23,7 +23,7 @@ import {
   FolderOpen,
   Puzzle,
 } from 'lucide-react';
-import type { Skill, Plugin, PluginCommand } from '@a-parallel/shared';
+import type { Skill, Plugin, PluginCommand } from '@funny/shared';
 
 interface RecommendedSkill {
   name: string;

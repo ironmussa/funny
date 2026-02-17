@@ -1,5 +1,5 @@
 {
-  "name": "@a-parallel/server",
+  "name": "@funny/server",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -11,8 +11,8 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@a-parallel/core": "*",
-    "@a-parallel/shared": "*",
+    "@funny/core": "*",
+    "@funny/shared": "*",
     "@anthropic-ai/claude-agent-sdk": "^0.2.42",
     "better-auth": "^1.4.18",
     "croner": "^10.0.1",

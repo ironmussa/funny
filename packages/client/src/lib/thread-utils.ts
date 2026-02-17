@@ -14,7 +14,7 @@ import {
   Eye,
   Archive,
 } from 'lucide-react';
-import type { ThreadStatus, GitSyncState, ThreadStage } from '@a-parallel/shared';
+import type { ThreadStatus, GitSyncState, ThreadStage } from '@funny/shared';
 
 export const statusConfig: Record<ThreadStatus, { icon: typeof Clock; className: string }> = {
   idle: { icon: CircleDot, className: 'text-gray-400' },

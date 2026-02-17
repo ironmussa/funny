@@ -2,7 +2,7 @@ import { Hono } from 'hono';
 import { readdirSync } from 'fs';
 import { join, parse as parsePath, resolve, normalize } from 'path';
 import { homedir, platform } from 'os';
-import { getRemoteUrl, extractRepoName, initRepo, execute } from '@a-parallel/core/git';
+import { getRemoteUrl, extractRepoName, initRepo, execute } from '@funny/core/git';
 import * as pm from '../services/project-manager.js';
 import { resultToResponse } from '../utils/result-response.js';
 import type { HonoEnv } from '../types/hono-env.js';

@@ -1,7 +1,7 @@
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, ALL_STANDARD_TOOLS, TOOL_LABELS, type ThreadMode, type ClaudeModel, type PermissionMode } from '@/stores/settings-store';
-import type { ToolPermission } from '@a-parallel/shared';
+import type { ToolPermission } from '@funny/shared';
 import { settingsItems, settingsLabelKeys, type SettingsItemId } from './SettingsPanel';
 import { cn } from '@/lib/utils';
 import { ScrollArea } from '@/components/ui/scroll-area';

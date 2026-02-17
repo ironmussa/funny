@@ -256,7 +256,7 @@ Each pipeline execution generates an event file in `.pipeline/events/`:
 └── config.yaml
 ```
 
-**Note:** Events are stored by `request_id` (not by date/branch). The persistence path is configurable via `config.events.path` or via the `EVENTS_PATH` environment variable (default: `~/.a-parallel/pipeline-events`).
+**Note:** Events are stored by `request_id` (not by date/branch). The persistence path is configurable via `config.events.path` or via the `EVENTS_PATH` environment variable (default: `~/.funny/pipeline-events`).
 
 Each `.jsonl` file contains one event per line, in chronological order:
 
@@ -1364,7 +1364,7 @@ The pipeline integrates a **Step 0 for infrastructure** that has two layers: a *
 #### Container Architecture
 
 ```
-@a-parallel/core/containers (library)          @a-parallel/agent (orchestration)
+@funny/core/containers (library)          @funny/agent (orchestration)
 ┌──────────────────────────────┐              ┌────────────────────────────────┐
 │ SandboxManager               │              │ ContainerManager               │
 │  - isPodmanAvailable()       │◄─────────────│  - setup(worktreePath, reqId)  │
@@ -1386,7 +1386,7 @@ The pipeline integrates a **Step 0 for infrastructure** that has two layers: a *
 └──────────────────────────────┘
 ```
 
-- **`@a-parallel/core/containers`** — Reusable library. Contains `SandboxManager`, `ContainerService`, and `createCdpMcpServer`.
+- **`@funny/core/containers`** — Reusable library. Contains `SandboxManager`, `ContainerService`, and `createCdpMcpServer`.
 - **`ContainerManager`** — Pipeline-specific orchestration. Lives in `packages/agent/src/infrastructure/`.
 
 #### Step 0 Flow
@@ -1401,7 +1401,7 @@ PipelineRunner.run(request)
          │      → If not installed → throw Error with installation instructions
          │
          ├── 2. Create sandbox container (ALWAYS)
-         │      → podman build (a-parallel-sandbox image, lazy, once only)
+         │      → podman build (funny-sandbox image, lazy, once only)
          │      → podman run -d (mount worktree read-only at /mnt/source)
          │      → Copy files (excluding .git) to /workspace
          │      → Initialize fresh git repo:
@@ -2413,7 +2413,7 @@ pipeline:
 
 ### The Pipeline Service as an application
 
-The Pipeline Service is a **Bun application** that runs as the `@a-parallel/agent` package within the monorepo:
+The Pipeline Service is a **Bun application** that runs as the `@funny/agent` package within the monorepo:
 1. Starts an HTTP server (Hono) on port 3002 to receive requests
 2. Uses `AgentOrchestrator` + `SDKClaudeProcess` from the Claude Agent SDK to execute agents
 3. Maintains an Event Bus (eventemitter3) in memory + JSONL persistence on disk
@@ -3130,7 +3130,7 @@ This appendix documents decisions made during implementation that diverge from t
 | Per-agent `enabled`/`blocking` flags | Tier-based agent arrays (`tiers.small.agents`) | Simpler; agents are enabled/disabled by tier |
 | `event_bus.implementation: redis/nats` | Only EventEmitter (in-memory + JSONL) | Sufficient for single-machine; Redis/NATS would be added if multi-machine is needed |
 | `integration.mode: pull-request/auto-merge` | Only `pull-request` | The final merge to main always requires human approval |
-| `adapters.inbound` (REST, CLI, MCP, webhook) | Only REST API (Hono) | CLI and MCP are added via integration with `@a-parallel/server` |
+| `adapters.inbound` (REST, CLI, MCP, webhook) | Only REST API (Hono) | CLI and MCP are added via integration with `@funny/server` |
 | `adapters.outbound` (manifest, client, slack, github) | Generic `adapters.webhooks[]` | A single adapter type (webhook) covers all cases; specific adapters are added as demanded |
 | `logging.per_request`, `.sources`, `.retention_days` | Only `logging.level` | Pino logger with configurable level; persistence is via EventBus JSONL |
 
@@ -3141,10 +3141,10 @@ This appendix documents decisions made during implementation that diverge from t
 **Implementation:**
 - **Runtime:** Bun (not Node.js) — faster, fewer dependencies
 - **HTTP Framework:** Hono (not Express/Fastify) — lighter, edge-ready
-- **Agent SDK:** `@a-parallel/core/agents` which uses `AgentOrchestrator` + `SDKClaudeProcess` (Claude Agent SDK, not CLI subprocess)
-- **Git operations:** `@a-parallel/core/git` which uses `execute()` via `Bun.spawn` (not `execa` or `child_process`)
+- **Agent SDK:** `@funny/core/agents` which uses `AgentOrchestrator` + `SDKClaudeProcess` (Claude Agent SDK, not CLI subprocess)
+- **Git operations:** `@funny/core/git` which uses `execute()` via `Bun.spawn` (not `execa` or `child_process`)
 - **Port:** `3002` (not `3100` as stated in the SAD) — to avoid conflicts with the main server on `3001`
-- **Monorepo package:** `@a-parallel/agent` within the `a-parallel` workspace
+- **Monorepo package:** `@funny/agent` within the `funny` workspace
 
 ### A.7 Saga: 7 steps instead of 9
 
@@ -3211,7 +3211,7 @@ Events from the SAD that **don't exist** in the implementation:
 
 **Layer 1 — Sandbox (MANDATORY):**
 1. Verifies that Podman is installed (if not → error with installation instructions)
-2. Builds the `a-parallel-sandbox` image if it doesn't exist (lazy, once)
+2. Builds the `funny-sandbox` image if it doesn't exist (lazy, once)
 3. Creates a `pipeline-sandbox-{requestId}` container with the worktree mounted **read-only** at `/mnt/source`
 4. Copies files (excluding `.git`) from the mount to `/workspace`
 5. Initializes a fresh git repo: `git init` → `git remote add origin` → `git fetch --depth=50` → `git checkout`
@@ -3224,8 +3224,8 @@ Events from the SAD that **don't exist** in the implementation:
 10. Injects the MCP server and `spawnClaudeCodeProcess` into `orchestrator.startAgent()`
 
 **Package architecture:**
-- `@a-parallel/core/containers` — Reusable library (`SandboxManager`, `ContainerService`, `createCdpMcpServer`)
-- `@a-parallel/agent/infrastructure/container-manager.ts` — Pipeline-specific orchestration
+- `@funny/core/containers` — Reusable library (`SandboxManager`, `ContainerService`, `createCdpMcpServer`)
+- `@funny/agent/infrastructure/container-manager.ts` — Pipeline-specific orchestration
 
 **Copy + Clone Strategy (why not bind-mount):**
 - Git worktrees use a `.git` pointer file (not a directory), and bind-mounting this doesn't work correctly inside a Linux container
@@ -3261,7 +3261,7 @@ CLIMessage from agent
 
 **SAD (original):** Outbound adapters are manually configured in `.pipeline/config.yaml`.
 
-**Implementation:** An internal webhook adapter is automatically registered that forwards **all** pipeline events to the `/api/ingest/webhook` endpoint of the main server (`@a-parallel/server`). This allows pipeline events (including `pipeline.cli_message`) to appear in the a-parallel UI.
+**Implementation:** An internal webhook adapter is automatically registered that forwards **all** pipeline events to the `/api/ingest/webhook` endpoint of the main server (`@funny/server`). This allows pipeline events (including `pipeline.cli_message`) to appear in the funny UI.
 
 ```
 EventBus

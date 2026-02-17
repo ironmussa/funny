@@ -1,11 +1,11 @@
 import { Hono } from 'hono';
 import { existsSync } from 'fs';
 import * as tm from '../services/thread-manager.js';
-import { getDiff, getDiffSummary, getSingleFileDiff, stageFiles, unstageFiles, revertFiles, addToGitignore, commit, push, createPR, mergeBranch, git, getStatusSummary, deriveGitSyncState, type GitIdentityOptions, removeWorktree, removeBranch, sanitizePath } from '@a-parallel/core/git';
+import { getDiff, getDiffSummary, getSingleFileDiff, stageFiles, unstageFiles, revertFiles, addToGitignore, commit, push, createPR, mergeBranch, git, getStatusSummary, deriveGitSyncState, type GitIdentityOptions, removeWorktree, removeBranch, sanitizePath } from '@funny/core/git';
 import { validate, mergeSchema, stageFilesSchema, commitSchema, createPRSchema } from '../validation/schemas.js';
 import { requireThread, requireThreadCwd, requireProject } from '../utils/route-helpers.js';
 import { resultToResponse } from '../utils/result-response.js';
-import { badRequest, internal } from '@a-parallel/shared/errors';
+import { badRequest, internal } from '@funny/shared/errors';
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { err } from 'neverthrow';
 import { getAuthMode } from '../lib/auth-mode.js';

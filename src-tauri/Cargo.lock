@@ -3,7 +3,7 @@
 version = 4
 
 [[package]]
-name = "a-parallel"
+name = "funny"
 version = "0.1.0"
 dependencies = [
  "portable-pty",

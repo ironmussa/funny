@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { okAsync, errAsync } from 'neverthrow';
-import type { DomainError } from '@a-parallel/shared/errors';
-import type { GitStatusInfo } from '@a-parallel/shared';
+import type { DomainError } from '@funny/shared/errors';
+import type { GitStatusInfo } from '@funny/shared';
 
 vi.mock('@/lib/api', () => ({
   api: {

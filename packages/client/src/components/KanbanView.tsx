@@ -13,7 +13,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { Thread, ThreadStage, Project } from '@a-parallel/shared';
+import type { Thread, ThreadStage, Project } from '@funny/shared';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { useAppStore } from '@/stores/app-store';
 import { useThreadStore } from '@/stores/thread-store';

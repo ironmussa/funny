@@ -1,6 +1,6 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { statusConfig, stageConfig, timeAgo, gitSyncStateConfig, getStatusLabels } from '@/lib/thread-utils';
-import type { ThreadStatus, GitSyncState, ThreadStage } from '@a-parallel/shared';
+import type { ThreadStatus, GitSyncState, ThreadStage } from '@funny/shared';
 
 // A mock translation function that returns the key and any interpolation options
 const t = (key: string, opts?: any) => (opts ? `${key}:${JSON.stringify(opts)}` : key);

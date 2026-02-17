@@ -61,8 +61,8 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           tagName: ${{ github.ref_name }}
-          releaseName: 'a-parallel ${{ github.ref_name }}'
-          releaseBody: 'Desktop release for a-parallel'
+          releaseName: 'funny ${{ github.ref_name }}'
+          releaseBody: 'Desktop release for funny'
           releaseDraft: true
           prerelease: false
           args: --target ${{ matrix.target }}
@@ -70,7 +70,7 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: a-parallel-${{ matrix.target }}
+          name: funny-${{ matrix.target }}
           path: |
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.msi
             src-tauri/target/${{ matrix.target }}/release/bundle/**/*.exe

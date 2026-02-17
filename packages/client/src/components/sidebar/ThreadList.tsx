@@ -7,7 +7,7 @@ import { useGitStatusStore } from '@/stores/git-status-store';
 import { timeAgo } from '@/lib/thread-utils';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { ThreadItem } from './ThreadItem';
-import type { Thread, ThreadStatus } from '@a-parallel/shared';
+import type { Thread, ThreadStatus } from '@funny/shared';
 
 const RUNNING_STATUSES = new Set<ThreadStatus>(['running', 'waiting']);
 const FINISHED_STATUSES = new Set<ThreadStatus>(['completed', 'failed', 'stopped', 'interrupted']);

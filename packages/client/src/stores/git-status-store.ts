@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { GitStatusInfo } from '@a-parallel/shared';
+import type { GitStatusInfo } from '@funny/shared';
 import { api } from '@/lib/api';
 
 interface GitStatusState {

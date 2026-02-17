@@ -12,6 +12,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
+import { useProjectStore } from '@/stores/project-store';
 import { PromptInput } from './PromptInput';
 import { ToolCallCard } from './ToolCallCard';
 import { ToolCallGroup } from './ToolCallGroup';
@@ -411,6 +412,7 @@ export function ThreadView() {
   const selectedThreadId = useAppStore(s => s.selectedThreadId);
   const selectedProjectId = useAppStore(s => s.selectedProjectId);
   const newThreadProjectId = useAppStore(s => s.newThreadProjectId);
+  const hasProjects = useProjectStore(s => s.projects.length > 0);
   const loadOlderMessages = useAppStore(s => s.loadOlderMessages);
   const hasMore = activeThread?.hasMore ?? false;
   const loadingMore = activeThread?.loadingMore ?? false;
@@ -636,7 +638,7 @@ export function ThreadView() {
   }
 
   if (!selectedThreadId) {
-    if (selectedProjectId) {
+    if (selectedProjectId && hasProjects) {
       return (
         <div className="flex-1 flex flex-col h-full min-w-0">
           <ProjectHeader />
@@ -648,8 +650,12 @@ export function ThreadView() {
       <div className="flex-1 flex flex-col h-full min-w-0">
         <div className="flex-1 flex items-center justify-center text-muted-foreground">
           <div className="text-center">
-            <p className="text-sm">{t('thread.selectOrCreate')}</p>
-            <p className="text-xs mt-1">{t('thread.threadsRunParallel')}</p>
+            <p className="text-sm">
+              {hasProjects ? t('thread.selectOrCreate') : t('thread.addProjectFirst')}
+            </p>
+            {hasProjects && (
+              <p className="text-xs mt-1">{t('thread.threadsRunParallel')}</p>
+            )}
           </div>
         </div>
       </div>

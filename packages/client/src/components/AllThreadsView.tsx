@@ -13,7 +13,7 @@ import { KanbanView } from '@/components/KanbanView';
 import { statusConfig, gitSyncStateConfig, getStatusLabels } from '@/lib/thread-utils';
 import { normalize } from '@/components/ui/highlight-text';
 import { api } from '@/lib/api';
-import type { Thread, ThreadStatus, GitSyncState } from '@a-parallel/shared';
+import type { Thread, ThreadStatus, GitSyncState } from '@funny/shared';
 
 const ITEMS_PER_PAGE = 20;
 

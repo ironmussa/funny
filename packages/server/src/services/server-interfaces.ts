@@ -3,7 +3,7 @@
  * These stay in the server package because they reference DB operations and WebSocket events.
  */
 
-import type { WSEvent } from '@a-parallel/shared';
+import type { WSEvent } from '@funny/shared';
 
 // ── Thread Manager subset used by agent-runner ──────────────────
 

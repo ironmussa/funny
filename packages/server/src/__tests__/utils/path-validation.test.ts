@@ -6,7 +6,7 @@ import {
   validatePathSync,
   pathExists,
   sanitizePath,
-} from '@a-parallel/core/git';
+} from '@funny/core/git';
 
 const TEST_DIR = resolve(import.meta.dir, '..', '..', '..', '.test-tmp-path-validation');
 

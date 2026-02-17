@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ToolPermission } from '@a-parallel/shared';
+import type { ToolPermission } from '@funny/shared';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type Editor = 'cursor' | 'vscode' | 'windsurf' | 'zed' | 'sublime' | 'vim';
@@ -108,7 +108,7 @@ export const useSettingsStore = create<SettingsState>()(
       completeSetup: () => set({ setupCompleted: true }),
     }),
     {
-      name: 'a-parallel-settings',
+      name: 'funny-settings',
       version: 4,
       migrate: (persisted: any, version: number) => {
         if (version < 2) {

@@ -1,8 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/nicegui/nicegui/main/nicegui/static/tauri/tauri.conf.json",
-  "productName": "a-parallel",
+  "productName": "funny",
   "version": "0.1.0",
-  "identifier": "com.a-parallel.app",
+  "identifier": "com.funny.app",
   "build": {
     "beforeDevCommand": "bun run dev",
     "devUrl": "http://localhost:5179",
@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "a-parallel",
+        "title": "funny",
         "width": 1280,
         "height": 800,
         "minWidth": 900,
@@ -36,7 +36,7 @@
       "icons/icon.ico"
     ],
     "externalBin": [
-      "binaries/a-parallel-server"
+      "binaries/funny-server"
     ]
   }
 }

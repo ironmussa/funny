@@ -8,7 +8,7 @@ import {
 import { startOAuthFlow, handleOAuthCallback } from '../services/mcp-oauth.js';
 import { addMcpServerSchema, validate } from '../validation/schemas.js';
 import { resultToResponse } from '../utils/result-response.js';
-import { badRequest } from '@a-parallel/shared/errors';
+import { badRequest } from '@funny/shared/errors';
 import { err } from 'neverthrow';
 
 const app = new Hono();

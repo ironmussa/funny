@@ -1,12 +1,12 @@
 /**
  * PipelineRunner — main orchestration for pipeline execution.
  *
- * Uses AgentOrchestrator from @a-parallel/core to manage the Claude process.
+ * Uses AgentOrchestrator from @funny/core to manage the Claude process.
  * Translates CLIMessages into PipelineEvents and publishes them on the EventBus.
  */
 
-import { AgentOrchestrator, defaultProcessFactory } from '@a-parallel/core/agents';
-import type { IAgentProcessFactory } from '@a-parallel/core/agents';
+import { AgentOrchestrator, defaultProcessFactory } from '@funny/core/agents';
+import type { IAgentProcessFactory } from '@funny/core/agents';
 import type {
   PipelineRequest,
   PipelineState,

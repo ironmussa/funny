@@ -36,7 +36,7 @@ import { registerAllHandlers } from './services/handlers/handler-registry.js';
 import type { HandlerServiceContext } from './services/handlers/types.js';
 import * as tm from './services/thread-manager.js';
 import * as pm from './services/project-manager.js';
-import { getProviderModels } from '@a-parallel/shared/models';
+import { getProviderModels } from '@funny/shared/models';
 
 // Resolve client dist directory (works both in dev and when installed via npm)
 const clientDistDir = resolve(

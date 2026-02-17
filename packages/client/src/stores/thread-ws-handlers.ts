@@ -4,7 +4,7 @@
  */
 
 import { toast } from 'sonner';
-import type { Thread, MessageRole, ThreadStatus } from '@a-parallel/shared';
+import type { Thread, MessageRole, ThreadStatus } from '@funny/shared';
 import { bufferWSEvent, getNavigate } from './thread-store-internals';
 import { transitionThreadStatus, getThreadActor, wsEventToMachineEvent } from './thread-machine-bridge';
 import type { AgentInitInfo, ThreadState } from './thread-store';

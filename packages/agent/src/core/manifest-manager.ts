@@ -10,7 +10,7 @@
 
 import { join, dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
-import { execute } from '@a-parallel/core/git';
+import { execute } from '@funny/core/git';
 import { StateMachine, BRANCH_TRANSITIONS, type BranchState } from './state-machine.js';
 import type {
   Manifest,

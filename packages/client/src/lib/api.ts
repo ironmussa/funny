@@ -1,6 +1,6 @@
 import { ResultAsync } from 'neverthrow';
-import type { DomainError } from '@a-parallel/shared/errors';
-import { internal } from '@a-parallel/shared/errors';
+import type { DomainError } from '@funny/shared/errors';
+import { internal } from '@funny/shared/errors';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 import type {
   Project,
@@ -23,7 +23,7 @@ import type {
   UpdateProfileRequest,
   GitHubRepo,
   PaginatedMessages,
-} from '@a-parallel/shared';
+} from '@funny/shared';
 
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
 const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
@@ -234,9 +234,9 @@ export const api = {
 
   // Thread comments
   getThreadComments: (threadId: string) =>
-    request<import('@a-parallel/shared').ThreadComment[]>(`/threads/${threadId}/comments`),
+    request<import('@funny/shared').ThreadComment[]>(`/threads/${threadId}/comments`),
   createThreadComment: (threadId: string, content: string) =>
-    request<import('@a-parallel/shared').ThreadComment>(`/threads/${threadId}/comments`, {
+    request<import('@funny/shared').ThreadComment>(`/threads/${threadId}/comments`, {
       method: 'POST',
       body: JSON.stringify({ content }),
     }),
@@ -260,7 +260,7 @@ export const api = {
     if (excludePatterns?.length) params.set('exclude', excludePatterns.join(','));
     if (maxFiles) params.set('maxFiles', String(maxFiles));
     const qs = params.toString();
-    return request<import('@a-parallel/shared').DiffSummaryResponse>(
+    return request<import('@funny/shared').DiffSummaryResponse>(
       `/git/${threadId}/diff/summary${qs ? `?${qs}` : ''}`
     );
   },

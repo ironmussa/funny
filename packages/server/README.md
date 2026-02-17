@@ -1,4 +1,4 @@
-# @a-parallel/server
+# @funny/server
 
 Hono HTTP server that orchestrates Claude Code agents, manages git worktrees, and streams real-time events over WebSocket.
 
@@ -89,8 +89,8 @@ src/
 
 - **Claude CLI as subprocess** — Agents are spawned via `claude --print --output-format stream-json`, not direct API calls. This gives us session resumption, tool access, and MCP integration for free.
 - **neverthrow everywhere** — All service and utility functions return `Result` or `ResultAsync` types. No thrown exceptions in business logic.
-- **Git worktrees for isolation** — Each agent works in a `.a-parallel-worktrees/` directory next to the project. Full filesystem isolation, shared git history.
-- **SQLite for simplicity** — Single-file database at `~/.a-parallel/data.db` with WAL mode for concurrent reads. No external database to set up.
+- **Git worktrees for isolation** — Each agent works in a `.funny-worktrees/` directory next to the project. Full filesystem isolation, shared git history.
+- **SQLite for simplicity** — Single-file database at `~/.funny/data.db` with WAL mode for concurrent reads. No external database to set up.
 - **Dual auth mode** — `AUTH_MODE=local` (single user, bearer token) or `AUTH_MODE=multi` (Better Auth with sessions, per-user isolation).
 
 ## Environment Variables

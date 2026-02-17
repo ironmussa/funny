@@ -7,7 +7,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { HighlightText } from '@/components/ui/highlight-text';
-import type { Thread, ThreadStatus } from '@a-parallel/shared';
+import type { Thread, ThreadStatus } from '@funny/shared';
 
 interface ThreadListViewProps {
   threads: Thread[];

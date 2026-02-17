@@ -3,7 +3,7 @@
  * These are portable — no server-specific dependencies (no DB, WebSocket, HTTP).
  */
 
-import type { AgentProvider } from '@a-parallel/shared';
+import type { AgentProvider } from '@funny/shared';
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
 // ── Agent process (provider-agnostic) ───────────────────────────

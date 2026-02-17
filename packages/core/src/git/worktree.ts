@@ -4,9 +4,9 @@ import { existsSync } from 'fs';
 import { ok, err, ResultAsync } from 'neverthrow';
 import { git } from './git.js';
 import { execute } from './process.js';
-import { badRequest, internal, type DomainError } from '@a-parallel/shared/errors';
+import { badRequest, internal, type DomainError } from '@funny/shared/errors';
 
-const WORKTREE_DIR_NAME = '.a-parallel-worktrees';
+const WORKTREE_DIR_NAME = '.funny-worktrees';
 
 async function getWorktreeBase(projectPath: string): Promise<string> {
   const projectName = basename(projectPath);

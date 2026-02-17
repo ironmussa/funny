@@ -21,7 +21,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { Project, Thread } from '@a-parallel/shared';
+import type { Project, Thread } from '@funny/shared';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { ThreadItem } from './ThreadItem';
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';

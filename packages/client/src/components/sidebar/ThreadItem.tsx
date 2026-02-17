@@ -19,7 +19,7 @@ import {
   PinOff,
 } from 'lucide-react';
 import { statusConfig, gitSyncStateConfig, timeAgo } from '@/lib/thread-utils';
-import type { Thread, ThreadStatus, GitStatusInfo } from '@a-parallel/shared';
+import type { Thread, ThreadStatus, GitStatusInfo } from '@funny/shared';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import {

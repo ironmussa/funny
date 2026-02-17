@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { ok, err, type Result } from 'neverthrow';
-import { validationErr, type DomainError } from '@a-parallel/shared/errors';
+import { validationErr, type DomainError } from '@funny/shared/errors';
 
 // ── Enums ────────────────────────────────────────────────────────
 

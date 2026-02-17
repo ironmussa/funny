@@ -1,10 +1,10 @@
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
-import type { CLIMessage } from '@a-parallel/core/agents';
-import type { WSEvent } from '@a-parallel/shared';
+import type { CLIMessage } from '@funny/core/agents';
+import type { WSEvent } from '@funny/shared';
 import type { AgentStateTracker } from './agent-state.js';
 import * as pm from './project-manager.js';
 import { threadEventBus } from './thread-event-bus.js';
-import { getStatusSummary, deriveGitSyncState } from '@a-parallel/core/git';
+import { getStatusSummary, deriveGitSyncState } from '@funny/core/git';
 
 /**
  * Decode literal Unicode escape sequences (\uXXXX) that may appear

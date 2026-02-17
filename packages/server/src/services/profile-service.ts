@@ -3,7 +3,7 @@ import { nanoid } from 'nanoid';
 import { db } from '../db/index.js';
 import * as schema from '../db/schema.js';
 import { encrypt, decrypt } from '../lib/crypto.js';
-import type { UserProfile, UpdateProfileRequest } from '@a-parallel/shared';
+import type { UserProfile, UpdateProfileRequest } from '@funny/shared';
 
 /** Retrieve a user's git profile. Returns null if not yet configured. */
 export function getProfile(userId: string): UserProfile | null {

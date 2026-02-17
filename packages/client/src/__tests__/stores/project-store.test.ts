@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { okAsync, errAsync } from 'neverthrow';
-import type { DomainError } from '@a-parallel/shared/errors';
-import type { Project } from '@a-parallel/shared';
+import type { DomainError } from '@funny/shared/errors';
+import type { Project } from '@funny/shared';
 
 // ── Shared mock state that we can reassign per test ──────────────────
 const mockLoadThreadsForProject = vi.fn().mockResolvedValue(undefined);

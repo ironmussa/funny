@@ -1,5 +1,5 @@
 {
-  "name": "@a-parallel/agent",
+  "name": "@funny/agent",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,8 +10,8 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@a-parallel/shared": "*",
-    "@a-parallel/core": "*",
+    "@funny/shared": "*",
+    "@funny/core": "*",
     "hono": "^4.11.9",
     "@hono/zod-validator": "^0.4.0",
     "eventemitter3": "^5.0.1",

@@ -20,7 +20,7 @@ import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { ImageLightbox } from './ImageLightbox';
-import type { ImageAttachment, Skill } from '@a-parallel/shared';
+import type { ImageAttachment, Skill } from '@funny/shared';
 
 interface WorktreeInfo {
   path: string;

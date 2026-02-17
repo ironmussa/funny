@@ -27,7 +27,7 @@ import {
   KeyRound,
   Check,
 } from 'lucide-react';
-import type { McpServer, McpServerType } from '@a-parallel/shared';
+import type { McpServer, McpServerType } from '@funny/shared';
 
 interface RecommendedServer {
   name: string;

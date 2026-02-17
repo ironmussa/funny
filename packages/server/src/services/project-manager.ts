@@ -3,9 +3,9 @@ import { nanoid } from 'nanoid';
 import { resolve, isAbsolute } from 'path';
 import { ok, err, type Result } from 'neverthrow';
 import { db, schema } from '../db/index.js';
-import { isGitRepoSync } from '@a-parallel/core/git';
-import { badRequest, notFound, conflict, internal, type DomainError } from '@a-parallel/shared/errors';
-import type { Project } from '@a-parallel/shared';
+import { isGitRepoSync } from '@funny/core/git';
+import { badRequest, notFound, conflict, internal, type DomainError } from '@funny/shared/errors';
+import type { Project } from '@funny/shared';
 
 type ProjectRow = typeof schema.projects.$inferSelect;
 

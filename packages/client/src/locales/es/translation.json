@@ -1,6 +1,6 @@
 {
   "app": {
-    "title": "a-parallel",
+    "title": "funny",
     "subtitle": "Agentes Claude Code en Paralelo"
   },
   "sidebar": {
@@ -61,6 +61,7 @@
     "describeTask": "Describe la tarea y presiona Enter para comenzar",
     "selectOrCreate": "Selecciona un hilo o crea uno nuevo",
     "threadsRunParallel": "Los hilos ejecutan agentes Claude Code en paralelo",
+    "addProjectFirst": "Agrega un proyecto desde la barra lateral para comenzar",
     "agentWorking": "El agente está trabajando...",
     "waitingForResponse": "Esperando tu respuesta...",
     "planWaitingForResponse": "Acepta o rechaza el plan",

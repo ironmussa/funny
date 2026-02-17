@@ -1,10 +1,10 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
 import { resolve, dirname } from 'path';
 import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
-import { executeSync } from '@a-parallel/core/git';
+import { executeSync } from '@funny/core/git';
 
 const TEST_REPO = resolve(import.meta.dir, '..', '..', '..', '.test-tmp-worktree-repo');
-const WORKTREE_DIR = resolve(dirname(TEST_REPO), '.a-parallel-worktrees');
+const WORKTREE_DIR = resolve(dirname(TEST_REPO), '.funny-worktrees');
 
 function setupRepo() {
   rmSync(TEST_REPO, { recursive: true, force: true });
@@ -44,7 +44,7 @@ describe('worktree-manager', () => {
   });
 
   test('getWorktreeBase creates directory', () => {
-    const base = resolve(dirname(TEST_REPO), '.a-parallel-worktrees');
+    const base = resolve(dirname(TEST_REPO), '.funny-worktrees');
     mkdirSync(base, { recursive: true });
     expect(existsSync(base)).toBe(true);
   });

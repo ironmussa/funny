@@ -1,5 +1,5 @@
 /**
- * @a-parallel/agent — Pipeline Service HTTP app.
+ * @funny/agent — Pipeline Service HTTP app.
  *
  * Wires config, circuit breakers, idempotency guard, DLQ, adapters,
  * branch cleaner, request logger, and all core components together.

@@ -2,13 +2,13 @@ import { Hono } from 'hono';
 import type { HonoEnv } from '../types/hono-env.js';
 import * as tm from '../services/thread-manager.js';
 import * as pm from '../services/project-manager.js';
-import { createWorktree, removeWorktree, removeBranch, getCurrentBranch } from '@a-parallel/core/git';
+import { createWorktree, removeWorktree, removeBranch, getCurrentBranch } from '@funny/core/git';
 import { startAgent, stopAgent, isAgentRunning, cleanupThreadState } from '../services/agent-runner.js';
 import { nanoid } from 'nanoid';
 import { createThreadSchema, createIdleThreadSchema, sendMessageSchema, updateThreadSchema, approveToolSchema, validate } from '../validation/schemas.js';
 import { requireThread, requireThreadWithMessages, requireProject } from '../utils/route-helpers.js';
 import { resultToResponse } from '../utils/result-response.js';
-import { notFound } from '@a-parallel/shared/errors';
+import { notFound } from '@funny/shared/errors';
 import { augmentPromptWithFiles } from '../utils/file-mentions.js';
 import { threadEventBus } from '../services/thread-event-bus.js';
 
@@ -259,9 +259,9 @@ threadRoutes.post('/:id/message', async (c) => {
   const cwd = thread.worktreePath ?? pm.getProject(thread.projectId)?.path;
   if (!cwd) return c.json({ error: 'Project path not found' }, 404);
 
-  const effectiveProvider = (provider || thread.provider || 'claude') as import('@a-parallel/shared').AgentProvider;
-  const effectiveModel = (model || thread.model || 'sonnet') as import('@a-parallel/shared').AgentModel;
-  const effectivePermission = (permissionMode || thread.permissionMode || 'autoEdit') as import('@a-parallel/shared').PermissionMode;
+  const effectiveProvider = (provider || thread.provider || 'claude') as import('@funny/shared').AgentProvider;
+  const effectiveModel = (model || thread.model || 'sonnet') as import('@funny/shared').AgentModel;
+  const effectivePermission = (permissionMode || thread.permissionMode || 'autoEdit') as import('@funny/shared').PermissionMode;
 
   // Update thread's permission mode and model if they changed
   const updates: Record<string, any> = {};
@@ -348,7 +348,7 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
   ];
 
   try {
-    const threadProvider = (thread.provider || 'claude') as import('@a-parallel/shared').AgentProvider;
+    const threadProvider = (thread.provider || 'claude') as import('@funny/shared').AgentProvider;
     if (approved) {
       // Add the approved tool to allowedTools and remove from disallowedTools
       if (!tools.includes(toolName)) {
@@ -360,8 +360,8 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
         id,
         message,
         cwd,
-        thread.model as import('@a-parallel/shared').AgentModel || 'sonnet',
-        thread.permissionMode as import('@a-parallel/shared').PermissionMode || 'autoEdit',
+        thread.model as import('@funny/shared').AgentModel || 'sonnet',
+        thread.permissionMode as import('@funny/shared').PermissionMode || 'autoEdit',
         undefined,
         disallowed,
         tools,
@@ -374,8 +374,8 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
         id,
         message,
         cwd,
-        thread.model as import('@a-parallel/shared').AgentModel || 'sonnet',
-        thread.permissionMode as import('@a-parallel/shared').PermissionMode || 'autoEdit',
+        thread.model as import('@funny/shared').AgentModel || 'sonnet',
+        thread.permissionMode as import('@funny/shared').PermissionMode || 'autoEdit',
         undefined,
         clientDisallowedTools,
         clientAllowedTools,
@@ -476,7 +476,7 @@ threadRoutes.patch('/:id', async (c) => {
         thread.initialPrompt,
         cwd,
         'sonnet', // default model for idle threads
-        (thread.permissionMode || 'autoEdit') as import('@a-parallel/shared').PermissionMode
+        (thread.permissionMode || 'autoEdit') as import('@funny/shared').PermissionMode
       ).catch((err) => {
         console.error(`[idle-start] Failed to auto-start agent for thread ${id}:`, err);
         tm.updateThread(id, { status: 'failed', completedAt: new Date().toISOString() });

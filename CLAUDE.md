@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What This Is
 
-a-parallel is a web UI for orchestrating multiple Claude Code agents in parallel. It uses git worktrees to let each agent work on its own branch simultaneously without conflicts. Think of it as a Codex App clone powered by the Claude Agent SDK.
+funny is a web UI for orchestrating multiple Claude Code agents in parallel. It uses git worktrees to let each agent work on its own branch simultaneously without conflicts. Think of it as a Codex App clone powered by the Claude Agent SDK.
 
 ## Installation & Running
 
@@ -12,16 +12,16 @@ a-parallel is a web UI for orchestrating multiple Claude Code agents in parallel
 
 ```bash
 # Quick start (no installation)
-npx a-parallel
+npx funny
 
 # Or install globally
-npm install -g a-parallel
-a-parallel
+npm install -g funny
+funny
 
 # CLI options
-a-parallel --port 8080              # Custom port
-a-parallel --auth-mode multi        # Multi-user mode
-a-parallel --help                   # Show all options
+funny --port 8080              # Custom port
+funny --auth-mode multi        # Multi-user mode
+funny --help                   # Show all options
 ```
 
 ### For Development
@@ -64,12 +64,12 @@ npm run db:studio
 
 **Entry point:** `packages/server/src/index.ts` — Hono app with CORS, logger middleware, and route groups mounted under `/api`. WebSocket upgrade at `/ws`.
 
-**Database:** SQLite via better-sqlite3 + Drizzle ORM. DB file lives at `~/.a-parallel/data.db`. Tables are auto-created on startup via `db/migrate.ts` (raw SQL, not Drizzle migrations). Schema in `db/schema.ts` defines: `projects`, `threads`, `messages`, `tool_calls`.
+**Database:** SQLite via better-sqlite3 + Drizzle ORM. DB file lives at `~/.funny/data.db`. Tables are auto-created on startup via `db/migrate.ts` (raw SQL, not Drizzle migrations). Schema in `db/schema.ts` defines: `projects`, `threads`, `messages`, `tool_calls`.
 
 **Key services:**
 - `agent-runner.ts` — Spawns Claude CLI processes via `claude-process.ts`. Parses NDJSON stream output, persists messages/tool_calls to DB, and emits WebSocket events via `ws-broker`. Supports session resumption.
 - `claude-process.ts` — Manages a single Claude CLI process (`claude --print --output-format stream-json`). Reads NDJSON stdout, emits typed messages.
-- `worktree-manager.ts` — Creates/lists/removes git worktrees in a `.a-parallel-worktrees` directory adjacent to the project. Uses synchronous git operations.
+- `worktree-manager.ts` — Creates/lists/removes git worktrees in a `.funny-worktrees` directory adjacent to the project. Uses synchronous git operations.
 - `ws-broker.ts` — Singleton pub/sub that broadcasts WebSocket events to all connected clients. Single multiplexed stream (not per-thread).
 - `project-manager.ts` — CRUD for projects. Validates that the path is a git repo before creating.
 - `diff-service.ts` — Re-exports from `git-v2.ts` for backward compatibility.
@@ -109,7 +109,7 @@ The app supports two authentication modes controlled by the `AUTH_MODE` environm
 
 ### Local Mode (default)
 
-Single-user mode. No login page. A bearer token is auto-generated and stored at `~/.a-parallel/auth-token`. This is the default when `AUTH_MODE` is not set.
+Single-user mode. No login page. A bearer token is auto-generated and stored at `~/.funny/auth-token`. This is the default when `AUTH_MODE` is not set.
 
 ```bash
 # Just start normally — no configuration needed
@@ -133,7 +133,7 @@ The admin can create additional users from **Settings > Users** in the UI. Self-
 
 **Key details:**
 - Sessions expire after 7 days
-- Auth secret is auto-generated and stored at `~/.a-parallel/auth-secret`
+- Auth secret is auto-generated and stored at `~/.funny/auth-secret`
 - Each user only sees their own projects, threads, and automations
 - WebSocket events are filtered per user
 - Legacy data (created in local mode) is reassigned to the first admin on login
@@ -148,7 +148,7 @@ In multi-user mode, each user can configure their own git identity and GitHub cr
 Tokens are encrypted at rest using **AES-256-GCM**. The encryption key is auto-generated on first use and stored at:
 
 ```
-~/.a-parallel/encryption.key
+~/.funny/encryption.key
 ```
 
 > **Important:** If this file is deleted, any previously saved GitHub tokens become unrecoverable. Back it up if needed. The file is created with restricted permissions (`0600`).

@@ -1,5 +1,5 @@
 import { setup, fromPromise } from 'xstate';
-import type { ThreadStatus } from '@a-parallel/shared';
+import type { ThreadStatus } from '@funny/shared';
 
 /**
  * Thread lifecycle state machine

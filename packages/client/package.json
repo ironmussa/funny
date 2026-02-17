@@ -1,5 +1,5 @@
 {
-  "name": "@a-parallel/client",
+  "name": "@funny/client",
   "version": "0.1.0",
   "private": true,
   "type": "module",
@@ -10,7 +10,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@a-parallel/shared": "*",
+    "@funny/shared": "*",
     "@tanstack/react-virtual": "^3.13.6",
     "@atlaskit/pragmatic-drag-and-drop": "^1.7.7",
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.0.3",

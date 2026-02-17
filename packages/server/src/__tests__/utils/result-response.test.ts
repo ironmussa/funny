@@ -10,7 +10,7 @@ import {
   processError,
   conflict,
   internal,
-} from '@a-parallel/shared/errors';
+} from '@funny/shared/errors';
 
 describe('resultToResponse', () => {
   function createApp(handler: (c: any) => Response | Promise<Response>) {

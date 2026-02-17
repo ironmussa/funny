@@ -4,8 +4,8 @@ import { eq } from 'drizzle-orm';
 import { resolve } from 'path';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { createTestDb, seedProject, seedThread } from '../helpers/test-db.js';
-import { executeSync } from '@a-parallel/core/git';
-import { getDiff, stageFiles, unstageFiles, commit } from '@a-parallel/core/git';
+import { executeSync } from '@funny/core/git';
+import { getDiff, stageFiles, unstageFiles, commit } from '@funny/core/git';
 
 const TEST_REPO = resolve(import.meta.dir, '..', '..', '..', '.test-tmp-git-routes');
 

@@ -3,7 +3,7 @@
  * Checks for CLI binaries and SDKs for each provider.
  */
 
-import type { AgentProvider } from '@a-parallel/shared';
+import type { AgentProvider } from '@funny/shared';
 import { checkClaudeBinaryAvailability, validateClaudeBinary } from './claude-binary.js';
 
 export interface ProviderAvailability {

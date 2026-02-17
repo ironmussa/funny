@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Automation, AutomationRun, InboxItem } from '@a-parallel/shared';
+import type { Automation, AutomationRun, InboxItem } from '@funny/shared';
 import { api } from '@/lib/api';
 
 interface AutomationState {

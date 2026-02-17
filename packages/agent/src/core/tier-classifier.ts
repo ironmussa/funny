@@ -4,7 +4,7 @@
  * Thresholds are configurable via PipelineServiceConfig.
  */
 
-import { execute } from '@a-parallel/core/git';
+import { execute } from '@funny/core/git';
 import type { Tier } from './types.js';
 
 export interface TierThresholds {

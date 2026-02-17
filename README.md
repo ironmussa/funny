@@ -1,8 +1,8 @@
-# a-parallel
+# funny
 
 > Parallel Claude Code agent orchestration powered by git worktrees
 
-a-parallel is a web UI for orchestrating multiple [Claude Code](https://claude.ai/code) agents in parallel. It uses git worktrees to let each agent work on its own branch simultaneously without conflicts. Think of it as a Codex App clone powered by the Claude Agent SDK.
+funny is a web UI for orchestrating multiple [Claude Code](https://claude.ai/code) agents in parallel. It uses git worktrees to let each agent work on its own branch simultaneously without conflicts. Think of it as a Codex App clone powered by the Claude Agent SDK.
 
 ## Features
 
@@ -21,7 +21,7 @@ a-parallel is a web UI for orchestrating multiple [Claude Code](https://claude.a
 No installation needed! Run directly with:
 
 \`\`\`bash
-npx a-parallel
+npx funny
 \`\`\`
 
 The app will start and open at \`http://localhost:3001\`
@@ -29,15 +29,15 @@ The app will start and open at \`http://localhost:3001\`
 ### Global Installation
 
 \`\`\`bash
-npm install -g a-parallel
-a-parallel
+npm install -g funny
+funny
 \`\`\`
 
 ### From Source
 
 \`\`\`bash
-git clone https://github.com/anthropics/a-parallel.git
-cd a-parallel
+git clone https://github.com/anthropics/funny.git
+cd funny
 npm install
 npm run build
 npm start
@@ -55,16 +55,16 @@ npm start
 
 \`\`\`bash
 # Default (local mode, port 3001)
-a-parallel
+funny
 
 # Custom port
-a-parallel --port 8080
+funny --port 8080
 
 # Multi-user mode
-a-parallel --auth-mode multi
+funny --auth-mode multi
 
 # Show all options
-a-parallel --help
+funny --help
 \`\`\`
 
 ### CLI Options
@@ -92,7 +92,7 @@ a-parallel --help
 Single-user mode with automatic bearer token authentication. Perfect for personal use.
 
 - No login page
-- Token auto-generated at \`~/.a-parallel/auth-token\`
+- Token auto-generated at \`~/.funny/auth-token\`
 - All data stored locally
 
 ### Multi-User Mode
@@ -100,7 +100,7 @@ Single-user mode with automatic bearer token authentication. Perfect for persona
 Multiple users with login page and admin-managed accounts.
 
 \`\`\`bash
-AUTH_MODE=multi a-parallel
+AUTH_MODE=multi funny
 \`\`\`
 
 Default admin credentials:
@@ -168,7 +168,7 @@ npm test
 All data is stored in:
 
 \`\`\`
-~/.a-parallel/
+~/.funny/
 ├── data.db           # SQLite database (projects, threads, messages)
 ├── auth-token        # Local mode bearer token
 ├── auth-secret       # Multi-user mode session secret
@@ -177,7 +177,7 @@ All data is stored in:
 
 ## Git Worktrees
 
-Worktrees are created in \`.a-parallel-worktrees/\` adjacent to your project:
+Worktrees are created in \`.funny-worktrees/\` adjacent to your project:
 
 \`\`\`
 /your-project/
@@ -203,7 +203,7 @@ MIT
 
 ## Support
 
-- [GitHub Issues](https://github.com/anthropics/a-parallel/issues)
+- [GitHub Issues](https://github.com/anthropics/funny/issues)
 - [Claude Code Documentation](https://claude.ai/code)
 
 ## Contributing

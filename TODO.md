@@ -18,7 +18,7 @@
 - In the architecture, ask how errors are handled, how users are managed, and exponential backoff.
 - CSS styles should be shared as much as possible
 To test the Intro, from the console
-const settings = JSON.parse(localStorage.getItem('a-parallel-settings'));
+const settings = JSON.parse(localStorage.getItem('funny-settings'));
 settings.state.setupCompleted = false;
-localStorage.setItem('a-parallel-settings', JSON.stringify(settings));
+localStorage.setItem('funny-settings', JSON.stringify(settings));
 location.reload();

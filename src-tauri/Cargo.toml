@@ -1,5 +1,5 @@
 [package]
-name = "a-parallel"
+name = "funny"
 version = "0.1.0"
 description = "Parallel Claude Code agent orchestration with git worktrees"
 authors = ["you"]

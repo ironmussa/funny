@@ -7,10 +7,10 @@
  */
 
 import { EventEmitter } from 'events';
-import type { AgentProvider, AgentModel, PermissionMode } from '@a-parallel/shared';
+import type { AgentProvider, AgentModel, PermissionMode } from '@funny/shared';
 import type { CLIMessage } from './types.js';
 import type { IAgentProcess, IAgentProcessFactory } from './interfaces.js';
-import { resolveModelId, resolvePermissionMode, getDefaultAllowedTools } from '@a-parallel/shared/models';
+import { resolveModelId, resolvePermissionMode, getDefaultAllowedTools } from '@funny/shared/models';
 
 // ── Types ─────────────────────────────────────────────────────────
 

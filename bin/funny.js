@@ -29,10 +29,10 @@ const { values } = parseArgs({
 
 if (values.help) {
   console.log(`
-a-parallel - Parallel Claude Code agent orchestration
+funny - Parallel Claude Code agent orchestration
 
 Usage:
-  a-parallel [options]
+  funny [options]
 
 Options:
   -p, --port <port>          Server port (default: 3001)
@@ -41,9 +41,9 @@ Options:
   --help                     Show this help message
 
 Examples:
-  a-parallel                 # Start on http://127.0.0.1:3001
-  a-parallel --port 8080     # Start on custom port
-  a-parallel --auth-mode multi  # Start in multi-user mode
+  funny                 # Start on http://127.0.0.1:3001
+  funny --port 8080     # Start on custom port
+  funny --auth-mode multi  # Start in multi-user mode
 
 Environment Variables:
   PORT                       Server port
@@ -51,7 +51,7 @@ Environment Variables:
   AUTH_MODE                  Authentication mode (local or multi)
   CORS_ORIGIN               Custom CORS origins (comma-separated)
 
-For more information, visit: https://github.com/anthropics/a-parallel
+For more information, visit: https://github.com/anthropics/funny
 `);
   process.exit(0);
 }
@@ -67,14 +67,14 @@ const serverSrc = resolve(import.meta.dir, '../packages/server/src/index.ts');
 
 // Check if built version exists, otherwise use source (for development)
 if (existsSync(serverEntry)) {
-  console.log('[a-parallel] Starting from built server...');
+  console.log('[funny] Starting from built server...');
   await import(serverEntry);
 } else if (existsSync(serverSrc)) {
-  console.log('[a-parallel] Built server not found, starting from source...');
-  console.log('[a-parallel] Run "npm run build" for production use.');
+  console.log('[funny] Built server not found, starting from source...');
+  console.log('[funny] Run "npm run build" for production use.');
   await import(serverSrc);
 } else {
-  console.error('[a-parallel] Error: Server files not found.');
+  console.error('[funny] Error: Server files not found.');
   console.error('Please run "npm install" and "npm run build" first.');
   process.exit(1);
 }

@@ -1,8 +1,8 @@
 import { wsBroker } from './ws-broker.js';
 import * as tm from './thread-manager.js';
-import type { WSEvent, AgentProvider, AgentModel, PermissionMode } from '@a-parallel/shared';
-import { AgentOrchestrator, defaultProcessFactory } from '@a-parallel/core/agents';
-import type { IAgentProcessFactory } from '@a-parallel/core/agents';
+import type { WSEvent, AgentProvider, AgentModel, PermissionMode } from '@funny/shared';
+import { AgentOrchestrator, defaultProcessFactory } from '@funny/core/agents';
+import type { IAgentProcessFactory } from '@funny/core/agents';
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import { AgentStateTracker } from './agent-state.js';
 import { AgentMessageHandler } from './agent-message-handler.js';

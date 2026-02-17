@@ -6,7 +6,7 @@
  */
 
 import { EventEmitter } from 'events';
-import type { ThreadStage, ThreadStatus, AgentProvider, AgentModel } from '@a-parallel/shared';
+import type { ThreadStage, ThreadStatus, AgentProvider, AgentModel } from '@funny/shared';
 
 // ── Event payloads ────────────────────────────────────────────────
 

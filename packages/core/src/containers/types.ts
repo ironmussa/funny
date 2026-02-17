@@ -53,6 +53,6 @@ export interface SandboxState {
 }
 
 export interface SandboxManagerOptions {
-  /** Podman image name (default: 'a-parallel-sandbox') */
+  /** Podman image name (default: 'funny-sandbox') */
   imageName?: string;
 }

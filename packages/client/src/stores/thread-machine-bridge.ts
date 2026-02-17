@@ -5,7 +5,7 @@
 
 import { createActor } from 'xstate';
 import { threadMachine, wsEventToMachineEvent, type ThreadContext } from '@/machines/thread-machine';
-import type { ThreadStatus } from '@a-parallel/shared';
+import type { ThreadStatus } from '@funny/shared';
 
 export { wsEventToMachineEvent };
 

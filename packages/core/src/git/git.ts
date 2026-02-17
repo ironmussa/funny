@@ -3,8 +3,8 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { execute, executeSync, ProcessExecutionError } from './process.js';
 import { validatePath, validatePathSync } from './path-validation.js';
-import { processError, internal, badRequest, type DomainError } from '@a-parallel/shared/errors';
-import type { FileDiff, FileDiffSummary, DiffSummaryResponse, GitSyncState } from '@a-parallel/shared';
+import { processError, internal, badRequest, type DomainError } from '@funny/shared/errors';
+import type { FileDiff, FileDiffSummary, DiffSummaryResponse, GitSyncState } from '@funny/shared';
 
 /** Per-user git identity for multi-user mode. */
 export interface GitIdentityOptions {

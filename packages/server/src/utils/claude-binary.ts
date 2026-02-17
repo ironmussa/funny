@@ -6,7 +6,7 @@
 import { platform } from 'os';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { executeSync } from '@a-parallel/core/git';
+import { executeSync } from '@funny/core/git';
 
 const IS_WINDOWS = platform() === 'win32';
 const BINARY_NAME = IS_WINDOWS ? 'claude.exe' : 'claude';

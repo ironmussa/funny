@@ -10,7 +10,7 @@
  *   - Scheduled: configurable interval timer
  */
 
-import { execute } from '@a-parallel/core/git';
+import { execute } from '@funny/core/git';
 import type { ManifestManager } from './manifest-manager.js';
 import type { Integrator } from './integrator.js';
 import type { ManifestReadyEntry } from './manifest-types.js';

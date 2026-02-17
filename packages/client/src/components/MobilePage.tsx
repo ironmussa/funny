@@ -28,7 +28,7 @@ import { MessageContent, CopyButton, WaitingActions } from './ThreadView';
 import { AgentResultCard, AgentInterruptedCard } from './thread/AgentStatusCards';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import type { Project, Thread } from '@a-parallel/shared';
+import type { Project, Thread } from '@funny/shared';
 
 type MobileView =
   | { screen: 'projects' }
@@ -131,7 +131,7 @@ function ProjectListView({
   return (
     <>
       <header className="flex items-center px-4 py-3 border-b border-border shrink-0">
-        <h1 className="text-base font-semibold">a-parallel</h1>
+        <h1 className="text-base font-semibold">funny</h1>
       </header>
       <div className="flex-1 overflow-y-auto">
         {projects.length === 0 ? (

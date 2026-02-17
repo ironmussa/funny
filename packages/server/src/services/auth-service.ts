@@ -1,6 +1,6 @@
 /**
  * Auth Service — generates and validates a bearer token for API access.
- * Token is stored at ~/.a-parallel/auth-token and cached in memory.
+ * Token is stored at ~/.funny/auth-token and cached in memory.
  */
 
 import { resolve } from 'path';
@@ -8,14 +8,14 @@ import { homedir } from 'os';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { randomBytes, timingSafeEqual } from 'crypto';
 
-const AUTH_DIR = resolve(homedir(), '.a-parallel');
+const AUTH_DIR = resolve(homedir(), '.funny');
 const TOKEN_PATH = resolve(AUTH_DIR, 'auth-token');
 
 let cachedToken: string | null = null;
 
 /**
  * Get (or generate on first call) the auth token.
- * Reads from ~/.a-parallel/auth-token, creating it if it doesn't exist.
+ * Reads from ~/.funny/auth-token, creating it if it doesn't exist.
  */
 export function getAuthToken(): string {
   if (cachedToken) return cachedToken;

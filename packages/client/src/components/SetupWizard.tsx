@@ -40,7 +40,7 @@ function WelcomeSlide({ onNext }: { onNext: () => void }) {
           <Terminal className="h-8 w-8 text-primary" />
         </div>
         <h1 className="text-2xl font-bold text-foreground">
-          Welcome to a-parallel
+          Welcome to funny
         </h1>
         <p className="text-sm text-muted-foreground leading-relaxed">
           Orchestrate multiple Claude Code agents in parallel. Each agent works
@@ -97,7 +97,7 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
           Claude Code CLI
         </h2>
         <p className="text-sm text-muted-foreground">
-          a-parallel needs the Claude Code CLI to run agents.
+          funny needs the Claude Code CLI to run agents.
         </p>
       </div>
 
@@ -183,7 +183,7 @@ function DoneSlide({ onFinish }: { onFinish: () => void }) {
       </div>
 
       <Button className="w-full" onClick={onFinish}>
-        Enter a-parallel
+        Enter funny
         <ArrowRight className="h-4 w-4 ml-1" />
       </Button>
     </>

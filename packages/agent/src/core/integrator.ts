@@ -15,9 +15,9 @@
  */
 
 import { nanoid } from 'nanoid';
-import { AgentOrchestrator, SDKClaudeProcess } from '@a-parallel/core/agents';
-import type { IAgentProcessFactory, IAgentProcess, AgentProcessOptions } from '@a-parallel/core/agents';
-import { execute, createPR } from '@a-parallel/core/git';
+import { AgentOrchestrator, SDKClaudeProcess } from '@funny/core/agents';
+import type { IAgentProcessFactory, IAgentProcess, AgentProcessOptions } from '@funny/core/agents';
+import { execute, createPR } from '@funny/core/git';
 import { Saga } from './saga.js';
 import type { ManifestReadyEntry, ManifestPendingMergeEntry, IntegratorResult } from './manifest-types.js';
 import type { PipelineEvent, PipelineEventType } from './types.js';
@@ -103,7 +103,7 @@ ${resultRows || '| — | — | No agent results recorded |'}
 ${corrections}${conflicts}
 
 ---
-*Automated by a-parallel Pipeline Service*
+*Automated by funny Pipeline Service*
 *Request ID: ${entry.request_id}*`;
 }
 

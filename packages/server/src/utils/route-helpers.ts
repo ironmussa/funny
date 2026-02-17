@@ -9,7 +9,7 @@
 import { ok, err, type Result } from 'neverthrow';
 import * as tm from '../services/thread-manager.js';
 import * as pm from '../services/project-manager.js';
-import { notFound, forbidden, type DomainError } from '@a-parallel/shared/errors';
+import { notFound, forbidden, type DomainError } from '@funny/shared/errors';
 
 /** Check that a thread belongs to the requesting user (multi-user mode) */
 function checkOwnership(thread: { userId: string }, userId: string): Result<void, DomainError> {

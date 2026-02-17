@@ -7,6 +7,6 @@ export default defineConfig({
   out: './drizzle',
   dialect: 'sqlite',
   dbCredentials: {
-    url: resolve(homedir(), '.a-parallel', 'data.db'),
+    url: resolve(homedir(), '.funny', 'data.db'),
   },
 });

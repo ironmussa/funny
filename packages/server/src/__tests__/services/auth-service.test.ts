@@ -12,7 +12,7 @@ mock.module('os', () => ({
 }));
 
 // We need to force the auth-service to use our test dir
-// The auth-service resolves AUTH_DIR as homedir()/.a-parallel
+// The auth-service resolves AUTH_DIR as homedir()/.funny
 // So we set homedir to TEST_DIR/.. and use TEST_DIR as the auth directory name
 // Actually, let's just test validateToken and getAuthToken concepts
 

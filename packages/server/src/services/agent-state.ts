@@ -1,9 +1,9 @@
-import type { WaitingReason } from '@a-parallel/shared';
+import type { WaitingReason } from '@funny/shared';
 
 /**
  * Tracks per-thread DB-mapping state for running agents.
  * Lifecycle fields (activeAgents, manuallyStopped) are now owned
- * by AgentOrchestrator in @a-parallel/core.
+ * by AgentOrchestrator in @funny/core.
  */
 export class AgentStateTracker {
   /**

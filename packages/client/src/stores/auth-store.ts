@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { AuthMode, SafeUser } from '@a-parallel/shared';
+import type { AuthMode, SafeUser } from '@funny/shared';
 import { authClient } from '@/lib/auth-client';
 import { setAuthToken, setAuthMode } from '@/lib/api';
 

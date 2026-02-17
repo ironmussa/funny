@@ -1,6 +1,6 @@
 import { Cron } from 'croner';
 import { nanoid } from 'nanoid';
-import type { AgentModel, AgentProvider, PermissionMode } from '@a-parallel/shared';
+import type { AgentModel, AgentProvider, PermissionMode } from '@funny/shared';
 import * as am from './automation-manager.js';
 import * as tm from './thread-manager.js';
 import * as pm from './project-manager.js';

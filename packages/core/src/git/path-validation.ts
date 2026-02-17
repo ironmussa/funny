@@ -2,7 +2,7 @@ import { resolve, isAbsolute } from 'path';
 import { access } from 'fs/promises';
 import { accessSync } from 'fs';
 import { ok, err, type Result, ResultAsync } from 'neverthrow';
-import { badRequest, forbidden, type DomainError } from '@a-parallel/shared/errors';
+import { badRequest, forbidden, type DomainError } from '@funny/shared/errors';
 
 /**
  * Validates that a path exists and is accessible (async).

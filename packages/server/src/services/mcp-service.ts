@@ -5,9 +5,9 @@
 
 import { ResultAsync } from 'neverthrow';
 import { getClaudeBinaryPath } from '../utils/claude-binary.js';
-import { execute, ProcessExecutionError } from '@a-parallel/core/git';
-import { processError, internal, type DomainError } from '@a-parallel/shared/errors';
-import type { McpServer, McpServerType } from '@a-parallel/shared';
+import { execute, ProcessExecutionError } from '@funny/core/git';
+import { processError, internal, type DomainError } from '@funny/shared/errors';
+import type { McpServer, McpServerType } from '@funny/shared';
 
 /**
  * List MCP servers configured for a project.

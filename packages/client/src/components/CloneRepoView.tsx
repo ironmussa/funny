@@ -21,7 +21,7 @@ import {
   Check,
   LogOut,
 } from 'lucide-react';
-import type { GitHubRepo } from '@a-parallel/shared';
+import type { GitHubRepo } from '@funny/shared';
 
 type ViewState = 'checking' | 'connect' | 'device-flow' | 'repos' | 'clone-config' | 'cloning';
 

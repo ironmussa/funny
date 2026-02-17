@@ -11,7 +11,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import type { Thread } from '@a-parallel/shared';
+import type { Thread } from '@funny/shared';
 
 interface RunningThread extends Thread {
   projectName: string;

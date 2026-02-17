@@ -9,15 +9,15 @@
  * browser) are started alongside the sandbox.
  *
  * Uses SandboxManager, ContainerService, and createCdpMcpServer from
- * @a-parallel/core as the underlying libraries.
+ * @funny/core as the underlying libraries.
  */
 
 import {
   SandboxManager,
   ContainerService,
   createCdpMcpServer,
-} from '@a-parallel/core/containers';
-import type { CdpMcpServerResult } from '@a-parallel/core/containers';
+} from '@funny/core/containers';
+import type { CdpMcpServerResult } from '@funny/core/containers';
 import { logger } from './logger.js';
 
 export interface ContainerSetupResult {

@@ -7,7 +7,7 @@ const mockListWorktrees = mock(() => ok([{ path: '/tmp/wt1', branch: 'feature/x'
 const mockCreateWorktree = mock(() => ok('/tmp/wt-new'));
 const mockRemoveWorktree = mock(() => ok(undefined));
 
-mock.module('@a-parallel/core/git', () => ({
+mock.module('@funny/core/git', () => ({
   listWorktrees: mockListWorktrees,
   createWorktree: mockCreateWorktree,
   removeWorktree: mockRemoveWorktree,

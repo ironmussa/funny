@@ -1,4 +1,4 @@
-# @a-parallel/client
+# @funny/client
 
 React 19 single-page application for managing and monitoring parallel Claude Code agents. Built with Vite, Tailwind CSS, and shadcn/ui.
 

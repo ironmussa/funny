@@ -3,7 +3,7 @@ import { homedir } from 'os';
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { randomBytes, createCipheriv, createDecipheriv } from 'crypto';
 
-const DATA_DIR = resolve(homedir(), '.a-parallel');
+const DATA_DIR = resolve(homedir(), '.funny');
 const KEY_PATH = resolve(DATA_DIR, 'encryption.key');
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;

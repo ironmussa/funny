@@ -56,7 +56,7 @@ import {
   Copy,
   ClipboardCopy,
 } from 'lucide-react';
-import type { FileDiffSummary } from '@a-parallel/shared';
+import type { FileDiffSummary } from '@funny/shared';
 
 const fileStatusIcons: Record<string, typeof FileCode> = {
   added: FilePlus,

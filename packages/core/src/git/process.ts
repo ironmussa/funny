@@ -1,5 +1,5 @@
 import { ResultAsync } from 'neverthrow';
-import { processError, internal, type DomainError } from '@a-parallel/shared/errors';
+import { processError, internal, type DomainError } from '@funny/shared/errors';
 
 export interface ProcessResult {
   stdout: string;

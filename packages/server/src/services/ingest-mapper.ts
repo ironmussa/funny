@@ -21,7 +21,7 @@ import { db, schema } from '../db/index.js';
 import { wsBroker } from './ws-broker.js';
 import * as tm from './thread-manager.js';
 import * as pm from './project-manager.js';
-import type { WSEvent } from '@a-parallel/shared';
+import type { WSEvent } from '@funny/shared';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -116,7 +116,7 @@ function resolveProjectId(workingPath: string): string | null {
   const projects = pm.listProjects('__local__');
   for (const project of projects) {
     const projPath = project.path.replace(/\\/g, '/').toLowerCase();
-    if (normalised.startsWith(projPath) || normalised.includes('.a-parallel-worktrees')) {
+    if (normalised.startsWith(projPath) || normalised.includes('.funny-worktrees')) {
       return project.id;
     }
   }

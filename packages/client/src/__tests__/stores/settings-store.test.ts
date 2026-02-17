@@ -16,7 +16,7 @@ import {
   editorLabels,
   useSettingsStore,
 } from '@/stores/settings-store';
-import type { ToolPermission } from '@a-parallel/shared';
+import type { ToolPermission } from '@funny/shared';
 
 describe('SettingsStore', () => {
   beforeEach(() => {

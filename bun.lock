@@ -16,11 +16,11 @@
       },
     },
     "packages/agent": {
-      "name": "@a-parallel/agent",
+      "name": "@funny/agent",
       "version": "0.1.0",
       "dependencies": {
-        "@a-parallel/core": "*",
-        "@a-parallel/shared": "*",
+        "@funny/core": "*",
+        "@funny/shared": "*",
         "@hono/zod-validator": "^0.4.0",
         "cockatiel": "^3.2.1",
         "eventemitter3": "^5.0.1",
@@ -36,14 +36,14 @@
       },
     },
     "packages/client": {
-      "name": "@a-parallel/client",
+      "name": "@funny/client",
       "version": "0.1.0",
       "dependencies": {
-        "@a-parallel/shared": "*",
         "@atlaskit/pragmatic-drag-and-drop": "^1.7.7",
         "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.0.3",
         "@fontsource/geist-mono": "^5.2.7",
         "@fontsource/geist-sans": "^5.2.5",
+        "@funny/shared": "*",
         "@radix-ui/react-collapsible": "^1.1.12",
         "@radix-ui/react-dialog": "^1.1.15",
         "@radix-ui/react-dropdown-menu": "^2.1.16",
@@ -98,11 +98,11 @@
       },
     },
     "packages/core": {
-      "name": "@a-parallel/core",
+      "name": "@funny/core",
       "version": "0.1.0",
       "dependencies": {
-        "@a-parallel/shared": "*",
         "@anthropic-ai/claude-agent-sdk": "^0.2.42",
+        "@funny/shared": "*",
         "neverthrow": "^8.2.0",
         "playwright": "^1.50.0",
         "zod": "^4.3.6",
@@ -116,12 +116,12 @@
       },
     },
     "packages/server": {
-      "name": "@a-parallel/server",
+      "name": "@funny/server",
       "version": "0.1.0",
       "dependencies": {
-        "@a-parallel/core": "*",
-        "@a-parallel/shared": "*",
         "@anthropic-ai/claude-agent-sdk": "^0.2.42",
+        "@funny/core": "*",
+        "@funny/shared": "*",
         "better-auth": "^1.4.18",
         "croner": "^10.0.1",
         "drizzle-orm": "^0.45.1",
@@ -137,7 +137,7 @@
       },
     },
     "packages/shared": {
-      "name": "@a-parallel/shared",
+      "name": "@funny/shared",
       "version": "0.1.0",
     },
   },
@@ -145,16 +145,6 @@
     "esbuild": ">=0.24.3",
   },
   "packages": {
-    "@a-parallel/agent": ["@a-parallel/agent@workspace:packages/agent"],
-
-    "@a-parallel/client": ["@a-parallel/client@workspace:packages/client"],
-
-    "@a-parallel/core": ["@a-parallel/core@workspace:packages/core"],
-
-    "@a-parallel/server": ["@a-parallel/server@workspace:packages/server"],
-
-    "@a-parallel/shared": ["@a-parallel/shared@workspace:packages/shared"],
-
     "@acemir/cssom": ["@acemir/cssom@0.9.31", "", {}, "sha512-ZnR3GSaH+/vJ0YlHau21FjfLYjMpYVIzTD8M8vIEQvIGxeOXyXdzCI140rrCY862p/C/BbzWsjc1dgnM9mkoTA=="],
 
     "@adobe/css-tools": ["@adobe/css-tools@4.4.4", "", {}, "sha512-Elp+iwUx5rN5+Y8xLt5/GRoG20WGoDCQ/1Fb+1LiGtvwbDavuSk0jhD/eZdckHAuzcDzccnkv+rEjyWfRx18gg=="],
@@ -330,6 +320,16 @@
     "@fontsource/geist-mono": ["@fontsource/geist-mono@5.2.7", "", {}, "sha512-xVPVFISJg/K0VVd+aQN0Y7X/sw9hUcJPyDWFJ5GpyU3bHELhoRsJkPSRSHXW32mOi0xZCUQDOaPj1sqIFJ1FGg=="],
 
     "@fontsource/geist-sans": ["@fontsource/geist-sans@5.2.5", "", {}, "sha512-anllOHyJbElRs9fV15TeDRqAeb1IKm4bSknPl6ZMoyPTx1BBy7logudcUwpNjmQLkzn4Q0JGQLRCUKJYoyST6A=="],
+
+    "@funny/agent": ["@funny/agent@workspace:packages/agent"],
+
+    "@funny/client": ["@funny/client@workspace:packages/client"],
+
+    "@funny/core": ["@funny/core@workspace:packages/core"],
+
+    "@funny/server": ["@funny/server@workspace:packages/server"],
+
+    "@funny/shared": ["@funny/shared@workspace:packages/shared"],
 
     "@hono/zod-validator": ["@hono/zod-validator@0.4.3", "", { "peerDependencies": { "hono": ">=3.9.0", "zod": "^3.19.1" } }, "sha512-xIgMYXDyJ4Hj6ekm9T9Y27s080Nl9NXHcJkOvkXPhubOLj8hZkOL8pDnnXfvCf5xEE8Q4oMFenQUZZREUY2gqQ=="],
 
@@ -1507,10 +1507,6 @@
 
     "zwitch": ["zwitch@2.0.4", "", {}, "sha512-bXE4cR/kVZhKZX/RjPEflHaKVhUVl85noU3v6b8apfQEc1x4A+zBxjZ4lN8LqGd6WZ3dl98pY4o717VFmoPp+A=="],
 
-    "@a-parallel/core/zod": ["zod@4.3.6", "", {}, "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="],
-
-    "@a-parallel/server/zod": ["zod@4.3.6", "", {}, "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="],
-
     "@anthropic-ai/claude-agent-sdk/zod": ["zod@4.3.6", "", {}, "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="],
 
     "@babel/helper-compilation-targets/lru-cache": ["lru-cache@5.1.1", "", { "dependencies": { "yallist": "^3.0.2" } }, "sha512-KpNARQA3Iwv+jTA0utUVVbrh+Jlrr1Fv0e56GGzAFOXN7dk/FviaDW8LHmK52DlcH4WP2n6gI8vN1aesBFgo9w=="],
@@ -1518,6 +1514,10 @@
     "@better-auth/core/zod": ["zod@4.3.6", "", {}, "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="],
 
     "@emotion/babel-plugin/convert-source-map": ["convert-source-map@1.9.0", "", {}, "sha512-ASFBup0Mz1uyiIjANan1jzLQami9z1PoYSZCiiYW2FczPbenXc45FZdBZLzOT+r6+iciuEModtmCti+hjaAk0A=="],
+
+    "@funny/core/zod": ["zod@4.3.6", "", {}, "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="],
+
+    "@funny/server/zod": ["zod@4.3.6", "", {}, "sha512-rftlrkhHZOcjDwkGlnUtZZkvaPHCsDATp4pGpuOOMDaTdDDXF91wuVDJoWoPsKX/3YPQ5fHuF3STjcYyKr+Qhg=="],
 
     "@radix-ui/react-collection/@radix-ui/react-slot": ["@radix-ui/react-slot@1.2.3", "", { "dependencies": { "@radix-ui/react-compose-refs": "1.1.2" }, "peerDependencies": { "@types/react": "*", "react": "^16.8 || ^17.0 || ^18.0 || ^19.0 || ^19.0.0-rc" }, "optionalPeers": ["@types/react"] }, "sha512-aeNmHnBxbi2St0au6VBVC7JXFlhLlOnvIIlePNniyUNAClzmtAUEY8/pBiK3iHjufOlwA+c20/8jngo7xcrg8A=="],
 

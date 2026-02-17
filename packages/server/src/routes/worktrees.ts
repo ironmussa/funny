@@ -1,9 +1,9 @@
 import { Hono } from 'hono';
-import { createWorktree, listWorktrees, removeWorktree } from '@a-parallel/core/git';
+import { createWorktree, listWorktrees, removeWorktree } from '@funny/core/git';
 import { createWorktreeSchema, deleteWorktreeSchema, validate } from '../validation/schemas.js';
 import { requireProject } from '../utils/route-helpers.js';
 import { resultToResponse } from '../utils/result-response.js';
-import { badRequest } from '@a-parallel/shared/errors';
+import { badRequest } from '@funny/shared/errors';
 import { err } from 'neverthrow';
 
 export const worktreeRoutes = new Hono();

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'bun:test';
 import { PipelineEventMapper, mapAgentMessage } from '../core/event-mapper.js';
-import type { CLIMessage } from '@a-parallel/core/agents';
+import type { CLIMessage } from '@funny/core/agents';
 
 // ── Helpers: build CLIMessage-like objects ───────────────────────
 

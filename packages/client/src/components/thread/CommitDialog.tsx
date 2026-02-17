@@ -32,7 +32,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { FileDiff } from '@a-parallel/shared';
+import type { FileDiff } from '@funny/shared';
 
 const fileStatusIcons: Record<string, typeof FileCode> = {
   added: FilePlus,

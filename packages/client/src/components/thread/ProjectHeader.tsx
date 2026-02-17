@@ -33,7 +33,7 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import type { StartupCommand } from '@a-parallel/shared';
+import type { StartupCommand } from '@funny/shared';
 
 
 

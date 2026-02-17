@@ -9,12 +9,12 @@ import { resolve, isAbsolute, join } from 'path';
 import { existsSync } from 'fs';
 import { validate, cloneRepoSchema, githubPollSchema } from '../validation/schemas.js';
 import { resultToResponse } from '../utils/result-response.js';
-import { execute } from '@a-parallel/core/git';
+import { execute } from '@funny/core/git';
 import * as profileService from '../services/profile-service.js';
 import * as pm from '../services/project-manager.js';
-import { badRequest, internal } from '@a-parallel/shared/errors';
+import { badRequest, internal } from '@funny/shared/errors';
 import { ok, err } from 'neverthrow';
-import type { GitHubRepo } from '@a-parallel/shared';
+import type { GitHubRepo } from '@funny/shared';
 
 const GITHUB_API = 'https://api.github.com';
 const DEVICE_CODE_URL = 'https://github.com/login/device/code';

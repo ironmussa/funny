@@ -11,7 +11,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { Play, Plus, Pencil, Trash2, X, Check, Square, Loader2, Terminal } from 'lucide-react';
-import type { StartupCommand } from '@a-parallel/shared';
+import type { StartupCommand } from '@funny/shared';
 
 export function StartupCommandsSettings() {
   const { t } = useTranslation();

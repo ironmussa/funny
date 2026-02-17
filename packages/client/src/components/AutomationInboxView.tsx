@@ -18,7 +18,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { Check, ChevronsUpDown, Inbox, Settings, Search } from 'lucide-react';
-import type { RunTriageStatus } from '@a-parallel/shared';
+import type { RunTriageStatus } from '@funny/shared';
 
 export function AutomationInboxView() {
   const navigate = useNavigate();

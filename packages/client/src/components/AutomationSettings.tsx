@@ -33,7 +33,7 @@ import {
   Timer,
   History,
 } from 'lucide-react';
-import type { Automation, AutomationRun, AgentModel, PermissionMode, AutomationSchedule } from '@a-parallel/shared';
+import type { Automation, AutomationRun, AgentModel, PermissionMode, AutomationSchedule } from '@funny/shared';
 
 const inputClass =
   'w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring';

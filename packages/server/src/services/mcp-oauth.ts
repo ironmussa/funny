@@ -138,7 +138,7 @@ async function registerClient(
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      client_name: `a-parallel (${serverName})`,
+      client_name: `funny (${serverName})`,
       redirect_uris: [redirectUri],
       grant_types: ['authorization_code'],
       response_types: ['code'],

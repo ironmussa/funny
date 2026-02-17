@@ -62,7 +62,7 @@ pub fn run() {
             // Spawn the server sidecar on startup
             let shell = app.shell();
             let sidecar = shell
-                .sidecar("a-parallel-server")
+                .sidecar("funny-server")
                 .expect("failed to create sidecar command");
 
             let (_rx, child) = sidecar

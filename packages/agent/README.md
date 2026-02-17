@@ -1,4 +1,4 @@
-# @a-parallel/agent — Pipeline Service
+# @funny/agent — Pipeline Service
 
 An autonomous pipeline service that runs quality-assurance agents (security, testing, architecture, etc.) against git branches in parallel using the Claude Agent SDK. It classifies changes by tier, auto-corrects failures, and integrates approved branches via PR.
 

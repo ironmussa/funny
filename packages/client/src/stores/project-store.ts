@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import type { Project } from '@a-parallel/shared';
+import type { Project } from '@funny/shared';
 import { api } from '@/lib/api';
 import { useThreadStore } from './thread-store';
 import { useGitStatusStore } from './git-status-store';

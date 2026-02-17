@@ -4,7 +4,7 @@ import {
   execute,
   executeSync,
   executeWithLogging,
-} from '@a-parallel/core/git';
+} from '@funny/core/git';
 
 describe('ProcessExecutionError', () => {
   test('sets all properties correctly', () => {

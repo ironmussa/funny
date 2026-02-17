@@ -7,8 +7,8 @@
 import { readFileSync, readdirSync, existsSync, rmSync, unlinkSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { execute } from '@a-parallel/core/git';
-import type { Skill } from '@a-parallel/shared';
+import { execute } from '@funny/core/git';
+import type { Skill } from '@funny/shared';
 
 const AGENTS_DIR = join(homedir(), '.agents');
 const SKILLS_DIR = join(AGENTS_DIR, 'skills');

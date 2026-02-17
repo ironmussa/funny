@@ -1,8 +1,8 @@
-# Plan: Reduccion de Carga Cognitiva en a-parallel
+# Plan: Reduccion de Carga Cognitiva en funny
 
 ## Contexto
 
-a-parallel nacio para resolver el dolor de manejar multiples agentes Claude Code en paralelo. Ya tiene Kanban, hilos con estado, review pane, y analytics. El objetivo ahora es **reducir la necesidad de que el usuario "este pendiente" activamente** de sus hilos.
+funny nacio para resolver el dolor de manejar multiples agentes Claude Code en paralelo. Ya tiene Kanban, hilos con estado, review pane, y analytics. El objetivo ahora es **reducir la necesidad de que el usuario "este pendiente" activamente** de sus hilos.
 
 ## Diagnostico: Puntos de Friccion
 

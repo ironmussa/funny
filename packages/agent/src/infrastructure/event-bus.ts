@@ -13,7 +13,7 @@ import { logger } from './logger.js';
 
 const DEFAULT_EVENTS_PATH = join(
   process.env.HOME ?? process.env.USERPROFILE ?? '.',
-  '.a-parallel',
+  '.funny',
   'pipeline-events',
 );
 

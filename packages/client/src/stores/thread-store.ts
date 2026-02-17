@@ -5,7 +5,7 @@
  */
 
 import { create } from 'zustand';
-import type { Thread, MessageRole, ThreadStatus, ThreadStage, WaitingReason, AgentModel, PermissionMode } from '@a-parallel/shared';
+import type { Thread, MessageRole, ThreadStatus, ThreadStage, WaitingReason, AgentModel, PermissionMode } from '@funny/shared';
 import { api } from '@/lib/api';
 import { useUIStore } from './ui-store';
 import { useProjectStore } from './project-store';
@@ -38,7 +38,7 @@ export interface AgentResultInfo {
 }
 
 export interface ThreadWithMessages extends Thread {
-  messages: (import('@a-parallel/shared').Message & { toolCalls?: any[] })[];
+  messages: (import('@funny/shared').Message & { toolCalls?: any[] })[];
   initInfo?: AgentInitInfo;
   resultInfo?: AgentResultInfo;
   waitingReason?: WaitingReason;
@@ -131,9 +131,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     if (result.isErr()) {
       if (getSelectGeneration() === gen) {
         clearWSBuffer(threadId);
-        // Keep selectedThreadId set so the UI knows we tried to load this thread
-        // ThreadView will show loading state or can handle the error
-        set({ activeThread: null });
+        set({ selectedThreadId: null, activeThread: null });
       }
       return;
     }

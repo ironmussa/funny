@@ -6,7 +6,7 @@ import { toast } from 'sonner';
 import { ArchiveRestore, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThreadListView } from '@/components/ThreadListView';
-import type { Thread } from '@a-parallel/shared';
+import type { Thread } from '@funny/shared';
 
 const PAGE_SIZE_OPTIONS = [100, 250, 500, 1000] as const;
 const DEFAULT_PAGE_SIZE = 100;

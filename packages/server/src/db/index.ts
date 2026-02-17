@@ -5,7 +5,7 @@ import { homedir } from 'os';
 import { mkdirSync } from 'fs';
 import * as schema from './schema.js';
 
-const dbDir = resolve(homedir(), '.a-parallel');
+const dbDir = resolve(homedir(), '.funny');
 mkdirSync(dbDir, { recursive: true });
 
 const dbPath = resolve(dbDir, 'data.db');

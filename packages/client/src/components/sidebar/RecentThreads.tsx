@@ -13,7 +13,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import type { Thread, ThreadStatus } from '@a-parallel/shared';
+import type { Thread, ThreadStatus } from '@funny/shared';
 import { useGitStatusStore } from '@/stores/git-status-store';
 
 const FINISHED_STATUSES: ThreadStatus[] = ['completed', 'failed', 'stopped', 'interrupted'];

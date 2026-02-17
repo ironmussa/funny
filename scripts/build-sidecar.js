@@ -30,7 +30,7 @@ function getTargetTriple() {
 const triple = process.env.TAURI_TARGET_TRIPLE || getTargetTriple();
 const ext = os.platform() === 'win32' ? '.exe' : '';
 const outDir = path.join(__dirname, '..', 'src-tauri', 'binaries');
-const outFile = path.join(outDir, `a-parallel-server-${triple}${ext}`);
+const outFile = path.join(outDir, `funny-server-${triple}${ext}`);
 
 fs.mkdirSync(outDir, { recursive: true });
 

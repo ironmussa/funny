@@ -17,7 +17,7 @@
       "identifier": "shell:allow-spawn",
       "allow": [
         {
-          "name": "a-parallel-server",
+          "name": "funny-server",
           "sidecar": true
         }
       ]

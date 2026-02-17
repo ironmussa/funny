@@ -7,7 +7,7 @@ import { homedir } from 'os';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { randomBytes } from 'crypto';
 
-const AUTH_DIR = resolve(homedir(), '.a-parallel');
+const AUTH_DIR = resolve(homedir(), '.funny');
 const SECRET_PATH = resolve(AUTH_DIR, 'auth-secret');
 
 function getOrCreateSecret(): string {

@@ -22,7 +22,7 @@ import type { SandboxState, SandboxManagerOptions } from './types.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const DOCKERFILE_PATH = resolve(__dirname, 'Dockerfile.sandbox');
-const DEFAULT_IMAGE_NAME = 'a-parallel-sandbox';
+const DEFAULT_IMAGE_NAME = 'funny-sandbox';
 const CONTAINER_WORKSPACE = '/workspace';
 const CONTAINER_SDK_PATH = '/opt/claude-sdk';
 const CONTAINER_SOURCE_MOUNT = '/mnt/source';

@@ -1,7 +1,7 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { useAppStore } from '@/stores/app-store';
 import { okAsync, errAsync } from 'neverthrow';
-import type { DomainError } from '@a-parallel/shared/errors';
+import type { DomainError } from '@funny/shared/errors';
 
 // Mock the api module
 vi.mock('@/lib/api', () => ({

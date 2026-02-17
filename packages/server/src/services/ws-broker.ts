@@ -1,5 +1,5 @@
 import type { ServerWebSocket } from 'bun';
-import type { WSEvent } from '@a-parallel/shared';
+import type { WSEvent } from '@funny/shared';
 
 class WSBroker {
   private clients = new Map<ServerWebSocket<unknown>, string>(); // ws → userId

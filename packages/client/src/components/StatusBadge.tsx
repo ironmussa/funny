@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 import { useTranslation } from 'react-i18next';
 import { getStatusLabels } from '@/lib/thread-utils';
-import type { ThreadStatus } from '@a-parallel/shared';
+import type { ThreadStatus } from '@funny/shared';
 
 const badgeStyles: Record<ThreadStatus, string> = {
   idle: 'bg-status-neutral/10 text-status-neutral/80',

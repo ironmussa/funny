@@ -14,7 +14,7 @@ import {
   gitSync,
   gitSafeSync,
   executeSync,
-} from '@a-parallel/core/git';
+} from '@funny/core/git';
 
 // ── Pure function tests ──────────────────────────────────────────
 

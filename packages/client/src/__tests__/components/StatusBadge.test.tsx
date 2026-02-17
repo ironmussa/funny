@@ -2,7 +2,7 @@ import { describe, test, expect, vi } from 'vitest';
 import { screen } from '@testing-library/react';
 import { renderWithProviders } from '../helpers/render';
 import { StatusBadge } from '@/components/StatusBadge';
-import type { ThreadStatus } from '@a-parallel/shared';
+import type { ThreadStatus } from '@funny/shared';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({

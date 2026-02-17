@@ -6,7 +6,7 @@ Migrate `packages/server` from TypeScript/Hono/Bun to Rust/Axum/Tokio by forking
 
 ## Architecture
 
-Fork temp_vibe_kanban's Rust workspace structure, adapted for a-parallel's domain:
+Fork temp_vibe_kanban's Rust workspace structure, adapted for funny's domain:
 
 ```
 packages/server-rs/
@@ -44,14 +44,14 @@ packages/server-rs/
   - `automations`, `automation_runs`, `user_profiles`, `stage_history`, `mcp_oauth_tokens`
 - Write SQLx migrations (proper `.sql` files, not ALTER TABLE hacks)
 - Implement model structs with `FromRow` + query methods (`find_by_id`, `create`, `list`, etc.)
-- Use `~/.a-parallel/data.db` (same path as current) for backwards compatibility
+- Use `~/.funny/data.db` (same path as current) for backwards compatibility
 - Create/Update request types per model
 
 ### 1.4 — Utils Crate (`crates/utils`)
 - `ws_broker.rs` — WebSocket pub/sub (port from `ws-broker.ts`)
   - `HashMap<WsId, (SplitSink, UserId)>` with broadcast + per-user emit
 - `process.rs` — Async process execution helpers (tokio::process::Command)
-- `auth.rs` — Token generation/validation, file-based auth token at `~/.a-parallel/auth-token`
+- `auth.rs` — Token generation/validation, file-based auth token at `~/.funny/auth-token`
 - `path.rs` — Path validation, tilde expansion
 - `claude_binary.rs` — Check Claude CLI availability in PATH
 
@@ -177,7 +177,7 @@ packages/server-rs/
 
 ### 6.2 — Database Migration
 - New SQLx migrations produce identical schema to current Drizzle setup
-- Existing `~/.a-parallel/data.db` works without modification
+- Existing `~/.funny/data.db` works without modification
 - Add migration path for any schema differences
 
 ### 6.3 — Testing Strategy

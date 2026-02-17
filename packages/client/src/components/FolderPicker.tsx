@@ -89,12 +89,12 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
       const data = rootsResult.value;
       setRoots(data.roots || []);
       setHome(data.home || '');
-      const lastPath = localStorage.getItem('a-parallel:last-browse-path');
+      const lastPath = localStorage.getItem('funny:last-browse-path');
       if (lastPath && lastPath !== data.home) {
         // Try saved path first; fall back to home on error
         const listResult = await api.browseList(lastPath);
         if (listResult.isErr() || listResult.value.error) {
-          localStorage.removeItem('a-parallel:last-browse-path');
+          localStorage.removeItem('funny:last-browse-path');
           loadDir(data.home);
         } else {
           setCurrentPath(listResult.value.path);
@@ -148,7 +148,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
       return;
     }
     pushHistory(data.path);
-    localStorage.setItem('a-parallel:last-browse-path', data.path);
+    localStorage.setItem('funny:last-browse-path', data.path);
     setLoading(false);
   };
 

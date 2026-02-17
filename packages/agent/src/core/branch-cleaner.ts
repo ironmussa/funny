@@ -7,7 +7,7 @@
  *   - pipeline.failed → keep if keep_on_failure=true, else delete
  */
 
-import { execute } from '@a-parallel/core/git';
+import { execute } from '@funny/core/git';
 import type { EventBus } from '../infrastructure/event-bus.js';
 import type { PipelineEvent, PipelineEventType } from './types.js';
 import { logger } from '../infrastructure/logger.js';

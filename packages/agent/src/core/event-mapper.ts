@@ -10,7 +10,7 @@
  * manifest writer, idempotency release, etc.).
  */
 
-import type { CLIMessage } from '@a-parallel/core/agents';
+import type { CLIMessage } from '@funny/core/agents';
 import type { PipelineEvent, PipelineEventType } from './types.js';
 
 // ── Correction detection patterns ────────────────────────────────

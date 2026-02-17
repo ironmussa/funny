@@ -41,11 +41,11 @@ describe('worktree operations', () => {
       }
     });
 
-    test('creates worktree in .a-parallel-worktrees directory', async () => {
+    test('creates worktree in .funny-worktrees directory', async () => {
       const result = await createWorktree(repoPath, 'feature-2');
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
-        expect(result.value).toContain('.a-parallel-worktrees');
+        expect(result.value).toContain('.funny-worktrees');
       }
     });
 

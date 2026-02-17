@@ -39,4 +39,4 @@ tauri.conf.json
 .DS_Store
 *.db
 *.db-journal
-.a-parallel-worktrees
+.funny-worktrees

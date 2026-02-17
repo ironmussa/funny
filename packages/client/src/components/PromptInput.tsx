@@ -19,6 +19,7 @@ import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
 import { useSettingsStore } from '@/stores/settings-store';
+import { useDraftStore } from '@/stores/draft-store';
 import { ImageLightbox } from './ImageLightbox';
 import type { ImageAttachment, Skill } from '@funny/shared';
 
@@ -387,6 +388,34 @@ export function PromptInput({
   const selectedProjectId = useAppStore(s => s.selectedProjectId);
   const selectedThreadId = useAppStore(s => s.selectedThreadId);
 
+  // Draft persistence across thread switches
+  const { setPromptDraft, clearPromptDraft } = useDraftStore();
+  const prevThreadIdRef = useRef<string | null | undefined>(selectedThreadId);
+
+  // Save draft when switching away from a thread, restore when switching to a new one
+  useEffect(() => {
+    const prevId = prevThreadIdRef.current;
+    prevThreadIdRef.current = selectedThreadId;
+
+    // Save draft for the thread we're leaving
+    if (prevId && prevId !== selectedThreadId) {
+      const currentPrompt = textareaRef.current?.value ?? prompt;
+      setPromptDraft(prevId, currentPrompt, images, selectedFiles);
+    }
+
+    // Restore draft for the thread we're entering
+    if (selectedThreadId && selectedThreadId !== prevId) {
+      const draft = useDraftStore.getState().drafts[selectedThreadId];
+      setPrompt(draft?.prompt ?? '');
+      setImages(draft?.images ?? []);
+      setSelectedFiles(draft?.selectedFiles ?? []);
+    } else if (!selectedThreadId) {
+      setPrompt('');
+      setImages([]);
+      setSelectedFiles([]);
+    }
+  }, [selectedThreadId]);
+
   // Derive project path and manage cwd override
   const projectPath = useMemo(
     () => selectedProjectId ? projects.find((p) => p.id === selectedProjectId)?.path ?? '' : '',
@@ -607,6 +636,7 @@ export function PromptInput({
     setPrompt('');
     setImages([]);
     setSelectedFiles([]);
+    if (selectedThreadId) clearPromptDraft(selectedThreadId);
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

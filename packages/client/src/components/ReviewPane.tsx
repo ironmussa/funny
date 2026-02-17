@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo, memo, Suspense } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, memo, Suspense } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useTranslation } from 'react-i18next';
 import { useProjectStore } from '@/stores/project-store';
@@ -12,6 +12,7 @@ import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
 import { useGitStatusStore } from '@/stores/git-status-store';
+import { useDraftStore } from '@/stores/draft-store';
 import {
   Dialog,
   DialogContent,
@@ -156,8 +157,37 @@ export function ReviewPane() {
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const [fileSearch, setFileSearch] = useState('');
   const [checkedFiles, setCheckedFiles] = useState<Set<string>>(new Set());
-  const [commitTitle, setCommitTitle] = useState('');
-  const [commitBody, setCommitBody] = useState('');
+  const { setCommitDraft, clearCommitDraft } = useDraftStore();
+  const [commitTitle, setCommitTitleRaw] = useState('');
+  const [commitBody, setCommitBodyRaw] = useState('');
+
+  // Wrap setters to also persist to draft store
+  const setCommitTitle = useCallback((v: string | ((prev: string) => string)) => {
+    setCommitTitleRaw(prev => {
+      const next = typeof v === 'function' ? v(prev) : v;
+      if (effectiveThreadId) {
+        // Read current body from state for sync
+        setCommitBodyRaw(body => {
+          setCommitDraft(effectiveThreadId, next, body);
+          return body;
+        });
+      }
+      return next;
+    });
+  }, [effectiveThreadId, setCommitDraft]);
+
+  const setCommitBody = useCallback((v: string | ((prev: string) => string)) => {
+    setCommitBodyRaw(prev => {
+      const next = typeof v === 'function' ? v(prev) : v;
+      if (effectiveThreadId) {
+        setCommitTitleRaw(title => {
+          setCommitDraft(effectiveThreadId, title, next);
+          return title;
+        });
+      }
+      return next;
+    });
+  }, [effectiveThreadId, setCommitDraft]);
   const [generatingMsg, setGeneratingMsg] = useState(false);
   const [selectedAction, setSelectedAction] = useState<'commit' | 'commit-push' | 'commit-pr' | 'commit-merge'>('commit');
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
@@ -234,14 +264,19 @@ export function ReviewPane() {
   }, [expandedFile]);
 
   // Reset state and refresh only when the git working directory changes.
+  // Restore commit draft for the new thread if available.
   useEffect(() => {
     setSummaries([]);
     setDiffCache(new Map());
     setSelectedFile(null);
     setCheckedFiles(new Set());
-    setCommitTitle('');
-    setCommitBody('');
     setFileSearch('');
+
+    // Restore commit title/body from draft store
+    const draft = effectiveThreadId ? useDraftStore.getState().drafts[effectiveThreadId] : undefined;
+    setCommitTitleRaw(draft?.commitTitle ?? '');
+    setCommitBodyRaw(draft?.commitBody ?? '');
+
     refresh();
   }, [gitContextKey]);
 
@@ -390,8 +425,9 @@ export function ReviewPane() {
       toast.success(t('review.commitAndMergeSuccess', { target }));
     }
 
-    setCommitTitle('');
-    setCommitBody('');
+    setCommitTitleRaw('');
+    setCommitBodyRaw('');
+    if (effectiveThreadId) clearCommitDraft(effectiveThreadId);
     setActionInProgress(null);
     await refresh();
   };

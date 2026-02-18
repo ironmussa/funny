@@ -124,7 +124,7 @@
     "mergeFailed": "Merge failed: {{message}}",
     "mergeConflict": "Rebase conflicts detected between your branch and {{target}}",
     "askAgentResolve": "Ask Agent to Resolve",
-    "openInVSCode": "Open in VS Code",
+    "openInEditor": "Open in {{editor}}",
     "agentResolvePrompt": "The rebase onto {{target}} failed due to conflicts. Please run `git rebase {{target}}`, resolve all conflicts, and then run `git rebase --continue`. Make sure all conflicts are fully resolved before continuing.",
     "agentResolveSent": "Asked the agent to resolve rebase conflicts",
     "mergeTooltip": "Merge {{branch}} into {{target}} locally on your machine",
@@ -294,7 +294,7 @@
     "input": "Input",
     "output": "Output",
     "waitingForOutput": "Waiting for output...",
-    "openInVSCode": "Open in VS Code: {{path}}",
+    "openInEditor": "Open in {{editor}}: {{path}}",
     "other": "Other",
     "otherPlaceholder": "Write your answer...",
     "next": "Next"

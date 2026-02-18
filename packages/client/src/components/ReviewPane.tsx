@@ -10,6 +10,8 @@ import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { ReactDiffViewer, DIFF_VIEWER_STYLES } from './tool-cards/utils';
+import { toEditorUri, openFileInEditor, getEditorLabel } from '@/lib/editor-utils';
+import { editorLabels } from '@/stores/settings-store';
 import { Button } from '@/components/ui/button';
 import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
 import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
@@ -60,6 +62,7 @@ import {
   FolderX,
   Copy,
   ClipboardCopy,
+  ExternalLink,
 } from 'lucide-react';
 import type { FileDiffSummary } from '@funny/shared';
 
@@ -150,6 +153,15 @@ export function ReviewPane() {
     return s.activeThread?.projectId ?? selectedProjectId ?? '';
   });
 
+  // The base directory path for constructing absolute file paths (worktree path or project path)
+  const basePath = useThreadStore(s => {
+    const wt = s.activeThread?.worktreePath;
+    if (wt) return wt;
+    const pid = s.activeThread?.projectId ?? selectedProjectId;
+    if (!pid) return '';
+    return useProjectStore.getState().projects.find(p => p.id === pid)?.path ?? '';
+  });
+
   const [summaries, setSummaries] = useState<FileDiffSummary[]>([]);
   const [diffCache, setDiffCache] = useState<Map<string, string>>(new Map());
   const [loadingDiff, setLoadingDiff] = useState<string | null>(null);
@@ -235,9 +247,10 @@ export function ReviewPane() {
           },
         },
         cancel: worktreePath ? {
-          label: t('review.openInVSCode'),
+          label: t('review.openInEditor', { editor: editorLabels[useSettingsStore.getState().defaultEditor] }),
           onClick: () => {
-            api.openInEditor(worktreePath, 'vscode');
+            const editor = useSettingsStore.getState().defaultEditor;
+            api.openInEditor(worktreePath, editor);
           },
         } : undefined,
       }
@@ -744,6 +757,16 @@ export function ReviewPane() {
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="min-w-[220px]">
+                          <DropdownMenuItem
+                            onClick={() => {
+                              const fullPath = basePath ? `${basePath}/${f.path}` : f.path;
+                              openFileInEditor(fullPath);
+                            }}
+                          >
+                            <ExternalLink />
+                            {t('review.openInEditor', { editor: getEditorLabel() })}
+                          </DropdownMenuItem>
+                          <DropdownMenuSeparator />
                           <DropdownMenuItem
                             onClick={() => handleRevertFile(f.path)}
                             className="text-destructive focus:text-destructive"

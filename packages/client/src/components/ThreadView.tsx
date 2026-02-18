@@ -43,24 +43,32 @@ function D4CAnimation() {
 // Regex to match file paths like /foo/bar.ts, C:\foo\bar.ts, or file_path:line_number patterns
 const FILE_PATH_RE = /(?:[A-Za-z]:[\\\/]|\/)[^\s:*?"<>|,()]+(?::\d+)?/g;
 
-function toVscodeUri(filePath: string): string {
-  const match = filePath.match(/^(.+):(\d+)$/);
-  const path = match ? match[1] : filePath;
-  const line = match ? match[2] : null;
-  const normalized = path.replace(/\\/g, '/');
-  const withLeadingSlash = normalized.startsWith('/') ? normalized : '/' + normalized;
-  return `vscode://file${withLeadingSlash}${line ? ':' + line : ''}`;
-}
+import { toEditorUriWithLine, openFileInEditor, getEditorLabel } from '@/lib/editor-utils';
+import { editorLabels } from '@/stores/settings-store';
 
 const markdownComponents = {
   a: ({ href, children }: any) => {
     const text = String(children);
     const fileMatch = text.match(FILE_PATH_RE);
     if (fileMatch) {
+      const editor = useSettingsStore.getState().defaultEditor;
+      const uri = toEditorUriWithLine(fileMatch[0], editor);
+      const label = editorLabels[editor];
+      if (uri) {
+        return (
+          <a href={uri} className="text-primary hover:underline" title={`Open in ${label}: ${text}`}>
+            {children}
+          </a>
+        );
+      }
       return (
-        <a href={toVscodeUri(fileMatch[0])} className="text-primary hover:underline" title={`Open in VS Code: ${text}`}>
+        <button
+          onClick={() => openFileInEditor(fileMatch[0], editor)}
+          className="text-primary hover:underline cursor-pointer inline"
+          title={`Open in ${label}: ${text}`}
+        >
           {children}
-        </a>
+        </button>
       );
     }
     return <a href={href} className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">{children}</a>;

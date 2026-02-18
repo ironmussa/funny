@@ -124,7 +124,7 @@
     "mergeFailed": "Merge falhou: {{message}}",
     "mergeConflict": "Conflitos de rebase detectados entre sua branch e {{target}}",
     "askAgentResolve": "Pedir ao Agente para Resolver",
-    "openInVSCode": "Abrir no VS Code",
+    "openInEditor": "Abrir no {{editor}}",
     "agentResolvePrompt": "O rebase sobre {{target}} falhou devido a conflitos. Por favor execute `git rebase {{target}}`, resolva todos os conflitos, e então execute `git rebase --continue`. Certifique-se de que todos os conflitos estejam completamente resolvidos antes de continuar.",
     "agentResolveSent": "Pediu ao agente para resolver os conflitos de rebase",
     "mergeTooltip": "Mesclar {{branch}} em {{target}} localmente na sua máquina",
@@ -294,7 +294,7 @@
     "input": "Entrada",
     "output": "Saída",
     "waitingForOutput": "Aguardando saída...",
-    "openInVSCode": "Abrir no VS Code: {{path}}",
+    "openInEditor": "Abrir no {{editor}}: {{path}}",
     "other": "Outra",
     "otherPlaceholder": "Escreva sua resposta...",
     "next": "Próximo"

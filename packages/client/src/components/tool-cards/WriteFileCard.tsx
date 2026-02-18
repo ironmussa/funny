@@ -2,11 +2,13 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { toVscodeUri, getFileExtension, getFileName } from './utils';
+import { toEditorUri, openFileInEditor, getEditorLabel, getFileExtension, getFileName } from './utils';
+import { useSettingsStore } from '@/stores/settings-store';
 
 export function WriteFileCard({ parsed, hideLabel }: { parsed: Record<string, unknown>; hideLabel?: boolean }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
+  const defaultEditor = useSettingsStore(s => s.defaultEditor);
   const filePath = parsed.file_path as string | undefined;
   const content = parsed.content as string | undefined;
   const ext = filePath ? getFileExtension(filePath) : '';
@@ -27,14 +29,28 @@ export function WriteFileCard({ parsed, hideLabel }: { parsed: Record<string, un
         {!hideLabel && <FileText className="h-3 w-3 flex-shrink-0 text-muted-foreground" />}
         {!hideLabel && <span className="font-medium font-mono text-foreground flex-shrink-0">{t('tools.writeFile')}</span>}
         {filePath && (
-          <a
-            href={toVscodeUri(filePath)}
-            onClick={(e) => e.stopPropagation()}
-            className="text-muted-foreground truncate font-mono text-xs min-w-0 hover:text-primary hover:underline"
-            title={t('tools.openInVSCode', { path: filePath })}
-          >
-            {filePath}
-          </a>
+          (() => {
+            const editorUri = toEditorUri(filePath, defaultEditor);
+            const editorTitle = t('tools.openInEditor', { editor: getEditorLabel(defaultEditor), path: filePath });
+            return editorUri ? (
+              <a
+                href={editorUri}
+                onClick={(e) => e.stopPropagation()}
+                className="text-muted-foreground truncate font-mono text-xs min-w-0 hover:text-primary hover:underline"
+                title={editorTitle}
+              >
+                {filePath}
+              </a>
+            ) : (
+              <button
+                onClick={(e) => { e.stopPropagation(); openFileInEditor(filePath, defaultEditor); }}
+                className="text-muted-foreground truncate font-mono text-xs min-w-0 hover:text-primary hover:underline text-left"
+                title={editorTitle}
+              >
+                {filePath}
+              </button>
+            );
+          })()
         )}
       </button>
       {expanded && content != null && (

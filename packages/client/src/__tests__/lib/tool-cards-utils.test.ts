@@ -6,11 +6,11 @@ import {
   getQuestions,
   getSummary,
   getToolLabel,
-  toVscodeUri,
   extToShikiLang,
   getFileExtension,
   getFileName,
 } from '@/components/tool-cards/utils';
+import { toEditorUri, toEditorUriWithLine } from '@/lib/editor-utils';
 
 const t = (key: string) => key;
 
@@ -170,17 +170,51 @@ describe('getToolLabel', () => {
   });
 });
 
-describe('toVscodeUri', () => {
-  test('creates vscode URI from Unix path', () => {
-    expect(toVscodeUri('/home/user/file.ts')).toBe('vscode://file/home/user/file.ts');
+describe('toEditorUri', () => {
+  test('creates URI for vscode', () => {
+    expect(toEditorUri('/home/user/file.ts', 'vscode')).toBe('vscode://file/home/user/file.ts');
   });
 
-  test('creates vscode URI from Windows path', () => {
-    expect(toVscodeUri('C:\\Users\\test\\file.ts')).toBe('vscode://file/C:/Users/test/file.ts');
+  test('creates URI for cursor', () => {
+    expect(toEditorUri('/home/user/file.ts', 'cursor')).toBe('cursor://file/home/user/file.ts');
+  });
+
+  test('creates URI for windsurf', () => {
+    expect(toEditorUri('/home/user/file.ts', 'windsurf')).toBe('windsurf://file/home/user/file.ts');
+  });
+
+  test('creates URI for zed', () => {
+    expect(toEditorUri('/home/user/file.ts', 'zed')).toBe('zed://file/home/user/file.ts');
+  });
+
+  test('returns null for sublime (no URI scheme)', () => {
+    expect(toEditorUri('/home/user/file.ts', 'sublime')).toBeNull();
+  });
+
+  test('returns null for vim (no URI scheme)', () => {
+    expect(toEditorUri('/home/user/file.ts', 'vim')).toBeNull();
+  });
+
+  test('normalizes Windows backslashes', () => {
+    expect(toEditorUri('C:\\Users\\test\\file.ts', 'vscode')).toBe('vscode://file/C:/Users/test/file.ts');
   });
 
   test('adds leading slash to relative paths', () => {
-    expect(toVscodeUri('src/file.ts')).toBe('vscode://file/src/file.ts');
+    expect(toEditorUri('src/file.ts', 'cursor')).toBe('cursor://file/src/file.ts');
+  });
+});
+
+describe('toEditorUriWithLine', () => {
+  test('appends line number to URI', () => {
+    expect(toEditorUriWithLine('/home/user/file.ts:42', 'vscode')).toBe('vscode://file/home/user/file.ts:42');
+  });
+
+  test('works without line number', () => {
+    expect(toEditorUriWithLine('/home/user/file.ts', 'cursor')).toBe('cursor://file/home/user/file.ts');
+  });
+
+  test('returns null for editors without URI scheme', () => {
+    expect(toEditorUriWithLine('/home/user/file.ts:42', 'vim')).toBeNull();
   });
 });
 

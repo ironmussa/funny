@@ -161,11 +161,8 @@ export function getToolLabel(name: string, t: (key: string) => string): string {
   return labels[name] ?? name;
 }
 
-export function toVscodeUri(filePath: string): string {
-  const normalized = filePath.replace(/\\/g, '/');
-  const withLeadingSlash = normalized.startsWith('/') ? normalized : '/' + normalized;
-  return `vscode://file${withLeadingSlash}`;
-}
+// Re-export editor utilities from the central module
+export { toEditorUri, toEditorUriWithLine, hasEditorUri, openFileInEditor, getEditorLabel } from '@/lib/editor-utils';
 
 const EXT_TO_SHIKI_LANG: Record<string, string> = {
   ts: 'typescript',

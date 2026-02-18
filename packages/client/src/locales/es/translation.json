@@ -434,7 +434,9 @@
     "unmergedChanges": "Cambios sin fusionar",
     "unmergedChangesDesc": "El hilo \"{{title}}\" tiene cambios que aún no se han fusionado con la rama base. ¿Estás seguro de que quieres marcarlo como Completado?",
     "unpushedChanges": "Commits sin push",
-    "unpushedChangesDesc": "El hilo \"{{title}}\" tiene commits que aún no se han enviado a origin. ¿Estás seguro de que quieres marcarlo como Completado?"
+    "unpushedChangesDesc": "El hilo \"{{title}}\" tiene commits que aún no se han enviado a origin. ¿Estás seguro de que quieres marcarlo como Completado?",
+    "dirtyChanges": "Cambios sin commitear",
+    "dirtyChangesDesc": "El hilo \"{{title}}\" tiene cambios sin commitear. ¿Estás seguro de que quieres marcarlo como Completado?"
   },
   "toast": {
     "threadArchived": "Hilo archivado exitosamente",

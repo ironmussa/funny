@@ -73,15 +73,6 @@ function KanbanCard({ thread, projectInfo, onDelete, search, ghost, contentSnipp
     });
   }, [thread.id, thread.stage, thread.archived, thread.projectId]);
 
-  // Scroll into view and highlight when returning from thread detail
-  useEffect(() => {
-    if (!highlighted || !ref.current) return;
-    // Small delay to ensure layout is settled
-    const timer = setTimeout(() => {
-      ref.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
-    return () => clearTimeout(timer);
-  }, [highlighted]);
 
   const StatusIcon = statusConfig[thread.status].icon;
   const statusClassName = statusConfig[thread.status].className;
@@ -592,9 +583,9 @@ export function KanbanView({ threads, projectId, search, contentSnippets, highli
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>{t(mergeWarning?.gitState === 'unpushed' ? 'dialog.unpushedChanges' : 'dialog.unmergedChanges')}</DialogTitle>
+            <DialogTitle>{t(`dialog.${mergeWarning?.gitState === 'unpushed' ? 'unpushedChanges' : mergeWarning?.gitState === 'dirty' ? 'dirtyChanges' : 'unmergedChanges'}`)}</DialogTitle>
             <DialogDescription className="break-all">
-              {t(mergeWarning?.gitState === 'unpushed' ? 'dialog.unpushedChangesDesc' : 'dialog.unmergedChangesDesc', { title: mergeWarning?.title && mergeWarning.title.length > 80 ? mergeWarning.title.slice(0, 80) + '…' : mergeWarning?.title })}
+              {t(`dialog.${mergeWarning?.gitState === 'unpushed' ? 'unpushedChangesDesc' : mergeWarning?.gitState === 'dirty' ? 'dirtyChangesDesc' : 'unmergedChangesDesc'}`, { title: mergeWarning?.title && mergeWarning.title.length > 80 ? mergeWarning.title.slice(0, 80) + '…' : mergeWarning?.title })}
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

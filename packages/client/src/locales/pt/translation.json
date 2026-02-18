@@ -432,7 +432,9 @@
     "unmergedChanges": "Alterações não mescladas",
     "unmergedChangesDesc": "A thread \"{{title}}\" possui alterações que ainda não foram mescladas na branch base. Tem certeza de que deseja marcá-la como Concluída?",
     "unpushedChanges": "Commits não enviados",
-    "unpushedChangesDesc": "A thread \"{{title}}\" possui commits que ainda não foram enviados para origin. Tem certeza de que deseja marcá-la como Concluída?"
+    "unpushedChangesDesc": "A thread \"{{title}}\" possui commits que ainda não foram enviados para origin. Tem certeza de que deseja marcá-la como Concluída?",
+    "dirtyChanges": "Alterações não commitadas",
+    "dirtyChangesDesc": "A thread \"{{title}}\" possui alterações não commitadas. Tem certeza de que deseja marcá-la como Concluída?"
   },
   "toast": {
     "threadArchived": "Thread arquivada com sucesso",

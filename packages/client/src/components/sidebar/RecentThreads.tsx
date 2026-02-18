@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useThreadStore } from '@/stores/thread-store';
 import { useProjectStore } from '@/stores/project-store';
+import { useUIStore } from '@/stores/ui-store';
 import { cn } from '@/lib/utils';
 import { timeAgo } from '@/lib/thread-utils';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
@@ -36,9 +37,10 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
   const selectedThreadId = useThreadStore(s => s.selectedThreadId);
   const projects = useProjectStore(s => s.projects);
   const gitStatusByThread = useGitStatusStore((s) => s.statusByThread);
+  const showGlobalSearch = useUIStore(s => s.showGlobalSearch);
   const [isExpanded, setIsExpanded] = useState(true);
 
-  const recentThreads = useMemo(() => {
+  const { recentThreads, totalCount } = useMemo(() => {
     const result: FinishedThread[] = [];
     const projectMap = new Map(projects.map(p => [p.id, { name: p.name, path: p.path }]));
 
@@ -61,7 +63,7 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
       return new Date(dateB).getTime() - new Date(dateA).getTime();
     });
 
-    return result.slice(0, 5);
+    return { recentThreads: result.slice(0, 5), totalCount: result.length };
   }, [threadsByProject, projects]);
 
   // Eagerly fetch git status for visible worktree threads that don't have it yet
@@ -114,6 +116,17 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
               onDelete={() => onDeleteThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch && thread.provider !== 'external')}
             />
           ))}
+          {totalCount > 5 && (
+            <button
+              onClick={() => {
+                showGlobalSearch();
+                navigate('/search');
+              }}
+              className="text-sm text-muted-foreground hover:text-foreground px-2 py-1.5 transition-colors"
+            >
+              {t('sidebar.viewAll')}
+            </button>
+          )}
         </div>
       </CollapsibleContent>
     </Collapsible>

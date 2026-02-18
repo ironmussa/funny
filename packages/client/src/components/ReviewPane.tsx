@@ -198,9 +198,13 @@ export function ReviewPane() {
   const baseBranch = useThreadStore(s => s.activeThread?.baseBranch);
   const gitStatus = useGitStatusStore(s => effectiveThreadId ? s.statusByThread[effectiveThreadId] : undefined);
   const [mergeInProgress, setMergeInProgress] = useState(false);
+  const [pushInProgress, setPushInProgress] = useState(false);
 
   // Show standalone merge button when worktree has no dirty files but has unmerged commits
   const showMergeOnly = isWorktree && summaries.length === 0 && !loading && gitStatus && !gitStatus.isMergedIntoBase;
+
+  // Show standalone push button when no dirty files but there are unpushed commits
+  const showPushOnly = summaries.length === 0 && !loading && gitStatus && gitStatus.unpushedCommitCount > 0;
 
   const showMergeConflictToast = useCallback((errorMessage: string, threadId: string) => {
     const target = baseBranch || 'main';
@@ -493,6 +497,19 @@ export function ReviewPane() {
       toast.success(t('review.ignoreSuccess'));
       await refresh();
     }
+  };
+
+  const handlePushOnly = async () => {
+    if (!effectiveThreadId || pushInProgress) return;
+    setPushInProgress(true);
+    const pushResult = await api.push(effectiveThreadId);
+    if (pushResult.isErr()) {
+      toast.error(t('review.pushFailed', { message: pushResult.error.message }));
+    } else {
+      toast.success(t('review.pushedSuccess'));
+    }
+    setPushInProgress(false);
+    useGitStatusStore.getState().fetchForThread(effectiveThreadId);
   };
 
   const handleMergeOnly = async () => {
@@ -874,6 +891,25 @@ export function ReviewPane() {
               >
                 {actionInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
                 {t('review.continue', 'Continue')}
+              </Button>
+            </div>
+          )}
+
+          {/* Standalone push button — shown when no dirty files but there are unpushed commits */}
+          {showPushOnly && (
+            <div className="border-t border-sidebar-border p-3 flex-shrink-0 space-y-2">
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <Upload className="h-3.5 w-3.5" />
+                <span>{t('review.readyToPush', { count: gitStatus!.unpushedCommitCount, defaultValue: `${gitStatus!.unpushedCommitCount} commit(s) ready to push` })}</span>
+              </div>
+              <Button
+                className="w-full"
+                size="sm"
+                onClick={handlePushOnly}
+                disabled={pushInProgress}
+              >
+                {pushInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />}
+                {t('review.pushToOrigin', 'Push to origin')}
               </Button>
             </div>
           )}

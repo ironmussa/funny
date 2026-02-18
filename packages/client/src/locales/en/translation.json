@@ -130,6 +130,8 @@
     "mergeTooltip": "Merge {{branch}} into {{target}} locally on your machine",
     "mergeAndCleanupTooltip": "Merge into {{target}}, push to origin, and remove the worktree",
     "readyToMerge": "Ready to merge into {{target}}",
+    "readyToPush": "{{count}} commit(s) ready to push",
+    "pushToOrigin": "Push to origin",
     "mergeIntoBranch": "Merge into {{target}}",
     "generateCommitMsg": "Generate commit message with AI",
     "generatingCommitMsg": "Generating commit message...",

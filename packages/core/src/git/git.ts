@@ -171,11 +171,37 @@ export function initRepo(cwd: string): ResultAsync<void, DomainError> {
 }
 
 /**
- * Stage files for commit
+ * Stage files for commit.
+ * Filters out gitignored files before running `git add` to prevent
+ * the entire operation from failing when ignored files are included.
  */
 export function stageFiles(cwd: string, paths: string[]): ResultAsync<void, DomainError> {
   if (paths.length === 0) return new ResultAsync(Promise.resolve(ok(undefined)));
-  return git(['add', ...paths], cwd).map(() => undefined);
+
+  return ResultAsync.fromPromise(
+    (async () => {
+      // Ask git which of the requested paths are ignored
+      const checkResult = await execute(
+        'git', ['check-ignore', '--stdin'],
+        { cwd, reject: false, stdin: paths.join('\n') }
+      );
+      const ignoredSet = new Set(
+        checkResult.exitCode === 0 && checkResult.stdout.trim()
+          ? checkResult.stdout.trim().split('\n').map(p => p.trim())
+          : []
+      );
+
+      const filteredPaths = paths.filter(p => !ignoredSet.has(p));
+      if (filteredPaths.length === 0) return;
+
+      const addResult = await git(['add', ...filteredPaths], cwd);
+      if (addResult.isErr()) throw addResult.error;
+    })(),
+    (error) => {
+      if ((error as DomainError).type) return error as DomainError;
+      return internal(String(error));
+    }
+  );
 }
 
 /**

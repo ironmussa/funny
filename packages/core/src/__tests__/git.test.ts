@@ -335,8 +335,8 @@ describe('git operations', () => {
       ).toBe('clean');
     });
 
-    test('priority: merged > dirty > unpushed > pushed > clean', () => {
-      // merged takes priority over dirty
+    test('priority: dirty > unpushed > merged > pushed > clean', () => {
+      // dirty takes priority over merged
       expect(
         deriveGitSyncState({
           dirtyFileCount: 5,
@@ -346,7 +346,19 @@ describe('git operations', () => {
           linesAdded: 10,
           linesDeleted: 5,
         })
-      ).toBe('merged');
+      ).toBe('dirty');
+
+      // unpushed takes priority over merged
+      expect(
+        deriveGitSyncState({
+          dirtyFileCount: 0,
+          unpushedCommitCount: 2,
+          hasRemoteBranch: true,
+          isMergedIntoBase: true,
+          linesAdded: 0,
+          linesDeleted: 0,
+        })
+      ).toBe('unpushed');
 
       // dirty takes priority over unpushed
       expect(

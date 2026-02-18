@@ -26,6 +26,7 @@
   "scripts": {
     "start": "bun ./bin/funny.js",
     "dev": "concurrently --kill-others \"bun run --cwd packages/server dev\" \"bun run --cwd packages/client dev\"",
+    "dev:test": "concurrently --kill-others \"bun run --cwd packages/server dev:test\" \"bun run --cwd packages/client dev:test\"",
     "dev:server": "bun run --cwd packages/server dev",
     "dev:client": "bun run --cwd packages/client dev",
     "dev:agent": "bun run --cwd packages/agent dev",

@@ -369,7 +369,15 @@
     "stop": "Stop",
     "run": "Run",
     "edit": "Edit",
-    "delete": "Delete"
+    "delete": "Delete",
+    "commandAdded": "Command added successfully",
+    "commandUpdated": "Command updated successfully",
+    "commandDeleted": "Command deleted successfully",
+    "labelRequired": "Label is required",
+    "commandRequired": "Command is required",
+    "commandAddError": "Failed to add command",
+    "commandUpdateError": "Failed to update command",
+    "commandDeleteError": "Failed to delete command"
   },
   "preview": {
     "open": "Open Preview",

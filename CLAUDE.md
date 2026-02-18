@@ -183,6 +183,23 @@ bunx tsc --noEmit
 - WebSocket events carry a `threadId` field so the client can associate updates with the correct thread
 - The model selector maps friendly names (sonnet/opus/haiku) to full model IDs in `agent-runner.ts`
 
+## Agent Safety Rules
+
+**NEVER start dev servers or long-running processes.** You are running headlessly without a browser — commands like `bun run dev`, `npm run dev`, `yarn dev`, `bun --watch`, or `vite` will hang forever and may kill the main development server via `kill-port.ts`.
+
+To verify your changes compile correctly, use build or type-check commands instead:
+
+```bash
+# Check that the client builds without errors
+bun run build
+
+# Type-check a specific file
+bun --check packages/server/src/index.ts
+
+# Type-check the whole project
+bunx tsc --noEmit
+```
+
 ## UI Rules
 
 **All UI work in `packages/client` MUST use shadcn/ui components and Tailwind CSS. These rules are mandatory.**

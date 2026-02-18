@@ -322,7 +322,7 @@ export function SettingsDetailView() {
 
       {/* Page content */}
       <ScrollArea className="flex-1 min-h-0">
-        <div className="px-8 py-8 max-w-2xl">
+        <div className="px-8 py-8 max-w-4xl">
           {page === 'general' ? (
             <GeneralSettings />
           ) : page === 'mcp-server' ? (

@@ -729,9 +729,9 @@ export function getStatusSummary(
  * Derive a single sync state from a git status summary.
  */
 export function deriveGitSyncState(summary: GitStatusSummary): GitSyncState {
-  if (summary.isMergedIntoBase) return 'merged';
   if (summary.dirtyFileCount > 0) return 'dirty';
   if (summary.unpushedCommitCount > 0) return 'unpushed';
+  if (summary.isMergedIntoBase) return 'merged';
   if (summary.hasRemoteBranch) return 'pushed';
   return 'clean';
 }

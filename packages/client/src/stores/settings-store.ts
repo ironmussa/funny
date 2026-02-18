@@ -146,11 +146,13 @@ export const useSettingsStore = create<SettingsState>()(
 );
 
 // Listen for system theme changes when in 'system' mode
-window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-  const { theme } = useSettingsStore.getState();
-  if (theme === 'system') {
-    applyTheme('system');
-  }
-});
+if (typeof window !== 'undefined') {
+  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
+    const { theme } = useSettingsStore.getState();
+    if (theme === 'system') {
+      applyTheme('system');
+    }
+  });
+}
 
 export { editorLabels };

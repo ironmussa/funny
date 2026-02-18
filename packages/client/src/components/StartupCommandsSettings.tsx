@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { useAppStore } from '@/stores/app-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { api } from '@/lib/api';
@@ -46,22 +47,44 @@ export function StartupCommandsSettings() {
   }
 
   const handleAdd = async () => {
-    if (!selectedProjectId || !label.trim() || !command.trim()) return;
+    if (!selectedProjectId) return;
+    if (!label.trim()) {
+      toast.error(t('startup.labelRequired'));
+      return;
+    }
+    if (!command.trim()) {
+      toast.error(t('startup.commandRequired'));
+      return;
+    }
     const result = await api.addCommand(selectedProjectId, label.trim(), command.trim());
     if (result.isOk()) {
       resetForm();
       setAdding(false);
       loadCommands();
+      toast.success(t('startup.commandAdded'));
+    } else {
+      toast.error(t('startup.commandAddError'));
     }
   };
 
   const handleUpdate = async (cmdId: string) => {
-    if (!selectedProjectId || !label.trim() || !command.trim()) return;
+    if (!selectedProjectId) return;
+    if (!label.trim()) {
+      toast.error(t('startup.labelRequired'));
+      return;
+    }
+    if (!command.trim()) {
+      toast.error(t('startup.commandRequired'));
+      return;
+    }
     const result = await api.updateCommand(selectedProjectId, cmdId, label.trim(), command.trim());
     if (result.isOk()) {
       setEditingId(null);
       resetForm();
       loadCommands();
+      toast.success(t('startup.commandUpdated'));
+    } else {
+      toast.error(t('startup.commandUpdateError'));
     }
   };
 
@@ -70,6 +93,9 @@ export function StartupCommandsSettings() {
     const result = await api.deleteCommand(selectedProjectId, cmdId);
     if (result.isOk()) {
       loadCommands();
+      toast.success(t('startup.commandDeleted'));
+    } else {
+      toast.error(t('startup.commandDeleteError'));
     }
   };
 
@@ -167,7 +193,7 @@ export function StartupCommandsSettings() {
         if (editingId === cmd.id) {
           return (
             <div key={cmd.id} className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
-              <div className="grid grid-cols-2 gap-2">
+              <div className="grid grid-cols-4 gap-2">
                 <div>
                   <label className="text-xs text-muted-foreground block mb-1">{t('startup.label')}</label>
                   <Input
@@ -178,7 +204,7 @@ export function StartupCommandsSettings() {
                     autoFocus
                   />
                 </div>
-                <div>
+                <div className="col-span-3">
                   <label className="text-xs text-muted-foreground block mb-1">{t('startup.command')}</label>
                   <Input
                     className="h-auto py-1.5 font-mono"
@@ -286,7 +312,7 @@ export function StartupCommandsSettings() {
       {/* Add form */}
       {adding && (
         <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-4 gap-2">
             <div>
               <label className="text-xs text-muted-foreground block mb-1">{t('startup.label')}</label>
               <Input
@@ -297,7 +323,7 @@ export function StartupCommandsSettings() {
                 autoFocus
               />
             </div>
-            <div>
+            <div className="col-span-3">
               <label className="text-xs text-muted-foreground block mb-1">{t('startup.command')}</label>
               <Input
                 className="h-auto py-1.5 font-mono"

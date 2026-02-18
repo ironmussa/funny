@@ -3,7 +3,7 @@
  * Prevents ghost processes from causing dual-listener issues.
  * Runs before `bun --watch` starts the server.
  */
-const port = Number(process.env.PORT) || 3001;
+const port = Number(process.argv[2]) || Number(process.env.PORT) || 3001;
 
 function findListeningPids(targetPort: number): number[] {
   const isWindows = process.platform === 'win32';

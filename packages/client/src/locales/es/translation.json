@@ -369,7 +369,15 @@
     "stop": "Detener",
     "run": "Ejecutar",
     "edit": "Editar",
-    "delete": "Eliminar"
+    "delete": "Eliminar",
+    "commandAdded": "Comando agregado exitosamente",
+    "commandUpdated": "Comando actualizado exitosamente",
+    "commandDeleted": "Comando eliminado exitosamente",
+    "labelRequired": "La etiqueta es obligatoria",
+    "commandRequired": "El comando es obligatorio",
+    "commandAddError": "Error al agregar el comando",
+    "commandUpdateError": "Error al actualizar el comando",
+    "commandDeleteError": "Error al eliminar el comando"
   },
   "preview": {
     "open": "Abrir Preview",

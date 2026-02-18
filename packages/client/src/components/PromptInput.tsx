@@ -390,7 +390,8 @@ export function PromptInput({
 
   // Draft persistence across thread switches
   const { setPromptDraft, clearPromptDraft } = useDraftStore();
-  const prevThreadIdRef = useRef<string | null | undefined>(selectedThreadId);
+  // Initialize to null so the mount effect always restores the draft for the current thread
+  const prevThreadIdRef = useRef<string | null | undefined>(null);
 
   // Keep refs in sync so unmount cleanup can read the latest values
   const promptRef = useRef(prompt);

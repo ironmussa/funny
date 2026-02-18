@@ -28,8 +28,6 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
-const TERMINAL_STATUSES: ThreadStatus[] = ['completed', 'failed', 'stopped', 'interrupted'];
-
 interface ThreadItemProps {
   thread: Thread;
   projectPath: string;
@@ -47,18 +45,20 @@ export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle
   const { t } = useTranslation();
   const [openDropdown, setOpenDropdown] = useState(false);
 
-  // Use git status icon for worktree threads in terminal states
-  const useGitIcon = thread.mode === 'worktree' && TERMINAL_STATUSES.includes(thread.status) && gitStatus;
-  const s = useGitIcon
-    ? gitSyncStateConfig[gitStatus.state]
-    : (statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending);
-  const Icon = s.icon;
+  // Thread status config
+  const threadStatusCfg = statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending;
+  const StatusIcon = threadStatusCfg.icon;
   const isRunning = thread.status === 'running';
   const displayTime = timeValue ?? timeAgo(thread.createdAt, t);
 
+  // Git status config (only for worktree threads that have git info)
+  const showGitIcon = thread.mode === 'worktree' && gitStatus;
+  const gitCfg = showGitIcon ? gitSyncStateConfig[gitStatus.state] : null;
+  const GitIcon = gitCfg?.icon ?? null;
+
   // Build tooltip text for git status
   let gitTooltip: string | null = null;
-  if (useGitIcon) {
+  if (showGitIcon) {
     const label = t(gitSyncStateConfig[gitStatus.state].labelKey);
     if (gitStatus.state === 'dirty' && gitStatus.dirtyFileCount > 0) {
       gitTooltip = `${label} (${gitStatus.dirtyFileCount})`;
@@ -80,26 +80,22 @@ export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle
     >
       <button
         onClick={onSelect}
-        className="flex-1 flex items-start gap-1.5 pl-2 py-1 text-left min-w-0 overflow-hidden"
+        className="flex-1 flex items-start gap-1 pl-2 py-1 text-left min-w-0 overflow-hidden"
       >
+        {/* Thread status icon */}
         <div className="relative h-3 w-3 flex-shrink-0 mt-[3px]">
-          {/* Status icon – hidden on hover when pin is available */}
           <span className={cn(
             'absolute inset-0',
             onPin && !isRunning && 'group-hover/thread:hidden'
           )}>
-            {gitTooltip ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Icon className={cn('h-3 w-3', s.className)} />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  {gitTooltip}
-                </TooltipContent>
-              </Tooltip>
-            ) : (
-              <Icon className={cn('h-3 w-3', s.className)} />
-            )}
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <StatusIcon className={cn('h-3 w-3', threadStatusCfg.className)} />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                {t(`thread.status.${thread.status}`)}
+              </TooltipContent>
+            </Tooltip>
           </span>
           {/* Pin toggle – shown on hover */}
           {onPin && !isRunning && (
@@ -118,6 +114,19 @@ export function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle
             </span>
           )}
         </div>
+        {/* Git status icon (worktree threads only) */}
+        {showGitIcon && GitIcon && (
+          <div className="h-3 w-3 flex-shrink-0 mt-[3px]">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <GitIcon className={cn('h-3 w-3', gitCfg!.className)} />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                {gitTooltip}
+              </TooltipContent>
+            </Tooltip>
+          </div>
+        )}
         <div className="flex flex-col gap-0 min-w-0 flex-1">
           <div className="flex items-center gap-1">
             <span className="text-sm leading-tight truncate">{thread.title}</span>

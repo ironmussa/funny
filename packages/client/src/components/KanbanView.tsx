@@ -508,13 +508,13 @@ export function KanbanView({ threads, projectId, search, contentSnippets, highli
 
       const targetProjectId = projectId || threadProjectId;
 
-      // Check if moving to "Done" with unmerged changes
+      // Check if moving to "Done" with uncommitted changes
       if (newStage === 'done') {
         const gitStatus = statusByThread[threadId];
         const thread = threads.find((t) => t.id === threadId);
 
-        // If the thread has a branch and git status shows it's not merged
-        if (thread?.branch && gitStatus && !gitStatus.isMergedIntoBase) {
+        // Only warn for dirty (uncommitted) changes — unpushed commits are safe
+        if (thread?.branch && gitStatus && gitStatus.state === 'dirty') {
           setMergeWarning({
             threadId,
             title: thread.title,

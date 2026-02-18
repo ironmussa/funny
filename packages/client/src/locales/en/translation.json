@@ -432,7 +432,9 @@
     "deleteWorktree": "Delete worktree",
     "deleteWorktreeDesc": "Are you sure you want to delete the worktree for branch \"{{branch}}\"? Any uncommitted changes will be lost.",
     "unmergedChanges": "Unmerged changes",
-    "unmergedChangesDesc": "The thread \"{{title}}\" has changes that haven't been merged into the base branch yet. Are you sure you want to mark it as Done?"
+    "unmergedChangesDesc": "The thread \"{{title}}\" has changes that haven't been merged into the base branch yet. Are you sure you want to mark it as Done?",
+    "unpushedChanges": "Unpushed commits",
+    "unpushedChangesDesc": "The thread \"{{title}}\" has commits that haven't been pushed to origin yet. Are you sure you want to mark it as Done?"
   },
   "toast": {
     "threadArchived": "Thread archived successfully",

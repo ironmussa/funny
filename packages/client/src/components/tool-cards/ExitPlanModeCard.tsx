@@ -1,10 +1,12 @@
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
 import { FileCode2, CheckCircle2, XCircle, Send } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
 
-export function ExitPlanModeCard({ onRespond }: { onRespond?: (answer: string) => void }) {
+export function ExitPlanModeCard({ plan, onRespond }: { plan?: string; onRespond?: (answer: string) => void }) {
   const { t } = useTranslation();
   const [input, setInput] = useState('');
   const [submitted, setSubmitted] = useState(false);
@@ -47,6 +49,27 @@ export function ExitPlanModeCard({ onRespond }: { onRespond?: (answer: string) =
           </span>
         )}
       </div>
+
+      {plan && (
+        <div className="border-t border-border/40 px-4 py-3 max-h-[500px] overflow-y-auto">
+          <div className="prose prose-xs prose-invert max-w-none
+            prose-headings:text-foreground prose-headings:font-semibold
+            prose-h1:text-xs prose-h1:mb-1.5 prose-h1:mt-0
+            prose-h2:text-xs prose-h2:mb-1 prose-h2:mt-2.5
+            prose-h3:text-sm prose-h3:mb-1 prose-h3:mt-2
+            prose-p:text-xs prose-p:text-muted-foreground prose-p:leading-relaxed prose-p:my-0.5
+            prose-li:text-sm prose-li:text-muted-foreground prose-li:leading-relaxed prose-li:my-0
+            prose-ul:my-0.5 prose-ol:my-0.5
+            prose-code:text-xs prose-code:bg-background/80 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-foreground
+            prose-pre:bg-background/80 prose-pre:rounded prose-pre:p-2 prose-pre:my-1
+            prose-strong:text-foreground
+          ">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {plan}
+            </ReactMarkdown>
+          </div>
+        </div>
+      )}
 
       {onRespond && !submitted && (
         <div className="border-t border-border/40 px-3 py-2.5 space-y-2">

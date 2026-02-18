@@ -42,13 +42,15 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
   }, [output, expanded]);
 
   // Specialized cards
+  // ExitPlanMode must be checked before isPlan — its input contains a `plan` field
+  // but needs approval buttons, which PlanCard doesn't provide.
+  if (name === 'ExitPlanMode') return <ExitPlanModeCard plan={typeof parsed.plan === 'string' ? parsed.plan : undefined} onRespond={onRespond} />;
   if (isPlan) return <PlanCard parsed={parsed} output={output} hideLabel={hideLabel} />;
   if (name === 'Bash') return <BashCard parsed={parsed} output={output} hideLabel={hideLabel} />;
   if (name === 'Read') return <ReadFileCard parsed={parsed} output={output} hideLabel={hideLabel} />;
   if (name === 'Write') return <WriteFileCard parsed={parsed} hideLabel={hideLabel} />;
   if (name === 'Edit') return <EditFileCard parsed={parsed} hideLabel={hideLabel} />;
   if (name === 'AskUserQuestion') return <AskQuestionCard parsed={parsed} onRespond={output ? undefined : onRespond} output={output} hideLabel={hideLabel} />;
-  if (name === 'ExitPlanMode') return <ExitPlanModeCard onRespond={onRespond} />;
 
   return (
     <div className="text-sm max-w-full overflow-hidden">

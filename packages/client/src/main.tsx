@@ -6,6 +6,7 @@ import { MobilePage } from './components/MobilePage';
 import { LoginPage } from './components/LoginPage';
 import { PreviewBrowser } from './components/PreviewBrowser';
 import { AppShellSkeleton } from './components/AppShellSkeleton';
+import { TooltipProvider } from './components/ui/tooltip';
 import { useAuthStore } from './stores/auth-store';
 import { useSettingsStore } from './stores/settings-store';
 import '@fontsource/geist-sans/latin.css';
@@ -78,10 +79,12 @@ function AuthGate() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    {isPreviewWindow ? (
-      <PreviewBrowser />
-    ) : (
-      <AuthGate />
-    )}
+    <TooltipProvider delayDuration={300} skipDelayDuration={0}>
+      {isPreviewWindow ? (
+        <PreviewBrowser />
+      ) : (
+        <AuthGate />
+      )}
+    </TooltipProvider>
   </React.StrictMode>
 );

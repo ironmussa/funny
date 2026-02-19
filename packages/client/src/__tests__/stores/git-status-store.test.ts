@@ -11,7 +11,7 @@ vi.mock('@/lib/api', () => ({
 }));
 
 import { api } from '@/lib/api';
-import { useGitStatusStore } from '@/stores/git-status-store';
+import { useGitStatusStore, _resetCooldowns } from '@/stores/git-status-store';
 
 const mockApi = vi.mocked(api);
 
@@ -35,6 +35,7 @@ describe('GitStatusStore', () => {
       loadingProjects: new Set(),
       _loadingThreads: new Set(),
     });
+    _resetCooldowns();
     vi.clearAllMocks();
   });
 

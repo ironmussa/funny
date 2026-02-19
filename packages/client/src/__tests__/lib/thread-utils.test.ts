@@ -231,20 +231,20 @@ describe('gitSyncStateConfig', () => {
     }
   });
 
-  test('dirty has orange color class', () => {
-    expect(gitSyncStateConfig.dirty.className).toContain('orange');
+  test('dirty has muted foreground class', () => {
+    expect(gitSyncStateConfig.dirty.className).toContain('text-muted-foreground');
   });
 
-  test('clean has green color class', () => {
-    expect(gitSyncStateConfig.clean.className).toContain('green');
+  test('clean has muted foreground class', () => {
+    expect(gitSyncStateConfig.clean.className).toContain('text-muted-foreground');
   });
 
-  test('pushed has blue color class', () => {
-    expect(gitSyncStateConfig.pushed.className).toContain('blue');
+  test('pushed has muted foreground class', () => {
+    expect(gitSyncStateConfig.pushed.className).toContain('text-muted-foreground');
   });
 
-  test('merged has emerald color class', () => {
-    expect(gitSyncStateConfig.merged.className).toContain('emerald');
+  test('merged has muted foreground class', () => {
+    expect(gitSyncStateConfig.merged.className).toContain('text-muted-foreground');
   });
 });
 

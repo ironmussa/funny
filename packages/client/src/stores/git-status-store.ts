@@ -16,6 +16,11 @@ interface GitStatusState {
 const FETCH_COOLDOWN_MS = 30_000;
 const _lastFetchByProject = new Map<string, number>();
 
+/** @internal Clear cooldown map — only for tests */
+export function _resetCooldowns() {
+  _lastFetchByProject.clear();
+}
+
 export const useGitStatusStore = create<GitStatusState>((set, get) => ({
   statusByThread: {},
   loadingProjects: new Set(),

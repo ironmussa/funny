@@ -140,14 +140,13 @@ describe('AppStore', () => {
       expect(useAppStore.getState().activeThread).toBeNull();
     });
 
-    test('clears activeThread on fetch error but keeps selectedThreadId', async () => {
+    test('clears activeThread and selectedThreadId on fetch error', async () => {
       const error: DomainError = { type: 'NOT_FOUND', message: 'Not found' };
       mockApi.getThread.mockReturnValueOnce(errAsync(error) as any);
 
       await useAppStore.getState().selectThread('nonexistent');
       expect(useAppStore.getState().activeThread).toBeNull();
-      // selectedThreadId is kept so the UI knows which thread was attempted
-      expect(useAppStore.getState().selectedThreadId).toBe('nonexistent');
+      expect(useAppStore.getState().selectedThreadId).toBeNull();
     });
   });
 

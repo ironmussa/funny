@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useThreadStore } from '@/stores/thread-store';
@@ -90,13 +90,13 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
             timeValue={isRunning ? undefined : timeAgo(thread.completedAt ?? thread.createdAt, t)}
             gitStatus={thread.mode === 'worktree' ? gitStatusByThread[thread.id] : undefined}
             onSelect={() => {
-              setTimeout(() => {
+              startTransition(() => {
                 const store = useThreadStore.getState();
                 if (store.selectedThreadId === thread.id && (!store.activeThread || store.activeThread.id !== thread.id)) {
                   store.selectThread(thread.id);
                 }
                 navigate(`/projects/${thread.projectId}/threads/${thread.id}`);
-              }, 0);
+              });
             }}
             onArchive={thread.status === 'running' ? undefined : () => onArchiveThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch && thread.provider !== 'external')}
             onDelete={thread.status === 'running' ? undefined : () => onDeleteThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch && thread.provider !== 'external')}

@@ -114,6 +114,7 @@ describe('worktree operations', () => {
   describe('removeWorktree', () => {
     test('removes a worktree', async () => {
       const createResult = await createWorktree(repoPath, 'to-remove');
+      if (createResult.isErr()) console.error("DEBUG ERROR:", createResult.error);
       expect(createResult.isOk()).toBe(true);
 
       if (createResult.isOk()) {

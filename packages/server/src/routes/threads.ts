@@ -453,6 +453,8 @@ threadRoutes.patch('/:id', async (c) => {
     }
     updates.worktreePath = null;
     updates.branch = null;
+    // Release in-memory agent state for the archived thread
+    cleanupThreadState(id);
   }
 
   if (Object.keys(updates).length > 0) {

@@ -10,6 +10,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import { err } from 'neverthrow';
 import { getAuthMode } from '../lib/auth-mode.js';
 import { getGitIdentity, getGithubToken } from '../services/profile-service.js';
+import { cleanupThreadState } from '../services/agent-runner.js';
 import type { HonoEnv } from '../types/hono-env.js';
 
 export const gitRoutes = new Hono<HonoEnv>();
@@ -424,6 +425,8 @@ gitRoutes.post('/:threadId/merge', async (c) => {
     await removeWorktree(project.path, thread.worktreePath).catch(console.warn);
     await removeBranch(project.path, thread.branch).catch(console.warn);
     tm.updateThread(threadId, { worktreePath: null, branch: null });
+    // Release in-memory agent state for the merged thread
+    cleanupThreadState(threadId);
   }
 
   invalidateGitStatusCache(threadId);

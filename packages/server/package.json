@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "bun src/kill-port.ts && bun --watch src/index.ts",
+    "dev": "bun src/dev-watch.ts",
     "dev:test": "bun src/kill-port.ts 3008 && PORT=3008 CLIENT_PORT=5180 bun --watch src/index.ts",
     "build": "bun run build.ts",
     "db:push": "bunx drizzle-kit push",

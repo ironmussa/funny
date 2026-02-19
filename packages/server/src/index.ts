@@ -9,6 +9,7 @@ import { handleError } from './middleware/error-handler.js';
 import { authMiddleware } from './middleware/auth.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { autoMigrate } from './db/migrate.js';
+import { closeDatabase } from './db/index.js';
 import { markStaleThreadsInterrupted } from './services/thread-manager.js';
 import { getAuthToken, validateToken } from './services/auth-service.js';
 import { getAuthMode } from './lib/auth-mode.js';
@@ -207,12 +208,16 @@ console.log(`[server] Auth mode: ${authMode}`);
 // Detect available providers at startup
 await logProviderStatus();
 
-// Stop previous server instance on bun --watch restarts.
-// globalThis persists across watch re-evaluations — this is the standard pattern.
+// Clean up previous instance on bun --watch restarts.
+// globalThis persists across watch re-evaluations — modules do NOT.
+// We must call the PREVIOUS run's cleanup (stored on globalThis) to close
+// the old DB connection, stop old agents, etc., not the freshly-imported ones.
 const prev = (globalThis as any).__bunServer;
+const prevCleanup = (globalThis as any).__bunCleanup as (() => Promise<void>) | undefined;
 if (prev) {
   prev.stop(true);
-  console.log('[server] Stopped previous server instance (watch restart)');
+  if (prevCleanup) await prevCleanup();
+  console.log('[server] Cleaned up previous instance (watch restart)');
 }
 
 const server = Bun.serve({
@@ -294,8 +299,16 @@ const server = Bun.serve({
   },
 });
 
-// Store for next --watch restart
+// Store for next --watch restart.
+// __bunCleanup captures the current run's resources so the NEXT run can clean
+// up this run's agents, DB, scheduler, etc. before re-initializing.
 (globalThis as any).__bunServer = server;
+(globalThis as any).__bunCleanup = async () => {
+  stopScheduler();
+  ptyManager.killAllPtys();
+  await stopAllAgents();
+  closeDatabase();
+};
 
 // Graceful shutdown — release the port FIRST, then clean up everything else.
 // Previous bug: server.stop() was called AFTER stopAllAgents() which could hang,
@@ -319,6 +332,9 @@ async function shutdown() {
   stopScheduler();
   ptyManager.killAllPtys();
   await stopAllAgents();
+
+  // 4. Flush WAL and close the database last (other cleanup may still write)
+  closeDatabase();
 
   clearTimeout(forceExit);
   process.exit(0);

@@ -63,6 +63,7 @@ import {
   Copy,
   ClipboardCopy,
   ExternalLink,
+  AlertTriangle,
 } from 'lucide-react';
 import type { FileDiffSummary } from '@funny/shared';
 
@@ -211,6 +212,7 @@ export function ReviewPane() {
   const gitStatus = useGitStatusStore(s => effectiveThreadId ? s.statusByThread[effectiveThreadId] : undefined);
   const [mergeInProgress, setMergeInProgress] = useState(false);
   const [pushInProgress, setPushInProgress] = useState(false);
+  const [hasRebaseConflict, setHasRebaseConflict] = useState(false);
 
   // Show standalone merge button when worktree has no dirty files but has unmerged commits
   const showMergeOnly = isWorktree && summaries.length === 0 && !loading && gitStatus && !gitStatus.isMergedIntoBase;
@@ -218,7 +220,7 @@ export function ReviewPane() {
   // Show standalone push button when no dirty files but there are unpushed commits
   const showPushOnly = summaries.length === 0 && !loading && gitStatus && gitStatus.unpushedCommitCount > 0;
 
-  const showMergeConflictToast = useCallback((errorMessage: string, threadId: string) => {
+  const showMergeConflictToast = useCallback((errorMessage: string, _threadId: string) => {
     const target = baseBranch || 'main';
     const isConflict = errorMessage.toLowerCase().includes('conflict') ||
                        errorMessage.toLowerCase().includes('rebase failed');
@@ -228,33 +230,8 @@ export function ReviewPane() {
       return;
     }
 
-    const worktreePath = useThreadStore.getState().activeThread?.worktreePath;
-
-    toast.error(
-      t('review.mergeConflict', { target }),
-      {
-        duration: 15000,
-        action: {
-          label: t('review.askAgentResolve'),
-          onClick: () => {
-            const prompt = t('review.agentResolvePrompt', { target });
-            useAppStore.getState().appendOptimisticMessage(threadId, prompt);
-            const { allowedTools, disallowedTools } = deriveToolLists(
-              useSettingsStore.getState().toolPermissions
-            );
-            api.sendMessage(threadId, prompt, { allowedTools, disallowedTools });
-            toast.success(t('review.agentResolveSent'));
-          },
-        },
-        cancel: worktreePath ? {
-          label: t('review.openInEditor', { editor: editorLabels[useSettingsStore.getState().defaultEditor] }),
-          onClick: () => {
-            const editor = useSettingsStore.getState().defaultEditor;
-            api.openInEditor(worktreePath, editor);
-          },
-        } : undefined,
-      }
-    );
+    toast.error(t('review.mergeConflict', { target }));
+    setHasRebaseConflict(true);
   }, [t, baseBranch]);
 
   const fileListRef = useRef<HTMLDivElement>(null);
@@ -328,6 +305,7 @@ export function ReviewPane() {
     setSelectedFile(null);
     setCheckedFiles(new Set());
     setFileSearch('');
+    setHasRebaseConflict(false);
 
     // Restore commit title/body from draft store
     const draft = effectiveThreadId ? useDraftStore.getState().drafts[effectiveThreadId] : undefined;
@@ -537,6 +515,26 @@ export function ReviewPane() {
     }
     setMergeInProgress(false);
     useGitStatusStore.getState().fetchForThread(effectiveThreadId);
+  };
+
+  const handleAskAgentResolve = () => {
+    if (!effectiveThreadId) return;
+    const target = baseBranch || 'main';
+    const prompt = t('review.agentResolvePrompt', { target });
+    useAppStore.getState().appendOptimisticMessage(effectiveThreadId, prompt);
+    const { allowedTools, disallowedTools } = deriveToolLists(
+      useSettingsStore.getState().toolPermissions
+    );
+    api.sendMessage(effectiveThreadId, prompt, { allowedTools, disallowedTools });
+    toast.success(t('review.agentResolveSent'));
+    setHasRebaseConflict(false);
+  };
+
+  const handleOpenInEditorConflict = () => {
+    const worktreePath = useThreadStore.getState().activeThread?.worktreePath;
+    if (!worktreePath) return;
+    const editor = useSettingsStore.getState().defaultEditor;
+    api.openInEditor(worktreePath, editor);
   };
 
   const getParentFolders = (filePath: string): string[] => {
@@ -960,6 +958,35 @@ export function ReviewPane() {
               >
                 {mergeInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <GitMerge className="h-3.5 w-3.5 mr-1.5" />}
                 {t('review.mergeIntoBranch', { target: baseBranch || 'base', defaultValue: `Merge into ${baseBranch || 'base'}` })}
+              </Button>
+            </div>
+          )}
+
+          {/* Rebase conflict resolution — shown when merge/rebase failed with conflicts */}
+          {hasRebaseConflict && (
+            <div className="border-t border-sidebar-border p-3 flex-shrink-0 space-y-2">
+              <div className="flex items-center gap-2 text-xs text-destructive">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                <span>{t('review.mergeConflict', { target: baseBranch || 'main' })}</span>
+              </div>
+              {isWorktree && (
+                <Button
+                  className="w-full"
+                  size="sm"
+                  variant="outline"
+                  onClick={handleOpenInEditorConflict}
+                >
+                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                  {t('review.openInEditor', { editor: editorLabels[useSettingsStore.getState().defaultEditor] })}
+                </Button>
+              )}
+              <Button
+                className="w-full"
+                size="sm"
+                onClick={handleAskAgentResolve}
+              >
+                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                {t('review.askAgentResolve')}
               </Button>
             </div>
           )}

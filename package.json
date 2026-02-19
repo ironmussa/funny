@@ -1,6 +1,6 @@
 {
   "name": "@ironmussa/funny",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "description": "Codex App clone powered by Claude Code — parallel agent orchestration with git worktrees",
   "author": "Anthropic",

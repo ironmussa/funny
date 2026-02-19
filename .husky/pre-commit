@@ -1,5 +1,5 @@
 #!/bin/sh
 # Husky pre-commit hook - Secret detection
 
-# Check for leaked secrets before committing
-npx secretlint "**/*"
+# Only scan staged files (fast, not entire repo)
+git diff --cached --name-only --diff-filter=ACM | xargs -r npx secretlint

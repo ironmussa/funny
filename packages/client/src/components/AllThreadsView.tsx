@@ -174,6 +174,8 @@ export function AllThreadsView() {
   // Stores threadId → snippet so we can display matching text on cards
   const [contentMatches, setContentMatches] = useState<Map<string, string>>(new Map());
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // Cache: key = "query|projectId" → Map<threadId, snippet>
+  const searchCacheRef = useRef<Map<string, Map<string, string>>>(new Map());
 
   useEffect(() => {
     // Clear previous timer
@@ -182,6 +184,13 @@ export function AllThreadsView() {
     const q = search.trim();
     if (!q) {
       setContentMatches(new Map());
+      return;
+    }
+
+    const cacheKey = `${q}|${projectFilter || ''}`;
+    const cached = searchCacheRef.current.get(cacheKey);
+    if (cached) {
+      setContentMatches(cached);
       return;
     }
 
@@ -194,6 +203,12 @@ export function AllThreadsView() {
           const { threadIds, snippets } = res.value;
           for (const id of threadIds) {
             map.set(id, snippets[id] || '');
+          }
+          searchCacheRef.current.set(cacheKey, map);
+          // Evict old entries to prevent unbounded growth
+          if (searchCacheRef.current.size > 50) {
+            const firstKey = searchCacheRef.current.keys().next().value!;
+            searchCacheRef.current.delete(firstKey);
           }
           setContentMatches(map);
         }

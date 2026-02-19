@@ -329,5 +329,55 @@ export function autoMigrate() {
     ON messages (thread_id, timestamp)
   `);
 
+  // Indexes for efficient thread filtering (Kanban search, list queries)
+  db.run(sql`
+    CREATE INDEX IF NOT EXISTS idx_threads_project_id
+    ON threads (project_id)
+  `);
+  db.run(sql`
+    CREATE INDEX IF NOT EXISTS idx_threads_user_archived
+    ON threads (user_id, archived)
+  `);
+
+  // FTS5 full-text search index for message content
+  // Uses an external-content table linked to messages for zero storage duplication
+  db.run(sql`
+    CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts
+    USING fts5(content, content=messages, content_rowid=rowid)
+  `);
+
+  // Triggers to keep FTS index in sync with the messages table
+  db.run(sql`
+    CREATE TRIGGER IF NOT EXISTS messages_fts_insert
+    AFTER INSERT ON messages BEGIN
+      INSERT INTO messages_fts(rowid, content) VALUES (NEW.rowid, NEW.content);
+    END
+  `);
+  db.run(sql`
+    CREATE TRIGGER IF NOT EXISTS messages_fts_delete
+    AFTER DELETE ON messages BEGIN
+      INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', OLD.rowid, OLD.content);
+    END
+  `);
+  db.run(sql`
+    CREATE TRIGGER IF NOT EXISTS messages_fts_update
+    AFTER UPDATE ON messages BEGIN
+      INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', OLD.rowid, OLD.content);
+      INSERT INTO messages_fts(rowid, content) VALUES (NEW.rowid, NEW.content);
+    END
+  `);
+
+  // Backfill FTS index for existing messages that aren't indexed yet.
+  // Only runs when the FTS table is empty (first migration with FTS).
+  const ftsCount = db.get<{ count: number }>(sql`SELECT COUNT(*) as count FROM messages_fts`);
+  if (ftsCount && ftsCount.count === 0) {
+    const msgCount = db.get<{ count: number }>(sql`SELECT COUNT(*) as count FROM messages`);
+    if (msgCount && msgCount.count > 0) {
+      console.log(`[db] Backfilling FTS index for ${msgCount.count} messages...`);
+      db.run(sql`INSERT INTO messages_fts(rowid, content) SELECT rowid, content FROM messages`);
+      console.log('[db] FTS backfill complete');
+    }
+  }
+
   console.log('[db] Tables ready');
 }

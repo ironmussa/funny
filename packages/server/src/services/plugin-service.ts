@@ -8,6 +8,7 @@ import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join, basename } from 'path';
 import { homedir } from 'os';
 import type { Plugin, PluginCommand } from '@funny/shared';
+import { log } from '../lib/abbacchio.js';
 
 const PLUGINS_DIR = join(homedir(), '.claude', 'plugins');
 const INSTALLED_FILE = join(PLUGINS_DIR, 'installed_plugins.json');
@@ -123,7 +124,7 @@ export function listPlugins(): Plugin[] {
 
     return plugins;
   } catch (err) {
-    console.error('[plugin-service] Failed to read installed plugins:', err);
+    log.error('Failed to read installed plugins', { namespace: 'plugin-service', error: err });
     return [];
   }
 }

@@ -9,6 +9,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { execute } from '@funny/core/git';
 import type { Skill } from '@funny/shared';
+import { log } from '../lib/abbacchio.js';
 
 const AGENTS_DIR = join(homedir(), '.agents');
 const SKILLS_DIR = join(AGENTS_DIR, 'skills');
@@ -79,7 +80,7 @@ export function listSkills(): Skill[] {
 
     return skills;
   } catch (err) {
-    console.error('[skills-service] Failed to read lock file:', err);
+    log.error('Failed to read skill lock file', { namespace: 'skills-service', error: err });
     return [];
   }
 }
@@ -112,7 +113,7 @@ export function listProjectSkills(projectPath: string): Skill[] {
 
     return skills;
   } catch (err) {
-    console.error('[skills-service] Failed to read project skills:', err);
+    log.error('Failed to read project skills', { namespace: 'skills-service', error: err });
     return [];
   }
 }
@@ -130,7 +131,7 @@ function stripAnsi(str: string): string {
  * Identifier format: owner/repo@skill-name
  */
 export async function addSkill(identifier: string): Promise<void> {
-  console.log(`[skills-service] Installing skill: ${identifier}`);
+  log.info('Installing skill', { namespace: 'skills-service', identifier });
 
   try {
     await execute('npx', ['--yes', 'skills', 'add', identifier, '-g', '-y'], {
@@ -154,7 +155,7 @@ export async function addSkill(identifier: string): Promise<void> {
  * and updating the lock file.
  */
 export function removeSkill(name: string): void {
-  console.log(`[skills-service] Removing skill: ${name}`);
+  log.info('Removing skill', { namespace: 'skills-service', name });
 
   // Remove skill directory
   const skillDir = join(SKILLS_DIR, name);
@@ -181,7 +182,7 @@ export function removeSkill(name: string): void {
       const { writeFileSync } = require('fs');
       writeFileSync(LOCK_FILE, JSON.stringify(lockFile, null, 2));
     } catch (err) {
-      console.error('[skills-service] Failed to update lock file:', err);
+      log.error('Failed to update skill lock file', { namespace: 'skills-service', error: err });
     }
   }
 }

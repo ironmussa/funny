@@ -6,6 +6,7 @@ import { resolve } from 'path';
 import { homedir } from 'os';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { randomBytes } from 'crypto';
+import { log } from './abbacchio.js';
 
 const AUTH_DIR = resolve(homedir(), '.funny');
 const SECRET_PATH = resolve(AUTH_DIR, 'auth-secret');
@@ -20,7 +21,7 @@ function getOrCreateSecret(): string {
 
   const secret = randomBytes(64).toString('hex');
   writeFileSync(SECRET_PATH, secret, { mode: 0o600 });
-  console.log('[auth] Generated new auth secret');
+  log.info('Generated new auth secret', { namespace: 'auth' });
   return secret;
 }
 
@@ -64,15 +65,10 @@ export async function initBetterAuth(): Promise<void> {
           role: 'admin',
         },
       });
-      console.log('[auth] ──────────────────────────────────────────────');
-      console.log('[auth] Created default admin account.');
-      console.log('[auth]   Username: admin');
-      console.log(`[auth]   Password: ${password}`);
-      console.log('[auth]   IMPORTANT: Change this password immediately!');
-      console.log('[auth] ──────────────────────────────────────────────');
+      log.info('Created default admin account', { namespace: 'auth', username: 'admin', password, important: 'Change this password immediately!' });
     }
   } catch (err) {
-    console.error('[auth] Failed to initialize Better Auth:', err);
+    log.error('Failed to initialize Better Auth', { namespace: 'auth', error: err });
   }
 }
 
@@ -87,6 +83,6 @@ export function assignLegacyData(userId: string): void {
     sqlite.run(`UPDATE threads SET user_id = ? WHERE user_id = '__local__'`, [userId]);
     sqlite.run(`UPDATE automations SET user_id = ? WHERE user_id = '__local__'`, [userId]);
   } catch (err) {
-    console.warn('[auth] Failed to assign legacy data:', err);
+    log.warn('Failed to assign legacy data', { namespace: 'auth', error: err });
   }
 }

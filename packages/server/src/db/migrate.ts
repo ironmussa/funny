@@ -1,5 +1,6 @@
 import { db } from './index.js';
 import { sql } from 'drizzle-orm';
+import { log } from '../lib/abbacchio.js';
 
 /**
  * Auto-create tables on startup if they don't exist.
@@ -373,11 +374,11 @@ export function autoMigrate() {
   if (ftsCount && ftsCount.count === 0) {
     const msgCount = db.get<{ count: number }>(sql`SELECT COUNT(*) as count FROM messages`);
     if (msgCount && msgCount.count > 0) {
-      console.log(`[db] Backfilling FTS index for ${msgCount.count} messages...`);
+      log.info(`Backfilling FTS index for ${msgCount.count} messages`, { namespace: 'db' });
       db.run(sql`INSERT INTO messages_fts(rowid, content) SELECT rowid, content FROM messages`);
-      console.log('[db] FTS backfill complete');
+      log.info('FTS backfill complete', { namespace: 'db' });
     }
   }
 
-  console.log('[db] Tables ready');
+  log.info('Tables ready', { namespace: 'db' });
 }

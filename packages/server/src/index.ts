@@ -1,3 +1,4 @@
+import { log } from './lib/abbacchio.js';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
@@ -172,9 +173,9 @@ if (existsSync(clientDistDir)) {
   app.get('*', (c) => {
     return c.html(Bun.file(join(clientDistDir, 'index.html')));
   });
-  console.log(`[server] Serving static files from ${clientDistDir}`);
+  log.info('Serving static files', { namespace: 'server', dir: clientDistDir });
 } else {
-  console.log(`[server] Client build not found at ${clientDistDir} - static serving disabled`);
+  log.info('Client build not found — static serving disabled', { namespace: 'server', dir: clientDistDir });
 }
 
 // Auto-create tables on startup, then start server
@@ -191,7 +192,7 @@ const handlerCtx: HandlerServiceContext = {
   emitToUser: (userId, event) => wsBroker.emitToUser(userId, event),
   broadcast: (event) => wsBroker.emit(event),
   startAgent,
-  log: (msg) => console.log(`[handler] ${msg}`),
+  log: (msg) => log.info(msg, { namespace: 'handler' }),
 };
 registerAllHandlers(handlerCtx);
 
@@ -203,7 +204,7 @@ if (authMode === 'local') {
   await initBetterAuth();
 }
 
-console.log(`[server] Auth mode: ${authMode}`);
+log.info(`Auth mode: ${authMode}`, { namespace: 'server' });
 
 // Detect available providers at startup
 await logProviderStatus();
@@ -217,7 +218,7 @@ const prevCleanup = (globalThis as any).__bunCleanup as (() => Promise<void>) | 
 if (prev) {
   prev.stop(true);
   if (prevCleanup) await prevCleanup();
-  console.log('[server] Cleaned up previous instance (watch restart)');
+  log.info('Cleaned up previous instance (watch restart)', { namespace: 'server' });
 }
 
 const server = Bun.serve({
@@ -273,7 +274,7 @@ const server = Bun.serve({
               return resolvedCwd.startsWith(projectPath);
             });
             if (!isAllowed) {
-              console.warn(`[ws] PTY spawn denied: cwd ${data.cwd} not in user's projects (userId=${userId})`);
+              log.warn(`PTY spawn denied: cwd not in user's projects`, { namespace: 'ws', cwd: data.cwd, userId });
               try { ws.send(JSON.stringify({ type: 'pty:error', data: { ptyId: data.id, error: 'Access denied: directory not in a registered project' } })); } catch {}
               break;
             }
@@ -290,10 +291,10 @@ const server = Bun.serve({
             ptyManager.killPty(data.id);
             break;
           default:
-            console.warn(`[ws] Unknown message type: ${type}`);
+            log.warn(`Unknown message type: ${type}`, { namespace: 'ws' });
         }
       } catch (err) {
-        console.error('[ws] Error handling message:', err);
+        log.error('Error handling message', { namespace: 'ws', error: err });
       }
     },
   },
@@ -317,14 +318,14 @@ let shuttingDown = false;
 async function shutdown() {
   if (shuttingDown) return; // Prevent double-shutdown
   shuttingDown = true;
-  console.log('[server] Shutting down...');
+  log.info('Shutting down...', { namespace: 'server' });
 
   // 1. Release the port IMMEDIATELY — this is the most critical step
   server.stop(true);
 
   // 2. Force exit after 5s in case cleanup hangs
   const forceExit = setTimeout(() => {
-    console.warn('[server] Force exit after timeout');
+    log.warn('Force exit after timeout', { namespace: 'server' });
     process.exit(1);
   }, 5000);
 
@@ -342,4 +343,4 @@ async function shutdown() {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-console.log(`[server] Listening on http://localhost:${server.port}`);
+log.info(`Listening on http://localhost:${server.port}`, { namespace: 'server', port: server.port, host });

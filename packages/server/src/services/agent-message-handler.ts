@@ -4,6 +4,7 @@ import type { WSEvent } from '@funny/shared';
 import type { AgentStateTracker } from './agent-state.js';
 import { threadEventBus } from './thread-event-bus.js';
 import { getStatusSummary, deriveGitSyncState } from '@funny/core/git';
+import { log } from '../lib/abbacchio.js';
 
 /**
  * Decode literal Unicode escape sequences (\uXXXX) that may appear
@@ -57,7 +58,7 @@ export class AgentMessageHandler {
   handle(threadId: string, msg: CLIMessage): void {
     // System init — capture session ID and broadcast init info
     if (msg.type === 'system' && 'subtype' in msg && msg.subtype === 'init') {
-      console.log(`[agent] init session=${msg.session_id} thread=${threadId}`);
+      log.info('Session initialized', { namespace: 'agent', sessionId: msg.session_id, threadId });
       this.threadManager.updateThread(threadId, {
         sessionId: msg.session_id,
         initTools: JSON.stringify(msg.tools ?? []),
@@ -135,13 +136,13 @@ export class AgentMessageHandler {
 
         // Skip duplicate ExitPlanMode calls
         if (block.name === 'ExitPlanMode' && this.state.pendingUserInput.get(threadId) === 'plan') {
-          console.log(`[agent] Skipping duplicate ExitPlanMode for thread=${threadId}`);
+          log.debug('Skipping duplicate ExitPlanMode', { namespace: 'agent', threadId });
           seen.set(block.id, 'skipped');
           continue;
         }
 
-        console.log(`[agent] tool_use: ${block.name} thread=${threadId}`);
-        console.log(`[agent] tool_use input:`, JSON.stringify(block.input, null, 2));
+        log.info(`tool_use: ${block.name}`, { namespace: 'agent', threadId, tool: block.name });
+        log.debug('tool_use input', { namespace: 'agent', threadId, tool: block.name, input: block.input });
 
         // Ensure there's always a parent assistant message for tool calls
         let parentMsgId = this.state.currentAssistantMsgId.get(threadId) || cliMap.get(cliMsgId);
@@ -210,8 +211,8 @@ export class AgentMessageHandler {
         if (toolCallId && block.content) {
           const decodedOutput = decodeUnicodeEscapes(block.content);
 
-          console.log(`[agent] tool_result: toolCallId=${toolCallId} thread=${threadId}`);
-          console.log(`[agent] tool_result output (${decodedOutput.length} chars):`, decodedOutput);
+          log.info(`tool_result: ${toolCallId}`, { namespace: 'agent', threadId, toolCallId, chars: decodedOutput.length });
+          log.debug('tool_result output', { namespace: 'agent', threadId, toolCallId, output: decodedOutput.slice(0, 500) });
 
           this.threadManager.updateToolCallOutput(toolCallId, decodedOutput);
           this.emitWS(threadId, 'agent:tool_output', {
@@ -234,7 +235,7 @@ export class AgentMessageHandler {
           );
 
           if (permissionDeniedMatch && tc?.name) {
-            console.log(`[agent] permission denied detected: tool=${tc.name} thread=${threadId}`);
+            log.warn('Permission denied detected', { namespace: 'agent', threadId, tool: tc.name });
             this.state.pendingPermissionRequest.set(threadId, {
               toolName: tc.name,
               toolUseId: block.tool_use_id,
@@ -267,7 +268,7 @@ export class AgentMessageHandler {
   private handleResult(threadId: string, msg: CLIMessage & { type: 'result' }): void {
     if (this.state.resultReceived.has(threadId)) return;
 
-    console.log(`[agent] result thread=${threadId} status=${msg.subtype} cost=$${msg.total_cost_usd} duration=${msg.duration_ms}ms`);
+    log.info('Agent completed', { namespace: 'agent', threadId, status: msg.subtype, cost: msg.total_cost_usd, durationMs: msg.duration_ms });
     this.state.resultReceived.add(threadId);
     this.state.currentAssistantMsgId.delete(threadId);
 

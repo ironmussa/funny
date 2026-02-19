@@ -3,6 +3,7 @@ import type { HonoEnv } from '../types/hono-env.js';
 import * as tm from '../services/thread-manager.js';
 import * as pm from '../services/project-manager.js';
 import { createWorktree, removeWorktree, removeBranch, getCurrentBranch } from '@funny/core/git';
+import { log } from '../lib/abbacchio.js';
 import { startAgent, stopAgent, isAgentRunning, cleanupThreadState } from '../services/agent-runner.js';
 import { nanoid } from 'nanoid';
 import { createThreadSchema, createIdleThreadSchema, sendMessageSchema, updateThreadSchema, approveToolSchema, validate } from '../validation/schemas.js';
@@ -219,7 +220,7 @@ threadRoutes.post('/', async (c) => {
     await startAgent(threadId, augmentedPrompt, cwd, model || 'sonnet', pMode, images, disallowedTools, allowedTools, provider || 'claude');
   } catch (err: any) {
     // If startAgent throws (e.g. Claude CLI not found), return error to client
-    console.error(`[agent] Failed to start agent for thread ${threadId}:`, err);
+    log.error('Failed to start agent', { namespace: 'agent', threadId, error: err });
 
     // Check if it's a binary-not-found error
     const isBinaryError = err.message?.includes('Could not find the claude CLI binary') ||
@@ -293,7 +294,7 @@ threadRoutes.post('/:id/message', async (c) => {
   try {
     await startAgent(id, augmentedContent, cwd, effectiveModel, effectivePermission, images, disallowedTools, allowedTools, effectiveProvider);
   } catch (err: any) {
-    console.error(`[agent] Failed to start agent for thread ${id}:`, err);
+    log.error('Failed to start agent', { namespace: 'agent', threadId: id, error: err });
 
     // Check if it's a binary-not-found error
     const isBinaryError = err.message?.includes('Could not find the claude CLI binary') ||
@@ -389,7 +390,7 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
       );
     }
   } catch (err: any) {
-    console.error(`[agent] Failed to start agent for thread ${id}:`, err);
+    log.error('Failed to start agent', { namespace: 'agent', threadId: id, error: err });
 
     // Check if it's a binary-not-found error
     const isBinaryError = err.message?.includes('Could not find the claude CLI binary') ||
@@ -443,11 +444,11 @@ threadRoutes.patch('/:id', async (c) => {
     const project = pm.getProject(thread.projectId);
     if (project) {
       await removeWorktree(project.path, thread.worktreePath).catch((e) => {
-        console.warn(`[cleanup] Failed to remove worktree: ${e}`);
+        log.warn('Failed to remove worktree', { namespace: 'cleanup', error: String(e) });
       });
       if (thread.branch) {
         await removeBranch(project.path, thread.branch).catch((e) => {
-          console.warn(`[cleanup] Failed to remove branch: ${e}`);
+          log.warn('Failed to remove branch', { namespace: 'cleanup', error: String(e) });
         });
       }
     }
@@ -486,7 +487,7 @@ threadRoutes.patch('/:id', async (c) => {
         'sonnet', // default model for idle threads
         (thread.permissionMode || 'autoEdit') as import('@funny/shared').PermissionMode
       ).catch((err) => {
-        console.error(`[idle-start] Failed to auto-start agent for thread ${id}:`, err);
+        log.error('Failed to auto-start agent for idle thread', { namespace: 'agent', threadId: id, error: err });
         tm.updateThread(id, { status: 'failed', completedAt: new Date().toISOString() });
       });
     }
@@ -549,7 +550,7 @@ threadRoutes.delete('/:id', async (c) => {
     });
 
     if (isAgentRunning(id)) {
-      stopAgent(id).catch(console.error);
+      stopAgent(id).catch((err) => log.error('Failed to stop agent', { namespace: 'agent', threadId: id, error: err }));
     }
 
     // Only remove worktree/branch for non-external threads (we don't control external worktrees)
@@ -557,11 +558,11 @@ threadRoutes.delete('/:id', async (c) => {
       const project = pm.getProject(thread.projectId);
       if (project) {
         await removeWorktree(project.path, thread.worktreePath).catch((e) => {
-          console.warn(`[cleanup] Failed to remove worktree: ${e}`);
+          log.warn('Failed to remove worktree', { namespace: 'cleanup', error: String(e) });
         });
         if (thread.branch) {
           await removeBranch(project.path, thread.branch).catch((e) => {
-            console.warn(`[cleanup] Failed to remove branch: ${e}`);
+            log.warn('Failed to remove branch', { namespace: 'cleanup', error: String(e) });
           });
         }
       }

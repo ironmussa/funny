@@ -5,6 +5,7 @@
 
 import type { AgentProvider } from '@funny/shared';
 import { checkClaudeBinaryAvailability, validateClaudeBinary } from './claude-binary.js';
+import { log } from '../lib/abbacchio.js';
 
 export interface ProviderAvailability {
   available: boolean;
@@ -112,12 +113,9 @@ export async function logProviderStatus(): Promise<void> {
   const providers = await getAvailableProviders();
   for (const [name, info] of providers) {
     if (info.available) {
-      const parts = [`[server] Provider ${name}: available`];
-      if (info.cliAvailable) parts.push(`(CLI: ${info.cliPath})`);
-      if (info.cliVersion) parts.push(`(${info.cliVersion})`);
-      console.log(parts.join(' '));
+      log.info(`Provider ${name}: available`, { namespace: 'server', provider: name, cliPath: info.cliPath, cliVersion: info.cliVersion });
     } else {
-      console.log(`[server] Provider ${name}: not available — ${info.error ?? 'unknown error'}`);
+      log.info(`Provider ${name}: not available`, { namespace: 'server', provider: name, error: info.error ?? 'unknown error' });
     }
   }
 }

@@ -10,6 +10,7 @@ import { db, schema } from '../db/index.js';
 import { eq, and } from 'drizzle-orm';
 import { addMcpServer, removeMcpServer } from './mcp-service.js';
 import { encrypt } from '../lib/crypto.js';
+import { log } from '../lib/abbacchio.js';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -333,7 +334,7 @@ export async function handleOAuthCallback(
 
     return { serverName: pending.serverName, success: true };
   } catch (err: any) {
-    console.error('[mcp-oauth] Token exchange failed:', err);
+    log.error('OAuth token exchange failed', { namespace: 'mcp-oauth', error: err });
     return { serverName: pending.serverName, success: false, error: err.message };
   }
 }

@@ -9,6 +9,7 @@
 
 import { threadEventBus, type ThreadEventMap } from '../thread-event-bus.js';
 import type { EventHandler, HandlerServiceContext } from './types.js';
+import { log } from '../../lib/abbacchio.js';
 
 // ── Import handlers ─────────────────────────────────────────────
 
@@ -37,7 +38,7 @@ export function registerAllHandlers(ctx: HandlerServiceContext): void {
         }
         await handler.action(payload, ctx);
       } catch (err) {
-        console.error(`[handler:${handler.name}] Error:`, err);
+        log.error(`Handler "${handler.name}" error`, { namespace: 'handler-registry', handler: handler.name, error: err });
       }
     };
 
@@ -45,8 +46,8 @@ export function registerAllHandlers(ctx: HandlerServiceContext): void {
       handler.event as keyof ThreadEventMap,
       wrappedListener as any,
     );
-    console.log(`[handler-registry] Registered "${handler.name}" on "${handler.event}"`);
+    log.debug(`Registered handler "${handler.name}" on "${handler.event}"`, { namespace: 'handler-registry', handler: handler.name, event: handler.event });
   }
 
-  console.log(`[handler-registry] ${allHandlers.length} handler(s) registered`);
+  log.info(`${allHandlers.length} handler(s) registered`, { namespace: 'handler-registry', count: allHandlers.length });
 }

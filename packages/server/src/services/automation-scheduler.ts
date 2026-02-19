@@ -6,6 +6,7 @@ import * as tm from './thread-manager.js';
 import * as pm from './project-manager.js';
 import { startAgent } from './agent-runner.js';
 import { wsBroker } from './ws-broker.js';
+import { log } from '../lib/abbacchio.js';
 
 // Tools that automations are NOT allowed to use (read-only execution)
 const AUTOMATION_DISALLOWED_TOOLS = ['Edit', 'Write', 'Bash', 'NotebookEdit'];
@@ -35,7 +36,7 @@ export async function triggerAutomationRun(automation: {
 }): Promise<void> {
   const project = pm.getProject(automation.projectId);
   if (!project) {
-    console.warn(`[automation-scheduler] Project ${automation.projectId} not found for automation ${automation.id}`);
+    log.warn('Project not found for automation', { namespace: 'automation', projectId: automation.projectId, automationId: automation.id });
     return;
   }
 
@@ -97,14 +98,14 @@ export async function triggerAutomationRun(automation: {
     undefined, // allowedTools
     (automation as any).provider as AgentProvider || 'claude',
   ).catch((err) => {
-    console.error(`[automation-scheduler] Agent error for automation ${automation.id}:`, err);
+    log.error('Agent error for automation', { namespace: 'automation', automationId: automation.id, error: err });
     am.updateRun(runId, {
       status: 'failed',
       completedAt: new Date().toISOString(),
     });
   });
 
-  console.log(`[automation-scheduler] Triggered run ${runId} for automation "${automation.name}"`);
+  log.info(`Triggered run for "${automation.name}"`, { namespace: 'automation', runId, automationId: automation.id });
 }
 
 // ── Cron job management ──────────────────────────────────────────
@@ -130,9 +131,9 @@ function scheduleJob(automation: { id: string; schedule: string; enabled: number
     activeJobs.set(automation.id, job);
 
     const next = job.nextRun();
-    console.log(`[automation-scheduler] Scheduled "${automation.name}" (${automation.schedule}) — next run: ${next?.toISOString() ?? 'never'}`);
+    log.info(`Scheduled "${automation.name}"`, { namespace: 'automation', schedule: automation.schedule, nextRun: next?.toISOString() ?? 'never' });
   } catch (e: any) {
-    console.error(`[automation-scheduler] Invalid cron expression for automation ${automation.id}: "${automation.schedule}" — ${e.message}`);
+    log.error('Invalid cron expression', { namespace: 'automation', automationId: automation.id, schedule: automation.schedule, error: e.message });
   }
 }
 
@@ -250,7 +251,7 @@ export function startScheduler(): void {
   checkCompletedRuns();
   completedRunsTimer = setInterval(checkCompletedRuns, COMPLETED_RUNS_POLL_MS);
 
-  console.log(`[automation-scheduler] Started — ${automations.filter(a => a.enabled).length} active job(s)`);
+  log.info(`Scheduler started`, { namespace: 'automation', activeJobs: automations.filter(a => a.enabled).length });
 }
 
 export function stopScheduler(): void {
@@ -266,5 +267,5 @@ export function stopScheduler(): void {
     completedRunsTimer = null;
   }
 
-  console.log('[automation-scheduler] Stopped');
+  log.info('Scheduler stopped', { namespace: 'automation' });
 }

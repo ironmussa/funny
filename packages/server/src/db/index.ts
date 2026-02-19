@@ -4,6 +4,7 @@ import { resolve } from 'path';
 import { homedir } from 'os';
 import { mkdirSync } from 'fs';
 import * as schema from './schema.js';
+import { log } from '../lib/abbacchio.js';
 
 const dbDir = resolve(homedir(), '.funny');
 mkdirSync(dbDir, { recursive: true });
@@ -22,7 +23,7 @@ const walCheckpointTimer = setInterval(() => {
   try {
     sqlite.exec('PRAGMA wal_checkpoint(PASSIVE)');
   } catch (err) {
-    console.warn('[db] WAL checkpoint failed:', err);
+    log.warn('WAL checkpoint failed', { namespace: 'db', error: err });
   }
 }, WAL_CHECKPOINT_INTERVAL_MS);
 // Don't keep the process alive just for checkpoints
@@ -36,9 +37,9 @@ export function closeDatabase() {
   } catch {}
   try {
     sqlite.close();
-    console.log('[db] Database closed');
+    log.info('Database closed', { namespace: 'db' });
   } catch (err) {
-    console.warn('[db] Error closing database:', err);
+    log.warn('Error closing database', { namespace: 'db', error: err });
   }
 }
 

@@ -22,6 +22,7 @@ import { wsBroker } from './ws-broker.js';
 import * as tm from './thread-manager.js';
 import * as pm from './project-manager.js';
 import type { WSEvent } from '@funny/shared';
+import { log } from '../lib/abbacchio.js';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -217,7 +218,7 @@ function onAccepted(event: IngestEvent): void {
   }
 
   emitWS(state, { type: 'agent:status', threadId, data: { status: 'pending' } });
-  console.log(`[ingest] Thread created id=${threadId} for request_id=${request_id}`);
+  log.info('Thread created', { namespace: 'ingest', threadId, requestId: request_id });
 }
 
 /**

@@ -1,17 +1,18 @@
 import type { ServerWebSocket } from 'bun';
 import type { WSEvent } from '@funny/shared';
+import { log } from '../lib/abbacchio.js';
 
 class WSBroker {
   private clients = new Map<ServerWebSocket<unknown>, string>(); // ws → userId
 
   addClient(ws: ServerWebSocket<unknown>, userId: string): void {
     this.clients.set(ws, userId);
-    console.log(`[ws] Client connected userId=${userId} (${this.clients.size} total)`);
+    log.info('Client connected', { namespace: 'ws', userId, total: this.clients.size });
   }
 
   removeClient(ws: ServerWebSocket<unknown>): void {
     this.clients.delete(ws);
-    console.log(`[ws] Client disconnected (${this.clients.size} total)`);
+    log.info('Client disconnected', { namespace: 'ws', total: this.clients.size });
   }
 
   /** Emit to all clients of a specific user */
@@ -35,7 +36,7 @@ class WSBroker {
     }
 
     if (sent === 0 && event.type === 'agent:result') {
-      console.warn(`[ws] agent:result for thread=${event.threadId} sent to 0 clients (userId=${userId}, total=${this.clients.size})`);
+      log.warn('agent:result sent to 0 clients', { namespace: 'ws', threadId: event.threadId, userId, total: this.clients.size });
     }
   }
 
@@ -59,7 +60,7 @@ class WSBroker {
     }
 
     if (sent === 0 && event.type === 'agent:result') {
-      console.warn(`[ws] agent:result for thread=${event.threadId} sent to 0 clients (broadcast, total=${this.clients.size})`);
+      log.warn('agent:result sent to 0 clients (broadcast)', { namespace: 'ws', threadId: event.threadId, total: this.clients.size });
     }
   }
 

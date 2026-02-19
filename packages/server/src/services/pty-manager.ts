@@ -7,6 +7,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import { join } from 'path';
 import { createInterface } from 'readline';
 import { wsBroker } from './ws-broker.js';
+import { log } from '../lib/abbacchio.js';
 
 let helperProcess: ChildProcess | null = null;
 let helperStdin: any = null; // Type as any to avoid strict stream types mismatch
@@ -17,7 +18,7 @@ function ensureHelper() {
   if (helperProcess && !helperProcess.killed) return;
 
   const helperPath = join(import.meta.dir, 'pty-helper.mjs');
-  console.log(`[pty-manager] Spawning helper process: node ${helperPath}`);
+  log.info('Spawning PTY helper process', { namespace: 'pty-manager', helperPath });
 
   helperProcess = spawn('node', [helperPath], {
     stdio: ['pipe', 'pipe', 'inherit'], // Pipe stdin/stdout, inherit stderr for logs
@@ -38,13 +39,13 @@ function ensureHelper() {
         const msg = JSON.parse(line);
         handleHelperMessage(msg);
       } catch (err) {
-        console.error('[pty-manager] Failed to parse helper output:', line, err);
+        log.error('Failed to parse PTY helper output', { namespace: 'pty-manager', line, error: err });
       }
     });
   }
 
   helperProcess.on('exit', (code) => {
-    console.warn(`[pty-manager] Helper process exited with code ${code}`);
+    log.warn('PTY helper process exited', { namespace: 'pty-manager', exitCode: code });
     helperProcess = null;
     helperStdin = null;
     // We might want to restart it immediately or on next demand
@@ -86,7 +87,7 @@ function handleHelperMessage(msg: any) {
     case 'pty:exit':
       if (data.ptyId) {
         const session = activeSessions.get(data.ptyId);
-        console.log(`[pty-manager] PTY ${data.ptyId} exited with code ${data.exitCode}`);
+        log.info('PTY exited', { namespace: 'pty-manager', ptyId: data.ptyId, exitCode: data.exitCode });
 
         const event = {
           type: 'pty:exit' as const,
@@ -129,7 +130,7 @@ export function spawnPty(
 ): void {
   if (activeSessions.has(id)) return;
 
-  console.log(`[pty-manager] Requesting spawn PTY ${id}`);
+  log.info('Requesting spawn PTY', { namespace: 'pty-manager', ptyId: id });
   activeSessions.set(id, { userId, cwd });
 
   sendToHelper('spawn', { id, cwd, cols, rows, env: process.env });
@@ -144,7 +145,7 @@ export function resizePty(id: string, cols: number, rows: number): void {
 }
 
 export function killPty(id: string): void {
-  console.log(`[pty-manager] Requesting kill PTY ${id}`);
+  log.info('Requesting kill PTY', { namespace: 'pty-manager', ptyId: id });
   sendToHelper('kill', { id });
   activeSessions.delete(id);
 }

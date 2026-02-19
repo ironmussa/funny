@@ -12,15 +12,17 @@
     "test": "bun test"
   },
   "dependencies": {
+    "@abbacchio/transport": "^0.1.5",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.42",
     "@funny/core": "*",
     "@funny/shared": "*",
-    "@anthropic-ai/claude-agent-sdk": "^0.2.42",
     "better-auth": "^1.4.18",
     "croner": "^10.0.1",
     "drizzle-orm": "^0.45.1",
     "hono": "^4.11.9",
     "nanoid": "^5.0.9",
     "node-pty": "^1.1.0",
+    "winston": "^3.19.0",
     "zod": "^4.3.6"
   },
   "devDependencies": {

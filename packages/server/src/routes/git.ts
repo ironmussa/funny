@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { existsSync } from 'fs';
 import * as tm from '../services/thread-manager.js';
+import { log } from '../lib/abbacchio.js';
 import { getDiff, getDiffSummary, getSingleFileDiff, stageFiles, unstageFiles, revertFiles, addToGitignore, commit, push, pull, createPR, mergeBranch, git, getStatusSummary, deriveGitSyncState, getLog, stash, stashPop, stashList, resetSoft, type GitIdentityOptions, removeWorktree, removeBranch, sanitizePath } from '@funny/core/git';
 import { validate, mergeSchema, stageFilesSchema, commitSchema, createPRSchema } from '../validation/schemas.js';
 import { requireThread, requireThreadCwd, requireProject } from '../utils/route-helpers.js';
@@ -363,7 +364,7 @@ ${diffSummary}`;
 
       return resultText || null;
     } catch (e: any) {
-      console.error('[generate-commit-message] SDK query error:', e.message);
+      log.error('SDK query error generating commit message', { namespace: 'git', error: e.message });
       return null;
     } finally {
       clearTimeout(timeout);
@@ -422,8 +423,8 @@ gitRoutes.post('/:threadId/merge', async (c) => {
   }
 
   if (parsed.value.cleanup && thread.worktreePath) {
-    await removeWorktree(project.path, thread.worktreePath).catch(console.warn);
-    await removeBranch(project.path, thread.branch).catch(console.warn);
+    await removeWorktree(project.path, thread.worktreePath).catch((e) => log.warn('Failed to remove worktree after merge', { namespace: 'git', error: String(e) }));
+    await removeBranch(project.path, thread.branch).catch((e) => log.warn('Failed to remove branch after merge', { namespace: 'git', error: String(e) }));
     tm.updateThread(threadId, { worktreePath: null, branch: null });
     // Release in-memory agent state for the merged thread
     cleanupThreadState(threadId);

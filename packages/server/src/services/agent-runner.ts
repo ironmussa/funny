@@ -7,6 +7,7 @@ import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import { AgentStateTracker } from './agent-state.js';
 import { AgentMessageHandler, type ProjectLookup } from './agent-message-handler.js';
 import { threadEventBus } from './thread-event-bus.js';
+import { log } from '../lib/abbacchio.js';
 
 // ── AgentRunner class ───────────────────────────────────────────
 
@@ -31,12 +32,14 @@ export class AgentRunner {
     });
 
     this.orchestrator.on('agent:error', (threadId: string, err: Error) => {
+      log.error('Agent error', { namespace: 'agent', threadId, error: err.message });
       this.threadManager.updateThread(threadId, { status: 'failed', completedAt: new Date().toISOString() });
       this.emitWS(threadId, 'agent:error', { error: err.message });
       this.emitWS(threadId, 'agent:status', { status: 'failed' });
     });
 
     this.orchestrator.on('agent:unexpected-exit', (threadId: string) => {
+      log.error('Agent exited unexpectedly', { namespace: 'agent', threadId });
       this.threadManager.updateThread(threadId, { status: 'failed', completedAt: new Date().toISOString() });
       this.emitWS(threadId, 'agent:error', {
         error: 'Agent process exited unexpectedly without a result',
@@ -45,12 +48,13 @@ export class AgentRunner {
     });
 
     this.orchestrator.on('agent:stopped', (threadId: string) => {
+      log.info('Agent stopped', { namespace: 'agent', threadId });
       this.threadManager.updateThread(threadId, { status: 'stopped', completedAt: new Date().toISOString() });
       this.emitWS(threadId, 'agent:status', { status: 'stopped' });
     });
 
     this.orchestrator.on('agent:session-cleared', (threadId: string) => {
-      console.warn(`[agent] Clearing stale sessionId for thread=${threadId} after resume failure`);
+      log.warn('Clearing stale sessionId after resume failure', { namespace: 'agent', threadId });
       this.threadManager.updateThread(threadId, { sessionId: null });
     });
   }
@@ -147,7 +151,7 @@ export class AgentRunner {
         model, provider,
       });
     } catch (err: any) {
-      console.error(`[agent] Failed to start ${provider} process for thread=${threadId}:`, err.message);
+      log.error(`Failed to start ${provider} process`, { namespace: 'agent', threadId, error: err.message });
       this.threadManager.updateThread(threadId, {
         status: 'failed',
         completedAt: new Date().toISOString()

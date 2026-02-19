@@ -7,6 +7,7 @@ import { resolve } from 'path';
 import { homedir } from 'os';
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { randomBytes, timingSafeEqual } from 'crypto';
+import { log } from '../lib/abbacchio.js';
 
 const AUTH_DIR = resolve(homedir(), '.funny');
 const TOKEN_PATH = resolve(AUTH_DIR, 'auth-token');
@@ -30,7 +31,7 @@ export function getAuthToken(): string {
   // Generate a 32-byte (256-bit) random token, hex-encoded = 64 chars
   cachedToken = randomBytes(32).toString('hex');
   writeFileSync(TOKEN_PATH, cachedToken, { mode: 0o600 });
-  console.log('[auth] Generated new auth token at', TOKEN_PATH);
+  log.info('Generated new auth token', { namespace: 'auth', path: TOKEN_PATH });
   return cachedToken;
 }
 

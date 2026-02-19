@@ -8,6 +8,7 @@ import { getClaudeBinaryPath } from '../utils/claude-binary.js';
 import { execute, ProcessExecutionError } from '@funny/core/git';
 import { processError, internal, type DomainError } from '@funny/shared/errors';
 import type { McpServer, McpServerType } from '@funny/shared';
+import { log } from '../lib/abbacchio.js';
 
 /**
  * List MCP servers configured for a project.
@@ -33,7 +34,7 @@ export function listMcpServers(projectPath: string): ResultAsync<McpServer[], Do
 
         return parseMcpListOutput(output);
       } catch (err) {
-        console.error('[mcp-service] Failed to list MCP servers:', err);
+        log.error('Failed to list MCP servers', { namespace: 'mcp-service', error: err });
         return [];
       }
     })(),
@@ -185,7 +186,7 @@ export function addMcpServer(opts: {
     }
   }
 
-  console.log(`[mcp-service] Adding server: ${binary} ${cliArgs.join(' ')}`);
+  log.info('Adding MCP server', { namespace: 'mcp-service', binary, args: cliArgs });
 
   return ResultAsync.fromPromise(
     execute(binary, cliArgs, { cwd: opts.projectPath, timeout: 30_000 }).then(() => undefined),
@@ -215,7 +216,7 @@ export function removeMcpServer(opts: {
 
   cliArgs.push(opts.name);
 
-  console.log(`[mcp-service] Removing server: ${binary} ${cliArgs.join(' ')}`);
+  log.info('Removing MCP server', { namespace: 'mcp-service', binary, args: cliArgs });
 
   return ResultAsync.fromPromise(
     execute(binary, cliArgs, { cwd: opts.projectPath, timeout: 15_000 }).then(() => undefined),

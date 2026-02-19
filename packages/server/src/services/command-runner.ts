@@ -6,6 +6,7 @@
 
 import { wsBroker } from './ws-broker.js';
 import * as pm from './project-manager.js';
+import { log } from '../lib/abbacchio.js';
 
 const KILL_GRACE_MS = 3_000;
 const IS_WINDOWS = process.platform === 'win32';
@@ -68,7 +69,7 @@ export async function startCommand(
   const shell = IS_WINDOWS ? 'cmd' : 'sh';
   const shellFlag = IS_WINDOWS ? '/c' : '-c';
 
-  console.log(`[command-runner] Starting "${label}": ${command} in ${cwd}`);
+  log.info(`Starting command "${label}"`, { namespace: 'command-runner', command, cwd });
 
   const proc = Bun.spawn([shell, shellFlag, command], {
     cwd,
@@ -102,7 +103,7 @@ export async function startCommand(
   // Handle exit
   proc.exited
     .then((exitCode) => {
-      console.log(`[command-runner] "${label}" exited with code ${exitCode}`);
+      log.info(`Command "${label}" exited`, { namespace: 'command-runner', exitCode });
       entry.exited = true;
       activeCommands.delete(commandId);
       emitWS('command:status', {
@@ -114,7 +115,7 @@ export async function startCommand(
       }, projectId);
     })
     .catch((err) => {
-      console.error(`[command-runner] "${label}" error:`, err);
+      log.error(`Command "${label}" error`, { namespace: 'command-runner', error: err });
       entry.exited = true;
       activeCommands.delete(commandId);
       emitWS('command:status', {
@@ -153,7 +154,7 @@ export async function stopCommand(commandId: string): Promise<void> {
   const entry = activeCommands.get(commandId);
   if (!entry || entry.exited) return;
 
-  console.log(`[command-runner] Stopping "${entry.label}"`);
+  log.info(`Stopping command "${entry.label}"`, { namespace: 'command-runner' });
 
   // On Windows, taskkill /T /F kills the entire process tree immediately,
   // so no grace period is needed. On Unix, try SIGTERM first, then SIGKILL.

@@ -6,6 +6,7 @@
 import type { EventHandler } from './types.js';
 import type { GitChangedEvent } from '../thread-event-bus.js';
 import { getStatusSummary, deriveGitSyncState } from '@funny/core/git';
+import { log } from '../../lib/abbacchio.js';
 
 export const gitStatusHandler: EventHandler<'git:changed'> = {
   name: 'emit-git-status-on-change',
@@ -27,7 +28,7 @@ export const gitStatusHandler: EventHandler<'git:changed'> = {
     const project = ctx.getProject(thread.projectId);
     if (!project) return;
 
-    console.log(`[git-status-handler] Emitting git status for thread=${threadId} after tool=${event.toolName}`);
+    log.debug('Emitting git status', { namespace: 'git-status-handler', threadId, toolName: event.toolName });
 
     const summaryResult = await getStatusSummary(
       worktreePath,
@@ -36,7 +37,7 @@ export const gitStatusHandler: EventHandler<'git:changed'> = {
     );
 
     if (summaryResult.isErr()) {
-      console.error(`[git-status-handler] Failed to get status: ${summaryResult.error}`);
+      log.error('Failed to get git status', { namespace: 'git-status-handler', threadId, error: String(summaryResult.error) });
       return;
     }
 

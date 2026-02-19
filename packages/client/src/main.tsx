@@ -1,6 +1,7 @@
 import React, { lazy, Suspense, useEffect, useSyncExternalStore } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
+import { AbbacchioProvider } from '@abbacchio/browser-transport/react';
 import { App } from './App';
 import { MobilePage } from './components/MobilePage';
 import { LoginPage } from './components/LoginPage';
@@ -77,14 +78,23 @@ function AuthGate() {
   );
 }
 
+const abbacchioUrl = import.meta.env.VITE_ABBACCHIO_URL || 'http://localhost:4000/api/logs';
+const abbacchioChannel = import.meta.env.VITE_ABBACCHIO_CHANNEL || 'funny-client';
+
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <TooltipProvider delayDuration={300} skipDelayDuration={0}>
-      {isPreviewWindow ? (
-        <PreviewBrowser />
-      ) : (
-        <AuthGate />
-      )}
-    </TooltipProvider>
+    <AbbacchioProvider
+      url={abbacchioUrl}
+      channel={abbacchioChannel}
+      captureConsole
+    >
+      <TooltipProvider delayDuration={300} skipDelayDuration={0}>
+        {isPreviewWindow ? (
+          <PreviewBrowser />
+        ) : (
+          <AuthGate />
+        )}
+      </TooltipProvider>
+    </AbbacchioProvider>
   </React.StrictMode>
 );

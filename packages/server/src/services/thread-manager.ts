@@ -1,6 +1,7 @@
 import { eq, and, or, ne, asc, desc, lt, inArray, like, count as drizzleCount, sql } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { db, schema } from '../db/index.js';
+import { log } from '../lib/abbacchio.js';
 
 /** Escape SQL LIKE wildcards so user input is treated as literal text */
 function escapeLike(value: string): string {
@@ -285,7 +286,7 @@ export function markStaleThreadsInterrupted(): void {
       .set({ status: 'interrupted', completedAt: new Date().toISOString() })
       .where(staleCondition)
       .run();
-    console.log(`[thread-manager] Marked ${stale.length} stale thread(s) as interrupted`);
+    log.info(`Marked ${stale.length} stale thread(s) as interrupted`, { namespace: 'thread-manager', count: stale.length });
   }
 }
 

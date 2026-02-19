@@ -7,6 +7,7 @@ import { platform } from 'os';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { executeSync } from '@funny/core/git';
+import { log } from '../lib/abbacchio.js';
 
 const IS_WINDOWS = platform() === 'win32';
 const BINARY_NAME = IS_WINDOWS ? 'claude.exe' : 'claude';
@@ -131,7 +132,7 @@ export function getClaudeBinaryPath(): string {
   if (!cachedBinaryPath) {
     cachedBinaryPath = resolveClaudeBinary();
     const version = validateClaudeBinary(cachedBinaryPath);
-    console.log(`[claude-binary] Found: ${cachedBinaryPath} (${version})`);
+    log.info(`Binary found: ${cachedBinaryPath}`, { namespace: 'claude-binary', version });
   }
   return cachedBinaryPath;
 }

@@ -150,7 +150,7 @@ describe('AgentRunner class', () => {
         return lastProcess;
       },
     };
-    runner = new AgentRunner(tmMock, wsMock, factory);
+    runner = new AgentRunner(tmMock, wsMock, factory, () => undefined);
   });
 
   // ── startAgent ──────────────────────────────────────────────

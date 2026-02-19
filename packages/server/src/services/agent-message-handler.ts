@@ -2,7 +2,6 @@ import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import type { CLIMessage } from '@funny/core/agents';
 import type { WSEvent } from '@funny/shared';
 import type { AgentStateTracker } from './agent-state.js';
-import * as pm from './project-manager.js';
 import { threadEventBus } from './thread-event-bus.js';
 import { getStatusSummary, deriveGitSyncState } from '@funny/core/git';
 
@@ -21,12 +20,28 @@ function decodeUnicodeEscapes(str: string): string {
  * Handles all CLI messages from Claude processes — system init,
  * assistant text/tool_use, user tool_result, and result.
  */
+export type ProjectLookup = (id: string) => { path: string;[key: string]: any } | undefined;
+
 export class AgentMessageHandler {
+  private _getProject: ProjectLookup | undefined;
+
   constructor(
     private state: AgentStateTracker,
     private threadManager: IThreadManager,
     private wsBroker: IWSBroker,
-  ) {}
+    getProject?: ProjectLookup,
+  ) {
+    this._getProject = getProject;
+  }
+
+  /** Lazy-load project-manager to avoid importing the singleton DB in tests */
+  private getProject(id: string): { path: string;[key: string]: any } | undefined {
+    if (!this._getProject) {
+      const pm = require('./project-manager.js');
+      this._getProject = pm.getProject;
+    }
+    return this._getProject!(id);
+  }
 
   private emitWS(threadId: string, type: WSEvent['type'], data: unknown): void {
     const event = { type, threadId, data } as WSEvent;
@@ -231,7 +246,7 @@ export class AgentMessageHandler {
           if (tc?.name && FILE_MODIFYING_TOOLS.has(tc.name) && !permissionDeniedMatch) {
             const thread = this.threadManager.getThread(threadId);
             if (thread) {
-              const project = pm.getProject(thread.projectId);
+              const project = this.getProject(thread.projectId);
               threadEventBus.emit('git:changed', {
                 threadId,
                 projectId: thread.projectId,
@@ -280,7 +295,7 @@ export class AgentMessageHandler {
       const threadForStage = this.threadManager.getThread(threadId);
       if (threadForStage && threadForStage.stage === 'in_progress') {
         this.threadManager.updateThread(threadId, { stage: 'review' });
-        const project = pm.getProject(threadForStage.projectId);
+        const project = this.getProject(threadForStage.projectId);
         threadEventBus.emit('thread:stage-changed', {
           threadId, projectId: threadForStage.projectId, userId: threadForStage.userId,
           worktreePath: threadForStage.worktreePath ?? null,
@@ -292,7 +307,7 @@ export class AgentMessageHandler {
       // Emit agent:completed
       const t = this.threadManager.getThread(threadId);
       if (t) {
-        const proj = pm.getProject(t.projectId);
+        const proj = this.getProject(t.projectId);
         threadEventBus.emit('agent:completed', {
           threadId, projectId: t.projectId, userId: t.userId,
           worktreePath: t.worktreePath ?? null,
@@ -330,7 +345,7 @@ export class AgentMessageHandler {
     const thread = this.threadManager.getThread(threadId);
     if (!thread?.worktreePath || thread.mode !== 'worktree') return;
 
-    const project = pm.getProject(thread.projectId);
+    const project = this.getProject(thread.projectId);
     if (!project) return;
 
     const summaryResult = await getStatusSummary(

@@ -66,70 +66,18 @@ describe('rateLimit middleware', () => {
     expect(res.headers.get('Retry-After')).toBe('2');
   });
 
-  test('uses x-forwarded-for header for IP (first IP, trimmed)', async () => {
-    app.use('*', rateLimit({ windowMs: 60_000, max: 1 }));
-    app.get('/test', (c) => c.json({ ok: true }));
-
-    // First request from IP "1.2.3.4"
-    const res1 = await app.request('/test', {
-      headers: { 'x-forwarded-for': '  1.2.3.4  , 5.6.7.8' },
-    });
-    expect(res1.status).toBe(200);
-
-    // Second from same IP should be blocked
-    const res2 = await app.request('/test', {
-      headers: { 'x-forwarded-for': '1.2.3.4, 9.10.11.12' },
-    });
-    expect(res2.status).toBe(429);
-  });
-
-  test('uses x-real-ip as fallback when x-forwarded-for is missing', async () => {
-    app.use('*', rateLimit({ windowMs: 60_000, max: 1 }));
-    app.get('/test', (c) => c.json({ ok: true }));
-
-    const res1 = await app.request('/test', {
-      headers: { 'x-real-ip': '10.0.0.1' },
-    });
-    expect(res1.status).toBe(200);
-
-    const res2 = await app.request('/test', {
-      headers: { 'x-real-ip': '10.0.0.1' },
-    });
-    expect(res2.status).toBe(429);
-  });
-
-  test('falls back to "unknown" when no IP headers present', async () => {
+  test('uses socket remoteAddress for IP keying (falls back to "unknown")', async () => {
+    // Without a real Bun server, app.request() has no c.env.remoteAddress,
+    // so all requests are keyed as "unknown" and share a single rate limit bucket
     app.use('*', rateLimit({ windowMs: 60_000, max: 1 }));
     app.get('/test', (c) => c.json({ ok: true }));
 
     const res1 = await app.request('/test');
     expect(res1.status).toBe(200);
 
-    // Second request with no headers should also be keyed as 'unknown' and blocked
+    // Second request (same "unknown" IP) should be blocked
     const res2 = await app.request('/test');
     expect(res2.status).toBe(429);
-  });
-
-  test('different IPs have independent rate limits', async () => {
-    app.use('*', rateLimit({ windowMs: 60_000, max: 1 }));
-    app.get('/test', (c) => c.json({ ok: true }));
-
-    const res1 = await app.request('/test', {
-      headers: { 'x-forwarded-for': '1.1.1.1' },
-    });
-    expect(res1.status).toBe(200);
-
-    // Different IP should still be allowed
-    const res2 = await app.request('/test', {
-      headers: { 'x-forwarded-for': '2.2.2.2' },
-    });
-    expect(res2.status).toBe(200);
-
-    // Original IP should be blocked
-    const res3 = await app.request('/test', {
-      headers: { 'x-forwarded-for': '1.1.1.1' },
-    });
-    expect(res3.status).toBe(429);
   });
 
   test('window expiry allows new requests after time passes', async () => {

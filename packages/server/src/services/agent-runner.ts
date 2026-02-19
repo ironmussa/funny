@@ -5,7 +5,7 @@ import { AgentOrchestrator, defaultProcessFactory } from '@funny/core/agents';
 import type { IAgentProcessFactory } from '@funny/core/agents';
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import { AgentStateTracker } from './agent-state.js';
-import { AgentMessageHandler } from './agent-message-handler.js';
+import { AgentMessageHandler, type ProjectLookup } from './agent-message-handler.js';
 import { threadEventBus } from './thread-event-bus.js';
 
 // ── AgentRunner class ───────────────────────────────────────────
@@ -19,10 +19,11 @@ export class AgentRunner {
     private threadManager: IThreadManager,
     private wsBroker: IWSBroker,
     processFactory: IAgentProcessFactory,
+    getProject?: ProjectLookup,
   ) {
     this.orchestrator = new AgentOrchestrator(processFactory);
     this.state = new AgentStateTracker();
-    this.messageHandler = new AgentMessageHandler(this.state, threadManager, wsBroker);
+    this.messageHandler = new AgentMessageHandler(this.state, threadManager, wsBroker, getProject);
 
     // Subscribe to orchestrator events — bridge to DB + WebSocket
     this.orchestrator.on('agent:message', (threadId: string, msg: any) => {

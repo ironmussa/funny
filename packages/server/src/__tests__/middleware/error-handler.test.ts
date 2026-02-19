@@ -12,7 +12,7 @@ describe('handleError', () => {
     return app;
   }
 
-  test('returns 400 for ProcessExecutionError', async () => {
+  test('returns 400 with generic message for ProcessExecutionError', async () => {
     const error = new Error('git checkout failed');
     error.name = 'ProcessExecutionError';
     (error as any).command = 'git checkout main';
@@ -23,10 +23,10 @@ describe('handleError', () => {
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body).toEqual({ error: 'git checkout failed' });
+    expect(body).toEqual({ error: 'Command execution failed' });
   });
 
-  test('returns 500 for generic Error', async () => {
+  test('returns 500 with generic message for generic Error', async () => {
     const error = new Error('something broke');
 
     const app = createApp(error);
@@ -34,7 +34,7 @@ describe('handleError', () => {
 
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body).toEqual({ error: 'something broke' });
+    expect(body).toEqual({ error: 'Internal server error' });
   });
 
   test('returns 500 with "Internal server error" when error has no message', async () => {
@@ -65,7 +65,7 @@ describe('handleError', () => {
 
     expect(res.status).toBe(400);
     const body = await res.json();
-    expect(body).toEqual({ error: 'command not found' });
+    expect(body).toEqual({ error: 'Command execution failed' });
   });
 
   test('returns 500 for TypeError', async () => {
@@ -76,7 +76,7 @@ describe('handleError', () => {
 
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body).toEqual({ error: 'Cannot read property of undefined' });
+    expect(body).toEqual({ error: 'Internal server error' });
   });
 
   test('returns 500 for RangeError', async () => {
@@ -87,7 +87,7 @@ describe('handleError', () => {
 
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body).toEqual({ error: 'Maximum call stack size exceeded' });
+    expect(body).toEqual({ error: 'Internal server error' });
   });
 
   test('response body is valid JSON with error key', async () => {
@@ -111,6 +111,6 @@ describe('handleError', () => {
     const res = await app.request('/test');
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body).toEqual({ error: 'async failure' });
+    expect(body).toEqual({ error: 'Internal server error' });
   });
 });

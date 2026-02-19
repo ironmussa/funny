@@ -7,7 +7,7 @@ import { useTerminalStore } from '@/stores/terminal-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { editorLabels, type Editor } from '@/stores/settings-store';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
-import { GitCompare, Globe, Terminal, ExternalLink, Pin, PinOff, Rocket, Play, Square, Loader2, Columns3, ArrowLeft } from 'lucide-react';
+import { GitCompare, Globe, Terminal, ExternalLink, Pin, PinOff, Rocket, Play, Square, Loader2, Columns3, ArrowLeft, FolderOpen, Copy, ClipboardList, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -35,9 +35,69 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import type { StartupCommand } from '@funny/shared';
+import type { StartupCommand, Message, ToolCall } from '@funny/shared';
 
+type MessageWithToolCalls = Message & { toolCalls?: ToolCall[] };
 
+function threadToMarkdown(messages: MessageWithToolCalls[], includeToolCalls: boolean): string {
+  const lines: string[] = [];
+  for (const msg of messages) {
+    const role = msg.role === 'user' ? 'User' : msg.role === 'assistant' ? 'Assistant' : 'System';
+    if (msg.content?.trim()) {
+      lines.push(`## ${role}\n\n${msg.content.trim()}\n`);
+    }
+    if (includeToolCalls && msg.toolCalls?.length) {
+      for (const tc of msg.toolCalls) {
+        let inputStr = '';
+        try {
+          const parsed = typeof tc.input === 'string' ? JSON.parse(tc.input) : tc.input;
+          inputStr = JSON.stringify(parsed, null, 2);
+        } catch { inputStr = String(tc.input); }
+        lines.push(`### Tool: ${tc.name}\n\n\`\`\`json\n${inputStr}\n\`\`\`\n`);
+        if (tc.output) {
+          lines.push(`**Output:**\n\n\`\`\`\n${tc.output}\n\`\`\`\n`);
+        }
+      }
+    }
+  }
+  return lines.join('\n');
+}
+
+function CopyThreadButton({ includeToolCalls }: { includeToolCalls: boolean }) {
+  const { t } = useTranslation();
+  const activeThread = useAppStore(s => s.activeThread);
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = useCallback(() => {
+    if (!activeThread?.messages?.length) return;
+    const md = threadToMarkdown(activeThread.messages, includeToolCalls);
+    navigator.clipboard.writeText(md);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  }, [activeThread?.messages, includeToolCalls]);
+
+  const Icon = copied ? Check : includeToolCalls ? ClipboardList : Copy;
+  const tooltip = includeToolCalls
+    ? t('thread.copyWithTools', 'Copy with tool calls')
+    : t('thread.copyText', 'Copy text only');
+
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          onClick={handleCopy}
+          className={copied ? 'text-status-success' : 'text-muted-foreground'}
+          disabled={!activeThread?.messages?.length}
+        >
+          <Icon className="h-4 w-4" />
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{tooltip}</TooltipContent>
+    </Tooltip>
+  );
+}
 
 function StartupCommandsPopover({ projectId }: { projectId: string }) {
   const { t } = useTranslation();
@@ -229,7 +289,8 @@ export const ProjectHeader = memo(function ProjectHeader() {
           <BreadcrumbList>
             {project && (
               <BreadcrumbItem className="flex-shrink-0">
-                <BreadcrumbLink className="text-sm whitespace-nowrap cursor-default">
+                <BreadcrumbLink className="text-sm whitespace-nowrap cursor-default flex items-center gap-1.5">
+                  <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
                   {project.name}
                 </BreadcrumbLink>
               </BreadcrumbItem>
@@ -253,6 +314,8 @@ export const ProjectHeader = memo(function ProjectHeader() {
         </Breadcrumb>
         </div>
         <div className="flex items-center gap-2">
+          <CopyThreadButton includeToolCalls={false} />
+          <CopyThreadButton includeToolCalls={true} />
           <StartupCommandsPopover projectId={projectId!} />
           {runningWithPort.length > 0 && (
             <Tooltip>

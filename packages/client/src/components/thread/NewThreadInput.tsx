@@ -23,8 +23,8 @@ export function NewThreadInput() {
     prompt: string,
     opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; sendToBacklog?: boolean; fileReferences?: { path: string }[] },
     images?: any[]
-  ) => {
-    if (!newThreadProjectId || creating) return;
+  ): Promise<boolean> => {
+    if (!newThreadProjectId || creating) return false;
     setCreating(true);
 
     const threadMode = (opts.threadMode as 'local' | 'worktree') || defaultThreadMode;
@@ -42,14 +42,14 @@ export function NewThreadInput() {
       if (result.isErr()) {
         toast.error(result.error.message);
         setCreating(false);
-        return;
+        return false;
       }
 
       await loadThreadsForProject(newThreadProjectId);
       setCreating(false);
       toast.success(t('toast.threadCreated', { title: prompt.slice(0, 200) }));
       cancelNewThread();
-      return;
+      return true;
     }
 
     // Normal mode: create and execute thread
@@ -71,12 +71,13 @@ export function NewThreadInput() {
     if (result.isErr()) {
       toast.error(result.error.message);
       setCreating(false);
-      return;
+      return false;
     }
 
     await loadThreadsForProject(newThreadProjectId);
     setCreating(false);
     navigate(`/projects/${newThreadProjectId}/threads/${result.value.id}`);
+    return true;
   };
 
   return (

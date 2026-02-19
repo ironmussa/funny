@@ -294,7 +294,7 @@ function BranchPicker({
 }
 
 interface PromptInputProps {
-  onSubmit: (prompt: string, opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; cwd?: string; sendToBacklog?: boolean; fileReferences?: { path: string }[] }, images?: ImageAttachment[]) => void;
+  onSubmit: (prompt: string, opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; cwd?: string; sendToBacklog?: boolean; fileReferences?: { path: string }[] }, images?: ImageAttachment[]) => Promise<boolean | void> | boolean | void;
   onStop?: () => void;
   loading?: boolean;
   running?: boolean;
@@ -642,23 +642,35 @@ export function PromptInput({
     ta.style.overflowY = ta.scrollHeight > maxHeight ? 'auto' : 'hidden';
   }, [prompt]);
 
-  const handleSubmit = () => {
+  const handleSubmit = async () => {
     if ((!prompt.trim() && images.length === 0) || loading) return;
-    onSubmit(
-      prompt,
+
+    // Capture current values and clear immediately for responsive UX
+    const submittedPrompt = prompt;
+    const submittedImages = images.length > 0 ? images : undefined;
+    const submittedFiles = selectedFiles.length > 0 ? selectedFiles.map(p => ({ path: p })) : undefined;
+    setPrompt('');
+    setImages([]);
+    setSelectedFiles([]);
+    if (selectedThreadId) clearPromptDraft(selectedThreadId);
+
+    const result = await onSubmit(
+      submittedPrompt,
       {
         model,
         mode,
         ...(isNewThread ? { threadMode, baseBranch: threadMode === 'worktree' ? selectedBranch : undefined, sendToBacklog } : {}),
         cwd: cwdOverride || undefined,
-        fileReferences: selectedFiles.length > 0 ? selectedFiles.map(p => ({ path: p })) : undefined,
+        fileReferences: submittedFiles,
       },
-      images.length > 0 ? images : undefined
+      submittedImages
     );
-    setPrompt('');
-    setImages([]);
-    setSelectedFiles([]);
-    if (selectedThreadId) clearPromptDraft(selectedThreadId);
+    if (result === false) {
+      // Restore on failure
+      setPrompt(submittedPrompt);
+      setImages(submittedImages ?? []);
+      setSelectedFiles(submittedFiles?.map(f => f.path) ?? []);
+    }
   };
 
   const handleKeyDown = (e: React.KeyboardEvent) => {

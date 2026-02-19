@@ -1,5 +1,5 @@
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent, waitFor } from '@testing-library/react';
 import { renderWithProviders } from '../helpers/render';
 import { PromptInput } from '@/components/PromptInput';
 import { useAppStore } from '@/stores/app-store';
@@ -94,7 +94,7 @@ describe('PromptInput', () => {
     expect(screen.queryByTitle('prompt.stopAgent')).toBeNull();
   });
 
-  test('submit clears the textarea', () => {
+  test('submit clears the textarea', async () => {
     const onSubmit = vi.fn();
     renderWithProviders(<PromptInput onSubmit={onSubmit} />);
 
@@ -103,7 +103,20 @@ describe('PromptInput', () => {
     expect(textarea.value).toBe('task');
 
     fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
-    expect(textarea.value).toBe('');
+    await waitFor(() => expect(textarea.value).toBe(''));
+  });
+
+  test('submit preserves textarea when onSubmit returns false', async () => {
+    const onSubmit = vi.fn().mockResolvedValue(false);
+    renderWithProviders(<PromptInput onSubmit={onSubmit} />);
+
+    const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: 'my task' } });
+    expect(textarea.value).toBe('my task');
+
+    fireEvent.keyDown(textarea, { key: 'Enter', shiftKey: false });
+    await waitFor(() => expect(onSubmit).toHaveBeenCalled());
+    expect(textarea.value).toBe('my task');
   });
 
   test('textarea is disabled when loading=true', () => {

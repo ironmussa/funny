@@ -49,7 +49,8 @@ import { editorLabels } from '@/stores/settings-store';
 const markdownComponents = {
   a: ({ href, children }: any) => {
     const text = String(children);
-    const fileMatch = text.match(FILE_PATH_RE);
+    const isWebUrl = href && /^https?:\/\//.test(href);
+    const fileMatch = !isWebUrl && text.match(FILE_PATH_RE);
     if (fileMatch) {
       const editor = useSettingsStore.getState().defaultEditor;
       const uri = toEditorUriWithLine(fileMatch[0], editor);

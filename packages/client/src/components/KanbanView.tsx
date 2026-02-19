@@ -397,8 +397,8 @@ export function KanbanView({ threads, projectId, search, contentSnippets, highli
     prompt: string,
     opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; sendToBacklog?: boolean },
     images?: any[]
-  ) => {
-    if (!slideUpProjectId || creating) return;
+  ): Promise<boolean> => {
+    if (!slideUpProjectId || creating) return false;
     setCreating(true);
 
     const threadMode = (opts.threadMode as 'local' | 'worktree') || defaultThreadMode;
@@ -417,12 +417,13 @@ export function KanbanView({ threads, projectId, search, contentSnippets, highli
       if (result.isErr()) {
         toast.error(result.error.message);
         setCreating(false);
-        return;
+        return false;
       }
 
       await loadThreadsForProject(slideUpProjectId);
       setCreating(false);
       toast.success(t('toast.threadCreated', { title: prompt.slice(0, 200) }));
+      return true;
     } else {
       // Create and execute thread (in_progress)
       const { allowedTools, disallowedTools } = deriveToolLists(toolPermissions);
@@ -442,12 +443,13 @@ export function KanbanView({ threads, projectId, search, contentSnippets, highli
       if (result.isErr()) {
         toast.error(result.error.message);
         setCreating(false);
-        return;
+        return false;
       }
 
       await loadThreadsForProject(slideUpProjectId);
       setCreating(false);
       toast.success(t('toast.threadCreated', { title: prompt.slice(0, 200) }));
+      return true;
     }
   }, [slideUpProjectId, slideUpStage, creating, defaultThreadMode, toolPermissions, loadThreadsForProject, t]);
 

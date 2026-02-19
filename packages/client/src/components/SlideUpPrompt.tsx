@@ -15,7 +15,7 @@ interface SlideUpPromptProps {
     prompt: string,
     opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; sendToBacklog?: boolean },
     images?: any[]
-  ) => void;
+  ) => Promise<boolean | void> | boolean | void;
   loading?: boolean;
   projectId?: string;
 }
@@ -33,9 +33,11 @@ export function SlideUpPrompt({
     prompt: string,
     opts: { model: string; mode: string; threadMode?: string; baseBranch?: string; sendToBacklog?: boolean },
     images?: any[]
-  ) => {
-    await onSubmit(prompt, opts, images);
+  ): Promise<boolean> => {
+    const result = await onSubmit(prompt, opts, images);
+    if (result === false) return false;
     onClose();
+    return true;
   };
 
   return (

@@ -263,8 +263,8 @@ function NewThreadView({
     prompt: string,
     opts: { model: string; mode: string; threadMode?: string; baseBranch?: string },
     images?: any[]
-  ) => {
-    if (creating) return;
+  ): Promise<boolean> => {
+    if (creating) return false;
     setCreating(true);
 
     const result = await api.createThread({
@@ -281,11 +281,12 @@ function NewThreadView({
     if (result.isErr()) {
       toast.error(result.error.message);
       setCreating(false);
-      return;
+      return false;
     }
 
     await loadThreadsForProject(projectId);
     onCreated(result.value.id);
+    return true;
   };
 
   return (

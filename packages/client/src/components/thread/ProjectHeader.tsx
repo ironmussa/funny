@@ -259,12 +259,15 @@ export const ProjectHeader = memo(function ProjectHeader() {
     const searchParam = kanbanContext.search ? `&search=${encodeURIComponent(kanbanContext.search)}` : '';
     const highlightParam = kanbanContext.threadId ? `&highlight=${kanbanContext.threadId}` : '';
 
+    // Close the review pane when returning to Kanban
+    setReviewPaneOpen(false);
+
     // Navigate to search view with board mode
     navigate(`/search?view=board${targetProjectId !== '__all__' ? `&project=${targetProjectId}` : ''}${searchParam}${highlightParam}`);
 
     // Clear the context after navigation
     setKanbanContext(null);
-  }, [kanbanContext, navigate, setKanbanContext]);
+  }, [kanbanContext, navigate, setKanbanContext, setReviewPaneOpen]);
 
   return (
     <div className="px-4 py-2 border-b border-border">

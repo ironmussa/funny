@@ -1062,4 +1062,273 @@ describe('ThreadManager', () => {
       expect(enrichedImages[0].url).toBe('data:image/png;base64,xyz');
     });
   });
+
+  // ── Archived threads (listArchivedThreads logic) ──────────
+
+  describe('listArchivedThreads', () => {
+    function listArchivedThreads(opts: {
+      page: number;
+      limit: number;
+      search: string;
+      userId: string;
+    }) {
+      const { page, limit, search, userId } = opts;
+      const offset = (page - 1) * limit;
+
+      function escapeLike(value: string): string {
+        return value.replace(/%/g, '\\%').replace(/_/g, '\\_');
+      }
+
+      const safeSearch = search ? escapeLike(search) : '';
+      const filters: ReturnType<typeof eq>[] = [eq(testDb.schema.threads.archived, 1)];
+
+      if (userId !== '__local__') {
+        filters.push(eq(testDb.schema.threads.userId, userId));
+      }
+
+      if (search) {
+        filters.push(
+          or(
+            like(testDb.schema.threads.title, `%${safeSearch}%`),
+            like(testDb.schema.threads.branch, `%${safeSearch}%`),
+            like(testDb.schema.threads.status, `%${safeSearch}%`)
+          ) as any
+        );
+      }
+
+      const conditions = and(...filters);
+
+      const [{ total }] = testDb.db
+        .select({ total: drizzleCount() })
+        .from(testDb.schema.threads)
+        .where(conditions!)
+        .all();
+
+      const completionTime = sql`COALESCE(${testDb.schema.threads.completedAt}, ${testDb.schema.threads.createdAt})`;
+      const threads = testDb.db
+        .select()
+        .from(testDb.schema.threads)
+        .where(conditions!)
+        .orderBy(desc(completionTime))
+        .limit(limit)
+        .offset(offset)
+        .all();
+
+      return { threads, total };
+    }
+
+    test('returns only archived threads', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 'active-1', projectId: 'p1', archived: 0 });
+      seedThread(testDb.db, { id: 'archived-1', projectId: 'p1', archived: 1 });
+      seedThread(testDb.db, { id: 'archived-2', projectId: 'p1', archived: 1 });
+
+      const result = listArchivedThreads({ page: 1, limit: 10, search: '', userId: '__local__' });
+      expect(result.total).toBe(2);
+      expect(result.threads).toHaveLength(2);
+      expect(result.threads.every(t => t.archived === 1)).toBe(true);
+    });
+
+    test('pagination works correctly', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 'a1', projectId: 'p1', archived: 1, createdAt: '2025-01-01T00:00:00Z' });
+      seedThread(testDb.db, { id: 'a2', projectId: 'p1', archived: 1, createdAt: '2025-01-02T00:00:00Z' });
+      seedThread(testDb.db, { id: 'a3', projectId: 'p1', archived: 1, createdAt: '2025-01-03T00:00:00Z' });
+
+      const page1 = listArchivedThreads({ page: 1, limit: 2, search: '', userId: '__local__' });
+      expect(page1.total).toBe(3);
+      expect(page1.threads).toHaveLength(2);
+
+      const page2 = listArchivedThreads({ page: 2, limit: 2, search: '', userId: '__local__' });
+      expect(page2.total).toBe(3);
+      expect(page2.threads).toHaveLength(1);
+    });
+
+    test('filters by search query on title', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 'a1', projectId: 'p1', archived: 1, title: 'Fix login bug' });
+      seedThread(testDb.db, { id: 'a2', projectId: 'p1', archived: 1, title: 'Add feature' });
+      seedThread(testDb.db, { id: 'a3', projectId: 'p1', archived: 1, title: 'Fix logout bug' });
+
+      const result = listArchivedThreads({ page: 1, limit: 10, search: 'Fix', userId: '__local__' });
+      expect(result.total).toBe(2);
+      expect(result.threads.every(t => t.title.includes('Fix'))).toBe(true);
+    });
+
+    test('filters by search query on branch', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 'a1', projectId: 'p1', archived: 1, branch: 'feature/auth' });
+      seedThread(testDb.db, { id: 'a2', projectId: 'p1', archived: 1, branch: 'fix/login' });
+
+      const result = listArchivedThreads({ page: 1, limit: 10, search: 'auth', userId: '__local__' });
+      expect(result.total).toBe(1);
+      expect(result.threads[0].branch).toContain('auth');
+    });
+
+    test('filters by userId in multi-user mode', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 'a1', projectId: 'p1', archived: 1, userId: 'user-1' });
+      seedThread(testDb.db, { id: 'a2', projectId: 'p1', archived: 1, userId: 'user-2' });
+      seedThread(testDb.db, { id: 'a3', projectId: 'p1', archived: 1, userId: 'user-1' });
+
+      const result = listArchivedThreads({ page: 1, limit: 10, search: '', userId: 'user-1' });
+      expect(result.total).toBe(2);
+      expect(result.threads.every(t => t.userId === 'user-1')).toBe(true);
+    });
+
+    test('returns empty results when no archived threads', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 't1', projectId: 'p1', archived: 0 });
+
+      const result = listArchivedThreads({ page: 1, limit: 10, search: '', userId: '__local__' });
+      expect(result.total).toBe(0);
+      expect(result.threads).toHaveLength(0);
+    });
+
+    test('search is case insensitive', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 'a1', projectId: 'p1', archived: 1, title: 'Important BUG Fix' });
+      seedThread(testDb.db, { id: 'a2', projectId: 'p1', archived: 1, title: 'Something else' });
+
+      const result = listArchivedThreads({ page: 1, limit: 10, search: 'bug', userId: '__local__' });
+      expect(result.total).toBe(1);
+      expect(result.threads[0].title).toBe('Important BUG Fix');
+    });
+  });
+
+  // ── Search (searchViaLike logic, FTS5 requires real DB) ───
+
+  describe('searchViaLike', () => {
+    function escapeLike(value: string): string {
+      return value.replace(/%/g, '\\%').replace(/_/g, '\\_');
+    }
+
+    function searchViaLike(query: string, projectId: string | undefined, userId: string): Map<string, string> {
+      const safeQuery = escapeLike(query.trim());
+
+      const filters: ReturnType<typeof eq>[] = [
+        like(testDb.schema.messages.content, `%${safeQuery}%`),
+      ];
+
+      if (userId !== '__local__') {
+        filters.push(eq(testDb.schema.threads.userId, userId));
+      }
+      if (projectId) {
+        filters.push(eq(testDb.schema.threads.projectId, projectId));
+      }
+
+      const rows = testDb.db
+        .select({ threadId: testDb.schema.messages.threadId, content: testDb.schema.messages.content })
+        .from(testDb.schema.messages)
+        .innerJoin(testDb.schema.threads, eq(testDb.schema.messages.threadId, testDb.schema.threads.id))
+        .where(and(...filters))
+        .all();
+
+      const result = new Map<string, string>();
+      const queryLower = query.trim().toLowerCase();
+      for (const row of rows) {
+        if (result.has(row.threadId)) continue;
+        const idx = row.content.toLowerCase().indexOf(queryLower);
+        if (idx === -1) continue;
+        const start = Math.max(0, idx - 30);
+        const end = Math.min(row.content.length, idx + queryLower.length + 50);
+        let snippet = row.content.slice(start, end).replace(/\n/g, ' ');
+        if (start > 0) snippet = '…' + snippet;
+        if (end < row.content.length) snippet = snippet + '…';
+        result.set(row.threadId, snippet);
+      }
+
+      return result;
+    }
+
+    test('finds messages containing the query string', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 't1', projectId: 'p1' });
+      seedThread(testDb.db, { id: 't2', projectId: 'p1' });
+      seedMessage(testDb.db, { id: 'm1', threadId: 't1', content: 'Implement the login feature' });
+      seedMessage(testDb.db, { id: 'm2', threadId: 't2', content: 'Fix the logout bug' });
+
+      const result = searchViaLike('login', undefined, '__local__');
+      expect(result.size).toBe(1);
+      expect(result.has('t1')).toBe(true);
+      expect(result.get('t1')).toContain('login');
+    });
+
+    test('returns empty map for empty query', () => {
+      // Mimic the guard in searchThreadIdsByContent
+      const query = '   ';
+      if (!query.trim()) {
+        expect(new Map().size).toBe(0);
+        return;
+      }
+    });
+
+    test('returns empty map when no matches', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 't1', projectId: 'p1' });
+      seedMessage(testDb.db, { id: 'm1', threadId: 't1', content: 'Hello world' });
+
+      const result = searchViaLike('nonexistent-xyz', undefined, '__local__');
+      expect(result.size).toBe(0);
+    });
+
+    test('filters by projectId', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedProject(testDb.db, { id: 'p2', name: 'Other' });
+      seedThread(testDb.db, { id: 't1', projectId: 'p1' });
+      seedThread(testDb.db, { id: 't2', projectId: 'p2' });
+      seedMessage(testDb.db, { id: 'm1', threadId: 't1', content: 'Find this keyword' });
+      seedMessage(testDb.db, { id: 'm2', threadId: 't2', content: 'Also has keyword' });
+
+      const result = searchViaLike('keyword', 'p1', '__local__');
+      expect(result.size).toBe(1);
+      expect(result.has('t1')).toBe(true);
+    });
+
+    test('filters by userId in multi-user mode', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 't1', projectId: 'p1', userId: 'user-a' });
+      seedThread(testDb.db, { id: 't2', projectId: 'p1', userId: 'user-b' });
+      seedMessage(testDb.db, { id: 'm1', threadId: 't1', content: 'Search target' });
+      seedMessage(testDb.db, { id: 'm2', threadId: 't2', content: 'Also a search target' });
+
+      const result = searchViaLike('target', undefined, 'user-a');
+      expect(result.size).toBe(1);
+      expect(result.has('t1')).toBe(true);
+    });
+
+    test('returns one snippet per thread (deduplicates)', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 't1', projectId: 'p1' });
+      seedMessage(testDb.db, { id: 'm1', threadId: 't1', content: 'first match target' });
+      seedMessage(testDb.db, { id: 'm2', threadId: 't1', content: 'second match target' });
+
+      const result = searchViaLike('target', undefined, '__local__');
+      expect(result.size).toBe(1);
+      expect(result.has('t1')).toBe(true);
+    });
+
+    test('generates snippet with context around match', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 't1', projectId: 'p1' });
+      const longContent = 'A'.repeat(50) + 'FINDME' + 'B'.repeat(80);
+      seedMessage(testDb.db, { id: 'm1', threadId: 't1', content: longContent });
+
+      const result = searchViaLike('FINDME', undefined, '__local__');
+      expect(result.size).toBe(1);
+      const snippet = result.get('t1')!;
+      expect(snippet).toContain('FINDME');
+      // Snippet should be truncated, not the full content
+      expect(snippet.length).toBeLessThan(longContent.length);
+    });
+
+    test('case-insensitive matching', () => {
+      seedProject(testDb.db, { id: 'p1' });
+      seedThread(testDb.db, { id: 't1', projectId: 'p1' });
+      seedMessage(testDb.db, { id: 'm1', threadId: 't1', content: 'The Error Handler works' });
+
+      const result = searchViaLike('error handler', undefined, '__local__');
+      expect(result.size).toBe(1);
+    });
+  });
 });

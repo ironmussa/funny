@@ -19,6 +19,14 @@ import {
   getStatusSummary,
   deriveGitSyncState,
   initRepo,
+  getLog,
+  stash,
+  stashPop,
+  stashList,
+  resetSoft,
+  pull,
+  addToGitignore,
+  getDiffSummary,
 } from '../git/git.js';
 import { executeSync } from '../git/process.js';
 
@@ -390,6 +398,249 @@ describe('git operations', () => {
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
         expect(result.value.dirtyFileCount).toBe(2);
+      }
+    });
+  });
+
+  describe('getLog', () => {
+    test('returns commit log entries', async () => {
+      const result = await getLog(repoPath);
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.length).toBeGreaterThanOrEqual(1);
+        const entry = result.value[0];
+        expect(entry.hash).toBeTruthy();
+        expect(entry.shortHash).toBeTruthy();
+        expect(entry.author).toBe('Test');
+        expect(entry.message).toBe('initial commit');
+        expect(entry.relativeDate).toBeTruthy();
+      }
+    });
+
+    test('respects limit parameter', async () => {
+      // Create additional commits
+      writeFileSync(resolve(repoPath, 'log1.txt'), 'a');
+      executeSync('git', ['add', '.'], { cwd: repoPath });
+      executeSync('git', ['commit', '-m', 'second commit'], { cwd: repoPath });
+      writeFileSync(resolve(repoPath, 'log2.txt'), 'b');
+      executeSync('git', ['add', '.'], { cwd: repoPath });
+      executeSync('git', ['commit', '-m', 'third commit'], { cwd: repoPath });
+
+      const result = await getLog(repoPath, 2);
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.length).toBe(2);
+        expect(result.value[0].message).toBe('third commit');
+        expect(result.value[1].message).toBe('second commit');
+      }
+    });
+
+    test('returns empty array for repo with no commits after filter', async () => {
+      const emptyRepo = resolve(TMP, 'empty-log-repo');
+      mkdirSync(emptyRepo, { recursive: true });
+      executeSync('git', ['init'], { cwd: emptyRepo });
+      // Repo with no commits — git log fails
+      const result = await getLog(emptyRepo);
+      expect(result.isErr()).toBe(true);
+    });
+  });
+
+  describe('stash', () => {
+    test('stashes current changes', async () => {
+      writeFileSync(resolve(repoPath, 'stash-test.txt'), 'will be stashed');
+      executeSync('git', ['add', '.'], { cwd: repoPath });
+
+      const result = await stash(repoPath);
+      expect(result.isOk()).toBe(true);
+
+      // Verify working tree is clean after stash
+      const status = executeSync('git', ['status', '--porcelain'], { cwd: repoPath });
+      expect(status.stdout.trim()).toBe('');
+    });
+
+    test('returns ok even when nothing to stash (git stash push exits 0)', async () => {
+      const result = await stash(repoPath);
+      // git stash push -m exits 0 with "No local changes to save" message
+      expect(result.isOk()).toBe(true);
+    });
+  });
+
+  describe('stashPop', () => {
+    test('pops most recent stash', async () => {
+      writeFileSync(resolve(repoPath, 'pop-test.txt'), 'stash me');
+      executeSync('git', ['add', '.'], { cwd: repoPath });
+      executeSync('git', ['stash', 'push', '-m', 'test stash'], { cwd: repoPath });
+
+      const result = await stashPop(repoPath);
+      expect(result.isOk()).toBe(true);
+
+      // File should be back
+      const status = executeSync('git', ['status', '--porcelain'], { cwd: repoPath });
+      expect(status.stdout).toContain('pop-test.txt');
+    });
+
+    test('returns error when no stash to pop', async () => {
+      const result = await stashPop(repoPath);
+      expect(result.isErr()).toBe(true);
+    });
+  });
+
+  describe('stashList', () => {
+    test('returns empty array when no stashes', async () => {
+      const result = await stashList(repoPath);
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value).toEqual([]);
+      }
+    });
+
+    test('lists stash entries', async () => {
+      writeFileSync(resolve(repoPath, 'list-test.txt'), 'data');
+      executeSync('git', ['add', '.'], { cwd: repoPath });
+      executeSync('git', ['stash', 'push', '-m', 'my stash message'], { cwd: repoPath });
+
+      const result = await stashList(repoPath);
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.length).toBe(1);
+        expect(result.value[0].index).toBe('stash@{0}');
+        expect(result.value[0].message).toContain('my stash message');
+      }
+    });
+  });
+
+  describe('resetSoft', () => {
+    test('undoes last commit keeping changes staged', async () => {
+      writeFileSync(resolve(repoPath, 'reset-test.txt'), 'content');
+      executeSync('git', ['add', '.'], { cwd: repoPath });
+      executeSync('git', ['commit', '-m', 'will be undone'], { cwd: repoPath });
+
+      const logBefore = gitSync(['log', '--oneline'], repoPath);
+      expect(logBefore).toContain('will be undone');
+
+      const result = await resetSoft(repoPath);
+      expect(result.isOk()).toBe(true);
+
+      // Commit should be gone
+      const logAfter = gitSync(['log', '--oneline'], repoPath);
+      expect(logAfter).not.toContain('will be undone');
+
+      // Changes should be staged
+      const status = executeSync('git', ['status', '--porcelain'], { cwd: repoPath });
+      expect(status.stdout).toContain('reset-test.txt');
+    });
+
+    test('fails when there is only one commit (no HEAD~1)', async () => {
+      // The repo has only the initial commit — can't reset further
+      const singleCommitRepo = resolve(TMP, 'single-commit');
+      mkdirSync(singleCommitRepo, { recursive: true });
+      executeSync('git', ['init'], { cwd: singleCommitRepo });
+      executeSync('git', ['config', 'user.email', 'test@test.com'], { cwd: singleCommitRepo });
+      executeSync('git', ['config', 'user.name', 'Test'], { cwd: singleCommitRepo });
+      writeFileSync(resolve(singleCommitRepo, 'only.txt'), 'only');
+      executeSync('git', ['add', '.'], { cwd: singleCommitRepo });
+      executeSync('git', ['commit', '-m', 'only commit'], { cwd: singleCommitRepo });
+
+      const result = await resetSoft(singleCommitRepo);
+      expect(result.isErr()).toBe(true);
+    });
+  });
+
+  describe('commit with amend', () => {
+    test('amends the last commit', async () => {
+      writeFileSync(resolve(repoPath, 'amend-test.txt'), 'v1');
+      executeSync('git', ['add', '.'], { cwd: repoPath });
+      await commit(repoPath, 'original message');
+
+      writeFileSync(resolve(repoPath, 'amend-test2.txt'), 'v2');
+      executeSync('git', ['add', '.'], { cwd: repoPath });
+      const result = await commit(repoPath, 'amended message', undefined, true);
+      expect(result.isOk()).toBe(true);
+
+      const log = gitSync(['log', '-1', '--format=%s'], repoPath);
+      expect(log).toBe('amended message');
+    });
+  });
+
+  describe('pull', () => {
+    test('returns error when no remote configured', async () => {
+      const result = await pull(repoPath);
+      expect(result.isErr()).toBe(true);
+    });
+  });
+
+  describe('addToGitignore', () => {
+    test('creates .gitignore if it does not exist', () => {
+      const result = addToGitignore(repoPath, 'node_modules');
+      expect(result.isOk()).toBe(true);
+
+      const { readFileSync: readFs } = require('fs');
+      const content = readFs(resolve(repoPath, '.gitignore'), 'utf-8');
+      expect(content).toContain('node_modules');
+    });
+
+    test('appends pattern without duplicates', () => {
+      writeFileSync(resolve(repoPath, '.gitignore'), 'dist\n');
+      addToGitignore(repoPath, 'node_modules');
+      addToGitignore(repoPath, 'node_modules'); // duplicate
+
+      const { readFileSync: readFs } = require('fs');
+      const content = readFs(resolve(repoPath, '.gitignore'), 'utf-8');
+      const occurrences = content.split('node_modules').length - 1;
+      expect(occurrences).toBe(1);
+    });
+  });
+
+  describe('getDiffSummary', () => {
+    test('returns empty for clean repo', async () => {
+      const result = await getDiffSummary(repoPath);
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.files).toEqual([]);
+        expect(result.value.total).toBe(0);
+        expect(result.value.truncated).toBe(false);
+      }
+    });
+
+    test('detects changed files without diff content', async () => {
+      writeFileSync(resolve(repoPath, 'summary1.txt'), 'a');
+      writeFileSync(resolve(repoPath, 'summary2.txt'), 'b');
+
+      const result = await getDiffSummary(repoPath);
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.files.length).toBe(2);
+        // No diff content in summary
+        for (const f of result.value.files) {
+          expect(f).not.toHaveProperty('diff');
+        }
+      }
+    });
+
+    test('excludes files matching exclude patterns', async () => {
+      writeFileSync(resolve(repoPath, 'keep.txt'), 'keep');
+      writeFileSync(resolve(repoPath, 'skip.log'), 'skip');
+
+      const result = await getDiffSummary(repoPath, { excludePatterns: ['*.log'] });
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        const paths = result.value.files.map(f => f.path);
+        expect(paths).toContain('keep.txt');
+        expect(paths).not.toContain('skip.log');
+      }
+    });
+
+    test('truncates when maxFiles exceeded', async () => {
+      writeFileSync(resolve(repoPath, 'trunc1.txt'), 'a');
+      writeFileSync(resolve(repoPath, 'trunc2.txt'), 'b');
+      writeFileSync(resolve(repoPath, 'trunc3.txt'), 'c');
+
+      const result = await getDiffSummary(repoPath, { maxFiles: 1 });
+      expect(result.isOk()).toBe(true);
+      if (result.isOk()) {
+        expect(result.value.files.length).toBe(1);
+        expect(result.value.total).toBe(3);
+        expect(result.value.truncated).toBe(true);
       }
     });
   });

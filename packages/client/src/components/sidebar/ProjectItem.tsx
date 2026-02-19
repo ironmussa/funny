@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { Folder, FolderOpen, FolderOpenDot, Search, Trash2, MoreHorizontal, Terminal, Settings, Pencil, Plus, BarChart3, CircleDot } from 'lucide-react';
+import { Folder, FolderOpen, FolderOpenDot, Search, Trash2, MoreHorizontal, Terminal, Settings, Pencil, Plus, BarChart3, CircleDot, SquareTerminal } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -23,6 +23,8 @@ import {
 } from '@/components/ui/tooltip';
 import type { Project, Thread } from '@funny/shared';
 import { useGitStatusStore } from '@/stores/git-status-store';
+import { useSettingsStore } from '@/stores/settings-store';
+import { openFileInEditor, getEditorLabel } from '@/lib/editor-utils';
 import { ThreadItem } from './ThreadItem';
 import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 
@@ -66,6 +68,7 @@ export function ProjectItem({
   const [hovered, setHovered] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(false);
   const gitStatusByThread = useGitStatusStore((s) => s.statusByThread);
+  const defaultEditor = useSettingsStore((s) => s.defaultEditor);
 
   const dragRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -192,6 +195,15 @@ export function ProjectItem({
                 >
                   <Terminal className="h-3.5 w-3.5" />
                   {t('sidebar.openTerminal')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    openFileInEditor(project.path, defaultEditor);
+                  }}
+                >
+                  <SquareTerminal className="h-3.5 w-3.5" />
+                  {t('sidebar.openInEditor')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
                   onClick={(e) => {

@@ -8,6 +8,27 @@ import { wsBroker } from './ws-broker.js';
 import * as pm from './project-manager.js';
 
 const KILL_GRACE_MS = 3_000;
+const IS_WINDOWS = process.platform === 'win32';
+
+/**
+ * Kill a process tree on Windows using taskkill /T /F.
+ * On Unix, proc.kill() already sends signals to the process group.
+ */
+function killProcessTree(proc: ReturnType<typeof Bun.spawn>, signal?: number): void {
+  if (IS_WINDOWS) {
+    try {
+      Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${proc.pid} 2>nul`]);
+    } catch {
+      // Best-effort: process may have already exited
+    }
+  } else {
+    try {
+      proc.kill(signal);
+    } catch {
+      // Best-effort
+    }
+  }
+}
 
 interface RunningCommand {
   proc: ReturnType<typeof Bun.spawn>;
@@ -44,9 +65,8 @@ export async function startCommand(
     await stopCommand(commandId);
   }
 
-  const isWindows = process.platform === 'win32';
-  const shell = isWindows ? 'cmd' : 'sh';
-  const shellFlag = isWindows ? '/c' : '-c';
+  const shell = IS_WINDOWS ? 'cmd' : 'sh';
+  const shellFlag = IS_WINDOWS ? '/c' : '-c';
 
   console.log(`[command-runner] Starting "${label}": ${command} in ${cwd}`);
 
@@ -135,19 +155,25 @@ export async function stopCommand(commandId: string): Promise<void> {
 
   console.log(`[command-runner] Stopping "${entry.label}"`);
 
-  entry.proc.kill(); // SIGTERM
+  // On Windows, taskkill /T /F kills the entire process tree immediately,
+  // so no grace period is needed. On Unix, try SIGTERM first, then SIGKILL.
+  if (IS_WINDOWS) {
+    killProcessTree(entry.proc);
+  } else {
+    killProcessTree(entry.proc); // SIGTERM
 
-  await Promise.race([
-    entry.proc.exited,
-    new Promise<void>((resolve) =>
-      setTimeout(() => {
-        if (!entry.exited) {
-          entry.proc.kill(9); // SIGKILL
-        }
-        resolve();
-      }, KILL_GRACE_MS)
-    ),
-  ]);
+    await Promise.race([
+      entry.proc.exited,
+      new Promise<void>((resolve) =>
+        setTimeout(() => {
+          if (!entry.exited) {
+            killProcessTree(entry.proc, 9); // SIGKILL
+          }
+          resolve();
+        }, KILL_GRACE_MS)
+      ),
+    ]);
+  }
 
   entry.exited = true;
   activeCommands.delete(commandId);

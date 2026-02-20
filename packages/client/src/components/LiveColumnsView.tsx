@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo, memo } from 'react';
+import { useState, useEffect, useRef, useCallback, useLayoutEffect, useMemo, memo, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -11,11 +11,14 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Loader2, Columns3, Grid2x2, ArrowUp, Square } from 'lucide-react';
+import { Loader2, Columns3, Grid2x2 } from 'lucide-react';
 import { statusConfig, timeAgo, resolveModelLabel } from '@/lib/thread-utils';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { ToolCallCard } from './ToolCallCard';
 import { ToolCallGroup } from './ToolCallGroup';
+import { PromptInput } from './PromptInput';
+import { useAppStore } from '@/stores/app-store';
+import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import type { Thread } from '@funny/shared';
 
 const ACTIVE_STATUSES = new Set(['running', 'waiting', 'pending']);
@@ -176,70 +179,6 @@ function D4CAnimation() {
   return <span className="inline-block text-xs leading-none w-4 text-center">{D4C_FRAMES[frame]}</span>;
 }
 
-/** Compact prompt input for a thread column */
-function CompactPromptInput({ threadId, running }: { threadId: string; running: boolean }) {
-  const { t } = useTranslation();
-  const [value, setValue] = useState('');
-  const [sending, setSending] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
-
-  const handleSend = useCallback(async () => {
-    const trimmed = value.trim();
-    if (!trimmed || sending) return;
-    setSending(true);
-    await api.sendMessage(threadId, trimmed);
-    setValue('');
-    setSending(false);
-    textareaRef.current?.focus();
-  }, [value, sending, threadId]);
-
-  const handleStop = useCallback(async () => {
-    await api.stopThread(threadId);
-  }, [threadId]);
-
-  const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  }, [handleSend]);
-
-  return (
-    <div className="flex-shrink-0 border-t border-border px-2 py-1.5 flex items-end gap-1.5">
-      <textarea
-        ref={textareaRef}
-        value={value}
-        onChange={(e) => setValue(e.target.value)}
-        onKeyDown={handleKeyDown}
-        placeholder={running ? t('thread.followUp', 'Follow up...') : t('thread.nextPrompt', 'Send a message...')}
-        rows={1}
-        className="flex-1 resize-none bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none min-h-[28px] max-h-[80px] py-1"
-        style={{ fieldSizing: 'content' } as React.CSSProperties}
-      />
-      {running ? (
-        <Button
-          variant="destructive"
-          size="icon-xs"
-          className="shrink-0"
-          onClick={handleStop}
-        >
-          <Square className="h-3 w-3" />
-        </Button>
-      ) : (
-        <Button
-          variant="default"
-          size="icon-xs"
-          className="shrink-0"
-          onClick={handleSend}
-          disabled={!value.trim() || sending}
-        >
-          {sending ? <Loader2 className="h-3 w-3 animate-spin" /> : <ArrowUp className="h-3 w-3" />}
-        </Button>
-      )}
-    </div>
-  );
-}
-
 /** A single column that loads and streams a thread in real-time */
 const ThreadColumn = memo(function ThreadColumn({ threadId }: { threadId: string }) {
   const { t } = useTranslation();
@@ -318,6 +257,29 @@ const ThreadColumn = memo(function ThreadColumn({ threadId }: { threadId: string
     const p = projects.find(p => p.id === thread.projectId);
     return p?.name ?? '';
   }, [thread?.projectId, projects]);
+
+  const [sending, setSending] = useState(false);
+
+  const handleSend = useCallback(async (prompt: string, opts: { provider?: string; model: string; mode: string; fileReferences?: { path: string }[] }, images?: any[]) => {
+    if (sending || !thread) return;
+    setSending(true);
+    startTransition(() => {
+      useAppStore.getState().appendOptimisticMessage(
+        threadId,
+        prompt,
+        images,
+        opts.model as any,
+        opts.mode as any
+      );
+    });
+    const { allowedTools, disallowedTools } = deriveToolLists(useSettingsStore.getState().toolPermissions);
+    await api.sendMessage(threadId, prompt, { provider: opts.provider || undefined, model: opts.model || undefined, permissionMode: opts.mode || undefined, allowedTools, disallowedTools, fileReferences: opts.fileReferences }, images);
+    setSending(false);
+  }, [sending, threadId, thread]);
+
+  const handleStop = useCallback(async () => {
+    await api.stopThread(threadId);
+  }, [threadId]);
 
   const status = liveStatus ?? thread?.status ?? 'idle';
   const StatusIcon = statusConfig[status]?.icon ?? Loader2;
@@ -443,7 +405,13 @@ const ThreadColumn = memo(function ThreadColumn({ threadId }: { threadId: string
       </ScrollArea>
 
       {/* Prompt input */}
-      <CompactPromptInput threadId={threadId} running={isRunning} />
+      <PromptInput
+        onSubmit={handleSend}
+        onStop={handleStop}
+        loading={sending}
+        running={isRunning}
+        placeholder={t('thread.nextPrompt')}
+      />
     </div>
   );
 });

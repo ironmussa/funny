@@ -13,11 +13,15 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { Monitor, GitBranch, RotateCcw } from 'lucide-react';
+import { Monitor, GitBranch, RotateCcw, Check, ChevronsUpDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { PROVIDERS, getModelOptions } from '@/lib/providers';
 import type { AgentProvider } from '@funny/shared';
 import { getDefaultModel } from '@funny/shared/models';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
+import { Button } from '@/components/ui/button';
+import { useState } from 'react';
 import { McpServerSettings } from './McpServerSettings';
 import { SkillsSettings } from './SkillsSettings';
 import { WorktreeSettings } from './WorktreeSettings';
@@ -77,6 +81,69 @@ function SegmentedControl<T extends string>({
         </button>
       ))}
     </div>
+  );
+}
+
+/* ── Combobox for provider/model selection ── */
+function ModelCombobox({
+  value,
+  onChange,
+  options,
+  placeholder,
+  searchPlaceholder,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  options: { value: string; label: string }[];
+  placeholder: string;
+  searchPlaceholder: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const selected = options.find((o) => o.value === value);
+
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <Button
+          variant="outline"
+          role="combobox"
+          aria-expanded={open}
+          className="w-[160px] justify-between text-xs h-8"
+        >
+          <span className="truncate">{selected?.label ?? placeholder}</span>
+          <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-[200px] p-0" align="start">
+        <Command>
+          <CommandInput placeholder={searchPlaceholder} className="h-8 text-xs" />
+          <CommandList>
+            <CommandEmpty>No results.</CommandEmpty>
+            <CommandGroup>
+              {options.map((opt) => (
+                <CommandItem
+                  key={opt.value}
+                  value={opt.label}
+                  onSelect={() => {
+                    onChange(opt.value);
+                    setOpen(false);
+                  }}
+                  className="text-xs"
+                >
+                  <Check
+                    className={cn(
+                      'mr-2 h-3 w-3',
+                      value === opt.value ? 'opacity-100' : 'opacity-0'
+                    )}
+                  />
+                  {opt.label}
+                </CommandItem>
+              ))}
+            </CommandGroup>
+          </CommandList>
+        </Command>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -229,7 +296,7 @@ function GeneralSettings() {
           description={t('settings.defaultModelDesc')}
         >
           <div className="flex items-center gap-2">
-            <SegmentedControl<string>
+            <ModelCombobox
               value={defaultProvider}
               onChange={(v) => {
                 const p = v as AgentProvider;
@@ -237,11 +304,15 @@ function GeneralSettings() {
                 setDefaultModel(getDefaultModel(p) as any);
               }}
               options={PROVIDERS.map((p) => ({ value: p.value, label: p.label }))}
+              placeholder={t('settings.selectProvider')}
+              searchPlaceholder={t('settings.searchProvider')}
             />
-            <SegmentedControl<string>
+            <ModelCombobox
               value={defaultModel}
               onChange={(v) => setDefaultModel(v as any)}
               options={getModelOptions(defaultProvider, t)}
+              placeholder={t('settings.selectModel')}
+              searchPlaceholder={t('settings.searchModel')}
             />
           </div>
         </SettingRow>

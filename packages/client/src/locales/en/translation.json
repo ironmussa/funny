@@ -188,7 +188,8 @@
     "undoLastCommit": "Undo last commit",
     "resetSoftConfirm": "Undo the last commit? Changes will be kept.",
     "resetSoftSuccess": "Last commit undone",
-    "resetSoftFailed": "Reset failed: {{message}}"
+    "resetSoftFailed": "Reset failed: {{message}}",
+    "agentRunningTooltip": "The agent is currently running. Wait for it to finish before performing git actions."
   },
   "newThread": {
     "title": "New Thread",
@@ -242,6 +243,10 @@
     "defaultThreadModeDesc": "Choose whether new threads run locally or in a git worktree",
     "defaultModel": "Default model",
     "defaultModelDesc": "The model selected by default when creating new threads",
+    "selectProvider": "Provider",
+    "searchProvider": "Search provider...",
+    "selectModel": "Model",
+    "searchModel": "Search model...",
     "defaultPermissionMode": "Default permission mode",
     "defaultPermissionModeDesc": "The permission mode selected by default for new threads and follow-ups",
     "permissions": "Permissions",

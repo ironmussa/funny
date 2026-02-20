@@ -785,7 +785,7 @@ export function ReviewPane() {
                   <Archive className={cn('h-3.5 w-3.5', stashInProgress && 'animate-pulse')} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top">{t('review.stash', 'Stash changes')}</TooltipContent>
+              <TooltipContent side="top">{isAgentRunning ? t('review.agentRunningTooltip') : t('review.stash', 'Stash changes')}</TooltipContent>
             </Tooltip>
           )}
         </div>
@@ -1111,33 +1111,48 @@ export function ReviewPane() {
                     { value: 'commit-merge' as const, icon: GitMerge, label: t('review.commitAndMerge', 'Commit & Merge') },
                   ] : []),
                 ]).map(({ value, icon: ActionIcon, label }) => (
-                  <button
-                    key={value}
-                    type="button"
-                    onClick={() => setSelectedAction(value)}
-                    disabled={!!actionInProgress || !!isAgentRunning}
-                    className={cn(
-                      'flex flex-col items-center gap-1 rounded-md border p-2 text-center transition-all',
-                      'hover:bg-accent/50 disabled:opacity-50 disabled:cursor-not-allowed',
-                      selectedAction === value
-                        ? 'border-primary bg-primary/5 text-foreground'
-                        : 'border-border text-muted-foreground'
+                  <Tooltip key={value}>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => setSelectedAction(value)}
+                        disabled={!!actionInProgress || !!isAgentRunning}
+                        className={cn(
+                          'flex flex-col items-center gap-1 rounded-md border p-2 text-center transition-all',
+                          'hover:bg-accent/50 disabled:opacity-50 disabled:cursor-not-allowed',
+                          selectedAction === value
+                            ? 'border-primary bg-primary/5 text-foreground'
+                            : 'border-border text-muted-foreground'
+                        )}
+                      >
+                        <ActionIcon className={cn('h-4 w-4', selectedAction === value && 'text-primary')} />
+                        <span className="text-[10px] font-medium leading-tight">{label}</span>
+                      </button>
+                    </TooltipTrigger>
+                    {isAgentRunning && (
+                      <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
                     )}
-                  >
-                    <ActionIcon className={cn('h-4 w-4', selectedAction === value && 'text-primary')} />
-                    <span className="text-[10px] font-medium leading-tight">{label}</span>
-                  </button>
+                  </Tooltip>
                 ))}
               </div>
-              <Button
-                className="w-full"
-                size="sm"
-                onClick={handleCommitAction}
-                disabled={!canCommit}
-              >
-                {actionInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
-                {t('review.continue', 'Continue')}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="w-full">
+                    <Button
+                      className="w-full"
+                      size="sm"
+                      onClick={handleCommitAction}
+                      disabled={!canCommit}
+                    >
+                      {actionInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
+                      {t('review.continue', 'Continue')}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {isAgentRunning && (
+                  <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
+                )}
+              </Tooltip>
             </div>
           )}
 
@@ -1149,15 +1164,24 @@ export function ReviewPane() {
                 <span>{t('review.readyToPush', { count: gitStatus!.unpushedCommitCount, defaultValue: `${gitStatus!.unpushedCommitCount} commit(s) ready to push` })}</span>
               </div>
               <div className="flex gap-1.5">
-                <Button
-                  className="flex-1"
-                  size="sm"
-                  onClick={handlePushOnly}
-                  disabled={pushInProgress || !!isAgentRunning}
-                >
-                  {pushInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />}
-                  {t('review.pushToOrigin', 'Push to origin')}
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="flex-1">
+                      <Button
+                        className="w-full"
+                        size="sm"
+                        onClick={handlePushOnly}
+                        disabled={pushInProgress || !!isAgentRunning}
+                      >
+                        {pushInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />}
+                        {t('review.pushToOrigin', 'Push to origin')}
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {isAgentRunning && (
+                    <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
+                  )}
+                </Tooltip>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
@@ -1169,7 +1193,7 @@ export function ReviewPane() {
                       {resetInProgress ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">{t('review.undoLastCommit', 'Undo last commit')}</TooltipContent>
+                  <TooltipContent side="top">{isAgentRunning ? t('review.agentRunningTooltip') : t('review.undoLastCommit', 'Undo last commit')}</TooltipContent>
                 </Tooltip>
               </div>
             </div>
@@ -1182,16 +1206,25 @@ export function ReviewPane() {
                 <ArchiveRestore className="h-3.5 w-3.5" />
                 <span>{t('review.stashedChanges', { count: stashEntries.length, defaultValue: `${stashEntries.length} stash(es) saved` })}</span>
               </div>
-              <Button
-                className="w-full"
-                size="sm"
-                variant="outline"
-                onClick={handleStashPop}
-                disabled={stashPopInProgress || !!isAgentRunning}
-              >
-                {stashPopInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ArchiveRestore className="h-3.5 w-3.5 mr-1.5" />}
-                {t('review.popStash', 'Pop stash')}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="w-full">
+                    <Button
+                      className="w-full"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleStashPop}
+                      disabled={stashPopInProgress || !!isAgentRunning}
+                    >
+                      {stashPopInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ArchiveRestore className="h-3.5 w-3.5 mr-1.5" />}
+                      {t('review.popStash', 'Pop stash')}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {isAgentRunning && (
+                  <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
+                )}
+              </Tooltip>
             </div>
           )}
 
@@ -1202,15 +1235,24 @@ export function ReviewPane() {
                 <GitMerge className="h-3.5 w-3.5" />
                 <span>{t('review.readyToMerge', { target: baseBranch || 'base', defaultValue: `Ready to merge into ${baseBranch || 'base'}` })}</span>
               </div>
-              <Button
-                className="w-full"
-                size="sm"
-                onClick={handleMergeOnly}
-                disabled={mergeInProgress || !!isAgentRunning}
-              >
-                {mergeInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <GitMerge className="h-3.5 w-3.5 mr-1.5" />}
-                {t('review.mergeIntoBranch', { target: baseBranch || 'base', defaultValue: `Merge into ${baseBranch || 'base'}` })}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span className="w-full">
+                    <Button
+                      className="w-full"
+                      size="sm"
+                      onClick={handleMergeOnly}
+                      disabled={mergeInProgress || !!isAgentRunning}
+                    >
+                      {mergeInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <GitMerge className="h-3.5 w-3.5 mr-1.5" />}
+                      {t('review.mergeIntoBranch', { target: baseBranch || 'base', defaultValue: `Merge into ${baseBranch || 'base'}` })}
+                    </Button>
+                  </span>
+                </TooltipTrigger>
+                {isAgentRunning && (
+                  <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
+                )}
+              </Tooltip>
             </div>
           )}
 

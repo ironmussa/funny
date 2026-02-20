@@ -188,7 +188,8 @@
     "undoLastCommit": "Deshacer último commit",
     "resetSoftConfirm": "¿Deshacer el último commit? Los cambios se mantendrán.",
     "resetSoftSuccess": "Último commit deshecho",
-    "resetSoftFailed": "Error al deshacer: {{message}}"
+    "resetSoftFailed": "Error al deshacer: {{message}}",
+    "agentRunningTooltip": "El agente se está ejecutando actualmente. Espere a que finalice para realizar acciones de git."
   },
   "newThread": {
     "title": "Nuevo Hilo",
@@ -242,6 +243,10 @@
     "defaultThreadModeDesc": "Elige si los nuevos hilos se ejecutan localmente o en un git worktree",
     "defaultModel": "Modelo predeterminado",
     "defaultModelDesc": "El modelo seleccionado por defecto al crear nuevos hilos",
+    "selectProvider": "Proveedor",
+    "searchProvider": "Buscar proveedor...",
+    "selectModel": "Modelo",
+    "searchModel": "Buscar modelo...",
     "defaultPermissionMode": "Modo de permisos predeterminado",
     "defaultPermissionModeDesc": "El modo de permisos seleccionado por defecto para nuevos hilos y seguimientos",
     "permissions": "Permisos",

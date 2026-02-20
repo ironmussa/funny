@@ -188,7 +188,8 @@
     "undoLastCommit": "Desfazer último commit",
     "resetSoftConfirm": "Desfazer o último commit? As alterações serão mantidas.",
     "resetSoftSuccess": "Último commit desfeito",
-    "resetSoftFailed": "Erro ao desfazer: {{message}}"
+    "resetSoftFailed": "Erro ao desfazer: {{message}}",
+    "agentRunningTooltip": "O agente está em execução. Aguarde a finalização para realizar ações de git."
   },
   "newThread": {
     "title": "Nova Thread",
@@ -242,6 +243,10 @@
     "defaultThreadModeDesc": "Escolha se novas threads rodam localmente ou em um git worktree",
     "defaultModel": "Modelo padrão",
     "defaultModelDesc": "O modelo selecionado por padrão ao criar novas threads",
+    "selectProvider": "Provedor",
+    "searchProvider": "Buscar provedor...",
+    "selectModel": "Modelo",
+    "searchModel": "Buscar modelo...",
     "defaultPermissionMode": "Modo de permissão padrão",
     "defaultPermissionModeDesc": "O modo de permissão selecionado por padrão para novas threads e acompanhamentos",
     "permissions": "Permissões",

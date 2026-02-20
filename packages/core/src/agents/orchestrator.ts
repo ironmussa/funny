@@ -31,6 +31,8 @@ export interface StartAgentOptions {
   mcpServers?: Record<string, any>;
   /** Custom spawn function for sandboxed execution (e.g., Podman container) */
   spawnClaudeCodeProcess?: (options: any) => any;
+  /** Custom system prefix for resume — replaces the default "interrupted session" note. */
+  systemPrefix?: string;
 }
 
 export interface OrchestratorEvents {
@@ -71,6 +73,7 @@ export class AgentOrchestrator extends EventEmitter {
       maxTurns = 200,
       mcpServers,
       spawnClaudeCodeProcess,
+      systemPrefix,
     } = options;
 
     console.log(`[orchestrator] start thread=${threadId} provider=${provider} model=${model} cwd=${cwd}`);
@@ -92,7 +95,9 @@ export class AgentOrchestrator extends EventEmitter {
     let effectivePrompt = prompt;
     if (isResume) {
       console.log(`[orchestrator] Resuming session=${sessionId} for thread=${threadId}`);
-      effectivePrompt = `[SYSTEM NOTE: This is a session resume after an interruption. Your previous session was interrupted mid-execution. Continue from where you left off. Do NOT re-plan or start over — pick up execution from the last completed step.]\n\n${prompt}`;
+      const prefix = systemPrefix
+        ?? `[SYSTEM NOTE: This is a session resume after an interruption. Your previous session was interrupted mid-execution. Continue from where you left off. Do NOT re-plan or start over — pick up execution from the last completed step.]`;
+      effectivePrompt = `${prefix}\n\n${prompt}`;
     }
 
     // Resolve model ID and permission mode via registry

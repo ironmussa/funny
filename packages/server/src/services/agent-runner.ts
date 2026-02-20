@@ -128,6 +128,13 @@ export class AgentRunner {
     // Read session ID from DB for resume
     const thread = this.threadManager.getThread(threadId);
 
+    // Detect post-merge follow-up: thread has sessionId and baseBranch (was a worktree)
+    // but worktreePath is gone (worktree was cleaned up after merge).
+    const isPostMerge = thread?.sessionId && thread?.baseBranch && !thread?.worktreePath;
+    const systemPrefix = isPostMerge
+      ? `[SYSTEM NOTE: This is a follow-up after your previous work was merged into the main branch. The worktree and feature branch have been cleaned up. You are now working in the main project directory. Your conversation history is preserved — continue naturally.]`
+      : undefined;
+
     // When resuming a plan-mode thread, the orchestrator downgrades to autoEdit.
     // Sync the DB and notify the client so the PromptInput dropdown updates.
     const isPlanResume = thread?.sessionId && permissionMode === 'plan';
@@ -155,6 +162,7 @@ export class AgentRunner {
         allowedTools,
         provider,
         sessionId: thread?.sessionId ?? undefined,
+        systemPrefix,
         mcpServers,
       });
 

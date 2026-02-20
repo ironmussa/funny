@@ -11,7 +11,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import { err } from 'neverthrow';
 import { getAuthMode } from '../lib/auth-mode.js';
 import { getGitIdentity, getGithubToken } from '../services/profile-service.js';
-import { cleanupThreadState } from '../services/agent-runner.js';
+
 import type { HonoEnv } from '../types/hono-env.js';
 
 export const gitRoutes = new Hono<HonoEnv>();
@@ -426,8 +426,9 @@ gitRoutes.post('/:threadId/merge', async (c) => {
     await removeWorktree(project.path, thread.worktreePath).catch((e) => log.warn('Failed to remove worktree after merge', { namespace: 'git', error: String(e) }));
     await removeBranch(project.path, thread.branch).catch((e) => log.warn('Failed to remove branch after merge', { namespace: 'git', error: String(e) }));
     tm.updateThread(threadId, { worktreePath: null, branch: null, mode: 'local' });
-    // Release in-memory agent state for the merged thread
-    cleanupThreadState(threadId);
+    // Do NOT call cleanupThreadState — the thread remains active for follow-ups.
+    // In-memory deduplication maps (processedToolUseIds, cliToDbMsgId) must be
+    // preserved so session resume can deduplicate re-sent content.
   }
 
   invalidateGitStatusCache(threadId);

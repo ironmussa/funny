@@ -1,0 +1,45 @@
+services:
+  vector:
+    image: timberio/vector:latest-alpine
+    ports:
+      - "4318:4318"
+    volumes:
+      - ./vector.toml:/etc/vector/vector.toml:ro
+    depends_on:
+      - victoria-metrics
+      - victoria-logs
+      - victoria-traces
+
+  victoria-metrics:
+    image: victoriametrics/victoria-metrics:latest
+    ports:
+      - "8428:8428"
+    volumes:
+      - vm-data:/victoria-metrics-data
+    command:
+      - "--storageDataPath=/victoria-metrics-data"
+      - "--retentionPeriod=30d"
+
+  victoria-logs:
+    image: victoriametrics/victoria-logs:latest
+    ports:
+      - "9428:9428"
+    volumes:
+      - vl-data:/victoria-logs-data
+    command:
+      - "--storageDataPath=/victoria-logs-data"
+      - "--retentionPeriod=30d"
+
+  victoria-traces:
+    image: victoriametrics/victoria-traces:latest
+    ports:
+      - "10428:10428"
+    volumes:
+      - vt-data:/victoria-traces-data
+    command:
+      - "--storageDataPath=/victoria-traces-data"
+
+volumes:
+  vm-data:
+  vl-data:
+  vt-data:

@@ -1,4 +1,5 @@
 import { log } from './lib/abbacchio.js';
+import { observability, observabilityShutdown } from '@funny/observability';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
@@ -27,6 +28,7 @@ import { automationRoutes } from './routes/automations.js';
 import { profileRoutes } from './routes/profile.js';
 import { githubRoutes } from './routes/github.js';
 import { analyticsRoutes } from './routes/analytics.js';
+import { logRoutes } from './routes/logs.js';
 import { ingestRoutes } from './routes/ingest.js';
 import { wsBroker } from './services/ws-broker.js';
 import { startScheduler, stopScheduler } from './services/automation-scheduler.js';
@@ -75,6 +77,7 @@ app.use(
   })
 );
 app.use('/api/*', rateLimit({ windowMs: 60_000, max: 1000 }));
+app.use('*', observability());
 
 // Ingest webhook — mounted BEFORE authMiddleware (uses its own secret-based auth)
 app.route('/api/ingest', ingestRoutes);
@@ -165,6 +168,7 @@ app.route('/api/automations', automationRoutes);
 app.route('/api/profile', profileRoutes);
 app.route('/api/github', githubRoutes);
 app.route('/api/analytics', analyticsRoutes);
+app.route('/api/logs', logRoutes);
 
 // Serve static files from client build (only if dist exists)
 if (existsSync(clientDistDir)) {
@@ -329,12 +333,15 @@ async function shutdown() {
     process.exit(1);
   }, 5000);
 
-  // 3. Clean up everything else (order doesn't matter since port is already free)
+  // 3. Flush pending telemetry before stopping services
+  await observabilityShutdown();
+
+  // 4. Clean up everything else (order doesn't matter since port is already free)
   stopScheduler();
   ptyManager.killAllPtys();
   await stopAllAgents();
 
-  // 4. Flush WAL and close the database last (other cleanup may still write)
+  // 5. Flush WAL and close the database last (other cleanup may still write)
   closeDatabase();
 
   clearTimeout(forceExit);

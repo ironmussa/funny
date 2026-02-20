@@ -511,6 +511,10 @@ export const api = {
     return request<any>(`/analytics/timeline${qs ? `?${qs}` : ''}`);
   },
 
+  // Logs (observability)
+  sendLogs: (logs: Array<{ level: string; message: string; attributes?: Record<string, string> }>) =>
+    request<{ ok: boolean }>('/logs', { method: 'POST', body: JSON.stringify({ logs }) }),
+
   // Setup
   setupStatus: () =>
     request<{ claudeCli: { available: boolean; path: string | null; error: string | null; version: string | null } }>('/setup/status'),

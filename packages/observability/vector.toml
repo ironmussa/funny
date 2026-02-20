@@ -1,0 +1,37 @@
+# Vector config: receives OTLP from the app, fans out to Victoria stack
+
+# Source: OTLP HTTP receiver (app sends metrics + traces + logs here)
+[sources.otlp]
+type = "opentelemetry"
+
+  [sources.otlp.http]
+  address = "0.0.0.0:4318"
+
+# Sink: Metrics → Victoria Metrics via Prometheus remote write
+[sinks.victoria_metrics]
+type = "prometheus_remote_write"
+inputs = ["otlp.metrics"]
+endpoint = "http://victoria-metrics:8428/api/v1/write"
+
+# Sink: Logs → Victoria Logs via HTTP JSON
+[sinks.victoria_logs]
+type = "http"
+inputs = ["otlp.logs"]
+uri = "http://victoria-logs:9428/insert/jsonline?_stream_fields=source_type&_msg_field=message&_time_field=timestamp"
+compression = "gzip"
+encoding.codec = "json"
+framing.method = "newline_delimited"
+
+  [sinks.victoria_logs.healthcheck]
+  enabled = false
+
+# Sink: Traces → Victoria Traces via OTLP HTTP
+[sinks.victoria_traces]
+type = "http"
+inputs = ["otlp.traces"]
+uri = "http://victoria-traces:10428/insert/opentelemetry/v1/traces"
+compression = "gzip"
+encoding.codec = "native_json"
+
+  [sinks.victoria_traces.healthcheck]
+  enabled = false

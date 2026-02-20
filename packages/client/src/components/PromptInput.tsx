@@ -690,6 +690,7 @@ export function PromptInput({
       setSelectedFiles([]);
     });
     if (selectedThreadId) clearPromptDraft(selectedThreadId);
+    textareaRef.current?.focus();
 
     const result = await onSubmit(
       submittedPrompt,

@@ -1201,7 +1201,7 @@ export function ReviewPane() {
 
           {/* Stash pop — shown when no dirty files but there are stashed changes */}
           {summaries.length === 0 && !loading && stashEntries.length > 0 && (
-            <div className="border-t border-sidebar-border p-3 flex-shrink-0 space-y-2">
+            <div className="border-t border-sidebar-border p-3 flex-shrink-0 space-y-3">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <ArchiveRestore className="h-3.5 w-3.5" />
                 <span>{t('review.stashedChanges', { count: stashEntries.length, defaultValue: `${stashEntries.length} stash(es) saved` })}</span>
@@ -1228,7 +1228,7 @@ export function ReviewPane() {
 
           {/* Standalone merge button — shown when no dirty files but worktree has unmerged commits */}
           {showMergeOnly && (
-            <div className="border-t border-sidebar-border p-3 flex-shrink-0 space-y-2">
+            <div className="border-t border-sidebar-border p-3 flex-shrink-0 space-y-3">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <GitMerge className="h-3.5 w-3.5" />
                 <span>{t('review.readyToMerge', { target: baseBranch || 'base', defaultValue: `Ready to merge into ${baseBranch || 'base'}` })}</span>

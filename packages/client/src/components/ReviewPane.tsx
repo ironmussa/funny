@@ -1137,7 +1137,7 @@ export function ReviewPane() {
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="w-full">
+                  <div className="w-full">
                     <Button
                       className="w-full"
                       size="sm"
@@ -1147,7 +1147,7 @@ export function ReviewPane() {
                       {actionInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
                       {t('review.continue', 'Continue')}
                     </Button>
-                  </span>
+                  </div>
                 </TooltipTrigger>
                 {isAgentRunning && (
                   <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
@@ -1208,7 +1208,6 @@ export function ReviewPane() {
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="w-full">
                     <Button
                       className="w-full"
                       size="sm"
@@ -1219,7 +1218,6 @@ export function ReviewPane() {
                       {stashPopInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ArchiveRestore className="h-3.5 w-3.5 mr-1.5" />}
                       {t('review.popStash', 'Pop stash')}
                     </Button>
-                  </span>
                 </TooltipTrigger>
                 {isAgentRunning && (
                   <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
@@ -1237,7 +1235,7 @@ export function ReviewPane() {
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <span className="w-full">
+
                     <Button
                       className="w-full"
                       size="sm"
@@ -1247,7 +1245,7 @@ export function ReviewPane() {
                       {mergeInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <GitMerge className="h-3.5 w-3.5 mr-1.5" />}
                       {t('review.mergeIntoBranch', { target: baseBranch || 'base', defaultValue: `Merge into ${baseBranch || 'base'}` })}
                     </Button>
-                  </span>
+      
                 </TooltipTrigger>
                 {isAgentRunning && (
                   <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>

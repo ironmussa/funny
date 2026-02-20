@@ -12,6 +12,7 @@ interface UIState {
   automationInboxOpen: boolean;
   addProjectOpen: boolean;
   analyticsOpen: boolean;
+  liveColumnsOpen: boolean;
   kanbanContext: { projectId?: string; search?: string; threadId?: string } | null;
 
   setReviewPaneOpen: (open: boolean) => void;
@@ -24,6 +25,7 @@ interface UIState {
   setAddProjectOpen: (open: boolean) => void;
   showGlobalSearch: () => void;
   setAnalyticsOpen: (open: boolean) => void;
+  setLiveColumnsOpen: (open: boolean) => void;
   setKanbanContext: (context: { projectId?: string; search?: string; threadId?: string } | null) => void;
 }
 
@@ -37,6 +39,7 @@ export const useUIStore = create<UIState>((set) => ({
   automationInboxOpen: false,
   addProjectOpen: false,
   analyticsOpen: false,
+  liveColumnsOpen: false,
   kanbanContext: null,
 
   setReviewPaneOpen: (open) => set({ reviewPaneOpen: open }),
@@ -86,7 +89,15 @@ export const useUIStore = create<UIState>((set) => ({
       invalidateSelectThread();
       useThreadStore.setState({ selectedThreadId: null, activeThread: null });
     }
-    set(open ? { analyticsOpen: true, reviewPaneOpen: false, settingsOpen: false, activeSettingsPage: null, allThreadsProjectId: null, addProjectOpen: false, automationInboxOpen: false } : { analyticsOpen: false });
+    set(open ? { analyticsOpen: true, reviewPaneOpen: false, settingsOpen: false, activeSettingsPage: null, allThreadsProjectId: null, addProjectOpen: false, automationInboxOpen: false, liveColumnsOpen: false } : { analyticsOpen: false });
+  },
+
+  setLiveColumnsOpen: (open) => {
+    if (open) {
+      invalidateSelectThread();
+      useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+    }
+    set(open ? { liveColumnsOpen: true, reviewPaneOpen: false, settingsOpen: false, activeSettingsPage: null, allThreadsProjectId: null, addProjectOpen: false, automationInboxOpen: false, analyticsOpen: false } : { liveColumnsOpen: false });
   },
 
   setKanbanContext: (context) => set({ kanbanContext: context }),

@@ -37,6 +37,7 @@ const SettingsDetailView = lazy(() => import('@/components/SettingsDetailView').
 const AutomationInboxView = lazy(() => import('@/components/AutomationInboxView').then(m => ({ default: m.AutomationInboxView })));
 const AddProjectView = lazy(() => import('@/components/AddProjectView').then(m => ({ default: m.AddProjectView })));
 const AnalyticsView = lazy(() => import('@/components/AnalyticsView').then(m => ({ default: m.AnalyticsView })));
+const LiveColumnsView = lazy(() => import('@/components/LiveColumnsView').then(m => ({ default: m.LiveColumnsView })));
 const CommandPalette = lazy(() => import('@/components/CommandPalette').then(m => ({ default: m.CommandPalette })));
 const CircuitBreakerDialog = lazy(() => import('@/components/CircuitBreakerDialog').then(m => ({ default: m.CircuitBreakerDialog })));
 
@@ -49,6 +50,7 @@ export function App() {
   const automationInboxOpen = useUIStore(s => s.automationInboxOpen);
   const addProjectOpen = useUIStore(s => s.addProjectOpen);
   const analyticsOpen = useUIStore(s => s.analyticsOpen);
+  const liveColumnsOpen = useUIStore(s => s.liveColumnsOpen);
   const navigate = useNavigate();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
@@ -131,7 +133,7 @@ export function App() {
         {/* Main content + terminal */}
         <div className="flex-1 flex overflow-hidden min-h-0">
           <Suspense>
-            {settingsOpen ? <SettingsDetailView /> : analyticsOpen ? <AnalyticsView /> : automationInboxOpen ? <AutomationInboxView /> : addProjectOpen ? <AddProjectView /> : allThreadsProjectId ? <AllThreadsView /> : <ThreadView />}
+            {settingsOpen ? <SettingsDetailView /> : analyticsOpen ? <AnalyticsView /> : liveColumnsOpen ? <LiveColumnsView /> : automationInboxOpen ? <AutomationInboxView /> : addProjectOpen ? <AddProjectView /> : allThreadsProjectId ? <AllThreadsView /> : <ThreadView />}
           </Suspense>
         </div>
 

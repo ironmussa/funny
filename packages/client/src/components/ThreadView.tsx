@@ -805,7 +805,7 @@ export function ThreadView() {
         </AnimatePresence>
 
         <ScrollArea className="h-full px-4 [&_[data-radix-scroll-area-viewport]>div]:!flex [&_[data-radix-scroll-area-viewport]>div]:!flex-col [&_[data-radix-scroll-area-viewport]>div]:min-h-full" viewportRef={scrollViewportRef}>
-          <div className="mx-auto max-w-3xl min-w-[320px] space-y-4 overflow-hidden py-4 mt-auto">
+          <div className="w-full mx-auto max-w-3xl min-w-[320px] space-y-4 overflow-hidden py-4 mt-auto">
             {loadingMore && (
               <div className="flex items-center justify-center py-3">
                 <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />

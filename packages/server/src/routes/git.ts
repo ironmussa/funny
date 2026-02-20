@@ -425,7 +425,7 @@ gitRoutes.post('/:threadId/merge', async (c) => {
   if (parsed.value.cleanup && thread.worktreePath) {
     await removeWorktree(project.path, thread.worktreePath).catch((e) => log.warn('Failed to remove worktree after merge', { namespace: 'git', error: String(e) }));
     await removeBranch(project.path, thread.branch).catch((e) => log.warn('Failed to remove branch after merge', { namespace: 'git', error: String(e) }));
-    tm.updateThread(threadId, { worktreePath: null, branch: null });
+    tm.updateThread(threadId, { worktreePath: null, branch: null, mode: 'local' });
     // Release in-memory agent state for the merged thread
     cleanupThreadState(threadId);
   }

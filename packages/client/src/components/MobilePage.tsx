@@ -548,6 +548,7 @@ function ChatView({
                   status={activeThread.resultInfo.status}
                   cost={activeThread.resultInfo.cost}
                   duration={activeThread.resultInfo.duration}
+                  onContinue={activeThread.resultInfo.status === 'failed' ? () => handleSend('Continue', { model: '', mode: '' }) : undefined}
                 />
               )}
 

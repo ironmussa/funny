@@ -1047,6 +1047,7 @@ export function ThreadView() {
                   cost={activeThread.resultInfo.cost}
                   duration={activeThread.resultInfo.duration}
                   error={activeThread.resultInfo.error}
+                  onContinue={activeThread.resultInfo.status === 'failed' ? () => handleSend('Continue', { model: activeThread.model, mode: activeThread.permissionMode }) : undefined}
                 />
               </motion.div>
             )}

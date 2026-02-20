@@ -10,7 +10,7 @@ function formatDuration(ms: number, t: (key: string, opts?: any) => string): str
   return t('duration.minutesSeconds', { minutes, seconds: remainingSeconds });
 }
 
-export function AgentResultCard({ status, cost, duration, error }: { status: 'completed' | 'failed'; cost: number; duration: number; error?: string }) {
+export function AgentResultCard({ status, cost, duration, error, onContinue }: { status: 'completed' | 'failed'; cost: number; duration: number; error?: string; onContinue?: () => void }) {
   const { t } = useTranslation();
   const isSuccess = status === 'completed';
 
@@ -19,15 +19,15 @@ export function AgentResultCard({ status, cost, duration, error }: { status: 'co
       'rounded-lg border px-3 py-2 text-xs flex flex-col gap-2',
       isSuccess
         ? 'border-status-success/20 bg-status-success/5'
-        : 'border-status-error/20 bg-status-error/5'
+        : 'border-status-interrupted/20 bg-status-interrupted/5'
     )}>
       <div className="flex items-center gap-3">
         {isSuccess ? (
           <CheckCircle2 className="h-4 w-4 text-status-success/80 flex-shrink-0" />
         ) : (
-          <XCircle className="h-4 w-4 text-status-error/80 flex-shrink-0" />
+          <AlertTriangle className="h-4 w-4 text-status-interrupted/80 flex-shrink-0" />
         )}
-        <span className={cn('font-medium', isSuccess ? 'text-status-success/80' : 'text-status-error/80')}>
+        <span className={cn('font-medium', isSuccess ? 'text-status-success/80' : 'text-status-interrupted/80')}>
           {isSuccess ? t('thread.taskCompleted') : t('thread.taskFailed')}
         </span>
         <div className="flex items-center gap-3 ml-auto text-muted-foreground">
@@ -37,14 +37,21 @@ export function AgentResultCard({ status, cost, duration, error }: { status: 'co
               {formatDuration(duration, t)}
             </span>
           )}
+          {!isSuccess && onContinue && (
+            <button
+              onClick={onContinue}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+            >
+              <Play className="h-3 w-3" />
+              {t('thread.acceptContinue')}
+            </button>
+          )}
         </div>
       </div>
       {!isSuccess && error && (
-        <div className="mt-1 pl-7">
-          <pre className="whitespace-pre-wrap font-mono text-[10px] text-status-error flex-1 w-full bg-status-error/10 p-2 rounded border border-status-error/20 overflow-x-auto">
-            {error}
-          </pre>
-        </div>
+        <pre className="whitespace-pre-wrap font-mono text-[10px] text-status-interrupted/80 pl-7 overflow-x-auto">
+          {error}
+        </pre>
       )}
     </div>
   );

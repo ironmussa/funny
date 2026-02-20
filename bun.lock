@@ -53,6 +53,7 @@
         "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.0.3",
         "@fontsource/geist-mono": "^5.2.7",
         "@fontsource/geist-sans": "^5.2.5",
+        "@funny/observability": "*",
         "@funny/shared": "*",
         "@radix-ui/react-collapsible": "^1.1.12",
         "@radix-ui/react-dialog": "^1.1.15",

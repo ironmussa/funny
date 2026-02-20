@@ -12,7 +12,8 @@
   "types": "./src/index.ts",
   "exports": {
     ".": "./src/index.ts",
-    "./logger": "./src/logger.ts"
+    "./logger": "./src/logger.ts",
+    "./browser": "./src/browser.ts"
   },
   "dependencies": {
     "@opentelemetry/api": "^1.9.0",

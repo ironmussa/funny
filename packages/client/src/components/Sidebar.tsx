@@ -27,7 +27,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { FolderPlus, Columns3, BarChart3, PanelLeftClose, Settings } from 'lucide-react';
+import { FolderPlus, Columns3, BarChart3, PanelLeftClose, Settings, Radio } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -290,6 +290,19 @@ export function AppSidebar() {
               </Button>
             </TooltipTrigger>
             <TooltipContent side="top">Kanban</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => navigate('/live')}
+                className="text-muted-foreground"
+              >
+                <Radio className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">Live</TooltipContent>
           </Tooltip>
           <Tooltip>
             <TooltipTrigger asChild>

@@ -44,7 +44,7 @@ const LiveColumnsView = lazy(() => import('@/components/LiveColumnsView').then(m
 const CommandPalette = lazy(() => import('@/components/CommandPalette').then(m => ({ default: m.CommandPalette })));
 const CircuitBreakerDialog = lazy(() => import('@/components/CircuitBreakerDialog').then(m => ({ default: m.CircuitBreakerDialog })));
 const WorkflowProgressPanel = lazy(() => import('@/components/WorkflowProgressPanel').then(m => ({ default: m.WorkflowProgressPanel })));
-const NewThreadDialog = lazy(() => import('@/components/NewThreadDialog').then(m => ({ default: m.NewThreadDialog })));)
+const NewThreadDialog = lazy(() => import('@/components/NewThreadDialog').then(m => ({ default: m.NewThreadDialog })));
 
 export function App() {
   const loadProjects = useProjectStore(s => s.loadProjects);

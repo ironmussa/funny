@@ -677,14 +677,15 @@ export function ThreadView() {
     }
     return (
       <div className="flex-1 flex flex-col h-full min-w-0">
-        <div className="flex-1 flex items-center justify-center text-muted-foreground">
-          <div className="text-center">
-            <p className="text-sm">
+        <div className="flex-1 flex items-center justify-center text-muted-foreground px-6">
+          <div className="text-center max-w-3xl">
+            <p className="text-4xl mb-4">{hasProjects ? '🚀' : '📁'}</p>
+            <p className="text-2xl font-semibold text-foreground mb-1">
               {hasProjects ? t('thread.selectOrCreate') : t('thread.addProjectFirst')}
             </p>
-            {hasProjects && (
-              <p className="text-xs mt-1">{t('thread.threadsRunParallel')}</p>
-            )}
+            <p className="text-sm">
+              {hasProjects ? t('thread.threadsRunParallel') : t('thread.addProjectDescription')}
+            </p>
           </div>
         </div>
       </div>

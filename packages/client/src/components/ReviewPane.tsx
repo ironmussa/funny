@@ -282,6 +282,19 @@ export function ReviewPane() {
       if (data.files.length > 0 && !selectedFile) {
         setSelectedFile(data.files[0].path);
       }
+      // Re-load diff for the currently selected file after cache was cleared
+      const fileToLoad = selectedFile ?? (data.files.length > 0 ? data.files[0].path : null);
+      if (fileToLoad) {
+        const summary = data.files.find(s => s.path === fileToLoad);
+        if (summary) {
+          setLoadingDiff(fileToLoad);
+          const diffResult = await api.getFileDiff(effectiveThreadId, fileToLoad, summary.staged);
+          if (diffResult.isOk()) {
+            setDiffCache(prev => new Map(prev).set(fileToLoad, diffResult.value.diff));
+          }
+          setLoadingDiff(prev => prev === fileToLoad ? null : prev);
+        }
+      }
     } else {
       console.error('Failed to load diff summary:', result.error);
     }

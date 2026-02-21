@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Editor, type BeforeMount } from '@monaco-editor/react';
 import {
@@ -11,8 +11,12 @@ import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
-import { Loader2, Save, X, Maximize2, Minimize2, Eye, EyeOff } from 'lucide-react';
+import { Loader2, Save, X, Maximize2, Minimize2, Eye, EyeOff, BookOpen, Code } from 'lucide-react';
 import { useSettingsStore } from '@/stores/settings-store';
+import ReactMarkdown, { type Components } from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import mermaid from 'mermaid';
+import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface MonacoEditorDialogProps {
   open: boolean;
@@ -29,10 +33,13 @@ export function MonacoEditorDialog({ open, onOpenChange, filePath }: MonacoEdito
   const [saving, setSaving] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
-
-  const isDirty = content !== originalContent;
   const ext = getFileExtension(filePath);
   const language = getMonacoLanguage(ext);
+  const isMarkdown = language === 'markdown';
+
+  const [showPreview, setShowPreview] = useState(isMarkdown);
+
+  const isDirty = content !== originalContent;
 
   // Derive Monaco theme from Funny theme
   const isDark =
@@ -104,13 +111,27 @@ export function MonacoEditorDialog({ open, onOpenChange, filePath }: MonacoEdito
           isFullscreen
             ? 'max-w-[100vw] max-h-[100vh] w-[100vw] h-[100vh] p-0'
             : 'max-w-5xl max-h-[85vh] h-[85vh] p-0',
-          '[&>button:last-child]:hidden'
+          '[&>button:last-child]:hidden',
+          '!duration-0'
         )}
       >
         <DialogHeader className="px-6 pt-4 pb-2 border-b border-border/50">
           <div className="flex items-center justify-between">
             <DialogTitle className="font-mono text-sm truncate">{filePath}</DialogTitle>
             <div className="flex items-center gap-1">
+              {/* Markdown preview toggle */}
+              {isMarkdown && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShowPreview(!showPreview)}
+                  title={showPreview ? t('editor.showCode', 'Show code') : t('editor.showPreview', 'Show preview')}
+                  className="h-8 w-8"
+                >
+                  {showPreview ? <Code className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />}
+                </Button>
+              )}
+
               {/* Minimap toggle */}
               <Button
                 variant="ghost"
@@ -152,6 +173,14 @@ export function MonacoEditorDialog({ open, onOpenChange, filePath }: MonacoEdito
             <div className="flex items-center justify-center h-full">
               <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
             </div>
+          ) : showPreview && isMarkdown ? (
+            <ScrollArea className="h-full">
+              <div className="prose prose-sm max-w-none px-8 py-6">
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownPreviewComponents}>
+                  {content}
+                </ReactMarkdown>
+              </div>
+            </ScrollArea>
           ) : (
             <Editor
               height="100%"
@@ -196,6 +225,82 @@ export function MonacoEditorDialog({ open, onOpenChange, filePath }: MonacoEdito
     </Dialog>
   );
 }
+
+/**
+ * Renders a Mermaid diagram from source text
+ */
+function MermaidBlock({ chart }: { chart: string }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const [svg, setSvg] = useState<string>('');
+  const [error, setError] = useState<string>('');
+
+  useEffect(() => {
+    let cancelled = false;
+    mermaid.initialize({ startOnLoad: false, theme: 'dark' });
+    mermaid
+      .render(`mermaid-${Math.random().toString(36).slice(2)}`, chart)
+      .then(({ svg: renderedSvg }) => {
+        if (!cancelled) setSvg(renderedSvg);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
+      });
+    return () => { cancelled = true; };
+  }, [chart]);
+
+  if (error) {
+    return (
+      <pre className="text-xs text-red-400 bg-red-950/30 rounded p-3 overflow-auto">
+        {error}
+      </pre>
+    );
+  }
+
+  return (
+    <div
+      ref={containerRef}
+      className="flex justify-center my-4 [&>svg]:max-w-full"
+      dangerouslySetInnerHTML={{ __html: svg }}
+    />
+  );
+}
+
+/**
+ * Custom markdown components with Mermaid support
+ */
+const markdownPreviewComponents: Components = {
+  code({ className, children, ...props }) {
+    const match = /language-(\w+)/.exec(className || '');
+    const lang = match?.[1];
+
+    if (lang === 'mermaid') {
+      return <MermaidBlock chart={String(children).trim()} />;
+    }
+
+    // Block code (inside <pre>)
+    if (className) {
+      return (
+        <code className={cn('text-xs', className)} {...props}>
+          {children}
+        </code>
+      );
+    }
+
+    // Inline code
+    return (
+      <code className="bg-muted px-1.5 py-0.5 rounded text-xs" {...props}>
+        {children}
+      </code>
+    );
+  },
+  pre({ children }) {
+    return (
+      <pre className="bg-muted/50 rounded-md p-3 overflow-auto text-sm">
+        {children}
+      </pre>
+    );
+  },
+};
 
 /**
  * Extract file extension from path

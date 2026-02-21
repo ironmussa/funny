@@ -63,7 +63,7 @@ export function WriteFileCard({ parsed, hideLabel }: { parsed: Record<string, un
               </span>
             )}
           </div>
-          <div className="overflow-x-auto max-h-80 overflow-y-auto">
+          <div className="overflow-hidden max-h-80">
             <pre className="px-3 py-2 font-mono text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap break-all">
               {content}
             </pre>

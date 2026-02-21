@@ -63,7 +63,7 @@ export function EditFileCard({ parsed, hideLabel }: { parsed: Record<string, unk
       </button>
       {expanded && hasDiff && (
         <div className="border-t border-border/40 overflow-hidden">
-          <div className="relative text-xs max-h-80 overflow-y-auto overflow-x-auto [&_.diff-container]:font-mono [&_.diff-container]:text-sm">
+          <div className="relative text-xs overflow-hidden max-h-80 [&_.diff-container]:font-mono [&_.diff-container]:text-sm">
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button

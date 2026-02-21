@@ -67,7 +67,7 @@ export function BashCard({ parsed, output, hideLabel }: { parsed: Record<string,
           <div>
             <div className="text-xs font-semibold text-muted-foreground uppercase mb-1">{t('tools.output')}</div>
             {output ? (
-              <div className="rounded bg-background/80 border border-border/40 px-2.5 py-1.5 overflow-x-auto max-h-60 overflow-y-auto">
+              <div className="rounded bg-background/80 border border-border/40 px-2.5 py-1.5 overflow-hidden max-h-60">
                 {highlightedOutput ? (
                   <div
                     className="font-mono text-sm leading-relaxed whitespace-pre-wrap break-all [&_.shiki]:!bg-transparent [&_pre]:!m-0 [&_code]:!p-0"

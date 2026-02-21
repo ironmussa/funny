@@ -20,7 +20,7 @@ export function PlanCard({ parsed, output, hideLabel }: { parsed: Record<string,
       )}
 
       {/* Plan content */}
-      <div className="border-t border-border/40 px-4 py-3 max-h-[500px] overflow-y-auto">
+      <div className="border-t border-border/40 px-4 py-3 max-h-[500px] overflow-hidden">
         <div className="prose prose-xs prose-invert max-w-none
           prose-headings:text-foreground prose-headings:font-semibold
           prose-h1:text-xs prose-h1:mb-1.5 prose-h1:mt-0

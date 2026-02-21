@@ -40,11 +40,13 @@ export const DIFF_VIEWER_STYLES = {
     },
   },
   line: {
-    fontSize: '11px',
+    fontSize: 'inherit',
     lineHeight: '1.4',
+    fontFamily: "'Geist Mono', ui-monospace, monospace",
   },
   contentText: {
     whiteSpace: 'pre',
+    fontFamily: "'Geist Mono', ui-monospace, monospace",
     // wordBreak: 'break-all',
     // overflow: 'hidden',
   },

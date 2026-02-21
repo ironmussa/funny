@@ -833,7 +833,7 @@ export function ReviewPane() {
                   Loading diff\u2026
                 </div>
               ) : selectedDiffContent ? (
-                <div className="relative text-xs [&_.diff-container]:font-mono [&_.diff-container]:text-sm [&_table]:w-max [&_td:last-child]:w-auto [&_td:last-child]:min-w-0">
+                <div className="relative text-xs [&_.diff-container]:font-mono [&_table]:w-max [&_td:last-child]:w-auto [&_td:last-child]:min-w-0">
                   <Tooltip>
                     <TooltipTrigger asChild>
                       <Button

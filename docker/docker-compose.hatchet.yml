@@ -1,0 +1,99 @@
+# Hatchet self-hosted setup for the Pipeline Service.
+#
+# Usage:
+#   docker compose -f docker/docker-compose.hatchet.yml up -d
+#
+# Dashboard: http://localhost:8080
+# Default login: admin@example.com / Admin123!!
+#
+# After starting, create an API token via the dashboard:
+#   Settings → API Tokens → Create API Token
+# Then set HATCHET_CLIENT_TOKEN in your .env file.
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: hatchet
+      POSTGRES_PASSWORD: hatchet
+      POSTGRES_DB: hatchet
+    ports:
+      - "5435:5432"
+    volumes:
+      - hatchet-pg-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U hatchet"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  rabbitmq:
+    image: rabbitmq:3-management-alpine
+    environment:
+      RABBITMQ_DEFAULT_USER: user
+      RABBITMQ_DEFAULT_PASS: password
+    ports:
+      - "5673:5672"
+      - "15673:15672"
+    volumes:
+      - hatchet-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  hatchet-migrate:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-migrate:latest
+    environment:
+      DATABASE_URL: postgres://hatchet:hatchet@postgres:5432/hatchet?sslmode=disable
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  hatchet-setup-config:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-admin:latest
+    command: /hatchet/hatchet-admin quickstart --skip client-docker --generated-config-dir /hatchet/config
+    environment:
+      DATABASE_URL: postgres://hatchet:hatchet@postgres:5432/hatchet?sslmode=disable
+      SERVER_MSGQUEUE_RABBITMQ_URL: amqp://user:password@rabbitmq:5672/
+      SERVER_AUTH_COOKIE_INSECURE: "t"
+      SERVER_GRPC_INSECURE: "t"
+      SERVER_GRPC_BROADCAST_ADDRESS: hatchet-engine:7077
+    volumes:
+      - hatchet-config:/hatchet/config
+    depends_on:
+      hatchet-migrate:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+
+  hatchet-engine:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-engine:latest
+    command: /hatchet/hatchet-engine --config /hatchet/config
+    restart: on-failure
+    environment:
+      DATABASE_URL: postgres://hatchet:hatchet@postgres:5432/hatchet?sslmode=disable
+      SERVER_MSGQUEUE_RABBITMQ_URL: amqp://user:password@rabbitmq:5672/
+      SERVER_AUTH_COOKIE_INSECURE: "t"
+      SERVER_GRPC_INSECURE: "t"
+      SERVER_GRPC_BROADCAST_ADDRESS: hatchet-engine:7077
+    ports:
+      - "7077:7070"
+    volumes:
+      - hatchet-config:/hatchet/config
+    depends_on:
+      hatchet-setup-config:
+        condition: service_completed_successfully
+
+  hatchet-dashboard:
+    image: ghcr.io/hatchet-dev/hatchet/hatchet-dashboard:latest
+    ports:
+      - "8080:80"
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:7077
+
+volumes:
+  hatchet-pg-data:
+  hatchet-rabbitmq-data:
+  hatchet-config:

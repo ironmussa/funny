@@ -76,13 +76,15 @@ export class ManifestManager {
   async addToReady(entry: ManifestReadyEntry): Promise<void> {
     const manifest = await this.read();
 
-    // Prevent duplicate branch
-    if (manifest.ready.some((e) => e.branch === entry.branch)) {
-      logger.warn({ branch: entry.branch }, 'Branch already in ready[], skipping');
-      return;
+    // Replace existing entry for the same branch (newer run supersedes)
+    const existingIdx = manifest.ready.findIndex((e) => e.branch === entry.branch);
+    if (existingIdx >= 0) {
+      logger.info({ branch: entry.branch }, 'Manifest: replacing existing ready[] entry with newer run');
+      manifest.ready[existingIdx] = entry;
+    } else {
+      manifest.ready.push(entry);
     }
 
-    manifest.ready.push(entry);
     await this.write(manifest);
     logger.info({ branch: entry.branch }, 'Manifest: added to ready[]');
   }

@@ -38,6 +38,7 @@ import { ThreadList } from './sidebar/ThreadList';
 import { ProjectItem } from './sidebar/ProjectItem';
 import { GeneralSettingsDialog } from './GeneralSettingsDialog';
 import { IssuesDialog } from './IssuesDialog';
+import { WorkflowDialog } from './WorkflowDialog';
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 
 export function AppSidebar() {
@@ -63,6 +64,7 @@ export function AppSidebar() {
   const startNewThread = useUIStore(s => s.startNewThread);
   const setAddProjectOpen = useUIStore(s => s.setAddProjectOpen);
   const showGlobalSearch = useUIStore(s => s.showGlobalSearch);
+  const openWorkflowDialog = useUIStore(s => s.openWorkflowDialog);
   const authMode = useAuthStore(s => s.mode);
   const authUser = useAuthStore(s => s.user);
   const logout = useAuthStore(s => s.logout);
@@ -136,17 +138,33 @@ export function AppSidebar() {
     });
   }, [projects, reorderProjects]);
 
-  // Track scroll position for top fade gradients
+  // Track scroll position for top fade gradients (throttled via rAF to avoid excessive re-renders)
   useEffect(() => {
     const threadsEl = threadsScrollRef.current;
     const projectsEl = projectsScrollRef.current;
-    const onThreadsScroll = () => setThreadsScrolled((threadsEl?.scrollTop ?? 0) > 2);
-    const onProjectsScroll = () => setProjectsScrolled((projectsEl?.scrollTop ?? 0) > 2);
+    let threadsRaf = 0;
+    let projectsRaf = 0;
+    const onThreadsScroll = () => {
+      if (threadsRaf) return;
+      threadsRaf = requestAnimationFrame(() => {
+        threadsRaf = 0;
+        setThreadsScrolled((threadsEl?.scrollTop ?? 0) > 2);
+      });
+    };
+    const onProjectsScroll = () => {
+      if (projectsRaf) return;
+      projectsRaf = requestAnimationFrame(() => {
+        projectsRaf = 0;
+        setProjectsScrolled((projectsEl?.scrollTop ?? 0) > 2);
+      });
+    };
     threadsEl?.addEventListener('scroll', onThreadsScroll, { passive: true });
     projectsEl?.addEventListener('scroll', onProjectsScroll, { passive: true });
     return () => {
       threadsEl?.removeEventListener('scroll', onThreadsScroll);
       projectsEl?.removeEventListener('scroll', onProjectsScroll);
+      if (threadsRaf) cancelAnimationFrame(threadsRaf);
+      if (projectsRaf) cancelAnimationFrame(projectsRaf);
     };
   }, []);
 
@@ -303,7 +321,7 @@ export function AppSidebar() {
       </div>
 
       {/* Projects list (fills remaining space, own scroll) */}
-      <SidebarContent ref={projectsScrollRef} className="px-2 pb-2 relative">
+      <SidebarContent ref={projectsScrollRef} className="px-2 pb-2 relative contain-paint">
         <div className={cn(
           "sticky top-0 left-0 right-0 h-4 -mb-4 bg-gradient-to-b from-sidebar to-transparent pointer-events-none z-10 shrink-0",
           projectsScrolled ? "opacity-100" : "opacity-0"
@@ -380,6 +398,7 @@ export function AppSidebar() {
                 navigate(`/search?project=${project.id}`);
               }}
               onShowIssues={() => setIssuesProjectId(project.id)}
+              onTriggerWorkflow={() => openWorkflowDialog(project.id, project.path, project.name)}
             />
           ))}
         </div>
@@ -417,6 +436,7 @@ export function AppSidebar() {
       </SidebarFooter>
 
       <GeneralSettingsDialog open={generalSettingsOpen} onOpenChange={setGeneralSettingsOpen} />
+      <WorkflowDialog />
 
       {issuesProjectId && (
         <IssuesDialog

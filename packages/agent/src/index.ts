@@ -17,7 +17,6 @@ import { DeadLetterQueue } from './infrastructure/dlq.js';
 import { AdapterManager } from './infrastructure/adapter.js';
 import { WebhookAdapter } from './infrastructure/webhook-adapter.js';
 import { RequestLogger } from './infrastructure/request-logger.js';
-import { ContainerManager } from './infrastructure/container-manager.js';
 import { createPipelineRoutes } from './routes/pipeline.js';
 import { createDirectorRoutes } from './routes/director.js';
 import { createWebhookRoutes } from './routes/webhooks.js';
@@ -57,9 +56,8 @@ const requestLogger = new RequestLogger(projectPath, config.logging.level as any
 
 // ── Singletons ──────────────────────────────────────────────────
 
-const containerManager = new ContainerManager();
 const eventBus = new EventBus(config.events.path ?? undefined);
-const runner = new PipelineRunner(eventBus, config, circuitBreakers, requestLogger, undefined, containerManager);
+const runner = new PipelineRunner(eventBus, config, circuitBreakers, requestLogger);
 const manifestManager = new ManifestManager(projectPath);
 const integrator = new Integrator(eventBus, config, circuitBreakers);
 const director = new Director(manifestManager, integrator, eventBus, projectPath, requestLogger);
@@ -163,26 +161,6 @@ eventBus.on('event', async (event: PipelineEvent) => {
   }
 });
 
-// Container cleanup: when pipeline finishes, stop containers + dispose browser.
-// Delay cleanup to let the SDK process exit cleanly before killing the container —
-// otherwise the child process exits with code 1 and triggers a spurious pipeline.failed.
-eventBus.on('event', (event: PipelineEvent) => {
-  if (
-    event.event_type !== 'pipeline.completed' &&
-    event.event_type !== 'pipeline.failed' &&
-    event.event_type !== 'pipeline.stopped'
-  ) return;
-
-  const worktreePath = (event.data as Record<string, any>).worktree_path;
-  if (worktreePath) {
-    setTimeout(() => {
-      containerManager.cleanup(worktreePath, event.request_id).catch((err: any) => {
-        logger.error({ err: err.message, worktreePath }, 'Container cleanup failed');
-      });
-    }, 3000);
-  }
-});
-
 // Branch cleanup: when pipeline completes, delete pipeline branch
 eventBus.on('event', async (event: PipelineEvent) => {
   if (event.event_type !== 'pipeline.completed') return;
@@ -254,7 +232,9 @@ app.route('/logs', createLogRoutes(requestLogger));
 
 // ── Exports ─────────────────────────────────────────────────────
 
-export { app, runner, eventBus, director, manifestManager, integrator, config, idempotencyGuard, dlq, branchCleaner, adapterManager, requestLogger, containerManager };
-export type { PipelineRequest, PipelineEvent, PipelineState, Tier, AgentName } from './core/types.js';
+export { app, runner, eventBus, director, manifestManager, integrator, config, idempotencyGuard, dlq, branchCleaner, adapterManager, requestLogger };
+export type { PipelineRequest, PipelineEvent, PipelineEventType, PipelineState, Tier, AgentName } from './core/types.js';
 export type { Manifest, IntegratorResult, DirectorStatus } from './core/manifest-types.js';
 export type { PipelineServiceConfig } from './config/schema.js';
+export { isHatchetEnabled } from './hatchet/client.js';
+export { startHatchetWorker } from './hatchet/worker.js';

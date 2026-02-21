@@ -25,10 +25,10 @@ describe('PipelineServiceConfigSchema', () => {
 
   it('defaults have correct agent settings', () => {
     const config = PipelineServiceConfigSchema.parse({});
-    expect(config.agents.pipeline.model).toBe('sonnet');
-    expect(config.agents.pipeline.maxTurns).toBe(200);
     expect(config.agents.conflict.model).toBe('opus');
     expect(config.agents.conflict.maxTurns).toBe(50);
+    expect(config.agents.tests).toEqual({});
+    expect(config.agents.security).toEqual({});
   });
 
   it('defaults have correct resilience settings', () => {
@@ -61,8 +61,8 @@ describe('PipelineServiceConfigSchema', () => {
         main: 'master',
       },
       agents: {
-        pipeline: { model: 'opus', permissionMode: 'ask', maxTurns: 100 },
         conflict: { model: 'haiku', permissionMode: 'autoEdit', maxTurns: 30 },
+        tests: { model: 'gpt-4', provider: 'openai' },
       },
       auto_correction: { max_attempts: 5 },
       resilience: {
@@ -141,19 +141,19 @@ describe('PipelineServiceConfigSchema', () => {
     expect(result.success).toBe(false);
   });
 
-  it('rejects maxTurns above 500', () => {
+  it('rejects conflict maxTurns above 500', () => {
     const result = PipelineServiceConfigSchema.safeParse({
       agents: {
-        pipeline: { model: 'sonnet', permissionMode: 'autoEdit', maxTurns: 501 },
+        conflict: { model: 'opus', permissionMode: 'autoEdit', maxTurns: 501 },
       },
     });
     expect(result.success).toBe(false);
   });
 
-  it('rejects maxTurns below 1', () => {
+  it('rejects conflict maxTurns below 1', () => {
     const result = PipelineServiceConfigSchema.safeParse({
       agents: {
-        pipeline: { model: 'sonnet', permissionMode: 'autoEdit', maxTurns: 0 },
+        conflict: { model: 'opus', permissionMode: 'autoEdit', maxTurns: 0 },
       },
     });
     expect(result.success).toBe(false);

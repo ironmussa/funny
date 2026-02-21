@@ -55,9 +55,11 @@ export function useTerminal({ id, cwd, containerRef }: UseTerminalOptions) {
     fitAddonRef.current = fitAddon;
 
     let cleanup: (() => void) | null = null;
+    let isMounted = true;
 
     (async () => {
       const { invoke, listen } = await getTauriApis();
+      if (!isMounted) return;
 
       // Listen for PTY output
       const unlistenData = await listen<{ data: string }>(`pty:data:${id}`, (event) => {
@@ -93,6 +95,10 @@ export function useTerminal({ id, cwd, containerRef }: UseTerminalOptions) {
         onResizeDisposable.dispose();
         invoke('pty_kill', { id }).catch(console.error);
       };
+
+      if (!isMounted) {
+        cleanup();
+      }
     })();
 
     // ResizeObserver to refit on container size change
@@ -103,6 +109,7 @@ export function useTerminal({ id, cwd, containerRef }: UseTerminalOptions) {
     resizeObserver.observe(container);
 
     return () => {
+      isMounted = false;
       resizeObserver.disconnect();
       terminal.dispose();
       terminalRef.current = null;

@@ -19,7 +19,7 @@ import { nanoid } from 'nanoid';
 import { wsBroker } from './ws-broker.js';
 import * as tm from './thread-manager.js';
 import * as pm from './project-manager.js';
-import type { WSEvent } from '@funny/shared';
+import type { WSEvent, WSWorkflowStepData, WSWorkflowStatusData } from '@funny/shared';
 import { log } from '../lib/abbacchio.js';
 
 // ── Types ────────────────────────────────────────────────────
@@ -80,6 +80,11 @@ const SILENT_EVENT_TYPES = new Set([
   'pipeline.correction.completed',
   'pipeline.message',
   'pipeline.cli_message',
+  // Workflow events are handled by onWorkflowEvent and should not create system messages
+  'workflow.started',
+  'workflow.step.completed',
+  'workflow.completed',
+  'workflow.failed',
 ]);
 
 function getCLIState(requestId: string): CLIMessageState {
@@ -529,6 +534,66 @@ function onMessage(event: IngestEvent): void {
   emitWS(state, { type: 'agent:message', threadId: state.threadId, data: { messageId: msgId, role, content } });
 }
 
+// ── Workflow event handler ────────────────────────────────────
+
+function onWorkflowEvent(event: IngestEvent): void {
+  const state = getState(event.request_id);
+  if (!state) return;
+
+  const { event_type, data } = event;
+  const runId = (data.run_id as string) ?? event.request_id;
+  const workflowName = (data.workflow_name as string) ?? 'unknown';
+
+  if (event_type === 'workflow.started') {
+    const wsEvent: WSEvent = {
+      type: 'workflow:status',
+      threadId: state.threadId,
+      data: {
+        runId,
+        workflowName,
+        status: 'running',
+      } satisfies WSWorkflowStatusData,
+    };
+    emitWS(state, wsEvent);
+  } else if (event_type === 'workflow.step.completed') {
+    const wsEvent: WSEvent = {
+      type: 'workflow:step',
+      threadId: state.threadId,
+      data: {
+        runId,
+        workflowName,
+        stepName: (data.step_name as string) ?? 'unknown',
+        status: 'completed',
+        output: (data.output as Record<string, unknown>) ?? undefined,
+      } satisfies WSWorkflowStepData,
+    };
+    emitWS(state, wsEvent);
+  } else if (event_type === 'workflow.completed') {
+    const wsEvent: WSEvent = {
+      type: 'workflow:status',
+      threadId: state.threadId,
+      data: {
+        runId,
+        workflowName,
+        status: 'completed',
+        qualityScores: (data.quality_scores as Record<string, { status: string; details: string }>) ?? undefined,
+      } satisfies WSWorkflowStatusData,
+    };
+    emitWS(state, wsEvent);
+  } else if (event_type === 'workflow.failed') {
+    const wsEvent: WSEvent = {
+      type: 'workflow:status',
+      threadId: state.threadId,
+      data: {
+        runId,
+        workflowName,
+        status: 'failed',
+      } satisfies WSWorkflowStatusData,
+    };
+    emitWS(state, wsEvent);
+  }
+}
+
 // ── Public API ───────────────────────────────────────────────
 
 /**
@@ -536,6 +601,11 @@ function onMessage(event: IngestEvent): void {
  * based on the event_type suffix.
  */
 export function handleIngestEvent(event: IngestEvent): void {
+  // Route workflow events to dedicated handler before suffix-based routing
+  if (event.event_type.startsWith('workflow.')) {
+    return onWorkflowEvent(event);
+  }
+
   const suffix = event.event_type.split('.').pop();
 
   switch (suffix) {

@@ -1,4 +1,6 @@
-import { lazy } from 'react';
+import { lazy, useMemo } from 'react';
+import { useThreadStore } from '@/stores/thread-store';
+import { useProjectStore } from '@/stores/project-store';
 
 export const ReactDiffViewer = lazy(() => import('react-diff-viewer-continued'));
 
@@ -235,4 +237,30 @@ export function getFileExtension(filePath: string): string {
 export function getFileName(filePath: string): string {
   const normalized = filePath.replace(/\\/g, '/');
   return normalized.split('/').pop() || filePath;
+}
+
+/**
+ * Hook that returns the current thread's project path (for stripping from absolute file paths).
+ */
+export function useCurrentProjectPath(): string | undefined {
+  const projectId = useThreadStore(s => s.activeThread?.projectId);
+  const projects = useProjectStore(s => s.projects);
+  return useMemo(
+    () => projects.find(p => p.id === projectId)?.path,
+    [projects, projectId]
+  );
+}
+
+/**
+ * Strips the project root prefix from an absolute file path to display a shorter relative path.
+ * Falls back to the original path if the project path is not a prefix.
+ */
+export function makeRelativePath(filePath: string, projectPath: string | undefined): string {
+  if (!projectPath) return filePath;
+  const normalizedFile = filePath.replace(/\\/g, '/');
+  const normalizedProject = projectPath.replace(/\\/g, '/').replace(/\/$/, '');
+  if (normalizedFile.startsWith(normalizedProject + '/')) {
+    return normalizedFile.slice(normalizedProject.length + 1);
+  }
+  return filePath;
 }

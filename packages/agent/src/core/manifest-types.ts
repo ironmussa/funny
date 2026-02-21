@@ -29,6 +29,7 @@ export interface ManifestReadyEntry {
   priority: number;
   depends_on: string[];
   base_main_sha: string;
+  base_branch?: string;
   metadata?: Record<string, unknown>;
 }
 

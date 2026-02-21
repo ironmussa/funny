@@ -534,4 +534,20 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ path, content }),
     }),
+
+  // Pipeline / Workflows
+  runPipeline: (input: { branch: string; worktree_path: string; base_branch?: string; config?: Record<string, unknown>; metadata?: Record<string, unknown> }) =>
+    request<{ request_id: string; status: string; events_url: string }>('/pipeline/run', {
+      method: 'POST',
+      body: JSON.stringify(input),
+    }),
+  triggerWorkflow: (workflowName: string, input: Record<string, unknown>) =>
+    request<{ run_id: string; status: string }>('/pipeline/workflow', {
+      method: 'POST',
+      body: JSON.stringify({ workflow_name: workflowName, input }),
+    }),
+  getWorkflowStatus: (runId: string) =>
+    request<Record<string, unknown>>(`/pipeline/workflow/${runId}`),
+  listPipelines: () =>
+    request<Array<Record<string, unknown>>>('/pipeline/list'),
 };

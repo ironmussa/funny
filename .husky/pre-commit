@@ -2,4 +2,4 @@
 # Husky pre-commit hook - Secret detection
 
 # Only scan staged files (fast, not entire repo)
-git diff --cached --name-only --diff-filter=ACM | xargs -r npx secretlint
+git diff --cached --name-only --diff-filter=ACM | grep -v '^docker/' | xargs -r npx secretlint

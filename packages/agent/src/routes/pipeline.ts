@@ -16,6 +16,7 @@ import type { PipelineRunner } from '../core/pipeline-runner.js';
 import type { EventBus } from '../infrastructure/event-bus.js';
 import type { IdempotencyGuard } from '../infrastructure/idempotency.js';
 import type { PipelineEvent } from '../core/types.js';
+import { getHatchetClient, isHatchetEnabled } from '../hatchet/client.js';
 import { logger } from '../infrastructure/logger.js';
 
 export function createPipelineRoutes(
@@ -181,6 +182,53 @@ export function createPipelineRoutes(
 
     await runner.stop(id);
     return c.json({ status: 'stopped' });
+  });
+
+  // ── GET /workflow/:runId — Get Hatchet workflow run status ──────
+
+  app.get('/workflow/:runId', async (c) => {
+    if (!isHatchetEnabled()) {
+      return c.json({ error: 'Hatchet is not configured (HATCHET_CLIENT_TOKEN missing)' }, 503);
+    }
+
+    const runId = c.req.param('runId');
+
+    try {
+      const hatchet = getHatchetClient();
+      const result = await hatchet.runs.get(runId);
+      return c.json(result);
+    } catch (err: any) {
+      logger.warn({ runId, err: err.message }, 'Failed to get workflow run status');
+      return c.json({ error: 'Workflow run not found' }, 404);
+    }
+  });
+
+  // ── POST /workflow — Trigger a Hatchet workflow ─────────────────
+
+  app.post('/workflow', async (c) => {
+    if (!isHatchetEnabled()) {
+      return c.json({ error: 'Hatchet is not configured (HATCHET_CLIENT_TOKEN missing)' }, 503);
+    }
+
+    const { workflow_name, input } = await c.req.json<{
+      workflow_name: string;
+      input: Record<string, unknown>;
+    }>();
+
+    if (!workflow_name || !input) {
+      return c.json({ error: 'workflow_name and input are required' }, 400);
+    }
+
+    const hatchet = getHatchetClient();
+    const ref = await hatchet.runNoWait(workflow_name, input, {});
+    const runId = await ref.getWorkflowRunId();
+
+    logger.info({ workflow_name, run_id: runId }, 'Hatchet workflow triggered');
+
+    return c.json({
+      run_id: runId,
+      status: 'triggered',
+    }, 202);
   });
 
   return app;

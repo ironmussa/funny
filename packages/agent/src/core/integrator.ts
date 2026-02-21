@@ -4,7 +4,7 @@
  * Takes a ManifestReadyEntry and performs the full integration workflow:
  * 1. Creates integration/{branch} from main
  * 2. Merges pipeline/{branch} into it
- * 3. If conflicts: spawns Claude agent (Opus) for conflict resolution
+ * 3. If conflicts: runs AgentExecutor for conflict resolution
  * 4. Pushes integration branch and creates GitHub PR
  *
  * Uses execute() directly for merge (not mergeBranch()) because we need
@@ -14,9 +14,8 @@
  * compensation (rollback) on failure.
  */
 
-import { nanoid } from 'nanoid';
-import { AgentOrchestrator, SDKClaudeProcess } from '@funny/core/agents';
-import type { IAgentProcessFactory, IAgentProcess, AgentProcessOptions } from '@funny/core/agents';
+import { AgentExecutor, ModelFactory } from '@funny/core/agents';
+import type { AgentRole, AgentContext } from '@funny/core/agents';
 import { execute, createPR } from '@funny/core/git';
 import { Saga } from './saga.js';
 import type { ManifestReadyEntry, ManifestPendingMergeEntry, IntegratorResult } from './manifest-types.js';
@@ -25,14 +24,6 @@ import type { EventBus } from '../infrastructure/event-bus.js';
 import type { CircuitBreakers } from '../infrastructure/circuit-breaker.js';
 import type { PipelineServiceConfig } from '../config/schema.js';
 import { logger } from '../infrastructure/logger.js';
-
-// ── Process factory ─────────────────────────────────────────────
-
-const claudeFactory: IAgentProcessFactory = {
-  create(opts: AgentProcessOptions): IAgentProcess {
-    return new SDKClaudeProcess(opts);
-  },
-};
 
 // ── Saga context ────────────────────────────────────────────────
 
@@ -110,11 +101,10 @@ ${corrections}${conflicts}
 // ── Integrator class ────────────────────────────────────────────
 
 export class Integrator {
-  private orchestrator: AgentOrchestrator;
+  private modelFactory: ModelFactory;
   private integrationPrefix: string;
   private mainBranch: string;
   private conflictModel: string;
-  private conflictPermMode: string;
   private conflictMaxTurns: number;
 
   constructor(
@@ -122,11 +112,22 @@ export class Integrator {
     private config: PipelineServiceConfig,
     private circuitBreakers?: CircuitBreakers,
   ) {
-    this.orchestrator = new AgentOrchestrator(claudeFactory);
+    this.modelFactory = new ModelFactory({
+      anthropic: {
+        apiKey: process.env[config.llm_providers.anthropic.api_key_env],
+        baseURL: config.llm_providers.anthropic.base_url || undefined,
+      },
+      openai: {
+        apiKey: process.env[config.llm_providers.openai.api_key_env],
+        baseURL: config.llm_providers.openai.base_url || undefined,
+      },
+      ollama: {
+        baseURL: config.llm_providers.ollama.base_url || undefined,
+      },
+    });
     this.integrationPrefix = config.branch.integration_prefix;
     this.mainBranch = config.branch.main;
     this.conflictModel = config.agents.conflict.model;
-    this.conflictPermMode = config.agents.conflict.permissionMode;
     this.conflictMaxTurns = config.agents.conflict.maxTurns;
   }
 
@@ -448,7 +449,7 @@ export class Integrator {
     }
   }
 
-  // ── Conflict resolution via Claude agent ──────────────────────
+  // ── Conflict resolution via AgentExecutor ──────────────────────
 
   private async resolveConflicts(
     integrationBranch: string,
@@ -456,72 +457,52 @@ export class Integrator {
     conflictedFiles: string[],
     cwd: string,
   ): Promise<boolean> {
-    const requestId = `conflict-${nanoid()}`;
     const prompt = buildConflictPrompt(integrationBranch, pipelineBranch, conflictedFiles);
 
-    logger.info({ requestId, conflictedFiles }, 'Starting conflict resolution agent');
+    logger.info({ conflictedFiles }, 'Starting conflict resolution agent');
 
-    const startAgent = () => this.orchestrator.startAgent({
-      threadId: requestId,
-      prompt,
-      cwd,
-      model: this.conflictModel as any,
-      permissionMode: this.conflictPermMode as any,
+    const role: AgentRole = {
+      name: 'conflict-resolver',
+      systemPrompt: prompt,
+      model: this.conflictModel,
+      provider: 'anthropic',
+      tools: [],
       maxTurns: this.conflictMaxTurns,
-    });
+    };
 
-    return new Promise<boolean>((resolve) => {
-      let settled = false;
+    const context: AgentContext = {
+      branch: integrationBranch,
+      worktreePath: cwd,
+      tier: 'large',
+      diffStats: {
+        files_changed: conflictedFiles.length,
+        lines_added: 0,
+        lines_deleted: 0,
+        changed_files: conflictedFiles,
+      },
+      previousResults: [],
+      baseBranch: this.mainBranch,
+    };
 
-      const onMessage = (threadId: string, msg: any) => {
-        if (threadId !== requestId || settled) return;
-        if (msg.type === 'result') {
-          settled = true;
-          cleanup();
-          resolve(!msg.is_error);
-        }
+    try {
+      const doResolve = async () => {
+        const model = this.modelFactory.create(role.provider, role.model);
+        const executor = new AgentExecutor(model);
+        const result = await executor.execute(role, context);
+        return result.status !== 'error';
       };
 
-      const onError = (threadId: string) => {
-        if (threadId !== requestId || settled) return;
-        settled = true;
-        cleanup();
-        resolve(false);
-      };
-
-      const onExit = (threadId: string) => {
-        if (threadId !== requestId || settled) return;
-        settled = true;
-        cleanup();
-        resolve(false);
-      };
-
-      const cleanup = () => {
-        this.orchestrator.off('agent:message', onMessage);
-        this.orchestrator.off('agent:error', onError);
-        this.orchestrator.off('agent:unexpected-exit', onExit);
-      };
-
-      this.orchestrator.on('agent:message', onMessage);
-      this.orchestrator.on('agent:error', onError);
-      this.orchestrator.on('agent:unexpected-exit', onExit);
-
-      // Wrap in circuit breaker if available
-      const doStart = this.circuitBreakers
-        ? () => this.circuitBreakers!.claude.execute(startAgent)
-        : startAgent;
-
-      doStart().catch(() => {
-        if (!settled) {
-          settled = true;
-          cleanup();
-          resolve(false);
-        }
-      });
-    });
+      if (this.circuitBreakers) {
+        return await this.circuitBreakers.claude.execute(doResolve);
+      }
+      return await doResolve();
+    } catch (err: any) {
+      logger.error({ err: err.message, conflictedFiles }, 'Conflict resolution agent failed');
+      return false;
+    }
   }
 
   async stopAll(): Promise<void> {
-    await this.orchestrator.stopAll();
+    // AgentExecutor is stateless — no subprocess to stop
   }
 }

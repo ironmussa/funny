@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight, FileSearch } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { toEditorUri, openFileInEditor, getEditorLabel, getFileExtension, getFileName, extToShikiLang } from './utils';
+import { toEditorUri, openFileInEditor, getEditorLabel, getFileExtension, getFileName, extToShikiLang, useCurrentProjectPath, makeRelativePath } from './utils';
 import { useSettingsStore } from '@/stores/settings-store';
 import { parseCatOutput } from '@/lib/parse-cat-output';
 import { CodeViewer } from '@/components/ui/code-viewer';
@@ -12,6 +12,8 @@ export function ReadFileCard({ parsed, output, hideLabel }: { parsed: Record<str
   const [expanded, setExpanded] = useState(false);
   const defaultEditor = useSettingsStore(s => s.defaultEditor);
   const filePath = parsed.file_path as string | undefined;
+  const projectPath = useCurrentProjectPath();
+  const displayPath = filePath ? makeRelativePath(filePath, projectPath) : undefined;
   const ext = filePath ? getFileExtension(filePath) : '';
   const fileName = filePath ? getFileName(filePath) : 'unknown';
 
@@ -45,7 +47,7 @@ export function ReadFileCard({ parsed, output, hideLabel }: { parsed: Record<str
                 className="text-muted-foreground truncate font-mono text-xs min-w-0 hover:text-primary hover:underline"
                 title={editorTitle}
               >
-                {filePath}
+                {displayPath}
               </a>
             ) : (
               <button
@@ -53,7 +55,7 @@ export function ReadFileCard({ parsed, output, hideLabel }: { parsed: Record<str
                 className="text-muted-foreground truncate font-mono text-xs min-w-0 hover:text-primary hover:underline text-left"
                 title={editorTitle}
               >
-                {filePath}
+                {displayPath}
               </button>
             );
           })()

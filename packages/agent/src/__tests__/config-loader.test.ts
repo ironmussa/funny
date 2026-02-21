@@ -29,7 +29,6 @@ describe('loadConfig', () => {
     expect(config.branch.main).toBe('main');
     expect(config.tiers.small.max_files).toBe(3);
     expect(config.tiers.small.max_lines).toBe(50);
-    expect(config.agents.pipeline.model).toBe('sonnet');
     expect(config.agents.conflict.model).toBe('opus');
     expect(config.director.auto_trigger_delay_ms).toBe(500);
     expect(config.resilience.dlq.enabled).toBe(true);
@@ -224,7 +223,7 @@ logging:
     // Default values for everything else
     expect(config.branch.main).toBe('main');
     expect(config.tiers.small.max_files).toBe(3);
-    expect(config.agents.pipeline.model).toBe('sonnet');
+    expect(config.agents.conflict.model).toBe('opus');
     expect(config.director.auto_trigger_delay_ms).toBe(500);
   });
 

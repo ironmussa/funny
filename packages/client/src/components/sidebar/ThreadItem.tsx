@@ -137,13 +137,13 @@ export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSele
       </button>
       <div className="flex-shrink-0 pr-1.5 pl-2 py-1 grid place-items-start justify-items-center min-w-[2.5rem]">
         <span className={cn(
-          'col-start-1 row-start-1 text-xs text-muted-foreground leading-4 h-4 group-hover/thread:opacity-0',
-          openDropdown && 'opacity-0'
+          'col-start-1 row-start-1 text-xs text-muted-foreground leading-4 h-4 group-hover/thread:opacity-0 group-hover/thread:pointer-events-none',
+          openDropdown && 'opacity-0 pointer-events-none'
         )}>
           {displayTime}
         </span>
         <div className={cn(
-          'col-start-1 row-start-1 flex items-center h-4 opacity-0 group-hover/thread:opacity-100',
+          'col-start-1 row-start-1 flex items-center opacity-0 group-hover/thread:opacity-100',
           openDropdown && '!opacity-100'
         )}>
           <DropdownMenu onOpenChange={handleDropdownChange}>

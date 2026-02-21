@@ -13,6 +13,7 @@ import type { IAgentProcessFactory, IAgentProcess, AgentProcessOptions } from '.
 import { SDKClaudeProcess } from './sdk-claude.js';
 import { CodexProcess } from './codex.js';
 import { GeminiACPProcess } from './gemini-acp.js';
+import { LLMApiProcess } from './llm/llm-api-process.js';
 
 type ProcessConstructor = new (opts: AgentProcessOptions) => IAgentProcess;
 
@@ -20,6 +21,7 @@ const providerRegistry = new Map<string, ProcessConstructor>([
   ['claude', SDKClaudeProcess],
   ['codex', CodexProcess],
   ['gemini', GeminiACPProcess],
+  ['llm-api', LLMApiProcess],
 ]);
 
 /** Register a new provider process class at runtime. */

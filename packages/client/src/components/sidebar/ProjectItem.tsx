@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, memo, useCallback } from 'react';
+import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { cn } from '@/lib/utils';
@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { Folder, FolderOpen, FolderOpenDot, Search, Trash2, MoreHorizontal, Terminal, Settings, Pencil, Plus, BarChart3, CircleDot, SquareTerminal } from 'lucide-react';
+import { Folder, FolderOpen, FolderOpenDot, Search, Trash2, MoreHorizontal, Terminal, Settings, Pencil, Plus, BarChart3, CircleDot, SquareTerminal, Zap } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -44,9 +44,10 @@ interface ProjectItemProps {
   onDeleteThread: (threadId: string, title: string) => void;
   onShowAllThreads: () => void;
   onShowIssues: () => void;
+  onTriggerWorkflow?: () => void;
 }
 
-export function ProjectItem({
+export const ProjectItem = memo(function ProjectItem({
   project,
   threads,
   isExpanded,
@@ -62,6 +63,7 @@ export function ProjectItem({
   onDeleteThread,
   onShowAllThreads,
   onShowIssues,
+  onTriggerWorkflow,
 }: ProjectItemProps) {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -69,6 +71,17 @@ export function ProjectItem({
   const [openDropdown, setOpenDropdown] = useState(false);
   const gitStatusByThread = useGitStatusStore((s) => s.statusByThread);
   const defaultEditor = useSettingsStore((s) => s.defaultEditor);
+
+  // Memoize sorted & sliced threads to avoid O(n log n) sort on every render
+  const visibleThreads = useMemo(() => {
+    return [...threads]
+      .sort((a, b) => {
+        if (a.pinned && !b.pinned) return -1;
+        if (!a.pinned && b.pinned) return 1;
+        return 0;
+      })
+      .slice(0, 5);
+  }, [threads]);
 
   const dragRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
@@ -232,6 +245,17 @@ export function ProjectItem({
                   <CircleDot className="h-3.5 w-3.5" />
                   {t('sidebar.githubIssues')}
                 </DropdownMenuItem>
+                {onTriggerWorkflow && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onTriggerWorkflow();
+                    }}
+                  >
+                    <Zap className="h-3.5 w-3.5" />
+                    Run Pipeline
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={(e) => {
@@ -283,14 +307,7 @@ export function ProjectItem({
               {t('sidebar.noThreads')}
             </p>
           )}
-          {[...threads]
-            .sort((a, b) => {
-              if (a.pinned && !b.pinned) return -1;
-              if (!a.pinned && b.pinned) return 1;
-              return 0;
-            })
-            .slice(0, 5)
-            .map((th) => (
+          {visibleThreads.map((th) => (
             <ThreadItem
               key={th.id}
               thread={th}
@@ -315,4 +332,4 @@ export function ProjectItem({
       </CollapsibleContent>
     </Collapsible>
   );
-}
+});

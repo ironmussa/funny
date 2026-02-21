@@ -24,3 +24,8 @@ export {
   createWorktree, listWorktrees, removeWorktree, removeBranch,
   type WorktreeInfo,
 } from './worktree.js';
+
+export {
+  fetchPRReviews, checkPRApprovalStatus, mergePR,
+  type PRReview, type PRReviewComment, type ReviewDecision, type PRReviewData,
+} from './github.js';

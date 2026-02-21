@@ -32,11 +32,17 @@ ingestRoutes.post('/webhook', async (c) => {
   const body = await c.req.json<IngestEvent>();
 
   // Validate minimal event structure
-  if (!body.event_type || !body.request_id || !body.timestamp) {
+  if (!body.event_type || !body.timestamp) {
     return c.json(
-      { error: 'Invalid event: event_type, request_id, and timestamp are required' },
+      { error: 'Invalid event: event_type and timestamp are required' },
       400,
     );
+  }
+
+  // Allow events with empty request_id (e.g. director.activated, director.cycle.completed)
+  // — they are system-level events not tied to a specific pipeline run.
+  if (!body.request_id) {
+    return c.json({ status: 'ok', skipped: true }, 200);
   }
 
   if (!body.data || typeof body.data !== 'object') {

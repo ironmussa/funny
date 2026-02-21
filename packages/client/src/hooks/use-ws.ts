@@ -161,6 +161,18 @@ function handleMessage(e: MessageEvent) {
       useAppStore.getState().handleWSQueueUpdate(threadId, data);
       break;
     }
+    case 'workflow:status': {
+      import('@/stores/workflow-store').then(({ useWorkflowStore }) => {
+        useWorkflowStore.getState().handleWorkflowStatus(data);
+      });
+      break;
+    }
+    case 'workflow:step': {
+      import('@/stores/workflow-store').then(({ useWorkflowStore }) => {
+        useWorkflowStore.getState().handleWorkflowStep(data);
+      });
+      break;
+    }
   }
 }
 

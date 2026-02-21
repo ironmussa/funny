@@ -66,6 +66,10 @@ export function resolveModelId(provider: AgentProvider, model: AgentModel): stri
     if (!id) throw new Error(`Unknown Gemini model: ${model}`);
     return id;
   }
+  if (provider === 'llm-api') {
+    // LLM API uses full model IDs directly — pass through
+    return model as string;
+  }
   throw new Error(`Unknown provider: ${provider}`);
 }
 
@@ -74,6 +78,7 @@ export function getDefaultModel(provider: AgentProvider): AgentModel {
   if (provider === 'claude') return 'sonnet';
   if (provider === 'codex') return 'o4-mini';
   if (provider === 'gemini') return 'gemini-3-flash-preview';
+  if (provider === 'llm-api') return 'sonnet'; // Default to sonnet-equivalent
   throw new Error(`Unknown provider: ${provider}`);
 }
 
@@ -82,6 +87,7 @@ export function getProviderModels(provider: AgentProvider): AgentModel[] {
   if (provider === 'claude') return Object.keys(CLAUDE_MODEL_IDS) as ClaudeModel[];
   if (provider === 'codex') return Object.keys(CODEX_MODEL_IDS) as CodexModel[];
   if (provider === 'gemini') return Object.keys(GEMINI_MODEL_IDS) as GeminiModel[];
+  if (provider === 'llm-api') return []; // LLM API accepts any model ID
   throw new Error(`Unknown provider: ${provider}`);
 }
 
@@ -109,11 +115,15 @@ export function resolveResumePermissionMode(
   return resolvedMode;
 }
 
+// LLM API manages its own tools via ToolRunner — no default tool list needed
+const LLM_API_DEFAULT_TOOLS = ['bash', 'read', 'edit', 'glob', 'grep'];
+
 /** Get default allowed tools for a provider. */
 export function getDefaultAllowedTools(provider: AgentProvider): string[] {
   if (provider === 'claude') return [...CLAUDE_DEFAULT_TOOLS];
   if (provider === 'codex') return [...CODEX_DEFAULT_TOOLS];
   if (provider === 'gemini') return [...GEMINI_DEFAULT_TOOLS];
+  if (provider === 'llm-api') return [...LLM_API_DEFAULT_TOOLS];
   return [];
 }
 

@@ -5,6 +5,7 @@ import { useWS } from '@/hooks/use-ws';
 import { useRouteSync } from '@/hooks/use-route-sync';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
+import { useWorkflowStore } from '@/stores/workflow-store';
 import { setAppNavigate } from '@/stores/thread-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
@@ -42,6 +43,7 @@ const AnalyticsView = lazy(() => import('@/components/AnalyticsView').then(m => 
 const LiveColumnsView = lazy(() => import('@/components/LiveColumnsView').then(m => ({ default: m.LiveColumnsView })));
 const CommandPalette = lazy(() => import('@/components/CommandPalette').then(m => ({ default: m.CommandPalette })));
 const CircuitBreakerDialog = lazy(() => import('@/components/CircuitBreakerDialog').then(m => ({ default: m.CircuitBreakerDialog })));
+const WorkflowProgressPanel = lazy(() => import('@/components/WorkflowProgressPanel').then(m => ({ default: m.WorkflowProgressPanel })));
 
 export function App() {
   const loadProjects = useProjectStore(s => s.loadProjects);
@@ -53,6 +55,7 @@ export function App() {
   const addProjectOpen = useUIStore(s => s.addProjectOpen);
   const analyticsOpen = useUIStore(s => s.analyticsOpen);
   const liveColumnsOpen = useUIStore(s => s.liveColumnsOpen);
+  const workflowRunSelected = useWorkflowStore(s => !!s.selectedRunId);
   const navigate = useNavigate();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
@@ -135,7 +138,7 @@ export function App() {
         {/* Main content + terminal */}
         <div className="flex-1 flex overflow-hidden min-h-0">
           <Suspense>
-            {settingsOpen ? <SettingsDetailView /> : analyticsOpen ? <AnalyticsView /> : liveColumnsOpen ? <LiveColumnsView /> : automationInboxOpen ? <AutomationInboxView /> : addProjectOpen ? <AddProjectView /> : allThreadsProjectId ? <AllThreadsView /> : <ThreadView />}
+            {settingsOpen ? <SettingsDetailView /> : analyticsOpen ? <AnalyticsView /> : liveColumnsOpen ? <LiveColumnsView /> : automationInboxOpen ? <AutomationInboxView /> : addProjectOpen ? <AddProjectView /> : allThreadsProjectId ? <AllThreadsView /> : workflowRunSelected ? <WorkflowProgressPanel /> : <ThreadView />}
           </Suspense>
         </div>
 

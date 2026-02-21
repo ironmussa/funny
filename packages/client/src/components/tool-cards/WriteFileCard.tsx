@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ChevronRight, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { toEditorUri, openFileInEditor, getEditorLabel, getFileExtension, getFileName } from './utils';
+import { toEditorUri, openFileInEditor, getEditorLabel, getFileExtension, getFileName, useCurrentProjectPath, makeRelativePath } from './utils';
 import { useSettingsStore } from '@/stores/settings-store';
 
 export function WriteFileCard({ parsed, hideLabel }: { parsed: Record<string, unknown>; hideLabel?: boolean }) {
@@ -10,6 +10,8 @@ export function WriteFileCard({ parsed, hideLabel }: { parsed: Record<string, un
   const [expanded, setExpanded] = useState(false);
   const defaultEditor = useSettingsStore(s => s.defaultEditor);
   const filePath = parsed.file_path as string | undefined;
+  const projectPath = useCurrentProjectPath();
+  const displayPath = filePath ? makeRelativePath(filePath, projectPath) : undefined;
   const content = parsed.content as string | undefined;
   const ext = filePath ? getFileExtension(filePath) : '';
   const fileName = filePath ? getFileName(filePath) : 'unknown';
@@ -39,7 +41,7 @@ export function WriteFileCard({ parsed, hideLabel }: { parsed: Record<string, un
                 className="text-muted-foreground truncate font-mono text-xs min-w-0 hover:text-primary hover:underline"
                 title={editorTitle}
               >
-                {filePath}
+                {displayPath}
               </a>
             ) : (
               <button
@@ -47,7 +49,7 @@ export function WriteFileCard({ parsed, hideLabel }: { parsed: Record<string, un
                 className="text-muted-foreground truncate font-mono text-xs min-w-0 hover:text-primary hover:underline text-left"
                 title={editorTitle}
               >
-                {filePath}
+                {displayPath}
               </button>
             );
           })()

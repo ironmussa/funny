@@ -41,6 +41,7 @@ function TauriTerminalTabContent({
     if (!containerRef.current || !isTauri) return;
 
     let cleanup: (() => void) | null = null;
+    let isMounted = true;
 
     (async () => {
       const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
@@ -51,7 +52,7 @@ function TauriTerminalTabContent({
       // @ts-ignore - CSS import handled by Vite bundler
       await import('@xterm/xterm/css/xterm.css');
 
-      if (!containerRef.current) return;
+      if (!isMounted || !containerRef.current) return;
 
       const terminal = new Terminal({
         cursorBlink: true,
@@ -75,6 +76,7 @@ function TauriTerminalTabContent({
 
       const { invoke } = await import('@tauri-apps/api/core');
       const { listen } = await import('@tauri-apps/api/event');
+      if (!isMounted) return;
 
       const unlistenData = await listen<{ data: string }>(`pty:data:${id}`, (event) => {
         terminal.write(event.payload.data);
@@ -108,9 +110,16 @@ function TauriTerminalTabContent({
         terminal.dispose();
         invoke('pty_kill', { id }).catch(console.error);
       };
+
+      if (!isMounted) {
+        cleanup();
+      }
     })();
 
-    return () => { cleanup?.(); };
+    return () => {
+      isMounted = false;
+      cleanup?.();
+    };
   }, [id, cwd]);
 
   return (
@@ -408,113 +417,113 @@ export function TerminalPanel() {
         height: panelVisible ? panelHeight : 0,
       }}
     >
-        {/* Drag handle */}
-        <div
-          className={cn(
-            'flex items-center justify-center h-2 cursor-row-resize hover:bg-primary/20 transition-colors flex-shrink-0 group',
-            dragging && 'bg-primary/30'
-          )}
-          onMouseDown={handleMouseDown}
-        >
-          <GripHorizontal className="h-3 w-3 text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors" />
-        </div>
+      {/* Drag handle */}
+      <div
+        className={cn(
+          'flex items-center justify-center h-2 cursor-row-resize hover:bg-primary/20 transition-colors flex-shrink-0 group',
+          dragging && 'bg-primary/30'
+        )}
+        onMouseDown={handleMouseDown}
+      >
+        <GripHorizontal className="h-3 w-3 text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors" />
+      </div>
 
-        {/* Tab bar */}
-        <div className="flex items-center gap-0.5 px-2 h-8 bg-secondary/50 border-b border-border flex-shrink-0">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button variant="ghost" size="icon-xs" onClick={togglePanel}>
-                <ChevronDown className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>
-              {t('terminal.hideTerminal')}
-            </TooltipContent>
-          </Tooltip>
+      {/* Tab bar */}
+      <div className="flex items-center gap-0.5 px-2 h-8 bg-secondary/50 border-b border-border flex-shrink-0">
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button variant="ghost" size="icon-xs" onClick={togglePanel}>
+              <ChevronDown className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {t('terminal.hideTerminal')}
+          </TooltipContent>
+        </Tooltip>
 
-          <TerminalIcon className="h-3.5 w-3.5 text-muted-foreground ml-1" />
-          <span className="text-xs text-muted-foreground font-medium ml-1">
-            {t('terminal.title')}
-          </span>
+        <TerminalIcon className="h-3.5 w-3.5 text-muted-foreground ml-1" />
+        <span className="text-xs text-muted-foreground font-medium ml-1">
+          {t('terminal.title')}
+        </span>
 
-          <div className="flex-1 flex items-center gap-0.5 ml-2 overflow-x-auto">
-            {visibleTabs.map((tab) => (
-              <button
-                key={tab.id}
-                onClick={() => {
-                  setActiveTab(tab.id);
-                  if (!panelVisible) togglePanel();
+        <div className="flex-1 flex items-center gap-0.5 ml-2 overflow-x-auto">
+          {visibleTabs.map((tab) => (
+            <button
+              key={tab.id}
+              onClick={() => {
+                setActiveTab(tab.id);
+                if (!panelVisible) togglePanel();
+              }}
+              className={cn(
+                'flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors whitespace-nowrap',
+                effectiveActiveTabId === tab.id
+                  ? 'bg-accent text-accent-foreground'
+                  : 'text-muted-foreground hover:bg-accent/50'
+              )}
+            >
+              <span>{tab.label}</span>
+              {!tab.alive && (
+                <span className="text-xs text-status-pending">{t('terminal.exited')}</span>
+              )}
+              <X
+                className="h-3 w-3 ml-1 opacity-60 hover:opacity-100"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleCloseTab(tab.id);
                 }}
-                className={cn(
-                  'flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors whitespace-nowrap',
-                  effectiveActiveTabId === tab.id
-                    ? 'bg-accent text-accent-foreground'
-                    : 'text-muted-foreground hover:bg-accent/50'
-                )}
-              >
-                <span>{tab.label}</span>
-                {!tab.alive && (
-                  <span className="text-xs text-status-pending">{t('terminal.exited')}</span>
-                )}
-                <X
-                  className="h-3 w-3 ml-1 opacity-60 hover:opacity-100"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleCloseTab(tab.id);
-                  }}
-                />
-              </button>
-            ))}
+              />
+            </button>
+          ))}
+        </div>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={handleNewTerminal}
+            >
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t('terminal.newTerminal')}</TooltipContent>
+        </Tooltip>
+      </div>
+
+      {/* Terminal content area */}
+      <div className="flex-1 bg-[#09090b] overflow-hidden min-h-0">
+        {visibleTabs.length === 0 ? (
+          <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
+            {t('terminal.noProcesses')}
           </div>
-
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={handleNewTerminal}
-              >
-                <Plus className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('terminal.newTerminal')}</TooltipContent>
-          </Tooltip>
-        </div>
-
-        {/* Terminal content area */}
-        <div className="flex-1 bg-[#09090b] overflow-hidden min-h-0">
-          {visibleTabs.length === 0 ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
-              {t('terminal.noProcesses')}
-            </div>
-          ) : (
-            tabs.map((tab) =>
-              tab.commandId ? (
-                <CommandTabContent
-                  key={tab.id}
-                  commandId={tab.commandId}
-                  projectId={tab.projectId}
-                  active={tab.id === effectiveActiveTabId}
-                  alive={tab.alive}
-                />
-              ) : tab.type === 'pty' ? (
-                <WebTerminalTabContent
-                  key={tab.id}
-                  id={tab.id}
-                  cwd={tab.cwd}
-                  active={tab.id === effectiveActiveTabId}
-                />
-              ) : isTauri ? (
-                <TauriTerminalTabContent
-                  key={tab.id}
-                  id={tab.id}
-                  cwd={tab.cwd}
-                  active={tab.id === effectiveActiveTabId}
-                />
-              ) : null
-            )
-          )}
-        </div>
+        ) : (
+          tabs.map((tab) =>
+            tab.commandId ? (
+              <CommandTabContent
+                key={tab.id}
+                commandId={tab.commandId}
+                projectId={tab.projectId}
+                active={tab.id === effectiveActiveTabId}
+                alive={tab.alive}
+              />
+            ) : tab.type === 'pty' ? (
+              <WebTerminalTabContent
+                key={tab.id}
+                id={tab.id}
+                cwd={tab.cwd}
+                active={tab.id === effectiveActiveTabId}
+              />
+            ) : isTauri ? (
+              <TauriTerminalTabContent
+                key={tab.id}
+                id={tab.id}
+                cwd={tab.cwd}
+                active={tab.id === effectiveActiveTabId}
+              />
+            ) : null
+          )
+        )}
+      </div>
     </div>
   );
 }

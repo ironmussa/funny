@@ -109,7 +109,7 @@ export type ThreadStatus = 'idle' | 'pending' | 'running' | 'waiting' | 'complet
 export type ThreadStage = 'backlog' | 'in_progress' | 'review' | 'done' | 'archived';
 export type WaitingReason = 'question' | 'plan' | 'permission';
 
-export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'external';
+export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'llm-api' | 'external';
 
 export type ClaudeModel = 'sonnet' | 'opus' | 'haiku';
 export type CodexModel = 'o3' | 'o4-mini' | 'codex-mini';
@@ -292,6 +292,21 @@ export interface WSQueueUpdateData {
   nextMessage?: string;
 }
 
+export interface WSWorkflowStepData {
+  runId: string;
+  workflowName: string;
+  stepName: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  output?: Record<string, unknown>;
+}
+
+export interface WSWorkflowStatusData {
+  runId: string;
+  workflowName: string;
+  status: 'triggered' | 'running' | 'completed' | 'failed';
+  qualityScores?: Record<string, { status: string; details: string }>;
+}
+
 export type WSEvent =
   | { type: 'agent:init'; threadId: string; data: WSInitData }
   | { type: 'agent:message'; threadId: string; data: WSMessageData }
@@ -307,7 +322,9 @@ export type WSEvent =
   | { type: 'git:status'; threadId: string; data: WSGitStatusData }
   | { type: 'pty:data'; threadId: string; data: WSPtyDataData }
   | { type: 'pty:exit'; threadId: string; data: WSPtyExitData }
-  | { type: 'thread:queue_update'; threadId: string; data: WSQueueUpdateData };
+  | { type: 'thread:queue_update'; threadId: string; data: WSQueueUpdateData }
+  | { type: 'workflow:step'; threadId: string; data: WSWorkflowStepData }
+  | { type: 'workflow:status'; threadId: string; data: WSWorkflowStatusData };
 
 export type WSEventType = WSEvent['type'];
 

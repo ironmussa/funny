@@ -36,8 +36,15 @@ export const DEFAULT_CONFIG = {
   },
 
   agents: {
-    pipeline: { model: 'sonnet', permissionMode: 'autoEdit', maxTurns: 200 },
     conflict: { model: 'opus', permissionMode: 'autoEdit', maxTurns: 50 },
+    tests: {} as { model?: string; provider?: string; maxTurns?: number },
+    security: {} as { model?: string; provider?: string; maxTurns?: number },
+    architecture: {} as { model?: string; provider?: string; maxTurns?: number },
+    performance: {} as { model?: string; provider?: string; maxTurns?: number },
+    style: {} as { model?: string; provider?: string; maxTurns?: number },
+    types: {} as { model?: string; provider?: string; maxTurns?: number },
+    docs: {} as { model?: string; provider?: string; maxTurns?: number },
+    integration: {} as { model?: string; provider?: string; maxTurns?: number },
   },
 
   auto_correction: {
@@ -72,6 +79,22 @@ export const DEFAULT_CONFIG = {
   adapters: {
     webhooks: [] as Array<{ url: string; secret?: string; events?: string[]; timeout_ms?: number }>,
     retry_interval_ms: 60_000,
+  },
+
+  llm_providers: {
+    anthropic: {
+      api_key_env: 'ANTHROPIC_API_KEY',
+      base_url: 'https://api.anthropic.com',
+    },
+    openai: {
+      api_key_env: 'OPENAI_API_KEY',
+      base_url: 'https://api.openai.com',
+    },
+    ollama: {
+      base_url: 'http://localhost:11434',
+    },
+    default_provider: 'anthropic',
+    fallback_provider: undefined as string | undefined,
   },
 
   webhook_secret: undefined as string | undefined,

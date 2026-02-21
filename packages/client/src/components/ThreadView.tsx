@@ -835,7 +835,7 @@ export function ThreadView() {
                       initial={knownIdsRef.current.has(tc.id) || prefersReducedMotion ? false : { opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.25, ease: 'easeOut' }}
-                      className={(tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode' || tc.name === 'TodoWrite') ? 'border border-border rounded-lg' : undefined}
+                      className={(tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode' || tc.name === 'TodoWrite' || tc.name === 'Edit') ? 'border border-border rounded-lg' : undefined}
                       {...(snapshotMap.has(tc.id) ? { 'data-todo-snapshot': snapshotMap.get(tc.id) } : {})}
                     >
                       <ToolCallCard
@@ -857,7 +857,7 @@ export function ThreadView() {
                       initial={knownIdsRef.current.has(ti.calls[0].id) || prefersReducedMotion ? false : { opacity: 0, y: 6 }}
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ duration: 0.25, ease: 'easeOut' }}
-                      className={(ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode' || ti.name === 'TodoWrite') ? 'border border-border rounded-lg' : undefined}
+                      className={(ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode' || ti.name === 'TodoWrite' || ti.name === 'Edit') ? 'border border-border rounded-lg' : undefined}
                       {...(groupSnapshotIdx >= 0 ? { 'data-todo-snapshot': groupSnapshotIdx } : {})}
                     >
                       <ToolCallGroup

@@ -22,7 +22,8 @@ export type AgentName =
   | 'style'
   | 'types'
   | 'docs'
-  | 'integration';
+  | 'integration'
+  | 'e2e';
 
 // ── Request / Response ──────────────────────────────────────────
 
@@ -35,6 +36,8 @@ export interface PipelineConfig {
   model?: string;
   /** Max turns for the agent */
   maxTurns?: number;
+  /** URL of the running app for E2E browser testing */
+  appUrl?: string;
 }
 
 export interface PipelineRequest {
@@ -83,7 +86,18 @@ export type PipelineEventType =
   | 'integration.pr.rebase_failed'
   // Cleanup events
   | 'cleanup.started'
-  | 'cleanup.completed';
+  | 'cleanup.completed'
+  // Hatchet workflow events
+  | 'workflow.started'
+  | 'workflow.step.completed'
+  | 'workflow.completed'
+  | 'workflow.failed'
+  // Review loop events
+  | 'review_loop.started'
+  | 'review_loop.feedback_applied'
+  | 'review_loop.push_completed'
+  | 'review_loop.completed'
+  | 'review_loop.failed';
 
 export interface PipelineEvent {
   event_type: PipelineEventType;

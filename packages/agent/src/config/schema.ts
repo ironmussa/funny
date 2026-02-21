@@ -8,7 +8,7 @@ import { z } from 'zod';
 
 const AgentNameSchema = z.enum([
   'tests', 'security', 'architecture', 'performance',
-  'style', 'types', 'docs', 'integration',
+  'style', 'types', 'docs', 'integration', 'e2e',
 ]);
 
 const TierConfigSchema = z.object({
@@ -17,11 +17,17 @@ const TierConfigSchema = z.object({
   agents: z.array(AgentNameSchema).min(1).default(['tests', 'style']),
 });
 
-const AgentSettingsSchema = z.object({
-  model: z.string().default('sonnet'),
+const ConflictAgentSchema = z.object({
+  model: z.string().default('opus'),
   permissionMode: z.string().default('autoEdit'),
-  maxTurns: z.number().int().min(1).max(500).default(200),
+  maxTurns: z.number().int().min(1).max(500).default(50),
 });
+
+const PerAgentOverrideSchema = z.object({
+  model: z.string().optional(),
+  provider: z.string().optional(),
+  maxTurns: z.number().int().min(1).optional(),
+}).default({});
 
 const CircuitBreakerEntrySchema = z.object({
   failure_threshold: z.number().int().min(1).default(3),
@@ -50,8 +56,16 @@ export const PipelineServiceConfigSchema = z.object({
   }).default({}),
 
   agents: z.object({
-    pipeline: AgentSettingsSchema.default({ model: 'sonnet', permissionMode: 'autoEdit', maxTurns: 200 }),
-    conflict: AgentSettingsSchema.default({ model: 'opus', permissionMode: 'autoEdit', maxTurns: 50 }),
+    conflict: ConflictAgentSchema.default({ model: 'opus', permissionMode: 'autoEdit', maxTurns: 50 }),
+    tests: PerAgentOverrideSchema,
+    security: PerAgentOverrideSchema,
+    architecture: PerAgentOverrideSchema,
+    performance: PerAgentOverrideSchema,
+    style: PerAgentOverrideSchema,
+    types: PerAgentOverrideSchema,
+    docs: PerAgentOverrideSchema,
+    integration: PerAgentOverrideSchema,
+    e2e: PerAgentOverrideSchema,
   }).default({}),
 
   auto_correction: z.object({
@@ -85,6 +99,22 @@ export const PipelineServiceConfigSchema = z.object({
       timeout_ms: z.number().int().min(1000).default(10_000),
     })).default([]),
     retry_interval_ms: z.number().int().min(5_000).default(60_000),
+  }).default({}),
+
+  llm_providers: z.object({
+    anthropic: z.object({
+      api_key_env: z.string().default('ANTHROPIC_API_KEY'),
+      base_url: z.string().default('https://api.anthropic.com'),
+    }).default({}),
+    openai: z.object({
+      api_key_env: z.string().default('OPENAI_API_KEY'),
+      base_url: z.string().default('https://api.openai.com'),
+    }).default({}),
+    ollama: z.object({
+      base_url: z.string().default('http://localhost:11434'),
+    }).default({}),
+    default_provider: z.string().default('anthropic'),
+    fallback_provider: z.string().optional(),
   }).default({}),
 
   webhook_secret: z.string().optional(),

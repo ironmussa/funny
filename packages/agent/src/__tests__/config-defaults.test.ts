@@ -145,21 +145,21 @@ describe('DEFAULT_CONFIG', () => {
 
   // ── Agent settings ──────────────────────────────────────────
 
-  it('agents config has pipeline and conflict settings', () => {
-    expect(DEFAULT_CONFIG.agents).toHaveProperty('pipeline');
+  it('agents config has conflict and per-agent overrides', () => {
     expect(DEFAULT_CONFIG.agents).toHaveProperty('conflict');
-  });
-
-  it('pipeline agent has model, permissionMode, and maxTurns', () => {
-    expect(DEFAULT_CONFIG.agents.pipeline.model).toBeTruthy();
-    expect(DEFAULT_CONFIG.agents.pipeline.permissionMode).toBeTruthy();
-    expect(DEFAULT_CONFIG.agents.pipeline.maxTurns).toBeGreaterThan(0);
+    expect(DEFAULT_CONFIG.agents).toHaveProperty('tests');
+    expect(DEFAULT_CONFIG.agents).toHaveProperty('security');
   });
 
   it('conflict agent has model, permissionMode, and maxTurns', () => {
     expect(DEFAULT_CONFIG.agents.conflict.model).toBeTruthy();
     expect(DEFAULT_CONFIG.agents.conflict.permissionMode).toBeTruthy();
     expect(DEFAULT_CONFIG.agents.conflict.maxTurns).toBeGreaterThan(0);
+  });
+
+  it('per-agent overrides default to empty objects', () => {
+    expect(DEFAULT_CONFIG.agents.tests).toEqual({});
+    expect(DEFAULT_CONFIG.agents.security).toEqual({});
   });
 
   // ── Cleanup defaults ────────────────────────────────────────

@@ -40,7 +40,7 @@ export function ExitPlanModeCard({ plan, onRespond }: { plan?: string; onRespond
   return (
     <div className="text-sm max-w-full overflow-hidden">
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
-        <FileCode2 className="h-3 w-3 flex-shrink-0 text-status-warning" />
+        <FileCode2 className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
         <span className="font-medium text-foreground">{t('tools.plan')}</span>
         <span className="text-muted-foreground">{t('thread.planWaitingForResponse')}</span>
         {submitted && (

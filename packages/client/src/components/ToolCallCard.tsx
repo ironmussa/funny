@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { ChevronRight, Wrench, ListTodo, Check } from 'lucide-react';
 import AnsiToHtml from 'ansi-to-html';
 import { cn } from '@/lib/utils';
-import { formatInput, getTodos, getFilePath, getSummary, getToolLabel, toEditorUri, openFileInEditor, getEditorLabel } from './tool-cards/utils';
+import { formatInput, getTodos, getFilePath, getSummary, getToolLabel, toEditorUri, openFileInEditor, getEditorLabel, useCurrentProjectPath, makeRelativePath } from './tool-cards/utils';
 import { useSettingsStore } from '@/stores/settings-store';
 import { TodoList } from './tool-cards/TodoList';
 import { AskQuestionCard } from './tool-cards/AskQuestionCard';
@@ -35,6 +35,8 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
   const todos = isTodo ? getTodos(parsed) : null;
   const filePath = getFilePath(name, parsed);
   const defaultEditor = useSettingsStore(s => s.defaultEditor);
+  const projectPath = useCurrentProjectPath();
+  const displayPath = filePath ? makeRelativePath(filePath, projectPath) : null;
 
   // SECURITY: escapeXML must remain true to prevent XSS via dangerouslySetInnerHTML
   const ansiConverter = useMemo(() => new AnsiToHtml({ fg: '#a1a1aa', bg: 'transparent', newline: false, escapeXML: true }), []);
@@ -99,7 +101,7 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
                     className="text-muted-foreground truncate font-mono text-xs min-w-0 hover:text-primary hover:underline"
                     title={editorTitle}
                   >
-                    {summary}
+                    {displayPath}
                   </a>
                 ) : (
                   <button
@@ -107,7 +109,7 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
                     className="text-muted-foreground truncate font-mono text-xs min-w-0 hover:text-primary hover:underline text-left"
                     title={editorTitle}
                   >
-                    {summary}
+                    {displayPath}
                   </button>
                 );
               })()

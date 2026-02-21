@@ -13,6 +13,7 @@
     "@abbacchio/transport": "^0.1.5",
     "@funny/core": "*",
     "@funny/shared": "*",
+    "@hatchet-dev/typescript-sdk": "^1.12.1",
     "@hono/zod-validator": "^0.4.0",
     "cockatiel": "^3.2.1",
     "eventemitter3": "^5.0.1",

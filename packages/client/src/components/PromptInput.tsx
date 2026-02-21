@@ -252,13 +252,13 @@ function WorktreePicker({
   );
   const displayLabel = currentWorktree?.branch ?? threadBranch ?? '\u2026';
 
-  const items: SearchablePickerItem[] = worktrees.map((wt) => ({
+  const items: SearchablePickerItem[] = useMemo(() => worktrees.map((wt) => ({
     key: wt.path,
     label: wt.branch,
     isSelected: wt.path.replace(/\\/g, '/').toLowerCase() === normalizedCurrent,
     detail: wt.commit?.slice(0, 8),
     badge: wt.isMain ? 'main' : undefined,
-  }));
+  })), [worktrees, normalizedCurrent]);
 
   return (
     <div onMouseDown={() => setFetchTrigger((n) => n + 1)}>
@@ -290,11 +290,11 @@ function BranchPicker({
 }) {
   const { t } = useTranslation();
 
-  const items: SearchablePickerItem[] = branches.map((b) => ({
+  const items: SearchablePickerItem[] = useMemo(() => branches.map((b) => ({
     key: b,
     label: b,
     isSelected: b === selected,
-  }));
+  })), [branches, selected]);
 
   return (
     <SearchablePicker
@@ -1074,7 +1074,7 @@ export function PromptInput({
           />
           {/* Bottom toolbar — single row, horizontal scroll to avoid layout shifts from wrapping */}
           <div className="px-2 py-1.5">
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar h-7">
               {!isNewThread && effectiveCwd && selectedProjectId && (
                 activeThread?.mode === 'worktree' ? (
                   <WorktreePicker

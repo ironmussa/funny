@@ -19,3 +19,4 @@ TODO.md
 /packages/agent/.pipeline
 packages/client/.env.test
 packages/server/.env.test
+.gitnexus

@@ -428,8 +428,16 @@ export function AllThreadsView() {
             placeholder={projectFilter ? t('allThreads.searchPlaceholder') : t('allThreads.globalSearchPlaceholder')}
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="w-44 h-7 pl-6 pr-2 py-1 text-xs md:text-xs bg-transparent"
+            className="w-44 h-7 pl-6 pr-7 py-1 text-xs md:text-xs bg-transparent"
           />
+          {search && (
+            <button
+              onClick={() => handleSearchChange('')}
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+            >
+              <X className="h-3 w-3" />
+            </button>
+          )}
         </div>
 
         <div className="w-px h-4 bg-border" />

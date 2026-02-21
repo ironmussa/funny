@@ -349,8 +349,7 @@ export function AppSidebar() {
                 // Defer expensive work (API calls, navigation) so the browser can paint the toggle immediately
                 startTransition(() => {
                   if (!wasExpanded) {
-                    // startNewThread → selectProject already triggers fetchForProject
-                    startNewThread(project.id);
+                    useProjectStore.getState().selectProject(project.id);
                     navigate(`/projects/${project.id}`);
                   } else if (selectedProjectId !== project.id) {
                     useGitStatusStore.getState().fetchForProject(project.id);

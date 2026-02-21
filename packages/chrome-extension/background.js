@@ -8,12 +8,13 @@
  * - Capturing screenshots via chrome.tabs API
  */
 
-// Default config
+// Default config — provider and model are intentionally empty so we can
+// detect "never saved" and use the server's defaults instead.
 const DEFAULT_CONFIG = {
   serverUrl: 'http://localhost:3001',
   projectId: '',
-  provider: 'claude',
-  model: 'sonnet',
+  provider: '',
+  model: '',
   permissionMode: 'autoEdit',
   mode: 'local'
 };
@@ -103,8 +104,8 @@ async function createThread(config, token, data) {
     projectId,
     title: `UI Review: ${data.title || data.url}`.slice(0, 100),
     mode,
-    provider: provider || 'claude',
-    model,
+    provider: provider || undefined,
+    model: model || undefined,
     permissionMode,
     prompt,
     images

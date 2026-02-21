@@ -77,21 +77,31 @@ async function loadProvidersAndModels(savedProvider, savedModel) {
       return;
     }
 
+    // If no saved provider, use the first available provider as default
+    const effectiveProvider = (savedProvider && providerData[savedProvider]?.available)
+      ? savedProvider
+      : availableProviders[0][0];
+
     availableProviders.forEach(([key, info]) => {
       const opt = document.createElement('option');
       opt.value = key;
       opt.textContent = info.label || key;
-      if (key === savedProvider) opt.selected = true;
+      if (key === effectiveProvider) opt.selected = true;
       providerSelect.appendChild(opt);
     });
 
-    // If saved provider isn't available, select first available
-    if (!providerData[savedProvider]?.available) {
-      providerSelect.value = availableProviders[0][0];
-    }
+    providerSelect.value = effectiveProvider;
+
+    // If no saved model, use the provider's default model from the server
+    const effectiveModel = savedModel || providerData[effectiveProvider]?.defaultModel || '';
 
     // Populate models for the selected provider
-    populateModels(providerSelect.value, savedModel);
+    populateModels(providerSelect.value, effectiveModel);
+
+    // Persist the resolved defaults so they're saved for next time
+    if (!savedProvider || !savedModel) {
+      saveCurrentConfig();
+    }
   } catch (err) {
     // Fallback: show empty selects
     providerSelect.innerHTML = '<option value="">Failed to load</option>';
@@ -111,18 +121,21 @@ function populateModels(provider, selectedModel) {
   // Use modelsWithLabels from the server (value + label pairs)
   const models = info.modelsWithLabels || info.models?.map(m => ({ value: m, label: m })) || [];
 
+  // Use the provider's default model from the server when no model is specified
+  // or when the selected model isn't valid for this provider
+  const effectiveModel = (selectedModel && models.some(m => m.value === selectedModel))
+    ? selectedModel
+    : info.defaultModel || models[0]?.value || '';
+
   models.forEach(m => {
     const opt = document.createElement('option');
     opt.value = m.value;
     opt.textContent = m.label;
-    if (m.value === selectedModel) opt.selected = true;
+    if (m.value === effectiveModel) opt.selected = true;
     modelSelect.appendChild(opt);
   });
 
-  // If saved model isn't valid for this provider, select the provider's default
-  if (!models.some(m => m.value === selectedModel)) {
-    modelSelect.value = info.defaultModel || models[0]?.value || '';
-  }
+  modelSelect.value = effectiveModel;
 }
 
 // ---------------------------------------------------------------------------

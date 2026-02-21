@@ -1,5 +1,6 @@
 import { useState, memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import {
   DropdownMenu,
@@ -81,10 +82,10 @@ export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSele
     >
       <button
         onClick={onSelect}
-        className="flex-1 flex items-start gap-1 pl-2 py-1 text-left min-w-0 overflow-hidden"
+        className="flex-1 flex items-center gap-1 pl-2 py-1 text-left min-w-0 overflow-hidden"
       >
         {/* Thread status icon */}
-        <div className="relative h-3 w-3 flex-shrink-0 mt-[3px]">
+        <div className="relative h-3 w-3 flex-shrink-0">
           <span className={cn(
             'absolute inset-0',
             onPin && !isRunning && 'group-hover/thread:hidden'
@@ -135,7 +136,7 @@ export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSele
           )}
         </div>
       </button>
-      <div className="flex-shrink-0 pr-1.5 pl-2 py-1 grid place-items-start justify-items-center min-w-[2.5rem]">
+      <div className="flex-shrink-0 pr-1.5 pl-2 py-1 grid place-items-center justify-items-center min-w-[2.5rem]">
         <span className={cn(
           'col-start-1 row-start-1 text-xs text-muted-foreground leading-4 h-4 group-hover/thread:opacity-0 group-hover/thread:pointer-events-none',
           openDropdown && 'opacity-0 pointer-events-none'
@@ -163,13 +164,18 @@ export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSele
                   e.stopPropagation();
                   const folderPath = thread.worktreePath || projectPath;
                   try {
-                    await fetch('/api/browse/open-directory', {
+                    const response = await fetch('/api/browse/open-directory', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ path: folderPath }),
                     });
+                    if (!response.ok) {
+                      const result = await response.json();
+                      toast.error(result.error || 'Failed to open directory');
+                    }
                   } catch (error) {
                     console.error('Failed to open directory:', error);
+                    toast.error('Failed to open directory');
                   }
                 }}
               >
@@ -181,13 +187,18 @@ export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSele
                   e.stopPropagation();
                   const folderPath = thread.worktreePath || projectPath;
                   try {
-                    await fetch('/api/browse/open-terminal', {
+                    const response = await fetch('/api/browse/open-terminal', {
                       method: 'POST',
                       headers: { 'Content-Type': 'application/json' },
                       body: JSON.stringify({ path: folderPath }),
                     });
+                    if (!response.ok) {
+                      const result = await response.json();
+                      toast.error(result.error || 'Failed to open terminal');
+                    }
                   } catch (error) {
                     console.error('Failed to open terminal:', error);
+                    toast.error('Failed to open terminal');
                   }
                 }}
               >

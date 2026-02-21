@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { readdirSync } from 'fs';
+import { readdirSync, existsSync, statSync } from 'fs';
 import { join, parse as parsePath, resolve, normalize } from 'path';
 import { homedir, platform } from 'os';
 import { getRemoteUrl, extractRepoName, initRepo, execute } from '@funny/core/git';
@@ -149,6 +149,20 @@ app.post('/open-directory', async (c) => {
   const denied = checkAllowedPath(dirPath, userId);
   if (denied) return denied;
 
+  // Validate directory exists before opening
+  if (!existsSync(dirPath)) {
+    return c.json({ error: 'Directory does not exist' }, 404);
+  }
+
+  try {
+    const stat = statSync(dirPath);
+    if (!stat.isDirectory()) {
+      return c.json({ error: 'Path is not a directory' }, 400);
+    }
+  } catch (error: any) {
+    return c.json({ error: `Cannot access directory: ${error.message}` }, 500);
+  }
+
   const os = platform();
   let cmd: string;
   let args: string[];
@@ -213,6 +227,20 @@ app.post('/open-terminal', async (c) => {
 
   const denied = checkAllowedPath(dirPath, userId);
   if (denied) return denied;
+
+  // Validate directory exists before opening
+  if (!existsSync(dirPath)) {
+    return c.json({ error: 'Directory does not exist' }, 404);
+  }
+
+  try {
+    const stat = statSync(dirPath);
+    if (!stat.isDirectory()) {
+      return c.json({ error: 'Path is not a directory' }, 400);
+    }
+  } catch (error: any) {
+    return c.json({ error: `Cannot access directory: ${error.message}` }, 500);
+  }
 
   const os = platform();
   let cmd: string;

@@ -288,6 +288,15 @@ function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, pr
     setVisibleCount(20);
   }, [search, projectId]);
 
+  // If the highlighted thread is beyond the visible count, expand to include it
+  useEffect(() => {
+    if (!highlightThreadId) return;
+    const idx = threads.findIndex((t) => t.id === highlightThreadId);
+    if (idx >= visibleCount) {
+      setVisibleCount(idx + 1);
+    }
+  }, [highlightThreadId, threads, visibleCount]);
+
   const StageIcon = stageConfig[stage].icon;
   const stageClassName = stageConfig[stage].className;
 

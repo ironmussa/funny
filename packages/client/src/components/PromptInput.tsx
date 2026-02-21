@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo, startTransition } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { ArrowUp, Square, Loader2, Image as ImageIcon, X, Zap, GitBranch, Check, Monitor, Inbox, FileText } from 'lucide-react';
@@ -691,11 +691,9 @@ export function PromptInput({
     const submittedPrompt = prompt;
     const submittedImages = images.length > 0 ? images : undefined;
     const submittedFiles = selectedFiles.length > 0 ? selectedFiles.map(p => ({ path: p })) : undefined;
-    startTransition(() => {
-      setPrompt('');
-      setImages([]);
-      setSelectedFiles([]);
-    });
+    setPrompt('');
+    setImages([]);
+    setSelectedFiles([]);
     if (selectedThreadId) clearPromptDraft(selectedThreadId);
     textareaRef.current?.focus();
 

@@ -63,8 +63,10 @@ async function fetchProjects(serverUrl, token) {
 // ---------------------------------------------------------------------------
 // Fetch providers & models from Funny
 // ---------------------------------------------------------------------------
-async function fetchSetupStatus(serverUrl) {
-  const res = await fetch(`${serverUrl}/api/setup/status`);
+async function fetchSetupStatus(serverUrl, token) {
+  const res = await fetch(`${serverUrl}/api/setup/status`, {
+    headers: { 'Authorization': `Bearer ${token}` }
+  });
   if (!res.ok) throw new Error(`Setup status failed: ${res.status}`);
   return res.json();
 }
@@ -201,7 +203,8 @@ async function handleFetchProjects() {
 
 async function handleFetchSetupStatus() {
   const config = await getConfig();
-  const data = await fetchSetupStatus(config.serverUrl);
+  const token = await getAuthToken(config.serverUrl);
+  const data = await fetchSetupStatus(config.serverUrl, token);
   return data;
 }
 

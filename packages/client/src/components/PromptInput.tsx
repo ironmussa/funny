@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { ArrowUp, Square, Loader2, Image as ImageIcon, X, Zap, GitBranch, Check, Monitor, Inbox, FileText } from 'lucide-react';
+import { ArrowUp, Square, Loader2, Paperclip, X, Zap, GitBranch, Check, Monitor, Inbox, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -1184,17 +1184,17 @@ export function PromptInput({
                   {t('prompt.backlog')}
                 </button>
               )}
-              {/* Image + send — always visible, pushed right */}
+              {/* Attach + send — always visible, pushed right */}
               <div className="flex items-center gap-1 ml-auto shrink-0">
                 <Button
                   onClick={() => fileInputRef.current?.click()}
                   variant="ghost"
                   size="icon-sm"
-                  aria-label={t('prompt.addImage')}
+                  aria-label={t('prompt.attach')}
                   disabled={loading || (running && !isQueueMode)}
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  <ImageIcon className="h-4 w-4" />
+                  <Paperclip className="h-4 w-4" />
                 </Button>
                 {queuedCount > 0 && (
                   <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded bg-muted text-muted-foreground">

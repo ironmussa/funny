@@ -9,7 +9,7 @@ import type { AgentProvider, AgentModel, ClaudeModel, CodexModel, GeminiModel, P
 
 const CLAUDE_MODEL_IDS: Record<ClaudeModel, string> = {
   sonnet: 'claude-sonnet-4-5-20250929',
-  'sonnet-4.6': 'claude-sonnet-4-6-20250929',
+  'sonnet-4.6': 'claude-sonnet-4-6',
   opus: 'claude-opus-4-6',
   haiku: 'claude-haiku-4-5-20251001',
 };

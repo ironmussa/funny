@@ -100,9 +100,16 @@ async function createThread(config, token, data) {
     });
   }
 
+  // Build a descriptive title from the first annotation comment
+  const firstComment = data.annotations?.[0]?.comment || '';
+  const pageTitle = data.title || data.url;
+  const threadTitle = firstComment
+    ? `${firstComment.slice(0, 70)} — ${pageTitle}`.slice(0, 100)
+    : `UI Review: ${pageTitle}`.slice(0, 100);
+
   const body = {
     projectId,
-    title: `UI Review: ${data.title || data.url}`.slice(0, 100),
+    title: threadTitle,
     mode,
     provider: provider || undefined,
     model: model || undefined,

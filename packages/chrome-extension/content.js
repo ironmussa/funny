@@ -27,6 +27,7 @@
   let annotationCounter = 0;
   let hoveredElement = null;
   let isPaused = false;
+  let isBrowsing = false;
   let annotationsVisible = true;
   let isDragging = false;
   let dragOffset = { x: 0, y: 0 };
@@ -670,8 +671,15 @@
       </div>
       <button class="toolbar-btn" data-action="pause" title="Pause animations">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <rect x="6" y="4" width="4" height="16"></rect>
-          <rect x="14" y="4" width="4" height="16"></rect>
+          <circle cx="12" cy="12" r="10"></circle>
+          <rect x="9" y="8" width="2" height="8" fill="currentColor" stroke="none"></rect>
+          <rect x="13" y="8" width="2" height="8" fill="currentColor" stroke="none"></rect>
+        </svg>
+      </button>
+      <button class="toolbar-btn" data-action="browse" title="Browse mode — navigate the page">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M5 12h14"></path>
+          <path d="M12 5l7 7-7 7"></path>
         </svg>
       </button>
       <button class="toolbar-btn" data-action="toggle-visibility" title="Toggle annotations">
@@ -773,6 +781,9 @@
       case 'pause':
         togglePauseAnimations();
         break;
+      case 'browse':
+        toggleBrowseMode();
+        break;
       case 'toggle-visibility':
         annotationsVisible = !annotationsVisible;
         renderAnnotations();
@@ -820,14 +831,30 @@
 
   function togglePauseAnimations() {
     isPaused = !isPaused;
+    const btn = toolbar.querySelector('[data-action="pause"]');
     if (isPaused) {
       document.getAnimations().forEach(a => a.pause());
-      toolbar.querySelector('[data-action="pause"]').classList.add('toolbar-btn-active');
+      btn.classList.add('toolbar-btn-active');
+      btn.title = 'Resume animations';
+      showToast('Animations paused — annotate the current frame');
+    } else {
+      document.getAnimations().forEach(a => a.play());
+      btn.classList.remove('toolbar-btn-active');
+      btn.title = 'Pause animations';
+    }
+  }
+
+  function toggleBrowseMode() {
+    isBrowsing = !isBrowsing;
+    const btn = toolbar.querySelector('[data-action="browse"]');
+    if (isBrowsing) {
+      btn.classList.add('toolbar-btn-active');
+      btn.title = 'Annotate mode — select elements';
       hideHoverHighlight();
       hidePopover();
     } else {
-      document.getAnimations().forEach(a => a.play());
-      toolbar.querySelector('[data-action="pause"]').classList.remove('toolbar-btn-active');
+      btn.classList.remove('toolbar-btn-active');
+      btn.title = 'Browse mode — navigate the page';
     }
   }
 
@@ -1270,7 +1297,7 @@
   // Event handlers
   // ---------------------------------------------------------------------------
   function onMouseMove(e) {
-    if (!isActive || isPaused || popover.style.display === 'block') return;
+    if (!isActive || isBrowsing || popover.style.display === 'block') return;
 
     const el = document.elementFromPoint(e.clientX, e.clientY);
     if (!el || el === shadowHost || shadowHost.contains(el)) {
@@ -1291,8 +1318,8 @@
     // Ignore clicks on our own UI (use composedPath to reliably cross shadow DOM boundaries)
     if (e.composedPath().includes(shadowHost)) return;
 
-    // When paused, don't intercept clicks — let the page behave normally
-    if (isPaused) return;
+    // In browse mode, let clicks pass through to the page
+    if (isBrowsing) return;
 
     // Close settings panel if open
     if (settingsPanel.style.display === 'block') {
@@ -1389,6 +1416,7 @@
       document.getAnimations().forEach(a => a.play());
       isPaused = false;
     }
+    isBrowsing = false;
   }
 
   // ---------------------------------------------------------------------------

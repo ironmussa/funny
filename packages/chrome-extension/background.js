@@ -79,7 +79,7 @@ async function createThread(config, token, data) {
   const { serverUrl, projectId, provider, model, permissionMode, mode } = config;
 
   if (!projectId) {
-    throw new Error('No project selected. Open the extension popup and select a project.');
+    throw new Error('No project selected. Open settings in the toolbar and select a project.');
   }
 
   // Build the prompt from annotations
@@ -182,10 +182,11 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
     return true;
   }
 
-  if (msg.type === 'OPEN_POPUP') {
-    // Can't programmatically open popup, but can open options page
-    // For now just log it
-    return false;
+  if (msg.type === 'GET_FULL_CONFIG') {
+    handleGetFullConfig()
+      .then(data => sendResponse(data))
+      .catch(err => sendResponse({ success: false, error: err.message }));
+    return true;
   }
 });
 
@@ -220,15 +221,57 @@ async function handleTestConnection(serverUrl) {
   }
 }
 
+async function handleGetFullConfig() {
+  const config = await getConfig();
+  const result = { success: true, config };
+
+  try {
+    const token = await getAuthToken(config.serverUrl);
+    const [projectsData, setupData] = await Promise.all([
+      fetchProjects(config.serverUrl, token).catch(() => ({ projects: [] })),
+      fetchSetupStatus(config.serverUrl, token).catch(() => ({ providers: {} })),
+    ]);
+    result.projects = projectsData.projects || projectsData;
+    result.providers = setupData.providers || {};
+    result.connected = true;
+  } catch (_) {
+    result.projects = [];
+    result.providers = {};
+    result.connected = false;
+  }
+
+  return result;
+}
+
 // ---------------------------------------------------------------------------
 // Extension icon click = toggle annotator in active tab
 // ---------------------------------------------------------------------------
 chrome.action.onClicked.addListener(async (tab) => {
-  // This fires only if there's no popup. Since we have a popup, this won't fire.
-  // But keeping it as fallback.
+  if (!tab?.id) return;
+
+  // Check for restricted pages
+  const url = tab.url || '';
+  if (url.startsWith('chrome://') || url.startsWith('chrome-extension://') ||
+      url.startsWith('about:') || url.startsWith('edge://') ||
+      url.includes('chromewebstore.google.com')) {
+    return; // Silently ignore restricted pages
+  }
+
+  // Try to toggle annotator in the active tab
   try {
     await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_ANNOTATOR' });
   } catch (_) {
-    // Content script not injected yet
+    // Content script not loaded — inject it and then activate
+    try {
+      await chrome.scripting.executeScript({
+        target: { tabId: tab.id },
+        files: ['content.js'],
+      });
+      // Wait for content script to initialize
+      await new Promise((r) => setTimeout(r, 200));
+      await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_ANNOTATOR' });
+    } catch (_) {
+      // Cannot inject — page may be restricted
+    }
   }
 });

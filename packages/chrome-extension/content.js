@@ -34,6 +34,7 @@
   let hoverHighlight = null;
   let hoverLabel = null;
   let popover = null;
+  let settingsPanel = null;
   let badgeContainer = null;
   let highlightContainer = null;
 
@@ -66,6 +67,10 @@
     // Popover (hidden by default)
     popover = createPopover();
     shadowRoot.appendChild(popover);
+
+    // Settings panel (hidden by default, positioned above toolbar)
+    settingsPanel = createSettingsPanel();
+    shadowRoot.appendChild(settingsPanel);
 
     // Toolbar
     toolbar = createToolbar();
@@ -518,8 +523,7 @@
         updateToolbarCount();
         break;
       case 'settings':
-        // Open popup
-        chrome.runtime.sendMessage({ type: 'OPEN_POPUP' });
+        toggleSettingsPanel();
         break;
       case 'send':
         sendToFunny();
@@ -538,6 +542,257 @@
     } else {
       document.getAnimations().forEach(a => a.play());
       toolbar.querySelector('[data-action="pause"]').classList.remove('toolbar-btn-active');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Settings panel (inline, replaces popup)
+  // ---------------------------------------------------------------------------
+  function createSettingsPanel() {
+    const panel = createElement('div', 'settings-panel');
+    panel.style.display = 'none';
+    panel.innerHTML = `
+      <div class="settings-header">
+        <div class="settings-title">
+          <span class="settings-logo">F</span>
+          <span>Settings</span>
+          <span class="settings-dot" title="Not connected"></span>
+        </div>
+        <button class="settings-close-btn" title="Close">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="18" y1="6" x2="6" y2="18"></line>
+            <line x1="6" y1="6" x2="18" y2="18"></line>
+          </svg>
+        </button>
+      </div>
+      <div class="settings-body">
+        <div class="settings-field">
+          <label>Server URL</label>
+          <input type="text" class="settings-input" data-key="serverUrl" placeholder="http://localhost:3001" />
+        </div>
+        <div class="settings-field">
+          <label>Project</label>
+          <select class="settings-select" data-key="projectId">
+            <option value="">Loading...</option>
+          </select>
+        </div>
+        <div class="settings-field">
+          <label>Provider</label>
+          <select class="settings-select" data-key="provider">
+            <option value="">Loading...</option>
+          </select>
+        </div>
+        <div class="settings-row">
+          <div class="settings-field">
+            <label>Model</label>
+            <select class="settings-select" data-key="model">
+              <option value="">-</option>
+            </select>
+          </div>
+          <div class="settings-field">
+            <label>Mode</label>
+            <select class="settings-select" data-key="mode">
+              <option value="local">Local</option>
+              <option value="worktree">Worktree</option>
+            </select>
+          </div>
+        </div>
+        <button class="settings-test-btn">Test Connection</button>
+        <div class="settings-status"></div>
+      </div>
+    `;
+
+    // Close button
+    panel.querySelector('.settings-close-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      hideSettingsPanel();
+    });
+
+    // Test connection
+    panel.querySelector('.settings-test-btn').addEventListener('click', (e) => {
+      e.stopPropagation();
+      testSettingsConnection();
+    });
+
+    // Auto-save on change
+    panel.querySelectorAll('.settings-select, .settings-input').forEach(el => {
+      el.addEventListener('change', (e) => {
+        e.stopPropagation();
+        // If provider changed, repopulate models
+        if (el.dataset.key === 'provider') {
+          populateSettingsModels(el.value);
+        }
+        saveSettings();
+      });
+    });
+
+    // Prevent clicks inside panel from triggering annotation
+    panel.addEventListener('click', (e) => e.stopPropagation());
+    panel.addEventListener('mousedown', (e) => e.stopPropagation());
+
+    return panel;
+  }
+
+  // Cached provider data for the settings panel
+  let settingsProviderData = null;
+
+  function toggleSettingsPanel() {
+    if (settingsPanel.style.display === 'block') {
+      hideSettingsPanel();
+    } else {
+      showSettingsPanel();
+    }
+  }
+
+  function showSettingsPanel() {
+    settingsPanel.style.display = 'block';
+    loadSettingsData();
+  }
+
+  function hideSettingsPanel() {
+    settingsPanel.style.display = 'none';
+  }
+
+  async function loadSettingsData() {
+    const statusEl = settingsPanel.querySelector('.settings-status');
+    statusEl.textContent = 'Loading...';
+    statusEl.className = 'settings-status';
+
+    try {
+      const data = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: 'GET_FULL_CONFIG' }, resolve);
+      });
+
+      if (!data?.success) {
+        statusEl.textContent = data?.error || 'Failed to load config';
+        statusEl.className = 'settings-status settings-status-error';
+        return;
+      }
+
+      const config = data.config || {};
+
+      // Populate server URL
+      const serverInput = settingsPanel.querySelector('[data-key="serverUrl"]');
+      serverInput.value = config.serverUrl || 'http://localhost:3001';
+
+      // Populate mode
+      const modeSelect = settingsPanel.querySelector('[data-key="mode"]');
+      modeSelect.value = config.mode || 'local';
+
+      // Populate projects
+      const projectSelect = settingsPanel.querySelector('[data-key="projectId"]');
+      projectSelect.innerHTML = '<option value="">Select a project...</option>';
+      (data.projects || []).forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.id;
+        opt.textContent = p.name;
+        if (p.id === config.projectId) opt.selected = true;
+        projectSelect.appendChild(opt);
+      });
+
+      // Populate providers
+      settingsProviderData = data.providers || {};
+      const providerSelect = settingsPanel.querySelector('[data-key="provider"]');
+      providerSelect.innerHTML = '';
+      const available = Object.entries(settingsProviderData)
+        .filter(([_, info]) => info.available);
+
+      if (available.length === 0) {
+        providerSelect.innerHTML = '<option value="">No providers</option>';
+      } else {
+        const effectiveProvider = (config.provider && settingsProviderData[config.provider]?.available)
+          ? config.provider : available[0][0];
+        available.forEach(([key, info]) => {
+          const opt = document.createElement('option');
+          opt.value = key;
+          opt.textContent = info.label || key;
+          if (key === effectiveProvider) opt.selected = true;
+          providerSelect.appendChild(opt);
+        });
+        providerSelect.value = effectiveProvider;
+        populateSettingsModels(effectiveProvider, config.model);
+      }
+
+      // Connection dot
+      const dot = settingsPanel.querySelector('.settings-dot');
+      if (data.connected) {
+        dot.className = 'settings-dot settings-dot-ok';
+        dot.title = 'Connected';
+        statusEl.textContent = 'Connected';
+        statusEl.className = 'settings-status settings-status-ok';
+      } else {
+        dot.className = 'settings-dot settings-dot-err';
+        dot.title = 'Not connected';
+        statusEl.textContent = 'Not connected';
+        statusEl.className = 'settings-status settings-status-error';
+      }
+    } catch (err) {
+      statusEl.textContent = 'Error loading settings';
+      statusEl.className = 'settings-status settings-status-error';
+    }
+  }
+
+  function populateSettingsModels(provider, selectedModel) {
+    const modelSelect = settingsPanel.querySelector('[data-key="model"]');
+    modelSelect.innerHTML = '';
+
+    if (!settingsProviderData || !settingsProviderData[provider]) {
+      modelSelect.innerHTML = '<option value="">-</option>';
+      return;
+    }
+
+    const info = settingsProviderData[provider];
+    const models = info.modelsWithLabels || info.models?.map(m => ({ value: m, label: m })) || [];
+    const effectiveModel = (selectedModel && models.some(m => m.value === selectedModel))
+      ? selectedModel
+      : info.defaultModel || models[0]?.value || '';
+
+    models.forEach(m => {
+      const opt = document.createElement('option');
+      opt.value = m.value;
+      opt.textContent = m.label;
+      if (m.value === effectiveModel) opt.selected = true;
+      modelSelect.appendChild(opt);
+    });
+
+    modelSelect.value = effectiveModel;
+  }
+
+  function saveSettings() {
+    const config = {};
+    settingsPanel.querySelectorAll('[data-key]').forEach(el => {
+      config[el.dataset.key] = el.value;
+    });
+    chrome.runtime.sendMessage({ type: 'SAVE_CONFIG', config });
+  }
+
+  async function testSettingsConnection() {
+    const statusEl = settingsPanel.querySelector('.settings-status');
+    const serverUrl = settingsPanel.querySelector('[data-key="serverUrl"]').value.trim();
+    statusEl.textContent = 'Connecting...';
+    statusEl.className = 'settings-status';
+
+    try {
+      const result = await new Promise((resolve) => {
+        chrome.runtime.sendMessage({ type: 'TEST_CONNECTION', serverUrl }, resolve);
+      });
+
+      const dot = settingsPanel.querySelector('.settings-dot');
+      if (result?.success) {
+        dot.className = 'settings-dot settings-dot-ok';
+        statusEl.textContent = 'Connected';
+        statusEl.className = 'settings-status settings-status-ok';
+        // Reload all data with new URL
+        saveSettings();
+        loadSettingsData();
+      } else {
+        dot.className = 'settings-dot settings-dot-err';
+        statusEl.textContent = result?.error || 'Connection failed';
+        statusEl.className = 'settings-status settings-status-error';
+      }
+    } catch (_) {
+      statusEl.textContent = 'Connection failed';
+      statusEl.className = 'settings-status settings-status-error';
     }
   }
 
@@ -682,6 +937,12 @@
     // Ignore clicks on our own UI
     if (e.target === shadowHost || shadowHost.contains(e.target)) return;
 
+    // Close settings panel if open
+    if (settingsPanel.style.display === 'block') {
+      hideSettingsPanel();
+      return;
+    }
+
     // Ignore if popover is open
     if (popover.style.display === 'block') {
       hidePopover();
@@ -701,7 +962,9 @@
   function onKeyDown(e) {
     if (!isActive) return;
     if (e.key === 'Escape') {
-      if (popover.style.display === 'block') {
+      if (settingsPanel.style.display === 'block') {
+        hideSettingsPanel();
+      } else if (popover.style.display === 'block') {
         hidePopover();
       } else {
         deactivate();
@@ -733,6 +996,7 @@
     isActive = false;
     hideHoverHighlight();
     hidePopover();
+    hideSettingsPanel();
     toolbar.style.display = 'none';
     highlightContainer.innerHTML = '';
     badgeContainer.innerHTML = '';
@@ -1038,6 +1302,148 @@
         background: #333;
         margin: 0 4px;
       }
+
+      /* Settings panel */
+      .settings-panel {
+        position: fixed;
+        bottom: 80px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 340px;
+        background: #1a1a1a;
+        color: #e5e5e5;
+        border-radius: 14px;
+        box-shadow: 0 8px 32px rgba(0,0,0,0.5);
+        pointer-events: auto;
+        z-index: 250;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 13px;
+        overflow: hidden;
+      }
+
+      .settings-header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 12px 14px;
+        border-bottom: 1px solid #2a2a2a;
+      }
+
+      .settings-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-weight: 600;
+        font-size: 13px;
+        color: white;
+      }
+
+      .settings-logo {
+        width: 20px;
+        height: 20px;
+        background: #22c55e;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 900;
+        font-size: 11px;
+        color: white;
+      }
+
+      .settings-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #555;
+        flex-shrink: 0;
+      }
+      .settings-dot-ok { background: #22c55e; }
+      .settings-dot-err { background: #dc2626; }
+
+      .settings-close-btn {
+        width: 28px;
+        height: 28px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background: transparent;
+        border: none;
+        color: #888;
+        cursor: pointer;
+        border-radius: 6px;
+        padding: 0;
+      }
+      .settings-close-btn:hover {
+        background: #333;
+        color: white;
+      }
+
+      .settings-body {
+        padding: 12px 14px;
+      }
+
+      .settings-field {
+        margin-bottom: 10px;
+        flex: 1;
+      }
+
+      .settings-field label {
+        display: block;
+        font-size: 11px;
+        color: #888;
+        margin-bottom: 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .settings-input,
+      .settings-select {
+        width: 100%;
+        background: #2a2a2a;
+        border: 1px solid #404040;
+        border-radius: 8px;
+        color: #e5e5e5;
+        font-size: 12px;
+        padding: 7px 10px;
+        outline: none;
+      }
+      .settings-input:focus,
+      .settings-select:focus {
+        border-color: #3b82f6;
+      }
+      .settings-select { cursor: pointer; }
+
+      .settings-row {
+        display: flex;
+        gap: 10px;
+      }
+
+      .settings-test-btn {
+        width: 100%;
+        padding: 8px;
+        background: #2a2a2a;
+        border: 1px solid #404040;
+        border-radius: 8px;
+        color: #ccc;
+        font-size: 12px;
+        font-weight: 500;
+        cursor: pointer;
+        margin-bottom: 8px;
+      }
+      .settings-test-btn:hover {
+        background: #333;
+        color: white;
+      }
+
+      .settings-status {
+        font-size: 11px;
+        color: #666;
+        text-align: center;
+        min-height: 16px;
+      }
+      .settings-status-ok { color: #22c55e; }
+      .settings-status-error { color: #dc2626; }
 
       /* Toast */
       .toast {

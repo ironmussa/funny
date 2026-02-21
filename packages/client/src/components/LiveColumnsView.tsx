@@ -557,95 +557,13 @@ export function LiveColumnsView() {
         <div className="flex-shrink-0 border-b border-border px-4 py-2 flex items-center gap-2">
           <Columns3 className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-medium">{t('live.title', 'Live')}</span>
-          <div className="ml-auto">
-            <Popover open={projectPickerOpen} onOpenChange={(v) => { setProjectPickerOpen(v); if (!v) setProjectSearch(''); }}>
-              <PopoverTrigger asChild>
-                <Button variant="ghost" className="h-6 px-2 text-[10px] gap-1.5 min-w-0">
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
-              </PopoverTrigger>
-              <PopoverContent align="end" className="w-56 p-0">
-                <div className="flex items-center gap-2 px-2.5 py-2 border-b border-border/50">
-                  <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                  <Input
-                    value={projectSearch}
-                    onChange={(e) => setProjectSearch(e.target.value)}
-                    placeholder={t('kanban.searchProject', 'Search project...')}
-                    className="flex-1 h-auto border-0 bg-transparent text-xs shadow-none focus-visible:ring-0 px-0 py-0 placeholder:text-muted-foreground"
-                    autoFocus
-                  />
-                </div>
-                <div className="max-h-48 overflow-y-auto py-1">
-                  {filteredProjects.length === 0 ? (
-                    <div className="text-xs text-muted-foreground text-center py-3">
-                      {t('commandPalette.noResults', 'No results')}
-                    </div>
-                  ) : (
-                    filteredProjects.map((p) => (
-                      <button
-                        key={p.id}
-                        className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-accent transition-colors flex items-center gap-2"
-                        onClick={() => {
-                          setProjectPickerOpen(false);
-                          setProjectSearch('');
-                          handleAddThread(p.id);
-                        }}
-                      >
-                        <span
-                          className="w-2 h-2 rounded-full shrink-0"
-                          style={{ backgroundColor: p.color || '#3b82f6' }}
-                        />
-                        <span className="truncate">{p.name}</span>
-                      </button>
-                    ))
-                  )}
-                </div>
-              </PopoverContent>
-            </Popover>
-          </div>
-        </div>
-        <div className="flex-1 flex items-center justify-center text-muted-foreground">
-          <div className="text-center space-y-2">
-            <Columns3 className="h-10 w-10 mx-auto text-muted-foreground/40" />
-            <p className="text-sm font-medium">{t('live.noActiveThreads', 'No active threads')}</p>
-            <p className="text-xs text-muted-foreground/60">{t('live.noActiveThreadsDesc', 'Start some agents and they will appear here in real-time')}</p>
-          </div>
-        </div>
-        <SlideUpPrompt
-          open={slideUpOpen}
-          onClose={() => setSlideUpOpen(false)}
-          onSubmit={handlePromptSubmit}
-          loading={creating}
-          projectId={slideUpProjectId}
-        />
-      </div>
-    );
-  }
-
-  return (
-    <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
-      {/* Header */}
-      <div className="flex-shrink-0 border-b border-border px-4 py-2 flex items-center gap-2">
-        <Columns3 className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium">{t('live.title', 'Live')}</span>
-        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
-          {activeThreads.filter(t => ACTIVE_STATUSES.has(t.status)).length} {t('live.active', 'active')}
-          {activeThreads.some(t => FINISHED_STATUSES.has(t.status)) && (
-            <span className="ml-1 text-muted-foreground">
-              + {activeThreads.filter(t => FINISHED_STATUSES.has(t.status)).length} {t('live.recent', 'recent')}
-            </span>
-          )}
-        </Badge>
-
-        {/* Add thread + Grid size picker */}
-        <div className="ml-auto flex items-center gap-1">
           <Popover open={projectPickerOpen} onOpenChange={(v) => { setProjectPickerOpen(v); if (!v) setProjectSearch(''); }}>
             <PopoverTrigger asChild>
               <Button variant="ghost" className="h-6 px-2 text-[10px] gap-1.5 min-w-0">
                 <Plus className="h-3.5 w-3.5" />
               </Button>
             </PopoverTrigger>
-            <PopoverContent align="end" className="w-56 p-0">
+            <PopoverContent align="start" className="w-56 p-0">
               <div className="flex items-center gap-2 px-2.5 py-2 border-b border-border/50">
                 <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
                 <Input
@@ -683,6 +601,88 @@ export function LiveColumnsView() {
               </div>
             </PopoverContent>
           </Popover>
+        </div>
+        <div className="flex-1 flex items-center justify-center text-muted-foreground">
+          <div className="text-center space-y-2">
+            <Columns3 className="h-10 w-10 mx-auto text-muted-foreground/40" />
+            <p className="text-sm font-medium">{t('live.noActiveThreads', 'No active threads')}</p>
+            <p className="text-xs text-muted-foreground/60">{t('live.noActiveThreadsDesc', 'Start some agents and they will appear here in real-time')}</p>
+          </div>
+        </div>
+        <SlideUpPrompt
+          open={slideUpOpen}
+          onClose={() => setSlideUpOpen(false)}
+          onSubmit={handlePromptSubmit}
+          loading={creating}
+          projectId={slideUpProjectId}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 flex flex-col h-full min-w-0 overflow-hidden">
+      {/* Header */}
+      <div className="flex-shrink-0 border-b border-border px-4 py-2 flex items-center gap-2">
+        <Columns3 className="h-4 w-4 text-muted-foreground" />
+        <span className="text-sm font-medium">{t('live.title', 'Live')}</span>
+        <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4">
+          {activeThreads.filter(t => ACTIVE_STATUSES.has(t.status)).length} {t('live.active', 'active')}
+          {activeThreads.some(t => FINISHED_STATUSES.has(t.status)) && (
+            <span className="ml-1 text-muted-foreground">
+              + {activeThreads.filter(t => FINISHED_STATUSES.has(t.status)).length} {t('live.recent', 'recent')}
+            </span>
+          )}
+        </Badge>
+
+        {/* Add thread */}
+        <Popover open={projectPickerOpen} onOpenChange={(v) => { setProjectPickerOpen(v); if (!v) setProjectSearch(''); }}>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" className="h-6 px-2 text-[10px] gap-1.5 min-w-0">
+              <Plus className="h-3.5 w-3.5" />
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="start" className="w-56 p-0">
+            <div className="flex items-center gap-2 px-2.5 py-2 border-b border-border/50">
+              <Search className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+              <Input
+                value={projectSearch}
+                onChange={(e) => setProjectSearch(e.target.value)}
+                placeholder={t('kanban.searchProject', 'Search project...')}
+                className="flex-1 h-auto border-0 bg-transparent text-xs shadow-none focus-visible:ring-0 px-0 py-0 placeholder:text-muted-foreground"
+                autoFocus
+              />
+            </div>
+            <div className="max-h-48 overflow-y-auto py-1">
+              {filteredProjects.length === 0 ? (
+                <div className="text-xs text-muted-foreground text-center py-3">
+                  {t('commandPalette.noResults', 'No results')}
+                </div>
+              ) : (
+                filteredProjects.map((p) => (
+                  <button
+                    key={p.id}
+                    className="w-full text-left px-2.5 py-1.5 text-xs hover:bg-accent transition-colors flex items-center gap-2"
+                    onClick={() => {
+                      setProjectPickerOpen(false);
+                      setProjectSearch('');
+                      handleAddThread(p.id);
+                    }}
+                  >
+                    <span
+                      className="w-2 h-2 rounded-full shrink-0"
+                      style={{ backgroundColor: p.color || '#3b82f6' }}
+                    />
+                    <span className="truncate">{p.name}</span>
+                  </button>
+                ))
+              )}
+            </div>
+          </PopoverContent>
+        </Popover>
+
+        {/* Grid size picker */}
+        <div className="ml-auto">
           <GridPicker
             cols={gridCols}
             rows={gridRows}

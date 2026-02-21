@@ -131,7 +131,7 @@ function KanbanCard({ thread, projectInfo, onDelete, search, ghost, contentSnipp
       {thread.branch && (
         <div className="flex items-center gap-1 mb-1.5 min-w-0">
           <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" />
-          <span className="text-[11px] text-muted-foreground truncate">{thread.branch}</span>
+          <span className="text-xs text-muted-foreground truncate">{thread.branch}</span>
         </div>
       )}
       {contentSnippet && search && !normalize(thread.title).includes(normalize(search)) && (

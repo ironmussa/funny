@@ -1,3 +1,6 @@
+// ─── Thread Machine (re-exported for convenience) ────────
+export type { ResumeReason } from './thread-machine.js';
+
 // ─── Auth ────────────────────────────────────────────────
 
 export type AuthMode = 'local' | 'multi';

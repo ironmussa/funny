@@ -1,10 +1,11 @@
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import type { CLIMessage } from '@funny/core/agents';
-import type { WSEvent } from '@funny/shared';
+import type { WSEvent, ThreadStatus } from '@funny/shared';
 import type { AgentStateTracker } from './agent-state.js';
 import { threadEventBus } from './thread-event-bus.js';
 import { getStatusSummary, deriveGitSyncState } from '@funny/core/git';
 import { log } from '../lib/abbacchio.js';
+import { transitionStatus } from './thread-status-machine.js';
 
 /**
  * Decode literal Unicode escape sequences (\uXXXX) that may appear
@@ -182,12 +183,16 @@ export class AgentMessageHandler {
         // Track if this tool call means Claude is waiting for user input
         if (block.name === 'AskUserQuestion') {
           this.state.pendingUserInput.set(threadId, 'question');
-          this.threadManager.updateThread(threadId, { status: 'waiting' });
-          this.emitWS(threadId, 'agent:status', { status: 'waiting', waitingReason: 'question' });
+          const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
+          const { status } = transitionStatus(threadId, { type: 'WAIT' }, currentStatus as ThreadStatus);
+          this.threadManager.updateThread(threadId, { status });
+          this.emitWS(threadId, 'agent:status', { status, waitingReason: 'question' });
         } else if (block.name === 'ExitPlanMode') {
           this.state.pendingUserInput.set(threadId, 'plan');
-          this.threadManager.updateThread(threadId, { status: 'waiting' });
-          this.emitWS(threadId, 'agent:status', { status: 'waiting', waitingReason: 'plan' });
+          const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
+          const { status } = transitionStatus(threadId, { type: 'WAIT' }, currentStatus as ThreadStatus);
+          this.threadManager.updateThread(threadId, { status });
+          this.emitWS(threadId, 'agent:status', { status, waitingReason: 'plan' });
         } else {
           this.state.pendingUserInput.delete(threadId);
         }
@@ -280,9 +285,16 @@ export class AgentMessageHandler {
     }
 
     const isWaitingForUser = !!waitingReason;
-    const finalStatus = isWaitingForUser
-      ? 'waiting'
-      : msg.subtype === 'success' ? 'completed' : 'failed';
+    const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
+
+    // Determine the machine event based on the result
+    const resultEvent = isWaitingForUser
+      ? { type: 'WAIT' as const, cost: msg.total_cost_usd, duration: msg.duration_ms }
+      : msg.subtype === 'success'
+        ? { type: 'COMPLETE' as const, cost: msg.total_cost_usd, duration: msg.duration_ms }
+        : { type: 'FAIL' as const, cost: msg.total_cost_usd, duration: msg.duration_ms };
+
+    const { status: finalStatus } = transitionStatus(threadId, resultEvent, currentStatus as ThreadStatus, msg.total_cost_usd ?? 0);
     this.state.pendingUserInput.delete(threadId);
 
     this.threadManager.updateThread(threadId, {

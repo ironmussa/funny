@@ -2,7 +2,7 @@ import { wsBroker } from './ws-broker.js';
 import * as tm from './thread-manager.js';
 import * as pm from './project-manager.js';
 import * as mq from './message-queue.js';
-import type { WSEvent, AgentProvider, AgentModel, PermissionMode } from '@funny/shared';
+import type { WSEvent, AgentProvider, AgentModel, PermissionMode, ThreadStatus } from '@funny/shared';
 import { AgentOrchestrator, defaultProcessFactory } from '@funny/core/agents';
 import type { IAgentProcessFactory } from '@funny/core/agents';
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
@@ -10,6 +10,9 @@ import { AgentStateTracker } from './agent-state.js';
 import { AgentMessageHandler, type ProjectLookup } from './agent-message-handler.js';
 import { threadEventBus } from './thread-event-bus.js';
 import { log } from '../lib/abbacchio.js';
+import { transitionStatus } from './thread-status-machine.js';
+import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
+import type { ThreadEvent } from '@funny/shared/thread-machine';
 
 // ── AgentRunner class ───────────────────────────────────────────
 
@@ -35,24 +38,30 @@ export class AgentRunner {
 
     this.orchestrator.on('agent:error', (threadId: string, err: Error) => {
       log.error('Agent error', { namespace: 'agent', threadId, error: err.message });
-      this.threadManager.updateThread(threadId, { status: 'failed', completedAt: new Date().toISOString() });
+      const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
+      const { status } = transitionStatus(threadId, { type: 'FAIL', error: err.message }, currentStatus as ThreadStatus);
+      this.threadManager.updateThread(threadId, { status, completedAt: new Date().toISOString() });
       this.emitWS(threadId, 'agent:error', { error: err.message });
-      this.emitWS(threadId, 'agent:status', { status: 'failed' });
+      this.emitWS(threadId, 'agent:status', { status });
     });
 
     this.orchestrator.on('agent:unexpected-exit', (threadId: string) => {
       log.error('Agent exited unexpectedly', { namespace: 'agent', threadId });
-      this.threadManager.updateThread(threadId, { status: 'failed', completedAt: new Date().toISOString() });
+      const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
+      const { status } = transitionStatus(threadId, { type: 'FAIL' }, currentStatus as ThreadStatus);
+      this.threadManager.updateThread(threadId, { status, completedAt: new Date().toISOString() });
       this.emitWS(threadId, 'agent:error', {
         error: 'Agent process exited unexpectedly without a result',
       });
-      this.emitWS(threadId, 'agent:status', { status: 'failed' });
+      this.emitWS(threadId, 'agent:status', { status });
     });
 
     this.orchestrator.on('agent:stopped', (threadId: string) => {
       log.info('Agent stopped', { namespace: 'agent', threadId });
-      this.threadManager.updateThread(threadId, { status: 'stopped', completedAt: new Date().toISOString() });
-      this.emitWS(threadId, 'agent:status', { status: 'stopped' });
+      const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
+      const { status } = transitionStatus(threadId, { type: 'STOP' }, currentStatus as ThreadStatus);
+      this.threadManager.updateThread(threadId, { status, completedAt: new Date().toISOString() });
+      this.emitWS(threadId, 'agent:status', { status });
       // Process queue after manual stop
       this.processQueue(threadId).catch((err) => {
         log.error('Queue drain failed after stop', { namespace: 'queue', threadId, error: String(err) });
@@ -120,15 +129,19 @@ export class AgentRunner {
     // Clear stale DB-mapping state from previous runs
     this.state.clearRunState(threadId);
 
-    // Capture the previous status before overwriting — needed to detect
-    // whether this is a response to a question/plan vs a genuine resume.
-    const previousStatus = this.threadManager.getThread(threadId)?.status;
+    // Transition the thread status via the state machine.
+    // The machine picks the right event based on the current state, giving us
+    // a `resumeReason` that tells us WHY we're entering `running` — so we can
+    // choose the correct system prefix for the Claude session resume.
+    const currentThread = this.threadManager.getThread(threadId);
+    const currentStatus = (currentThread?.status ?? 'pending') as ThreadStatus;
+    const startEvent = this.pickStartEvent(currentStatus);
+    const { status: newStatus, resumeReason } = transitionStatus(threadId, startEvent, currentStatus, currentThread?.cost ?? 0);
 
     // Update thread status + provider in DB
-    this.threadManager.updateThread(threadId, { status: 'running', provider });
+    this.threadManager.updateThread(threadId, { status: newStatus, provider });
 
     // Auto-transition stage to 'in_progress' from 'backlog' or 'review'
-    const currentThread = this.threadManager.getThread(threadId);
     if (currentThread && (currentThread.stage === 'review' || currentThread.stage === 'backlog')) {
       const fromStage = currentThread.stage;
       this.threadManager.updateThread(threadId, { stage: 'in_progress' });
@@ -152,17 +165,9 @@ export class AgentRunner {
     // Read session ID from DB for resume
     const thread = this.threadManager.getThread(threadId);
 
-    // Determine the appropriate system prefix for session resume based on context:
-    // 1. Post-merge: worktree was cleaned up after merge
-    // 2. Waiting for user input: agent asked a question or requested plan approval
-    // 3. Default: genuine interruption/resume (handled by orchestrator)
-    const isPostMerge = thread?.sessionId && thread?.baseBranch && !thread?.worktreePath;
-    const wasWaitingForUser = previousStatus === 'waiting';
-    const systemPrefix = isPostMerge
-      ? `[SYSTEM NOTE: This is a follow-up after your previous work was merged into the main branch. The worktree and feature branch have been cleaned up. You are now working in the main project directory. Your conversation history is preserved — continue naturally.]`
-      : wasWaitingForUser
-        ? `[SYSTEM NOTE: The user has responded to your question or plan approval request. Continue naturally based on their response.]`
-        : undefined;
+    // Derive the system prefix from the machine's resumeReason
+    const isPostMerge = !!(thread?.sessionId && thread?.baseBranch && !thread?.worktreePath);
+    const systemPrefix = getResumeSystemPrefix(resumeReason, isPostMerge);
 
     // When resuming a plan-mode thread, the orchestrator downgrades to autoEdit.
     // Sync the DB and notify the client so the PromptInput dropdown updates.
@@ -255,6 +260,30 @@ export class AgentRunner {
       });
     } catch (err: any) {
       log.error('Failed to auto-send queued message', { namespace: 'queue', threadId, error: err.message });
+    }
+  }
+
+  /**
+   * Pick the right machine event based on the current thread status.
+   * This determines the `resumeReason` the machine will set.
+   */
+  private pickStartEvent(currentStatus: ThreadStatus): ThreadEvent {
+    switch (currentStatus) {
+      case 'pending':
+        return { type: 'START' };
+      case 'waiting':
+        return { type: 'RESPOND' };
+      case 'completed':
+        return { type: 'FOLLOW_UP' };
+      case 'stopped':
+      case 'failed':
+      case 'interrupted':
+        return { type: 'RESTART' };
+      case 'running':
+        // Already running (self-transition)
+        return { type: 'START' };
+      default:
+        return { type: 'START' };
     }
   }
 

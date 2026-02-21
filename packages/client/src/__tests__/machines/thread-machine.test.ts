@@ -8,7 +8,7 @@ import type { ThreadEvent } from '@/machines/thread-machine';
  */
 function createThreadActor(initialStatus?: string) {
   const actor = createActor(threadMachine, {
-    input: { threadId: 'test-thread', cost: 0 },
+    input: { threadId: 'test-thread', cost: 0, resumeReason: null },
   });
   actor.start();
 
@@ -39,7 +39,7 @@ describe('threadMachine', () => {
   describe('initial state', () => {
     test('starts in pending state', () => {
       const actor = createActor(threadMachine, {
-        input: { threadId: 'test', cost: 0 },
+        input: { threadId: 'test', cost: 0, resumeReason: null },
       });
       actor.start();
       expect(actor.getSnapshot().value).toBe('pending');
@@ -48,7 +48,7 @@ describe('threadMachine', () => {
 
     test('has initial context from input', () => {
       const actor = createActor(threadMachine, {
-        input: { threadId: 'my-thread', cost: 1.5 },
+        input: { threadId: 'my-thread', cost: 1.5, resumeReason: null },
       });
       actor.start();
       const ctx = actor.getSnapshot().context;
@@ -231,6 +231,13 @@ describe('threadMachine', () => {
   });
 
   describe('waiting transitions', () => {
+    test('waiting -> running on RESPOND', () => {
+      const actor = createThreadActor('waiting');
+      actor.send({ type: 'RESPOND' });
+      expect(actor.getSnapshot().value).toBe('running');
+      actor.stop();
+    });
+
     test('waiting -> running on START', () => {
       const actor = createThreadActor('waiting');
       actor.send({ type: 'START' });
@@ -290,6 +297,13 @@ describe('threadMachine', () => {
   });
 
   describe('completed transitions', () => {
+    test('completed -> running on FOLLOW_UP', () => {
+      const actor = createThreadActor('completed');
+      actor.send({ type: 'FOLLOW_UP' });
+      expect(actor.getSnapshot().value).toBe('running');
+      actor.stop();
+    });
+
     test('completed -> running on RESTART', () => {
       const actor = createThreadActor('completed');
       actor.send({ type: 'RESTART' });
@@ -466,6 +480,67 @@ describe('threadMachine', () => {
       actor.stop();
     });
   });
+
+  describe('resumeReason context', () => {
+    test('START from pending sets resumeReason to "fresh"', () => {
+      const actor = createThreadActor();
+      actor.send({ type: 'START' });
+      expect(actor.getSnapshot().context.resumeReason).toBe('fresh');
+      actor.stop();
+    });
+
+    test('RESPOND from waiting sets resumeReason to "waiting-response"', () => {
+      const actor = createThreadActor('waiting');
+      actor.send({ type: 'RESPOND' });
+      expect(actor.getSnapshot().context.resumeReason).toBe('waiting-response');
+      actor.stop();
+    });
+
+    test('FOLLOW_UP from completed sets resumeReason to "follow-up"', () => {
+      const actor = createThreadActor('completed');
+      actor.send({ type: 'FOLLOW_UP' });
+      expect(actor.getSnapshot().context.resumeReason).toBe('follow-up');
+      actor.stop();
+    });
+
+    test('RESTART from stopped sets resumeReason to "interrupted"', () => {
+      const actor = createThreadActor('stopped');
+      actor.send({ type: 'RESTART' });
+      expect(actor.getSnapshot().context.resumeReason).toBe('interrupted');
+      actor.stop();
+    });
+
+    test('RESTART from failed sets resumeReason to "interrupted"', () => {
+      const actor = createThreadActor('failed');
+      actor.send({ type: 'RESTART' });
+      expect(actor.getSnapshot().context.resumeReason).toBe('interrupted');
+      actor.stop();
+    });
+
+    test('RESTART from interrupted sets resumeReason to "interrupted"', () => {
+      const actor = createThreadActor('interrupted');
+      actor.send({ type: 'RESTART' });
+      expect(actor.getSnapshot().context.resumeReason).toBe('interrupted');
+      actor.stop();
+    });
+
+    test('resumeReason is cleared on COMPLETE', () => {
+      const actor = createThreadActor();
+      actor.send({ type: 'START' });
+      expect(actor.getSnapshot().context.resumeReason).toBe('fresh');
+      actor.send({ type: 'COMPLETE', cost: 0.05, duration: 1000 });
+      expect(actor.getSnapshot().context.resumeReason).toBeNull();
+      actor.stop();
+    });
+
+    test('resumeReason is cleared on FAIL', () => {
+      const actor = createThreadActor();
+      actor.send({ type: 'START' });
+      actor.send({ type: 'FAIL', cost: 0.01, duration: 100 });
+      expect(actor.getSnapshot().context.resumeReason).toBeNull();
+      actor.stop();
+    });
+  });
 });
 
 describe('wsEventToMachineEvent', () => {
@@ -567,16 +642,16 @@ describe('wsEventToMachineEvent', () => {
   });
 
   describe('agent:error events', () => {
-    test('returns FAIL event', () => {
+    test('returns FAIL event with error', () => {
       const result = wsEventToMachineEvent('agent:error', {
         error: 'Something went wrong',
       });
-      expect(result).toEqual({ type: 'FAIL' });
+      expect(result).toEqual({ type: 'FAIL', error: 'Something went wrong' });
     });
 
-    test('returns FAIL with no cost/duration', () => {
+    test('returns FAIL with undefined error when missing', () => {
       const result = wsEventToMachineEvent('agent:error', {});
-      expect(result).toEqual({ type: 'FAIL' });
+      expect(result).toEqual({ type: 'FAIL', error: undefined });
     });
   });
 

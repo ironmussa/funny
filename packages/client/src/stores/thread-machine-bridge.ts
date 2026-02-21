@@ -4,7 +4,7 @@
  */
 
 import { createActor } from 'xstate';
-import { threadMachine, wsEventToMachineEvent, type ThreadContext } from '@/machines/thread-machine';
+import { threadMachine, wsEventToMachineEvent, type ThreadContext } from '@funny/shared/thread-machine';
 import type { ThreadStatus } from '@funny/shared';
 
 export { wsEventToMachineEvent };
@@ -17,7 +17,7 @@ export function getThreadActor(threadId: string, initialStatus: ThreadStatus = '
   let actor = threadActors.get(threadId);
   if (!actor) {
     actor = createActor(threadMachine, {
-      input: { threadId, cost } as ThreadContext,
+      input: { threadId, cost, resumeReason: null } as ThreadContext,
     });
     actor.start();
     if (initialStatus !== 'pending') {

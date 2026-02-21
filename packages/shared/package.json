@@ -11,6 +11,10 @@
   "exports": {
     ".": "./src/types.ts",
     "./errors": "./src/errors.ts",
-    "./models": "./src/models.ts"
+    "./models": "./src/models.ts",
+    "./thread-machine": "./src/thread-machine.ts"
+  },
+  "dependencies": {
+    "xstate": "^5.28.0"
   }
 }

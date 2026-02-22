@@ -1204,6 +1204,17 @@ export function ThreadView() {
           {/* Input — sticky at bottom */}
           {!(activeThread.status === 'waiting' && activeThread.waitingReason === 'question') && (
             <div className="sticky bottom-0 z-10 bg-background">
+              {/* Scroll to bottom button — visibility managed via DOM ref to avoid re-renders */}
+              <div ref={scrollDownRef} className="relative" style={{ display: 'none' }}>
+                <button
+                  onClick={scrollToBottom}
+                  aria-label={t('thread.scrollToBottom', 'Scroll to bottom')}
+                  className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-full bg-secondary border border-muted-foreground/40 px-3 py-1.5 text-xs text-muted-foreground shadow-md hover:bg-muted transition-colors"
+                >
+                  <ArrowDown className="h-3 w-3" />
+                  {t('thread.scrollToBottom', 'Scroll to bottom')}
+                </button>
+              </div>
               <PromptInput
                 onSubmit={handleSend}
                 onStop={handleStop}
@@ -1216,18 +1227,6 @@ export function ThreadView() {
             </div>
           )}
           </div>
-
-        {/* Scroll to bottom button — visibility managed via DOM ref to avoid re-renders */}
-        <div ref={scrollDownRef} className="relative" style={{ display: 'none' }}>
-          <button
-            onClick={scrollToBottom}
-            aria-label={t('thread.scrollToBottom', 'Scroll to bottom')}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 rounded-full bg-secondary border border-muted-foreground/40 px-3 py-1.5 text-xs text-muted-foreground shadow-md hover:bg-muted transition-colors"
-          >
-            <ArrowDown className="h-3 w-3" />
-            {t('thread.scrollToBottom', 'Scroll to bottom')}
-          </button>
-        </div>
         </div>
 
         {/* Prompt Timeline */}

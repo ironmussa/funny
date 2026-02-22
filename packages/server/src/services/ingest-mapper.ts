@@ -208,6 +208,7 @@ function onAccepted(event: IngestEvent): void {
     branch,
     baseBranch,
     worktreePath,
+    source: 'ingest',
     externalRequestId: request_id,
     cost: 0,
     createdAt: timestamp,

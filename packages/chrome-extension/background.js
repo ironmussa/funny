@@ -114,6 +114,7 @@ async function createThread(config, token, data) {
     provider: provider || undefined,
     model: model || undefined,
     permissionMode,
+    source: 'chrome_extension',
     prompt,
     images
   };

@@ -7,13 +7,13 @@ import {
   dropTargetForElements,
   monitorForElements,
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
-import { GitBranch, Pin, Plus, Search, Trash2 } from 'lucide-react';
+import { GitBranch, Pin, Plus, Search, Trash2, Chrome, Bot, Webhook, Terminal } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import type { Thread, ThreadStage, Project } from '@funny/shared';
+import type { Thread, ThreadStage, Project, ThreadSource } from '@funny/shared';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { useAppStore } from '@/stores/app-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -47,6 +47,13 @@ interface KanbanViewProps {
 }
 
 const STAGES: ThreadStage[] = ['backlog', 'in_progress', 'review', 'done', 'archived'];
+
+const SOURCE_ICON: Record<string, typeof Chrome | undefined> = {
+  chrome_extension: Chrome,
+  api: Terminal,
+  automation: Bot,
+  ingest: Webhook,
+};
 
 function KanbanCard({ thread, projectInfo, onDelete, search, ghost, contentSnippet, projectId, highlighted, stage }: { thread: Thread; projectInfo?: { name: string; color?: string }; onDelete: (thread: Thread) => void; search?: string; ghost?: boolean; contentSnippet?: string; projectId?: string; highlighted?: boolean; stage: ThreadStage }) {
   const { t } = useTranslation();
@@ -180,9 +187,19 @@ function KanbanCard({ thread, projectInfo, onDelete, search, ghost, contentSnipp
           <span className="text-xs text-muted-foreground truncate">
             {t(`thread.status.${thread.status}`)}
           </span>
-          {thread.provider === 'external' && (
-            <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 font-medium">External</Badge>
-          )}
+          {thread.source && thread.source !== 'web' && SOURCE_ICON[thread.source] && (() => {
+            const SourceIcon = SOURCE_ICON[thread.source]!;
+            return (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <SourceIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {t(`thread.source.${thread.source}`)}
+                </TooltipContent>
+              </Tooltip>
+            );
+          })()}
         </div>
         <div className="flex items-center gap-2 shrink-0 text-xs text-muted-foreground">
           <span>{timeAgo(thread.completedAt || thread.createdAt, t)}</span>

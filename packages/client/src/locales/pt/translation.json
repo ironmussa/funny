@@ -98,7 +98,14 @@
     "typeToQueue": "Digite um acompanhamento para enfileirar...",
     "interruptingAgent": "Interrompendo agente com novo prompt...",
     "messageQueued": "Mensagem enfileirada — será enviada quando o agente terminar",
-    "queuedMessages": "{{count}} mensagem(ns) enfileirada(s)"
+    "queuedMessages": "{{count}} mensagem(ns) enfileirada(s)",
+    "source": {
+      "web": "Criado pela interface web",
+      "chrome_extension": "Criado pela extensão do Chrome",
+      "api": "Criado pela API",
+      "automation": "Criado por automação",
+      "ingest": "Criado por fonte externa"
+    }
   },
   "review": {
     "title": "Revisão",

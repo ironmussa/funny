@@ -90,7 +90,7 @@ threadRoutes.post('/idle', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(createIdleThreadSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { projectId, title, mode, baseBranch, prompt } = parsed.value;
+  const { projectId, title, mode, source, baseBranch, prompt } = parsed.value;
 
   const projectResult = requireProject(projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
@@ -129,6 +129,7 @@ threadRoutes.post('/idle', async (c) => {
     mode,
     permissionMode: 'autoEdit' as const,
     model: 'sonnet' as const,
+    source: source || 'web',
     status: 'idle' as const,
     stage: 'backlog' as const,
     branch: threadBranch,
@@ -155,7 +156,7 @@ threadRoutes.post('/', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(createThreadSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { projectId, title, mode, provider, model, permissionMode, baseBranch, prompt, images, allowedTools, disallowedTools, fileReferences, worktreePath: requestWorktreePath } = parsed.value;
+  const { projectId, title, mode, provider, model, permissionMode, source, baseBranch, prompt, images, allowedTools, disallowedTools, fileReferences, worktreePath: requestWorktreePath } = parsed.value;
 
   const projectResult = requireProject(projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
@@ -202,6 +203,7 @@ threadRoutes.post('/', async (c) => {
     provider: provider || 'claude',
     permissionMode: permissionMode || 'autoEdit',
     model: model || 'sonnet',
+    source: source || 'web',
     status: 'pending' as const,
     branch: threadBranch,
     baseBranch: resolvedBaseBranch || (mode === 'local' ? threadBranch : undefined),

@@ -98,7 +98,14 @@
     "typeToQueue": "Escribe un seguimiento para encolar...",
     "interruptingAgent": "Interrumpiendo agente con nuevo prompt...",
     "messageQueued": "Mensaje en cola — se enviará cuando el agente termine",
-    "queuedMessages": "{{count}} mensaje(s) en cola"
+    "queuedMessages": "{{count}} mensaje(s) en cola",
+    "source": {
+      "web": "Creado desde la interfaz web",
+      "chrome_extension": "Creado desde la extensión de Chrome",
+      "api": "Creado desde la API",
+      "automation": "Creado desde automatización",
+      "ingest": "Creado desde fuente externa"
+    }
   },
   "review": {
     "title": "Revisión",

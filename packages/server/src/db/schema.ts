@@ -32,6 +32,7 @@ export const threads = sqliteTable('threads', {
   stage: text('stage').notNull().default('backlog'), // 'backlog' | 'in_progress' | 'review' | 'done'
   model: text('model').notNull().default('sonnet'), // 'sonnet' | 'opus' | 'haiku'
   initialPrompt: text('initial_prompt'),
+  source: text('source').notNull().default('web'), // 'web' | 'chrome_extension' | 'api' | 'automation' | 'ingest'
   externalRequestId: text('external_request_id'),
   initTools: text('init_tools'),   // JSON-encoded string[] of available tools
   initCwd: text('init_cwd'),       // Working directory reported by agent

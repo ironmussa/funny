@@ -114,6 +114,8 @@ export type WaitingReason = 'question' | 'plan' | 'permission';
 
 export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'llm-api' | 'external';
 
+export type ThreadSource = 'web' | 'chrome_extension' | 'api' | 'automation' | 'ingest';
+
 export type ClaudeModel = 'sonnet' | 'sonnet-4.6' | 'opus' | 'haiku';
 export type CodexModel = 'o3' | 'o4-mini' | 'codex-mini';
 export type GeminiModel = 'gemini-2.0-flash' | 'gemini-2.5-flash' | 'gemini-2.5-pro' | 'gemini-3-flash-preview' | 'gemini-3-pro-preview';
@@ -140,6 +142,7 @@ export interface Thread {
   archived?: boolean;
   pinned?: boolean;
   automationId?: string;
+  source: ThreadSource;
   externalRequestId?: string;
   commentCount?: number;
   createdAt: string;
@@ -408,6 +411,7 @@ export interface CreateThreadRequest {
   provider?: AgentProvider;
   model?: AgentModel;
   permissionMode?: PermissionMode;
+  source?: ThreadSource;
   baseBranch?: string;
   prompt: string;
   allowedTools?: string[];

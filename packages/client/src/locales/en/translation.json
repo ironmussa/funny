@@ -98,7 +98,14 @@
     "typeToQueue": "Type a follow-up to queue...",
     "interruptingAgent": "Interrupting agent with new prompt...",
     "messageQueued": "Message queued — will send when agent finishes",
-    "queuedMessages": "{{count}} message(s) queued"
+    "queuedMessages": "{{count}} message(s) queued",
+    "source": {
+      "web": "Created from web UI",
+      "chrome_extension": "Created from Chrome extension",
+      "api": "Created from API",
+      "automation": "Created from automation",
+      "ingest": "Created from external source"
+    }
   },
   "review": {
     "title": "Review",

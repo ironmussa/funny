@@ -394,6 +394,13 @@ const migrations: Migration[] = [
       `);
     },
   },
+
+  {
+    name: '018_thread_source',
+    up() {
+      addColumn('threads', 'source', "TEXT NOT NULL", "'web'");
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

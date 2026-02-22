@@ -12,6 +12,7 @@ export const geminiModelSchema = z.enum(['gemini-2.0-flash', 'gemini-2.5-flash',
 export const agentModelSchema = z.union([claudeModelSchema, codexModelSchema, geminiModelSchema]);
 export const permissionModeSchema = z.enum(['plan', 'autoEdit', 'confirmEdit']);
 export const threadStageSchema = z.enum(['backlog', 'in_progress', 'review', 'done']);
+export const threadSourceSchema = z.enum(['web', 'chrome_extension', 'api', 'automation', 'ingest']);
 
 // ── Image attachment ─────────────────────────────────────────────
 
@@ -60,6 +61,7 @@ export const createThreadSchema = z.object({
   provider: agentProviderSchema.optional().default('claude'),
   model: agentModelSchema.optional().default('sonnet'),
   permissionMode: permissionModeSchema.optional().default('autoEdit'),
+  source: threadSourceSchema.optional().default('web'),
   baseBranch: z.string().optional(),
   prompt: z.string().min(1, 'prompt is required'),
   images: z.array(imageAttachmentSchema).optional(),
@@ -73,6 +75,7 @@ export const createIdleThreadSchema = z.object({
   projectId: z.string().min(1),
   title: z.string().min(1, 'title is required'),
   mode: threadModeSchema,
+  source: threadSourceSchema.optional().default('web'),
   baseBranch: z.string().optional(),
   prompt: z.string().optional(),
 });

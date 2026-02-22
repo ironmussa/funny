@@ -55,6 +55,7 @@ export async function triggerAutomationRun(automation: {
     branch: null,
     baseBranch: null,
     worktreePath: null,
+    source: 'automation',
     automationId: automation.id,
     cost: 0,
     archived: 0,

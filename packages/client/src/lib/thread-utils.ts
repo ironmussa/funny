@@ -10,7 +10,7 @@ import {
   GitPullRequestArrow,
   GitMerge,
   LayoutList,
-  ClipboardList,
+  Lightbulb,
   Play,
   Eye,
   Archive,
@@ -30,7 +30,7 @@ export const statusConfig: Record<ThreadStatus, { icon: typeof Clock; className:
 
 export const stageConfig: Record<ThreadStage, { icon: typeof Clock; className: string; labelKey: string }> = {
   backlog: { icon: LayoutList, className: 'text-gray-400', labelKey: 'kanban.backlog' },
-  planning: { icon: ClipboardList, className: 'text-violet-400', labelKey: 'kanban.planning' },
+  planning: { icon: Lightbulb, className: 'text-violet-400', labelKey: 'kanban.planning' },
   in_progress: { icon: Play, className: 'text-blue-400', labelKey: 'kanban.inProgress' },
   review: { icon: Eye, className: 'text-amber-400', labelKey: 'kanban.review' },
   done: { icon: CheckCircle2, className: 'text-green-400', labelKey: 'kanban.done' },

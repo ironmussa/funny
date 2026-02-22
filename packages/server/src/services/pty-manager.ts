@@ -21,11 +21,23 @@ function ensureHelper() {
   log.info('Spawning PTY helper process', { namespace: 'pty-manager', helperPath });
 
   helperProcess = spawn('node', [helperPath], {
-    stdio: ['pipe', 'pipe', 'inherit'], // Pipe stdin/stdout, inherit stderr for logs
+    // ALL fds must be 'pipe' (not 'inherit') to prevent Windows handle inheritance.
+    // When any fd uses 'inherit', Node sets bInheritHandles=TRUE in CreateProcess,
+    // causing the child to inherit ALL parent handles — including the server's
+    // listening socket. If the server dies without cleanup, the helper keeps the
+    // port occupied indefinitely (ghost socket).
+    stdio: ['pipe', 'pipe', 'pipe'],
     windowsHide: true,
   });
 
   helperStdin = helperProcess.stdin;
+
+  // Forward helper's stderr to server's stderr (replaces 'inherit')
+  if (helperProcess.stderr) {
+    helperProcess.stderr.on('data', (chunk: Buffer) => {
+      process.stderr.write(chunk);
+    });
+  }
 
   if (helperProcess.stdout) {
     const rl = createInterface({
@@ -151,9 +163,21 @@ export function killPty(id: string): void {
 }
 
 export function killAllPtys(): void {
-  // If we kill the helper, all children die (usually)
   if (helperProcess) {
-    helperProcess.kill();
+    if (process.platform === 'win32' && helperProcess.pid) {
+      // On Windows, child.kill() only kills the helper — grandchild shell
+      // processes (spawned by node-pty) survive. Use taskkill /T to kill
+      // the entire process tree.
+      try {
+        const r = Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${helperProcess.pid}`]);
+        // Fallback: if taskkill fails, try the normal kill
+        if (r.exitCode !== 0) helperProcess.kill();
+      } catch {
+        try { helperProcess.kill(); } catch {}
+      }
+    } else {
+      helperProcess.kill();
+    }
     helperProcess = null;
     helperStdin = null;
   }

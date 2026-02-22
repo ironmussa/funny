@@ -69,7 +69,18 @@ for (const dir of extraWatchDirs) {
 function cleanup() {
   for (const w of watchers) w.close();
   if (debounceTimer) clearTimeout(debounceTimer);
-  if (child) child.kill();
+  if (child?.pid) {
+    if (process.platform === 'win32') {
+      // On Windows, child.kill() calls TerminateProcess which kills ONLY the
+      // target process — child processes (PTY helper, etc.) survive and can hold
+      // the server's port open. Use taskkill /T to kill the entire process tree.
+      try {
+        Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${child.pid}`]);
+      } catch {}
+    } else {
+      child.kill();
+    }
+  }
   process.exit(0);
 }
 process.on('SIGINT', cleanup);

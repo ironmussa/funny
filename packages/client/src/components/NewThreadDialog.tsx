@@ -130,7 +130,7 @@ export function NewThreadDialog() {
               </button>
             </PopoverTrigger>
             <PopoverContent
-              className="w-[var(--radix-popover-trigger-width)] p-0 flex flex-col"
+              className="w-[var(--radix-popover-trigger-width)] p-0 flex flex-col overflow-hidden"
               style={{ maxHeight: '320px' }}
               align="start"
               onOpenAutoFocus={(e) => { e.preventDefault(); branchSearchRef.current?.focus(); }}
@@ -148,7 +148,7 @@ export function NewThreadDialog() {
                   className="w-full bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
                 />
               </div>
-              <ScrollArea className="flex-1 min-h-0" style={{ maxHeight: '260px' }}>
+              <ScrollArea className="flex-1 min-h-0" style={{ maxHeight: '260px' }} type="always">
                 <div className="p-1">
                   {branches
                     .filter((b) => !branchSearch || b.toLowerCase().includes(branchSearch.toLowerCase()))

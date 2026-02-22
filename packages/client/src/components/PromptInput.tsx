@@ -15,7 +15,6 @@ import {
   PopoverTrigger,
   PopoverContent,
 } from '@/components/ui/popover';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { PROVIDERS, getModelOptions } from '@/lib/providers';
@@ -136,7 +135,7 @@ function SearchablePicker({
       <PopoverContent
         side="top"
         align="start"
-        className={cn(width, 'p-0 flex flex-col')}
+        className={cn(width, 'p-0 flex flex-col overflow-hidden')}
         style={{ maxHeight: 'min(70vh, 520px)' }}
         onOpenAutoFocus={(e) => { e.preventDefault(); searchInputRef.current?.focus(); }}
       >
@@ -156,55 +155,57 @@ function SearchablePicker({
             className="w-full bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
           />
         </div>
-        <ScrollArea className="flex-1 min-h-0" style={{ maxHeight: 'min(60vh, 440px)' }}>
-          <div className="p-1" ref={listRef}>
-            {loading && items.length === 0 && loadingText && (
-              <p className="text-sm text-muted-foreground text-center py-3">{loadingText}</p>
-            )}
-            {!loading && items.length === 0 && emptyText && (
-              <p className="text-sm text-muted-foreground text-center py-3">{emptyText}</p>
-            )}
-            {!loading && items.length > 0 && filtered.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-3">{noMatchText}</p>
-            )}
-            {filtered.map((item, i) => (
-              <button
-                key={item.key}
-                ref={(el) => { itemRefs.current[i] = el; }}
-                onClick={() => { onSelect(item.key); setOpen(false); setSearch(''); }}
-                onKeyDown={(e) => handleItemKeyDown(e, i)}
-                onFocus={() => setHighlightIndex(i)}
-                onMouseEnter={() => { setHighlightIndex(i); itemRefs.current[i]?.focus(); }}
-                className={cn(
-                  'w-full flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-colors outline-none',
-                  i === highlightIndex
-                    ? 'bg-accent text-foreground'
-                    : item.isSelected
-                      ? 'bg-accent/50 text-foreground'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-                )}
-              >
-                <GitBranch className="h-3 w-3 shrink-0 text-status-info" />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-medium font-mono truncate">{item.label}</span>
-                    {item.badge && (
-                      <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground leading-none">
-                        {item.badge}
-                      </span>
-                    )}
-                  </div>
-                  {item.detail && (
-                    <span className="text-xs text-muted-foreground/70 truncate block font-mono">
-                      {item.detail}
+        <div
+          className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-1"
+          ref={listRef}
+          style={{ maxHeight: 'min(60vh, 440px)' }}
+        >
+          {loading && items.length === 0 && loadingText && (
+            <p className="text-sm text-muted-foreground text-center py-3">{loadingText}</p>
+          )}
+          {!loading && items.length === 0 && emptyText && (
+            <p className="text-sm text-muted-foreground text-center py-3">{emptyText}</p>
+          )}
+          {!loading && items.length > 0 && filtered.length === 0 && (
+            <p className="text-sm text-muted-foreground text-center py-3">{noMatchText}</p>
+          )}
+          {filtered.map((item, i) => (
+            <button
+              key={item.key}
+              ref={(el) => { itemRefs.current[i] = el; }}
+              onClick={() => { onSelect(item.key); setOpen(false); setSearch(''); }}
+              onKeyDown={(e) => handleItemKeyDown(e, i)}
+              onFocus={() => setHighlightIndex(i)}
+              onMouseEnter={() => { setHighlightIndex(i); itemRefs.current[i]?.focus(); }}
+              className={cn(
+                'w-full flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-colors outline-none',
+                i === highlightIndex
+                  ? 'bg-accent text-foreground'
+                  : item.isSelected
+                    ? 'bg-accent/50 text-foreground'
+                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+              )}
+            >
+              <GitBranch className="h-3 w-3 shrink-0 text-status-info" />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="font-medium font-mono truncate">{item.label}</span>
+                  {item.badge && (
+                    <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground leading-none">
+                      {item.badge}
                     </span>
                   )}
                 </div>
-                {item.isSelected && <Check className="h-3 w-3 shrink-0 text-status-info" />}
-              </button>
-            ))}
-          </div>
-        </ScrollArea>
+                {item.detail && (
+                  <span className="text-xs text-muted-foreground/70 truncate block font-mono">
+                    {item.detail}
+                  </span>
+                  )}
+              </div>
+              {item.isSelected && <Check className="h-3 w-3 shrink-0 text-status-info" />}
+            </button>
+          ))}
+        </div>
       </PopoverContent>
     </Popover>
   );

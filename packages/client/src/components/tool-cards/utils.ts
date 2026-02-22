@@ -246,10 +246,11 @@ export function getFileName(filePath: string): string {
  */
 export function useCurrentProjectPath(): string | undefined {
   const projectId = useThreadStore(s => s.activeThread?.projectId);
+  const worktreePath = useThreadStore(s => s.activeThread?.worktreePath);
   const projects = useProjectStore(s => s.projects);
   return useMemo(
-    () => projects.find(p => p.id === projectId)?.path,
-    [projects, projectId]
+    () => worktreePath || projects.find(p => p.id === projectId)?.path,
+    [projects, projectId, worktreePath]
   );
 }
 

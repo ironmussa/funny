@@ -337,3 +337,20 @@ export const stopAllAgents = defaultRunner.stopAllAgents.bind(defaultRunner);
 export const isAgentRunning = defaultRunner.isAgentRunning.bind(defaultRunner);
 export const cleanupThreadState = defaultRunner.cleanupThreadState.bind(defaultRunner);
 export const extractActiveAgents = defaultRunner.extractActiveAgents.bind(defaultRunner);
+
+// ── Self-register with ShutdownManager ──────────────────────
+import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
+shutdownManager.register('agent-runner', async (mode) => {
+  if (mode === 'hotReload') {
+    // Preserve running agents for adoption by the next instance
+    const surviving = extractActiveAgents();
+    if (surviving.size > 0) {
+      (globalThis as any).__funnyActiveAgents = surviving;
+      console.log(`[shutdown] Preserved ${surviving.size} agent(s) for next instance`);
+    } else {
+      await stopAllAgents();
+    }
+  } else {
+    await stopAllAgents();
+  }
+}, ShutdownPhase.SERVICES);

@@ -11,11 +11,15 @@ type ProjectRow = typeof schema.projects.$inferSelect;
 
 /** Convert DB row to Project, mapping nullable fields to optional. */
 function toProject(row: ProjectRow): Project {
-  const { color, followUpMode, ...rest } = row;
+  const { color, followUpMode, defaultProvider, defaultModel, defaultMode, defaultPermissionMode, ...rest } = row;
   return {
     ...rest,
     ...(color != null ? { color } : {}),
     ...(followUpMode && followUpMode !== 'interrupt' ? { followUpMode: followUpMode as 'interrupt' | 'queue' } : {}),
+    ...(defaultProvider != null ? { defaultProvider: defaultProvider as Project['defaultProvider'] } : {}),
+    ...(defaultModel != null ? { defaultModel: defaultModel as Project['defaultModel'] } : {}),
+    ...(defaultMode != null ? { defaultMode: defaultMode as Project['defaultMode'] } : {}),
+    ...(defaultPermissionMode != null ? { defaultPermissionMode: defaultPermissionMode as Project['defaultPermissionMode'] } : {}),
   };
 }
 
@@ -88,7 +92,15 @@ export function renameProject(id: string, name: string): Result<Project, DomainE
   return updateProject(id, { name });
 }
 
-export function updateProject(id: string, fields: { name?: string; color?: string | null; followUpMode?: string }): Result<Project, DomainError> {
+export function updateProject(id: string, fields: {
+  name?: string;
+  color?: string | null;
+  followUpMode?: string;
+  defaultProvider?: string | null;
+  defaultModel?: string | null;
+  defaultMode?: string | null;
+  defaultPermissionMode?: string | null;
+}): Result<Project, DomainError> {
   const project = db.select().from(schema.projects).where(eq(schema.projects.id, id)).get();
   if (!project) {
     return err(notFound('Project not found'));
@@ -107,6 +119,10 @@ export function updateProject(id: string, fields: { name?: string; color?: strin
   if (fields.name !== undefined) updateData.name = fields.name;
   if (fields.color !== undefined) updateData.color = fields.color;
   if (fields.followUpMode !== undefined) updateData.followUpMode = fields.followUpMode;
+  if (fields.defaultProvider !== undefined) updateData.defaultProvider = fields.defaultProvider;
+  if (fields.defaultModel !== undefined) updateData.defaultModel = fields.defaultModel;
+  if (fields.defaultMode !== undefined) updateData.defaultMode = fields.defaultMode;
+  if (fields.defaultPermissionMode !== undefined) updateData.defaultPermissionMode = fields.defaultPermissionMode;
 
   db.update(schema.projects).set(updateData).where(eq(schema.projects.id, id)).run();
   return ok(toProject({ ...project, ...updateData } as ProjectRow));

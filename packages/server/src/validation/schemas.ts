@@ -48,6 +48,10 @@ export const updateProjectSchema = z.object({
   name: z.string().min(1, 'name is required').optional(),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'color must be a valid hex color (#RRGGBB)').nullable().optional(),
   followUpMode: followUpModeSchema.optional(),
+  defaultProvider: agentProviderSchema.nullable().optional(),
+  defaultModel: agentModelSchema.nullable().optional(),
+  defaultMode: threadModeSchema.nullable().optional(),
+  defaultPermissionMode: permissionModeSchema.nullable().optional(),
 });
 
 export const reorderProjectsSchema = z.object({

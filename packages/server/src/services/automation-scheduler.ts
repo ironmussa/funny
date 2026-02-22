@@ -284,6 +284,10 @@ export function startScheduler(): void {
   log.info(`Scheduler started`, { namespace: 'automation', activeJobs: automations.filter(a => a.enabled).length });
 }
 
+// ── Self-register with ShutdownManager ──────────────────────
+import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
+shutdownManager.register('automation-scheduler', () => stopScheduler(), ShutdownPhase.SERVICES);
+
 export function stopScheduler(): void {
   // Stop all cron jobs
   for (const [id, job] of activeJobs) {

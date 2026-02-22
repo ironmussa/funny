@@ -408,6 +408,16 @@ const migrations: Migration[] = [
       addColumn('threads', 'parent_thread_id', 'TEXT');
     },
   },
+
+  {
+    name: '020_project_defaults',
+    up() {
+      addColumn('projects', 'default_provider', 'TEXT');
+      addColumn('projects', 'default_model', 'TEXT');
+      addColumn('projects', 'default_mode', 'TEXT');
+      addColumn('projects', 'default_permission_mode', 'TEXT');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

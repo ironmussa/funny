@@ -341,10 +341,21 @@ export function PromptInput({
 }: PromptInputProps) {
   const { t } = useTranslation();
 
-  const defaultThreadMode = useSettingsStore(s => s.defaultThreadMode);
-  const defaultProvider = useSettingsStore(s => s.defaultProvider);
-  const defaultModel = useSettingsStore(s => s.defaultModel);
-  const defaultPermissionMode = useSettingsStore(s => s.defaultPermissionMode);
+  const globalThreadMode = useSettingsStore(s => s.defaultThreadMode);
+  const globalProvider = useSettingsStore(s => s.defaultProvider);
+  const globalModel = useSettingsStore(s => s.defaultModel);
+  const globalPermissionMode = useSettingsStore(s => s.defaultPermissionMode);
+
+  // Resolve effective defaults: project-level > global settings
+  const projectsForDefaults = useProjectStore(s => s.projects);
+  const selectedProjectIdForDefaults = useProjectStore(s => s.selectedProjectId);
+  const effectiveProject = (propProjectId || selectedProjectIdForDefaults)
+    ? projectsForDefaults.find(p => p.id === (propProjectId || selectedProjectIdForDefaults))
+    : undefined;
+  const defaultProvider = effectiveProject?.defaultProvider ?? globalProvider;
+  const defaultModel = effectiveProject?.defaultModel ?? globalModel;
+  const defaultPermissionMode = effectiveProject?.defaultPermissionMode ?? globalPermissionMode;
+  const defaultThreadMode = effectiveProject?.defaultMode ?? globalThreadMode;
 
   const [prompt, setPrompt] = useState(initialPromptProp ?? '');
   const [provider, setProvider] = useState<string>(defaultProvider);

@@ -6,6 +6,10 @@ export const projects = sqliteTable('projects', {
   path: text('path').notNull(),
   color: text('color'),
   followUpMode: text('follow_up_mode').notNull().default('interrupt'), // 'interrupt' | 'queue'
+  defaultProvider: text('default_provider'), // nullable — null means "use global default"
+  defaultModel: text('default_model'),
+  defaultMode: text('default_mode'),
+  defaultPermissionMode: text('default_permission_mode'),
   userId: text('user_id').notNull().default('__local__'),
   sortOrder: integer('sort_order').notNull().default(0),
   createdAt: text('created_at').notNull(),

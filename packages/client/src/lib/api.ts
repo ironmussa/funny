@@ -157,7 +157,7 @@ export const api = {
     request<Project>('/projects', { method: 'POST', body: JSON.stringify({ name, path }) }),
   renameProject: (id: string, name: string) =>
     request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
-  updateProject: (id: string, data: { name?: string; color?: string | null; followUpMode?: string }) =>
+  updateProject: (id: string, data: { name?: string; color?: string | null; followUpMode?: string; defaultProvider?: string | null; defaultModel?: string | null; defaultMode?: string | null; defaultPermissionMode?: string | null }) =>
     request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteProject: (id: string) => request<{ ok: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
   reorderProjects: (projectIds: string[]) =>

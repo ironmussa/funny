@@ -29,6 +29,10 @@ const walCheckpointTimer = setInterval(() => {
 // Don't keep the process alive just for checkpoints
 if (walCheckpointTimer.unref) walCheckpointTimer.unref();
 
+// ── Self-register with ShutdownManager ──────────────────────
+import { shutdownManager, ShutdownPhase } from '../services/shutdown-manager.js';
+shutdownManager.register('database', () => closeDatabase(), ShutdownPhase.DATABASE);
+
 /** Flush WAL and close the database cleanly. Call once during shutdown. */
 export function closeDatabase() {
   clearInterval(walCheckpointTimer);

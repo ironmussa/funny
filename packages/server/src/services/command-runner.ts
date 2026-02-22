@@ -194,3 +194,14 @@ export function getRunningCommands(): string[] {
 export function isCommandRunning(commandId: string): boolean {
   return activeCommands.has(commandId);
 }
+
+/** Kill all running commands. Called during shutdown. */
+export async function stopAllCommands(): Promise<void> {
+  const ids = [...activeCommands.keys()];
+  if (ids.length === 0) return;
+  await Promise.allSettled(ids.map((id) => stopCommand(id)));
+}
+
+// ── Self-register with ShutdownManager ──────────────────────
+import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
+shutdownManager.register('command-runner', () => stopAllCommands(), ShutdownPhase.SERVICES);

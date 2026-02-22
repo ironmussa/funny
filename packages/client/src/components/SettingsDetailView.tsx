@@ -269,6 +269,72 @@ function GeneralSettings() {
                 ]}
               />
             </SettingRow>
+            <SettingRow
+              title={t('settings.projectDefaultModel', 'Default Model')}
+              description={t('settings.projectDefaultModelDesc', 'Provider and model for new threads in this project')}
+            >
+              <div className="flex items-center gap-2">
+                <ModelCombobox
+                  value={selectedProject.defaultProvider ?? ''}
+                  onChange={(v) => {
+                    if (!v) {
+                      updateProject(selectedProject.id, { defaultProvider: null, defaultModel: null });
+                    } else {
+                      const p = v as AgentProvider;
+                      updateProject(selectedProject.id, {
+                        defaultProvider: p,
+                        defaultModel: getDefaultModel(p),
+                      });
+                    }
+                  }}
+                  options={[
+                    { value: '', label: t('settings.useGlobal', 'Global') },
+                    ...PROVIDERS.map((p) => ({ value: p.value, label: p.label })),
+                  ]}
+                  placeholder={t('settings.useGlobal', 'Global')}
+                  searchPlaceholder={t('settings.searchProvider')}
+                />
+                <ModelCombobox
+                  value={selectedProject.defaultModel ?? ''}
+                  onChange={(v) => updateProject(selectedProject.id, { defaultModel: v || null })}
+                  options={[
+                    { value: '', label: t('settings.useGlobal', 'Global') },
+                    ...getModelOptions(selectedProject.defaultProvider || defaultProvider, t),
+                  ]}
+                  placeholder={t('settings.useGlobal', 'Global')}
+                  searchPlaceholder={t('settings.searchModel')}
+                />
+              </div>
+            </SettingRow>
+            <SettingRow
+              title={t('settings.projectDefaultMode', 'Default Thread Mode')}
+              description={t('settings.projectDefaultModeDesc', 'Local or worktree for new threads')}
+            >
+              <SegmentedControl<string>
+                value={selectedProject.defaultMode ?? ''}
+                onChange={(v) => updateProject(selectedProject.id, { defaultMode: v || null })}
+                options={[
+                  { value: '', label: t('settings.useGlobal', 'Global') },
+                  { value: 'local', label: t('thread.mode.local'), icon: <Monitor className="h-3 w-3" /> },
+                  { value: 'worktree', label: t('thread.mode.worktree'), icon: <GitBranch className="h-3 w-3" /> },
+                ]}
+              />
+            </SettingRow>
+            <SettingRow
+              title={t('settings.projectDefaultPermission', 'Default Permission Mode')}
+              description={t('settings.projectDefaultPermissionDesc', 'Permission mode for new threads')}
+            >
+              <SegmentedControl<string>
+                value={selectedProject.defaultPermissionMode ?? ''}
+                onChange={(v) => updateProject(selectedProject.id, { defaultPermissionMode: v || null })}
+                options={[
+                  { value: '', label: t('settings.useGlobal', 'Global') },
+                  { value: 'plan', label: t('prompt.plan') },
+                  { value: 'autoEdit', label: t('prompt.autoEdit') },
+                  { value: 'confirmEdit', label: t('prompt.askBeforeEdits') },
+                ]}
+              />
+            </SettingRow>
           </div>
         </>
       )}

@@ -1,6 +1,7 @@
 import { useEffect } from 'react';
 import { useAppStore } from '@/stores/app-store';
 import { useTerminalStore } from '@/stores/terminal-store';
+import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
 import { getAuthToken, getAuthMode } from '@/lib/api';
 
@@ -250,6 +251,9 @@ function connect() {
 function setupWS(ws: WebSocket) {
   ws.onopen = () => {
     console.log('[ws] Connected');
+    // WebSocket connected — server is alive, so reset the HTTP circuit breaker
+    // to dismiss the "server unavailable" overlay immediately
+    useCircuitBreakerStore.getState().recordSuccess();
     // Always re-sync loaded threads on connect — events may have been lost
     // while disconnected (e.g. agent:result emitted when 0 clients were connected)
     console.log('[ws] Syncing all loaded threads with server');

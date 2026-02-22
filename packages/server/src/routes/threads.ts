@@ -201,15 +201,19 @@ threadRoutes.post('/', async (c) => {
   }
 
   const userId = c.get('userId') as string;
+  // Resolve defaults: explicit value > project default > hardcoded fallback
+  const resolvedProvider = provider || project.defaultProvider || 'claude';
+  const resolvedModel = model || project.defaultModel || 'sonnet';
+  const resolvedPermissionMode = permissionMode || project.defaultPermissionMode || 'autoEdit';
   const thread = {
     id: threadId,
     projectId,
     userId,
     title: title || prompt,
     mode,
-    provider: provider || 'claude',
-    permissionMode: permissionMode || 'autoEdit',
-    model: model || 'sonnet',
+    provider: resolvedProvider,
+    permissionMode: resolvedPermissionMode,
+    model: resolvedModel,
     source: source || 'web',
     status: 'pending' as const,
     branch: threadBranch,
@@ -230,7 +234,7 @@ threadRoutes.post('/', async (c) => {
     stage: 'in_progress' as const, status: 'pending',
   });
 
-  const pMode = permissionMode || 'autoEdit';
+  const pMode = resolvedPermissionMode;
 
   // Augment prompt with file contents if file references were provided
   const augmentedPrompt = await augmentPromptWithFiles(prompt, fileReferences, cwd);

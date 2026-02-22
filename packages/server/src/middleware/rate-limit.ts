@@ -1,4 +1,12 @@
 import type { Context, Next } from 'hono';
+import { shutdownManager, ShutdownPhase } from '../services/shutdown-manager.js';
+
+let pruneTimer: ReturnType<typeof setInterval> | null = null;
+
+// ── Self-register with ShutdownManager ──────────────────────
+shutdownManager.register('rate-limit-timer', () => {
+  if (pruneTimer) { clearInterval(pruneTimer); pruneTimer = null; }
+}, ShutdownPhase.SERVICES);
 
 /**
  * Simple in-memory sliding-window rate limiter.
@@ -9,8 +17,11 @@ export function rateLimit(opts: { windowMs: number; max: number }) {
   const { windowMs, max } = opts;
   const hits = new Map<string, number[]>();
 
+  // Clear previous timer if rateLimit is called again (hot reload)
+  if (pruneTimer) clearInterval(pruneTimer);
+
   // Periodically prune stale entries to prevent memory growth
-  setInterval(() => {
+  pruneTimer = setInterval(() => {
     const now = Date.now();
     for (const [key, timestamps] of hits) {
       const valid = timestamps.filter((t) => now - t < windowMs);
@@ -20,7 +31,8 @@ export function rateLimit(opts: { windowMs: number; max: number }) {
         hits.set(key, valid);
       }
     }
-  }, windowMs).unref();
+  }, windowMs);
+  pruneTimer.unref();
 
   return async (c: Context, next: Next) => {
     // Use Bun's socket address when available; only fall back to proxy

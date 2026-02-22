@@ -1162,6 +1162,10 @@
         if (el.dataset.key === 'provider') {
           populateSettingsModels(el.value);
         }
+        // If project changed, apply project defaults to provider/model/mode
+        if (el.dataset.key === 'projectId') {
+          applyProjectDefaults(el.value);
+        }
         saveSettings();
       });
     });
@@ -1175,6 +1179,8 @@
 
   // Cached provider data for the settings panel
   let settingsProviderData = null;
+  // Cached projects data (includes per-project defaults)
+  let settingsProjectsData = [];
 
   function toggleSettingsPanel() {
     if (settingsPanel.style.display === 'block') {
@@ -1266,20 +1272,27 @@
       const serverInput = settingsPanel.querySelector('[data-key="serverUrl"]');
       serverInput.value = config.serverUrl || 'http://localhost:3001';
 
-      // Populate mode
-      const modeSelect = settingsPanel.querySelector('[data-key="mode"]');
-      modeSelect.value = config.mode || 'worktree';
-
       // Populate projects
+      settingsProjectsData = data.projects || [];
       const projectSelect = settingsPanel.querySelector('[data-key="projectId"]');
       projectSelect.innerHTML = '<option value="">Select a project...</option>';
-      (data.projects || []).forEach(p => {
+      settingsProjectsData.forEach(p => {
         const opt = document.createElement('option');
         opt.value = p.id;
         opt.textContent = p.name;
         if (p.id === config.projectId) opt.selected = true;
         projectSelect.appendChild(opt);
       });
+
+      // Look up project defaults for the selected project
+      const selectedProject = config.projectId
+        ? settingsProjectsData.find(p => p.id === config.projectId)
+        : null;
+
+      // Populate mode — project default > saved config > 'worktree'
+      const modeSelect = settingsPanel.querySelector('[data-key="mode"]');
+      const effectiveMode = config.mode || (selectedProject?.defaultMode) || 'worktree';
+      modeSelect.value = effectiveMode;
 
       // Populate providers
       settingsProviderData = data.providers || {};
@@ -1291,8 +1304,13 @@
       if (available.length === 0) {
         providerSelect.innerHTML = '<option value="">No providers</option>';
       } else {
+        // Resolve provider: saved config > project default > first available
+        const projectDefaultProvider = selectedProject?.defaultProvider;
         const effectiveProvider = (config.provider && settingsProviderData[config.provider]?.available)
-          ? config.provider : available[0][0];
+          ? config.provider
+          : (projectDefaultProvider && settingsProviderData[projectDefaultProvider]?.available)
+            ? projectDefaultProvider
+            : available[0][0];
         available.forEach(([key, info]) => {
           const opt = document.createElement('option');
           opt.value = key;
@@ -1301,7 +1319,9 @@
           providerSelect.appendChild(opt);
         });
         providerSelect.value = effectiveProvider;
-        populateSettingsModels(effectiveProvider, config.model);
+        // Resolve model: saved config > project default > provider default
+        const effectiveModel = config.model || (selectedProject?.defaultModel) || undefined;
+        populateSettingsModels(effectiveProvider, effectiveModel);
       }
 
       // Connection state (dot + connect button + status text)
@@ -1323,6 +1343,32 @@
     } catch (err) {
       statusEl.textContent = 'Error loading settings';
       statusEl.className = 'settings-status settings-status-error';
+    }
+  }
+
+  function applyProjectDefaults(projectId) {
+    const project = settingsProjectsData.find(p => p.id === projectId);
+    if (!project || !settingsProviderData) return;
+
+    const available = Object.entries(settingsProviderData)
+      .filter(([_, info]) => info.available);
+    if (available.length === 0) return;
+
+    // Apply project default provider if set
+    if (project.defaultProvider && settingsProviderData[project.defaultProvider]?.available) {
+      const providerSelect = settingsPanel.querySelector('[data-key="provider"]');
+      providerSelect.value = project.defaultProvider;
+      populateSettingsModels(project.defaultProvider, project.defaultModel);
+    } else if (project.defaultModel) {
+      // Only model default set — apply to current provider
+      const providerSelect = settingsPanel.querySelector('[data-key="provider"]');
+      populateSettingsModels(providerSelect.value, project.defaultModel);
+    }
+
+    // Apply project default mode if set
+    if (project.defaultMode) {
+      const modeSelect = settingsPanel.querySelector('[data-key="mode"]');
+      modeSelect.value = project.defaultMode;
     }
   }
 

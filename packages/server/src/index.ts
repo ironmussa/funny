@@ -11,7 +11,7 @@ import { handleError } from './middleware/error-handler.js';
 import { authMiddleware } from './middleware/auth.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { autoMigrate } from './db/migrate.js';
-import { closeDatabase } from './db/index.js';
+import './db/index.js'; // triggers self-registration with shutdownManager
 import { markStaleThreadsInterrupted } from './services/thread-manager.js';
 import { getAuthToken, validateToken } from './services/auth-service.js';
 import { getAuthMode } from './lib/auth-mode.js';
@@ -33,8 +33,8 @@ import { logRoutes } from './routes/logs.js';
 import { ingestRoutes } from './routes/ingest.js';
 import { createPipelineProxyRoutes } from './routes/pipeline-proxy.js';
 import { wsBroker } from './services/ws-broker.js';
-import { startScheduler, stopScheduler } from './services/automation-scheduler.js';
-import { startAgent, stopAllAgents, extractActiveAgents } from './services/agent-runner.js';
+import { startScheduler } from './services/automation-scheduler.js';
+import { startAgent } from './services/agent-runner.js';
 import * as ptyManager from './services/pty-manager.js';
 import { checkClaudeBinaryAvailability, resetBinaryCache, validateClaudeBinary } from './utils/claude-binary.js';
 import { getAvailableProviders, resetProviderCache, logProviderStatus } from './utils/provider-detection.js';
@@ -324,58 +324,48 @@ const server = Bun.serve({
   },
 });
 
-// Store for next --watch restart.
-// __bunCleanup captures the current run's resources so the NEXT run can clean
-// up this run's agents, DB, scheduler, etc. before re-initializing.
-(globalThis as any).__bunServer = server;
-(globalThis as any).__bunCleanup = async () => {
-  stopScheduler();
-  ptyManager.killAllPtys();
+// ── Shutdown registry ──────────────────────────────────────────────
+// Services self-register via shutdownManager.register() at import time.
+// Here we register items that are created in index.ts itself.
+import { shutdownManager, ShutdownPhase } from './services/shutdown-manager.js';
 
-  // Preserve running agent processes across --watch restarts instead of killing them.
-  // Store on globalThis so the next module evaluation can adopt them.
-  const surviving = extractActiveAgents();
-  if (surviving.size > 0) {
-    (globalThis as any).__funnyActiveAgents = surviving;
-    console.log(`[cleanup] Preserved ${surviving.size} agent(s) for next instance`);
-  } else {
-    await stopAllAgents(); // Fallback: kill any stragglers
+// Phase 0: release the port immediately
+shutdownManager.register('http-server', () => server.stop(true), ShutdownPhase.SERVER);
+
+// Phase 1: flush telemetry (only on hard shutdown — no need on hot reload)
+shutdownManager.register('observability', () => observabilityShutdown(), ShutdownPhase.SERVICES, false);
+
+// Phase 3: Windows tree kill + exit (only on hard shutdown)
+shutdownManager.register('process-exit', () => {
+  if (process.platform === 'win32') {
+    try { Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${process.pid}`]); } catch {}
   }
+  process.exit(0);
+}, ShutdownPhase.FINAL, false);
 
-  closeDatabase();
-};
+// Store for next --watch restart.
+(globalThis as any).__bunServer = server;
+(globalThis as any).__bunCleanup = () => shutdownManager.run('hotReload');
 
-// Graceful shutdown — release the port FIRST, then clean up everything else.
-// Previous bug: server.stop() was called AFTER stopAllAgents() which could hang,
-// leaving the port occupied indefinitely.
+// Graceful shutdown — all cleanup is handled by shutdownManager in phase order.
 let shuttingDown = false;
 async function shutdown() {
-  if (shuttingDown) return; // Prevent double-shutdown
+  if (shuttingDown) return;
   shuttingDown = true;
   log.info('Shutting down...', { namespace: 'server' });
 
-  // 1. Release the port IMMEDIATELY — this is the most critical step
-  server.stop(true);
-
-  // 2. Force exit after 5s in case cleanup hangs
+  // Force exit after 5s in case cleanup hangs
   const forceExit = setTimeout(() => {
     log.warn('Force exit after timeout', { namespace: 'server' });
+    if (process.platform === 'win32') {
+      try { Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${process.pid}`]); } catch {}
+    }
     process.exit(1);
   }, 5000);
 
-  // 3. Flush pending telemetry before stopping services
-  await observabilityShutdown();
-
-  // 4. Clean up everything else (order doesn't matter since port is already free)
-  stopScheduler();
-  ptyManager.killAllPtys();
-  await stopAllAgents();
-
-  // 5. Flush WAL and close the database last (other cleanup may still write)
-  closeDatabase();
+  await shutdownManager.run('hard');
 
   clearTimeout(forceExit);
-  process.exit(0);
 }
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);

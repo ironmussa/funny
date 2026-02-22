@@ -100,6 +100,10 @@ export interface Project {
   path: string;
   color?: string;
   followUpMode?: FollowUpMode;
+  defaultProvider?: AgentProvider;
+  defaultModel?: AgentModel;
+  defaultMode?: ThreadMode;
+  defaultPermissionMode?: PermissionMode;
   userId: string;
   sortOrder: number;
   createdAt: string;

@@ -77,10 +77,12 @@ export function isGitRepoSync(path: string): boolean {
 }
 
 /**
- * Get the current branch name
+ * Get the current branch name.
+ * Falls back to symbolic-ref for repos with no commits yet.
  */
 export function getCurrentBranch(cwd: string): ResultAsync<string, DomainError> {
-  return git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
+  return git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)
+    .orElse(() => git(['symbolic-ref', '--short', 'HEAD'], cwd));
 }
 
 /**
@@ -107,6 +109,10 @@ export function listBranches(cwd: string): ResultAsync<string[], DomainError> {
           .map((b) => b.replace(/^origin\//, ''));
         if (remotes.length > 0) return [...new Set(remotes)];
       }
+
+      // Fall back to symbolic-ref for empty repos (no commits yet)
+      const symbolicBranch = await gitOptional(['symbolic-ref', '--short', 'HEAD'], cwd);
+      if (symbolicBranch) return [symbolicBranch];
 
       return [];
     })(),

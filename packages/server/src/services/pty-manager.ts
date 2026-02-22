@@ -162,6 +162,10 @@ export function killPty(id: string): void {
   activeSessions.delete(id);
 }
 
+// ── Self-register with ShutdownManager ──────────────────────
+import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
+shutdownManager.register('pty-manager', () => killAllPtys(), ShutdownPhase.SERVICES);
+
 export function killAllPtys(): void {
   if (helperProcess) {
     if (process.platform === 'win32' && helperProcess.pid) {

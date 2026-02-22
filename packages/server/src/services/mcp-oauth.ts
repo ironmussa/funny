@@ -59,7 +59,7 @@ interface OAuthPendingState {
 const pendingStates = new Map<string, OAuthPendingState>();
 const STATE_TTL_MS = 10 * 60 * 1000; // 10 minutes
 
-setInterval(() => {
+const stateCleanupTimer = setInterval(() => {
   const now = Date.now();
   for (const [key, state] of pendingStates) {
     if (now - state.createdAt > STATE_TTL_MS) {
@@ -67,6 +67,13 @@ setInterval(() => {
     }
   }
 }, 60_000);
+
+// ── Self-register with ShutdownManager ──────────────────────
+import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
+shutdownManager.register('mcp-oauth-timer', () => {
+  clearInterval(stateCleanupTimer);
+  pendingStates.clear();
+}, ShutdownPhase.SERVICES);
 
 // ── PKCE utilities ────────────────────────────────────────────
 

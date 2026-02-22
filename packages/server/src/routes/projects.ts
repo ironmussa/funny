@@ -73,7 +73,7 @@ projectRoutes.get('/:id/branches', async (c) => {
     getCurrentBranch(project.path),
   ]);
 
-  // For empty repos (no commits), branches and currentBranch will fail.
+  // For empty repos (no commits), branches and currentBranch may fail.
   // Return empty/null defaults instead of an error.
   return c.json({
     branches: branchesResult.isOk() ? branchesResult.value : [],

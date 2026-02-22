@@ -317,16 +317,9 @@ export const ProjectHeader = memo(function ProjectHeader() {
             {project && activeThread && <BreadcrumbSeparator />}
             {activeThread && (
               <BreadcrumbItem className="overflow-hidden flex-1">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="block w-full cursor-default">
-                      <BreadcrumbPage className="text-sm truncate block">
-                        {activeThread.title}
-                      </BreadcrumbPage>
-                    </div>
-                  </TooltipTrigger>
-                  <TooltipContent side="bottom" sticky="always" collisionPadding={8} className="max-w-[500px] whitespace-normal break-words">{activeThread.title}</TooltipContent>
-                </Tooltip>
+                <BreadcrumbPage className="text-sm truncate block">
+                  {activeThread.title}
+                </BreadcrumbPage>
               </BreadcrumbItem>
             )}
           </BreadcrumbList>

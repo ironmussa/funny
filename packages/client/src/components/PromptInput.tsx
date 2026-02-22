@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { ArrowUp, Square, Loader2, Paperclip, X, Zap, GitBranch, Check, Monitor, Inbox, FileText } from 'lucide-react';
+import { ArrowUp, Square, Loader2, Paperclip, X, Zap, GitBranch, Check, Inbox, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -349,7 +349,7 @@ export function PromptInput({
   const [provider, setProvider] = useState<string>(defaultProvider);
   const [model, setModel] = useState<string>(defaultModel);
   const [mode, setMode] = useState<string>(defaultPermissionMode);
-  const [threadMode, setThreadMode] = useState<string>(defaultThreadMode);
+  const [createWorktree, setCreateWorktree] = useState(defaultThreadMode === 'worktree');
 
   const models = useMemo(() => getModelOptions(provider, t), [provider, t]);
 
@@ -367,14 +367,7 @@ export function PromptInput({
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [sendToBacklog, setSendToBacklog] = useState(false);
   const [localCurrentBranch, setLocalCurrentBranch] = useState<string | null>(null);
-  const [newThreadCurrentBranch, setNewThreadCurrentBranch] = useState<string | null>(null);
 
-  // Get the display label for thread mode selector
-  const getThreadModeLabel = useCallback((mode: string) => {
-    if (mode === 'worktree') return t('thread.mode.worktree');
-    // For local mode, show the current branch name
-    return newThreadCurrentBranch || t('thread.mode.local');
-  }, [newThreadCurrentBranch, t]);
 
   // When provider changes, reset model to first available for that provider
   useEffect(() => {
@@ -534,7 +527,6 @@ export function PromptInput({
         if (result.isOk()) {
           const data = result.value;
           setNewThreadBranches(data.branches);
-          setNewThreadCurrentBranch(data.currentBranch);
           if (data.defaultBranch) {
             setSelectedBranch(data.defaultBranch);
           } else if (data.branches.length > 0) {
@@ -542,7 +534,6 @@ export function PromptInput({
           }
         } else {
           setNewThreadBranches([]);
-          setNewThreadCurrentBranch(null);
         }
       })();
     }
@@ -724,7 +715,7 @@ export function PromptInput({
         provider,
         model,
         mode,
-        ...(isNewThread ? { threadMode, baseBranch: threadMode === 'worktree' ? selectedBranch : undefined, sendToBacklog } : {}),
+        ...(isNewThread ? { threadMode: createWorktree ? 'worktree' : 'local', baseBranch: selectedBranch || undefined, sendToBacklog } : {}),
         cwd: cwdOverride || undefined,
         fileReferences: submittedFiles,
       },
@@ -1116,43 +1107,28 @@ export function PromptInput({
                   </button>
                 ) : null
               )}
+              {isNewThread && newThreadBranches.length > 0 && (
+                <BranchPicker
+                  branches={newThreadBranches}
+                  selected={selectedBranch}
+                  onChange={setSelectedBranch}
+                />
+              )}
               {isNewThread && (
-                <>
-                  <div className="flex items-center gap-0.5 border border-border rounded-md overflow-hidden shrink-0">
-                    <button
-                      onClick={() => setThreadMode('local')}
-                      aria-pressed={threadMode === 'local'}
-                      tabIndex={-1}
-                      className={cn(
-                        'px-2 py-1 text-xs flex items-center gap-1 transition-colors',
-                        threadMode === 'local' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
-                      )}
-                      title={newThreadCurrentBranch ? t('thread.mode.localHint', `Working on ${newThreadCurrentBranch}`) : undefined}
-                    >
-                      <Monitor className="h-3 w-3" />
-                      <span className="font-mono">{getThreadModeLabel('local')}</span>
-                    </button>
-                    <button
-                      onClick={() => setThreadMode('worktree')}
-                      aria-pressed={threadMode === 'worktree'}
-                      tabIndex={-1}
-                      className={cn(
-                        'px-2 py-1 text-xs flex items-center gap-1 transition-colors',
-                        threadMode === 'worktree' ? 'bg-primary/10 text-primary' : 'text-muted-foreground hover:text-foreground'
-                      )}
-                    >
-                      <GitBranch className="h-3 w-3" />
-                      {getThreadModeLabel('worktree')}
-                    </button>
-                  </div>
-                  {threadMode === 'worktree' && newThreadBranches.length > 0 && (
-                    <BranchPicker
-                      branches={newThreadBranches}
-                      selected={selectedBranch}
-                      onChange={setSelectedBranch}
-                    />
+                <button
+                  onClick={() => setCreateWorktree(!createWorktree)}
+                  tabIndex={-1}
+                  className={cn(
+                    'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors shrink-0',
+                    createWorktree
+                      ? 'bg-primary/10 text-primary'
+                      : 'text-muted-foreground hover:text-foreground hover:bg-muted'
                   )}
-                </>
+                  title={t('newThread.createWorktree', 'Create isolated worktree')}
+                >
+                  <GitBranch className="h-3 w-3" />
+                  <span>{t('thread.mode.worktree')}</span>
+                </button>
               )}
               <Select value={provider} onValueChange={setProvider}>
                 <SelectTrigger tabIndex={-1} className="h-7 w-auto min-w-0 text-xs border-0 bg-transparent shadow-none text-muted-foreground hover:bg-accent hover:text-accent-foreground shrink-0">

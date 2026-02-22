@@ -289,6 +289,21 @@ export const ProjectHeader = memo(function ProjectHeader() {
             <TooltipContent>{t('kanban.backToBoard', 'Back to Kanban')}</TooltipContent>
           </Tooltip>
         )}
+        {!kanbanContext && activeThread?.parentThreadId && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => navigate(`/projects/${activeThread.projectId}/threads/${activeThread.parentThreadId}`)}
+                className="text-muted-foreground hover:text-foreground shrink-0"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>{t('thread.backToParent', 'Back to parent thread')}</TooltipContent>
+          </Tooltip>
+        )}
         <Breadcrumb className="min-w-0">
           <BreadcrumbList>
             {project && (

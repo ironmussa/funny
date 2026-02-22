@@ -156,7 +156,7 @@ threadRoutes.post('/', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(createThreadSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { projectId, title, mode, provider, model, permissionMode, source, baseBranch, prompt, images, allowedTools, disallowedTools, fileReferences, worktreePath: requestWorktreePath } = parsed.value;
+  const { projectId, title, mode, provider, model, permissionMode, source, baseBranch, prompt, images, allowedTools, disallowedTools, fileReferences, worktreePath: requestWorktreePath, parentThreadId } = parsed.value;
 
   const projectResult = requireProject(projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
@@ -215,6 +215,7 @@ threadRoutes.post('/', async (c) => {
     branch: threadBranch,
     baseBranch: resolvedBaseBranch || (mode === 'local' ? threadBranch : undefined),
     worktreePath,
+    parentThreadId,
     cost: 0,
     createdAt: new Date().toISOString(),
   };

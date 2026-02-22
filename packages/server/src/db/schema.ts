@@ -34,6 +34,7 @@ export const threads = sqliteTable('threads', {
   initialPrompt: text('initial_prompt'),
   source: text('source').notNull().default('web'), // 'web' | 'chrome_extension' | 'api' | 'automation' | 'ingest'
   externalRequestId: text('external_request_id'),
+  parentThreadId: text('parent_thread_id'),
   initTools: text('init_tools'),   // JSON-encoded string[] of available tools
   initCwd: text('init_cwd'),       // Working directory reported by agent
   createdAt: text('created_at').notNull(),

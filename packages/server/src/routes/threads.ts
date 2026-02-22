@@ -190,6 +190,13 @@ threadRoutes.post('/', async (c) => {
     const branchResult = await getCurrentBranch(project.path);
     if (branchResult.isOk()) {
       threadBranch = branchResult.value;
+
+      // If a specific branch was requested in local mode, validate it matches the current branch
+      if (resolvedBaseBranch && resolvedBaseBranch !== threadBranch) {
+        return c.json({
+          error: `Cannot create local thread on branch "${resolvedBaseBranch}". Current branch is "${threadBranch}". Enable "Create worktree" to work on a different branch.`
+        }, 400);
+      }
     }
   }
 

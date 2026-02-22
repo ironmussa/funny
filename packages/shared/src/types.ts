@@ -144,6 +144,7 @@ export interface Thread {
   automationId?: string;
   source: ThreadSource;
   externalRequestId?: string;
+  parentThreadId?: string;
   commentCount?: number;
   createdAt: string;
   completedAt?: string;
@@ -417,6 +418,7 @@ export interface CreateThreadRequest {
   allowedTools?: string[];
   disallowedTools?: string[];
   worktreePath?: string;
+  parentThreadId?: string;
 }
 
 export interface SendMessageRequest {

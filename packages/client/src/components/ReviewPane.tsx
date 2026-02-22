@@ -582,6 +582,7 @@ export function ReviewPane() {
       allowedTools,
       disallowedTools,
       worktreePath: activeThread.worktreePath ?? undefined,
+      parentThreadId: activeThread.id,
     });
 
     if (result.isErr()) {

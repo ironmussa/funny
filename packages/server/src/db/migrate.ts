@@ -401,6 +401,13 @@ const migrations: Migration[] = [
       addColumn('threads', 'source', "TEXT NOT NULL", "'web'");
     },
   },
+
+  {
+    name: '019_parent_thread_id',
+    up() {
+      addColumn('threads', 'parent_thread_id', 'TEXT');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

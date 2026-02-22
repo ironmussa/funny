@@ -28,6 +28,7 @@ import { NewThreadInput } from './thread/NewThreadInput';
 import { AgentResultCard, AgentInterruptedCard, AgentStoppedCard } from './thread/AgentStatusCards';
 import { TodoPanel } from './thread/TodoPanel';
 import { StickyUserMessage } from './thread/StickyUserMessage';
+import { PromptTimeline } from './thread/PromptTimeline';
 import { parseReferencedFiles } from '@/lib/parse-referenced-files';
 import { useTodoSnapshots } from '@/hooks/use-todo-panel';
 
@@ -853,26 +854,28 @@ export function ThreadView() {
         )}
       </AnimatePresence>
 
-      {/* Messages */}
-      <div className="flex-1 relative min-h-0">
-        {/* Sticky user message */}
-        <AnimatePresence mode="wait">
-          {stickyUserMsg && (
-            <StickyUserMessage
-              key={stickyUserMsgId}
-              content={stickyUserMsg.content}
-              images={stickyUserMsg.images}
-              onScrollTo={() => {
-                const el = scrollViewportRef.current?.querySelector(
-                  `[data-user-msg="${stickyUserMsgId}"]`
-                );
-                el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              }}
-            />
-          )}
-        </AnimatePresence>
+      {/* Messages + Timeline */}
+      <div className="flex-1 flex min-h-0">
+        {/* Messages column */}
+        <div className="flex-1 relative min-h-0 min-w-0">
+          {/* Sticky user message */}
+          <AnimatePresence mode="wait">
+            {stickyUserMsg && (
+              <StickyUserMessage
+                key={stickyUserMsgId}
+                content={stickyUserMsg.content}
+                images={stickyUserMsg.images}
+                onScrollTo={() => {
+                  const el = scrollViewportRef.current?.querySelector(
+                    `[data-user-msg="${stickyUserMsgId}"]`
+                  );
+                  el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                }}
+              />
+            )}
+          </AnimatePresence>
 
-        <ScrollArea className="h-full px-4 [&_[data-radix-scroll-area-viewport]>div]:!flex [&_[data-radix-scroll-area-viewport]>div]:!flex-col [&_[data-radix-scroll-area-viewport]>div]:min-h-full" viewportRef={scrollViewportRef}>
+          <ScrollArea className="h-full px-4 [&_[data-radix-scroll-area-viewport]>div]:!flex [&_[data-radix-scroll-area-viewport]>div]:!flex-col [&_[data-radix-scroll-area-viewport]>div]:min-h-full" viewportRef={scrollViewportRef}>
           <div className="w-full mx-auto max-w-3xl min-w-[320px] space-y-4 overflow-hidden py-4 mt-auto">
             {loadingMore && (
               <div className="flex items-center justify-center py-3">
@@ -1169,21 +1172,37 @@ export function ThreadView() {
 
           </div>
         </ScrollArea>
-      </div>
 
-      {/* Scroll to bottom button */}
-      {showScrollDown && (
-        <div className="relative">
-          <button
-            onClick={scrollToBottom}
-            aria-label={t('thread.scrollToBottom', 'Scroll to bottom')}
-            className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 rounded-full bg-secondary border border-muted-foreground/40 px-3 py-1.5 text-xs text-muted-foreground shadow-md hover:bg-muted transition-colors"
-          >
-            <ArrowDown className="h-3 w-3" />
-            {t('thread.scrollToBottom', 'Scroll to bottom')}
-          </button>
+        {/* Scroll to bottom button */}
+        {showScrollDown && (
+          <div className="relative">
+            <button
+              onClick={scrollToBottom}
+              aria-label={t('thread.scrollToBottom', 'Scroll to bottom')}
+              className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 flex items-center gap-1 rounded-full bg-secondary border border-muted-foreground/40 px-3 py-1.5 text-xs text-muted-foreground shadow-md hover:bg-muted transition-colors"
+            >
+              <ArrowDown className="h-3 w-3" />
+              {t('thread.scrollToBottom', 'Scroll to bottom')}
+            </button>
+          </div>
+        )}
         </div>
-      )}
+
+        {/* Prompt Timeline */}
+        {activeThread.messages.length > 0 && (
+          <PromptTimeline
+            messages={activeThread.messages}
+            onScrollToMessage={(msgId) => {
+              const el = scrollViewportRef.current?.querySelector(
+                `[data-user-msg="${msgId}"]`
+              );
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+            }}
+          />
+        )}
+      </div>
 
       {/* Input — hidden when waiting for a question response */}
       {!(activeThread.status === 'waiting' && activeThread.waitingReason === 'question') && (

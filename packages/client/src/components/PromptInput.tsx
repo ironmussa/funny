@@ -391,6 +391,9 @@ export function PromptInput({
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  // Track whether handleSubmit cleared the prompt so the unmount cleanup
+  // doesn't accidentally save the stale value back into the draft store.
+  const hasSubmittedRef = useRef(false);
 
   // Load initial prompt when prop changes (e.g. navigating to a backlog thread)
   useEffect(() => {
@@ -463,6 +466,10 @@ export function PromptInput({
   // Save draft when the component unmounts (e.g. navigating to AllThreadsView)
   useEffect(() => {
     return () => {
+      // Skip saving draft if the prompt was just submitted — the draft was
+      // already cleared in handleSubmit and promptRef may still hold the
+      // stale pre-submit value because React batches state updates.
+      if (hasSubmittedRef.current) return;
       const threadId = selectedThreadIdRef.current;
       if (threadId) {
         const currentPrompt = textareaRef.current?.value ?? promptRef.current;
@@ -707,6 +714,7 @@ export function PromptInput({
     setPrompt('');
     setImages([]);
     setSelectedFiles([]);
+    hasSubmittedRef.current = true;
     if (selectedThreadId) clearPromptDraft(selectedThreadId);
     textareaRef.current?.focus();
 
@@ -724,6 +732,7 @@ export function PromptInput({
     );
     if (result === false) {
       // Restore on failure
+      hasSubmittedRef.current = false;
       setPrompt(submittedPrompt);
       setImages(submittedImages ?? []);
       setSelectedFiles(submittedFiles?.map(f => f.path) ?? []);

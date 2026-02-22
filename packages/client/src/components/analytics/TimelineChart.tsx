@@ -19,6 +19,7 @@ interface DataPoint {
 interface Props {
   created: DataPoint[];
   completed: DataPoint[];
+  movedToPlanning: DataPoint[];
   movedToReview: DataPoint[];
   movedToDone: DataPoint[];
   movedToArchived: DataPoint[];
@@ -34,7 +35,7 @@ const TOOLTIP_CONTENT_STYLE: React.CSSProperties = {
   color: 'hsl(var(--foreground))',
 };
 
-export function TimelineChart({ created, completed, movedToReview, movedToDone, movedToArchived, groupBy = 'day' }: Props) {
+export function TimelineChart({ created, completed, movedToPlanning, movedToReview, movedToDone, movedToArchived, groupBy = 'day' }: Props) {
   const { t } = useTranslation();
 
   const chartData = useMemo(() => {
@@ -42,12 +43,13 @@ export function TimelineChart({ created, completed, movedToReview, movedToDone, 
       date: string;
       created: number;
       completed: number;
+      movedToPlanning: number;
       movedToReview: number;
       movedToDone: number;
       movedToArchived: number;
     }>();
 
-    const empty = { created: 0, completed: 0, movedToReview: 0, movedToDone: 0, movedToArchived: 0 };
+    const empty = { created: 0, completed: 0, movedToPlanning: 0, movedToReview: 0, movedToDone: 0, movedToArchived: 0 };
 
     for (const item of created) {
       const existing = dateMap.get(item.date);
@@ -59,6 +61,12 @@ export function TimelineChart({ created, completed, movedToReview, movedToDone, 
       const existing = dateMap.get(item.date);
       if (existing) { existing.completed = item.count; }
       else { dateMap.set(item.date, { ...empty, date: item.date, completed: item.count }); }
+    }
+
+    for (const item of movedToPlanning) {
+      const existing = dateMap.get(item.date);
+      if (existing) { existing.movedToPlanning = item.count; }
+      else { dateMap.set(item.date, { ...empty, date: item.date, movedToPlanning: item.count }); }
     }
 
     for (const item of movedToReview) {
@@ -80,7 +88,7 @@ export function TimelineChart({ created, completed, movedToReview, movedToDone, 
     }
 
     return Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date));
-  }, [created, completed, movedToReview, movedToDone, movedToArchived]);
+  }, [created, completed, movedToPlanning, movedToReview, movedToDone, movedToArchived]);
 
   if (chartData.length === 0) {
     return (
@@ -152,6 +160,13 @@ export function TimelineChart({ created, completed, movedToReview, movedToDone, 
           dataKey="completed"
           fill="#22c55e"
           name={t('analytics.completed')}
+          radius={[3, 3, 0, 0]}
+          maxBarSize={32}
+        />
+        <Bar
+          dataKey="movedToPlanning"
+          fill="#a78bfa"
+          name={t('analytics.movedToPlanning')}
           radius={[3, 3, 0, 0]}
           maxBarSize={32}
         />

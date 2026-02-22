@@ -17,12 +17,13 @@ import { TimelineChart } from './analytics/TimelineChart';
 import { MetricCard } from './analytics/MetricCard';
 import { TimeRangeSelector, type TimeRange } from './analytics/TimeRangeSelector';
 import { GroupBySelector, type GroupBy } from './analytics/GroupBySelector';
-import { ChevronLeft, Plus, CheckCircle2, Eye, LayoutList, DollarSign, Archive } from 'lucide-react';
+import { ChevronLeft, Plus, CheckCircle2, Eye, LayoutList, ClipboardList, DollarSign, Archive } from 'lucide-react';
 
 interface OverviewData {
   currentStageDistribution: Record<string, number>;
   createdCount: number;
   completedCount: number;
+  movedToPlanningCount: number;
   movedToReviewCount: number;
   movedToDoneCount: number;
   movedToArchivedCount: number;
@@ -33,6 +34,7 @@ interface OverviewData {
 interface TimelineData {
   createdByDate: Array<{ date: string; count: number }>;
   completedByDate: Array<{ date: string; count: number }>;
+  movedToPlanningByDate: Array<{ date: string; count: number }>;
   movedToReviewByDate: Array<{ date: string; count: number }>;
   movedToDoneByDate: Array<{ date: string; count: number }>;
   movedToArchivedByDate: Array<{ date: string; count: number }>;
@@ -127,7 +129,7 @@ export function AnalyticsView() {
           ) : (
             <>
               {/* Metric Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
                 <MetricCard
                   title={t('analytics.tasksCreated')}
                   value={overview.createdCount}
@@ -139,6 +141,12 @@ export function AnalyticsView() {
                   value={overview.completedCount}
                   icon={<CheckCircle2 className="h-3.5 w-3.5" />}
                   color="green"
+                />
+                <MetricCard
+                  title={t('analytics.movedToPlanning')}
+                  value={overview.movedToPlanningCount}
+                  icon={<ClipboardList className="h-3.5 w-3.5" />}
+                  color="violet"
                 />
                 <MetricCard
                   title={t('analytics.movedToReview')}
@@ -193,6 +201,7 @@ export function AnalyticsView() {
                   <TimelineChart
                     created={timeline.createdByDate}
                     completed={timeline.completedByDate}
+                    movedToPlanning={timeline.movedToPlanningByDate ?? []}
                     movedToReview={timeline.movedToReviewByDate}
                     movedToDone={timeline.movedToDoneByDate}
                     movedToArchived={timeline.movedToArchivedByDate ?? []}

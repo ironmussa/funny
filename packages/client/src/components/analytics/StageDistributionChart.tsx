@@ -7,6 +7,7 @@ interface Props {
 
 const COLORS: Record<string, string> = {
   backlog: '#6b7280',
+  planning: '#a78bfa',
   in_progress: '#3b82f6',
   review: '#f59e0b',
   done: '#22c55e',
@@ -26,6 +27,7 @@ const TOOLTIP_LABEL_STYLE: React.CSSProperties = { color: 'hsl(var(--popover-for
 
 const LABEL_KEYS: Record<string, string> = {
   backlog: 'analytics.backlog',
+  planning: 'analytics.planning',
   in_progress: 'analytics.inProgress',
   review: 'analytics.review',
   done: 'analytics.done',

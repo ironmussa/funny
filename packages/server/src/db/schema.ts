@@ -29,7 +29,7 @@ export const threads = sqliteTable('threads', {
   cost: real('cost').notNull().default(0),
   archived: integer('archived').notNull().default(0),
   pinned: integer('pinned').notNull().default(0),
-  stage: text('stage').notNull().default('backlog'), // 'backlog' | 'in_progress' | 'review' | 'done'
+  stage: text('stage').notNull().default('backlog'), // 'backlog' | 'planning' | 'in_progress' | 'review' | 'done'
   model: text('model').notNull().default('sonnet'), // 'sonnet' | 'opus' | 'haiku'
   initialPrompt: text('initial_prompt'),
   source: text('source').notNull().default('web'), // 'web' | 'chrome_extension' | 'api' | 'automation' | 'ingest'

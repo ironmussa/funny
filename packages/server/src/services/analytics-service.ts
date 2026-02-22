@@ -126,6 +126,7 @@ export function getOverview(params: OverviewParams) {
 
   const distribution: Record<string, number> = {
     backlog: 0,
+    planning: 0,
     in_progress: 0,
     review: 0,
     done: 0,
@@ -164,6 +165,7 @@ export function getOverview(params: OverviewParams) {
     currentStageDistribution: distribution,
     createdCount: createdResult?.count ?? 0,
     completedCount: completedResult?.count ?? 0,
+    movedToPlanningCount: countTransitionsTo('planning', filters, range),
     movedToReviewCount: countTransitionsTo('review', filters, range),
     movedToDoneCount: countTransitionsTo('done', filters, range),
     movedToArchivedCount: countTransitionsTo('archived', filters, range),
@@ -236,6 +238,7 @@ export function getTimeline(params: TimelineParams) {
   return {
     createdByDate,
     completedByDate,
+    movedToPlanningByDate: stageTransitionsByDate('planning', filters, range, groupBy, tzMod),
     movedToReviewByDate: stageTransitionsByDate('review', filters, range, groupBy, tzMod),
     movedToDoneByDate: stageTransitionsByDate('done', filters, range, groupBy, tzMod),
     movedToArchivedByDate: stageTransitionsByDate('archived', filters, range, groupBy, tzMod),

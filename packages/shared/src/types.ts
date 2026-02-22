@@ -109,7 +109,7 @@ export interface Project {
 
 export type ThreadMode = 'local' | 'worktree';
 export type ThreadStatus = 'idle' | 'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'stopped' | 'interrupted';
-export type ThreadStage = 'backlog' | 'in_progress' | 'review' | 'done' | 'archived';
+export type ThreadStage = 'backlog' | 'planning' | 'in_progress' | 'review' | 'done' | 'archived';
 export type WaitingReason = 'question' | 'plan' | 'permission';
 
 export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'llm-api' | 'external';

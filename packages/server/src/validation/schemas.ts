@@ -11,7 +11,7 @@ export const codexModelSchema = z.enum(['o3', 'o4-mini', 'codex-mini']);
 export const geminiModelSchema = z.enum(['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3-flash-preview', 'gemini-3-pro-preview']);
 export const agentModelSchema = z.union([claudeModelSchema, codexModelSchema, geminiModelSchema]);
 export const permissionModeSchema = z.enum(['plan', 'autoEdit', 'confirmEdit']);
-export const threadStageSchema = z.enum(['backlog', 'in_progress', 'review', 'done']);
+export const threadStageSchema = z.enum(['backlog', 'planning', 'in_progress', 'review', 'done']);
 export const threadSourceSchema = z.enum(['web', 'chrome_extension', 'api', 'automation', 'ingest']);
 
 // ── Image attachment ─────────────────────────────────────────────

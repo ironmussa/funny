@@ -57,7 +57,7 @@ describe('statusConfig', () => {
 });
 
 describe('stageConfig', () => {
-  const allStages: ThreadStage[] = ['backlog', 'in_progress', 'review', 'done', 'archived'];
+  const allStages: ThreadStage[] = ['backlog', 'planning', 'in_progress', 'review', 'done', 'archived'];
 
   test('has an entry for every ThreadStage', () => {
     for (const stage of allStages) {

@@ -27,6 +27,7 @@ import { log } from '../lib/abbacchio.js';
 export interface IngestEvent {
   event_type: string;
   request_id: string;
+  thread_id?: string;
   timestamp: string;
   data: Record<string, unknown>;
   metadata?: Record<string, unknown>;
@@ -157,6 +158,46 @@ function getState(requestId: string): ExternalThreadState | null {
   return null;
 }
 
+/**
+ * Look up thread state by direct thread ID.
+ * Allows sending events to threads created from the UI (not via ingest).
+ */
+function getStateByThreadId(threadId: string): ExternalThreadState | null {
+  const cacheKey = `__thread:${threadId}`;
+  const cached = threadStates.get(cacheKey);
+  if (cached) return cached;
+
+  const row = tm.getThread(threadId);
+  if (row) {
+    const state: ExternalThreadState = {
+      threadId: row.id,
+      projectId: row.projectId,
+      userId: row.userId,
+    };
+    threadStates.set(cacheKey, state);
+    return state;
+  }
+
+  return null;
+}
+
+/**
+ * Resolve thread state from an event — tries thread_id first (direct),
+ * then falls back to request_id (externalRequestId lookup).
+ */
+function resolveState(event: IngestEvent): ExternalThreadState | null {
+  if (event.thread_id) return getStateByThreadId(event.thread_id);
+  return getState(event.request_id);
+}
+
+/**
+ * Resolve the cache key used for CLI state maps.
+ * Uses thread_id when present, otherwise request_id.
+ */
+function resolveStateKey(event: IngestEvent): string {
+  return event.thread_id ? `__thread:${event.thread_id}` : event.request_id;
+}
+
 function emitWS(state: ExternalThreadState, event: WSEvent): void {
   if (state.userId && state.userId !== '__local__') {
     wsBroker.emitToUser(state.userId, event);
@@ -169,6 +210,28 @@ function emitWS(state: ExternalThreadState, event: WSEvent): void {
 
 function onAccepted(event: IngestEvent): void {
   const { request_id, data, metadata, timestamp } = event;
+  const stateKey = resolveStateKey(event);
+
+  // If thread_id is provided, link to an existing thread instead of creating one
+  if (event.thread_id) {
+    const existing = getStateByThreadId(event.thread_id);
+    if (existing) {
+      // Link request_id to the existing thread for future lookups
+      if (request_id) {
+        tm.updateThread(existing.threadId, { provider: 'external' });
+        threadStates.set(request_id, existing);
+      }
+      const prompt = (data.prompt as string) ?? (metadata?.prompt as string);
+      if (prompt) {
+        tm.insertMessage({ threadId: existing.threadId, role: 'user', content: prompt });
+        emitWS(existing, { type: 'agent:message', threadId: existing.threadId, data: { messageId: '', role: 'user', content: prompt } });
+      }
+      emitWS(existing, { type: 'agent:status', threadId: existing.threadId, data: { status: 'pending' } });
+      log.info('Linked to existing thread', { namespace: 'ingest', threadId: existing.threadId, requestId: request_id });
+      return;
+    }
+    throw new Error(`Thread not found: thread_id=${event.thread_id}`);
+  }
 
   // Prevent duplicate thread creation
   if (getState(request_id)) {
@@ -233,7 +296,7 @@ function onAccepted(event: IngestEvent): void {
  * (via onCLIMessage → handleCLISystem) handles the WebSocket emissions.
  */
 function onStarted(event: IngestEvent): void {
-  const state = getState(event.request_id);
+  const state = resolveState(event);
   if (!state) return;
   tm.updateThread(state.threadId, { status: 'running' });
 }
@@ -243,11 +306,13 @@ function onStarted(event: IngestEvent): void {
  * If handleCLIResult already processed the result CLI message, skip.
  */
 function onCompleted(event: IngestEvent): void {
+  const stateKey = resolveStateKey(event);
+
   // Check if CLI result already handled this
-  const cliState = cliStates.get(event.request_id);
+  const cliState = cliStates.get(stateKey);
   if (cliState?.resultHandled) return;
 
-  const state = getState(event.request_id);
+  const state = resolveState(event);
   if (!state) return;
 
   const now = new Date().toISOString();
@@ -271,8 +336,8 @@ function onCompleted(event: IngestEvent): void {
     },
   });
 
-  cliStates.delete(event.request_id);
-  threadStates.delete(event.request_id);
+  cliStates.delete(stateKey);
+  threadStates.delete(stateKey);
 }
 
 /**
@@ -280,11 +345,13 @@ function onCompleted(event: IngestEvent): void {
  * If handleCLIResult already processed the result CLI message, skip.
  */
 function onFailed(event: IngestEvent): void {
+  const stateKey = resolveStateKey(event);
+
   // Check if CLI result already handled this
-  const cliState = cliStates.get(event.request_id);
+  const cliState = cliStates.get(stateKey);
   if (cliState?.resultHandled) return;
 
-  const state = getState(event.request_id);
+  const state = resolveState(event);
   if (!state) return;
 
   const now = new Date().toISOString();
@@ -309,12 +376,13 @@ function onFailed(event: IngestEvent): void {
     },
   });
 
-  cliStates.delete(event.request_id);
-  threadStates.delete(event.request_id);
+  cliStates.delete(stateKey);
+  threadStates.delete(stateKey);
 }
 
 function onStopped(event: IngestEvent): void {
-  const state = getState(event.request_id);
+  const stateKey = resolveStateKey(event);
+  const state = resolveState(event);
   if (!state) return;
 
   const now = new Date().toISOString();
@@ -322,20 +390,21 @@ function onStopped(event: IngestEvent): void {
 
   emitWS(state, { type: 'agent:status', threadId: state.threadId, data: { status: 'stopped' } });
 
-  cliStates.delete(event.request_id);
-  threadStates.delete(event.request_id);
+  cliStates.delete(stateKey);
+  threadStates.delete(stateKey);
 }
 
 // ── CLI Message handler (mirrors agent-message-handler.ts) ───
 
 function onCLIMessage(event: IngestEvent): void {
-  const threadState = getState(event.request_id);
+  const threadState = resolveState(event);
   if (!threadState) return;
 
   const msg = event.data.cli_message as any;
   if (!msg || !msg.type) return;
 
-  const cliState = getCLIState(event.request_id);
+  const stateKey = resolveStateKey(event);
+  const cliState = getCLIState(stateKey);
 
   switch (msg.type) {
     case 'system':
@@ -348,7 +417,7 @@ function onCLIMessage(event: IngestEvent): void {
       handleCLIToolResults(threadState, cliState, msg);
       break;
     case 'result':
-      handleCLIResult(threadState, cliState, msg, event.request_id);
+      handleCLIResult(threadState, cliState, msg, stateKey);
       break;
   }
 }
@@ -532,7 +601,7 @@ function handleCLIResult(
 // ── Legacy simple message handler ────────────────────────────
 
 function onMessage(event: IngestEvent): void {
-  const state = getState(event.request_id);
+  const state = resolveState(event);
   if (!state) return;
 
   const content = (event.data.text as string) ?? (event.data.content as string) ?? (event.data.message as string) ?? JSON.stringify(event.data);
@@ -545,7 +614,7 @@ function onMessage(event: IngestEvent): void {
 // ── Workflow event handler ────────────────────────────────────
 
 function onWorkflowEvent(event: IngestEvent): void {
-  const state = getState(event.request_id);
+  const state = resolveState(event);
   if (!state) return;
 
   const { event_type, data } = event;
@@ -636,7 +705,7 @@ export function handleIngestEvent(event: IngestEvent): void {
       // handled by cli_message (containers.ready, tier_classified, etc.)
       if (SILENT_EVENT_TYPES.has(event.event_type)) return;
       // For truly unknown events from other sources, render as system message
-      const state = getState(event.request_id);
+      const state = resolveState(event);
       if (!state) return;
       const detail = (event.data.message as string) ?? (event.data.detail as string) ?? JSON.stringify(event.data);
       const content = `[${event.event_type}] ${detail}`;

@@ -39,9 +39,9 @@ ingestRoutes.post('/webhook', async (c) => {
     );
   }
 
-  // Allow events with empty request_id (e.g. director.activated, director.cycle.completed)
+  // Allow events with empty request_id AND no thread_id (e.g. director.activated, director.cycle.completed)
   // — they are system-level events not tied to a specific pipeline run.
-  if (!body.request_id) {
+  if (!body.request_id && !body.thread_id) {
     return c.json({ status: 'ok', skipped: true }, 200);
   }
 

@@ -1,94 +1,126 @@
-# Plan: `packages/openai-compat` — OpenAI-compatible API server
+# Plan: API para agentes externos — Soporte de `thread_id` directo en Ingest
 
-## Goal
+## Contexto
 
-Create a new package `packages/openai-compat` that exposes an OpenAI-compatible HTTP API (`/v1/chat/completions` + `/v1/models`). Any tool that speaks the OpenAI API (Cursor, Continue, Open WebUI, LM Studio clients, etc.) can point at this server and use Claude/Codex/Gemini models transparently.
+Ya existe un sistema de ingest en `POST /api/ingest/webhook` con un `IngestMapper` completo que:
+- Crea hilos vía `*.accepted` events
+- Procesa mensajes CLI vía `*.cli_message` events
+- Maneja ciclo de vida (`*.started`, `*.completed`, `*.failed`, `*.stopped`)
+- Emite WebSocket events para actualización en tiempo real en la UI
 
-## Architecture
+**Problema actual:** El ingest resuelve hilos SOLO por `request_id` → `externalRequestId`. No puede enviar mensajes a un hilo existente creado desde la UI (que no tiene `externalRequestId`).
 
-Uses the existing **`ModelFactory`** from `@funny/core` (which wraps the Vercel AI SDK) to create language models, then uses `generateText` / `streamText` from the `ai` package to translate between OpenAI wire format and provider-specific calls.
+## Lo que se va a implementar
 
+Extender el ingest API para soportar **`thread_id` directo** como alternativa a `request_id`, permitiendo enviar mensajes a cualquier hilo existente.
+
+---
+
+## Cambios
+
+### 1. Ampliar `IngestEvent` — Agregar `thread_id` opcional
+
+**Archivo:** `packages/server/src/services/ingest-mapper.ts`
+
+```typescript
+export interface IngestEvent {
+  event_type: string;
+  request_id: string;
+  thread_id?: string;       // ← NUEVO: ID directo de hilo existente
+  timestamp: string;
+  data: Record<string, unknown>;
+  metadata?: Record<string, unknown>;
+}
 ```
-External Client (OpenAI format)
-    │
-    ▼
-packages/openai-compat (Hono server)
-    │  Translates OpenAI messages → Vercel AI SDK calls
-    ▼
-ModelFactory (@funny/core)
-    │  Creates LanguageModel for any provider
-    ▼
-@ai-sdk/anthropic, @ai-sdk/openai, etc.
-    │
-    ▼
-Claude API / OpenAI API / Ollama / etc.
+
+### 2. Nueva función `getStateByThreadId()` en `ingest-mapper.ts`
+
+Busca directamente por `tm.getThread(threadId)` y construye el `ExternalThreadState`. Cachea en `threadStates` usando `__thread:${threadId}` como key para no colisionar con request_ids.
+
+### 3. Modificar `resolveState()` — Resolver por `thread_id` O `request_id`
+
+Nueva función auxiliar que combina ambos paths:
+
+```typescript
+function resolveState(event: IngestEvent): ExternalThreadState | null {
+  // 1. thread_id directo tiene prioridad
+  if (event.thread_id) return getStateByThreadId(event.thread_id);
+  // 2. Fallback a request_id (comportamiento actual)
+  return getState(event.request_id);
+}
 ```
 
-## Files to create
+Reemplazar todas las llamadas a `getState(event.request_id)` en `onStarted`, `onCompleted`, `onFailed`, `onStopped`, `onCLIMessage`, `onMessage` por `resolveState(event)`.
 
-### 1. `packages/openai-compat/package.json`
-- Name: `@funny/openai-compat`
-- Dependencies: `hono`, `ai`, `@funny/core`, `@funny/shared`
-- Bin entry for `funny-openai-proxy` standalone usage
-- Scripts: `dev`, `start`
+### 4. Modificar `onAccepted` — Soporte para vincular hilo existente
 
-### 2. `packages/openai-compat/tsconfig.json`
-- Extends `../../tsconfig.base.json`
+Cuando `thread_id` viene en el evento `*.accepted`:
+- Si el hilo ya existe en DB, vincular el `request_id` al hilo existente (actualizar `externalRequestId` y `provider` a `external`)
+- Si no existe, crear uno nuevo como hoy
 
-### 3. `packages/openai-compat/src/index.ts` — Entry point
-- Creates the Hono app
-- Mounts routes
-- Starts the server (port from `--port` flag or `OPENAI_COMPAT_PORT` env, default `4010`)
-- Prints available models and base URL on startup
+### 5. Relajar validación en `ingest.ts`
 
-### 4. `packages/openai-compat/src/routes/models.ts` — `GET /v1/models`
-- Returns all available models from the model registry (`@funny/shared/models`)
-- Maps to OpenAI `List models` response format: `{ object: "list", data: [{ id, object: "model", created, owned_by }] }`
-- Includes Claude, Codex, and Gemini models
-- Model IDs use the full model IDs (e.g. `claude-sonnet-4-5-20250929`)
+**Archivo:** `packages/server/src/routes/ingest.ts`
 
-### 5. `packages/openai-compat/src/routes/chat.ts` — `POST /v1/chat/completions`
-- Accepts OpenAI `ChatCompletionRequest` format
-- Extracts `model`, `messages`, `temperature`, `max_tokens`, `stream`
-- Maps the model ID to a provider using the model resolver
-- Creates a `LanguageModel` via `ModelFactory.create(provider, modelId)`
-- **Non-streaming**: Uses `generateText()` → returns OpenAI `ChatCompletion` response
-- **Streaming (SSE)**: Uses `streamText()` → returns `text/event-stream` with `data: {...}` chunks in OpenAI format, ending with `data: [DONE]`
+Actualmente si no viene `request_id` se retorna `{ skipped: true }`. Cambiar para que si viene `thread_id`, se procese el evento aunque `request_id` esté vacío.
 
-### 6. `packages/openai-compat/src/utils/model-resolver.ts`
-- Takes an OpenAI-style model ID string and resolves it to `{ provider, modelId }`
-- Supports aliases: `claude-sonnet` → `anthropic` + `claude-sonnet-4-5-20250929`
-- Falls through to full model IDs: `claude-opus-4-6` → `anthropic` + `claude-opus-4-6`
-- Also supports `gpt-4-turbo` → `openai` + `gpt-4-turbo`, etc.
+```typescript
+// Antes:
+if (!body.request_id) {
+  return c.json({ status: 'ok', skipped: true }, 200);
+}
 
-### 7. `packages/openai-compat/src/utils/format.ts`
-- `toOpenAIChatCompletion()` — Converts `generateText` result to OpenAI response format
-- `toOpenAIStreamChunk()` — Converts `streamText` chunk to OpenAI SSE chunk format
-- Handles `id`, `object`, `created`, `model`, `choices`, `usage` fields
+// Después:
+if (!body.request_id && !body.thread_id) {
+  return c.json({ status: 'ok', skipped: true }, 200);
+}
+```
 
-## Key design decisions
+---
 
-1. **Hono for HTTP** — Same framework as the main server, lightweight and fast
-2. **Standalone server** — Runs on its own port, independent from the main funny server. Can be started with `bun run --cwd packages/openai-compat dev`
-3. **No auth by default** — Local proxy. Optional `OPENAI_COMPAT_API_KEY` env var to require a Bearer token
-4. **Model auto-detection** — Detects provider from model ID prefix (`claude-*` → anthropic, `gpt-*` → openai, `gemini-*` → gemini)
-5. **Provider API keys from env** — Uses `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, etc. (same as ModelFactory already does)
+## Ejemplo de uso
 
-## Changes to existing files
-
-None. The root `package.json` already uses `packages/*` glob for workspaces, so the new package is auto-discovered.
-
-## Usage
-
+### Enviar a un hilo existente (creado en la UI)
 ```bash
-# Set your API key
-export ANTHROPIC_API_KEY=sk-ant-...
-
-# Start the proxy
-cd packages/openai-compat && bun run dev
-
-# Use with any OpenAI client
-curl http://localhost:4010/v1/chat/completions \
+curl -X POST http://localhost:3001/api/ingest/webhook \
+  -H "X-Webhook-Secret: mi-secreto" \
   -H "Content-Type: application/json" \
-  -d '{"model":"claude-sonnet-4-5-20250929","messages":[{"role":"user","content":"Hello!"}]}'
+  -d '{
+    "event_type": "agent.cli_message",
+    "thread_id": "el-thread-id-de-funny",
+    "request_id": "",
+    "timestamp": "2026-02-22T10:00:01Z",
+    "data": {
+      "cli_message": {
+        "type": "assistant",
+        "message": {
+          "id": "msg_1",
+          "content": [{ "type": "text", "text": "Resultado del análisis..." }]
+        }
+      }
+    }
+  }'
 ```
+
+### Crear hilo nuevo (ya funciona hoy)
+```bash
+curl -X POST http://localhost:3001/api/ingest/webhook \
+  -H "X-Webhook-Secret: mi-secreto" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "event_type": "agent.accepted",
+    "request_id": "run-123",
+    "timestamp": "2026-02-22T10:00:00Z",
+    "data": { "title": "Mi agente externo", "prompt": "Analizando..." },
+    "metadata": { "projectId": "abc123" }
+  }'
+```
+
+---
+
+## Archivos a modificar
+
+1. **`packages/server/src/services/ingest-mapper.ts`** — Agregar `thread_id` al tipo, `getStateByThreadId()`, `resolveState()`, actualizar handlers
+2. **`packages/server/src/routes/ingest.ts`** — Relajar validación de `request_id`
+
+**Total: 2 archivos modificados, 0 archivos nuevos.**

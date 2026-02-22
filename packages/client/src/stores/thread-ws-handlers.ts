@@ -215,8 +215,16 @@ export function handleWSStatus(
     set(stateUpdate as any);
   }
 
-  if (!foundInSidebar && activeThread?.id === threadId) {
-    loadThreadsForProject(activeThread.projectId);
+  if (!foundInSidebar) {
+    if (activeThread?.id === threadId) {
+      loadThreadsForProject(activeThread.projectId);
+    } else {
+      // Thread not found in any loaded project — likely created externally
+      // (e.g. Chrome extension ingest). Refresh all loaded projects.
+      for (const pid of Object.keys(threadsByProject)) {
+        loadThreadsForProject(pid);
+      }
+    }
   }
 }
 
@@ -306,6 +314,12 @@ export function handleWSResult(
 
   if (projectIdForRefresh) {
     setTimeout(() => loadThreadsForProject(projectIdForRefresh), 500);
+  } else {
+    // Thread not found in any loaded project — likely created externally
+    // (e.g. Chrome extension ingest). Refresh all loaded projects so it appears.
+    for (const pid of Object.keys(threadsByProject)) {
+      loadThreadsForProject(pid);
+    }
   }
 
   // Toast notification

@@ -11,7 +11,6 @@ import { useTerminalStore } from '@/stores/terminal-store';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { AppSidebar } from '@/components/Sidebar';
 import { ThreadView } from '@/components/ThreadView';
-import { MonacoEditorDialog } from '@/components/MonacoEditorDialog';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { Toaster } from 'sonner';
 import { TOAST_DURATION } from '@/lib/utils';
@@ -44,6 +43,7 @@ const LiveColumnsView = lazy(() => import('@/components/LiveColumnsView').then(m
 const CommandPalette = lazy(() => import('@/components/CommandPalette').then(m => ({ default: m.CommandPalette })));
 const CircuitBreakerDialog = lazy(() => import('@/components/CircuitBreakerDialog').then(m => ({ default: m.CircuitBreakerDialog })));
 const WorkflowProgressPanel = lazy(() => import('@/components/WorkflowProgressPanel').then(m => ({ default: m.WorkflowProgressPanel })));
+const MonacoEditorDialog = lazy(() => import('@/components/MonacoEditorDialog').then(m => ({ default: m.MonacoEditorDialog })));
 
 export function App() {
   const loadProjects = useProjectStore(s => s.loadProjects);
@@ -167,15 +167,19 @@ export function App() {
       <Suspense><CircuitBreakerDialog /></Suspense>
       {commandPaletteOpen && <Suspense><CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} /></Suspense>}
 
-      {/* Internal Monaco Editor Dialog (global) */}
-      <MonacoEditorDialog
-        open={useInternalEditorStore((s) => s.isOpen)}
-        onOpenChange={(open) => {
-          if (!open) useInternalEditorStore.getState().closeEditor();
-        }}
-        filePath={useInternalEditorStore((s) => s.filePath) || ''}
-        initialContent={useInternalEditorStore((s) => s.initialContent)}
-      />
+      {/* Internal Monaco Editor Dialog (global, lazy-loaded) */}
+      {useInternalEditorStore((s) => s.isOpen) && (
+        <Suspense>
+          <MonacoEditorDialog
+            open={true}
+            onOpenChange={(open) => {
+              if (!open) useInternalEditorStore.getState().closeEditor();
+            }}
+            filePath={useInternalEditorStore((s) => s.filePath) || ''}
+            initialContent={useInternalEditorStore((s) => s.initialContent)}
+          />
+        </Suspense>
+      )}
     </SidebarProvider>
   );
 }

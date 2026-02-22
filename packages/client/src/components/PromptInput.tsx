@@ -678,15 +678,20 @@ export function PromptInput({
     if (!loading) textareaRef.current?.focus();
   }, [loading]);
 
-  // Auto-resize textarea up to 35vh
-  useEffect(() => {
+  // Auto-resize textarea up to 35vh (called imperatively to avoid re-render dependency on prompt)
+  const resizeTextarea = useCallback(() => {
     const ta = textareaRef.current;
     if (!ta) return;
     ta.style.height = 'auto';
     const maxHeight = window.innerHeight * 0.35;
     ta.style.height = `${Math.min(ta.scrollHeight, maxHeight)}px`;
     ta.style.overflowY = ta.scrollHeight > maxHeight ? 'auto' : 'hidden';
-  }, [prompt]);
+  }, []);
+
+  // Resize on initial mount and when prompt changes externally (e.g. draft restore)
+  useEffect(() => {
+    resizeTextarea();
+  }, [prompt, resizeTextarea]);
 
   const handleSubmit = async () => {
     if (loading) return;
@@ -1042,8 +1047,10 @@ export function PromptInput({
             placeholder={running ? (isQueueMode ? t('thread.typeToQueue') : t('thread.agentWorkingQueue')) : defaultPlaceholder}
             value={prompt}
             onChange={(e) => {
-              setPrompt(e.target.value);
-              handleMentionDetection(e.target.value, e.target.selectionStart ?? e.target.value.length);
+              const value = e.target.value;
+              setPrompt(value);
+              resizeTextarea();
+              handleMentionDetection(value, e.target.selectionStart ?? value.length);
             }}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}

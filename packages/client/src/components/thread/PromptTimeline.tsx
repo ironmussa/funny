@@ -1,7 +1,7 @@
 import { useMemo, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ListTodo, MessageCircleQuestion, FileCode2, Play, CheckCircle2 } from 'lucide-react';
+import { ListTodo, MessageCircleQuestion, FileCode2, Play, CheckCircle2, Loader2 } from 'lucide-react';
 import type { Message, ToolCall, ThreadStatus } from '@funny/shared';
 
 type MilestoneType = 'prompt' | 'todo' | 'question' | 'plan' | 'start' | 'end';
@@ -16,6 +16,8 @@ interface PromptMilestone {
   toolCallId?: string;
   /** Whether this individual todo task is completed */
   completed?: boolean;
+  /** Whether this individual todo task is currently in progress */
+  inProgress?: boolean;
 }
 
 function formatTime(dateStr: string): string {
@@ -154,8 +156,11 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
             const total = lastTodoSnapshot.todos.length;
             for (let i = 0; i < total; i++) {
               const todo = lastTodoSnapshot.todos[i];
+              const isInProgress = todo.status === 'in_progress';
               const step = `${i + 1}/${total}`;
-              const label = todo.content || todo.activeForm || `Task ${i + 1}`;
+              const label = isInProgress && todo.activeForm
+                ? todo.activeForm
+                : todo.content || todo.activeForm || `Task ${i + 1}`;
               result.push({
                 id: `todo-${i}`,
                 content: `${step} · ${label}`,
@@ -164,6 +169,7 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
                 type: 'todo',
                 toolCallId: lastTodoSnapshot.toolCallId,
                 completed: todo.status === 'completed',
+                inProgress: isInProgress,
               });
             }
             continue;
@@ -272,11 +278,11 @@ const MILESTONE_ICON: Record<MilestoneType, typeof ListTodo | null> = {
 
 const MILESTONE_COLOR: Record<MilestoneType, { icon: string; text: string }> = {
   prompt: { icon: '', text: '' },
-  todo: { icon: 'text-amber-400', text: 'text-amber-400/80' },
-  question: { icon: 'text-blue-400', text: 'text-blue-400/80' },
-  plan: { icon: 'text-purple-400', text: 'text-purple-400/80' },
-  start: { icon: 'text-green-400', text: 'text-green-400/80' },
-  end: { icon: 'text-green-400', text: 'text-green-400/80' },
+  todo: { icon: 'text-muted-foreground', text: 'text-muted-foreground' },
+  question: { icon: 'text-muted-foreground', text: 'text-muted-foreground' },
+  plan: { icon: 'text-muted-foreground', text: 'text-muted-foreground' },
+  start: { icon: 'text-muted-foreground', text: 'text-muted-foreground' },
+  end: { icon: 'text-muted-foreground', text: 'text-muted-foreground' },
 };
 
 function TimelineMilestone({
@@ -297,7 +303,9 @@ function TimelineMilestone({
     <div className="flex gap-2 group/milestone">
       {/* Vertical line + dot/icon */}
       <div className="flex flex-col items-center flex-shrink-0 w-4">
-        {Icon ? (
+        {milestone.inProgress ? (
+          <Loader2 className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-blue-400 animate-spin" />
+        ) : Icon ? (
           <Icon className={cn('w-3.5 h-3.5 flex-shrink-0 mt-0.5', colors.icon)} />
         ) : (
           <div
@@ -340,11 +348,13 @@ function TimelineMilestone({
             </div>
             <div className={cn(
               'text-[11px] leading-snug line-clamp-2 transition-colors',
-              milestone.type !== 'prompt'
-                ? colors.text
-                : isActive
-                  ? 'text-foreground font-medium'
-                  : 'text-muted-foreground group-hover/btn:text-foreground',
+              milestone.inProgress
+                ? 'text-blue-400 font-medium'
+                : milestone.type !== 'prompt'
+                  ? colors.text
+                  : isActive
+                    ? 'text-foreground font-medium'
+                    : 'text-muted-foreground group-hover/btn:text-foreground',
               milestone.completed && 'line-through opacity-60'
             )}>
               {truncate(milestone.content, 80)}

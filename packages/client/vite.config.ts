@@ -27,6 +27,8 @@ export default defineConfig(({ mode }) => {
             'markdown': ['react-markdown', 'remark-gfm'],
             'motion': ['motion'],
             'syntax': ['shiki'],
+            'monaco': ['@monaco-editor/react'],
+            'mermaid': ['mermaid'],
           },
         },
       },

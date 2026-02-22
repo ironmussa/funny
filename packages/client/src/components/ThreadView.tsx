@@ -471,6 +471,198 @@ function UserMessageContent({ content }: { content: string }) {
   );
 }
 
+/** Memoized message list to avoid rebuilding the entire list on every render */
+const MemoizedMessageList = memo(function MemoizedMessageList({
+  messages,
+  threadId,
+  knownIds,
+  prefersReducedMotion,
+  snapshotMap,
+  onSend,
+  onOpenLightbox,
+}: {
+  messages: any[];
+  threadId: string;
+  knownIds: Set<string>;
+  prefersReducedMotion: boolean | null;
+  snapshotMap: Map<string, number>;
+  onSend: (prompt: string, opts: { model: string; mode: string }) => void;
+  onOpenLightbox: (images: { src: string; alt: string }[], index: number) => void;
+}) {
+  const { t } = useTranslation();
+
+  const groupedItems = useMemo(() => buildGroupedRenderItems(messages), [messages]);
+
+  const renderToolItem = useCallback((ti: ToolItem) => {
+    if (ti.type === 'toolcall') {
+      const tc = ti.tc;
+      return (
+        <motion.div
+          key={tc.id}
+          initial={knownIds.has(tc.id) || prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+          className={(tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode' || tc.name === 'TodoWrite' || tc.name === 'Edit') ? 'border border-border rounded-lg' : undefined}
+          data-tool-call-id={tc.id}
+          {...(snapshotMap.has(tc.id) ? { 'data-todo-snapshot': snapshotMap.get(tc.id) } : {})}
+        >
+          <ToolCallCard
+            name={tc.name}
+            input={tc.input}
+            output={tc.output}
+            onRespond={(tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode') ? (answer: string) => {
+              useAppStore.getState().handleWSToolOutput(threadId, { toolCallId: tc.id, output: answer });
+              onSend(answer, { model: '', mode: '' });
+            } : undefined}
+          />
+        </motion.div>
+      );
+    }
+    if (ti.type === 'toolcall-group') {
+      const groupSnapshotIdx = ti.name === 'TodoWrite'
+        ? Math.max(...ti.calls.map((c: any) => snapshotMap.get(c.id) ?? -1))
+        : -1;
+      return (
+        <motion.div
+          key={ti.calls[0].id}
+          initial={knownIds.has(ti.calls[0].id) || prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+          className={(ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode' || ti.name === 'TodoWrite' || ti.name === 'Edit') ? 'border border-border rounded-lg' : undefined}
+          data-tool-call-id={ti.calls[0].id}
+          {...(groupSnapshotIdx >= 0 ? { 'data-todo-snapshot': groupSnapshotIdx } : {})}
+        >
+          <ToolCallGroup
+            name={ti.name}
+            calls={ti.calls}
+            onRespond={(ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode')
+              ? (answer: string) => {
+                for (const call of ti.calls) {
+                  if (!call.output) {
+                    useAppStore.getState().handleWSToolOutput(threadId, { toolCallId: call.id, output: answer });
+                  }
+                }
+                onSend(answer, { model: '', mode: '' });
+              }
+              : undefined}
+          />
+        </motion.div>
+      );
+    }
+    return null;
+  }, [knownIds, prefersReducedMotion, snapshotMap, threadId, onSend]);
+
+  return (
+    <>
+      {groupedItems.map((item) => {
+        if (item.type === 'message') {
+          const msg = item.msg;
+          return (
+            <motion.div
+              key={msg.id}
+              initial={knownIds.has(msg.id) || prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ duration: 0.3, ease: 'easeOut' }}
+              className={cn(
+                'relative group text-sm',
+                msg.role === 'user'
+                  ? 'max-w-[80%] ml-auto rounded-lg px-3 py-2 bg-foreground text-background'
+                  : 'w-full text-foreground'
+              )}
+              {...(msg.role === 'user' ? { 'data-user-msg': msg.id } : {})}
+            >
+              {msg.images && msg.images.length > 0 && (() => {
+                const allImages = msg.images!.map((i: any, j: number) => ({
+                  src: `data:${i.source.media_type};base64,${i.source.data}`,
+                  alt: `Attachment ${j + 1}`,
+                }));
+                return (
+                  <div className="flex flex-wrap gap-2 mb-2">
+                    {msg.images!.map((img: any, idx: number) => (
+                      <img
+                        key={idx}
+                        src={`data:${img.source.media_type};base64,${img.source.data}`}
+                        alt={`Attachment ${idx + 1}`}
+                        width={160}
+                        height={160}
+                        className="max-h-40 rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
+                        onClick={() => onOpenLightbox(allImages, idx)}
+                      />
+                    ))}
+                  </div>
+                );
+              })()}
+              {msg.role === 'user' ? (
+                (() => {
+                  const { files, cleanContent } = parseReferencedFiles(msg.content);
+                  return (
+                    <>
+                      {files.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mb-1.5">
+                          {files.map((file) => (
+                            <span
+                              key={file}
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-mono bg-background/20 rounded text-background/70"
+                              title={file}
+                            >
+                              <FileText className="h-3 w-3 shrink-0" />
+                              {file.split('/').pop()}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                      <UserMessageContent content={cleanContent.trim()} />
+                      {(msg.model || msg.permissionMode) && (
+                        <div className="flex gap-1 mt-1.5">
+                          {msg.model && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-medium bg-background/10 text-background/60 border-background/20">
+                              {resolveModelLabel(msg.model, t)}
+                            </Badge>
+                          )}
+                          {msg.permissionMode && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-medium bg-background/10 text-background/60 border-background/20">
+                              {t(`prompt.${msg.permissionMode}`)}
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </>
+                  );
+                })()
+              ) : (
+                <div className="text-sm leading-relaxed break-words overflow-x-auto">
+                  <div className="flex items-start gap-2">
+                    <div className="flex-1 min-w-0">
+                      <MessageContent content={msg.content.trim()} />
+                    </div>
+                    <CopyButton content={msg.content} />
+                  </div>
+                  <div className="mt-1">
+                    <span className="text-[10px] text-muted-foreground/60 select-none">
+                      {timeAgo(msg.timestamp, t)}
+                    </span>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          );
+        }
+        if (item.type === 'toolcall' || item.type === 'toolcall-group') {
+          return renderToolItem(item);
+        }
+        if (item.type === 'toolcall-run') {
+          return (
+            <div key={item.items[0].type === 'toolcall' ? item.items[0].tc.id : item.items[0].calls[0].id} className="space-y-1">
+              {item.items.map(renderToolItem)}
+            </div>
+          );
+        }
+        return null;
+      })}
+    </>
+  );
+});
+
 export function ThreadView() {
   const { t } = useTranslation();
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
@@ -814,8 +1006,8 @@ export function ThreadView() {
     <div className="flex-1 flex flex-col h-full min-w-0 relative">
       <ProjectHeader />
 
-      {/* Floating TODO Panel */}
-      <AnimatePresence>
+      {/* Floating TODO Panel (currently disabled) */}
+      {/* <AnimatePresence>
         {currentSnapshot && !todoPanelDismissed && currentSnapshot.progress.completed < currentSnapshot.progress.total && (
           <TodoPanel
             todos={currentSnapshot.todos}
@@ -823,7 +1015,7 @@ export function ThreadView() {
             onDismiss={() => setTodoPanelDismissed(true)}
           />
         )}
-      </AnimatePresence>
+      </AnimatePresence> */}
 
       {/* Messages + Timeline */}
       <div className="flex-1 flex min-h-0">
@@ -854,172 +1046,15 @@ export function ThreadView() {
               <InitInfoCard initInfo={activeThread.initInfo} />
             )}
 
-            {buildGroupedRenderItems(activeThread.messages ?? []).map((item) => {
-              const renderToolItem = (ti: ToolItem) => {
-                if (ti.type === 'toolcall') {
-                  const tc = ti.tc;
-                  return (
-                    <motion.div
-                      key={tc.id}
-                      initial={knownIdsRef.current.has(tc.id) || prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.25, ease: 'easeOut' }}
-                      className={(tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode' || tc.name === 'TodoWrite' || tc.name === 'Edit') ? 'border border-border rounded-lg' : undefined}
-                      data-tool-call-id={tc.id}
-                      {...(snapshotMap.has(tc.id) ? { 'data-todo-snapshot': snapshotMap.get(tc.id) } : {})}
-                    >
-                      <ToolCallCard
-                        name={tc.name}
-                        input={tc.input}
-                        output={tc.output}
-                        onRespond={(tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode') ? (answer: string) => {
-                          // Optimistically set tool call output so it persists on refresh
-                          useAppStore.getState().handleWSToolOutput(activeThread.id, { toolCallId: tc.id, output: answer });
-                          handleSend(answer, { model: '', mode: '' });
-                        } : undefined}
-                      />
-                    </motion.div>
-                  );
-                }
-                if (ti.type === 'toolcall-group') {
-                  const groupSnapshotIdx = ti.name === 'TodoWrite'
-                    ? Math.max(...ti.calls.map((c: any) => snapshotMap.get(c.id) ?? -1))
-                    : -1;
-                  return (
-                    <motion.div
-                      key={ti.calls[0].id}
-                      initial={knownIdsRef.current.has(ti.calls[0].id) || prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.25, ease: 'easeOut' }}
-                      className={(ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode' || ti.name === 'TodoWrite' || ti.name === 'Edit') ? 'border border-border rounded-lg' : undefined}
-                      data-tool-call-id={ti.calls[0].id}
-                      {...(groupSnapshotIdx >= 0 ? { 'data-todo-snapshot': groupSnapshotIdx } : {})}
-                    >
-                      <ToolCallGroup
-                        name={ti.name}
-                        calls={ti.calls}
-                        onRespond={(ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode')
-                          ? (answer: string) => {
-                            // Optimistically set tool call output for all calls in group
-                            for (const call of ti.calls) {
-                              if (!call.output) {
-                                useAppStore.getState().handleWSToolOutput(activeThread.id, { toolCallId: call.id, output: answer });
-                              }
-                            }
-                            handleSend(answer, { model: '', mode: '' });
-                          }
-                          : undefined}
-                      />
-                    </motion.div>
-                  );
-                }
-                return null;
-              };
-
-              if (item.type === 'message') {
-                const msg = item.msg;
-                return (
-                  <motion.div
-                    key={msg.id}
-                    initial={knownIdsRef.current.has(msg.id) || prefersReducedMotion ? false : { opacity: 0, y: 8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ duration: 0.3, ease: 'easeOut' }}
-                    className={cn(
-                      'relative group text-sm',
-                      msg.role === 'user'
-                        ? 'max-w-[80%] ml-auto rounded-lg px-3 py-2 bg-foreground text-background'
-                        : 'w-full text-foreground'
-                    )}
-                    {...(msg.role === 'user' ? { 'data-user-msg': msg.id } : {})}
-                  >
-                    {msg.images && msg.images.length > 0 && (() => {
-                      const allImages = msg.images!.map((i: any, j: number) => ({
-                        src: `data:${i.source.media_type};base64,${i.source.data}`,
-                        alt: `Attachment ${j + 1}`,
-                      }));
-                      return (
-                        <div className="flex flex-wrap gap-2 mb-2">
-                          {msg.images!.map((img: any, idx: number) => (
-                            <img
-                              key={idx}
-                              src={`data:${img.source.media_type};base64,${img.source.data}`}
-                              alt={`Attachment ${idx + 1}`}
-                              width={160}
-                              height={160}
-                              className="max-h-40 rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
-                              onClick={() => openLightbox(allImages, idx)}
-                            />
-                          ))}
-                        </div>
-                      );
-                    })()}
-                    {msg.role === 'user' ? (
-                      (() => {
-                        const { files, cleanContent } = parseReferencedFiles(msg.content);
-                        return (
-                          <>
-                            {files.length > 0 && (
-                              <div className="flex flex-wrap gap-1 mb-1.5">
-                                {files.map((file) => (
-                                  <span
-                                    key={file}
-                                    className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-mono bg-background/20 rounded text-background/70"
-                                    title={file}
-                                  >
-                                    <FileText className="h-3 w-3 shrink-0" />
-                                    {file.split('/').pop()}
-                                  </span>
-                                ))}
-                              </div>
-                            )}
-                            <UserMessageContent content={cleanContent.trim()} />
-                            {(msg.model || msg.permissionMode) && (
-                              <div className="flex gap-1 mt-1.5">
-                                {msg.model && (
-                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-medium bg-background/10 text-background/60 border-background/20">
-                                    {resolveModelLabel(msg.model, t)}
-                                  </Badge>
-                                )}
-                                {msg.permissionMode && (
-                                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-medium bg-background/10 text-background/60 border-background/20">
-                                    {t(`prompt.${msg.permissionMode}`)}
-                                  </Badge>
-                                )}
-                              </div>
-                            )}
-                          </>
-                        );
-                      })()
-                    ) : (
-                      <div className="text-sm leading-relaxed break-words overflow-x-auto">
-                        <div className="flex items-start gap-2">
-                          <div className="flex-1 min-w-0">
-                            <MessageContent content={msg.content.trim()} />
-                          </div>
-                          <CopyButton content={msg.content} />
-                        </div>
-                        <div className="mt-1">
-                          <span className="text-[10px] text-muted-foreground/60 select-none">
-                            {timeAgo(msg.timestamp, t)}
-                          </span>
-                        </div>
-                      </div>
-                    )}
-                  </motion.div>
-                );
-              }
-              if (item.type === 'toolcall' || item.type === 'toolcall-group') {
-                return renderToolItem(item);
-              }
-              if (item.type === 'toolcall-run') {
-                return (
-                  <div key={item.items[0].type === 'toolcall' ? item.items[0].tc.id : item.items[0].calls[0].id} className="space-y-1">
-                    {item.items.map(renderToolItem)}
-                  </div>
-                );
-              }
-              return null;
-            })}
+            <MemoizedMessageList
+              messages={activeThread.messages ?? []}
+              threadId={activeThread.id}
+              knownIds={knownIdsRef.current}
+              prefersReducedMotion={prefersReducedMotion}
+              snapshotMap={snapshotMap}
+              onSend={handleSend}
+              onOpenLightbox={openLightbox}
+            />
 
             {isRunning && !isExternal && (
               <motion.div

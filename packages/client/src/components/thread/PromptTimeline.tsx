@@ -14,6 +14,8 @@ interface PromptMilestone {
   type: MilestoneType;
   /** Tool call ID for scrolling to tool call elements */
   toolCallId?: string;
+  /** Whether this individual todo task is completed */
+  completed?: boolean;
 }
 
 function formatTime(dateStr: string): string {
@@ -55,25 +57,16 @@ function truncate(text: string, max: number): string {
   return text.slice(0, max).trimEnd() + '…';
 }
 
-/** Extract a short summary for a tool call milestone */
-function getToolCallSummary(name: string, input: string): string | null {
-  let parsed: Record<string, unknown>;
+function parseToolInput(input: string): Record<string, unknown> | null {
   try {
-    parsed = typeof input === 'string' ? JSON.parse(input) : input;
+    return typeof input === 'string' ? JSON.parse(input) : input;
   } catch {
     return null;
   }
+}
 
-  if (name === 'TodoWrite') {
-    const todos = parsed.todos;
-    if (!Array.isArray(todos)) return null;
-    const done = todos.filter((t: any) => t.status === 'completed').length;
-    // Find the current in_progress task for a meaningful label
-    const inProgress = todos.find((t: any) => t.status === 'in_progress');
-    if (inProgress?.activeForm) return `${done}/${todos.length} · ${inProgress.activeForm}`;
-    return `${done}/${todos.length} done`;
-  }
-
+/** Extract a short summary for non-todo tool call milestones */
+function getToolCallSummary(name: string, parsed: Record<string, unknown>): string | null {
   if (name === 'AskUserQuestion') {
     const questions = parsed.questions;
     if (!Array.isArray(questions) || questions.length === 0) return null;
@@ -106,6 +99,27 @@ export function PromptTimeline({ messages, activeMessageId, onScrollToMessage }:
     let idx = 0;
     const result: PromptMilestone[] = [];
 
+    // First pass: find the last TodoWrite snapshot to get final task states
+    let lastTodoSnapshot: { todos: any[]; toolCallId: string; timestamp: string } | null = null;
+    for (const m of messages) {
+      if (m.role === 'assistant' && m.toolCalls) {
+        for (const tc of m.toolCalls) {
+          if (tc.name === 'TodoWrite') {
+            const parsed = parseToolInput(tc.input);
+            if (parsed) {
+              const todos = parsed.todos;
+              if (Array.isArray(todos) && todos.length > 0) {
+                lastTodoSnapshot = { todos, toolCallId: tc.id, timestamp: m.timestamp };
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Track whether we've already inserted the todo items
+    let todosInserted = false;
+
     for (const m of messages) {
       // User messages become prompt milestones
       if (m.role === 'user' && m.content?.trim()) {
@@ -118,13 +132,36 @@ export function PromptTimeline({ messages, activeMessageId, onScrollToMessage }:
         });
       }
 
-      // Scan assistant tool calls for todos, questions, plans
+      // Scan assistant tool calls for questions, plans, and the first TodoWrite
       if (m.role === 'assistant' && m.toolCalls) {
         for (const tc of m.toolCalls) {
+          // Insert individual todo items at the position of the first TodoWrite
+          if (tc.name === 'TodoWrite' && !todosInserted && lastTodoSnapshot) {
+            todosInserted = true;
+            for (let i = 0; i < lastTodoSnapshot.todos.length; i++) {
+              const todo = lastTodoSnapshot.todos[i];
+              result.push({
+                id: `todo-${i}`,
+                content: todo.content || todo.activeForm || `Task ${i + 1}`,
+                timestamp: m.timestamp,
+                index: idx++,
+                type: 'todo',
+                toolCallId: lastTodoSnapshot.toolCallId,
+                completed: todo.status === 'completed',
+              });
+            }
+            continue;
+          }
+          // Skip subsequent TodoWrite calls (already represented by individual items)
+          if (tc.name === 'TodoWrite') continue;
+
           const milestoneType = TOOL_CALL_TYPES[tc.name];
           if (!milestoneType) continue;
 
-          const summary = getToolCallSummary(tc.name, tc.input);
+          const parsed = parseToolInput(tc.input);
+          if (!parsed) continue;
+
+          const summary = getToolCallSummary(tc.name, parsed);
           if (!summary) continue;
 
           result.push({
@@ -273,7 +310,8 @@ function TimelineMilestone({
                 ? colors.text
                 : isActive
                   ? 'text-foreground font-medium'
-                  : 'text-muted-foreground group-hover/btn:text-foreground'
+                  : 'text-muted-foreground group-hover/btn:text-foreground',
+              milestone.completed && 'line-through opacity-60'
             )}>
               {truncate(milestone.content, 80)}
             </div>

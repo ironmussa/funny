@@ -373,6 +373,10 @@ export function PromptInput({
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [sendToBacklog, setSendToBacklog] = useState(false);
   const [localCurrentBranch, setLocalCurrentBranch] = useState<string | null>(null);
+  // For existing threads in local mode: allow creating a worktree
+  const [createWorktreeForFollowUp, setCreateWorktreeForFollowUp] = useState(false);
+  const [followUpBranches, setFollowUpBranches] = useState<string[]>([]);
+  const [followUpSelectedBranch, setFollowUpSelectedBranch] = useState<string>('');
 
 
   // When provider changes, reset model to first available for that provider
@@ -561,6 +565,30 @@ export function PromptInput({
     }
   }, [isNewThread, activeThread?.mode, activeThread?.branch, selectedProjectId]);
 
+  // Fetch branches for follow-up worktree creation (when in local mode thread)
+  useEffect(() => {
+    if (!isNewThread && activeThread?.mode === 'local' && selectedProjectId) {
+      (async () => {
+        const result = await api.listBranches(selectedProjectId);
+        if (result.isOk()) {
+          const data = result.value;
+          setFollowUpBranches(data.branches);
+          if (data.defaultBranch) {
+            setFollowUpSelectedBranch(data.defaultBranch);
+          } else if (data.currentBranch) {
+            setFollowUpSelectedBranch(data.currentBranch);
+          } else if (data.branches.length > 0) {
+            setFollowUpSelectedBranch(data.branches[0]);
+          }
+        } else {
+          setFollowUpBranches([]);
+        }
+      })();
+    } else {
+      setFollowUpBranches([]);
+    }
+  }, [isNewThread, activeThread?.mode, selectedProjectId]);
+
   // Fetch skills once when the menu first opens
   const loadSkills = useCallback(async () => {
     if (skillsLoaded) return;
@@ -721,7 +749,12 @@ export function PromptInput({
         provider,
         model,
         mode,
-        ...(isNewThread ? { threadMode: createWorktree ? 'worktree' : 'local', baseBranch: selectedBranch || undefined, sendToBacklog } : {}),
+        ...(isNewThread
+          ? { threadMode: createWorktree ? 'worktree' : 'local', baseBranch: selectedBranch || undefined, sendToBacklog }
+          : createWorktreeForFollowUp
+            ? { threadMode: 'worktree', baseBranch: followUpSelectedBranch || undefined }
+            : {}
+        ),
         cwd: cwdOverride || undefined,
         fileReferences: submittedFiles,
       },
@@ -1106,11 +1139,36 @@ export function PromptInput({
                     threadBranch={activeThread?.branch}
                     onChange={setCwdOverride}
                   />
-                ) : (activeThread?.branch || localCurrentBranch) ? (
-                  <button className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted truncate max-w-[300px]" disabled>
-                    <GitBranch className="h-3 w-3 shrink-0" />
-                    <span className="truncate font-mono">{activeThread?.branch || localCurrentBranch}</span>
-                  </button>
+                ) : activeThread?.mode === 'local' ? (
+                  <>
+                    {!createWorktreeForFollowUp && (activeThread?.branch || localCurrentBranch) && (
+                      <button className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted truncate max-w-[300px]" disabled>
+                        <GitBranch className="h-3 w-3 shrink-0" />
+                        <span className="truncate font-mono">{activeThread?.branch || localCurrentBranch}</span>
+                      </button>
+                    )}
+                    {createWorktreeForFollowUp && followUpBranches.length > 0 && (
+                      <BranchPicker
+                        branches={followUpBranches}
+                        selected={followUpSelectedBranch}
+                        onChange={setFollowUpSelectedBranch}
+                      />
+                    )}
+                    <button
+                      onClick={() => setCreateWorktreeForFollowUp(!createWorktreeForFollowUp)}
+                      tabIndex={-1}
+                      className={cn(
+                        'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors shrink-0',
+                        createWorktreeForFollowUp
+                          ? 'bg-primary/10 text-primary'
+                          : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                      )}
+                      title={t('newThread.createWorktree', 'Create isolated worktree')}
+                    >
+                      <GitBranch className="h-3 w-3" />
+                      <span>{t('thread.mode.worktree')}</span>
+                    </button>
+                  </>
                 ) : null
               )}
               {isNewThread && newThreadBranches.length > 0 && (

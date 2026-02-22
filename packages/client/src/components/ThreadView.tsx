@@ -827,8 +827,9 @@ export function ThreadView() {
 
       {/* Messages + Timeline */}
       <div className="flex-1 flex min-h-0">
-        {/* Messages column */}
-        <div className="flex-1 relative min-h-0 min-w-0">
+        {/* Messages column + input */}
+        <div className="flex-1 flex flex-col min-h-0 min-w-0">
+          <div className="flex-1 relative min-h-0 min-w-0">
           <ScrollArea className="h-full px-4 [&_[data-radix-scroll-area-viewport]>div]:!flex [&_[data-radix-scroll-area-viewport]>div]:!flex-col [&_[data-radix-scroll-area-viewport]>div]:min-h-full" viewportRef={scrollViewportRef}>
           <div className="w-full mx-auto max-w-3xl min-w-[320px] space-y-4 overflow-hidden py-4 mt-auto">
             {loadingMore && (
@@ -1144,6 +1145,20 @@ export function ThreadView() {
         )}
         </div>
 
+          {/* Input — hidden when waiting for a question response */}
+          {!(activeThread.status === 'waiting' && activeThread.waitingReason === 'question') && (
+            <PromptInput
+              onSubmit={handleSend}
+              onStop={handleStop}
+              loading={sending}
+              running={isRunning && !isExternal}
+              isQueueMode={isQueueMode}
+              queuedCount={(activeThread as any).queuedCount ?? 0}
+              placeholder={t('thread.nextPrompt')}
+            />
+          )}
+        </div>
+
         {/* Prompt Timeline */}
         {activeThread.messages.length > 0 && (
           <PromptTimeline
@@ -1162,19 +1177,6 @@ export function ThreadView() {
           />
         )}
       </div>
-
-      {/* Input — hidden when waiting for a question response */}
-      {!(activeThread.status === 'waiting' && activeThread.waitingReason === 'question') && (
-        <PromptInput
-          onSubmit={handleSend}
-          onStop={handleStop}
-          loading={sending}
-          running={isRunning && !isExternal}
-          isQueueMode={isQueueMode}
-          queuedCount={(activeThread as any).queuedCount ?? 0}
-          placeholder={t('thread.nextPrompt')}
-        />
-      )}
 
       {/* Image lightbox */}
       <ImageLightbox

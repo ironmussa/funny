@@ -13,6 +13,7 @@ import { log } from '../lib/abbacchio.js';
 import { transitionStatus } from './thread-status-machine.js';
 import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
 import type { ThreadEvent } from '@funny/shared/thread-machine';
+import { buildThreadContext, needsContextRecovery } from './thread-context-builder.js';
 
 // ── AgentRunner class ───────────────────────────────────────────
 
@@ -165,6 +166,24 @@ export class AgentRunner {
     // Read session ID from DB for resume
     const thread = this.threadManager.getThread(threadId);
 
+    // Check if this thread needs context recovery (post-merge, session exists but worktree gone)
+    const needsRecovery = needsContextRecovery(threadId);
+    let effectivePrompt = prompt;
+    let effectiveSessionId = thread?.sessionId ?? undefined;
+
+    if (needsRecovery) {
+      log.info('Thread needs context recovery (post-merge)', { namespace: 'agent', threadId });
+      // Build conversation history from DB
+      const context = buildThreadContext(threadId);
+      if (context) {
+        // Prepend context to the user's new message
+        effectivePrompt = `${context}\n\nUSER (new message):\n${prompt}`;
+      }
+      // Clear sessionId to force a fresh session with the full context
+      this.threadManager.updateThread(threadId, { sessionId: null });
+      effectiveSessionId = undefined;
+    }
+
     // Derive the system prefix from the machine's resumeReason
     const isPostMerge = !!(thread?.sessionId && thread?.baseBranch && !thread?.worktreePath);
     const systemPrefix = getResumeSystemPrefix(resumeReason, isPostMerge);
@@ -187,7 +206,7 @@ export class AgentRunner {
     try {
       await this.orchestrator.startAgent({
         threadId,
-        prompt,
+        prompt: effectivePrompt,
         cwd,
         model,
         permissionMode,
@@ -195,7 +214,7 @@ export class AgentRunner {
         disallowedTools,
         allowedTools,
         provider,
-        sessionId: thread?.sessionId ?? undefined,
+        sessionId: effectiveSessionId,
         systemPrefix,
         mcpServers,
       });

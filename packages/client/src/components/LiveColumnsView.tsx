@@ -438,7 +438,6 @@ export function LiveColumnsView() {
   const threadsByProject = useThreadStore(s => s.threadsByProject);
   const projects = useProjectStore(s => s.projects);
   const loadThreadsForProject = useThreadStore(s => s.loadThreadsForProject);
-  const defaultThreadMode = useSettingsStore(s => s.defaultThreadMode);
   const toolPermissions = useSettingsStore(s => s.toolPermissions);
   const [gridCols, setGridCols] = useState(() => {
     const saved = localStorage.getItem('funny:grid-cols');
@@ -470,7 +469,8 @@ export function LiveColumnsView() {
     if (!slideUpProjectId || creating) return false;
     setCreating(true);
 
-    const threadMode = (opts.threadMode as 'local' | 'worktree') || defaultThreadMode;
+    const slideUpProject = projects.find(p => p.id === slideUpProjectId);
+    const threadMode = (opts.threadMode as 'local' | 'worktree') || slideUpProject?.defaultMode || 'worktree';
 
     if (opts.sendToBacklog) {
       const result = await api.createIdleThread({
@@ -513,7 +513,7 @@ export function LiveColumnsView() {
     setCreating(false);
     toast.success(t('toast.threadCreated', { title: prompt.slice(0, 200) }));
     return true;
-  }, [slideUpProjectId, creating, defaultThreadMode, toolPermissions, loadThreadsForProject, t]);
+  }, [slideUpProjectId, creating, projects, toolPermissions, loadThreadsForProject, t]);
 
   const filteredProjects = projectSearch
     ? projects.filter((p) => p.name.toLowerCase().includes(projectSearch.toLowerCase()))

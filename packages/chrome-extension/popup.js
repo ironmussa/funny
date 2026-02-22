@@ -25,6 +25,9 @@ let isAnnotatorActive = false;
 // Cached provider data from the server
 let providerData = null;
 
+// Cached projects list (with defaults) from the server
+let projectsData = [];
+
 // ---------------------------------------------------------------------------
 // Init
 // ---------------------------------------------------------------------------
@@ -32,7 +35,6 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Load config
   const config = await sendMessage({ type: 'GET_CONFIG' });
   serverUrlInput.value = config.serverUrl || 'http://localhost:3001';
-  modeSelect.value = config.mode || 'worktree';
 
   // Get state from content script
   try {
@@ -48,9 +50,19 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   // Fetch providers/models from server + projects in parallel
   await Promise.all([
-    loadProvidersAndModels(config.provider, config.model),
+    loadProviderOptions(),
     loadProjects(config.projectId),
   ]);
+
+  // Apply project defaults after both providers and projects are loaded.
+  // Project defaults take priority over saved config.
+  if (config.projectId && providerData) {
+    applyProjectDefaults(config.projectId);
+  } else {
+    // No project selected — use saved config or fallbacks
+    applyFromConfig(config);
+  }
+  saveCurrentConfig();
 
   // Auto-test connection
   await testConnection(false);
@@ -59,7 +71,12 @@ document.addEventListener('DOMContentLoaded', async () => {
 // ---------------------------------------------------------------------------
 // Provider / Model loading from Funny API
 // ---------------------------------------------------------------------------
-async function loadProvidersAndModels(savedProvider, savedModel) {
+
+/**
+ * Fetch available providers from the server and populate the provider dropdown.
+ * Does NOT select a value — that's done by applyProjectDefaults or applyFromConfig.
+ */
+async function loadProviderOptions() {
   try {
     const result = await sendMessage({ type: 'FETCH_SETUP_STATUS' });
     if (!result.success) throw new Error(result.error);
@@ -77,36 +94,37 @@ async function loadProvidersAndModels(savedProvider, savedModel) {
       return;
     }
 
-    // If no saved provider, use the first available provider as default
-    const effectiveProvider = (savedProvider && providerData[savedProvider]?.available)
-      ? savedProvider
-      : availableProviders[0][0];
-
     availableProviders.forEach(([key, info]) => {
       const opt = document.createElement('option');
       opt.value = key;
       opt.textContent = info.label || key;
-      if (key === effectiveProvider) opt.selected = true;
       providerSelect.appendChild(opt);
     });
-
-    providerSelect.value = effectiveProvider;
-
-    // If no saved model, use the provider's default model from the server
-    const effectiveModel = savedModel || providerData[effectiveProvider]?.defaultModel || '';
-
-    // Populate models for the selected provider
-    populateModels(providerSelect.value, effectiveModel);
-
-    // Persist the resolved defaults so they're saved for next time
-    if (!savedProvider || !savedModel) {
-      saveCurrentConfig();
-    }
   } catch (err) {
     // Fallback: show empty selects
     providerSelect.innerHTML = '<option value="">Failed to load</option>';
     modelSelect.innerHTML = '<option value="">-</option>';
   }
+}
+
+/**
+ * Apply saved config values when no project is selected.
+ */
+function applyFromConfig(config) {
+  if (!providerData) return;
+
+  const effectiveProvider = (config.provider && providerData[config.provider]?.available)
+    ? config.provider
+    : providerSelect.options[0]?.value || '';
+
+  if (effectiveProvider) {
+    providerSelect.value = effectiveProvider;
+  }
+
+  const effectiveModel = config.model || providerData[effectiveProvider]?.defaultModel || '';
+  populateModels(providerSelect.value, effectiveModel);
+
+  modeSelect.value = config.mode || 'worktree';
 }
 
 function populateModels(provider, selectedModel) {
@@ -164,7 +182,10 @@ testConnectionBtn.addEventListener('click', () => testConnection(true));
 
 // Save config on change
 serverUrlInput.addEventListener('change', () => saveCurrentConfig());
-projectSelect.addEventListener('change', () => saveCurrentConfig());
+projectSelect.addEventListener('change', () => {
+  applyProjectDefaults(projectSelect.value);
+  saveCurrentConfig();
+});
 providerSelect.addEventListener('change', () => {
   populateModels(providerSelect.value);
   saveCurrentConfig();
@@ -225,9 +246,9 @@ async function loadProjects(selectedProjectId) {
     const result = await sendMessage({ type: 'FETCH_PROJECTS' });
     if (!result.success) throw new Error(result.error);
 
-    const projects = result.projects;
+    projectsData = result.projects || [];
     projectSelect.innerHTML = '<option value="">Select a project...</option>';
-    projects.forEach(p => {
+    projectsData.forEach(p => {
       const opt = document.createElement('option');
       opt.value = p.id;
       opt.textContent = p.name;
@@ -237,6 +258,30 @@ async function loadProjects(selectedProjectId) {
   } catch (err) {
     projectSelect.innerHTML = '<option value="">Failed to load projects</option>';
   }
+}
+
+/**
+ * Apply project-level defaults (provider, model, mode) to the popup selects.
+ * Uses hardcoded fallbacks when the project has no defaults set.
+ */
+function applyProjectDefaults(projectId) {
+  if (!projectId || !providerData) return;
+
+  const project = projectsData.find(p => p.id === projectId);
+  if (!project) return;
+
+  // Resolve provider: project default > first available > 'claude'
+  const effectiveProvider = project.defaultProvider || 'claude';
+  if (providerData[effectiveProvider]?.available) {
+    providerSelect.value = effectiveProvider;
+  }
+
+  // Resolve model: project default > provider's default
+  const effectiveModel = project.defaultModel || '';
+  populateModels(providerSelect.value, effectiveModel);
+
+  // Resolve mode: project default > 'worktree'
+  modeSelect.value = project.defaultMode || 'worktree';
 }
 
 async function testConnection(showFeedback) {
@@ -257,9 +302,16 @@ async function testConnection(showFeedback) {
     await saveCurrentConfig();
     const config = await sendMessage({ type: 'GET_CONFIG' });
     await Promise.all([
-      loadProvidersAndModels(config.provider, config.model),
-      loadProjects(projectSelect.value),
+      loadProviderOptions(),
+      loadProjects(config.projectId),
     ]);
+    // Re-apply project defaults or config after reload
+    if (config.projectId && providerData) {
+      applyProjectDefaults(config.projectId);
+    } else {
+      applyFromConfig(config);
+    }
+    saveCurrentConfig();
   } else {
     connectionDot.className = 'connection-dot error';
     connectionDot.title = 'Connection failed';

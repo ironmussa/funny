@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -16,7 +17,9 @@ export function NewThreadInput() {
   const newThreadIdleOnly = useAppStore(s => s.newThreadIdleOnly);
   const cancelNewThread = useAppStore(s => s.cancelNewThread);
   const loadThreadsForProject = useAppStore(s => s.loadThreadsForProject);
-  const defaultThreadMode = useSettingsStore(s => s.defaultThreadMode);
+  const projects = useProjectStore(s => s.projects);
+  const project = effectiveProjectId ? projects.find(p => p.id === effectiveProjectId) : undefined;
+  const defaultThreadMode = project?.defaultMode ?? 'worktree';
   const toolPermissions = useSettingsStore(s => s.toolPermissions);
 
   const [creating, setCreating] = useState(false);

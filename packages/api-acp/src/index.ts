@@ -64,4 +64,5 @@ console.log();
 export default {
   port,
   fetch: app.fetch,
+  idleTimeout: 255, // max allowed by Bun — SDK query() can take 30+ seconds to respond
 };

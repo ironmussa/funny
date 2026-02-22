@@ -41,6 +41,9 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: `http://localhost:${serverPort}`,
           changeOrigin: true,
+          // Timeout stale connections after 10s — prevents infinite hangs when
+          // the backend hot-reloads and ghost sockets remain (Windows issue).
+          timeout: 10000,
         },
         '/ws': {
           target: `ws://localhost:${serverPort}`,

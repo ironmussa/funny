@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/stores/app-store';
-import { useSettingsStore } from '@/stores/settings-store';
+import { useProjectStore } from '@/stores/project-store';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
 import { GitBranch, Check, ChevronsUpDown, Search } from 'lucide-react';
@@ -37,9 +37,11 @@ export function NewThreadDialog() {
   const loadThreadsForProject = useAppStore(s => s.loadThreadsForProject);
   const selectThread = useAppStore(s => s.selectThread);
 
-  const defaultThreadMode = useSettingsStore(s => s.defaultThreadMode);
-  const defaultProvider = useSettingsStore(s => s.defaultProvider);
-  const defaultModel = useSettingsStore(s => s.defaultModel);
+  const projects = useProjectStore(s => s.projects);
+  const project = newThreadProjectId ? projects.find(p => p.id === newThreadProjectId) : undefined;
+  const defaultThreadMode = project?.defaultMode ?? 'worktree';
+  const defaultProvider = project?.defaultProvider ?? 'claude';
+  const defaultModel = project?.defaultModel ?? 'sonnet';
   const [createWorktree, setCreateWorktree] = useState(defaultThreadMode === 'worktree');
   const [provider, setProvider] = useState<string>(defaultProvider);
   const [model, setModel] = useState<string>(defaultModel);

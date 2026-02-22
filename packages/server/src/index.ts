@@ -1,3 +1,10 @@
+// On Windows, bun --watch forks worker processes — each has its own globalThis.
+// Ghost sockets from previous workers (whose child processes inherited the
+// server's listening handle) can block the port. Clean them up before binding.
+if (process.platform === 'win32') {
+  await import('./kill-port.js');
+}
+
 import { log } from './lib/abbacchio.js';
 import { observability, observabilityShutdown } from '@funny/observability';
 import { Hono } from 'hono';

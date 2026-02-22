@@ -24,9 +24,6 @@ describe('SettingsStore', () => {
     useSettingsStore.setState({
       theme: 'dark',
       defaultEditor: 'cursor',
-      defaultThreadMode: 'worktree',
-      defaultModel: 'opus',
-      defaultPermissionMode: 'autoEdit',
       toolPermissions: Object.fromEntries(
         ALL_STANDARD_TOOLS.map(tool => [tool, 'allow' as ToolPermission])
       ),
@@ -138,9 +135,6 @@ describe('SettingsStore', () => {
 
       expect(state.theme).toBe('dark');
       expect(state.defaultEditor).toBe('cursor');
-      expect(state.defaultThreadMode).toBe('worktree');
-      expect(state.defaultModel).toBe('opus');
-      expect(state.defaultPermissionMode).toBe('autoEdit');
       expect(state.setupCompleted).toBe(false);
 
       // All tool permissions default to 'allow'
@@ -156,27 +150,6 @@ describe('SettingsStore', () => {
     test('updates editor', () => {
       useSettingsStore.getState().setDefaultEditor('vscode');
       expect(useSettingsStore.getState().defaultEditor).toBe('vscode');
-    });
-  });
-
-  describe('setDefaultThreadMode', () => {
-    test('updates mode', () => {
-      useSettingsStore.getState().setDefaultThreadMode('local');
-      expect(useSettingsStore.getState().defaultThreadMode).toBe('local');
-    });
-  });
-
-  describe('setDefaultModel', () => {
-    test('updates model', () => {
-      useSettingsStore.getState().setDefaultModel('haiku');
-      expect(useSettingsStore.getState().defaultModel).toBe('haiku');
-    });
-  });
-
-  describe('setDefaultPermissionMode', () => {
-    test('updates mode', () => {
-      useSettingsStore.getState().setDefaultPermissionMode('plan');
-      expect(useSettingsStore.getState().defaultPermissionMode).toBe('plan');
     });
   });
 

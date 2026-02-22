@@ -44,19 +44,11 @@ interface SettingsState {
   theme: Theme;
   defaultEditor: Editor;
   useInternalEditor: boolean;
-  defaultThreadMode: ThreadMode;
-  defaultProvider: AgentProvider;
-  defaultModel: AgentModel;
-  defaultPermissionMode: PermissionMode;
   toolPermissions: Record<string, ToolPermission>;
   setupCompleted: boolean;
   setTheme: (theme: Theme) => void;
   setDefaultEditor: (editor: Editor) => void;
   setUseInternalEditor: (use: boolean) => void;
-  setDefaultThreadMode: (mode: ThreadMode) => void;
-  setDefaultProvider: (provider: AgentProvider) => void;
-  setDefaultModel: (model: AgentModel) => void;
-  setDefaultPermissionMode: (mode: PermissionMode) => void;
   setToolPermission: (toolName: string, permission: ToolPermission) => void;
   resetToolPermissions: () => void;
   completeSetup: () => void;
@@ -93,10 +85,6 @@ export const useSettingsStore = create<SettingsState>()(
       theme: 'dark',
       defaultEditor: 'cursor',
       useInternalEditor: false,
-      defaultThreadMode: 'worktree',
-      defaultProvider: 'claude',
-      defaultModel: 'opus',
-      defaultPermissionMode: 'autoEdit',
       toolPermissions: { ...DEFAULT_TOOL_PERMISSIONS },
       setupCompleted: false,
       setTheme: (theme) => {
@@ -105,10 +93,6 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setDefaultEditor: (editor) => set({ defaultEditor: editor }),
       setUseInternalEditor: (use) => set({ useInternalEditor: use }),
-      setDefaultThreadMode: (mode) => set({ defaultThreadMode: mode }),
-      setDefaultProvider: (provider) => set({ defaultProvider: provider }),
-      setDefaultModel: (model) => set({ defaultModel: model }),
-      setDefaultPermissionMode: (mode) => set({ defaultPermissionMode: mode }),
       setToolPermission: (toolName, permission) => set((state) => ({
         toolPermissions: { ...state.toolPermissions, [toolName]: permission },
       })),

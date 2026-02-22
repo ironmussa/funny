@@ -13,80 +13,91 @@ bun packages/server/src/kill-port.ts
 
 # 4. Restart
 bun run dev
-# Or separately:
-bun run dev:server
-bun run dev:client
 
 # 5. Hard refresh the browser: Ctrl+Shift+R
 ```
 
-## The Problem (What Happened)
+## The Root Cause: Windows Handle Inheritance
 
-After pressing Ctrl+C to stop the server, the UI got permanently stuck on skeleton loaders. Refreshing the page didn't help. The server appeared to restart fine (logs showed `Listening on http://localhost:3001` and HTTP requests returned 200), but the frontend was completely unresponsive.
-
-### Investigation timeline
-
-**1. First theory: Circuit breaker blocking the UI**
-
-The client has a circuit breaker that opens after 3 failed HTTP requests, showing a full-screen "server unavailable" overlay. We thought it was staying open after the server came back.
-
-- **Finding:** The circuit breaker auto-probes `/api/health` every 15 seconds, but when the WebSocket reconnects (every 2s), it called `refreshAllLoadedThreads()` while the circuit breaker was still open — so all API requests failed immediately with "circuit open" and the data never loaded.
-- **Fix applied:** Reset the circuit breaker when the WebSocket connects (`use-ws.ts:255`). This closes the circuit 2 seconds after server restart instead of 15.
-
-**2. Second theory: Ghost processes holding the port**
-
-The user suspected zombie processes. We checked with `netstat`:
+On Windows, when a process spawns a child using `CreateProcess` with `bInheritHandles=TRUE`, the child inherits **ALL** open handles from the parent — not just stdio, but also TCP sockets, file handles, etc.
 
 ```
-TCP  127.0.0.1:3001  0.0.0.0:0  LISTENING  20148   ← live server
-TCP  127.0.0.1:3001  0.0.0.0:0  LISTENING  29772   ← ghost (process dead!)
+Server (Bun, listening on :3001)
+  └── SDK spawns node.exe (inherits server socket!)
+       └── Hot reload kills server... but node.exe keeps the socket alive
+            └── Ghost socket: TCP LISTEN on :3001 with dead PID
 ```
 
-Two processes "listening" on the same port, but PID 29772 didn't exist anymore. Windows was keeping its TCP socket entries alive.
+When the server hot-reloads (file change), the old worker process dies but its child processes survive with inherited copies of the server's listening socket. New connections can be routed to the ghost socket instead of the live server, causing the UI to hang forever on skeletons.
 
-**3. Root cause: Vite proxy using dead connections**
+### How we confirmed this
 
-Filtering the browser Network tab by Fetch/XHR revealed only 2 requests:
-- `bootstrap` — stuck with "Provisional headers are shown" (never completed)
-- `logs` — failed
+1. `netstat -ano | findstr :3001` showed **two LISTEN entries** — one live, one from a dead PID
+2. `Get-Process -Id <ghost_pid>` → process doesn't exist
+3. `Get-NetTCPConnection` showed Vite proxy had `Established` connections to the ghost
+4. Even `curl http://127.0.0.1:3001/api/health` hung (ghost intercepted the connection)
+5. Killing **all node.exe** processes freed the ghost socket — confirming a node.exe child held the inherited handle
+6. The user confirmed an MCP server was running at the time — MCP servers are long-lived child processes that inherit the socket
 
-The `/api/bootstrap` is the FIRST request the app makes at startup to get the auth token. If it hangs, `isLoading` stays `true` forever and the AuthGate component renders `<AppShellSkeleton />` indefinitely.
+### Why `bun --watch` makes it worse
 
-The Vite dev server proxy had established TCP connections to the old server process (PID 29772) before it died. Even though the process was dead, Vite kept trying to reuse those cached connections (HTTP keep-alive). Requests sent through the dead connection hung forever.
+`bun --watch` on Windows forks worker processes (new PID per reload). Each worker has its own `globalThis`, so the cleanup pattern (`__bunCleanup` on globalThis) doesn't work — the new worker can't access the old worker's cleanup functions. The old worker is killed without running any cleanup, and its children (agents, MCP servers) survive with the inherited socket.
 
-**4. Why `process.exit()` leaves orphans on Windows**
+## Solutions: Defense in Depth
 
-On Windows, `process.exit()` only terminates the current process. Child processes survive. The Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`) spawns Node.js subprocesses via `query()` with `executable: 'node'`. These subprocesses can inherit the server's socket handle (Windows handle inheritance via `bInheritHandles=TRUE` in CreateProcess). When the parent server dies, the orphaned subprocess keeps the port occupied.
+### Layer 1 (Root Cause Fix): Prevent socket inheritance in agent processes
 
-### Solutions implemented
+**File:** `packages/core/src/agents/sdk-claude.ts:72-102`
 
-**A. Windows process tree kill on shutdown** (`index.ts` → ShutdownManager FINAL phase)
+The Claude Agent SDK has a `spawnClaudeCodeProcess` hook that controls how it spawns its subprocess. On Windows, we provide a custom spawn function that uses `stdio: ['pipe', 'pipe', 'pipe']` — this triggers `PROC_THREAD_ATTRIBUTE_HANDLE_LIST` in Node.js/libuv, which restricts handle inheritance to only the pipe handles. The server socket is NOT inherited.
 
-Before `process.exit()`, run `taskkill /F /T /PID` to kill the entire process tree including all child and grandchild processes. This prevents orphaned subprocesses from holding the port.
+```typescript
+if (process.platform === 'win32' && !sdkOptions.spawnClaudeCodeProcess) {
+  const { spawn } = await import('child_process');
+  sdkOptions.spawnClaudeCodeProcess = (options) => {
+    const child = spawn(options.command, options.args, {
+      stdio: ['pipe', 'pipe', 'pipe'],  // ← triggers HANDLE_LIST restriction
+      cwd: options.cwd,
+      env: options.env,
+      windowsHide: true,
+    });
+    // wire abort signal...
+    return child;
+  };
+}
+```
 
-**B. Circuit breaker reset on WebSocket reconnect** (`use-ws.ts:255`)
+Same pattern already used by:
+- `sandbox-manager.ts:490` (Podman execution)
+- `pty-manager.ts:23-31` (PTY helper with explicit comment about handle inheritance)
 
-When the WebSocket connects, call `useCircuitBreakerStore.getState().recordSuccess()` before `refreshAllLoadedThreads()`. This ensures API requests aren't blocked by the circuit breaker during reconnection.
+### Layer 2: Kill entire process tree on dev reload
 
-**C. ShutdownManager registry pattern** (`shutdown-manager.ts`)
+**File:** `packages/server/src/dev-watch.ts`
 
-Centralized all scattered cleanup logic into a single registry. Before this, cleanup was manually orchestrated in `index.ts` with direct calls to each service. Adding or changing cleanup required editing multiple files.
+Replaced `bun --watch` with manual file watching + `taskkill /F /T /PID` on every reload. This kills the server AND all its children, preventing ghost sockets even if Layer 1 misses something (e.g., MCP server processes spawned by the SDK internally without the custom hook).
 
-**D. Fixed missing cleanup & timer leaks**
+### Layer 3: Clean ghost sockets at startup
 
-- `command-runner.ts` — active commands were NOT killed on shutdown (now they are)
-- `rate-limit.ts` — `setInterval` for pruning was never cleared (timer leak)
-- `mcp-oauth.ts` — `setInterval` for state cleanup was never cleared (timer leak)
+**File:** `packages/server/src/kill-port.ts` (called from `index.ts:4-6`)
 
-**E. Persistent server logs** (`~/.funny/logs/server-YYYY-MM-DD.log`)
+Runs before `Bun.serve()` on Windows. Detects ghost sockets by checking if listening PIDs are alive. If ghost PIDs are found, hunts for processes holding inherited handles by scanning all TCP connections on the port.
 
-Added Winston file transport with daily rotation (7 day retention). Before this, all logs were console-only and lost on restart.
+### Layer 4: Vite proxy timeout
+
+**File:** `packages/client/vite.config.ts:46`
+
+Added `timeout: 10000` to the API proxy. If a cached connection to a ghost socket hangs, it times out after 10 seconds instead of hanging forever. The client can then retry on a fresh connection to the live server.
+
+### Layer 5: Circuit breaker reset on WebSocket reconnect
+
+**File:** `packages/client/src/hooks/use-ws.ts`
+
+When the WebSocket connects, resets the HTTP circuit breaker immediately. Without this, the circuit breaker stays open for 15 seconds after the server comes back, blocking all API requests.
 
 ## Architecture: ShutdownManager
 
 All cleanup is centralized in `packages/server/src/services/shutdown-manager.ts` using a registry pattern. Services self-register at import time.
-
-### How it works
 
 ```
                     shutdownManager (singleton)
@@ -108,15 +119,6 @@ Each service self-registers at import time:
   shutdownManager.register('name', cleanupFn, phase)
 ```
 
-### Shutdown phases
-
-```
-Phase 0 (SERVER):    server.stop(true)         — release port first
-Phase 1 (SERVICES):  [parallel] all services   — agents, PTY, scheduler, timers...
-Phase 2 (DATABASE):  closeDatabase()           — last, because others write during cleanup
-Phase 3 (FINAL):     taskkill /F /T + exit     — Windows tree kill, only on hard shutdown
-```
-
 ### Registered services
 
 | Service              | File                              | Phase    | Notes                              |
@@ -135,7 +137,7 @@ Phase 3 (FINAL):     taskkill /F /T + exit     — Windows tree kill, only on ha
 ### Two shutdown modes
 
 - **`hard`** (Ctrl+C / SIGINT): kills everything, exits process
-- **`hotReload`** (bun --watch): preserves running agents on `globalThis`, kills the rest
+- **`hotReload`** (dev-watch file change): kills process tree, restarts fresh
 
 ### Adding a new service
 
@@ -157,11 +159,17 @@ netstat -ano | findstr :3001
 # Check if a PID is alive or ghost
 powershell -Command "Get-Process -Id <PID>"
 
+# Full TCP state with process info
+powershell -Command "Get-NetTCPConnection -LocalPort 3001 | Select OwningProcess,State | Format-Table"
+
 # Kill a specific process tree
 taskkill /F /T /PID <PID>
 
-# Nuclear option: kill everything on port 3001
+# Nuclear: kill ALL processes with connections to port 3001
 powershell -Command "Get-NetTCPConnection -LocalPort 3001 -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }"
+
+# If ghost persists after killing known processes, find ALL node.exe and kill them
+powershell -Command "Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force"
 ```
 
 ## Logs
@@ -179,23 +187,17 @@ grep "error" ~/.funny/logs/server-*.log
 tail -f ~/.funny/logs/server-2026-02-22.log
 ```
 
-## Circuit breaker recovery
-
-The client has a circuit breaker that blocks HTTP requests after 3 consecutive failures. When the WebSocket reconnects (every 2s), it automatically resets the circuit breaker (`use-ws.ts:255`), which also triggers `refreshAllLoadedThreads()` to reload all data.
-
-If the UI is still stuck after the server is back:
-1. Check browser Console for errors
-2. Filter Network tab by Fetch/XHR — is `/api/bootstrap` completing?
-3. Hard refresh: Ctrl+Shift+R
-
 ## Key files
 
 | File | Role |
 |------|------|
+| `packages/core/src/agents/sdk-claude.ts` | Root cause fix: custom spawn with handle isolation |
 | `packages/server/src/services/shutdown-manager.ts` | Centralized shutdown registry |
 | `packages/server/src/kill-port.ts` | Pre-startup ghost socket cleanup |
-| `packages/server/src/dev-watch.ts` | Dev wrapper (runs kill-port + taskkill on exit) |
+| `packages/server/src/dev-watch.ts` | Dev wrapper: file watch + process tree kill |
+| `packages/client/vite.config.ts` | Proxy timeout (10s) to prevent infinite hangs |
 | `packages/client/src/hooks/use-ws.ts` | WebSocket reconnection + circuit breaker reset |
 | `packages/client/src/stores/circuit-breaker-store.ts` | HTTP circuit breaker (opens after 3 failures) |
 | `packages/client/src/stores/auth-store.ts` | Auth init (`_bootstrapPromise` at module load) |
-| `packages/client/src/components/CircuitBreakerDialog.tsx` | Full-screen "server unavailable" overlay |
+| `packages/server/src/services/pty-manager.ts` | PTY helper with handle isolation pattern |
+| `packages/core/src/containers/sandbox-manager.ts` | Sandbox spawn with same handle isolation pattern |

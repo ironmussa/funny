@@ -388,7 +388,6 @@ export function KanbanView({ threads, projectId, search, contentSnippets, highli
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const projects = useAppStore((s) => s.projects);
   const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
-  const defaultThreadMode = useSettingsStore((s) => s.defaultThreadMode);
   const toolPermissions = useSettingsStore((s) => s.toolPermissions);
 
   const [deleteConfirm, setDeleteConfirm] = useState<{
@@ -464,7 +463,8 @@ export function KanbanView({ threads, projectId, search, contentSnippets, highli
     if (!slideUpProjectId || creating) return false;
     setCreating(true);
 
-    const threadMode = (opts.threadMode as 'local' | 'worktree') || defaultThreadMode;
+    const slideUpProject = projects.find(p => p.id === slideUpProjectId);
+    const threadMode = (opts.threadMode as 'local' | 'worktree') || slideUpProject?.defaultMode || 'worktree';
     const toBacklog = opts.sendToBacklog || slideUpStage === 'backlog';
 
     if (toBacklog) {
@@ -514,7 +514,7 @@ export function KanbanView({ threads, projectId, search, contentSnippets, highli
       toast.success(t('toast.threadCreated', { title: prompt.slice(0, 200) }));
       return true;
     }
-  }, [slideUpProjectId, slideUpStage, creating, defaultThreadMode, toolPermissions, loadThreadsForProject, t]);
+  }, [slideUpProjectId, slideUpStage, creating, projects, toolPermissions, loadThreadsForProject, t]);
 
   const projectInfoById = useMemo(() => {
     if (projectId) return undefined;

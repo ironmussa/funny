@@ -20,7 +20,6 @@ import { api } from '@/lib/api';
 import { PROVIDERS, getModelOptions } from '@/lib/providers';
 import { useThreadStore } from '@/stores/thread-store';
 import { useProjectStore } from '@/stores/project-store';
-import { useSettingsStore } from '@/stores/settings-store';
 import { useDraftStore } from '@/stores/draft-store';
 import { ImageLightbox } from './ImageLightbox';
 import type { ImageAttachment, Skill } from '@funny/shared';
@@ -341,21 +340,16 @@ export function PromptInput({
 }: PromptInputProps) {
   const { t } = useTranslation();
 
-  const globalThreadMode = useSettingsStore(s => s.defaultThreadMode);
-  const globalProvider = useSettingsStore(s => s.defaultProvider);
-  const globalModel = useSettingsStore(s => s.defaultModel);
-  const globalPermissionMode = useSettingsStore(s => s.defaultPermissionMode);
-
-  // Resolve effective defaults: project-level > global settings
+  // Resolve effective defaults from project settings (hardcoded fallbacks)
   const projectsForDefaults = useProjectStore(s => s.projects);
   const selectedProjectIdForDefaults = useProjectStore(s => s.selectedProjectId);
   const effectiveProject = (propProjectId || selectedProjectIdForDefaults)
     ? projectsForDefaults.find(p => p.id === (propProjectId || selectedProjectIdForDefaults))
     : undefined;
-  const defaultProvider = effectiveProject?.defaultProvider ?? globalProvider;
-  const defaultModel = effectiveProject?.defaultModel ?? globalModel;
-  const defaultPermissionMode = effectiveProject?.defaultPermissionMode ?? globalPermissionMode;
-  const defaultThreadMode = effectiveProject?.defaultMode ?? globalThreadMode;
+  const defaultProvider = effectiveProject?.defaultProvider ?? 'claude';
+  const defaultModel = effectiveProject?.defaultModel ?? 'sonnet';
+  const defaultPermissionMode = effectiveProject?.defaultPermissionMode ?? 'autoEdit';
+  const defaultThreadMode = effectiveProject?.defaultMode ?? 'worktree';
 
   const [prompt, setPrompt] = useState(initialPromptProp ?? '');
   const [provider, setProvider] = useState<string>(defaultProvider);
@@ -1138,7 +1132,6 @@ export function PromptInput({
                   )}
                   title={t('newThread.createWorktree', 'Create isolated worktree')}
                 >
-                  <GitBranch className="h-3 w-3" />
                   <span>{t('thread.mode.worktree')}</span>
                 </button>
               )}

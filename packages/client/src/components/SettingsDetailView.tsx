@@ -1,6 +1,6 @@
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
-import { useSettingsStore, ALL_STANDARD_TOOLS, TOOL_LABELS, type ThreadMode, type PermissionMode } from '@/stores/settings-store';
+import { useSettingsStore, ALL_STANDARD_TOOLS, TOOL_LABELS } from '@/stores/settings-store';
 import type { ToolPermission } from '@funny/shared';
 import { settingsItems, settingsLabelKeys, type SettingsItemId } from './SettingsPanel';
 import { cn } from '@/lib/utils';
@@ -239,7 +239,7 @@ function ProjectColorPicker({ projectId, currentColor }: { projectId: string; cu
 
 /* ── General settings content ── */
 function GeneralSettings() {
-  const { defaultThreadMode, defaultProvider, defaultModel, defaultPermissionMode, toolPermissions, setDefaultThreadMode, setDefaultProvider, setDefaultModel, setDefaultPermissionMode, setToolPermission, resetToolPermissions } = useSettingsStore();
+  const { toolPermissions, setToolPermission, resetToolPermissions } = useSettingsStore();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
   const projects = useAppStore((s) => s.projects);
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
@@ -275,33 +275,23 @@ function GeneralSettings() {
             >
               <div className="flex items-center gap-2">
                 <ModelCombobox
-                  value={selectedProject.defaultProvider ?? ''}
+                  value={selectedProject.defaultProvider || 'claude'}
                   onChange={(v) => {
-                    if (!v) {
-                      updateProject(selectedProject.id, { defaultProvider: null, defaultModel: null });
-                    } else {
-                      const p = v as AgentProvider;
-                      updateProject(selectedProject.id, {
-                        defaultProvider: p,
-                        defaultModel: getDefaultModel(p),
-                      });
-                    }
+                    const p = v as AgentProvider;
+                    updateProject(selectedProject.id, {
+                      defaultProvider: p,
+                      defaultModel: getDefaultModel(p),
+                    });
                   }}
-                  options={[
-                    { value: '', label: t('settings.useGlobal', 'Global') },
-                    ...PROVIDERS.map((p) => ({ value: p.value, label: p.label })),
-                  ]}
-                  placeholder={t('settings.useGlobal', 'Global')}
+                  options={PROVIDERS.map((p) => ({ value: p.value, label: p.label }))}
+                  placeholder={t('settings.selectProvider')}
                   searchPlaceholder={t('settings.searchProvider')}
                 />
                 <ModelCombobox
-                  value={selectedProject.defaultModel ?? ''}
-                  onChange={(v) => updateProject(selectedProject.id, { defaultModel: v || null })}
-                  options={[
-                    { value: '', label: t('settings.useGlobal', 'Global') },
-                    ...getModelOptions(selectedProject.defaultProvider || defaultProvider, t),
-                  ]}
-                  placeholder={t('settings.useGlobal', 'Global')}
+                  value={selectedProject.defaultModel || getDefaultModel((selectedProject.defaultProvider || 'claude') as AgentProvider)}
+                  onChange={(v) => updateProject(selectedProject.id, { defaultModel: v })}
+                  options={getModelOptions(selectedProject.defaultProvider || 'claude', t)}
+                  placeholder={t('settings.selectModel')}
                   searchPlaceholder={t('settings.searchModel')}
                 />
               </div>
@@ -311,10 +301,9 @@ function GeneralSettings() {
               description={t('settings.projectDefaultModeDesc', 'Local or worktree for new threads')}
             >
               <SegmentedControl<string>
-                value={selectedProject.defaultMode ?? ''}
-                onChange={(v) => updateProject(selectedProject.id, { defaultMode: v || null })}
+                value={selectedProject.defaultMode || 'worktree'}
+                onChange={(v) => updateProject(selectedProject.id, { defaultMode: v })}
                 options={[
-                  { value: '', label: t('settings.useGlobal', 'Global') },
                   { value: 'local', label: t('thread.mode.local'), icon: <Monitor className="h-3 w-3" /> },
                   { value: 'worktree', label: t('thread.mode.worktree'), icon: <GitBranch className="h-3 w-3" /> },
                 ]}
@@ -325,10 +314,9 @@ function GeneralSettings() {
               description={t('settings.projectDefaultPermissionDesc', 'Permission mode for new threads')}
             >
               <SegmentedControl<string>
-                value={selectedProject.defaultPermissionMode ?? ''}
-                onChange={(v) => updateProject(selectedProject.id, { defaultPermissionMode: v || null })}
+                value={selectedProject.defaultPermissionMode || 'autoEdit'}
+                onChange={(v) => updateProject(selectedProject.id, { defaultPermissionMode: v })}
                 options={[
-                  { value: '', label: t('settings.useGlobal', 'Global') },
                   { value: 'plan', label: t('prompt.plan') },
                   { value: 'autoEdit', label: t('prompt.autoEdit') },
                   { value: 'confirmEdit', label: t('prompt.askBeforeEdits') },
@@ -338,65 +326,6 @@ function GeneralSettings() {
           </div>
         </>
       )}
-
-      {/* Threads section */}
-      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2 mt-6">
-        {t('settings.threads')}
-      </h3>
-      <div className="rounded-lg border border-border/50 overflow-hidden">
-        <SettingRow
-          title={t('settings.defaultThreadMode')}
-          description={t('settings.defaultThreadModeDesc')}
-        >
-          <SegmentedControl<ThreadMode>
-            value={defaultThreadMode}
-            onChange={setDefaultThreadMode}
-            options={[
-              { value: 'local', label: t('thread.mode.local'), icon: <Monitor className="h-3 w-3" /> },
-              { value: 'worktree', label: t('thread.mode.worktree'), icon: <GitBranch className="h-3 w-3" /> },
-            ]}
-          />
-        </SettingRow>
-        <SettingRow
-          title={t('settings.defaultModel')}
-          description={t('settings.defaultModelDesc')}
-        >
-          <div className="flex items-center gap-2">
-            <ModelCombobox
-              value={defaultProvider}
-              onChange={(v) => {
-                const p = v as AgentProvider;
-                setDefaultProvider(p);
-                setDefaultModel(getDefaultModel(p) as any);
-              }}
-              options={PROVIDERS.map((p) => ({ value: p.value, label: p.label }))}
-              placeholder={t('settings.selectProvider')}
-              searchPlaceholder={t('settings.searchProvider')}
-            />
-            <ModelCombobox
-              value={defaultModel}
-              onChange={(v) => setDefaultModel(v as any)}
-              options={getModelOptions(defaultProvider, t)}
-              placeholder={t('settings.selectModel')}
-              searchPlaceholder={t('settings.searchModel')}
-            />
-          </div>
-        </SettingRow>
-        <SettingRow
-          title={t('settings.defaultPermissionMode')}
-          description={t('settings.defaultPermissionModeDesc')}
-        >
-          <SegmentedControl<PermissionMode>
-            value={defaultPermissionMode}
-            onChange={setDefaultPermissionMode}
-            options={[
-              { value: 'plan', label: t('prompt.plan') },
-              { value: 'autoEdit', label: t('prompt.autoEdit') },
-              { value: 'confirmEdit', label: t('prompt.askBeforeEdits') },
-            ]}
-          />
-        </SettingRow>
-      </div>
 
       {/* Permissions */}
       <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2 mt-6">

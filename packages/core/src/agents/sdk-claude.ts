@@ -69,6 +69,38 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       sdkOptions.allowDangerouslySkipPermissions = true;
     }
 
+    // On Windows, prevent the SDK's child process from inheriting the server's
+    // listening socket handle. The SDK's default spawn uses 'inherit' stdio which
+    // causes bInheritHandles=TRUE, inheriting ALL handles — including the server
+    // socket. Using 'pipe' triggers PROC_THREAD_ATTRIBUTE_HANDLE_LIST in libuv,
+    // restricting inheritance to only the pipe handles.
+    // Same pattern as sandbox-manager.ts createSpawnFn() and pty-manager.ts.
+    if (process.platform === 'win32' && !sdkOptions.spawnClaudeCodeProcess) {
+      const { spawn } = await import('child_process');
+      sdkOptions.spawnClaudeCodeProcess = (options: {
+        command: string;
+        args: string[];
+        cwd?: string;
+        env: Record<string, string | undefined>;
+        signal: AbortSignal;
+      }) => {
+        const child = spawn(options.command, options.args, {
+          stdio: ['pipe', 'pipe', 'pipe'],
+          cwd: options.cwd,
+          env: options.env as NodeJS.ProcessEnv,
+          windowsHide: true,
+        });
+        if (options.signal.aborted) {
+          child.kill('SIGTERM');
+        } else {
+          const onAbort = () => child.kill('SIGTERM');
+          options.signal.addEventListener('abort', onAbort, { once: true });
+          child.once('exit', () => options.signal.removeEventListener('abort', onAbort));
+        }
+        return child;
+      };
+    }
+
     // Pass MCP servers (e.g., CDP browser tools) if provided
     if (this.options.mcpServers) {
       sdkOptions.mcpServers = this.options.mcpServers;

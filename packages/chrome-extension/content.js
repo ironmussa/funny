@@ -1289,9 +1289,9 @@
         ? settingsProjectsData.find(p => p.id === config.projectId)
         : null;
 
-      // Populate mode — project default > saved config > 'worktree'
+      // Populate mode — project default > fallback
       const modeSelect = settingsPanel.querySelector('[data-key="mode"]');
-      const effectiveMode = config.mode || (selectedProject?.defaultMode) || 'worktree';
+      const effectiveMode = selectedProject?.defaultMode || config.mode || 'worktree';
       modeSelect.value = effectiveMode;
 
       // Populate providers
@@ -1304,12 +1304,12 @@
       if (available.length === 0) {
         providerSelect.innerHTML = '<option value="">No providers</option>';
       } else {
-        // Resolve provider: saved config > project default > first available
+        // Resolve provider: project default > saved config > first available
         const projectDefaultProvider = selectedProject?.defaultProvider;
-        const effectiveProvider = (config.provider && settingsProviderData[config.provider]?.available)
-          ? config.provider
-          : (projectDefaultProvider && settingsProviderData[projectDefaultProvider]?.available)
-            ? projectDefaultProvider
+        const effectiveProvider = (projectDefaultProvider && settingsProviderData[projectDefaultProvider]?.available)
+          ? projectDefaultProvider
+          : (config.provider && settingsProviderData[config.provider]?.available)
+            ? config.provider
             : available[0][0];
         available.forEach(([key, info]) => {
           const opt = document.createElement('option');
@@ -1319,8 +1319,8 @@
           providerSelect.appendChild(opt);
         });
         providerSelect.value = effectiveProvider;
-        // Resolve model: saved config > project default > provider default
-        const effectiveModel = config.model || (selectedProject?.defaultModel) || undefined;
+        // Resolve model: project default > saved config > provider default
+        const effectiveModel = selectedProject?.defaultModel || config.model || undefined;
         populateSettingsModels(effectiveProvider, effectiveModel);
       }
 
@@ -1354,22 +1354,20 @@
       .filter(([_, info]) => info.available);
     if (available.length === 0) return;
 
-    // Apply project default provider if set
-    if (project.defaultProvider && settingsProviderData[project.defaultProvider]?.available) {
-      const providerSelect = settingsPanel.querySelector('[data-key="provider"]');
-      providerSelect.value = project.defaultProvider;
-      populateSettingsModels(project.defaultProvider, project.defaultModel);
-    } else if (project.defaultModel) {
-      // Only model default set — apply to current provider
-      const providerSelect = settingsPanel.querySelector('[data-key="provider"]');
-      populateSettingsModels(providerSelect.value, project.defaultModel);
+    // Resolve provider: project default > 'claude'
+    const effectiveProvider = project.defaultProvider || 'claude';
+    const providerSelect = settingsPanel.querySelector('[data-key="provider"]');
+    if (settingsProviderData[effectiveProvider]?.available) {
+      providerSelect.value = effectiveProvider;
     }
 
-    // Apply project default mode if set
-    if (project.defaultMode) {
-      const modeSelect = settingsPanel.querySelector('[data-key="mode"]');
-      modeSelect.value = project.defaultMode;
-    }
+    // Resolve model: project default > provider's default
+    const effectiveModel = project.defaultModel || '';
+    populateSettingsModels(providerSelect.value, effectiveModel);
+
+    // Resolve mode: project default > 'worktree'
+    const modeSelect = settingsPanel.querySelector('[data-key="mode"]');
+    modeSelect.value = project.defaultMode || 'worktree';
   }
 
   function populateSettingsModels(provider, selectedModel) {

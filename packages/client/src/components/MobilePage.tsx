@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useAppStore } from '@/stores/app-store';
 import { selectLastMessage } from '@/stores/thread-selectors';
-import { useSettingsStore } from '@/stores/settings-store';
 import { useWS } from '@/hooks/use-ws';
 import { initAuth } from '@/lib/api';
 import { api } from '@/lib/api';
@@ -257,7 +256,9 @@ function NewThreadView({
 }) {
   const { t } = useTranslation();
   const loadThreadsForProject = useAppStore(s => s.loadThreadsForProject);
-  const defaultThreadMode = useSettingsStore(s => s.defaultThreadMode);
+  const projects = useAppStore(s => s.projects);
+  const project = projects.find(p => p.id === projectId);
+  const defaultThreadMode = project?.defaultMode ?? 'worktree';
   const [creating, setCreating] = useState(false);
 
   const handleCreate = async (

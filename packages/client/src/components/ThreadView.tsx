@@ -693,6 +693,8 @@ export function ThreadView() {
   const [showScrollDown, setShowScrollDown] = useState(false);
   const scrollDownRef = useRef<HTMLDivElement>(null);
   const todoThrottleRef = useRef(0);
+  const [visibleMessageId, setVisibleMessageId] = useState<string | null>(null);
+  const visibleMsgThrottleRef = useRef(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<{ src: string; alt: string }[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -839,6 +841,30 @@ export function ThreadView() {
 
       // Throttled: expensive DOM queries for todo snapshot tracking
       updateTodoSnapshot(isAtBottom);
+
+      // Track which user message is currently visible for timeline highlighting
+      const now2 = performance.now();
+      if (now2 - visibleMsgThrottleRef.current >= 100) {
+        visibleMsgThrottleRef.current = now2;
+        const userEls = viewport.querySelectorAll<HTMLElement>('[data-user-msg]');
+        if (userEls.length > 0) {
+          if (isAtBottom) {
+            // At bottom → highlight the last user message
+            setVisibleMessageId(userEls[userEls.length - 1].dataset.userMsg!);
+          } else {
+            // Find the last user message whose top is above the viewport center
+            const viewportRect = viewport.getBoundingClientRect();
+            const threshold = viewportRect.top + viewportRect.height * 0.4;
+            let found: string | null = null;
+            userEls.forEach((el) => {
+              if (el.getBoundingClientRect().top <= threshold) {
+                found = el.dataset.userMsg!;
+              }
+            });
+            setVisibleMessageId(found);
+          }
+        }
+      }
     };
 
     viewport.addEventListener('scroll', handleScroll, { passive: true });
@@ -1231,23 +1257,21 @@ export function ThreadView() {
 
         {/* Prompt Timeline — hidden when container < 600px */}
         {activeThread.messages.length > 0 && (
-          <div className="thread-timeline">
-            <PromptTimeline
-              messages={activeThread.messages}
-              activeMessageId={showScrollDown ? undefined : activeThread.messages.filter(m => m.role === 'user' && m.content?.trim()).at(-1)?.id}
-              threadStatus={activeThread.status}
-              messagesScrollRef={scrollViewportRef}
-              onScrollToMessage={(msgId, toolCallId) => {
-                // Try tool call element first, then user message
-                const el = toolCallId
-                  ? scrollViewportRef.current?.querySelector(`[data-tool-call-id="${toolCallId}"]`)
-                  : scrollViewportRef.current?.querySelector(`[data-user-msg="${msgId}"]`);
-                if (el) {
-                  el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                }
-              }}
-            />
-          </div>
+          <PromptTimeline
+            messages={activeThread.messages}
+            activeMessageId={visibleMessageId ?? activeThread.messages.filter(m => m.role === 'user' && m.content?.trim()).at(-1)?.id}
+            threadStatus={activeThread.status}
+            messagesScrollRef={scrollViewportRef}
+            onScrollToMessage={(msgId, toolCallId) => {
+              // Try tool call element first, then user message
+              const el = toolCallId
+                ? scrollViewportRef.current?.querySelector(`[data-tool-call-id="${toolCallId}"]`)
+                : scrollViewportRef.current?.querySelector(`[data-user-msg="${msgId}"]`);
+              if (el) {
+                el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              }
+            }}
+          />
         )}
       </div>
 

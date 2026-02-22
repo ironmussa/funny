@@ -56,6 +56,9 @@ export function App() {
   const analyticsOpen = useUIStore(s => s.analyticsOpen);
   const liveColumnsOpen = useUIStore(s => s.liveColumnsOpen);
   const workflowRunSelected = useWorkflowStore(s => !!s.selectedRunId);
+  const internalEditorOpen = useInternalEditorStore(s => s.isOpen);
+  const internalEditorFilePath = useInternalEditorStore(s => s.filePath);
+  const internalEditorContent = useInternalEditorStore(s => s.initialContent);
   const navigate = useNavigate();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
 
@@ -168,15 +171,15 @@ export function App() {
       {commandPaletteOpen && <Suspense><CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} /></Suspense>}
 
       {/* Internal Monaco Editor Dialog (global, lazy-loaded) */}
-      {useInternalEditorStore((s) => s.isOpen) && (
+      {internalEditorOpen && (
         <Suspense>
           <MonacoEditorDialog
             open={true}
             onOpenChange={(open) => {
               if (!open) useInternalEditorStore.getState().closeEditor();
             }}
-            filePath={useInternalEditorStore((s) => s.filePath) || ''}
-            initialContent={useInternalEditorStore((s) => s.initialContent)}
+            filePath={internalEditorFilePath || ''}
+            initialContent={internalEditorContent}
           />
         </Suspense>
       )}

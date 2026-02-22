@@ -13,7 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Input } from '@/components/ui/input';
-import { Loader2, Columns3, Grid2x2, Plus, Search } from 'lucide-react';
+import { Loader2, Columns3, Grid2x2, Plus, Search, GitBranch } from 'lucide-react';
 import { statusConfig, timeAgo, resolveModelLabel } from '@/lib/thread-utils';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { ToolCallCard } from './ToolCallCard';
@@ -328,16 +328,17 @@ const ThreadColumn = memo(function ThreadColumn({ threadId }: { threadId: string
             {thread.title}
           </span>
         </div>
-        <div className="flex items-center gap-1.5 mt-1">
+        <div className="flex items-center gap-1.5 mt-1 min-w-0">
           {projectName && (
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal">
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-normal shrink-0">
               {projectName}
             </Badge>
           )}
           {(thread.branch || thread.baseBranch) && (
-            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-mono font-normal truncate max-w-[120px]">
-              {thread.branch || thread.baseBranch}
-            </Badge>
+            <span className="flex items-center gap-1 text-[10px] font-mono text-muted-foreground min-w-0 flex-1">
+              <GitBranch className="h-3 w-3 shrink-0" />
+              <span className="truncate">{thread.branch || thread.baseBranch}</span>
+            </span>
           )}
         </div>
       </div>

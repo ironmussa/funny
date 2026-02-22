@@ -62,6 +62,105 @@ interface ChatCompletionRequest {
   tool_choice?: 'auto' | 'none' | 'required' | { type: 'function'; function: { name: string } };
 }
 
+// ── JSON Repair ─────────────────────────────────────────
+
+/**
+ * Ensure a tool_call's `arguments` string is valid JSON.
+ * LangChain does JSON.parse(arguments) on each tool_call — if it fails,
+ * the call goes to `invalid_tool_calls` and is never executed (causing loops).
+ */
+function repairJsonArgs(args: string): string {
+  // Fast path: already valid
+  try { JSON.parse(args); return args; } catch {}
+
+  let s = args.trim();
+
+  // Fix 1: Extra trailing braces/brackets  e.g. {"path":"."}}  →  {"path":"."}
+  for (let i = 0; i < 3; i++) {
+    if (s.endsWith('}}')) {
+      const attempt = s.slice(0, -1);
+      try { JSON.parse(attempt); return attempt; } catch {}
+    }
+    if (s.endsWith(']]')) {
+      const attempt = s.slice(0, -1);
+      try { JSON.parse(attempt); return attempt; } catch {}
+    }
+    s = s.slice(0, -1); // peel one char and retry full set
+    if (!s) break;
+  }
+
+  // Fix 2: Missing closing braces  e.g. {"path":"."  →  {"path":"."}
+  s = args.trim();
+  for (let i = 0; i < 3; i++) {
+    s += '}';
+    try { JSON.parse(s); return s; } catch {}
+  }
+
+  // Fix 3: Missing closing bracket for arrays
+  s = args.trim();
+  for (let i = 0; i < 3; i++) {
+    s += ']';
+    try { JSON.parse(s); return s; } catch {}
+  }
+
+  // Fix 4: Try wrapping bare key=value in object
+  if (!args.trim().startsWith('{')) {
+    const attempt = `{${args.trim()}}`;
+    try { JSON.parse(attempt); return attempt; } catch {}
+  }
+
+  // Give up — return original (LangChain will put it in invalid_tool_calls)
+  console.warn(`[api-acp] WARNING: could not repair JSON args: ${args.slice(0, 200)}`);
+  return args;
+}
+
+/**
+ * Try to parse a JSON array string, with repair for common model mistakes.
+ * Returns parsed array or null.
+ */
+function tryParseJsonArray(raw: string): any[] | null {
+  const s = raw.trim();
+
+  // Fast path
+  try {
+    const parsed = JSON.parse(s);
+    if (Array.isArray(parsed)) return parsed;
+    return null;
+  } catch {}
+
+  // Fix: truncated JSON — model may have been cut off mid-array.
+  // Try closing open braces/brackets from the end.
+  // Count open vs close braces/brackets (outside of strings)
+  let inString = false;
+  let escape = false;
+  let braces = 0;
+  let brackets = 0;
+  for (const ch of s) {
+    if (escape) { escape = false; continue; }
+    if (ch === '\\' && inString) { escape = true; continue; }
+    if (ch === '"') { inString = !inString; continue; }
+    if (inString) continue;
+    if (ch === '{') braces++;
+    if (ch === '}') braces--;
+    if (ch === '[') brackets++;
+    if (ch === ']') brackets--;
+  }
+
+  let fixed = s;
+  // Close unclosed braces then brackets
+  for (let i = 0; i < braces; i++) fixed += '}';
+  for (let i = 0; i < brackets; i++) fixed += ']';
+  try {
+    const parsed = JSON.parse(fixed);
+    if (Array.isArray(parsed)) {
+      console.log(`[api-acp] repaired outer JSON (added ${braces} braces, ${brackets} brackets)`);
+      return parsed;
+    }
+  } catch {}
+
+  return null;
+}
+
 // ── Helpers ──────────────────────────────────────────────
 
 /** Extract system messages into a single system prompt. */
@@ -130,17 +229,15 @@ function buildToolInstruction(tools: OpenAIToolDef[], toolChoice?: ChatCompletio
   }
 
   return `
-You have access to the following tools. To call tools, output a JSON array in ONE of these formats:
+You have access to the following tools. To call a tool, output a JSON array inside a fenced code block:
 
-Format A (preferred):
 \`\`\`tool_calls
-[{"id":"call_001","type":"function","function":{"name":"TOOL_NAME","arguments":"{...}"}}]
+[{"id":"call_001","type":"function","function":{"name":"TOOL_NAME","arguments":{"param":"value"}}}]
 \`\`\`
 
-Format B:
-<function_calls>
-[{"id":"call_001","type":"function","function":{"name":"TOOL_NAME","arguments":"{...}"}}]
-</function_calls>
+IMPORTANT: The "arguments" field must be a JSON OBJECT (not a string). Example:
+✅ "arguments":{"path":"/src/index.ts","content":"hello"}
+❌ "arguments":"{\"path\":\"/src/index.ts\"}"
 
 Available tools:
 ${toolDescriptions}
@@ -151,7 +248,8 @@ CRITICAL RULES:
 2. Do NOT simulate, imagine, or fabricate tool results. You will receive REAL results in the next message.
 3. Do NOT output any text after the tool_calls block. Your response ENDS at the closing block.
 4. You may include a brief explanation BEFORE the tool_calls block.
-5. If you don't need any tools, respond normally with text (no tool_calls block).`;
+5. If you don't need any tools, respond normally with text (no tool_calls block).
+6. Each tool call MUST have a unique "id" like "call_001", "call_002", etc.`;
 }
 
 /**
@@ -181,20 +279,37 @@ function parseToolCalls(text: string): { toolCalls: OpenAIToolCall[]; textConten
 
   if (!bestMatch) return null;
 
-  try {
-    const parsed = JSON.parse(bestMatch[1].trim());
-    if (!Array.isArray(parsed)) return null;
+  // Use tryParseJsonArray for robust parsing (handles malformed model JSON)
+  const parsed = tryParseJsonArray(bestMatch[1]);
+  if (!parsed) return null;
 
-    const toolCalls: OpenAIToolCall[] = parsed.map((tc: any, i: number) => ({
-      id: tc.id || `call_${String(i).padStart(3, '0')}`,
-      type: 'function' as const,
-      function: {
-        name: tc.function?.name ?? tc.name ?? 'unknown',
-        arguments: typeof tc.function?.arguments === 'string'
-          ? tc.function.arguments
-          : JSON.stringify(tc.function?.arguments ?? tc.arguments ?? {}),
-      },
-    }));
+  try {
+    const toolCalls: OpenAIToolCall[] = parsed.map((tc: any, i: number) => {
+      // Get raw arguments value
+      const rawArgs = tc.function?.arguments ?? tc.arguments;
+      let argsStr: string;
+      if (typeof rawArgs === 'string') {
+        // Validate & repair the arguments JSON so LangChain can parse it
+        argsStr = repairJsonArgs(rawArgs);
+      } else {
+        argsStr = JSON.stringify(rawArgs ?? {});
+      }
+
+      // CRITICAL: Always generate unique IDs. LangGraph's ToolNode skips
+      // tool_calls whose ID already has a ToolMessage response in state.
+      // If the model reuses "call_001" across responses, subsequent calls
+      // are silently dropped. Use timestamp+random to guarantee uniqueness.
+      const uid = `call_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}_${i}`;
+
+      return {
+        id: uid,
+        type: 'function' as const,
+        function: {
+          name: tc.function?.name ?? tc.name ?? 'unknown',
+          arguments: argsStr,
+        },
+      };
+    });
 
     // Text BEFORE the first tool_calls block only (discard everything after)
     const textContent = text.slice(0, bestMatch.index).trim();
@@ -211,7 +326,8 @@ chatRoute.post('/', async (c) => {
   const body = await c.req.json<ChatCompletionRequest>();
   const { model: requestedModel, messages, stream, tools, tool_choice } = body;
 
-  dbg(`[api-acp] REQ model=${requestedModel} stream=${stream} tools=${tools?.length ?? 0} msgs=${messages?.length}`);
+  // Always log request summary
+  console.log(`[api-acp] REQ model=${requestedModel} stream=${stream} tools=${tools?.length ?? 0} msgs=${messages?.length}`);
 
   if (!requestedModel) {
     return c.json({ error: { message: 'model is required', type: 'invalid_request_error' } }, 400);
@@ -293,12 +409,13 @@ async function handleNonStreaming(
 
     const fullText = textParts.join('');
 
-    dbg(`[api-acp] RESP len=${fullText.length}`);
+    console.log(`[api-acp] RESP non-stream len=${fullText.length} hasTools=${hasTools}`);
+    if (hasTools) console.log(`[api-acp] FULL TEXT:\n${fullText}\n[END]`);
 
     // Check if model output contains tool_calls
     if (hasTools) {
       const parsed = parseToolCalls(fullText);
-      dbg(`[api-acp] parsed: ${parsed ? parsed.toolCalls.map(tc => tc.function.name).join(', ') : 'none'}`);
+      console.log(`[api-acp] parsed: ${parsed ? `${parsed.toolCalls.length} calls [${parsed.toolCalls.map(tc => tc.function.name).join(', ')}]` : 'none'}`);
       if (parsed) {
         const resp = {
           id: completionId,
@@ -434,7 +551,7 @@ async function handleStreaming(
         // For tool mode, check if we got tool_calls and emit them
         if (hasTools && accumulatedText) {
           const parsed = parseToolCalls(accumulatedText);
-          dbg(`[api-acp] stream parsed: ${parsed ? parsed.toolCalls.map(tc => tc.function.name).join(', ') : 'none'}`);
+          console.log(`[api-acp] stream parsed: ${parsed ? `${parsed.toolCalls.length} calls [${parsed.toolCalls.map(tc => tc.function.name).join(', ')}]` : 'none'}`);
           if (parsed) {
             // Send text content if any
             if (parsed.textContent) {

@@ -76,7 +76,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // restricting inheritance to only the pipe handles.
     // Same pattern as sandbox-manager.ts createSpawnFn() and pty-manager.ts.
     if (process.platform === 'win32' && !sdkOptions.spawnClaudeCodeProcess) {
-      const { spawn } = await import('child_process');
+      const { spawn, execSync } = await import('child_process');
       sdkOptions.spawnClaudeCodeProcess = (options: {
         command: string;
         args: string[];
@@ -90,10 +90,21 @@ export class SDKClaudeProcess extends BaseAgentProcess {
           env: options.env as NodeJS.ProcessEnv,
           windowsHide: true,
         });
+        // On Windows, child.kill('SIGTERM') only kills the immediate process,
+        // not the subprocess tree. Use taskkill /F /T to kill the entire tree.
+        const killTree = () => {
+          if (child.pid != null) {
+            try {
+              execSync(`taskkill /F /T /PID ${child.pid} 2>nul`, { windowsHide: true });
+            } catch {
+              // Best-effort: process may have already exited
+            }
+          }
+        };
         if (options.signal.aborted) {
-          child.kill('SIGTERM');
+          killTree();
         } else {
-          const onAbort = () => child.kill('SIGTERM');
+          const onAbort = () => killTree();
           options.signal.addEventListener('abort', onAbort, { once: true });
           child.once('exit', () => options.signal.removeEventListener('abort', onAbort));
         }

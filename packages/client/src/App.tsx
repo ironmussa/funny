@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useEffect, useState, startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'motion/react';
 import { useWS } from '@/hooks/use-ws';
@@ -40,7 +40,14 @@ const AutomationInboxView = lazy(() => import('@/components/AutomationInboxView'
 const AddProjectView = lazy(() => import('@/components/AddProjectView').then(m => ({ default: m.AddProjectView })));
 const AnalyticsView = lazy(() => import('@/components/AnalyticsView').then(m => ({ default: m.AnalyticsView })));
 const LiveColumnsView = lazy(() => import('@/components/LiveColumnsView').then(m => ({ default: m.LiveColumnsView })));
-const CommandPalette = lazy(() => import('@/components/CommandPalette').then(m => ({ default: m.CommandPalette })));
+const commandPaletteImport = () => import('@/components/CommandPalette').then(m => ({ default: m.CommandPalette }));
+const CommandPalette = lazy(commandPaletteImport);
+// Prefetch the CommandPalette chunk on idle so Ctrl+K opens instantly
+if (typeof requestIdleCallback === 'function') {
+  requestIdleCallback(() => { commandPaletteImport(); });
+} else {
+  setTimeout(() => { commandPaletteImport(); }, 2000);
+}
 const CircuitBreakerDialog = lazy(() => import('@/components/CircuitBreakerDialog').then(m => ({ default: m.CircuitBreakerDialog })));
 const WorkflowProgressPanel = lazy(() => import('@/components/WorkflowProgressPanel').then(m => ({ default: m.WorkflowProgressPanel })));
 const MonacoEditorDialog = lazy(() => import('@/components/MonacoEditorDialog').then(m => ({ default: m.MonacoEditorDialog })));
@@ -86,7 +93,9 @@ export function App() {
       if (e.ctrlKey && e.key === 'k') {
         e.preventDefault();
         e.stopPropagation();
-        setCommandPaletteOpen(prev => !prev);
+        startTransition(() => {
+          setCommandPaletteOpen(prev => !prev);
+        });
         return;
       }
 
@@ -168,7 +177,7 @@ export function App() {
 
       <Toaster position="bottom-right" theme="dark" duration={TOAST_DURATION} />
       <Suspense><CircuitBreakerDialog /></Suspense>
-      {commandPaletteOpen && <Suspense><CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} /></Suspense>}
+      <Suspense><CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} /></Suspense>
 
       {/* Internal Monaco Editor Dialog (global, lazy-loaded) */}
       {internalEditorOpen && (

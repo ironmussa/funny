@@ -1,4 +1,4 @@
-import { memo, useState, useEffect, useCallback } from 'react';
+import { memo, useState, useEffect, useCallback, startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { useThreadStore } from '@/stores/thread-store';
@@ -453,7 +453,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                onClick={() => setReviewPaneOpen(!reviewPaneOpen)}
+                onClick={() => startTransition(() => setReviewPaneOpen(!reviewPaneOpen))}
                 className={`${showGitStats ? 'h-8 px-2' : 'h-8 w-8'} ${reviewPaneOpen ? 'text-primary' : 'text-muted-foreground'}`}
               >
                 {showGitStats ? (

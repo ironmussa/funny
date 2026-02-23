@@ -38,7 +38,7 @@ export function handleWSMessage(
     if (messageId) {
       const existingIdx = activeThread.messages.findIndex((m) => m.id === messageId);
       if (existingIdx >= 0) {
-        const updated = [...activeThread.messages];
+        const updated = activeThread.messages.slice();
         updated[existingIdx] = { ...updated[existingIdx], content: data.content };
         set({ activeThread: { ...activeThread, messages: updated } });
         return;
@@ -48,16 +48,13 @@ export function handleWSMessage(
     set({
       activeThread: {
         ...activeThread,
-        messages: [
-          ...activeThread.messages,
-          {
-            id: messageId || crypto.randomUUID(),
-            threadId,
-            role: data.role as MessageRole,
-            content: data.content,
-            timestamp: new Date().toISOString(),
-          },
-        ],
+        messages: activeThread.messages.concat({
+          id: messageId || crypto.randomUUID(),
+          threadId,
+          role: data.role as MessageRole,
+          content: data.content,
+          timestamp: new Date().toISOString(),
+        }),
       },
     });
   } else if (selectedThreadId === threadId) {
@@ -76,18 +73,18 @@ export function handleWSToolCall(
 
   if (activeThread?.id === threadId) {
     const toolCallId = data.toolCallId || crypto.randomUUID();
-    const messages = [...activeThread.messages];
     const tcEntry = { id: toolCallId, messageId: data.messageId || '', name: data.name, input: JSON.stringify(data.input) };
 
-    if (messages.some(m => m.toolCalls?.some((tc: any) => tc.id === toolCallId))) return;
+    if (activeThread.messages.some(m => m.toolCalls?.some((tc: any) => tc.id === toolCallId))) return;
 
     if (data.messageId) {
-      const msgIdx = messages.findIndex((m) => m.id === data.messageId);
+      const msgIdx = activeThread.messages.findIndex((m) => m.id === data.messageId);
       if (msgIdx >= 0) {
+        const messages = activeThread.messages.slice();
         const msg = messages[msgIdx];
         messages[msgIdx] = {
           ...msg,
-          toolCalls: [...(msg.toolCalls ?? []), tcEntry],
+          toolCalls: (msg.toolCalls ?? []).concat(tcEntry),
         };
         set({ activeThread: { ...activeThread, messages } });
         return;
@@ -97,17 +94,14 @@ export function handleWSToolCall(
     set({
       activeThread: {
         ...activeThread,
-        messages: [
-          ...messages,
-          {
-            id: data.messageId || crypto.randomUUID(),
-            threadId,
-            role: 'assistant' as MessageRole,
-            content: '',
-            timestamp: new Date().toISOString(),
-            toolCalls: [tcEntry],
-          },
-        ],
+        messages: activeThread.messages.concat({
+          id: data.messageId || crypto.randomUUID(),
+          threadId,
+          role: 'assistant' as MessageRole,
+          content: '',
+          timestamp: new Date().toISOString(),
+          toolCalls: [tcEntry],
+        }),
       },
     });
   } else if (selectedThreadId === threadId) {

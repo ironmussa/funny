@@ -291,13 +291,27 @@ export function AppSidebar() {
     openWorkflowDialog(projectId, projectPath);
   }, [openWorkflowDialog]);
 
-  // Memoize per-project thread lists to avoid .filter() on every render
+  // Memoize per-project thread lists, preserving referential identity for
+  // projects whose source threads array didn't change. This prevents
+  // unrelated ProjectItem components from re-rendering when only one
+  // project's threadsByProject entry was updated.
+  const prevSourceRef = useRef<Record<string, typeof threadsByProject[string]>>({});
+  const prevFilteredRef = useRef<Record<string, typeof threadsByProject[string]>>({});
   const filteredThreadsByProject = useMemo(() => {
+    const prevSrc = prevSourceRef.current;
+    const prevFiltered = prevFilteredRef.current;
     const result: Record<string, typeof threadsByProject[string]> = {};
     for (const project of projects) {
-      const threads = threadsByProject[project.id] ?? [];
-      result[project.id] = threads.filter((t) => !t.archived);
+      const src = threadsByProject[project.id];
+      if (src === prevSrc[project.id] && prevFiltered[project.id]) {
+        // Source array unchanged — reuse previous filtered result
+        result[project.id] = prevFiltered[project.id];
+      } else {
+        result[project.id] = (src ?? []).filter((t) => !t.archived);
+      }
     }
+    prevSourceRef.current = threadsByProject;
+    prevFilteredRef.current = result;
     return result;
   }, [threadsByProject, projects]);
 

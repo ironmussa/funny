@@ -399,6 +399,31 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         return { model: model || activeThread.model, cwd, tools: [] as string[] };
       })();
 
+      const newMessage = {
+        id: crypto.randomUUID(),
+        threadId,
+        role: 'user' as MessageRole,
+        content,
+        images,
+        timestamp: new Date().toISOString(),
+        model,
+        permissionMode,
+      };
+
+      // Append message using concat (avoids spreading the entire messages array)
+      const nextMessages = activeThread.messages.concat(newMessage);
+
+      // Only rebuild threadsByProject if the status actually changed
+      const statusChanged = newStatus !== activeThread.status;
+      const nextThreadsByProject = statusChanged
+        ? {
+            ...threadsByProject,
+            [pid]: projectThreads.map((t) =>
+              t.id === threadId ? { ...t, status: newStatus } : t
+            ),
+          }
+        : threadsByProject;
+
       set({
         activeThread: {
           ...activeThread,
@@ -409,26 +434,9 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
           waitingReason: undefined,
           pendingPermission: undefined,
           permissionMode: permissionMode || activeThread.permissionMode,
-          messages: [
-            ...activeThread.messages,
-            {
-              id: crypto.randomUUID(),
-              threadId,
-              role: 'user' as MessageRole,
-              content,
-              images,
-              timestamp: new Date().toISOString(),
-              model,
-              permissionMode,
-            },
-          ],
+          messages: nextMessages,
         },
-        threadsByProject: {
-          ...threadsByProject,
-          [pid]: projectThreads.map((t) =>
-            t.id === threadId ? { ...t, status: newStatus } : t
-          ),
-        },
+        threadsByProject: nextThreadsByProject,
       });
     }
   },

@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { ArrowUp, Square, Loader2, Paperclip, X, Zap, GitBranch, Check, Inbox, FileText } from 'lucide-react';
@@ -325,7 +325,7 @@ interface PromptInputProps {
   initialPrompt?: string;
 }
 
-export function PromptInput({
+export const PromptInput = memo(function PromptInput({
   onSubmit,
   onStop,
   loading = false,
@@ -1320,4 +1320,4 @@ export function PromptInput({
       </div>
     </div>
   );
-}
+});

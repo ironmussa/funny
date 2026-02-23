@@ -925,6 +925,78 @@ export function ThreadView() {
     viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
   }, []);
 
+  // Stable ref to avoid recreating handleSend on every render.
+  // This prevents PromptInput and MemoizedMessageList from re-rendering
+  // due to the onSubmit/onSend prop reference changing.
+  // NOTE: These hooks MUST be before any early returns to satisfy the Rules of Hooks.
+  const activeThreadRef = useRef(activeThread);
+  activeThreadRef.current = activeThread;
+  const sendingRef = useRef(sending);
+  sendingRef.current = sending;
+
+  const handleSend = useCallback(async (prompt: string, opts: { provider?: string; model: string; mode: string; fileReferences?: { path: string }[] }, images?: any[]) => {
+    if (sendingRef.current) return;
+    const thread = activeThreadRef.current;
+    if (!thread) return;
+    setSending(true);
+
+    const threadIsRunning = thread.status === 'running';
+    const currentProject = useProjectStore.getState().projects.find(p => p.id === thread.projectId);
+    const threadIsQueueMode = currentProject?.followUpMode === 'queue';
+
+    // Toast for interrupt mode when agent is running
+    if (threadIsRunning && !threadIsQueueMode) {
+      toast.info(t('thread.interruptingAgent'));
+    }
+
+    // Always scroll to bottom when the user sends a message (smooth)
+    userHasScrolledUp.current = false;
+    smoothScrollPending.current = true;
+    if (scrollDownRef.current) scrollDownRef.current.style.display = 'none';
+
+    startTransition(() => {
+      useAppStore.getState().appendOptimisticMessage(
+        thread.id,
+        prompt,
+        images,
+        opts.model as any,
+        opts.mode as any
+      );
+    });
+
+    const { allowedTools, disallowedTools } = deriveToolLists(useSettingsStore.getState().toolPermissions);
+    const result = await api.sendMessage(thread.id, prompt, { provider: opts.provider || undefined, model: opts.model || undefined, permissionMode: opts.mode || undefined, allowedTools, disallowedTools, fileReferences: opts.fileReferences }, images);
+    if (result.isErr()) {
+      console.error('Send failed:', result.error);
+    } else if (threadIsRunning && threadIsQueueMode) {
+      toast.success(t('thread.messageQueued'));
+    }
+    setSending(false);
+  }, [t]);
+
+  const handleStop = useCallback(async () => {
+    const thread = activeThreadRef.current;
+    if (!thread) return;
+    const result = await api.stopThread(thread.id);
+    if (result.isErr()) {
+      console.error('Stop failed:', result.error);
+    }
+  }, []);
+
+  const handlePermissionApproval = useCallback(async (toolName: string, approved: boolean) => {
+    const thread = activeThreadRef.current;
+    if (!thread) return;
+    useAppStore.getState().appendOptimisticMessage(
+      thread.id,
+      approved ? `Approved: ${toolName}` : `Denied: ${toolName}`
+    );
+    const { allowedTools, disallowedTools } = deriveToolLists(useSettingsStore.getState().toolPermissions);
+    const result = await api.approveTool(thread.id, toolName, approved, allowedTools, disallowedTools);
+    if (result.isErr()) {
+      console.error('Permission approval failed:', result.error);
+    }
+  }, []);
+
   // Show new thread input when a project's "+" was clicked
   if (newThreadProjectId && !selectedThreadId) {
     return (
@@ -971,71 +1043,6 @@ export function ThreadView() {
       </div>
     );
   }
-
-  const handleSend = async (prompt: string, opts: { provider?: string; model: string; mode: string; fileReferences?: { path: string }[] }, images?: any[]) => {
-    if (sending) return;
-    setSending(true);
-
-    // Toast for interrupt mode when agent is running
-    if (isRunning && !isQueueMode) {
-      toast.info(t('thread.interruptingAgent'));
-    }
-
-    // Always scroll to bottom when the user sends a message (smooth)
-    userHasScrolledUp.current = false;
-    smoothScrollPending.current = true;
-    if (scrollDownRef.current) scrollDownRef.current.style.display = 'none';
-
-    // Clear initialPrompt immediately (outside startTransition) so the
-    // PromptInput prop updates before any intermediate re-renders.
-    // Without this, the idle PromptInput can re-mount with the stale
-    // initialPrompt because startTransition defers the store update.
-    if (activeThread.initialPrompt) {
-      useThreadStore.setState((s) => ({
-        activeThread: s.activeThread?.id === activeThread.id
-          ? { ...s.activeThread, initialPrompt: undefined }
-          : s.activeThread,
-      }));
-    }
-
-    startTransition(() => {
-      useAppStore.getState().appendOptimisticMessage(
-        activeThread.id,
-        prompt,
-        images,
-        opts.model as any,
-        opts.mode as any
-      );
-    });
-
-    const { allowedTools, disallowedTools } = deriveToolLists(useSettingsStore.getState().toolPermissions);
-    const result = await api.sendMessage(activeThread.id, prompt, { provider: opts.provider || undefined, model: opts.model || undefined, permissionMode: opts.mode || undefined, allowedTools, disallowedTools, fileReferences: opts.fileReferences }, images);
-    if (result.isErr()) {
-      console.error('Send failed:', result.error);
-    } else if (isRunning && isQueueMode) {
-      toast.success(t('thread.messageQueued'));
-    }
-    setSending(false);
-  };
-
-  const handleStop = async () => {
-    const result = await api.stopThread(activeThread.id);
-    if (result.isErr()) {
-      console.error('Stop failed:', result.error);
-    }
-  };
-
-  const handlePermissionApproval = async (toolName: string, approved: boolean) => {
-    useAppStore.getState().appendOptimisticMessage(
-      activeThread.id,
-      approved ? `Approved: ${toolName}` : `Denied: ${toolName}`
-    );
-    const { allowedTools, disallowedTools } = deriveToolLists(useSettingsStore.getState().toolPermissions);
-    const result = await api.approveTool(activeThread.id, toolName, approved, allowedTools, disallowedTools);
-    if (result.isErr()) {
-      console.error('Permission approval failed:', result.error);
-    }
-  };
 
   const isRunning = activeThread.status === 'running';
   const isExternal = activeThread.provider === 'external';

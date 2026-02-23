@@ -24,7 +24,6 @@ function CommandDialog({
   children,
   ...props
 }: React.ComponentProps<typeof Dialog>) {
-  console.log('[CommandDialog] render, open=', props.open);
   return (
     <Dialog {...props}>
       <DialogPortal>

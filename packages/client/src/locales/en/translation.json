@@ -63,6 +63,7 @@
       "gemini25pro": "Gemini 2.5 Pro",
       "gemini20flash": "Gemini 2.0 Flash"
     },
+    "createdBy": "Created by {{creator}}",
     "send": "Send",
     "stop": "Stop",
     "placeholder": "Type your message...",

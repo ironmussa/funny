@@ -19,7 +19,8 @@ import { authMiddleware } from './middleware/auth.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { autoMigrate } from './db/migrate.js';
 import './db/index.js'; // triggers self-registration with shutdownManager
-import { markStaleThreadsInterrupted } from './services/thread-manager.js';
+import { markStaleThreadsInterrupted, markStaleExternalThreadsStopped } from './services/thread-manager.js';
+import { startExternalThreadSweep } from './services/ingest-mapper.js';
 import { getAuthToken, validateToken } from './services/auth-service.js';
 import { getAuthMode } from './lib/auth-mode.js';
 import { authRoutes } from './routes/auth.js';
@@ -250,7 +251,11 @@ if (prev) {
 // do we need to mark stale threads.
 if (!prev) {
   markStaleThreadsInterrupted();
+  markStaleExternalThreadsStopped();
 }
+
+// Periodic sweep: stop external threads that haven't received events in 10 minutes
+startExternalThreadSweep();
 
 const server = Bun.serve({
   port,

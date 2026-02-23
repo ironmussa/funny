@@ -154,8 +154,8 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
     let idx = 0;
     const result: PromptMilestone[] = [];
 
-    // First pass: find the last TodoWrite snapshot to get final task states
-    let lastTodoSnapshot: { todos: any[]; toolCallId: string; timestamp: string } | null = null;
+    // First pass: collect all TodoWrite snapshots to track per-task timestamps
+    const todoSnapshots: { todos: any[]; toolCallId: string; timestamp: string }[] = [];
     for (const m of messages) {
       if (m.role === 'assistant' && m.toolCalls) {
         for (const tc of m.toolCalls) {
@@ -164,8 +164,38 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
             if (parsed) {
               const todos = parsed.todos;
               if (Array.isArray(todos) && todos.length > 0) {
-                lastTodoSnapshot = { todos, toolCallId: tc.id, timestamp: m.timestamp };
+                todoSnapshots.push({ todos, toolCallId: tc.id, timestamp: m.timestamp });
               }
+            }
+          }
+        }
+      }
+    }
+    const lastTodoSnapshot = todoSnapshots.length > 0 ? todoSnapshots[todoSnapshots.length - 1] : null;
+
+    // Build per-task timestamp map: find when each task first became in_progress or completed
+    const todoTimestamps = new Map<string, string>();
+    if (lastTodoSnapshot) {
+      for (const todo of lastTodoSnapshot.todos) {
+        const key = todo.content || todo.activeForm || '';
+        // Search snapshots for the earliest timestamp where this task entered its current status
+        for (const snap of todoSnapshots) {
+          const match = snap.todos.find((t: any) =>
+            (t.content || t.activeForm || '') === key
+          );
+          if (match) {
+            if (todo.status === 'completed' && match.status === 'completed') {
+              todoTimestamps.set(key, snap.timestamp);
+              break;
+            }
+            if (todo.status === 'in_progress' && (match.status === 'in_progress' || match.status === 'completed')) {
+              todoTimestamps.set(key, snap.timestamp);
+              break;
+            }
+            if (todo.status === 'pending' && match.status !== undefined) {
+              // For pending tasks, use the first snapshot where they appeared
+              todoTimestamps.set(key, snap.timestamp);
+              break;
             }
           }
         }
@@ -213,10 +243,11 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
               const label = isInProgress && todo.activeForm
                 ? todo.activeForm
                 : todo.content || todo.activeForm || `Task ${i + 1}`;
+              const todoKey = todo.content || todo.activeForm || '';
               result.push({
                 id: `todo-${i}`,
                 content: `${step} · ${label}`,
-                timestamp: m.timestamp,
+                timestamp: todoTimestamps.get(todoKey) || m.timestamp,
                 index: idx++,
                 type: 'todo',
                 toolCallId: lastTodoSnapshot.toolCallId,

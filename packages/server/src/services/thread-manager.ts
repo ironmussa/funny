@@ -23,6 +23,7 @@ export {
   updateThread,
   deleteThread,
   markStaleThreadsInterrupted,
+  markStaleExternalThreadsStopped,
 } from './thread-repository.js';
 
 // Message CRUD + enriched queries

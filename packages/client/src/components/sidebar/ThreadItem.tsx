@@ -28,6 +28,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { Badge } from '@/components/ui/badge';
 
 interface ThreadItemProps {
   thread: Thread;
@@ -127,6 +128,19 @@ export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSele
                 </TooltipTrigger>
                 <TooltipContent side="top" className="text-xs">
                   {gitTooltip}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {/* Creator badge for external/pipeline threads */}
+            {thread.createdBy && thread.createdBy !== 'user' && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-none">
+                    {thread.createdBy}
+                  </Badge>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {t('thread.createdBy', { creator: thread.createdBy })}
                 </TooltipContent>
               </Tooltip>
             )}

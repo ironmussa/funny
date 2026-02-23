@@ -21,6 +21,7 @@ export const threads = sqliteTable('threads', {
     .notNull()
     .references(() => projects.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().default('__local__'),
+  createdBy: text('created_by'), // Username, external agent ID, or pipeline/automation name
   title: text('title').notNull(),
   mode: text('mode').notNull(), // 'local' | 'worktree'
   provider: text('provider').notNull().default('claude'), // 'claude' | 'codex'

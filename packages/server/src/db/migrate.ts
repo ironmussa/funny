@@ -418,6 +418,13 @@ const migrations: Migration[] = [
       addColumn('projects', 'default_permission_mode', 'TEXT');
     },
   },
+
+  {
+    name: '021_thread_created_by',
+    up() {
+      addColumn('threads', 'created_by', 'TEXT');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

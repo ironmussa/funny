@@ -152,6 +152,8 @@ export interface Thread {
   commentCount?: number;
   createdAt: string;
   completedAt?: string;
+  /** Creator/agent that generated this thread (user ID, 'external', 'pipeline', 'automation', etc.) */
+  createdBy?: string;
 }
 
 // ─── Thread Comments ────────────────────────────────────

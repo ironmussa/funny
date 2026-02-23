@@ -191,8 +191,11 @@ function getStateByThreadId(threadId: string): ExternalThreadState | null {
  * then falls back to request_id (externalRequestId lookup).
  */
 function resolveState(event: IngestEvent): ExternalThreadState | null {
-  if (event.thread_id) return getStateByThreadId(event.thread_id);
-  return getState(event.request_id);
+  const state = event.thread_id
+    ? getStateByThreadId(event.thread_id)
+    : getState(event.request_id);
+  if (state) state.lastEventAt = Date.now();
+  return state;
 }
 
 /**
@@ -261,6 +264,8 @@ function onAccepted(event: IngestEvent): string | undefined {
   const branch = (data.branch as string) ?? null;
   const baseBranch = (data.base_branch as string) ?? null;
   const worktreePath = (data.worktree_path as string) ?? null;
+  // createdBy: allow external caller to specify agent/pipeline name, otherwise mark as "external"
+  const createdBy = (metadata?.createdBy as string) ?? (data.created_by as string) ?? 'external';
 
   tm.createThread({
     id: threadId,
@@ -279,6 +284,7 @@ function onAccepted(event: IngestEvent): string | undefined {
     source: 'ingest',
     externalRequestId: request_id,
     cost: 0,
+    createdBy,
     createdAt: timestamp,
   });
 
@@ -676,6 +682,82 @@ function onWorkflowEvent(event: IngestEvent): void {
     emitWS(state, wsEvent);
   }
 }
+
+// ── Stale-thread sweep ───────────────────────────────────────
+
+/** 10 minutes without events → consider external thread stale */
+const STALE_TTL_MS = 10 * 60 * 1000;
+
+/** Sweep interval — check every 2 minutes */
+const SWEEP_INTERVAL_MS = 2 * 60 * 1000;
+
+let sweepTimer: ReturnType<typeof setInterval> | null = null;
+
+/**
+ * Clean up in-memory state for a single external thread.
+ * Transitions it to `stopped` in the DB and emits a WS event.
+ */
+export function cleanupExternalThread(threadId: string): void {
+  // Find the entry in threadStates that matches this threadId
+  for (const [key, state] of threadStates) {
+    if (state.threadId === threadId) {
+      const now = new Date().toISOString();
+      tm.updateThread(threadId, { status: 'stopped', completedAt: now });
+      emitWS(state, { type: 'agent:status', threadId, data: { status: 'stopped' } });
+      threadStates.delete(key);
+      cliStates.delete(key);
+      log.info('Cleaned up external thread', { namespace: 'ingest', threadId });
+      return;
+    }
+  }
+
+  // Fallback: no in-memory state, just update DB
+  tm.updateThread(threadId, { status: 'stopped', completedAt: new Date().toISOString() });
+  log.info('Cleaned up external thread (no in-memory state)', { namespace: 'ingest', threadId });
+}
+
+/**
+ * Sweep all in-memory external thread states and stop any that haven't
+ * received an event in the last STALE_TTL_MS.
+ */
+export function sweepStaleExternalThreads(): void {
+  const now = Date.now();
+  const stale: Array<{ key: string; state: ExternalThreadState }> = [];
+
+  for (const [key, state] of threadStates) {
+    if (now - state.lastEventAt >= STALE_TTL_MS) {
+      stale.push({ key, state });
+    }
+  }
+
+  for (const { key, state } of stale) {
+    const isoNow = new Date().toISOString();
+    tm.updateThread(state.threadId, { status: 'stopped', completedAt: isoNow });
+    emitWS(state, { type: 'agent:status', threadId: state.threadId, data: { status: 'stopped' } });
+    threadStates.delete(key);
+    cliStates.delete(key);
+    log.info('Swept stale external thread', { namespace: 'ingest', threadId: state.threadId, staleSinceMs: now - state.lastEventAt });
+  }
+
+  if (stale.length > 0) {
+    log.info(`Swept ${stale.length} stale external thread(s)`, { namespace: 'ingest' });
+  }
+}
+
+/** Start the periodic sweep timer. Called once at server startup. */
+export function startExternalThreadSweep(): void {
+  if (sweepTimer) return;
+  sweepTimer = setInterval(sweepStaleExternalThreads, SWEEP_INTERVAL_MS);
+  log.info(`External thread sweep started (interval=${SWEEP_INTERVAL_MS}ms, ttl=${STALE_TTL_MS}ms)`, { namespace: 'ingest' });
+}
+
+// Register cleanup with shutdown manager
+shutdownManager.register('ingest-sweep', async () => {
+  if (sweepTimer) {
+    clearInterval(sweepTimer);
+    sweepTimer = null;
+  }
+}, ShutdownPhase.SERVICES);
 
 // ── Public API ───────────────────────────────────────────────
 

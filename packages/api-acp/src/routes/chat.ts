@@ -375,12 +375,12 @@ async function handleNonStreaming(
       prompt,
       options: {
         model: modelId,
-        maxTurns: 1,
+        maxTurns: hasTools ? 1 : 50,
         executable: 'node',
         systemPrompt: systemPrompt || undefined,
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
-        tools: [],
+        ...(hasTools ? { tools: [] } : {}),
       },
     });
 
@@ -495,12 +495,12 @@ async function handleStreaming(
           prompt,
           options: {
             model: modelId,
-            maxTurns: 1,
+            maxTurns: hasTools ? 1 : 50,
             executable: 'node',
             systemPrompt: systemPrompt || undefined,
             permissionMode: 'bypassPermissions',
             allowDangerouslySkipPermissions: true,
-            tools: [],
+            ...(hasTools ? { tools: [] } : {}),
           },
         });
 

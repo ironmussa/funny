@@ -6,6 +6,7 @@ import * as mq from '../services/message-queue.js';
 import { createWorktree, removeWorktree, removeBranch, getCurrentBranch } from '@funny/core/git';
 import { log } from '../lib/abbacchio.js';
 import { startAgent, stopAgent, isAgentRunning, cleanupThreadState } from '../services/agent-runner.js';
+import { cleanupExternalThread } from '../services/ingest-mapper.js';
 import { wsBroker } from '../services/ws-broker.js';
 import { nanoid } from 'nanoid';
 import { createThreadSchema, createIdleThreadSchema, sendMessageSchema, updateThreadSchema, approveToolSchema, validate } from '../validation/schemas.js';
@@ -138,6 +139,7 @@ threadRoutes.post('/idle', async (c) => {
     initialPrompt: prompt,
     cost: 0,
     createdAt: new Date().toISOString(),
+    createdBy: userId, // Track who created this thread
   };
 
   tm.createThread(thread);
@@ -222,6 +224,7 @@ threadRoutes.post('/', async (c) => {
     parentThreadId,
     cost: 0,
     createdAt: new Date().toISOString(),
+    createdBy: userId, // Thread creator is the authenticated user
   };
 
   tm.createThread(thread);
@@ -405,7 +408,8 @@ threadRoutes.post('/:id/stop', async (c) => {
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const thread = threadResult.value;
   if (thread.provider === 'external') {
-    return c.json({ error: 'Cannot stop an external thread' }, 409);
+    cleanupExternalThread(id);
+    return c.json({ ok: true });
   }
   await stopAgent(id);
   return c.json({ ok: true });

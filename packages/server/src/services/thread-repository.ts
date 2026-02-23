@@ -187,3 +187,28 @@ export function markStaleThreadsInterrupted(): void {
     log.info(`Marked ${stale.length} stale thread(s) as interrupted`, { namespace: 'thread-manager', count: stale.length });
   }
 }
+
+/** Mark stale external threads (running/pending) as stopped. Called on server startup. */
+export function markStaleExternalThreadsStopped(): void {
+  const staleCondition = and(
+    or(
+      eq(schema.threads.status, 'running'),
+      eq(schema.threads.status, 'pending'),
+      eq(schema.threads.status, 'waiting'),
+    ),
+    eq(schema.threads.provider, 'external'),
+  );
+
+  const stale = db.select({ id: schema.threads.id })
+    .from(schema.threads)
+    .where(staleCondition)
+    .all();
+
+  if (stale.length > 0) {
+    db.update(schema.threads)
+      .set({ status: 'stopped', completedAt: new Date().toISOString() })
+      .where(staleCondition)
+      .run();
+    log.info(`Marked ${stale.length} stale external thread(s) as stopped`, { namespace: 'thread-manager', count: stale.length });
+  }
+}

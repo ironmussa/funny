@@ -12,6 +12,7 @@ export function insertToolCall(data: {
   messageId: string;
   name: string;
   input: string;
+  author?: string | null;
 }): string {
   const id = nanoid();
   db.insert(schema.toolCalls)
@@ -20,6 +21,7 @@ export function insertToolCall(data: {
       messageId: data.messageId,
       name: data.name,
       input: data.input,
+      author: data.author ?? null,
     })
     .run();
   return id;

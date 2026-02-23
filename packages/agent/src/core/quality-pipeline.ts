@@ -169,12 +169,13 @@ export class QualityPipeline {
   private async emitCLIMessage(
     requestId: string,
     cliMessage: Record<string, unknown>,
+    author?: string,
   ): Promise<void> {
     await this.eventBus.publish({
       event_type: 'pipeline.cli_message',
       request_id: requestId,
       timestamp: new Date().toISOString(),
-      data: { cli_message: cliMessage },
+      data: { cli_message: { ...cliMessage, author }, author },
       metadata: this.requestMetadata,
     });
   }
@@ -239,7 +240,7 @@ export class QualityPipeline {
               id: msgId,
               content: contentBlocks,
             },
-          });
+          }, agentName);
         }
 
         // Emit tool results as user message (after assistant is delivered)
@@ -253,7 +254,7 @@ export class QualityPipeline {
           await this.emitCLIMessage(requestId, {
             type: 'user',
             message: { content: resultBlocks },
-          });
+          }, agentName);
         }
       } catch (err: any) {
         logger.error({ err: err.message, requestId, agent: agentName }, 'Failed to emit CLI step messages');
@@ -294,7 +295,7 @@ export class QualityPipeline {
         tools: role.tools,
         model: role.model,
         cwd: context.worktreePath,
-      });
+      }, agentName);
 
       // Emit dispatch message for this agent
       await this.emitCLIMessage(requestId, {
@@ -303,7 +304,7 @@ export class QualityPipeline {
           id: `${agentName}-dispatch`,
           content: [{ type: 'text', text: `Dispatching agent \`${agentName}\` (model: \`${role.model}\`, provider: \`${role.provider}\`)...` }],
         },
-      });
+      }, agentName);
 
       const startTime = Date.now();
 
@@ -336,7 +337,7 @@ export class QualityPipeline {
             id: `${agentName}-summary`,
             content: [{ type: 'text', text: summaryText }],
           },
-        });
+        }, agentName);
 
         // Emit agent completed event
         await this.eventBus.publish({

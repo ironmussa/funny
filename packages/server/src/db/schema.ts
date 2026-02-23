@@ -81,6 +81,7 @@ export const toolCalls = sqliteTable('tool_calls', {
   name: text('name').notNull(),
   input: text('input'),
   output: text('output'),
+  author: text('author'), // Agent name that executed this tool call (for pipeline threads)
 });
 
 export const automations = sqliteTable('automations', {

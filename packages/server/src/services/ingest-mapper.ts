@@ -418,13 +418,15 @@ function onCLIMessage(event: IngestEvent): void {
 
   const stateKey = resolveStateKey(event);
   const cliState = getCLIState(stateKey);
+  // Extract author from CLI message (set by pipeline agents)
+  const author = (msg.author as string) ?? (event.data.author as string) ?? undefined;
 
   switch (msg.type) {
     case 'system':
       handleCLISystem(threadState, cliState, msg);
       break;
     case 'assistant':
-      handleCLIAssistant(threadState, cliState, msg);
+      handleCLIAssistant(threadState, cliState, msg, author);
       break;
     case 'user':
       handleCLIToolResults(threadState, cliState, msg);
@@ -469,6 +471,7 @@ function handleCLIAssistant(
   threadState: ExternalThreadState,
   cliState: CLIMessageState,
   msg: any,
+  author?: string,
 ): void {
   const { threadId } = threadState;
   const cliMsgId = msg.message?.id;
@@ -487,7 +490,7 @@ function handleCLIAssistant(
     if (msgId) {
       tm.updateMessage(msgId, textContent);
     } else {
-      msgId = tm.insertMessage({ threadId, role: 'assistant', content: textContent });
+      msgId = tm.insertMessage({ threadId, role: 'assistant', content: textContent, author });
     }
     cliState.currentAssistantMsgId = msgId;
     cliState.cliToDbMsgId.set(cliMsgId, msgId);
@@ -495,7 +498,7 @@ function handleCLIAssistant(
     emitWS(threadState, {
       type: 'agent:message',
       threadId,
-      data: { messageId: msgId, role: 'assistant', content: textContent },
+      data: { messageId: msgId, role: 'assistant', content: textContent, author },
     });
   }
 
@@ -510,11 +513,11 @@ function handleCLIAssistant(
     // Ensure there's a parent assistant message
     let parentMsgId = cliState.currentAssistantMsgId || cliState.cliToDbMsgId.get(cliMsgId);
     if (!parentMsgId) {
-      parentMsgId = tm.insertMessage({ threadId, role: 'assistant', content: '' });
+      parentMsgId = tm.insertMessage({ threadId, role: 'assistant', content: '', author });
       emitWS(threadState, {
         type: 'agent:message',
         threadId,
-        data: { messageId: parentMsgId, role: 'assistant', content: '' },
+        data: { messageId: parentMsgId, role: 'assistant', content: '', author },
       });
     }
     cliState.currentAssistantMsgId = parentMsgId;
@@ -531,6 +534,7 @@ function handleCLIAssistant(
         messageId: parentMsgId,
         name: block.name,
         input: inputJson,
+        author,
       });
       cliState.processedToolUseIds.set(block.id, toolCallId);
 
@@ -542,6 +546,7 @@ function handleCLIAssistant(
           messageId: parentMsgId,
           name: block.name,
           input: block.input,
+          author,
         },
       });
     }

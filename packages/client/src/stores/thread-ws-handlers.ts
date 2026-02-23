@@ -28,7 +28,7 @@ export function handleWSInit(get: Get, set: Set, threadId: string, data: AgentIn
 export function handleWSMessage(
   get: Get, set: Set,
   threadId: string,
-  data: { messageId?: string; role: string; content: string }
+  data: { messageId?: string; role: string; content: string; author?: string }
 ): void {
   const { activeThread, selectedThreadId } = get();
 
@@ -38,8 +38,8 @@ export function handleWSMessage(
     if (messageId) {
       const existingIdx = activeThread.messages.findIndex((m) => m.id === messageId);
       if (existingIdx >= 0) {
-        const updated = activeThread.messages.slice();
-        updated[existingIdx] = { ...updated[existingIdx], content: data.content };
+        const updated = [...activeThread.messages];
+        updated[existingIdx] = { ...updated[existingIdx], content: data.content, ...(data.author ? { author: data.author } : {}) };
         set({ activeThread: { ...activeThread, messages: updated } });
         return;
       }
@@ -48,13 +48,17 @@ export function handleWSMessage(
     set({
       activeThread: {
         ...activeThread,
-        messages: activeThread.messages.concat({
-          id: messageId || crypto.randomUUID(),
-          threadId,
-          role: data.role as MessageRole,
-          content: data.content,
-          timestamp: new Date().toISOString(),
-        }),
+        messages: [
+          ...activeThread.messages,
+          {
+            id: messageId || crypto.randomUUID(),
+            threadId,
+            role: data.role as MessageRole,
+            content: data.content,
+            timestamp: new Date().toISOString(),
+            ...(data.author ? { author: data.author } : {}),
+          },
+        ],
       },
     });
   } else if (selectedThreadId === threadId) {
@@ -67,13 +71,13 @@ export function handleWSMessage(
 export function handleWSToolCall(
   get: Get, set: Set,
   threadId: string,
-  data: { toolCallId?: string; messageId?: string; name: string; input: unknown }
+  data: { toolCallId?: string; messageId?: string; name: string; input: unknown; author?: string }
 ): void {
   const { activeThread, selectedThreadId } = get();
 
   if (activeThread?.id === threadId) {
     const toolCallId = data.toolCallId || crypto.randomUUID();
-    const tcEntry = { id: toolCallId, messageId: data.messageId || '', name: data.name, input: JSON.stringify(data.input) };
+    const tcEntry = { id: toolCallId, messageId: data.messageId || '', name: data.name, input: JSON.stringify(data.input), ...(data.author ? { author: data.author } : {}) };
 
     if (activeThread.messages.some(m => m.toolCalls?.some((tc: any) => tc.id === toolCallId))) return;
 

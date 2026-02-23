@@ -427,9 +427,10 @@ const migrations: Migration[] = [
   },
 
   {
-    name: '022_message_author',
+    name: '022_message_and_tool_call_author',
     up() {
       addColumn('messages', 'author', 'TEXT');
+      addColumn('tool_calls', 'author', 'TEXT');
     },
   },
 ];

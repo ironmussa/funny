@@ -52,6 +52,7 @@ export class PipelineRunner {
     requestId: string,
     text: string,
     metadata?: Record<string, unknown>,
+    author?: string,
   ): Promise<void> {
     const count = (this.msgCounters.get(requestId) ?? 0) + 1;
     this.msgCounters.set(requestId, count);
@@ -67,7 +68,9 @@ export class PipelineRunner {
             id: `pipeline-msg-${count}`,
             content: [{ type: 'text', text }],
           },
+          author: author ?? 'pipeline',
         },
+        author: author ?? 'pipeline',
       },
       metadata,
     });

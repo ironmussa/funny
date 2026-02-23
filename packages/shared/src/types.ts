@@ -193,6 +193,8 @@ export interface Message {
   model?: AgentModel;
   /** Permission mode used when this user message was sent */
   permissionMode?: PermissionMode;
+  /** Agent name, pipeline name, or user identifier that produced this message */
+  author?: string;
 }
 
 // ─── Thread with Messages ────────────────────────────────
@@ -216,6 +218,8 @@ export interface ToolCall {
   name: string;
   input: string;
   output?: string;
+  /** Agent name that executed this tool call (for pipeline threads) */
+  author?: string;
 }
 
 // ─── WebSocket Events ────────────────────────────────────
@@ -230,6 +234,7 @@ export interface WSMessageData {
   messageId?: string;
   role: string;
   content: string;
+  author?: string;
 }
 
 export interface WSToolCallData {
@@ -237,6 +242,7 @@ export interface WSToolCallData {
   messageId?: string;
   name: string;
   input: unknown;
+  author?: string;
 }
 
 export interface WSToolOutputData {

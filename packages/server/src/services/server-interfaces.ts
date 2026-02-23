@@ -29,6 +29,7 @@ export interface IMessageRepository {
     images?: string | null;
     model?: string | null;
     permissionMode?: string | null;
+    author?: string | null;
   }): string;
   updateMessage(id: string, content: string): void;
 }
@@ -40,6 +41,7 @@ export interface IToolCallRepository {
     messageId: string;
     name: string;
     input: string;
+    author?: string | null;
   }): string;
   updateToolCallOutput(id: string, output: string): void;
   findToolCall(messageId: string, name: string, input: string): { id: string } | undefined;

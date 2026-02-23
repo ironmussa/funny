@@ -20,6 +20,7 @@ import { ToolCallCard } from './ToolCallCard';
 import { ToolCallGroup } from './ToolCallGroup';
 import { ImageLightbox } from './ImageLightbox';
 import { Badge } from '@/components/ui/badge';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { ProjectHeader } from './thread/ProjectHeader';
 import { NewThreadInput } from './thread/NewThreadInput';
 import { AgentResultCard, AgentInterruptedCard, AgentStoppedCard } from './thread/AgentStatusCards';
@@ -642,7 +643,17 @@ const MemoizedMessageList = memo(function MemoizedMessageList({
               ) : (
                 <div className="text-sm leading-relaxed break-words overflow-x-auto">
                   <div className="flex items-start gap-2">
+                    {msg.author && (
+                      <Avatar className="h-5 w-5 shrink-0 mt-0.5">
+                        <AvatarFallback className="text-[10px] font-medium bg-primary/10 text-primary">
+                          {msg.author.slice(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
                     <div className="flex-1 min-w-0">
+                      {msg.author && (
+                        <span className="text-[10px] font-medium text-primary/70 mb-0.5 block">{msg.author}</span>
+                      )}
                       <MessageContent content={msg.content.trim()} />
                     </div>
                     <CopyButton content={msg.content} />

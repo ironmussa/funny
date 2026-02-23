@@ -361,7 +361,7 @@ ${diffSummary}`;
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60_000);
 
-  const output = await (async (): Promise<string | null> => {
+  const output = await (async (): Promise<{ text: string } | { error: string }> => {
     try {
       let resultText = '';
 
@@ -388,28 +388,48 @@ ${diffSummary}`;
           if (text) resultText = text;
         }
         if (msg.type === 'result') {
-          return (msg as any).result || resultText;
+          const r = (msg as any).result || resultText;
+          return r ? { text: r } : { error: 'No output received' };
         }
       }
 
-      return resultText || null;
+      return resultText ? { text: resultText } : { error: 'No output received' };
     } catch (e: any) {
       log.error('SDK query error generating commit message', { namespace: 'git', error: e.message });
-      return null;
+      return { error: e.message || 'Unknown error' };
     } finally {
       clearTimeout(timeout);
     }
   })();
 
-  if (!output) {
-    return resultToResponse(c, err(internal('Failed to generate commit message')));
+  if ('error' in output) {
+    return resultToResponse(c, err(internal(output.error)));
   }
 
-  const trimmed = output.trim();
+  const trimmed = output.text.trim();
+
+  // Detect CLI/SDK error messages returned as text instead of exceptions
+  const errorPatterns = [
+    /invalid api key/i,
+    /authentication.*error/i,
+    /fix external api key/i,
+    /unauthorized/i,
+    /api key.*invalid/i,
+  ];
+  if (errorPatterns.some(p => p.test(trimmed))) {
+    log.error('SDK auth error generating commit message', { namespace: 'git', output: trimmed.slice(0, 200) });
+    return resultToResponse(c, err(internal(trimmed.split('\n')[0])));
+  }
+
   const titleMatch = trimmed.match(/^TITLE:\s*(.+)/m);
   const bodyMatch = trimmed.match(/^BODY:\s*([\s\S]+)/m);
 
-  const title = titleMatch?.[1]?.trim() || trimmed.split('\n')[0];
+  if (!titleMatch) {
+    log.error('Unexpected output from commit message generation', { namespace: 'git', output: trimmed.slice(0, 500) });
+    return resultToResponse(c, err(internal('Failed to generate commit message')));
+  }
+
+  const title = titleMatch[1].trim();
   const commitBody = bodyMatch?.[1]?.trim() || '';
 
   return c.json({ title, body: commitBody });

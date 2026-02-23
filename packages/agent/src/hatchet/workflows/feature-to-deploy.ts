@@ -111,8 +111,8 @@ Output your analysis as JSON:
       };
 
       const modelFactory = new ModelFactory();
-      const model = modelFactory.create(role.provider, role.model);
-      const executor = new AgentExecutor(model);
+      const resolved = modelFactory.resolve(role.provider, role.model);
+      const executor = new AgentExecutor(resolved.baseURL, resolved.modelId, resolved.apiKey);
       const result = await executor.execute(role, context);
 
       // Parse the result as complexity output
@@ -199,8 +199,8 @@ When finished, output a JSON summary:
       };
 
       const modelFactory = new ModelFactory();
-      const model = modelFactory.create(role.provider, role.model);
-      const executor = new AgentExecutor(model);
+      const resolved = modelFactory.resolve(role.provider, role.model);
+      const executor = new AgentExecutor(resolved.baseURL, resolved.modelId, resolved.apiKey);
       const result = await executor.execute(role, context);
 
       return { status: result.status, agent: result.agent, findings_count: result.findings.length };

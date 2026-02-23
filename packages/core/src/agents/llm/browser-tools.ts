@@ -1,13 +1,13 @@
 /**
- * Browser tools for the E2E agent — Playwright in Vercel AI SDK `tool()` format.
+ * Browser tools for the E2E agent — Playwright with plain tool definitions.
  *
  * Lazy browser initialization: Chromium is only launched on the first tool call.
  * Cleanup via dispose() closes the browser and releases resources.
  */
 
-import { tool } from 'ai';
 import { z } from 'zod';
 import type { Browser, Page } from 'playwright';
+import type { ToolDef } from './agent-executor.js';
 
 export interface BrowserToolsContext {
   /** Base URL of the app to test (e.g., http://localhost:3000) */
@@ -15,7 +15,7 @@ export interface BrowserToolsContext {
 }
 
 export interface BrowserToolsHandle {
-  tools: Record<string, ReturnType<typeof tool>>;
+  tools: Record<string, ToolDef>;
   dispose: () => Promise<void>;
 }
 
@@ -51,8 +51,8 @@ export function createBrowserTools(ctx: BrowserToolsContext): BrowserToolsHandle
     }
   }
 
-  const tools = {
-    browser_navigate: tool({
+  const tools: Record<string, ToolDef> = {
+    browser_navigate: {
       description: 'Navigate the browser to a URL.',
       parameters: z.object({
         url: z.string().describe('The URL to navigate to'),
@@ -63,9 +63,9 @@ export function createBrowserTools(ctx: BrowserToolsContext): BrowserToolsHandle
         const title = await p.title();
         return `Navigated to: ${p.url()}\nTitle: ${title}`;
       },
-    }),
+    },
 
-    browser_screenshot: tool({
+    browser_screenshot: {
       description: 'Take a screenshot of the current page. Returns base64 PNG.',
       parameters: z.object({
         fullPage: z.boolean().optional().default(false)
@@ -76,9 +76,9 @@ export function createBrowserTools(ctx: BrowserToolsContext): BrowserToolsHandle
         const buf = await p.screenshot({ fullPage, type: 'png' });
         return `data:image/png;base64,${buf.toString('base64')}`;
       },
-    }),
+    },
 
-    browser_click: tool({
+    browser_click: {
       description: 'Click an element matching a CSS selector.',
       parameters: z.object({
         selector: z.string().describe('CSS selector of the element to click'),
@@ -90,9 +90,9 @@ export function createBrowserTools(ctx: BrowserToolsContext): BrowserToolsHandle
         await p.click(selector, { timeout });
         return `Clicked: ${selector}`;
       },
-    }),
+    },
 
-    browser_get_dom: tool({
+    browser_get_dom: {
       description: 'Get the HTML content of the current page or a specific element.',
       parameters: z.object({
         selector: z.string().optional()
@@ -116,9 +116,9 @@ export function createBrowserTools(ctx: BrowserToolsContext): BrowserToolsHandle
         }
         return html;
       },
-    }),
+    },
 
-    browser_console_errors: tool({
+    browser_console_errors: {
       description: 'Get all console errors captured since the browser was opened.',
       parameters: z.object({}),
       execute: async () => {
@@ -127,7 +127,7 @@ export function createBrowserTools(ctx: BrowserToolsContext): BrowserToolsHandle
           ? consoleErrors.join('\n')
           : 'No console errors detected.';
       },
-    }),
+    },
   };
 
   return { tools, dispose };

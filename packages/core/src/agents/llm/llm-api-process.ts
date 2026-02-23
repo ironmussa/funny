@@ -1,5 +1,5 @@
 /**
- * LLMApiProcess — bridge between the AI SDK-based agent system and
+ * LLMApiProcess — bridge between the direct HTTP agent system and
  * the existing IAgentProcess interface.
  *
  * Extends BaseAgentProcess so it plugs directly into:
@@ -13,10 +13,9 @@
  */
 
 import { randomUUID } from 'crypto';
-import type { StepResult } from 'ai';
 import type { CLIMessage } from '../types.js';
 import { BaseAgentProcess, type ResultSubtype } from '../base-process.js';
-import { AgentExecutor } from './agent-executor.js';
+import { AgentExecutor, type StepInfo } from './agent-executor.js';
 import { ModelFactory } from './model-factory.js';
 import type { AgentRole, AgentContext, AgentResult } from './agent-context.js';
 
@@ -40,11 +39,11 @@ export class LLMApiProcess extends BaseAgentProcess {
     try {
       const { role, context } = this.parsePromptPayload();
 
-      // Create AI SDK model via factory
-      const model = this.modelFactory.create(role.provider, role.model);
+      // Resolve provider config
+      const resolved = this.modelFactory.resolve(role.provider, role.model);
 
-      // Create executor
-      const executor = new AgentExecutor(model);
+      // Create executor with direct HTTP
+      const executor = new AgentExecutor(resolved.baseURL, resolved.modelId, resolved.apiKey);
 
       // Emit init
       const toolNames = ['bash', 'read', 'edit', 'glob', 'grep'];
@@ -53,7 +52,7 @@ export class LLMApiProcess extends BaseAgentProcess {
       // Execute with step callbacks for CLIMessage bridging
       const agentResult = await executor.execute(role, context, {
         signal: this.abortController.signal,
-        onStepFinish: (step: StepResult<any>) => {
+        onMessage: (step: StepInfo) => {
           this.emitStepAsCLIMessages(step);
         },
       });
@@ -134,9 +133,9 @@ export class LLMApiProcess extends BaseAgentProcess {
     return 'anthropic';
   }
 
-  // ── CLIMessage emission from AI SDK steps ───────────────────
+  // ── CLIMessage emission from agent steps ───────────────────
 
-  private emitStepAsCLIMessages(step: StepResult<any>): void {
+  private emitStepAsCLIMessages(step: StepInfo): void {
     // Emit assistant text
     if (step.text) {
       const cliMsg: CLIMessage = {
@@ -159,9 +158,9 @@ export class LLMApiProcess extends BaseAgentProcess {
             content: [
               {
                 type: 'tool_use' as const,
-                id: tc.toolCallId,
-                name: tc.toolName,
-                input: tc.args,
+                id: tc.id,
+                name: tc.function.name,
+                input: JSON.parse(tc.function.arguments),
               },
             ],
           },

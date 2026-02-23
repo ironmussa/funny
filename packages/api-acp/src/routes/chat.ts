@@ -328,6 +328,12 @@ chatRoute.post('/', async (c) => {
 
   // Always log request summary
   console.log(`[api-acp] REQ model=${requestedModel} stream=${stream} tools=${tools?.length ?? 0} msgs=${messages?.length}`);
+  // Log each message role and tool calls for debugging
+  for (const [i, msg] of messages.entries()) {
+    const toolInfo = msg.tool_calls?.length ? ` tool_calls=[${msg.tool_calls.map(tc => tc.function.name).join(',')}]` : '';
+    const contentPreview = msg.content ? msg.content.slice(0, 120).replace(/\n/g, '\\n') : '(null)';
+    console.log(`[api-acp]   msg[${i}] role=${msg.role}${msg.tool_call_id ? ` tool_call_id=${msg.tool_call_id}` : ''}${toolInfo} content=${contentPreview}${(msg.content?.length ?? 0) > 120 ? '...' : ''}`);
+  }
 
   if (!requestedModel) {
     return c.json({ error: { message: 'model is required', type: 'invalid_request_error' } }, 400);
@@ -385,10 +391,12 @@ async function handleNonStreaming(
     });
 
     for await (const msg of gen) {
+      console.log(`[api-acp] SDK msg type=${msg.type}${(msg as any).subtype ? ` subtype=${(msg as any).subtype}` : ''}`);
       if (msg.type === 'assistant') {
         const raw = msg as any;
         if (raw.message?.content) {
           for (const block of raw.message.content) {
+            console.log(`[api-acp]   block type=${block.type}${block.type === 'text' ? ` len=${block.text?.length}` : ''}${block.type === 'tool_use' ? ` name=${block.name}` : ''}`);
             if (block.type === 'text') {
               textParts.push(block.text);
             }
@@ -401,6 +409,7 @@ async function handleNonStreaming(
       }
       if (msg.type === 'result') {
         const raw = msg as any;
+        console.log(`[api-acp]   result len=${raw.result?.length ?? 0}`);
         if (textParts.length === 0 && raw.result) {
           textParts.push(raw.result);
         }
@@ -505,10 +514,12 @@ async function handleStreaming(
         });
 
         for await (const msg of gen) {
+          console.log(`[api-acp] SDK stream msg type=${msg.type}${(msg as any).subtype ? ` subtype=${(msg as any).subtype}` : ''}`);
           if (msg.type === 'assistant') {
             const raw = msg as any;
             if (raw.message?.content) {
               for (const block of raw.message.content) {
+                console.log(`[api-acp]   stream block type=${block.type}${block.type === 'text' ? ` len=${block.text?.length}` : ''}${block.type === 'tool_use' ? ` name=${block.name}` : ''}`);
                 if (block.type === 'text') {
                   accumulatedText += block.text;
 

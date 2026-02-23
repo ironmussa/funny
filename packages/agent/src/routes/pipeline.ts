@@ -74,6 +74,7 @@ export function createPipelineRoutes(
 
     const request = {
       request_id: requestId,
+      projectId: body.projectId,
       branch: body.branch,
       worktree_path: body.worktree_path,
       base_branch: body.base_branch,

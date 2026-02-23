@@ -9,8 +9,7 @@
  */
 
 import { AgentExecutor, ModelFactory } from '@funny/core/agents';
-import type { AgentContext, AgentResult, DiffStats } from '@funny/core/agents';
-import type { StepResult } from 'ai';
+import type { AgentContext, AgentResult, DiffStats, StepInfo } from '@funny/core/agents';
 import type { PipelineRequest, AgentName, Tier } from './types.js';
 import type { EventBus } from '../infrastructure/event-bus.js';
 import type { PipelineServiceConfig } from '../config/schema.js';
@@ -30,6 +29,8 @@ export interface QualityPipelineResult {
 
 export class QualityPipeline {
   private modelFactory: ModelFactory;
+  /** Metadata from the pipeline request (carries projectId, userId, etc.) */
+  private requestMetadata?: Record<string, unknown>;
 
   constructor(
     private eventBus: EventBus,
@@ -62,6 +63,7 @@ export class QualityPipeline {
     diffStats: DiffStats,
   ): Promise<QualityPipelineResult> {
     const baseBranch = request.base_branch ?? this.config.branch.main;
+    this.requestMetadata = request.metadata;
 
     // Build shared context for all agents
     const context: AgentContext = {
@@ -112,6 +114,7 @@ export class QualityPipeline {
           correction_number: cycle + 1,
           failed_agents: failedNames,
         },
+        metadata: this.requestMetadata,
       });
 
       // Re-run failed agents with accumulated results as context
@@ -172,71 +175,88 @@ export class QualityPipeline {
       request_id: requestId,
       timestamp: new Date().toISOString(),
       data: { cli_message: cliMessage },
+      metadata: this.requestMetadata,
     });
   }
 
   /**
-   * Build an onStepFinish callback that translates Vercel AI SDK steps
+   * Build an onStepFinish callback that translates agent steps
    * into pipeline.cli_message events (CLIMessage format).
+   *
+   * Now receives StepInfo with both toolCalls AND toolResults populated.
    */
   private createStepCallback(
     requestId: string,
     agentName: string,
-  ): (step: StepResult<any>) => void {
+  ): (step: StepInfo) => Promise<void> {
     /** Monotonically increasing message ID for this agent's messages */
     let msgCounter = 0;
 
-    return (step: StepResult<any>) => {
+    return async (step: StepInfo) => {
       const msgId = `${agentName}-msg-${++msgCounter}`;
 
-      // Build content blocks from the step
-      const contentBlocks: Array<Record<string, unknown>> = [];
+      logger.info(
+        {
+          requestId,
+          agent: agentName,
+          stepNumber: step.stepNumber,
+          hasText: !!step.text,
+          textLen: step.text?.length ?? 0,
+          toolCalls: step.toolCalls?.length ?? 0,
+          toolCallNames: step.toolCalls?.map((tc) => tc.function.name) ?? [],
+          toolResults: step.toolResults?.length ?? 0,
+          finishReason: step.finishReason,
+        },
+        'onStepFinish fired',
+      );
 
-      // Add text if present
-      if (step.text) {
-        contentBlocks.push({ type: 'text', text: step.text });
-      }
+      try {
+        // Build content blocks from the step
+        const contentBlocks: Array<Record<string, unknown>> = [];
 
-      // Add tool calls
-      if (step.toolCalls && step.toolCalls.length > 0) {
-        for (const tc of step.toolCalls) {
-          contentBlocks.push({
-            type: 'tool_use',
-            id: tc.toolCallId,
-            name: tc.toolName,
-            input: tc.args,
+        // Add text if present — prefix with agent name so user knows which agent is speaking
+        if (step.text) {
+          contentBlocks.push({ type: 'text', text: `[${agentName}] ${step.text}` });
+        }
+
+        // Add tool calls
+        if (step.toolCalls && step.toolCalls.length > 0) {
+          for (const tc of step.toolCalls) {
+            contentBlocks.push({
+              type: 'tool_use',
+              id: tc.id,
+              name: tc.function.name,
+              input: JSON.parse(tc.function.arguments),
+            });
+          }
+        }
+
+        // Emit assistant message with text + tool_use blocks (must complete first)
+        if (contentBlocks.length > 0) {
+          await this.emitCLIMessage(requestId, {
+            type: 'assistant',
+            message: {
+              id: msgId,
+              content: contentBlocks,
+            },
           });
         }
-      }
 
-      // Emit assistant message with text + tool_use blocks
-      if (contentBlocks.length > 0) {
-        // Fire and forget — don't await to avoid blocking the AI SDK loop
-        this.emitCLIMessage(requestId, {
-          type: 'assistant',
-          message: {
-            id: msgId,
-            content: contentBlocks,
-          },
-        }).catch((err) =>
-          logger.error({ err: err.message, requestId, agent: agentName }, 'Failed to emit CLI assistant message'),
-        );
-      }
+        // Emit tool results as user message (after assistant is delivered)
+        if (step.toolResults && step.toolResults.length > 0) {
+          const resultBlocks = step.toolResults.map((tr) => ({
+            type: 'tool_result',
+            tool_use_id: tr.toolCallId,
+            content: tr.result,
+          }));
 
-      // Emit tool results as user message
-      if (step.toolResults && step.toolResults.length > 0) {
-        const resultBlocks = step.toolResults.map((tr: any) => ({
-          type: 'tool_result',
-          tool_use_id: tr.toolCallId,
-          content: typeof tr.result === 'string' ? tr.result : JSON.stringify(tr.result),
-        }));
-
-        this.emitCLIMessage(requestId, {
-          type: 'user',
-          message: { content: resultBlocks },
-        }).catch((err) =>
-          logger.error({ err: err.message, requestId, agent: agentName }, 'Failed to emit CLI tool result'),
-        );
+          await this.emitCLIMessage(requestId, {
+            type: 'user',
+            message: { content: resultBlocks },
+          });
+        }
+      } catch (err: any) {
+        logger.error({ err: err.message, requestId, agent: agentName }, 'Failed to emit CLI step messages');
       }
     };
   }
@@ -262,6 +282,7 @@ export class QualityPipeline {
         request_id: requestId,
         timestamp: new Date().toISOString(),
         data: { agent_name: agentName, model: role.model, provider: role.provider },
+        metadata: this.requestMetadata,
       });
 
       // Emit system init CLI message so the thread shows as running
@@ -275,11 +296,20 @@ export class QualityPipeline {
         cwd: context.worktreePath,
       });
 
+      // Emit dispatch message for this agent
+      await this.emitCLIMessage(requestId, {
+        type: 'assistant',
+        message: {
+          id: `${agentName}-dispatch`,
+          content: [{ type: 'text', text: `Dispatching agent \`${agentName}\` (model: \`${role.model}\`, provider: \`${role.provider}\`)...` }],
+        },
+      });
+
       const startTime = Date.now();
 
       try {
-        const model = this.modelFactory.create(role.provider, role.model);
-        const executor = new AgentExecutor(model);
+        const resolved = this.modelFactory.resolve(role.provider, role.model);
+        const executor = new AgentExecutor(resolved.baseURL, resolved.modelId, resolved.apiKey);
 
         const result = await executor.execute(role, context, {
           signal: this.signal,
@@ -287,13 +317,18 @@ export class QualityPipeline {
         });
 
         // Emit a final assistant message with the agent's summary
-        const summaryText = [
-          `**Agent \`${agentName}\`: ${result.status}**`,
+        const durationSec = ((result.metadata.duration_ms ?? 0) / 1000).toFixed(1);
+        const summaryLines = [
+          `**Agent \`${agentName}\` finished: ${result.status}** (${durationSec}s, ${result.metadata.turns_used} steps)`,
           `Findings: ${result.findings.length}, Fixes applied: ${result.fixes_applied}`,
-          ...result.findings.map(
-            (f, i) => `${i + 1}. [${f.severity}] ${f.description}${f.fix_applied ? ' (fixed)' : ''}`,
-          ),
-        ].join('\n');
+        ];
+        if (result.findings.length > 0) {
+          summaryLines.push('');
+          for (const [i, f] of result.findings.entries()) {
+            summaryLines.push(`${i + 1}. [${f.severity}] ${f.description}${f.file ? ` (${f.file}${f.line ? `:${f.line}` : ''})` : ''}${f.fix_applied ? ' ✓ fixed' : ''}`);
+          }
+        }
+        const summaryText = summaryLines.join('\n');
 
         await this.emitCLIMessage(requestId, {
           type: 'assistant',
@@ -315,6 +350,7 @@ export class QualityPipeline {
             fixes_applied: result.fixes_applied,
             duration_ms: result.metadata.duration_ms,
           },
+          metadata: this.requestMetadata,
         });
 
         logger.info(
@@ -351,6 +387,7 @@ export class QualityPipeline {
             error: err.message,
             duration_ms: durationMs,
           },
+          metadata: this.requestMetadata,
         });
 
         // Return an error result so the pipeline can continue

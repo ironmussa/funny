@@ -23,7 +23,8 @@
     "neverthrow": "^8.2.0",
     "p-limit": "^7.3.0",
     "playwright": "^1.50.0",
-    "zod": "^4.3.6"
+    "zod": "^4.3.6",
+    "zod-to-json-schema": "^3.25.1"
   },
   "optionalDependencies": {
     "@agentclientprotocol/sdk": "^0.14.1",

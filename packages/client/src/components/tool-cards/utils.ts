@@ -81,7 +81,8 @@ export interface Question {
   multiSelect: boolean;
 }
 
-export function formatInput(input: string | Record<string, unknown>): Record<string, unknown> {
+export function formatInput(input: string | Record<string, unknown> | null | undefined): Record<string, unknown> {
+  if (!input) return {};
   if (typeof input === 'string') {
     try {
       return JSON.parse(input);

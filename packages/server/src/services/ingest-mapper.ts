@@ -246,8 +246,9 @@ function onAccepted(event: IngestEvent): string | undefined {
     return;
   }
 
-  // Resolve project
+  // Resolve project — prefer top-level data.projectId, then metadata, then auto-detect
   const projectId =
+    (data.projectId as string) ??
     (metadata?.projectId as string) ??
     (data.worktree_path ? resolveProjectId(data.worktree_path as string) : null);
 

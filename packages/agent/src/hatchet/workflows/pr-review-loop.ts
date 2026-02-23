@@ -190,8 +190,8 @@ export function registerPRReviewLoopWorkflow(hatchet: HatchetClient) {
       };
 
       const modelFactory = new ModelFactory();
-      const model = modelFactory.create(role.provider, role.model);
-      const executor = new AgentExecutor(model);
+      const resolved = modelFactory.resolve(role.provider, role.model);
+      const executor = new AgentExecutor(resolved.baseURL, resolved.modelId, resolved.apiKey);
       const result = await executor.execute(role, context);
 
       // Get the latest commit SHA

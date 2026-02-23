@@ -47,6 +47,8 @@ export interface PipelineRequest {
   branch: string;
   worktree_path: string;
   base_branch?: string;
+  /** Project ID — resolved by the caller (UI, API, etc.) */
+  projectId?: string;
   config?: PipelineConfig;
   metadata?: Record<string, unknown>;
 }

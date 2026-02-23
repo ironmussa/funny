@@ -22,6 +22,7 @@ export const PipelineRunSchema = z.object({
       message: 'branch must not start with "pipeline/"',
     }),
   worktree_path: z.string().min(1, 'worktree_path is required'),
+  projectId: z.string().optional(),
   base_branch: z.string().optional(),
   config: PipelineConfigSchema,
   metadata: z.record(z.unknown()).optional(),

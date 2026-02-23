@@ -1,16 +1,17 @@
 /**
- * AgentExecutor — runs an agentic loop using the Vercel AI SDK.
+ * AgentExecutor — runs an agentic loop via direct HTTP calls to api-acp.
  *
- * Uses `generateText` with `maxSteps` for automatic tool calling:
- *   1. Send system prompt + context + user prompt to the LLM
- *   2. AI SDK handles tool calls automatically (up to maxSteps)
- *   3. Parse final text as structured AgentResult JSON
+ * Loop:
+ *   1. Send system prompt + context + user prompt to api-acp
+ *   2. If model returns tool_calls → execute tools locally → append results
+ *   3. Repeat until finish_reason is "stop" or maxTurns reached
+ *   4. Parse final text as structured AgentResult JSON
  *
- * Replaces the manual agentic loop with AI SDK's built-in loop.
+ * No Vercel AI SDK — just fetch() and local tool execution.
  */
 
-import { generateText, tool, type LanguageModel, type StepResult } from 'ai';
 import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
 import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { execute } from '../../git/process.js';
@@ -18,19 +19,63 @@ import type { AgentRole, AgentContext, AgentResult, Finding } from './agent-cont
 import { createBrowserTools, type BrowserToolsHandle } from './browser-tools.js';
 import { loadContextDocs } from './context-loader.js';
 
+// ── Types ────────────────────────────────────────────────────
+
+/** OpenAI-compatible message format */
+interface ChatMessage {
+  role: 'system' | 'user' | 'assistant' | 'tool';
+  content: string | null;
+  tool_calls?: ToolCallInfo[];
+  tool_call_id?: string;
+}
+
+/** OpenAI-compatible tool call */
+interface ToolCallInfo {
+  id: string;
+  type: 'function';
+  function: { name: string; arguments: string };
+}
+
+/** Tool result after local execution */
+export interface ToolResult {
+  toolCallId: string;
+  toolName: string;
+  result: string;
+}
+
+/** Step data passed to onStepFinish callback */
+export interface StepInfo {
+  stepNumber: number;
+  text: string;
+  toolCalls: ToolCallInfo[];
+  toolResults: ToolResult[];
+  finishReason: string;
+}
+
+/** A plain tool definition (no Vercel AI SDK dependency) */
+export interface ToolDef {
+  description: string;
+  parameters: z.ZodType<any>;
+  execute: (args: any) => Promise<string>;
+}
+
 // ── Options ───────────────────────────────────────────────────
 
 export interface AgentExecutorOptions {
   /** Abort signal for cancellation */
   signal?: AbortSignal;
-  /** Callback fired after each step (tool call + result) */
-  onStepFinish?: (step: StepResult<any>) => void;
+  /** Callback fired after each step (LLM call + tool execution). May return a Promise. */
+  onStepFinish?: (step: StepInfo) => Promise<void> | void;
 }
 
 // ── Executor ──────────────────────────────────────────────────
 
 export class AgentExecutor {
-  constructor(private model: LanguageModel) {}
+  constructor(
+    private baseURL: string,
+    private modelId: string,
+    private apiKey?: string,
+  ) {}
 
   async execute(
     role: AgentRole,
@@ -50,21 +95,138 @@ export class AgentExecutor {
       });
     }
 
+    // Build tool map and OpenAI-format definitions
+    const toolMap: Record<string, ToolDef> = tools;
+    const openaiTools = Object.entries(tools).map(([name, def]) => ({
+      type: 'function' as const,
+      function: {
+        name,
+        description: def.description,
+        parameters: zodToJsonSchema(def.parameters),
+      },
+    }));
+
+    // Build initial messages
+    const messages: ChatMessage[] = [
+      { role: 'system', content: this.buildSystemPrompt(role, context, projectKnowledge) },
+      { role: 'user', content: this.buildUserPrompt(context) },
+    ];
+
+    let steps = 0;
+    let totalInputTokens = 0;
+    let totalOutputTokens = 0;
+    let lastText = '';
+
     try {
-      const result = await generateText({
-        model: this.model,
-        system: this.buildSystemPrompt(role, context, projectKnowledge),
-        prompt: this.buildUserPrompt(context),
-        tools,
-        maxSteps: role.maxTurns,
-        temperature: role.temperature,
-        maxTokens: role.maxTokens,
-        abortSignal: options.signal,
-        onStepFinish: options.onStepFinish,
-      });
+      while (steps < role.maxTurns) {
+        if (options.signal?.aborted) {
+          return this.makeErrorResult(role, startTime, 'Aborted');
+        }
+
+        // Call api-acp
+        const url = `${this.baseURL}/v1/chat/completions`;
+        console.log(`[AgentExecutor] POST ${url} model=${this.modelId} msgs=${messages.length} tools=${openaiTools.length} step=${steps}`);
+        const response = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(this.apiKey ? { Authorization: `Bearer ${this.apiKey}` } : {}),
+          },
+          body: JSON.stringify({
+            model: this.modelId,
+            messages,
+            tools: openaiTools.length > 0 ? openaiTools : undefined,
+          }),
+          signal: options.signal,
+        });
+
+        if (!response.ok) {
+          const errBody = await response.text().catch(() => 'Unknown error');
+          console.error(`[AgentExecutor] ERROR ${response.status} from ${url}: ${errBody.slice(0, 500)}`);
+          throw new Error(`api-acp returned ${response.status}: ${errBody}`);
+        }
+
+        const data = await response.json() as any;
+        const choice = data.choices?.[0];
+        if (!choice) {
+          throw new Error('api-acp returned empty choices');
+        }
+
+        // Track tokens
+        if (data.usage) {
+          totalInputTokens += data.usage.prompt_tokens ?? 0;
+          totalOutputTokens += data.usage.completion_tokens ?? 0;
+        }
+
+        const assistantMsg = choice.message;
+        const assistantText = assistantMsg.content ?? '';
+        lastText = assistantText;
+
+        // Append assistant message to conversation
+        messages.push({
+          role: 'assistant',
+          content: assistantMsg.content,
+          tool_calls: assistantMsg.tool_calls,
+        });
+
+        // If no tool calls → done
+        if (choice.finish_reason !== 'tool_calls' || !assistantMsg.tool_calls?.length) {
+          steps++;
+          await options.onStepFinish?.({
+            stepNumber: steps,
+            text: assistantText,
+            toolCalls: [],
+            toolResults: [],
+            finishReason: choice.finish_reason ?? 'stop',
+          });
+          break;
+        }
+
+        // Execute tools locally
+        const toolResults: ToolResult[] = [];
+        for (const tc of assistantMsg.tool_calls) {
+          const toolName = tc.function.name;
+          const toolDef = toolMap[toolName];
+
+          let result: string;
+          if (!toolDef) {
+            result = `Error: Unknown tool "${toolName}"`;
+          } else {
+            try {
+              const args = JSON.parse(tc.function.arguments);
+              result = await toolDef.execute(args);
+            } catch (err: any) {
+              result = `Error executing ${toolName}: ${err.message}`;
+            }
+          }
+
+          toolResults.push({ toolCallId: tc.id, toolName, result });
+
+          // Append tool result message to conversation
+          messages.push({
+            role: 'tool',
+            tool_call_id: tc.id,
+            content: result,
+          });
+        }
+
+        steps++;
+
+        // Fire onStepFinish with BOTH toolCalls AND toolResults
+        await options.onStepFinish?.({
+          stepNumber: steps,
+          text: assistantText,
+          toolCalls: assistantMsg.tool_calls,
+          toolResults,
+          finishReason: 'tool-calls',
+        });
+      }
 
       // Parse the final text output as AgentResult
-      return this.parseResult(role, result.text, startTime, result.steps.length, result.usage);
+      return this.parseResult(role, lastText, startTime, steps, {
+        promptTokens: totalInputTokens,
+        completionTokens: totalOutputTokens,
+      });
     } catch (err: any) {
       if (options.signal?.aborted) {
         return this.makeErrorResult(role, startTime, 'Aborted');
@@ -196,18 +358,18 @@ Run your analysis and report findings. If you can fix issues, apply fixes and re
   }
 }
 
-// ── Tool Definitions (AI SDK format) ──────────────────────────
+// ── Tool Definitions ─────────────────────────────────────────
 
 interface ToolsResult {
-  tools: Record<string, ReturnType<typeof tool>>;
+  tools: Record<string, ToolDef>;
   browserHandle: BrowserToolsHandle | null;
 }
 
 function createTools(cwd: string, role: AgentRole, context: AgentContext): ToolsResult {
   let browserHandle: BrowserToolsHandle | null = null;
 
-  const baseTools: Record<string, ReturnType<typeof tool>> = {
-    bash: tool({
+  const baseTools: Record<string, ToolDef> = {
+    bash: {
       description: 'Run a shell command in the working directory. Returns stdout, stderr, and exit code.',
       parameters: z.object({
         command: z.string().describe('The shell command to execute'),
@@ -225,9 +387,9 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
         parts.push(`exit_code: ${result.exitCode}`);
         return parts.join('\n');
       },
-    }),
+    },
 
-    read: tool({
+    read: {
       description: 'Read a file. Returns numbered lines.',
       parameters: z.object({
         path: z.string().describe('Relative file path to read'),
@@ -246,9 +408,9 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
         const slice = lines.slice(start, start + count);
         return slice.map((line, i) => `${String(start + i + 1).padStart(6)}\t${line}`).join('\n');
       },
-    }),
+    },
 
-    edit: tool({
+    edit: {
       description: 'Edit a file by replacing an exact string match.',
       parameters: z.object({
         path: z.string().describe('Relative file path to edit'),
@@ -267,9 +429,9 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
         writeFileSync(filePath, content.replace(old_text, new_text), 'utf-8');
         return `Successfully edited ${relPath}`;
       },
-    }),
+    },
 
-    glob: tool({
+    glob: {
       description: 'Find files matching a glob pattern.',
       parameters: z.object({
         pattern: z.string().describe('Glob pattern (e.g., "**/*.ts")'),
@@ -283,9 +445,9 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
         }
         return matches.join('\n') || 'No files matched.';
       },
-    }),
+    },
 
-    grep: tool({
+    grep: {
       description: 'Search file contents for a pattern. Returns matching lines with paths and line numbers.',
       parameters: z.object({
         pattern: z.string().describe('Text or regex pattern to search for'),
@@ -307,7 +469,7 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
           return result.stdout || 'No matches.';
         }
       },
-    }),
+    },
   };
 
   // Merge browser tools if role requests them

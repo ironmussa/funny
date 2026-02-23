@@ -25,6 +25,7 @@ import type { CircuitBreakers } from '../infrastructure/circuit-breaker.js';
 import type { RequestLogger } from '../infrastructure/request-logger.js';
 import type { PipelineServiceConfig } from '../config/schema.js';
 import { logger } from '../infrastructure/logger.js';
+import { nanoid } from 'nanoid';
 
 // ── PipelineRunner ──────────────────────────────────────────────
 
@@ -33,6 +34,8 @@ export class PipelineRunner {
   private machines = new Map<string, StateMachine<PipelineStatus>>();
   private activePipelines = new Map<string, QualityPipeline>();
   private abortControllers = new Map<string, AbortController>();
+  /** Per-request message counters for unique CLI message IDs */
+  private msgCounters = new Map<string, number>();
 
   constructor(
     private eventBus: EventBus,
@@ -40,6 +43,35 @@ export class PipelineRunner {
     private circuitBreakers?: CircuitBreakers,
     private requestLogger?: RequestLogger,
   ) {}
+
+  /**
+   * Emit a pipeline.cli_message event with an assistant text message.
+   * Used by PipelineRunner stages to send user-visible status updates.
+   */
+  private async emitCLIText(
+    requestId: string,
+    text: string,
+    metadata?: Record<string, unknown>,
+  ): Promise<void> {
+    const count = (this.msgCounters.get(requestId) ?? 0) + 1;
+    this.msgCounters.set(requestId, count);
+
+    await this.eventBus.publish({
+      event_type: 'pipeline.cli_message',
+      request_id: requestId,
+      timestamp: new Date().toISOString(),
+      data: {
+        cli_message: {
+          type: 'assistant',
+          message: {
+            id: `pipeline-msg-${count}`,
+            content: [{ type: 'text', text }],
+          },
+        },
+      },
+      metadata,
+    });
+  }
 
   // ── Public API ──────────────────────────────────────────────────
 
@@ -67,14 +99,36 @@ export class PipelineRunner {
     const abortController = new AbortController();
     this.abortControllers.set(request_id, abortController);
 
-    // Publish accepted event
+    // Publish accepted event (metadata carries projectId for thread creation)
     await this.eventBus.publish({
       event_type: 'pipeline.accepted',
       request_id,
       timestamp: new Date().toISOString(),
-      data: { branch: request.branch, worktree_path: request.worktree_path },
+      data: { branch: request.branch, worktree_path: request.worktree_path, projectId: request.projectId },
+      metadata: request.metadata,
     });
     this.requestLogger?.info('pipeline.runner', request_id, 'accepted', `Pipeline accepted for branch ${request.branch}`, { branch: request.branch, worktree_path: request.worktree_path });
+
+    // Emit system/init so the thread transitions to "running" state
+    await this.eventBus.publish({
+      event_type: 'pipeline.cli_message',
+      request_id,
+      timestamp: new Date().toISOString(),
+      data: {
+        cli_message: {
+          type: 'system',
+          subtype: 'init',
+          session_id: `pipeline-${request_id}`,
+          tools: [],
+          model: 'pipeline',
+          cwd: request.worktree_path,
+        },
+      },
+      metadata: request.metadata,
+    });
+
+    // Emit user-visible accepted message
+    await this.emitCLIText(request_id, `Received pipeline request for branch \`${request.branch}\`\nAnalyzing changeset...`, request.metadata);
 
     try {
       // 1. Classify tier using config thresholds
@@ -97,10 +151,18 @@ export class PipelineRunner {
         request_id,
         timestamp: new Date().toISOString(),
         data: { tier, stats },
+        metadata: request.metadata,
       });
 
       logger.info({ requestId: request_id, tier, stats }, 'Tier classified');
       this.requestLogger?.info('pipeline.runner', request_id, 'tier_classified', `Classified as ${tier}`, { tier, stats });
+
+      // Emit user-visible tier classification message
+      await this.emitCLIText(
+        request_id,
+        `Changeset classified as **${tier}** tier — ${stats.filesChanged} files changed (+${stats.insertions}/-${stats.deletions} lines)`,
+        request.metadata,
+      );
 
       // 2. Determine agents from tier config
       const tierAgents: Record<Tier, AgentName[]> = {
@@ -125,7 +187,15 @@ export class PipelineRunner {
         request_id,
         timestamp: new Date().toISOString(),
         data: { tier, agents, model_count: agents.length },
+        metadata: request.metadata,
       });
+
+      // Emit user-visible dispatch message
+      await this.emitCLIText(
+        request_id,
+        `Dispatching **${agents.length}** quality agents: ${agents.map(a => `\`${a}\``).join(', ')}\nEach agent will analyze the changeset independently...`,
+        request.metadata,
+      );
 
       // 5. Create and run QualityPipeline
       const pipeline = new QualityPipeline(this.eventBus, this.config, abortController.signal);
@@ -162,6 +232,19 @@ export class PipelineRunner {
           metadata: request.metadata,
         });
 
+        // Emit user-visible completion summary
+        const passed = result.agentResults.filter((r: any) => r.status === 'passed').length;
+        const failed = result.agentResults.filter((r: any) => r.status === 'failed').length;
+        const statusLabel = result.overallStatus === 'failed' ? 'Failed' : 'Passed';
+        const agentSummaries = result.agentResults.map((r: any) =>
+          `- \`${r.agent}\`: **${r.status}** (${r.findings?.length ?? 0} findings, ${r.fixes_applied ?? 0} fixes)`
+        ).join('\n');
+        await this.emitCLIText(
+          request_id,
+          `Pipeline **${statusLabel}** — ${passed} passed, ${failed} failed, ${result.correctionsApplied.length} corrections\n\n${agentSummaries}`,
+          request.metadata,
+        );
+
         this.updateStatus(request_id, result.overallStatus === 'failed' ? 'failed' : 'approved');
       };
 
@@ -180,6 +263,7 @@ export class PipelineRunner {
           request_id,
           timestamp: new Date().toISOString(),
           data: {},
+          metadata: request.metadata,
         });
         return;
       }
@@ -192,6 +276,7 @@ export class PipelineRunner {
         request_id,
         timestamp: new Date().toISOString(),
         data: { error: err.message },
+        metadata: request.metadata,
       });
     } finally {
       this.activePipelines.delete(request_id);

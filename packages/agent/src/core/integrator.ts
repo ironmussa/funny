@@ -497,8 +497,8 @@ export class Integrator {
 
     try {
       const doResolve = async () => {
-        const model = this.modelFactory.create(role.provider, role.model);
-        const executor = new AgentExecutor(model);
+        const resolved = this.modelFactory.resolve(role.provider, role.model);
+        const executor = new AgentExecutor(resolved.baseURL, resolved.modelId, resolved.apiKey);
         const result = await executor.execute(role, context);
         return result.status !== 'error';
       };

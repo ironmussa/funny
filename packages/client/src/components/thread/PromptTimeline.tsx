@@ -154,7 +154,7 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
     let idx = 0;
     const result: PromptMilestone[] = [];
 
-    // First pass: collect all TodoWrite snapshots to track per-task timestamps
+    // First pass: collect all TodoWrite snapshots to track per-task history
     const todoSnapshots: { todos: any[]; toolCallId: string; timestamp: string }[] = [];
     for (const m of messages) {
       if (m.role === 'assistant' && m.toolCalls) {
@@ -173,32 +173,34 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
     }
     const lastTodoSnapshot = todoSnapshots.length > 0 ? todoSnapshots[todoSnapshots.length - 1] : null;
 
-    // Build per-task timestamp map: find when each task first became in_progress or completed
-    const todoTimestamps = new Map<string, string>();
+    // Build a map of each todo's first-appearance timestamp and latest status.
+    // Key = todo content string. We track when a todo first appeared in any snapshot
+    // and its most recent status from the last snapshot that contains it.
+    const todoFirstSeen = new Map<string, { timestamp: string; toolCallId: string; snapshotIdx: number }>();
+    const todoLatestStatus = new Map<string, { status: string; activeForm?: string; content?: string }>();
+
+    for (let si = 0; si < todoSnapshots.length; si++) {
+      const snap = todoSnapshots[si];
+      for (const todo of snap.todos) {
+        const key = todo.content || todo.activeForm || '';
+        if (!todoFirstSeen.has(key)) {
+          todoFirstSeen.set(key, { timestamp: snap.timestamp, toolCallId: snap.toolCallId, snapshotIdx: si });
+        }
+        // Always update to latest status
+        todoLatestStatus.set(key, { status: todo.status, activeForm: todo.activeForm, content: todo.content });
+      }
+    }
+
+    // Group todos by the snapshot where they first appeared, preserving order
+    const todosByFirstSnapshot = new Map<number, string[]>();
     if (lastTodoSnapshot) {
       for (const todo of lastTodoSnapshot.todos) {
         const key = todo.content || todo.activeForm || '';
-        // Search snapshots for the earliest timestamp where this task entered its current status
-        for (const snap of todoSnapshots) {
-          const match = snap.todos.find((t: any) =>
-            (t.content || t.activeForm || '') === key
-          );
-          if (match) {
-            if (todo.status === 'completed' && match.status === 'completed') {
-              todoTimestamps.set(key, snap.timestamp);
-              break;
-            }
-            if (todo.status === 'in_progress' && (match.status === 'in_progress' || match.status === 'completed')) {
-              todoTimestamps.set(key, snap.timestamp);
-              break;
-            }
-            if (todo.status === 'pending' && match.status !== undefined) {
-              // For pending tasks, use the first snapshot where they appeared
-              todoTimestamps.set(key, snap.timestamp);
-              break;
-            }
-          }
-        }
+        const firstSeen = todoFirstSeen.get(key);
+        if (!firstSeen) continue;
+        const si = firstSeen.snapshotIdx;
+        if (!todosByFirstSnapshot.has(si)) todosByFirstSnapshot.set(si, []);
+        todosByFirstSnapshot.get(si)!.push(key);
       }
     }
 
@@ -214,8 +216,12 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
       });
     }
 
-    // Track whether we've already inserted the todo items
-    let todosInserted = false;
+    // Track which TodoWrite snapshots we've already emitted todos for
+    let nextSnapshotToEmit = 0;
+    // Total number of todos from the latest snapshot (for step numbering)
+    const totalTodos = lastTodoSnapshot ? lastTodoSnapshot.todos.length : 0;
+    // Track global todo index for step numbering
+    let todoIndex = 0;
 
     for (const m of messages) {
       // User messages become prompt milestones
@@ -229,36 +235,47 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
         });
       }
 
-      // Scan assistant tool calls for questions, plans, and the first TodoWrite
+      // Scan assistant tool calls for questions, plans, and TodoWrites
       if (m.role === 'assistant' && m.toolCalls) {
         for (const tc of m.toolCalls) {
-          // Insert individual todo items at the position of the first TodoWrite
-          if (tc.name === 'TodoWrite' && !todosInserted && lastTodoSnapshot) {
-            todosInserted = true;
-            const total = lastTodoSnapshot.todos.length;
-            for (let i = 0; i < total; i++) {
-              const todo = lastTodoSnapshot.todos[i];
-              const isInProgress = todo.status === 'in_progress';
-              const step = `${i + 1}/${total}`;
-              const label = isInProgress && todo.activeForm
-                ? todo.activeForm
-                : todo.content || todo.activeForm || `Task ${i + 1}`;
-              const todoKey = todo.content || todo.activeForm || '';
-              result.push({
-                id: `todo-${i}`,
-                content: `${step} · ${label}`,
-                timestamp: todoTimestamps.get(todoKey) || m.timestamp,
-                index: idx++,
-                type: 'todo',
-                toolCallId: lastTodoSnapshot.toolCallId,
-                completed: todo.status === 'completed',
-                inProgress: isInProgress,
-              });
+          if (tc.name === 'TodoWrite') {
+            // Emit todos that first appeared in snapshots up to and including this one
+            while (nextSnapshotToEmit < todoSnapshots.length && todoSnapshots[nextSnapshotToEmit].toolCallId === tc.id) {
+              break;
             }
+            // Find which snapshot index this tool call corresponds to
+            const snapIdx = todoSnapshots.findIndex(s => s.toolCallId === tc.id);
+            if (snapIdx < 0) continue;
+
+            // Emit all pending snapshot groups up to this one
+            for (let si = nextSnapshotToEmit; si <= snapIdx; si++) {
+              const todoKeys = todosByFirstSnapshot.get(si);
+              if (!todoKeys) continue;
+              for (const key of todoKeys) {
+                const latest = todoLatestStatus.get(key);
+                const firstSeen = todoFirstSeen.get(key);
+                if (!latest || !firstSeen) continue;
+                const isInProgress = latest.status === 'in_progress';
+                const step = `${todoIndex + 1}/${totalTodos}`;
+                const label = isInProgress && latest.activeForm
+                  ? latest.activeForm
+                  : latest.content || latest.activeForm || `Task ${todoIndex + 1}`;
+                result.push({
+                  id: `todo-${tc.id}-${todoIndex}`,
+                  content: `${step} · ${label}`,
+                  timestamp: firstSeen.timestamp,
+                  index: idx++,
+                  type: 'todo',
+                  toolCallId: firstSeen.toolCallId,
+                  completed: latest.status === 'completed',
+                  inProgress: isInProgress,
+                });
+                todoIndex++;
+              }
+            }
+            nextSnapshotToEmit = snapIdx + 1;
             continue;
           }
-          // Skip subsequent TodoWrite calls (already represented by individual items)
-          if (tc.name === 'TodoWrite') continue;
 
           const milestoneType = TOOL_CALL_TYPES[tc.name];
           if (!milestoneType) continue;

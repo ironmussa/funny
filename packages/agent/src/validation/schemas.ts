@@ -12,6 +12,7 @@ const PipelineConfigSchema = z.object({
   agents: z.array(AgentNameSchema).min(1).optional(),
   model: z.string().optional(),
   maxTurns: z.number().int().min(1).max(500).optional(),
+  skip_merge: z.boolean().optional(),
 }).optional();
 
 export const PipelineRunSchema = z.object({

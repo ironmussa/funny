@@ -104,16 +104,16 @@ export const PipelineServiceConfigSchema = z.object({
   llm_providers: z.object({
     anthropic: z.object({
       api_key_env: z.string().default('ANTHROPIC_API_KEY'),
-      base_url: z.string().default('https://api.anthropic.com'),
+      base_url: z.string().default(''),
     }).default({}),
-    openai: z.object({
-      api_key_env: z.string().default('OPENAI_API_KEY'),
-      base_url: z.string().default('https://api.openai.com'),
+    funny_api_acp: z.object({
+      api_key_env: z.string().default('FUNNY_API_ACP_KEY'),
+      base_url: z.string().default('http://localhost:4010/v1'),
     }).default({}),
     ollama: z.object({
       base_url: z.string().default('http://localhost:11434'),
     }).default({}),
-    default_provider: z.string().default('anthropic'),
+    default_provider: z.string().default('funny-api-acp'),
     fallback_provider: z.string().optional(),
   }).default({}),
 

@@ -39,9 +39,9 @@ export class QualityPipeline {
         apiKey: process.env[config.llm_providers.anthropic.api_key_env],
         baseURL: config.llm_providers.anthropic.base_url || undefined,
       },
-      openai: {
-        apiKey: process.env[config.llm_providers.openai.api_key_env],
-        baseURL: config.llm_providers.openai.base_url || undefined,
+      'funny-api-acp': {
+        apiKey: process.env[config.llm_providers.funny_api_acp.api_key_env],
+        baseURL: config.llm_providers.funny_api_acp.base_url || undefined,
       },
       ollama: {
         baseURL: config.llm_providers.ollama.base_url || undefined,
@@ -135,7 +135,7 @@ export class QualityPipeline {
       }
     }
 
-    const hasFailed = results.some((r) => r.status === 'failed');
+    const hasFailed = results.some((r) => r.status !== 'passed');
 
     logger.info(
       {
@@ -209,6 +209,9 @@ export class QualityPipeline {
             findings: result.findings.length,
             fixes: result.fixes_applied,
             durationMs: result.metadata.duration_ms,
+            ...(result.status === 'error' && result.findings.length > 0
+              ? { error: result.findings[0].description }
+              : {}),
           },
           'Agent completed',
         );

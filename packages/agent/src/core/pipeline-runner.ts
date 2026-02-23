@@ -157,6 +157,7 @@ export class PipelineRunner {
             tier,
             corrections_applied: result.correctionsApplied,
             num_agents: result.agentResults.length,
+            skip_merge: request.config?.skip_merge ?? false,
           },
           metadata: request.metadata,
         });

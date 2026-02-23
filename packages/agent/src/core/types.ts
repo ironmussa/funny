@@ -38,6 +38,8 @@ export interface PipelineConfig {
   maxTurns?: number;
   /** URL of the running app for E2E browser testing */
   appUrl?: string;
+  /** Skip the integration/merge step after pipeline completes */
+  skip_merge?: boolean;
 }
 
 export interface PipelineRequest {

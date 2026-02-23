@@ -62,7 +62,7 @@ describe('PipelineServiceConfigSchema', () => {
       },
       agents: {
         conflict: { model: 'haiku', permissionMode: 'autoEdit', maxTurns: 30 },
-        tests: { model: 'gpt-4', provider: 'openai' },
+        tests: { model: 'claude-sonnet', provider: 'funny-api-acp' },
       },
       auto_correction: { max_attempts: 5 },
       resilience: {

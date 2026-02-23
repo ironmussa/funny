@@ -84,16 +84,16 @@ export const DEFAULT_CONFIG = {
   llm_providers: {
     anthropic: {
       api_key_env: 'ANTHROPIC_API_KEY',
-      base_url: 'https://api.anthropic.com',
+      base_url: '',
     },
-    openai: {
-      api_key_env: 'OPENAI_API_KEY',
-      base_url: 'https://api.openai.com',
+    funny_api_acp: {
+      api_key_env: 'FUNNY_API_ACP_KEY',
+      base_url: 'http://localhost:4010/v1',
     },
     ollama: {
       base_url: 'http://localhost:11434',
     },
-    default_provider: 'anthropic',
+    default_provider: 'funny-api-acp',
     fallback_provider: undefined as string | undefined,
   },
 

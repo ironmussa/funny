@@ -119,9 +119,9 @@ export class Integrator {
         apiKey: process.env[config.llm_providers.anthropic.api_key_env],
         baseURL: config.llm_providers.anthropic.base_url || undefined,
       },
-      openai: {
-        apiKey: process.env[config.llm_providers.openai.api_key_env],
-        baseURL: config.llm_providers.openai.base_url || undefined,
+      'funny-api-acp': {
+        apiKey: process.env[config.llm_providers.funny_api_acp.api_key_env],
+        baseURL: config.llm_providers.funny_api_acp.base_url || undefined,
       },
       ollama: {
         baseURL: config.llm_providers.ollama.base_url || undefined,
@@ -476,7 +476,7 @@ export class Integrator {
       name: 'conflict-resolver',
       systemPrompt: prompt,
       model: this.conflictModel,
-      provider: 'anthropic',
+      provider: 'funny-api-acp',
       tools: [],
       maxTurns: this.conflictMaxTurns,
     };

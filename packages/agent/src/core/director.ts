@@ -160,6 +160,11 @@ export class Director {
 
       // Process sequentially
       for (const entry of eligible) {
+        if (entry.skip_merge) {
+          logger.info({ branch: entry.branch }, 'Skipping integration (skip_merge)');
+          continue;
+        }
+
         logger.info({ branch: entry.branch, priority: entry.priority }, 'Dispatching integration');
         this.emitEvent('director.integration.dispatched', entry.request_id, {
           branch: entry.branch,

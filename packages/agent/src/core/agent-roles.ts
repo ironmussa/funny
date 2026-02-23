@@ -235,7 +235,7 @@ When finished, output a JSON result:
 export const BASE_AGENT_ROLES: Record<AgentName, AgentRole> = {
   tests: {
     name: 'tests',
-    provider: 'anthropic',
+    provider: 'funny-api-acp',
     model: 'claude-sonnet-4-5-20250929',
     maxTurns: 80,
     tools: [],
@@ -244,7 +244,7 @@ export const BASE_AGENT_ROLES: Record<AgentName, AgentRole> = {
   },
   security: {
     name: 'security',
-    provider: 'anthropic',
+    provider: 'funny-api-acp',
     model: 'claude-sonnet-4-5-20250929',
     maxTurns: 40,
     tools: [],
@@ -253,7 +253,7 @@ export const BASE_AGENT_ROLES: Record<AgentName, AgentRole> = {
   },
   architecture: {
     name: 'architecture',
-    provider: 'anthropic',
+    provider: 'funny-api-acp',
     model: 'claude-sonnet-4-5-20250929',
     maxTurns: 30,
     tools: [],
@@ -262,7 +262,7 @@ export const BASE_AGENT_ROLES: Record<AgentName, AgentRole> = {
   },
   performance: {
     name: 'performance',
-    provider: 'anthropic',
+    provider: 'funny-api-acp',
     model: 'claude-sonnet-4-5-20250929',
     maxTurns: 30,
     tools: [],
@@ -271,7 +271,7 @@ export const BASE_AGENT_ROLES: Record<AgentName, AgentRole> = {
   },
   style: {
     name: 'style',
-    provider: 'anthropic',
+    provider: 'funny-api-acp',
     model: 'claude-sonnet-4-5-20250929',
     maxTurns: 30,
     tools: [],
@@ -280,7 +280,7 @@ export const BASE_AGENT_ROLES: Record<AgentName, AgentRole> = {
   },
   types: {
     name: 'types',
-    provider: 'anthropic',
+    provider: 'funny-api-acp',
     model: 'claude-sonnet-4-5-20250929',
     maxTurns: 30,
     tools: [],
@@ -289,7 +289,7 @@ export const BASE_AGENT_ROLES: Record<AgentName, AgentRole> = {
   },
   docs: {
     name: 'docs',
-    provider: 'anthropic',
+    provider: 'funny-api-acp',
     model: 'claude-sonnet-4-5-20250929',
     maxTurns: 20,
     tools: [],
@@ -298,7 +298,7 @@ export const BASE_AGENT_ROLES: Record<AgentName, AgentRole> = {
   },
   integration: {
     name: 'integration',
-    provider: 'anthropic',
+    provider: 'funny-api-acp',
     model: 'claude-sonnet-4-5-20250929',
     maxTurns: 30,
     tools: [],
@@ -307,7 +307,7 @@ export const BASE_AGENT_ROLES: Record<AgentName, AgentRole> = {
   },
   e2e: {
     name: 'e2e',
-    provider: 'anthropic',
+    provider: 'funny-api-acp',
     model: 'claude-sonnet-4-5-20250929',
     maxTurns: 60,
     tools: ['browser'],

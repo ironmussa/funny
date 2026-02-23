@@ -30,6 +30,7 @@ export interface ManifestReadyEntry {
   depends_on: string[];
   base_main_sha: string;
   base_branch?: string;
+  skip_merge?: boolean;
   metadata?: Record<string, unknown>;
 }
 

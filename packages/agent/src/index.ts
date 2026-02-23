@@ -90,7 +90,7 @@ director.startSchedule(config.director.schedule_interval_ms);
 eventBus.on('event', async (event: PipelineEvent) => {
   if (event.event_type !== 'pipeline.completed') return;
 
-  const { branch, pipeline_branch, worktree_path, tier, base_branch } = event.data as Record<string, any>;
+  const { branch, pipeline_branch, worktree_path, tier, base_branch, skip_merge } = event.data as Record<string, any>;
   if (!branch) return;
 
   try {
@@ -107,6 +107,7 @@ eventBus.on('event', async (event: PipelineEvent) => {
       depends_on: (event.metadata?.depends_on as string[]) ?? [],
       base_main_sha: '',
       base_branch: (base_branch as string) ?? undefined,
+      skip_merge: !!skip_merge,
       metadata: event.metadata,
     };
     await manifestManager.addToReady(entry);

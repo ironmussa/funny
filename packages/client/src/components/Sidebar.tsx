@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef, startTransition } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo, startTransition } from 'react';
 import { cn } from '@/lib/utils';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
@@ -222,6 +222,85 @@ export function AppSidebar() {
     navigate('/');
   }, [deleteProjectConfirm, deleteProject, navigate, t]);
 
+  // ── Stable callbacks for ProjectItem (avoids breaking memo) ──────────
+  const handleToggleProject = useCallback((projectId: string) => {
+    const wasExpanded = useProjectStore.getState().expandedProjects.has(projectId);
+    toggleProject(projectId);
+    startTransition(() => {
+      if (!wasExpanded) {
+        useProjectStore.getState().selectProject(projectId);
+        navigate(`/projects/${projectId}`);
+      } else if (useProjectStore.getState().selectedProjectId !== projectId) {
+        useGitStatusStore.getState().fetchForProject(projectId);
+        navigate(`/projects/${projectId}`);
+      }
+    });
+  }, [toggleProject, navigate]);
+
+  const handleNewThread = useCallback((projectId: string) => {
+    startTransition(() => {
+      startNewThread(projectId);
+      navigate(`/projects/${projectId}`);
+    });
+  }, [startNewThread, navigate]);
+
+  const handleRenameProject = useCallback((projectId: string, currentName: string) => {
+    setRenameProjectState({ projectId, currentName, newName: currentName });
+  }, []);
+
+  const handleDeleteProject = useCallback((projectId: string, name: string) => {
+    setDeleteProjectConfirm({ projectId, name });
+  }, []);
+
+  const handleSelectThread = useCallback((projectId: string, threadId: string) => {
+    startTransition(() => {
+      const store = useThreadStore.getState();
+      if (store.selectedThreadId === threadId && (!store.activeThread || store.activeThread.id !== threadId)) {
+        store.selectThread(threadId);
+      }
+      navigate(`/projects/${projectId}/threads/${threadId}`);
+    });
+  }, [navigate]);
+
+  const handleArchiveThread = useCallback((projectId: string, threadId: string, title: string) => {
+    const threads = useThreadStore.getState().threadsByProject[projectId] ?? [];
+    const th = threads.find(t => t.id === threadId);
+    setArchiveConfirm({ threadId, projectId, title, isWorktree: th?.mode === 'worktree' && !!th?.branch && th?.provider !== 'external' });
+  }, []);
+
+  const handlePinThread = useCallback((projectId: string, threadId: string, pinned: boolean) => {
+    pinThread(threadId, projectId, pinned);
+  }, [pinThread]);
+
+  const handleDeleteThread = useCallback((projectId: string, threadId: string, title: string) => {
+    const threads = useThreadStore.getState().threadsByProject[projectId] ?? [];
+    const th = threads.find(t => t.id === threadId);
+    setDeleteThreadConfirm({ threadId, projectId, title, isWorktree: th?.mode === 'worktree' && !!th?.branch && th?.provider !== 'external' });
+  }, []);
+
+  const handleShowAllThreads = useCallback((projectId: string) => {
+    showGlobalSearch();
+    navigate(`/search?project=${projectId}`);
+  }, [showGlobalSearch, navigate]);
+
+  const handleShowIssues = useCallback((projectId: string) => {
+    setIssuesProjectId(projectId);
+  }, []);
+
+  const handleTriggerWorkflow = useCallback((projectId: string, projectPath: string) => {
+    openWorkflowDialog(projectId, projectPath);
+  }, [openWorkflowDialog]);
+
+  // Memoize per-project thread lists to avoid .filter() on every render
+  const filteredThreadsByProject = useMemo(() => {
+    const result: Record<string, typeof threadsByProject[string]> = {};
+    for (const project of projects) {
+      const threads = threadsByProject[project.id] ?? [];
+      result[project.id] = threads.filter((t) => !t.archived);
+    }
+    return result;
+  }, [threadsByProject, projects]);
+
   if (settingsOpen) {
     return <SettingsPanel />;
   }
@@ -352,65 +431,21 @@ export function AppSidebar() {
             <ProjectItem
               key={project.id}
               project={project}
-              threads={(threadsByProject[project.id] ?? []).filter((t) => !t.archived)}
+              threads={filteredThreadsByProject[project.id] ?? []}
               isExpanded={expandedProjects.has(project.id)}
               isSelected={selectedProjectId === project.id}
               selectedThreadId={selectedThreadId}
-              onToggle={() => {
-                const wasExpanded = expandedProjects.has(project.id);
-                toggleProject(project.id);
-                // Defer expensive work (API calls, navigation) so the browser can paint the toggle immediately
-                startTransition(() => {
-                  if (!wasExpanded) {
-                    useProjectStore.getState().selectProject(project.id);
-                    navigate(`/projects/${project.id}`);
-                  } else if (selectedProjectId !== project.id) {
-                    useGitStatusStore.getState().fetchForProject(project.id);
-                    navigate(`/projects/${project.id}`);
-                  }
-                });
-              }}
-              onNewThread={() => {
-                startTransition(() => {
-                  startNewThread(project.id);
-                  navigate(`/projects/${project.id}`);
-                });
-              }}
-              onRenameProject={() => {
-                setRenameProjectState({ projectId: project.id, currentName: project.name, newName: project.name });
-              }}
-              onDeleteProject={() => {
-                setDeleteProjectConfirm({ projectId: project.id, name: project.name });
-              }}
-              onSelectThread={(threadId) => {
-                startTransition(() => {
-                  const store = useThreadStore.getState();
-                  // If already on this thread's URL but activeThread didn't load, re-select directly
-                  if (store.selectedThreadId === threadId && (!store.activeThread || store.activeThread.id !== threadId)) {
-                    store.selectThread(threadId);
-                  }
-                  navigate(`/projects/${project.id}/threads/${threadId}`);
-                });
-              }}
-              onArchiveThread={(threadId, title) => {
-                const threads = threadsByProject[project.id] ?? [];
-                const th = threads.find(t => t.id === threadId);
-                setArchiveConfirm({ threadId, projectId: project.id, title, isWorktree: th?.mode === 'worktree' && !!th?.branch && th?.provider !== 'external' });
-              }}
-              onPinThread={(threadId, pinned) => {
-                pinThread(threadId, project.id, pinned);
-              }}
-              onDeleteThread={(threadId, title) => {
-                const threads = threadsByProject[project.id] ?? [];
-                const th = threads.find(t => t.id === threadId);
-                setDeleteThreadConfirm({ threadId, projectId: project.id, title, isWorktree: th?.mode === 'worktree' && !!th?.branch && th?.provider !== 'external' });
-              }}
-              onShowAllThreads={() => {
-                showGlobalSearch();
-                navigate(`/search?project=${project.id}`);
-              }}
-              onShowIssues={() => setIssuesProjectId(project.id)}
-              onTriggerWorkflow={() => openWorkflowDialog(project.id, project.path)}
+              onToggle={handleToggleProject}
+              onNewThread={handleNewThread}
+              onRenameProject={handleRenameProject}
+              onDeleteProject={handleDeleteProject}
+              onSelectThread={handleSelectThread}
+              onArchiveThread={handleArchiveThread}
+              onPinThread={handlePinThread}
+              onDeleteThread={handleDeleteThread}
+              onShowAllThreads={handleShowAllThreads}
+              onShowIssues={handleShowIssues}
+              onTriggerWorkflow={handleTriggerWorkflow}
             />
           ))}
         </div>

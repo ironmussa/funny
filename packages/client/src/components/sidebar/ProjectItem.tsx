@@ -34,17 +34,17 @@ interface ProjectItemProps {
   isExpanded: boolean;
   isSelected: boolean;
   selectedThreadId: string | null;
-  onToggle: () => void;
-  onNewThread: () => void;
-  onRenameProject: () => void;
-  onDeleteProject: () => void;
-  onSelectThread: (threadId: string) => void;
-  onArchiveThread: (threadId: string, title: string) => void;
-  onPinThread: (threadId: string, pinned: boolean) => void;
-  onDeleteThread: (threadId: string, title: string) => void;
-  onShowAllThreads: () => void;
-  onShowIssues: () => void;
-  onTriggerWorkflow?: () => void;
+  onToggle: (projectId: string) => void;
+  onNewThread: (projectId: string) => void;
+  onRenameProject: (projectId: string, currentName: string) => void;
+  onDeleteProject: (projectId: string, name: string) => void;
+  onSelectThread: (projectId: string, threadId: string) => void;
+  onArchiveThread: (projectId: string, threadId: string, title: string) => void;
+  onPinThread: (projectId: string, threadId: string, pinned: boolean) => void;
+  onDeleteThread: (projectId: string, threadId: string, title: string) => void;
+  onShowAllThreads: (projectId: string) => void;
+  onShowIssues: (projectId: string) => void;
+  onTriggerWorkflow?: (projectId: string, projectPath: string) => void;
 }
 
 export const ProjectItem = memo(function ProjectItem({
@@ -67,7 +67,6 @@ export const ProjectItem = memo(function ProjectItem({
 }: ProjectItemProps) {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const [hovered, setHovered] = useState(false);
   const [openDropdown, setOpenDropdown] = useState(false);
   const gitStatusByThread = useGitStatusStore((s) => s.statusByThread);
   const defaultEditor = useSettingsStore((s) => s.defaultEditor);
@@ -113,22 +112,20 @@ export const ProjectItem = memo(function ProjectItem({
   return (
     <Collapsible
       open={isExpanded}
-      onOpenChange={onToggle}
+      onOpenChange={() => onToggle(project.id)}
       className="min-w-0"
       data-project-id={project.id}
     >
       <div
         ref={dragRef}
         className={cn(
-          "flex items-center rounded-md hover:bg-accent/50 transition-colors select-none",
+          "group/project flex items-center rounded-md hover:bg-accent/50 select-none",
           isDragging && "opacity-50",
           isDropTarget && "ring-2 ring-ring"
         )}
-        onMouseEnter={() => setHovered(true)}
-        onMouseLeave={() => setHovered(false)}
       >
         <CollapsibleTrigger className={cn(
-          "flex-1 flex items-center gap-1.5 px-2 py-1 text-xs text-left text-muted-foreground hover:text-foreground min-w-0 transition-colors",
+          "flex-1 flex items-center gap-1.5 px-2 py-1 text-xs text-left text-muted-foreground hover:text-foreground min-w-0",
           isDragging ? "cursor-grabbing" : "cursor-pointer"
         )}>
           {isExpanded ? (
@@ -141,9 +138,9 @@ export const ProjectItem = memo(function ProjectItem({
         <div className="flex items-center mr-2 gap-0.5">
           <div className={cn(
             'flex items-center gap-0.5',
-            hovered || openDropdown
+            openDropdown
               ? 'opacity-100'
-              : 'opacity-0 pointer-events-none'
+              : 'opacity-0 pointer-events-none group-hover/project:opacity-100 group-hover/project:pointer-events-auto'
           )}>
             <Tooltip>
               <TooltipTrigger asChild>
@@ -152,7 +149,7 @@ export const ProjectItem = memo(function ProjectItem({
                   size="icon-xs"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onShowAllThreads();
+                    onShowAllThreads(project.id);
                   }}
                   className="text-muted-foreground hover:text-foreground"
                 >
@@ -239,7 +236,7 @@ export const ProjectItem = memo(function ProjectItem({
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    onShowIssues();
+                    onShowIssues(project.id);
                   }}
                 >
                   <CircleDot className="h-3.5 w-3.5" />
@@ -249,7 +246,7 @@ export const ProjectItem = memo(function ProjectItem({
                   <DropdownMenuItem
                     onClick={(e) => {
                       e.stopPropagation();
-                      onTriggerWorkflow();
+                      onTriggerWorkflow(project.id, project.path);
                     }}
                   >
                     <Zap className="h-3.5 w-3.5" />
@@ -260,7 +257,7 @@ export const ProjectItem = memo(function ProjectItem({
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    onRenameProject();
+                    onRenameProject(project.id, project.name);
                   }}
                 >
                   <Pencil className="h-3.5 w-3.5" />
@@ -269,7 +266,7 @@ export const ProjectItem = memo(function ProjectItem({
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    onDeleteProject();
+                    onDeleteProject(project.id, project.name);
                   }}
                   className="text-status-error focus:text-status-error"
                 >
@@ -285,7 +282,7 @@ export const ProjectItem = memo(function ProjectItem({
                   size="icon-xs"
                   onClick={(e) => {
                     e.stopPropagation();
-                    onNewThread();
+                    onNewThread(project.id);
                   }}
                   className="text-muted-foreground hover:text-foreground"
                 >
@@ -313,16 +310,16 @@ export const ProjectItem = memo(function ProjectItem({
               thread={th}
               projectPath={project.path}
               isSelected={selectedThreadId === th.id}
-              onSelect={() => onSelectThread(th.id)}
-              onArchive={th.status === 'running' ? undefined : () => onArchiveThread(th.id, th.title)}
-              onPin={() => onPinThread(th.id, !th.pinned)}
-              onDelete={th.status === 'running' ? undefined : () => onDeleteThread(th.id, th.title)}
+              onSelect={() => onSelectThread(project.id, th.id)}
+              onArchive={th.status === 'running' ? undefined : () => onArchiveThread(project.id, th.id, th.title)}
+              onPin={() => onPinThread(project.id, th.id, !th.pinned)}
+              onDelete={th.status === 'running' ? undefined : () => onDeleteThread(project.id, th.id, th.title)}
               gitStatus={th.mode === 'worktree' ? gitStatusByThread[th.id] : undefined}
             />
           ))}
           {threads.length > 5 && (
             <button
-              onClick={onShowAllThreads}
+              onClick={() => onShowAllThreads(project.id)}
               className="text-sm text-muted-foreground hover:text-foreground px-2 py-1.5 transition-colors"
             >
               {t('sidebar.viewAll')}

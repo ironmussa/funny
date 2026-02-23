@@ -10,11 +10,13 @@
 
 import { AgentExecutor, ModelFactory } from '@funny/core/agents';
 import type { AgentContext, AgentResult, DiffStats } from '@funny/core/agents';
+import type { StepResult } from 'ai';
 import type { PipelineRequest, AgentName, Tier } from './types.js';
 import type { EventBus } from '../infrastructure/event-bus.js';
 import type { PipelineServiceConfig } from '../config/schema.js';
 import { resolveAgentRole } from './agent-roles.js';
 import { logger } from '../infrastructure/logger.js';
+import { nanoid } from 'nanoid';
 
 // ── Result type ─────────────────────────────────────────────────
 
@@ -154,6 +156,91 @@ export class QualityPipeline {
     };
   }
 
+  // ── CLI message emission ─────────────────────────────────────
+
+  /**
+   * Emit a pipeline.cli_message event wrapping a CLIMessage-shaped payload.
+   * The ingest-mapper on the server side processes these to populate the thread
+   * with assistant text, tool calls, tool results, and final status.
+   */
+  private async emitCLIMessage(
+    requestId: string,
+    cliMessage: Record<string, unknown>,
+  ): Promise<void> {
+    await this.eventBus.publish({
+      event_type: 'pipeline.cli_message',
+      request_id: requestId,
+      timestamp: new Date().toISOString(),
+      data: { cli_message: cliMessage },
+    });
+  }
+
+  /**
+   * Build an onStepFinish callback that translates Vercel AI SDK steps
+   * into pipeline.cli_message events (CLIMessage format).
+   */
+  private createStepCallback(
+    requestId: string,
+    agentName: string,
+  ): (step: StepResult<any>) => void {
+    /** Monotonically increasing message ID for this agent's messages */
+    let msgCounter = 0;
+
+    return (step: StepResult<any>) => {
+      const msgId = `${agentName}-msg-${++msgCounter}`;
+
+      // Build content blocks from the step
+      const contentBlocks: Array<Record<string, unknown>> = [];
+
+      // Add text if present
+      if (step.text) {
+        contentBlocks.push({ type: 'text', text: step.text });
+      }
+
+      // Add tool calls
+      if (step.toolCalls && step.toolCalls.length > 0) {
+        for (const tc of step.toolCalls) {
+          contentBlocks.push({
+            type: 'tool_use',
+            id: tc.toolCallId,
+            name: tc.toolName,
+            input: tc.args,
+          });
+        }
+      }
+
+      // Emit assistant message with text + tool_use blocks
+      if (contentBlocks.length > 0) {
+        // Fire and forget — don't await to avoid blocking the AI SDK loop
+        this.emitCLIMessage(requestId, {
+          type: 'assistant',
+          message: {
+            id: msgId,
+            content: contentBlocks,
+          },
+        }).catch((err) =>
+          logger.error({ err: err.message, requestId, agent: agentName }, 'Failed to emit CLI assistant message'),
+        );
+      }
+
+      // Emit tool results as user message
+      if (step.toolResults && step.toolResults.length > 0) {
+        const resultBlocks = step.toolResults.map((tr: any) => ({
+          type: 'tool_result',
+          tool_use_id: tr.toolCallId,
+          content: typeof tr.result === 'string' ? tr.result : JSON.stringify(tr.result),
+        }));
+
+        this.emitCLIMessage(requestId, {
+          type: 'user',
+          message: { content: resultBlocks },
+        }).catch((err) =>
+          logger.error({ err: err.message, requestId, agent: agentName }, 'Failed to emit CLI tool result'),
+        );
+      }
+    };
+  }
+
   // ── Agent wave execution ──────────────────────────────────────
 
   /**
@@ -177,6 +264,17 @@ export class QualityPipeline {
         data: { agent_name: agentName, model: role.model, provider: role.provider },
       });
 
+      // Emit system init CLI message so the thread shows as running
+      const sessionId = nanoid();
+      await this.emitCLIMessage(requestId, {
+        type: 'system',
+        subtype: 'init',
+        session_id: sessionId,
+        tools: role.tools,
+        model: role.model,
+        cwd: context.worktreePath,
+      });
+
       const startTime = Date.now();
 
       try {
@@ -185,6 +283,24 @@ export class QualityPipeline {
 
         const result = await executor.execute(role, context, {
           signal: this.signal,
+          onStepFinish: this.createStepCallback(requestId, agentName),
+        });
+
+        // Emit a final assistant message with the agent's summary
+        const summaryText = [
+          `**Agent \`${agentName}\`: ${result.status}**`,
+          `Findings: ${result.findings.length}, Fixes applied: ${result.fixes_applied}`,
+          ...result.findings.map(
+            (f, i) => `${i + 1}. [${f.severity}] ${f.description}${f.fix_applied ? ' (fixed)' : ''}`,
+          ),
+        ].join('\n');
+
+        await this.emitCLIMessage(requestId, {
+          type: 'assistant',
+          message: {
+            id: `${agentName}-summary`,
+            content: [{ type: 'text', text: summaryText }],
+          },
         });
 
         // Emit agent completed event

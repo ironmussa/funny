@@ -151,6 +151,10 @@
         "@openai/codex-sdk": "^0.101.0",
       },
     },
+    "packages/funny-client": {
+      "name": "@funny/funny-client",
+      "version": "0.1.0",
+    },
     "packages/observability": {
       "name": "@funny/observability",
       "version": "0.1.0",
@@ -435,6 +439,8 @@
     "@funny/client": ["@funny/client@workspace:packages/client"],
 
     "@funny/core": ["@funny/core@workspace:packages/core"],
+
+    "@funny/funny-client": ["@funny/funny-client@workspace:packages/funny-client"],
 
     "@funny/observability": ["@funny/observability@workspace:packages/observability"],
 

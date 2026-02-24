@@ -27,5 +27,7 @@ export {
 
 export {
   fetchPRReviews, checkPRApprovalStatus, mergePR,
+  getPRInfo, getPRDiff, postPRReview,
   type PRReview, type PRReviewComment, type ReviewDecision, type PRReviewData,
+  type PRInfo, type ReviewEvent,
 } from './github.js';

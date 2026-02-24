@@ -2,6 +2,7 @@
  * GitHub webhook inbound endpoint.
  *
  * POST /github — Receives GitHub events:
+ *   - pull_request (action=opened|synchronize) → triggers ReviewBot code review
  *   - pull_request (action=closed, merged=true) → emits 'integration.pr.merged'
  *   - pull_request_review (action=submitted) →
  *       state=changes_requested → triggers pr-review-loop workflow
@@ -12,6 +13,7 @@ import { Hono } from 'hono';
 import type { EventBus } from '../infrastructure/event-bus.js';
 import type { PipelineServiceConfig } from '../config/schema.js';
 import { isHatchetEnabled, getHatchetClient } from '../hatchet/client.js';
+import { PRReviewer } from '@funny/reviewbot';
 import { logger } from '../infrastructure/logger.js';
 
 // ── HMAC signature validation ────────────────────────────────────
@@ -66,6 +68,33 @@ export function createWebhookRoutes(
 
     const githubEvent = c.req.header('X-GitHub-Event');
     const integrationPrefix = config.branch.integration_prefix;
+
+    // ── Handle pull_request events (opened/synchronize → ReviewBot) ──
+
+    if (githubEvent === 'pull_request' && (payload.action === 'opened' || payload.action === 'synchronize')) {
+      const pr = payload.pull_request;
+      const prNumber: number = pr?.number ?? 0;
+      const repoFullName: string = payload.repository?.full_name ?? '';
+
+      logger.info(
+        { prNumber, action: payload.action, repo: repoFullName },
+        'PR event — triggering ReviewBot',
+      );
+
+      // Run review asynchronously (don't block the webhook response)
+      const projectPath = process.env.PROJECT_PATH ?? process.cwd();
+      const reviewer = new PRReviewer();
+      reviewer.review(projectPath, prNumber).then((result) => {
+        logger.info(
+          { prNumber, status: result.status, findings: result.findings.length, duration_ms: result.duration_ms },
+          'ReviewBot completed',
+        );
+      }).catch((err) => {
+        logger.error({ prNumber, err: err.message }, 'ReviewBot failed');
+      });
+
+      return c.json({ status: 'processed', action: 'reviewbot_triggered', pr_number: prNumber }, 200);
+    }
 
     // ── Handle pull_request events (merged PRs) ──────────────────
 

@@ -124,7 +124,11 @@ ${plan.risks.length > 0 ? `**Risks to watch for:**\n${plan.risks.map((r) => `- $
 // ── OrchestratorAgent ───────────────────────────────────────────
 
 export class OrchestratorAgent {
-  constructor(private config: PipelineServiceConfig) {}
+  private modelFactory: ModelFactory;
+
+  constructor(private config: PipelineServiceConfig, modelFactory?: ModelFactory) {
+    this.modelFactory = modelFactory ?? new ModelFactory();
+  }
 
   /**
    * Analyze an issue and produce an implementation plan.
@@ -144,15 +148,14 @@ export class OrchestratorAgent {
   ): Promise<ImplementationPlan> {
     const { orchestrator } = this.config;
 
-    const modelFactory = new ModelFactory();
-    const resolved = modelFactory.resolve(orchestrator.provider, orchestrator.model);
+    const resolved = this.modelFactory.resolve(orchestrator.provider, orchestrator.model);
 
     const systemPrompt = buildPlanningPrompt(issue, projectPath);
 
     const userPrompt = `Analyze this issue and create an implementation plan. Use the tools to explore the codebase at ${projectPath}, then output your plan as a JSON block.`;
 
-    // Direct LLM call — no AgentExecutor wrapper
-    const url = `${resolved.baseURL}/chat/completions`;
+    // Direct LLM call via runs endpoint — no AgentExecutor wrapper
+    const url = `${resolved.baseURL}/v1/runs`;
     logger.info({ url, model: resolved.modelId }, 'Planning issue with direct LLM call');
 
     let allText = '';
@@ -221,11 +224,9 @@ export class OrchestratorAgent {
       },
     ];
 
-    type ChatMsg = { role: string; content: string | null; tool_calls?: any[]; tool_call_id?: string };
-    const messages: ChatMsg[] = [
-      { role: 'system', content: systemPrompt },
-      { role: 'user', content: userPrompt },
-    ];
+    // Build conversation as text prompt — on subsequent turns we append
+    // assistant text + tool results so the model has context.
+    const conversationParts: string[] = [userPrompt];
 
     const { readFileSync, existsSync } = await import('fs');
     const { join } = await import('path');
@@ -234,7 +235,8 @@ export class OrchestratorAgent {
     while (steps < maxTurns) {
       if (opts?.signal?.aborted) break;
 
-      console.log(`[Planner] POST ${url} model=${resolved.modelId} msgs=${messages.length} step=${steps}`);
+      const prompt = conversationParts.join('\n\n');
+      console.log(`[Planner] POST ${url} model=${resolved.modelId} step=${steps}`);
       const response = await fetch(url, {
         method: 'POST',
         headers: {
@@ -243,8 +245,10 @@ export class OrchestratorAgent {
         },
         body: JSON.stringify({
           model: resolved.modelId,
-          messages,
+          system_prompt: systemPrompt,
+          prompt,
           tools,
+          max_turns: 1,
         }),
         signal: opts?.signal,
       });
@@ -256,29 +260,28 @@ export class OrchestratorAgent {
       }
 
       const data = await response.json() as any;
-      const choice = data.choices?.[0];
-      if (!choice) break;
 
-      const msg = choice.message;
-      const text = msg.content ?? '';
+      if (data.status === 'failed') {
+        logger.error({ error: data.error?.message }, 'Planner run failed');
+        break;
+      }
+
+      const text = data.result?.text ?? '';
       if (text) {
         allText += '\n' + text;
         opts?.onEvent?.({ type: 'text', content: text, step: steps });
       }
 
-      messages.push({
-        role: 'assistant',
-        content: msg.content,
-        tool_calls: msg.tool_calls,
-      });
+      const runToolCalls = data.result?.tool_calls;
 
       // No tool calls → model is done
-      if (!msg.tool_calls?.length) {
+      if (!runToolCalls?.length) {
         break;
       }
 
       // Execute tools locally
-      for (const tc of msg.tool_calls) {
+      const toolResultParts: string[] = [];
+      for (const tc of runToolCalls) {
         const args = JSON.parse(tc.function.arguments);
         opts?.onEvent?.({ type: 'tool_call', name: tc.function.name, args, id: tc.id, step: steps });
 
@@ -335,13 +338,15 @@ export class OrchestratorAgent {
         }
 
         opts?.onEvent?.({ type: 'tool_result', id: tc.id, name: tc.function.name, result: result.slice(0, 2000), step: steps });
-
-        messages.push({
-          role: 'tool',
-          content: result,
-          tool_call_id: tc.id,
-        });
+        toolResultParts.push(`Tool result (${tc.id} / ${tc.function.name}):\n${result}`);
       }
+
+      // Append assistant text + tool results to conversation for next turn
+      const assistantPart = text
+        ? `Assistant: ${text}\n${runToolCalls.map((tc: any) => `[tool_call: ${tc.function.name}(${tc.function.arguments})]`).join('\n')}`
+        : runToolCalls.map((tc: any) => `[tool_call: ${tc.function.name}(${tc.function.arguments})]`).join('\n');
+      conversationParts.push(assistantPart);
+      conversationParts.push(toolResultParts.join('\n\n'));
 
       steps++;
     }
@@ -391,8 +396,7 @@ export class OrchestratorAgent {
       baseBranch: 'main',
     };
 
-    const modelFactory = new ModelFactory();
-    const resolved = modelFactory.resolve(role.provider, role.model);
+    const resolved = this.modelFactory.resolve(role.provider, role.model);
     const executor = new AgentExecutor(resolved.baseURL, resolved.modelId, resolved.apiKey);
     const result = await executor.execute(role, context, { signal: opts?.signal });
 

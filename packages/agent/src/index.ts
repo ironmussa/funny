@@ -114,7 +114,7 @@ director.startSchedule(config.director.schedule_interval_ms);
 // ── Session & Orchestrator singletons ───────────────────────────
 
 const sessionStore = new SessionStore(eventBus, config.sessions.persist_path ?? undefined);
-const orchestratorAgent = new OrchestratorAgent(config);
+const orchestratorAgent = new OrchestratorAgent(config, modelFactory);
 
 // Initialize tracker (GitHub by default, gracefully handles missing `gh` CLI)
 let tracker: Tracker | null = null;

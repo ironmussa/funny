@@ -2,12 +2,12 @@
  * AgentExecutor — runs an agentic loop via direct HTTP calls to api-acp.
  *
  * Loop:
- *   1. Send system prompt + context + user prompt to api-acp
- *   2. If model returns tool_calls → execute tools locally → append results
- *   3. Repeat until finish_reason is "stop" or maxTurns reached
+ *   1. Send system prompt + prompt to api-acp /v1/runs
+ *   2. If run result contains tool_calls → execute tools locally → build new prompt
+ *   3. Repeat until no tool_calls or maxTurns reached
  *   4. Parse final text as structured AgentResult JSON
  *
- * No Vercel AI SDK — just fetch() and local tool execution.
+ * Uses the agent run protocol (POST /v1/runs) instead of OpenAI format.
  */
 
 import { z } from 'zod';
@@ -21,19 +21,29 @@ import { loadContextDocs } from './context-loader.js';
 
 // ── Types ────────────────────────────────────────────────────
 
-/** OpenAI-compatible message format */
-interface ChatMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
-  tool_calls?: ToolCallInfo[];
-  tool_call_id?: string;
-}
-
-/** OpenAI-compatible tool call */
+/** Tool call from run result */
 interface ToolCallInfo {
   id: string;
   type: 'function';
   function: { name: string; arguments: string };
+}
+
+/** Run result from the agent API */
+interface RunResult {
+  text: string;
+  tool_calls?: ToolCallInfo[];
+}
+
+/** Run response from POST /v1/runs */
+interface RunResponse {
+  id: string;
+  status: string;
+  model: string;
+  created_at: number;
+  completed_at?: number;
+  usage?: { input_tokens: number; output_tokens: number };
+  result?: RunResult;
+  error?: { message: string };
 }
 
 /** Tool result after local execution */
@@ -95,9 +105,9 @@ export class AgentExecutor {
       });
     }
 
-    // Build tool map and OpenAI-format definitions
+    // Build tool map and run-format definitions
     const toolMap: Record<string, ToolDef> = tools;
-    const openaiTools = Object.entries(tools).map(([name, def]) => ({
+    const runTools = Object.entries(tools).map(([name, def]) => ({
       type: 'function' as const,
       function: {
         name,
@@ -106,11 +116,12 @@ export class AgentExecutor {
       },
     }));
 
-    // Build initial messages
-    const messages: ChatMessage[] = [
-      { role: 'system', content: this.buildSystemPrompt(role, context, projectKnowledge) },
-      { role: 'user', content: this.buildUserPrompt(context) },
-    ];
+    const systemPrompt = this.buildSystemPrompt(role, context, projectKnowledge);
+
+    // Build conversation history as text prompt.
+    // On the first turn it's just the user prompt; on subsequent turns
+    // we append assistant text + tool results so the model has context.
+    const conversationParts: string[] = [this.buildUserPrompt(context)];
 
     let steps = 0;
     let totalInputTokens = 0;
@@ -123,9 +134,10 @@ export class AgentExecutor {
           return this.makeErrorResult(role, startTime, 'Aborted');
         }
 
-        // Call api-acp
-        const url = `${this.baseURL}/chat/completions`;
-        console.log(`[AgentExecutor] POST ${url} model=${this.modelId} msgs=${messages.length} tools=${openaiTools.length} step=${steps}`);
+        // Call api-acp runs endpoint
+        const url = `${this.baseURL}/v1/runs`;
+        const prompt = conversationParts.join('\n\n');
+        console.log(`[AgentExecutor] POST ${url} model=${this.modelId} tools=${runTools.length} step=${steps}`);
         const response = await fetch(url, {
           method: 'POST',
           headers: {
@@ -134,8 +146,10 @@ export class AgentExecutor {
           },
           body: JSON.stringify({
             model: this.modelId,
-            messages,
-            tools: openaiTools.length > 0 ? openaiTools : undefined,
+            system_prompt: systemPrompt,
+            prompt,
+            tools: runTools.length > 0 ? runTools : undefined,
+            max_turns: 1,
           }),
           signal: options.signal,
         });
@@ -146,45 +160,39 @@ export class AgentExecutor {
           throw new Error(`api-acp returned ${response.status}: ${errBody}`);
         }
 
-        const data = await response.json() as any;
-        const choice = data.choices?.[0];
-        if (!choice) {
-          throw new Error('api-acp returned empty choices');
+        const data = await response.json() as RunResponse;
+
+        if (data.status === 'failed') {
+          throw new Error(data.error?.message ?? 'Run failed');
         }
 
         // Track tokens
         if (data.usage) {
-          totalInputTokens += data.usage.prompt_tokens ?? 0;
-          totalOutputTokens += data.usage.completion_tokens ?? 0;
+          totalInputTokens += data.usage.input_tokens ?? 0;
+          totalOutputTokens += data.usage.output_tokens ?? 0;
         }
 
-        const assistantMsg = choice.message;
-        const assistantText = assistantMsg.content ?? '';
+        const assistantText = data.result?.text ?? '';
         lastText = assistantText;
-
-        // Append assistant message to conversation
-        messages.push({
-          role: 'assistant',
-          content: assistantMsg.content,
-          tool_calls: assistantMsg.tool_calls,
-        });
+        const runToolCalls = data.result?.tool_calls;
 
         // If no tool calls → done
-        if (choice.finish_reason !== 'tool_calls' || !assistantMsg.tool_calls?.length) {
+        if (!runToolCalls?.length) {
           steps++;
           await options.onStepFinish?.({
             stepNumber: steps,
             text: assistantText,
             toolCalls: [],
             toolResults: [],
-            finishReason: choice.finish_reason ?? 'stop',
+            finishReason: 'stop',
           });
           break;
         }
 
         // Execute tools locally
         const toolResults: ToolResult[] = [];
-        for (const tc of assistantMsg.tool_calls) {
+        const toolResultParts: string[] = [];
+        for (const tc of runToolCalls) {
           const toolName = tc.function.name;
           const toolDef = toolMap[toolName];
 
@@ -201,14 +209,15 @@ export class AgentExecutor {
           }
 
           toolResults.push({ toolCallId: tc.id, toolName, result });
-
-          // Append tool result message to conversation
-          messages.push({
-            role: 'tool',
-            tool_call_id: tc.id,
-            content: result,
-          });
+          toolResultParts.push(`Tool result (${tc.id} / ${toolName}):\n${result}`);
         }
+
+        // Append assistant text + tool results to conversation for next turn
+        const assistantPart = assistantText
+          ? `Assistant: ${assistantText}\n${runToolCalls.map((tc) => `[tool_call: ${tc.function.name}(${tc.function.arguments})]`).join('\n')}`
+          : runToolCalls.map((tc) => `[tool_call: ${tc.function.name}(${tc.function.arguments})]`).join('\n');
+        conversationParts.push(assistantPart);
+        conversationParts.push(toolResultParts.join('\n\n'));
 
         steps++;
 
@@ -216,7 +225,7 @@ export class AgentExecutor {
         await options.onStepFinish?.({
           stepNumber: steps,
           text: assistantText,
-          toolCalls: assistantMsg.tool_calls,
+          toolCalls: runToolCalls,
           toolResults,
           finishReason: 'tool-calls',
         });

@@ -9,7 +9,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { ThreadItem } from './ThreadItem';
 import type { Thread, ThreadStatus, GitStatusInfo } from '@funny/shared';
 
-const RUNNING_STATUSES = new Set<ThreadStatus>(['running', 'waiting']);
+const RUNNING_STATUSES = new Set<ThreadStatus>(['running', 'waiting', 'pending']);
 const FINISHED_STATUSES = new Set<ThreadStatus>(['completed', 'failed', 'stopped', 'interrupted']);
 const VISIBLE_STATUSES = new Set<ThreadStatus>([...RUNNING_STATUSES, ...FINISHED_STATUSES]);
 

@@ -1310,12 +1310,12 @@ export const PromptInput = memo(function PromptInput({
               ) : (
                 <>
                   {effectiveCwd && (
-                    <span className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground truncate max-w-[400px] shrink-0">
+                    <span className="group/cwd flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground truncate max-w-[400px] shrink-0">
                       <FolderOpen className="h-3 w-3 shrink-0" />
                       <span className="truncate font-mono">{effectiveCwd}</span>
                       <button
                         type="button"
-                        className="shrink-0 hover:text-foreground transition-colors"
+                        className="shrink-0 hover:text-foreground transition-colors opacity-0 group-hover/cwd:opacity-100"
                         onClick={() => { navigator.clipboard.writeText(effectiveCwd); toast.success('Path copied'); }}
                       >
                         <Copy className="h-3 w-3" />
@@ -1323,7 +1323,7 @@ export const PromptInput = memo(function PromptInput({
                     </span>
                   )}
                   {followUpBranches.length > 0 && (
-                    <span className="flex items-center gap-1 shrink-0">
+                    <span className="group/base flex items-center gap-1 shrink-0">
                       <BranchPicker
                         branches={followUpBranches}
                         selected={followUpSelectedBranch}
@@ -1331,7 +1331,7 @@ export const PromptInput = memo(function PromptInput({
                       />
                       <button
                         type="button"
-                        className="shrink-0 text-muted-foreground hover:text-foreground transition-colors"
+                        className="shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover/base:opacity-100"
                         onClick={() => { navigator.clipboard.writeText(followUpSelectedBranch); toast.success('Branch copied'); }}
                       >
                         <Copy className="h-3 w-3" />
@@ -1342,12 +1342,12 @@ export const PromptInput = memo(function PromptInput({
                     <ArrowLeft className="h-3 w-3 text-muted-foreground shrink-0" />
                   )}
                   {activeThreadBranch && (
-                    <span className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground shrink-0">
+                    <span className="group/src flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground shrink-0">
                       <GitBranch className="h-3 w-3 shrink-0" />
                       <span className="font-mono font-medium text-foreground">{activeThreadBranch}</span>
                       <button
                         type="button"
-                        className="shrink-0 hover:text-foreground transition-colors"
+                        className="shrink-0 hover:text-foreground transition-colors opacity-0 group-hover/src:opacity-100"
                         onClick={() => { navigator.clipboard.writeText(activeThreadBranch); toast.success('Branch copied'); }}
                       >
                         <Copy className="h-3 w-3" />

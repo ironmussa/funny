@@ -9,7 +9,7 @@ Think of it as an AI project manager: it reads your backlog, decomposes features
 - [Bun](https://bun.sh/) >= 1.2
 - Git
 - [`gh` CLI](https://cli.github.com/) authenticated (`gh auth login`) for GitHub issue tracking
-- `api-acp` running on port 4010 (default LLM provider)
+- `api-acp` running on port 4010 (agent API — `/v1/runs` protocol)
 - [Hatchet](https://hatchet.run/) (optional — enables durable workflows and batch processing)
 
 ## Quick Start

@@ -92,7 +92,7 @@ export const DEFAULT_CONFIG = {
     },
     funny_api_acp: {
       api_key_env: 'FUNNY_API_ACP_KEY',
-      base_url: 'http://localhost:4010/v1',
+      base_url: 'http://localhost:4010',
     },
     ollama: {
       base_url: 'http://localhost:11434',

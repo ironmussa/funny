@@ -1,8 +1,9 @@
 /**
  * Model Factory — resolves provider + model into connection details.
  *
- * Returns { baseURL, apiKey, modelId } for direct HTTP calls to
- * OpenAI-compatible endpoints (api-acp, ollama, vLLM, etc.).
+ * Returns { baseURL, apiKey, modelId } for direct HTTP calls.
+ * baseURL is the server root (e.g. http://localhost:4010) — callers
+ * append the endpoint path (e.g. /v1/runs).
  */
 
 // ── Provider Config ───────────────────────────────────────────

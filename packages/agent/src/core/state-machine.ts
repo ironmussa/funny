@@ -1,41 +1,8 @@
 /**
  * Generic finite state machine with typed transitions.
- *
- * Used for:
- *   - Pipeline status: accepted → running → approved/failed/error
- *   - Branch lifecycle: running → ready → pending_merge → merge_history
  */
 
-import type { PipelineStatus } from './types.js';
 import { logger } from '../infrastructure/logger.js';
-
-// ── Branch lifecycle state ──────────────────────────────────────
-
-export type BranchState =
-  | 'running'
-  | 'ready'
-  | 'pending_merge'
-  | 'merge_history'
-  | 'removed';
-
-// ── Transition maps ─────────────────────────────────────────────
-
-export const PIPELINE_TRANSITIONS: Record<PipelineStatus, PipelineStatus[]> = {
-  accepted:   ['running'],
-  running:    ['correcting', 'approved', 'failed', 'error'],
-  correcting: ['running', 'approved', 'failed', 'error'],
-  approved:   [],  // terminal
-  failed:     [],  // terminal
-  error:      [],  // terminal
-};
-
-export const BRANCH_TRANSITIONS: Record<BranchState, BranchState[]> = {
-  running:       ['ready', 'removed'],
-  ready:         ['pending_merge'],
-  pending_merge: ['pending_merge', 'ready', 'merge_history'],
-  merge_history: [],  // terminal
-  removed:       [],  // terminal
-};
 
 // ── StateMachine class ──────────────────────────────────────────
 

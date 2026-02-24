@@ -6,171 +6,90 @@ describe('DEFAULT_CONFIG', () => {
 
   it('has all required top-level keys', () => {
     const requiredKeys = [
-      'tiers',
       'branch',
-      'agents',
-      'auto_correction',
-      'resilience',
-      'director',
-      'cleanup',
-      'adapters',
-      'webhook_secret',
+      'llm_providers',
       'events',
       'logging',
+      'tracker',
+      'orchestrator',
+      'sessions',
+      'reactions',
     ];
     for (const key of requiredKeys) {
       expect(DEFAULT_CONFIG).toHaveProperty(key);
     }
   });
 
-  // ── Tier thresholds are reasonable ──────────────────────────
-
-  it('tier thresholds: small < medium < large for max_files', () => {
-    expect(DEFAULT_CONFIG.tiers.small.max_files).toBeLessThan(DEFAULT_CONFIG.tiers.medium.max_files);
-    expect(DEFAULT_CONFIG.tiers.medium.max_files).toBeLessThan(DEFAULT_CONFIG.tiers.large.max_files);
-  });
-
-  it('tier thresholds: small < medium < large for max_lines', () => {
-    expect(DEFAULT_CONFIG.tiers.small.max_lines).toBeLessThan(DEFAULT_CONFIG.tiers.medium.max_lines);
-    expect(DEFAULT_CONFIG.tiers.medium.max_lines).toBeLessThan(DEFAULT_CONFIG.tiers.large.max_lines);
-  });
-
-  it('small tier has positive thresholds', () => {
-    expect(DEFAULT_CONFIG.tiers.small.max_files).toBeGreaterThan(0);
-    expect(DEFAULT_CONFIG.tiers.small.max_lines).toBeGreaterThan(0);
-  });
-
-  it('large tier uses Infinity for both thresholds', () => {
-    expect(DEFAULT_CONFIG.tiers.large.max_files).toBe(Infinity);
-    expect(DEFAULT_CONFIG.tiers.large.max_lines).toBe(Infinity);
-  });
-
-  // ── Agent lists are non-empty for each tier ─────────────────
-
-  it('small tier has non-empty agent list', () => {
-    expect(DEFAULT_CONFIG.tiers.small.agents.length).toBeGreaterThan(0);
-  });
-
-  it('medium tier has non-empty agent list', () => {
-    expect(DEFAULT_CONFIG.tiers.medium.agents.length).toBeGreaterThan(0);
-  });
-
-  it('large tier has non-empty agent list', () => {
-    expect(DEFAULT_CONFIG.tiers.large.agents.length).toBeGreaterThan(0);
-  });
-
-  it('larger tiers have more agents than smaller tiers', () => {
-    expect(DEFAULT_CONFIG.tiers.medium.agents.length).toBeGreaterThanOrEqual(
-      DEFAULT_CONFIG.tiers.small.agents.length,
-    );
-    expect(DEFAULT_CONFIG.tiers.large.agents.length).toBeGreaterThanOrEqual(
-      DEFAULT_CONFIG.tiers.medium.agents.length,
-    );
-  });
-
-  it('all tier agents are valid agent names', () => {
-    const validNames = ['tests', 'security', 'architecture', 'performance', 'style', 'types', 'docs', 'integration'];
-    for (const tier of ['small', 'medium', 'large'] as const) {
-      for (const agent of DEFAULT_CONFIG.tiers[tier].agents) {
-        expect(validNames).toContain(agent);
-      }
-    }
-  });
-
-  // ── Branch prefixes ─────────────────────────────────────────
-
-  it('branch prefixes are set and non-empty', () => {
-    expect(DEFAULT_CONFIG.branch.pipeline_prefix).toBeTruthy();
-    expect(DEFAULT_CONFIG.branch.integration_prefix).toBeTruthy();
-    expect(DEFAULT_CONFIG.branch.main).toBeTruthy();
-  });
-
-  it('pipeline prefix ends with /', () => {
-    expect(DEFAULT_CONFIG.branch.pipeline_prefix.endsWith('/')).toBe(true);
-  });
-
-  it('integration prefix ends with /', () => {
-    expect(DEFAULT_CONFIG.branch.integration_prefix.endsWith('/')).toBe(true);
-  });
+  // ── Branch ────────────────────────────────────────────────────
 
   it('main branch defaults to "main"', () => {
     expect(DEFAULT_CONFIG.branch.main).toBe('main');
   });
 
-  // ── Resilience defaults ─────────────────────────────────────
+  // ── LLM Providers ────────────────────────────────────────────
 
-  it('circuit breaker config exists for claude and github', () => {
-    expect(DEFAULT_CONFIG.resilience.circuit_breaker).toHaveProperty('claude');
-    expect(DEFAULT_CONFIG.resilience.circuit_breaker).toHaveProperty('github');
+  it('has anthropic, funny_api_acp, and ollama providers', () => {
+    expect(DEFAULT_CONFIG.llm_providers.anthropic).toBeDefined();
+    expect(DEFAULT_CONFIG.llm_providers.funny_api_acp).toBeDefined();
+    expect(DEFAULT_CONFIG.llm_providers.ollama).toBeDefined();
   });
 
-  it('claude circuit breaker has positive failure_threshold and reset_timeout_ms', () => {
-    expect(DEFAULT_CONFIG.resilience.circuit_breaker.claude.failure_threshold).toBeGreaterThan(0);
-    expect(DEFAULT_CONFIG.resilience.circuit_breaker.claude.reset_timeout_ms).toBeGreaterThan(0);
+  it('default provider is funny-api-acp', () => {
+    expect(DEFAULT_CONFIG.llm_providers.default_provider).toBe('funny-api-acp');
   });
 
-  it('github circuit breaker has positive failure_threshold and reset_timeout_ms', () => {
-    expect(DEFAULT_CONFIG.resilience.circuit_breaker.github.failure_threshold).toBeGreaterThan(0);
-    expect(DEFAULT_CONFIG.resilience.circuit_breaker.github.reset_timeout_ms).toBeGreaterThan(0);
+  // ── Tracker ──────────────────────────────────────────────────
+
+  it('tracker defaults to github type', () => {
+    expect(DEFAULT_CONFIG.tracker.type).toBe('github');
   });
 
-  it('DLQ config has all required fields', () => {
-    const dlq = DEFAULT_CONFIG.resilience.dlq;
-    expect(dlq.enabled).toBe(true);
-    expect(dlq.path).toBeTruthy();
-    expect(dlq.max_retries).toBeGreaterThan(0);
-    expect(dlq.base_delay_ms).toBeGreaterThan(0);
-    expect(dlq.backoff_factor).toBeGreaterThanOrEqual(1);
+  it('tracker max_parallel defaults to 5', () => {
+    expect(DEFAULT_CONFIG.tracker.max_parallel).toBe(5);
   });
 
-  // ── Director defaults ───────────────────────────────────────
+  // ── Orchestrator ─────────────────────────────────────────────
 
-  it('director defaults exist with required fields', () => {
-    expect(DEFAULT_CONFIG.director).toHaveProperty('auto_trigger_delay_ms');
-    expect(DEFAULT_CONFIG.director).toHaveProperty('default_priority');
-    expect(DEFAULT_CONFIG.director).toHaveProperty('schedule_interval_ms');
+  it('orchestrator has model and provider', () => {
+    expect(DEFAULT_CONFIG.orchestrator.model).toBeTruthy();
+    expect(DEFAULT_CONFIG.orchestrator.provider).toBeTruthy();
   });
 
-  it('director auto_trigger_delay_ms is non-negative', () => {
-    expect(DEFAULT_CONFIG.director.auto_trigger_delay_ms).toBeGreaterThanOrEqual(0);
+  it('orchestrator has planning and implementing turn limits', () => {
+    expect(DEFAULT_CONFIG.orchestrator.max_planning_turns).toBeGreaterThan(0);
+    expect(DEFAULT_CONFIG.orchestrator.max_implementing_turns).toBeGreaterThan(0);
   });
 
-  it('director default_priority is positive', () => {
-    expect(DEFAULT_CONFIG.director.default_priority).toBeGreaterThan(0);
+  // ── Sessions ─────────────────────────────────────────────────
+
+  it('sessions have retry limits', () => {
+    expect(DEFAULT_CONFIG.sessions.max_retries_ci).toBeGreaterThan(0);
+    expect(DEFAULT_CONFIG.sessions.max_retries_review).toBeGreaterThan(0);
   });
 
-  it('director schedule_interval_ms defaults to 0 (disabled)', () => {
-    expect(DEFAULT_CONFIG.director.schedule_interval_ms).toBe(0);
+  it('auto_merge defaults to false', () => {
+    expect(DEFAULT_CONFIG.sessions.auto_merge).toBe(false);
   });
 
-  // ── Agent settings ──────────────────────────────────────────
+  // ── Reactions ────────────────────────────────────────────────
 
-  it('agents config has conflict and per-agent overrides', () => {
-    expect(DEFAULT_CONFIG.agents).toHaveProperty('conflict');
-    expect(DEFAULT_CONFIG.agents).toHaveProperty('tests');
-    expect(DEFAULT_CONFIG.agents).toHaveProperty('security');
+  it('ci_failed reaction defaults to respawn_agent', () => {
+    expect(DEFAULT_CONFIG.reactions.ci_failed.action).toBe('respawn_agent');
   });
 
-  it('conflict agent has model, permissionMode, and maxTurns', () => {
-    expect(DEFAULT_CONFIG.agents.conflict.model).toBeTruthy();
-    expect(DEFAULT_CONFIG.agents.conflict.permissionMode).toBeTruthy();
-    expect(DEFAULT_CONFIG.agents.conflict.maxTurns).toBeGreaterThan(0);
+  it('changes_requested reaction defaults to respawn_agent', () => {
+    expect(DEFAULT_CONFIG.reactions.changes_requested.action).toBe('respawn_agent');
   });
 
-  it('per-agent overrides default to empty objects', () => {
-    expect(DEFAULT_CONFIG.agents.tests).toEqual({});
-    expect(DEFAULT_CONFIG.agents.security).toEqual({});
+  it('approved_and_green reaction defaults to notify', () => {
+    expect(DEFAULT_CONFIG.reactions.approved_and_green.action).toBe('notify');
   });
 
-  // ── Cleanup defaults ────────────────────────────────────────
-
-  it('cleanup defaults exist', () => {
-    expect(DEFAULT_CONFIG.cleanup).toHaveProperty('keep_on_failure');
-    expect(DEFAULT_CONFIG.cleanup).toHaveProperty('stale_branch_days');
-    expect(DEFAULT_CONFIG.cleanup.stale_branch_days).toBeGreaterThan(0);
+  it('agent_stuck reaction defaults to escalate', () => {
+    expect(DEFAULT_CONFIG.reactions.agent_stuck.action).toBe('escalate');
   });
 
-  // ── Logging defaults ────────────────────────────────────────
+  // ── Logging ──────────────────────────────────────────────────
 
   it('logging level defaults to "info"', () => {
     expect(DEFAULT_CONFIG.logging.level).toBe('info');

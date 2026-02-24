@@ -2,18 +2,16 @@
  * GitHub webhook inbound endpoint.
  *
  * POST /github — Receives GitHub events:
- *   - pull_request (action=opened|synchronize) → triggers ReviewBot code review
- *   - pull_request (action=closed, merged=true) → emits 'integration.pr.merged'
+ *   - pull_request (action=closed, merged=true) → emits 'session.merged'
  *   - pull_request_review (action=submitted) →
- *       state=changes_requested → triggers pr-review-loop workflow
- *       state=approved → emits pr.approved event to unblock durable wait
+ *       state=changes_requested → emits 'session.changes_requested'
+ *       state=approved → emits 'session.review_requested'
+ *   - check_suite (conclusion) → emits 'session.ci_passed' / 'session.ci_failed'
  */
 
 import { Hono } from 'hono';
 import type { EventBus } from '../infrastructure/event-bus.js';
 import type { PipelineServiceConfig } from '../config/schema.js';
-import { isHatchetEnabled, getHatchetClient } from '../hatchet/client.js';
-import { PRReviewer } from '@funny/reviewbot';
 import { logger } from '../infrastructure/logger.js';
 
 // ── HMAC signature validation ────────────────────────────────────
@@ -67,34 +65,6 @@ export function createWebhookRoutes(
     }
 
     const githubEvent = c.req.header('X-GitHub-Event');
-    const integrationPrefix = config.branch.integration_prefix;
-
-    // ── Handle pull_request events (opened/synchronize → ReviewBot) ──
-
-    if (githubEvent === 'pull_request' && (payload.action === 'opened' || payload.action === 'synchronize')) {
-      const pr = payload.pull_request;
-      const prNumber: number = pr?.number ?? 0;
-      const repoFullName: string = payload.repository?.full_name ?? '';
-
-      logger.info(
-        { prNumber, action: payload.action, repo: repoFullName },
-        'PR event — triggering ReviewBot',
-      );
-
-      // Run review asynchronously (don't block the webhook response)
-      const projectPath = process.env.PROJECT_PATH ?? process.cwd();
-      const reviewer = new PRReviewer();
-      reviewer.review(projectPath, prNumber).then((result) => {
-        logger.info(
-          { prNumber, status: result.status, findings: result.findings.length, duration_ms: result.duration_ms },
-          'ReviewBot completed',
-        );
-      }).catch((err) => {
-        logger.error({ prNumber, err: err.message }, 'ReviewBot failed');
-      });
-
-      return c.json({ status: 'processed', action: 'reviewbot_triggered', pr_number: prNumber }, 200);
-    }
 
     // ── Handle pull_request events (merged PRs) ──────────────────
 
@@ -105,37 +75,29 @@ export function createWebhookRoutes(
 
       const pr = payload.pull_request;
       const headRef: string = pr.head?.ref ?? '';
-      const baseRef: string = pr.base?.ref ?? '';
-      const mergeCommitSha: string = pr.merge_commit_sha ?? '';
       const prNumber: number = pr.number ?? 0;
+      const mergeCommitSha: string = pr.merge_commit_sha ?? '';
 
-      if (!headRef.startsWith(integrationPrefix)) {
-        return c.json({ status: 'ignored', reason: 'not an integration branch' }, 200);
-      }
-      const branch = headRef.slice(integrationPrefix.length);
-      const pipelineBranch = `${config.branch.pipeline_prefix}${branch}`;
+      // Extract issue number from branch name (e.g., "issue/42/slug")
+      const issueMatch = headRef.match(/^issue\/(\d+)/);
+      const issueNumber = issueMatch ? parseInt(issueMatch[1], 10) : null;
 
-      logger.info(
-        { branch, headRef, baseRef, prNumber, mergeCommitSha },
-        'GitHub webhook: PR merged',
-      );
+      logger.info({ headRef, prNumber, mergeCommitSha, issueNumber }, 'GitHub webhook: PR merged');
 
       await eventBus.publish({
-        event_type: 'integration.pr.merged',
+        event_type: 'session.merged',
         request_id: `webhook-${prNumber}`,
         timestamp: new Date().toISOString(),
         data: {
-          branch,
-          integration_branch: headRef,
-          pipeline_branch: pipelineBranch,
-          base_ref: baseRef,
+          branch: headRef,
           merge_commit_sha: mergeCommitSha,
           pr_number: prNumber,
           pr_url: pr.html_url ?? '',
+          issueNumber,
         },
       });
 
-      return c.json({ status: 'processed', branch, pr_number: prNumber }, 200);
+      return c.json({ status: 'processed', branch: headRef, pr_number: prNumber }, 200);
     }
 
     // ── Handle pull_request_review events ────────────────────────
@@ -149,62 +111,39 @@ export function createWebhookRoutes(
       const pr = payload.pull_request;
       const headRef: string = pr?.head?.ref ?? '';
       const prNumber: number = pr?.number ?? 0;
-      const prUrl: string = pr?.html_url ?? '';
       const reviewState: string = review?.state?.toLowerCase() ?? '';
 
-      // Only handle reviews on integration branches
-      if (!headRef.startsWith(integrationPrefix)) {
-        return c.json({ status: 'ignored', reason: 'not an integration branch' }, 200);
-      }
-
-      const branch = headRef.slice(integrationPrefix.length);
+      // Extract issue number from branch name
+      const issueMatch = headRef.match(/^issue\/(\d+)/);
+      const issueNumber = issueMatch ? parseInt(issueMatch[1], 10) : null;
 
       if (reviewState === 'approved') {
-        logger.info({ branch, prNumber, reviewer: review?.user?.login }, 'PR approved via webhook');
-
-        // Emit pr.approved event to Hatchet to unblock the durable wait
-        if (isHatchetEnabled()) {
-          const hatchet = getHatchetClient();
-          await hatchet.event.push('pr.approved', { prNumber, branch });
-        }
+        logger.info({ headRef, prNumber, reviewer: review?.user?.login }, 'PR approved via webhook');
 
         await eventBus.publish({
-          event_type: 'review_loop.completed',
+          event_type: 'session.review_requested',
           request_id: `review-${prNumber}`,
           timestamp: new Date().toISOString(),
-          data: { branch, pr_number: prNumber, reason: 'approved' },
+          data: { branch: headRef, prNumber, issueNumber, approved: true },
         });
 
-        return c.json({ status: 'processed', action: 'pr_approved', branch }, 200);
+        return c.json({ status: 'processed', action: 'pr_approved', branch: headRef }, 200);
       }
 
       if (reviewState === 'changes_requested') {
         logger.info(
-          { branch, prNumber, reviewer: review?.user?.login },
-          'Changes requested on PR — triggering review loop',
+          { headRef, prNumber, reviewer: review?.user?.login },
+          'Changes requested on PR',
         );
 
         await eventBus.publish({
-          event_type: 'review_loop.started',
+          event_type: 'session.changes_requested',
           request_id: `review-${prNumber}-${Date.now()}`,
           timestamp: new Date().toISOString(),
-          data: { branch, pr_number: prNumber, reviewer: review?.user?.login ?? '' },
+          data: { branch: headRef, prNumber, issueNumber },
         });
 
-        // Trigger the pr-review-loop workflow via Hatchet
-        if (isHatchetEnabled()) {
-          const hatchet = getHatchetClient();
-          await hatchet.runNoWait('pr-review-loop', {
-            projectPath: process.env.PROJECT_PATH ?? process.cwd(),
-            branch,
-            integrationBranch: headRef,
-            prNumber,
-            prUrl,
-            baseBranch: config.branch.main,
-          }, {});
-        }
-
-        return c.json({ status: 'processed', action: 'review_loop_triggered', branch }, 200);
+        return c.json({ status: 'processed', action: 'changes_requested', branch: headRef }, 200);
       }
 
       return c.json({ status: 'ignored', reason: `review state: ${reviewState}` }, 200);
@@ -222,30 +161,19 @@ export function createWebhookRoutes(
         return c.json({ status: 'ignored', reason: 'incomplete check_suite data' }, 200);
       }
 
-      // Extract issue number from branch name (e.g., "issue/42")
-      const issueMatch = headBranch.match(/^issue\/(\d+)$/);
+      // Extract issue number from branch name (e.g., "issue/42/slug")
+      const issueMatch = headBranch.match(/^issue\/(\d+)/);
       const issueNumber = issueMatch ? parseInt(issueMatch[1], 10) : null;
 
       if (conclusion === 'success') {
         logger.info({ headBranch, headSha }, 'CI passed via check_suite webhook');
 
-        // Emit for ReactionEngine
         await eventBus.publish({
-          event_type: 'session.ci_passed' as any,
+          event_type: 'session.ci_passed',
           request_id: `ci-${headSha.slice(0, 8)}`,
           timestamp: new Date().toISOString(),
-          data: { branch: headBranch, sha: headSha, issueNumber, prApproved: false },
+          data: { branch: headBranch, sha: headSha, issueNumber },
         });
-
-        // Emit Hatchet event for durable wait
-        if (isHatchetEnabled() && issueNumber) {
-          const hatchet = getHatchetClient();
-          await hatchet.event.push(`ci.completed.issue-${issueNumber}`, {
-            passed: true,
-            branch: headBranch,
-            sha: headSha,
-          });
-        }
 
         return c.json({ status: 'processed', action: 'ci_passed', branch: headBranch }, 200);
       }
@@ -254,75 +182,16 @@ export function createWebhookRoutes(
         logger.info({ headBranch, headSha, conclusion }, 'CI failed via check_suite webhook');
 
         await eventBus.publish({
-          event_type: 'session.ci_failed' as any,
+          event_type: 'session.ci_failed',
           request_id: `ci-${headSha.slice(0, 8)}`,
           timestamp: new Date().toISOString(),
           data: { branch: headBranch, sha: headSha, conclusion, issueNumber },
         });
 
-        // Emit Hatchet event
-        if (isHatchetEnabled() && issueNumber) {
-          const hatchet = getHatchetClient();
-          await hatchet.event.push(`ci.completed.issue-${issueNumber}`, {
-            passed: false,
-            branch: headBranch,
-            sha: headSha,
-            conclusion,
-          });
-        }
-
         return c.json({ status: 'processed', action: 'ci_failed', branch: headBranch }, 200);
       }
 
       return c.json({ status: 'ignored', reason: `conclusion: ${conclusion}` }, 200);
-    }
-
-    // ── Handle pull_request_review on issue branches ────────────
-    // (extends existing review handling to also work for issue/* branches)
-
-    if (githubEvent === 'pull_request_review') {
-      // The existing handler above only processes integration/* branches.
-      // This catch handles issue/* branches for the session lifecycle.
-      const review = payload.review;
-      const pr = payload.pull_request;
-      const headRef: string = pr?.head?.ref ?? '';
-      const prNumber: number = pr?.number ?? 0;
-      const reviewState: string = review?.state?.toLowerCase() ?? '';
-
-      const issueMatch = headRef.match(/^issue\/(\d+)$/);
-      if (issueMatch) {
-        const issueNumber = parseInt(issueMatch[1], 10);
-
-        if (reviewState === 'approved') {
-          await eventBus.publish({
-            event_type: 'session.review_requested' as any,
-            request_id: `review-issue-${issueNumber}`,
-            timestamp: new Date().toISOString(),
-            data: { branch: headRef, prNumber, issueNumber, approved: true },
-          });
-
-          if (isHatchetEnabled()) {
-            const hatchet = getHatchetClient();
-            await hatchet.event.push(`pr.approved.issue-${issueNumber}`, {
-              prNumber,
-              branch: headRef,
-            });
-          }
-
-          return c.json({ status: 'processed', action: 'issue_pr_approved', branch: headRef }, 200);
-        }
-
-        if (reviewState === 'changes_requested') {
-          await eventBus.publish({
-            event_type: 'session.changes_requested' as any,
-            request_id: `review-issue-${issueNumber}-${Date.now()}`,
-            timestamp: new Date().toISOString(),
-            data: { branch: headRef, prNumber, issueNumber },
-          });
-
-          return c.json({ status: 'processed', action: 'issue_changes_requested', branch: headRef }, 200);
-        }
-      }
     }
 
     return c.json({ status: 'ignored', reason: `event type: ${githubEvent}` }, 200);

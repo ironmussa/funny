@@ -8,7 +8,7 @@ const TEST_DIR = join(import.meta.dir, '..', '..', '.test-tmp-event-bus');
 
 function makeEvent(overrides: Partial<PipelineEvent> = {}): PipelineEvent {
   return {
-    event_type: 'pipeline.accepted',
+    event_type: 'session.created',
     request_id: 'req-001',
     timestamp: new Date().toISOString(),
     data: { branch: 'feature/test' },
@@ -42,7 +42,7 @@ describe('EventBus', () => {
     await bus.publish(event);
 
     expect(received.length).toBe(1);
-    expect(received[0].event_type).toBe('pipeline.accepted');
+    expect(received[0].event_type).toBe('session.created');
     expect(received[0].request_id).toBe('req-001');
   });
 
@@ -52,14 +52,14 @@ describe('EventBus', () => {
 
     bus.on('event', (evt) => received.push(evt));
 
-    await bus.publish(makeEvent({ event_type: 'pipeline.accepted' }));
-    await bus.publish(makeEvent({ event_type: 'pipeline.started' }));
-    await bus.publish(makeEvent({ event_type: 'pipeline.completed' }));
+    await bus.publish(makeEvent({ event_type: 'session.created' }));
+    await bus.publish(makeEvent({ event_type: 'session.implementing' }));
+    await bus.publish(makeEvent({ event_type: 'session.pr_created' }));
 
     expect(received.length).toBe(3);
-    expect(received[0].event_type).toBe('pipeline.accepted');
-    expect(received[1].event_type).toBe('pipeline.started');
-    expect(received[2].event_type).toBe('pipeline.completed');
+    expect(received[0].event_type).toBe('session.created');
+    expect(received[1].event_type).toBe('session.implementing');
+    expect(received[2].event_type).toBe('session.pr_created');
   });
 
   // ── Subscribers receive published events ────────────────────
@@ -101,30 +101,30 @@ describe('EventBus', () => {
   it('getEvents() returns published events for a request_id', async () => {
     const bus = new EventBus(TEST_DIR);
 
-    await bus.publish(makeEvent({ request_id: 'req-abc', event_type: 'pipeline.accepted' }));
-    await bus.publish(makeEvent({ request_id: 'req-abc', event_type: 'pipeline.started' }));
+    await bus.publish(makeEvent({ request_id: 'req-abc', event_type: 'session.created' }));
+    await bus.publish(makeEvent({ request_id: 'req-abc', event_type: 'session.implementing' }));
 
     const events = await bus.getEvents('req-abc');
     expect(events.length).toBe(2);
-    expect(events[0].event_type).toBe('pipeline.accepted');
-    expect(events[1].event_type).toBe('pipeline.started');
+    expect(events[0].event_type).toBe('session.created');
+    expect(events[1].event_type).toBe('session.implementing');
   });
 
   it('getEvents() only returns events for the specified request_id', async () => {
     const bus = new EventBus(TEST_DIR);
 
-    await bus.publish(makeEvent({ request_id: 'req-1', event_type: 'pipeline.accepted' }));
-    await bus.publish(makeEvent({ request_id: 'req-2', event_type: 'pipeline.started' }));
-    await bus.publish(makeEvent({ request_id: 'req-1', event_type: 'pipeline.completed' }));
+    await bus.publish(makeEvent({ request_id: 'req-1', event_type: 'session.created' }));
+    await bus.publish(makeEvent({ request_id: 'req-2', event_type: 'session.implementing' }));
+    await bus.publish(makeEvent({ request_id: 'req-1', event_type: 'session.pr_created' }));
 
     const events1 = await bus.getEvents('req-1');
     expect(events1.length).toBe(2);
-    expect(events1[0].event_type).toBe('pipeline.accepted');
-    expect(events1[1].event_type).toBe('pipeline.completed');
+    expect(events1[0].event_type).toBe('session.created');
+    expect(events1[1].event_type).toBe('session.pr_created');
 
     const events2 = await bus.getEvents('req-2');
     expect(events2.length).toBe(1);
-    expect(events2[0].event_type).toBe('pipeline.started');
+    expect(events2[0].event_type).toBe('session.implementing');
   });
 
   // ── Events are persisted to JSONL files ─────────────────────
@@ -141,8 +141,8 @@ describe('EventBus', () => {
   it('JSONL file contains valid JSON lines', async () => {
     const bus = new EventBus(TEST_DIR);
 
-    await bus.publish(makeEvent({ request_id: 'req-jsonl', event_type: 'pipeline.accepted' }));
-    await bus.publish(makeEvent({ request_id: 'req-jsonl', event_type: 'pipeline.started' }));
+    await bus.publish(makeEvent({ request_id: 'req-jsonl', event_type: 'session.created' }));
+    await bus.publish(makeEvent({ request_id: 'req-jsonl', event_type: 'session.implementing' }));
 
     const filePath = join(TEST_DIR, 'req-jsonl.jsonl');
     const content = await Bun.file(filePath).text();
@@ -151,22 +151,22 @@ describe('EventBus', () => {
     expect(lines.length).toBe(2);
 
     const parsed0 = JSON.parse(lines[0]);
-    expect(parsed0.event_type).toBe('pipeline.accepted');
+    expect(parsed0.event_type).toBe('session.created');
 
     const parsed1 = JSON.parse(lines[1]);
-    expect(parsed1.event_type).toBe('pipeline.started');
+    expect(parsed1.event_type).toBe('session.implementing');
   });
 
   it('persisted events survive across EventBus instances', async () => {
     const bus1 = new EventBus(TEST_DIR);
-    await bus1.publish(makeEvent({ request_id: 'req-persist', event_type: 'pipeline.accepted' }));
+    await bus1.publish(makeEvent({ request_id: 'req-persist', event_type: 'session.created' }));
 
     // Create a new EventBus pointing to the same directory
     const bus2 = new EventBus(TEST_DIR);
     const events = await bus2.getEvents('req-persist');
 
     expect(events.length).toBe(1);
-    expect(events[0].event_type).toBe('pipeline.accepted');
+    expect(events[0].event_type).toBe('session.created');
     expect(events[0].request_id).toBe('req-persist');
   });
 
@@ -175,13 +175,13 @@ describe('EventBus', () => {
 
     await bus.publish(makeEvent({
       request_id: 'req-data',
-      data: { branch: 'feature/auth', filesChanged: 5, tier: 'medium' },
+      data: { branch: 'feature/auth', filesChanged: 5, status: 'implementing' },
     }));
 
     const events = await bus.getEvents('req-data');
     expect(events.length).toBe(1);
     expect(events[0].data.branch).toBe('feature/auth');
     expect(events[0].data.filesChanged).toBe(5);
-    expect(events[0].data.tier).toBe('medium');
+    expect(events[0].data.status).toBe('implementing');
   });
 });

@@ -4,7 +4,6 @@
  * GET    /             — List all sessions
  * GET    /:id          — Get session detail with events
  * POST   /start        — Start a new session from an issue
- * POST   /batch        — Process multiple issues from backlog
  * POST   /:id/escalate — Manually escalate a session
  * POST   /:id/cancel   — Cancel a session
  * DELETE /:id          — Remove a session record
@@ -20,7 +19,6 @@ import type { EventBus } from '../infrastructure/event-bus.js';
 import type { PipelineServiceConfig } from '../config/schema.js';
 import { Session } from '../core/session.js';
 import type { IssueRef } from '../core/session.js';
-import { isHatchetEnabled, getHatchetClient } from '../hatchet/client.js';
 import { logger } from '../infrastructure/logger.js';
 
 // ── Validation schemas ──────────────────────────────────────────
@@ -37,18 +35,6 @@ const StartSessionSchema = z.object({
   title: z.string().optional(),
   body: z.string().optional(),
   labels: z.array(z.string()).optional(),
-});
-
-const BatchStartSchema = z.object({
-  projectPath: z.string().min(1),
-  /** Specific issue numbers to process */
-  issueNumbers: z.array(z.number().int().min(1)).optional(),
-  /** Or use label filter from config */
-  labels: z.array(z.string()).optional(),
-  maxParallel: z.number().int().min(1).optional(),
-  model: z.string().optional(),
-  provider: z.string().optional(),
-  baseBranch: z.string().optional(),
 });
 
 // ── Route factory ───────────────────────────────────────────────
@@ -159,8 +145,6 @@ export function createSessionRoutes(
     sessionStore.add(session);
 
     // Emit accepted event so the ingest mapper creates a thread in the Funny UI.
-    // The ingest mapper routes *.accepted → thread creation via onAccepted().
-    // It resolves projectId from: data.projectId > metadata.projectId > resolveProjectId(worktree_path).
     await eventBus.publish({
       event_type: 'session.accepted' as any,
       request_id: session.id,
@@ -175,56 +159,32 @@ export function createSessionRoutes(
       },
     });
 
-    // If Hatchet is available, trigger the full workflow
-    if (isHatchetEnabled()) {
-      try {
-        const hatchet = getHatchetClient();
-        await hatchet.runNoWait('issue-to-pr', {
-          issueNumber: body.issueNumber,
-          projectPath: body.projectPath,
-          repo: config.tracker.repo,
-          model: body.model ?? config.orchestrator.model,
-          provider: body.provider ?? config.orchestrator.provider,
-          baseBranch: body.baseBranch ?? config.branch.main,
-          issueContext: `#${issueRef.number}: ${issueRef.title}\n\n${issueRef.body ?? ''}`,
-        }, {});
+    // Run inline: plan → implement → PR
+    await sessionStore.transition(session.id, 'planning');
 
-        await sessionStore.transition(session.id, 'planning');
+    const issueDetailForPlan: import('../trackers/tracker.js').IssueDetail = {
+      number: issueRef.number,
+      title: issueRef.title,
+      state: 'open',
+      body: issueRef.body ?? null,
+      url: issueRef.url,
+      labels: (issueRef.labels ?? []).map((l) => ({ name: l, color: '' })),
+      assignee: null,
+      commentsCount: 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      comments: [],
+      fullContext: `#${issueRef.number}: ${issueRef.title}\n\n${issueRef.body ?? ''}`,
+    };
 
-        logger.info({ sessionId: session.id, issueNumber: body.issueNumber }, 'Issue-to-PR workflow triggered via Hatchet');
-      } catch (err: any) {
-        logger.error({ err: err.message }, 'Failed to trigger Hatchet workflow');
-        return c.json({ error: `Hatchet workflow failed: ${err.message}` }, 500);
-      }
-    } else {
-      // Without Hatchet: run inline (plan only for now)
-      await sessionStore.transition(session.id, 'planning');
-
-      // Plan in background — build IssueDetail from issueRef
-      const issueDetailForPlan: import('../trackers/tracker.js').IssueDetail = {
-        number: issueRef.number,
-        title: issueRef.title,
-        state: 'open',
-        body: issueRef.body ?? null,
-        url: issueRef.url,
-        labels: (issueRef.labels ?? []).map((l) => ({ name: l, color: '' })),
-        assignee: null,
-        commentsCount: 0,
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        comments: [],
-        fullContext: `#${issueRef.number}: ${issueRef.title}\n\n${issueRef.body ?? ''}`,
-      };
-      // Run the full inline pipeline: plan → implement → PR
-      runInlinePipeline(
-        session, issueDetailForPlan, body.projectPath,
-        body.baseBranch ?? config.branch.main,
-        sessionStore, orchestratorAgent, eventBus, config,
-      ).catch(async (err) => {
-        logger.error({ sessionId: session.id, err: err.message }, 'Inline pipeline failed');
-        await sessionStore.transition(session.id, 'failed', { error: err.message });
-      });
-    }
+    runIssuePipeline(
+      session, issueDetailForPlan, body.projectPath,
+      body.baseBranch ?? config.branch.main,
+      sessionStore, orchestratorAgent, eventBus, config,
+    ).catch(async (err) => {
+      logger.error({ sessionId: session.id, err: err.message }, 'Issue pipeline failed');
+      await sessionStore.transition(session.id, 'failed', { error: err.message });
+    });
 
     // Comment on the issue to show it's being worked on
     if (tracker) {
@@ -243,41 +203,11 @@ export function createSessionRoutes(
     }, 202);
   });
 
-  // ── POST /batch — Process multiple issues ─────────────────────
-
-  app.post('/batch', zValidator('json', BatchStartSchema), async (c) => {
-    const body = c.req.valid('json');
-
-    if (!isHatchetEnabled()) {
-      return c.json({ error: 'Batch processing requires Hatchet (HATCHET_CLIENT_TOKEN)' }, 503);
-    }
-
-    const hatchet = getHatchetClient();
-
-    try {
-      await hatchet.runNoWait('backlog-processor', {
-        projectPath: body.projectPath,
-        repo: config.tracker.repo,
-        issueNumbers: body.issueNumbers,
-        labels: body.labels ?? config.tracker.labels,
-        excludeLabels: config.tracker.exclude_labels,
-        maxParallel: body.maxParallel ?? config.tracker.max_parallel,
-        model: body.model ?? config.orchestrator.model,
-        provider: body.provider ?? config.orchestrator.provider,
-        baseBranch: body.baseBranch ?? config.branch.main,
-      }, {});
-
-      return c.json({ status: 'processing', message: 'Backlog processor triggered' }, 202);
-    } catch (err: any) {
-      return c.json({ error: `Failed to trigger backlog processor: ${err.message}` }, 500);
-    }
-  });
-
   // ── POST /:id/escalate — Manual escalation ────────────────────
 
   app.post('/:id/escalate', async (c) => {
     const id = c.req.param('id');
-    const body = await c.req.json<{ reason?: string }>().catch(() => ({}));
+    const body = await c.req.json<{ reason?: string }>().catch(() => ({} as { reason?: string }));
 
     const ok = await sessionStore.transition(id, 'escalated', {
       reason: body.reason ?? 'Manual escalation',
@@ -324,13 +254,13 @@ export function createSessionRoutes(
   return app;
 }
 
-// ── Inline pipeline (no Hatchet) ──────────────────────────────
+// ── Issue pipeline ──────────────────────────────────────────────
 
 /**
- * Runs the full issue-to-PR pipeline inline when Hatchet is not available.
- * Steps: plan → create worktree → implement → create PR
+ * Runs the full issue-to-PR pipeline.
+ * Steps: plan → create worktree → implement → push → create PR
  */
-async function runInlinePipeline(
+async function runIssuePipeline(
   session: Session,
   issue: import('../trackers/tracker.js').IssueDetail,
   projectPath: string,
@@ -341,43 +271,16 @@ async function runInlinePipeline(
   config: PipelineServiceConfig,
 ) {
   // Step 1: Plan
-  logger.info({ sessionId: session.id }, 'Inline pipeline: planning');
+  logger.info({ sessionId: session.id }, 'Pipeline: planning');
   const plan = await orchestratorAgent.planIssue(issue, projectPath, {
     onEvent: async (event) => {
-      // Emit each planner event to the UI via EventBus → ingest webhook → thread messages
       switch (event.type) {
         case 'text':
           await eventBus.publish({
-            event_type: 'session.message' as any,
+            event_type: 'session.plan_ready' as any,
             request_id: session.id,
             timestamp: new Date().toISOString(),
             data: { role: 'assistant', content: event.content },
-          });
-          break;
-        case 'tool_call':
-          await eventBus.publish({
-            event_type: 'session.tool_call' as any,
-            request_id: session.id,
-            timestamp: new Date().toISOString(),
-            data: {
-              tool_name: event.name,
-              tool_input: event.args,
-              tool_call_id: event.id,
-              status: 'running',
-            },
-          });
-          break;
-        case 'tool_result':
-          await eventBus.publish({
-            event_type: 'session.tool_result' as any,
-            request_id: session.id,
-            timestamp: new Date().toISOString(),
-            data: {
-              tool_name: event.name,
-              tool_call_id: event.id,
-              output: event.result,
-              status: 'completed',
-            },
           });
           break;
       }
@@ -385,7 +288,7 @@ async function runInlinePipeline(
   });
   sessionStore.update(session.id, (s) => s.setPlan(plan));
   await eventBus.publish({
-    event_type: 'session.plan_ready' as any,
+    event_type: 'session.plan_ready',
     request_id: session.id,
     timestamp: new Date().toISOString(),
     data: { sessionId: session.id, plan },
@@ -393,27 +296,27 @@ async function runInlinePipeline(
 
   logger.info(
     { sessionId: session.id, summary: plan.summary, complexity: plan.estimated_complexity },
-    'Inline pipeline: plan ready',
+    'Pipeline: plan ready',
   );
 
   // Step 2: Create worktree + branch
   const branchName = `issue/${issue.number}/${slugify(issue.title)}`;
   const { createWorktree } = await import('@funny/core/git');
 
-  const wtResult = await createWorktree(projectPath, branchName, { baseBranch });
+  const wtResult = await createWorktree(projectPath, branchName, baseBranch);
   if (wtResult.isErr()) {
     logger.error({ err: wtResult.error }, 'Failed to create worktree');
     await sessionStore.transition(session.id, 'failed', { error: `Worktree creation failed: ${wtResult.error}` });
     return;
   }
 
-  const worktreePath = wtResult.value.path;
+  const worktreePath = wtResult.value;
   sessionStore.update(session.id, (s) => s.setBranch(branchName, worktreePath));
   await sessionStore.transition(session.id, 'implementing');
 
   logger.info(
     { sessionId: session.id, branch: branchName, worktreePath },
-    'Inline pipeline: implementing',
+    'Pipeline: implementing',
   );
 
   // Step 3: Implement
@@ -423,14 +326,13 @@ async function runInlinePipeline(
 
   logger.info(
     { sessionId: session.id, status: implResult.status, findings: implResult.findings_count },
-    'Inline pipeline: implementation complete',
+    'Pipeline: implementation complete',
   );
 
-  // Step 4: Create PR
-  const { git, push, createPR } = await import('@funny/core/git');
+  // Step 4: Push + create PR
+  const { push, createPR } = await import('@funny/core/git');
 
-  // Push the branch
-  const pushResult = await push(worktreePath, { branch: branchName });
+  const pushResult = await push(worktreePath);
   if (pushResult.isErr()) {
     logger.error({ err: pushResult.error }, 'Failed to push branch');
     await sessionStore.transition(session.id, 'failed', { error: `Push failed: ${pushResult.error}` });
@@ -439,22 +341,19 @@ async function runInlinePipeline(
 
   await sessionStore.transition(session.id, 'pr_created');
 
-  // Create PR
   const prTitle = `fix: ${issue.title} (Closes #${issue.number})`;
   const prBody = `## Summary\n\n${plan.summary}\n\n## Approach\n\n${plan.approach}\n\n---\n\nAutomated by funny agent session \`${session.id}\``;
 
-  const prResult = await createPR(worktreePath, {
-    title: prTitle,
-    body: prBody,
-    baseBranch,
-    headBranch: branchName,
-  });
+  const prResult = await createPR(worktreePath, prTitle, prBody, baseBranch);
 
   if (prResult.isOk()) {
-    sessionStore.update(session.id, (s) => s.setPR(prResult.value.number, prResult.value.url));
+    const prUrl = prResult.value;
+    // Extract PR number from URL (e.g. https://github.com/org/repo/pull/42)
+    const prNumber = parseInt(prUrl.split('/').pop() ?? '0', 10);
+    sessionStore.update(session.id, (s) => s.setPR(prNumber, prUrl));
     logger.info(
-      { sessionId: session.id, prNumber: prResult.value.number, prUrl: prResult.value.url },
-      'Inline pipeline: PR created',
+      { sessionId: session.id, prNumber, prUrl },
+      'Pipeline: PR created',
     );
   } else {
     logger.warn({ err: prResult.error }, 'PR creation failed — session still tracks the pushed branch');
@@ -463,7 +362,7 @@ async function runInlinePipeline(
   // Transition to waiting for CI
   await sessionStore.transition(session.id, 'ci_running');
 
-  logger.info({ sessionId: session.id }, 'Inline pipeline: complete, waiting for CI/review');
+  logger.info({ sessionId: session.id }, 'Pipeline: complete, waiting for CI/review');
 }
 
 /** Convert issue title to a git-branch-friendly slug */

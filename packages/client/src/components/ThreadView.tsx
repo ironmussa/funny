@@ -999,7 +999,7 @@ export function ThreadView() {
   const sendingRef = useRef(sending);
   sendingRef.current = sending;
 
-  const handleSend = useCallback(async (prompt: string, opts: { provider?: string; model: string; mode: string; fileReferences?: { path: string }[] }, images?: any[]) => {
+  const handleSend = useCallback(async (prompt: string, opts: { provider?: string; model: string; mode: string; fileReferences?: { path: string }[]; baseBranch?: string }, images?: any[]) => {
     if (sendingRef.current) return;
     const thread = activeThreadRef.current;
     if (!thread) return;
@@ -1030,7 +1030,7 @@ export function ThreadView() {
     });
 
     const { allowedTools, disallowedTools } = deriveToolLists(useSettingsStore.getState().toolPermissions);
-    const result = await api.sendMessage(thread.id, prompt, { provider: opts.provider || undefined, model: opts.model || undefined, permissionMode: opts.mode || undefined, allowedTools, disallowedTools, fileReferences: opts.fileReferences }, images);
+    const result = await api.sendMessage(thread.id, prompt, { provider: opts.provider || undefined, model: opts.model || undefined, permissionMode: opts.mode || undefined, allowedTools, disallowedTools, fileReferences: opts.fileReferences, baseBranch: opts.baseBranch }, images);
     if (result.isErr()) {
       console.error('Send failed:', result.error);
     } else if (threadIsRunning && threadIsQueueMode) {

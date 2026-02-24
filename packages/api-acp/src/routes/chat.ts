@@ -18,6 +18,7 @@ import {
   toOpenAIStreamChunk,
   sseEncode,
 } from '../utils/format.js';
+import * as activeQueries from '../utils/active-queries.js';
 const DEBUG = !!process.env.API_ACP_DEBUG;
 function dbg(msg: string) {
   if (DEBUG) console.log(msg);
@@ -372,6 +373,9 @@ async function handleNonStreaming(
   systemPrompt: string,
   hasTools: boolean,
 ) {
+  const abortController = new AbortController();
+  activeQueries.register(completionId, abortController);
+
   try {
     const textParts: string[] = [];
     let inputTokens = 0;
@@ -386,9 +390,12 @@ async function handleNonStreaming(
         systemPrompt: systemPrompt || undefined,
         permissionMode: 'bypassPermissions',
         allowDangerouslySkipPermissions: true,
+        abortController,
         ...(hasTools ? { tools: [] } : {}),
       },
     });
+
+    activeQueries.setQuery(completionId, gen);
 
     for await (const msg of gen) {
       console.log(`[api-acp] SDK msg type=${msg.type}${(msg as any).subtype ? ` subtype=${(msg as any).subtype}` : ''}`);
@@ -467,6 +474,8 @@ async function handleNonStreaming(
       { error: { message: err.message, type: 'server_error' } },
       500,
     );
+  } finally {
+    activeQueries.remove(completionId);
   }
 }
 
@@ -483,6 +492,9 @@ async function handleStreaming(
   const encoder = new TextEncoder();
   const id = completionId;
   const model = requestedModel;
+
+  const abortController = new AbortController();
+  activeQueries.register(completionId, abortController);
 
   const readableStream = new ReadableStream({
     async start(controller) {
@@ -509,9 +521,12 @@ async function handleStreaming(
             systemPrompt: systemPrompt || undefined,
             permissionMode: 'bypassPermissions',
             allowDangerouslySkipPermissions: true,
+            abortController,
             ...(hasTools ? { tools: [] } : {}),
           },
         });
+
+        activeQueries.setQuery(completionId, gen);
 
         for await (const msg of gen) {
           console.log(`[api-acp] SDK stream msg type=${msg.type}${(msg as any).subtype ? ` subtype=${(msg as any).subtype}` : ''}`);
@@ -630,7 +645,14 @@ async function handleStreaming(
       } catch (err: any) {
         console.error('[api-acp] stream error:', err.message);
         controller.error(err);
+      } finally {
+        activeQueries.remove(completionId);
       }
+    },
+    cancel() {
+      // Client disconnected — cancel the in-flight query
+      console.log(`[api-acp] client disconnected, cancelling ${completionId}`);
+      activeQueries.cancel(completionId);
     },
   });
 

@@ -290,7 +290,7 @@ threadRoutes.post('/:id/message', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(sendMessageSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { content, provider, model, permissionMode, images, allowedTools, disallowedTools, fileReferences } = parsed.value;
+  const { content, provider, model, permissionMode, images, allowedTools, disallowedTools, fileReferences, baseBranch } = parsed.value;
 
   const userId = c.get('userId') as string;
   const threadResult = requireThread(id, userId);
@@ -304,13 +304,16 @@ threadRoutes.post('/:id/message', async (c) => {
   const effectiveModel = (model || thread.model || 'sonnet') as import('@funny/shared').AgentModel;
   const effectivePermission = (permissionMode || thread.permissionMode || 'autoEdit') as import('@funny/shared').PermissionMode;
 
-  // Update thread's permission mode and model if they changed
+  // Update thread's permission mode, model, and baseBranch if they changed
   const updates: Record<string, any> = {};
   if (permissionMode && permissionMode !== thread.permissionMode) {
     updates.permissionMode = permissionMode;
   }
   if (model && model !== thread.model) {
     updates.model = model;
+  }
+  if (baseBranch && baseBranch !== thread.baseBranch) {
+    updates.baseBranch = baseBranch;
   }
   if (Object.keys(updates).length > 0) {
     tm.updateThread(id, updates);

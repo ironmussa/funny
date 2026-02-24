@@ -213,10 +213,10 @@ export const api = {
     prompt?: string;
     stage?: string;
   }) => request<Thread>('/threads/idle', { method: 'POST', body: JSON.stringify(data) }),
-  sendMessage: (threadId: string, content: string, opts?: { provider?: string; model?: string; permissionMode?: string; allowedTools?: string[]; disallowedTools?: string[]; fileReferences?: { path: string }[] }, images?: ImageAttachment[]) =>
+  sendMessage: (threadId: string, content: string, opts?: { provider?: string; model?: string; permissionMode?: string; allowedTools?: string[]; disallowedTools?: string[]; fileReferences?: { path: string }[]; baseBranch?: string }, images?: ImageAttachment[]) =>
     request<{ ok: boolean }>(`/threads/${threadId}/message`, {
       method: 'POST',
-      body: JSON.stringify({ content, provider: opts?.provider, model: opts?.model, permissionMode: opts?.permissionMode, images, allowedTools: opts?.allowedTools, disallowedTools: opts?.disallowedTools, fileReferences: opts?.fileReferences }),
+      body: JSON.stringify({ content, provider: opts?.provider, model: opts?.model, permissionMode: opts?.permissionMode, images, allowedTools: opts?.allowedTools, disallowedTools: opts?.disallowedTools, fileReferences: opts?.fileReferences, baseBranch: opts?.baseBranch }),
     }),
   stopThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/stop`, { method: 'POST' }),

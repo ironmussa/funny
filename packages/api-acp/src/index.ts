@@ -14,6 +14,7 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { modelsRoute } from './routes/models.js';
 import { chatRoute } from './routes/chat.js';
+import { cancelRoute } from './routes/cancel.js';
 import { getAdvertisedModels } from './utils/model-resolver.js';
 
 const app = new Hono();
@@ -42,6 +43,7 @@ if (requiredKey) {
 
 app.route('/v1/models', modelsRoute);
 app.route('/v1/chat/completions', chatRoute);
+app.route('/v1/chat/completions', cancelRoute);
 
 // Health check
 app.get('/', (c) => c.json({ status: 'ok', service: 'funny-api-acp' }));

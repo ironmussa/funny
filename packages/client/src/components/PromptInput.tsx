@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { ArrowUp, Square, Loader2, Paperclip, X, Zap, GitBranch, Check, Inbox, FileText, Globe, Github, FolderOpen } from 'lucide-react';
+import { ArrowUp, ArrowRight, Square, Loader2, Paperclip, X, Zap, GitBranch, Check, Inbox, FileText, Globe, Github, FolderOpen } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import {
@@ -389,6 +389,7 @@ export const PromptInput = memo(function PromptInput({
   const activeThreadModel = useThreadStore(s => s.activeThread?.model);
   const activeThreadMode = useThreadStore(s => s.activeThread?.mode);
   const activeThreadBranch = useThreadStore(s => s.activeThread?.branch);
+  const activeThreadBaseBranch = useThreadStore(s => s.activeThread?.baseBranch);
   const [newThreadBranches, setNewThreadBranches] = useState<string[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [images, setImages] = useState<ImageAttachment[]>([]);
@@ -589,15 +590,18 @@ export const PromptInput = memo(function PromptInput({
     }
   }, [projectPath]);
 
-  // Fetch branches for follow-up worktree creation (when in local mode thread)
+  // Fetch branches for follow-up mode (all thread types)
   useEffect(() => {
-    if (!isNewThread && activeThreadMode === 'local' && selectedProjectId) {
+    if (!isNewThread && selectedProjectId) {
       (async () => {
         const result = await api.listBranches(selectedProjectId);
         if (result.isOk()) {
           const data = result.value;
           setFollowUpBranches(data.branches);
-          if (data.defaultBranch) {
+          // Default to baseBranch (worktree source), then defaultBranch, then currentBranch
+          if (activeThreadBaseBranch) {
+            setFollowUpSelectedBranch(activeThreadBaseBranch);
+          } else if (data.defaultBranch) {
             setFollowUpSelectedBranch(data.defaultBranch);
           } else if (data.currentBranch) {
             setFollowUpSelectedBranch(data.currentBranch);
@@ -611,7 +615,7 @@ export const PromptInput = memo(function PromptInput({
     } else {
       setFollowUpBranches([]);
     }
-  }, [isNewThread, activeThreadMode, selectedProjectId]);
+  }, [isNewThread, selectedProjectId, activeThreadBaseBranch]);
 
   // Fetch skills once when the menu first opens
   const loadSkills = useCallback(async () => {
@@ -777,7 +781,7 @@ export const PromptInput = memo(function PromptInput({
           ? { threadMode: createWorktree ? 'worktree' : 'local', baseBranch: selectedBranch || undefined, sendToBacklog }
           : createWorktreeForFollowUp
             ? { threadMode: 'worktree', baseBranch: followUpSelectedBranch || undefined }
-            : {}
+            : { baseBranch: followUpSelectedBranch || undefined }
         ),
         cwd: cwdOverride || undefined,
         fileReferences: submittedFiles,
@@ -1311,11 +1315,21 @@ export const PromptInput = memo(function PromptInput({
                       <span className="truncate font-mono">{effectiveCwd}</span>
                     </span>
                   )}
-                  {(activeThreadBranch || localCurrentBranch) && (
+                  {activeThreadBranch && (
                     <span className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground shrink-0">
                       <GitBranch className="h-3 w-3 shrink-0" />
-                      <span className="truncate font-mono">{activeThreadBranch || localCurrentBranch}</span>
+                      <span className="font-mono font-medium text-foreground">{activeThreadBranch}</span>
                     </span>
+                  )}
+                  {activeThreadBranch && followUpBranches.length > 0 && (
+                    <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                  )}
+                  {followUpBranches.length > 0 && (
+                    <BranchPicker
+                      branches={followUpBranches}
+                      selected={followUpSelectedBranch}
+                      onChange={setFollowUpSelectedBranch}
+                    />
                   )}
                 </>
               )}

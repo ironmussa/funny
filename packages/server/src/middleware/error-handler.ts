@@ -18,6 +18,11 @@ export const handleError: ErrorHandler = (err, c) => {
   }
 
   // Any other Error — log full details server-side, return generic message to client
-  log.error('Unhandled error', { namespace: 'error-handler', error: err });
+  log.error('Unhandled error', {
+    namespace: 'error-handler',
+    message: err?.message,
+    stack: err?.stack,
+    name: err?.name,
+  });
   return c.json({ error: 'Internal server error' }, 500);
 };

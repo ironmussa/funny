@@ -140,6 +140,7 @@ threadRoutes.post('/idle', async (c) => {
     userId,
     title,
     mode,
+    provider: 'claude' as const,
     permissionMode: 'autoEdit' as const,
     model: 'sonnet' as const,
     source: source || 'web',

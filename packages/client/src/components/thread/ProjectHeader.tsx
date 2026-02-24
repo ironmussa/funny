@@ -350,7 +350,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => navigate(`/projects/${activeThreadProjectId}/threads/${activeThreadParentId}`)}
+                onClick={() => startTransition(() => navigate(`/projects/${activeThreadProjectId}/threads/${activeThreadParentId}`))}
                 className="text-muted-foreground hover:text-foreground shrink-0"
               >
                 <ArrowLeft className="h-4 w-4" />

@@ -103,7 +103,7 @@ threadRoutes.post('/idle', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(createIdleThreadSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { projectId, title, mode, source, baseBranch, prompt } = parsed.value;
+  const { projectId, title, mode, source, baseBranch, prompt, stage } = parsed.value;
 
   const projectResult = requireProject(projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);

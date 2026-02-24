@@ -144,13 +144,15 @@ export const ProjectItem = memo(function ProjectItem({
       <div
         ref={dragRef}
         className={cn(
-          "group/project flex items-center rounded-md hover:bg-accent/50 select-none",
+          "group/project flex items-center rounded-md select-none",
+          isSelected ? "bg-accent" : "hover:bg-accent/50",
           isDragging && "opacity-50",
           isDropTarget && "ring-2 ring-ring"
         )}
       >
         <CollapsibleTrigger className={cn(
-          "flex-1 flex items-center gap-1.5 px-2 py-1 text-xs text-left text-muted-foreground hover:text-foreground min-w-0",
+          "flex-1 flex items-center gap-1.5 px-2 py-1 text-xs text-left min-w-0",
+          isSelected ? "text-accent-foreground" : "text-muted-foreground hover:text-foreground",
           isDragging ? "cursor-grabbing" : "cursor-pointer"
         )}>
           {isExpanded ? (

@@ -50,6 +50,31 @@ export interface GitChangedEvent extends ThreadLifecycleContext {
   toolName: string;
 }
 
+export interface GitCommittedEvent {
+  threadId: string;
+  userId: string;
+  projectId: string;
+  message: string;
+  amend?: boolean;
+  cwd: string;
+}
+
+export interface GitPushedEvent {
+  threadId: string;
+  userId: string;
+  projectId: string;
+  cwd: string;
+}
+
+export interface GitMergedEvent {
+  threadId: string;
+  userId: string;
+  projectId: string;
+  sourceBranch: string;
+  targetBranch: string;
+  output: string;
+}
+
 // ── Event map ─────────────────────────────────────────────────────
 
 export interface ThreadEventMap {
@@ -59,6 +84,9 @@ export interface ThreadEventMap {
   'agent:started': (event: AgentStartedEvent) => void;
   'agent:completed': (event: AgentCompletedEvent) => void;
   'git:changed': (event: GitChangedEvent) => void;
+  'git:committed': (event: GitCommittedEvent) => void;
+  'git:pushed': (event: GitPushedEvent) => void;
+  'git:merged': (event: GitMergedEvent) => void;
 }
 
 // ── Typed EventEmitter ────────────────────────────────────────────

@@ -50,6 +50,8 @@ import { registerAllHandlers } from './services/handlers/handler-registry.js';
 import type { HandlerServiceContext } from './services/handlers/types.js';
 import * as tm from './services/thread-manager.js';
 import * as pm from './services/project-manager.js';
+import { getStatusSummary, deriveGitSyncState } from '@funny/core/git';
+import { saveThreadEvent } from './services/thread-event-service.js';
 import { getProviderModels, getProviderModelsWithLabels, PROVIDER_LABELS, getDefaultModel } from '@funny/shared/models';
 
 // Resolve client dist directory (works both in dev and when installed via npm)
@@ -215,6 +217,9 @@ const handlerCtx: HandlerServiceContext = {
   emitToUser: (userId, event) => wsBroker.emitToUser(userId, event),
   broadcast: (event) => wsBroker.emit(event),
   startAgent,
+  getGitStatusSummary: getStatusSummary,
+  deriveGitSyncState,
+  saveThreadEvent,
   log: (msg) => log.info(msg, { namespace: 'handler' }),
 };
 registerAllHandlers(handlerCtx);

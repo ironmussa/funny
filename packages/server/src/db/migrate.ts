@@ -433,6 +433,50 @@ const migrations: Migration[] = [
       addColumn('tool_calls', 'author', 'TEXT');
     },
   },
+
+  {
+    name: '023_thread_events',
+    up() {
+      db.run(sql`
+        CREATE TABLE IF NOT EXISTS thread_events (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          event_type TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          timestamp TEXT NOT NULL
+        )
+      `);
+
+      db.run(sql`
+        CREATE INDEX IF NOT EXISTS idx_thread_events_thread_timestamp
+        ON thread_events (thread_id, timestamp)
+      `);
+    },
+  },
+
+  {
+    name: '024_fix_thread_events_columns',
+    up() {
+      // Rename columns created by 023 to match Drizzle schema.
+      // SQLite 3.25+ supports ALTER TABLE RENAME COLUMN.
+      try {
+        db.run(sql`ALTER TABLE thread_events RENAME COLUMN payload TO data`);
+      } catch {
+        // Column may already be named 'data' on fresh installs
+      }
+      try {
+        db.run(sql`ALTER TABLE thread_events RENAME COLUMN timestamp TO created_at`);
+      } catch {
+        // Column may already be named 'created_at' on fresh installs
+      }
+      // Recreate index with correct column name
+      db.run(sql`DROP INDEX IF EXISTS idx_thread_events_thread_timestamp`);
+      db.run(sql`
+        CREATE INDEX IF NOT EXISTS idx_thread_events_thread_created
+        ON thread_events (thread_id, created_at)
+      `);
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

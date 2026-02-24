@@ -14,6 +14,7 @@ import { getGitIdentity, getGithubToken } from '../services/profile-service.js';
 
 import type { HonoEnv } from '../types/hono-env.js';
 import { wsBroker } from '../services/ws-broker.js';
+import { threadEventBus } from '../services/thread-event-bus.js';
 
 export const gitRoutes = new Hono<HonoEnv>();
 
@@ -266,8 +267,9 @@ gitRoutes.post('/:threadId/revert', async (c) => {
 
 // POST /api/git/:threadId/commit
 gitRoutes.post('/:threadId/commit', async (c) => {
+  const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = requireThreadCwd(c.req.param('threadId'), userId);
+  const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -278,20 +280,41 @@ gitRoutes.post('/:threadId/commit', async (c) => {
   const identity = resolveIdentity(userId);
   const result = await commit(cwd, parsed.value.message, identity, parsed.value.amend);
   if (result.isErr()) return resultToResponse(c, result);
-  invalidateGitStatusCache(c.req.param('threadId'));
+
+  const thread = requireThread(threadId, userId);
+  threadEventBus.emit('git:committed', {
+    threadId,
+    userId,
+    projectId: thread.isOk() ? thread.value.projectId : '',
+    message: parsed.value.message,
+    amend: parsed.value.amend,
+    cwd,
+  });
+
+  invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });
 });
 
 // POST /api/git/:threadId/push
 gitRoutes.post('/:threadId/push', async (c) => {
+  const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = requireThreadCwd(c.req.param('threadId'), userId);
+  const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const identity = resolveIdentity(userId);
   const result = await push(cwdResult.value, identity);
   if (result.isErr()) return resultToResponse(c, result);
-  invalidateGitStatusCache(c.req.param('threadId'));
+
+  const thread = requireThread(threadId, userId);
+  threadEventBus.emit('git:pushed', {
+    threadId,
+    userId,
+    projectId: thread.isOk() ? thread.value.projectId : '',
+    cwd: cwdResult.value,
+  });
+
+  invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });
 });
 
@@ -463,6 +486,15 @@ gitRoutes.post('/:threadId/merge', async (c) => {
   const identity = resolveIdentity(userId);
   const mergeResult = await mergeBranch(project.path, thread.branch, targetBranch, identity, thread.worktreePath ?? undefined);
   if (mergeResult.isErr()) return resultToResponse(c, mergeResult);
+
+  threadEventBus.emit('git:merged', {
+    threadId,
+    userId,
+    projectId: thread.projectId,
+    sourceBranch: thread.branch,
+    targetBranch,
+    output: mergeResult.value,
+  });
 
   if (parsed.value.push) {
     const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;

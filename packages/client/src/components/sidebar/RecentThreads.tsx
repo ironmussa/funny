@@ -21,6 +21,7 @@ const FINISHED_STATUSES: ThreadStatus[] = ['completed', 'failed', 'stopped', 'in
 interface FinishedThread extends Thread {
   projectName: string;
   projectPath: string;
+  projectColor?: string;
 }
 
 interface RecentThreadsProps {
@@ -40,7 +41,7 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
 
   const { recentThreads, totalCount } = useMemo(() => {
     const result: FinishedThread[] = [];
-    const projectMap = new Map(projects.map(p => [p.id, { name: p.name, path: p.path }]));
+    const projectMap = new Map(projects.map(p => [p.id, { name: p.name, path: p.path, color: p.color }]));
 
     for (const [projectId, threads] of Object.entries(threadsByProject)) {
       for (const thread of threads) {
@@ -50,6 +51,7 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
             ...thread,
             projectName: project?.name ?? projectId,
             projectPath: project?.path ?? '',
+            projectColor: project?.color,
           });
         }
       }
@@ -101,6 +103,7 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
               projectPath={thread.projectPath}
               isSelected={selectedThreadId === thread.id}
               subtitle={thread.projectName}
+              projectColor={thread.projectColor}
               timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t)}
               gitStatus={thread.mode === 'worktree' ? gitStatusByThread[thread.id] : undefined}
               onSelect={() => {

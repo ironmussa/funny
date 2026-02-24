@@ -3,10 +3,16 @@
  * tools are executed, ensuring the UI stays in sync with git state.
  */
 
+/**
+ * Git Status handler — emits git status via WebSocket when file-modifying
+ * tools are executed, ensuring the UI stays in sync with git state.
+ *
+ * Fully decoupled: uses HandlerServiceContext for all git operations
+ * instead of importing @funny/core/git directly.
+ */
+
 import type { EventHandler } from './types.js';
 import type { GitChangedEvent } from '../thread-event-bus.js';
-import { getStatusSummary, deriveGitSyncState } from '@funny/core/git';
-import { log } from '../../lib/abbacchio.js';
 
 export const gitStatusHandler: EventHandler<'git:changed'> = {
   name: 'emit-git-status-on-change',
@@ -28,16 +34,16 @@ export const gitStatusHandler: EventHandler<'git:changed'> = {
     const project = ctx.getProject(thread.projectId);
     if (!project) return;
 
-    log.debug('Emitting git status', { namespace: 'git-status-handler', threadId, toolName: event.toolName });
+    ctx.log(`Emitting git status for thread ${threadId} (tool: ${event.toolName})`);
 
-    const summaryResult = await getStatusSummary(
+    const summaryResult = await ctx.getGitStatusSummary(
       worktreePath,
       thread.baseBranch ?? undefined,
       project.path
     );
 
     if (summaryResult.isErr()) {
-      log.error('Failed to get git status', { namespace: 'git-status-handler', threadId, error: String(summaryResult.error) });
+      ctx.log(`Failed to get git status for thread ${threadId}: ${String(summaryResult.error)}`);
       return;
     }
 
@@ -49,7 +55,7 @@ export const gitStatusHandler: EventHandler<'git:changed'> = {
       data: {
         statuses: [{
           threadId,
-          state: deriveGitSyncState(summary),
+          state: ctx.deriveGitSyncState(summary),
           ...summary,
         }],
       },

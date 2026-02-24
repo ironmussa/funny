@@ -186,6 +186,9 @@ export const api = {
     const params = new URLSearchParams({ cursor, limit: String(limit) });
     return request<PaginatedMessages>(`/threads/${threadId}/messages?${params.toString()}`);
   },
+  getThreadEvents: (threadId: string) => {
+    return request<Array<import('@funny/shared').ThreadEvent>>(`/threads/${threadId}/events`);
+  },
   createThread: (data: {
     projectId: string;
     title: string;
@@ -208,6 +211,7 @@ export const api = {
     mode: string;
     baseBranch?: string;
     prompt?: string;
+    stage?: string;
   }) => request<Thread>('/threads/idle', { method: 'POST', body: JSON.stringify(data) }),
   sendMessage: (threadId: string, content: string, opts?: { provider?: string; model?: string; permissionMode?: string; allowedTools?: string[]; disallowedTools?: string[]; fileReferences?: { path: string }[] }, images?: ImageAttachment[]) =>
     request<{ ok: boolean }>(`/threads/${threadId}/message`, {

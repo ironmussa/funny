@@ -8,6 +8,7 @@ import { ChevronLeft, Archive, Search, ArrowUp, ArrowDown, LayoutList, Columns3,
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { ProjectChip } from '@/components/ui/project-chip';
 import { ThreadListView } from '@/components/ThreadListView';
 import { KanbanView } from '@/components/KanbanView';
 import { statusConfig, gitSyncStateConfig, getStatusLabels } from '@/lib/thread-utils';
@@ -650,15 +651,7 @@ export function AllThreadsView() {
                 return (
                   <>
                     {!projectFilter && projectInfoById[thread.projectId] && (
-                      <span
-                        className="text-xs px-1.5 py-0.5 rounded"
-                        style={{
-                          backgroundColor: projectInfoById[thread.projectId].color ? `${projectInfoById[thread.projectId].color}1A` : '#3b82f61A',
-                          color: projectInfoById[thread.projectId].color || '#3b82f6',
-                        }}
-                      >
-                        {projectInfoById[thread.projectId].name}
-                      </span>
+                      <ProjectChip name={projectInfoById[thread.projectId].name} color={projectInfoById[thread.projectId].color} />
                     )}
                     {!!thread.archived && (
                       <span className="inline-flex items-center gap-0.5 text-xs text-status-warning/80 bg-status-warning/10 px-1.5 py-0.5 rounded">

@@ -15,12 +15,16 @@ import { log } from '../../lib/abbacchio.js';
 
 import { commentHandler } from './comment-handler.js';
 import { gitStatusHandler } from './git-status-handler.js';
+import { gitCommitPersistenceHandler, gitPushPersistenceHandler, gitMergePersistenceHandler } from './git-event-persistence-handler.js';
 
 // ── Handler list ────────────────────────────────────────────────
 
 const allHandlers: EventHandler<any>[] = [
   commentHandler,
   gitStatusHandler,
+  gitCommitPersistenceHandler,
+  gitPushPersistenceHandler,
+  gitMergePersistenceHandler,
 ];
 
 // ── Registration ────────────────────────────────────────────────

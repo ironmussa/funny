@@ -655,3 +655,15 @@ export interface InboxItem {
   automation: Automation;
   thread: Thread;
 }
+
+// ─── Thread Events ──────────────────────────────────────
+
+export type ThreadEventType = 'git:changed' | 'git:commit' | 'git:push' | 'git:merge' | 'git:pr_created';
+
+export interface ThreadEvent {
+  id: string;
+  threadId: string;
+  type: ThreadEventType;
+  data: string;
+  createdAt: string;
+}

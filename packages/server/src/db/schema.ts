@@ -186,3 +186,13 @@ export const mcpOauthTokens = sqliteTable('mcp_oauth_tokens', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
+
+export const threadEvents = sqliteTable('thread_events', {
+  id: text('id').primaryKey(),
+  threadId: text('thread_id')
+    .notNull()
+    .references(() => threads.id, { onDelete: 'cascade' }),
+  eventType: text('event_type').notNull(), // 'git:status' | 'git:commit' | 'git:push' | 'git:merge' | etc.
+  data: text('data').notNull(), // JSON-encoded event data
+  createdAt: text('created_at').notNull(),
+});

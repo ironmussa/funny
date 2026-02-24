@@ -36,6 +36,7 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { ProjectChip } from '@/components/ui/project-chip';
 import { SlideUpPrompt } from '@/components/SlideUpPrompt';
 
 interface KanbanViewProps {
@@ -152,15 +153,7 @@ function KanbanCard({ thread, projectInfo, onDelete, search, ghost, contentSnipp
       </div>
 
       {projectInfo && (
-        <span
-          className="text-xs px-1.5 py-0.5 rounded inline-block mb-1"
-          style={{
-            backgroundColor: projectInfo.color ? `${projectInfo.color}1A` : '#3b82f61A',
-            color: projectInfo.color || '#3b82f6',
-          }}
-        >
-          {projectInfo.name}
-        </span>
+        <ProjectChip name={projectInfo.name} color={projectInfo.color} className="mb-1" />
       )}
 
       {displayBranch && (
@@ -465,16 +458,17 @@ export function KanbanView({ threads, projectId, search, contentSnippets, highli
 
     const slideUpProject = projects.find(p => p.id === slideUpProjectId);
     const threadMode = (opts.threadMode as 'local' | 'worktree') || slideUpProject?.defaultMode || 'worktree';
-    const toBacklog = opts.sendToBacklog || slideUpStage === 'backlog';
+    const toIdle = opts.sendToBacklog || slideUpStage === 'backlog' || slideUpStage === 'planning';
 
-    if (toBacklog) {
-      // Create idle thread (backlog)
+    if (toIdle) {
+      // Create idle thread (backlog or planning)
       const result = await api.createIdleThread({
         projectId: slideUpProjectId,
         title: prompt.slice(0, 200),
         mode: threadMode,
         baseBranch: opts.baseBranch,
         prompt,
+        stage: slideUpStage === 'planning' ? 'planning' : undefined,
       });
 
       if (result.isErr()) {

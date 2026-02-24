@@ -16,6 +16,7 @@ const VISIBLE_STATUSES = new Set<ThreadStatus>([...RUNNING_STATUSES, ...FINISHED
 interface EnrichedThread extends Thread {
   projectName: string;
   projectPath: string;
+  projectColor?: string;
 }
 
 interface ThreadListProps {
@@ -34,7 +35,7 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
 
   const { threads, totalCount } = useMemo(() => {
     const result: EnrichedThread[] = [];
-    const projectMap = new Map(projects.map(p => [p.id, { name: p.name, path: p.path }]));
+    const projectMap = new Map(projects.map(p => [p.id, { name: p.name, path: p.path, color: p.color }]));
 
     for (const [projectId, projectThreads] of Object.entries(threadsByProject)) {
       for (const thread of projectThreads) {
@@ -44,6 +45,7 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
             ...thread,
             projectName: project?.name ?? projectId,
             projectPath: project?.path ?? '',
+            projectColor: project?.color,
           });
         }
       }
@@ -87,6 +89,7 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
             projectPath={thread.projectPath}
             isSelected={selectedThreadId === thread.id}
             subtitle={thread.projectName}
+            projectColor={thread.projectColor}
             timeValue={isRunning ? undefined : timeAgo(thread.completedAt ?? thread.createdAt, t)}
             gitStatus={thread.mode === 'worktree' ? gitStatusByThread[thread.id] : undefined}
             onSelect={() => {

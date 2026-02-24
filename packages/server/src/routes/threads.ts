@@ -16,6 +16,7 @@ import { notFound } from '@funny/shared/errors';
 import { augmentPromptWithFiles } from '../utils/file-mentions.js';
 import { threadEventBus } from '../services/thread-event-bus.js';
 import type { WSEvent } from '@funny/shared';
+import { getThreadEvents } from '../services/thread-event-service.js';
 
 export const threadRoutes = new Hono<HonoEnv>();
 
@@ -86,6 +87,17 @@ threadRoutes.get('/:id/messages', (c) => {
   return c.json(result);
 });
 
+// GET /api/threads/:id/events — get all events for a thread
+threadRoutes.get('/:id/events', (c) => {
+  const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+  const threadResult = requireThread(id, userId);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+
+  const events = getThreadEvents(id);
+  return c.json({ events });
+});
+
 // POST /api/threads/idle
 threadRoutes.post('/idle', async (c) => {
   const raw = await c.req.json();
@@ -132,7 +144,7 @@ threadRoutes.post('/idle', async (c) => {
     model: 'sonnet' as const,
     source: source || 'web',
     status: 'idle' as const,
-    stage: 'backlog' as const,
+    stage: (stage || 'backlog') as 'backlog' | 'planning',
     branch: threadBranch,
     baseBranch: resolvedBaseBranch || (mode === 'local' ? threadBranch : undefined),
     worktreePath,

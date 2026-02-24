@@ -83,6 +83,7 @@ export const createIdleThreadSchema = z.object({
   source: threadSourceSchema.optional().default('web'),
   baseBranch: z.string().optional(),
   prompt: z.string().optional(),
+  stage: z.enum(['backlog', 'planning']).optional().default('backlog'),
 });
 
 export const sendMessageSchema = z.object({

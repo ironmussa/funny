@@ -18,17 +18,18 @@ import {
   Square,
   Pin,
   PinOff,
+  Bot,
 } from 'lucide-react';
 import { statusConfig, gitSyncStateConfig, timeAgo } from '@/lib/thread-utils';
 import type { Thread, ThreadStatus, GitStatusInfo } from '@funny/shared';
 import { Button } from '@/components/ui/button';
+import { ProjectChip } from '@/components/ui/project-chip';
 import { api } from '@/lib/api';
 import {
   Tooltip,
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { Badge } from '@/components/ui/badge';
 
 interface ThreadItemProps {
   thread: Thread;
@@ -36,6 +37,7 @@ interface ThreadItemProps {
   isSelected: boolean;
   onSelect: () => void;
   subtitle?: string;
+  projectColor?: string;
   timeValue?: string;
   onArchive?: () => void;
   onPin?: () => void;
@@ -43,7 +45,7 @@ interface ThreadItemProps {
   gitStatus?: GitStatusInfo;
 }
 
-export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle, timeValue, onArchive, onPin, onDelete, gitStatus }: ThreadItemProps) {
+export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle, projectColor, timeValue, onArchive, onPin, onDelete, gitStatus }: ThreadItemProps) {
   const { t } = useTranslation();
   const [openDropdown, setOpenDropdown] = useState(false);
   const handleDropdownChange = useCallback((open: boolean) => setOpenDropdown(open), []);
@@ -117,7 +119,7 @@ export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSele
             </span>
           )}
         </div>
-        <div className="flex flex-col gap-0 min-w-0 flex-1">
+        <div className="flex flex-col gap-1 min-w-0 flex-1">
           <div className="flex items-center gap-1">
             <span className="text-sm leading-tight truncate">{thread.title}</span>
             {/* Git status icon (worktree threads only) */}
@@ -131,22 +133,24 @@ export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSele
                 </TooltipContent>
               </Tooltip>
             )}
-            {/* Creator badge for external/pipeline threads */}
-            {thread.createdBy && thread.createdBy !== 'user' && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4 leading-none">
-                    {thread.createdBy}
-                  </Badge>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  {t('thread.createdBy', { creator: thread.createdBy })}
-                </TooltipContent>
-              </Tooltip>
-            )}
           </div>
-          {subtitle && (
-            <span className="text-xs text-muted-foreground font-mono truncate">{subtitle}</span>
+          {(subtitle || (thread.createdBy && thread.createdBy !== 'user' && thread.createdBy !== '__local__')) && (
+            <div className="flex items-center gap-1 min-w-0">
+              {subtitle && (
+                <ProjectChip name={subtitle} color={projectColor} />
+              )}
+              {/* External creator icon */}
+              {thread.createdBy && thread.createdBy !== 'user' && thread.createdBy !== '__local__' && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Bot className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    {t('thread.createdBy', { creator: thread.createdBy })}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+            </div>
           )}
         </div>
       </button>

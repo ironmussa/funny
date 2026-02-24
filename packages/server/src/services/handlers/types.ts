@@ -39,6 +39,13 @@ export interface HandlerServiceContext {
     permissionMode?: string,
   ): Promise<void>;
 
+  // Git
+  getGitStatusSummary(cwd: string, baseBranch?: string, mainRepoPath?: string): Promise<any>;
+  deriveGitSyncState(summary: any): string;
+
+  // Thread events
+  saveThreadEvent(threadId: string, type: string, data: Record<string, unknown>): Promise<void>;
+
   // Logging
   log(message: string): void;
 }

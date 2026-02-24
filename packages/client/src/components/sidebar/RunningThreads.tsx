@@ -17,6 +17,7 @@ import { useGitStatusStore } from '@/stores/git-status-store';
 interface RunningThread extends Thread {
   projectName: string;
   projectPath: string;
+  projectColor?: string;
 }
 
 export function RunningThreads() {
@@ -30,7 +31,7 @@ export function RunningThreads() {
 
   const runningThreads = useMemo(() => {
     const result: RunningThread[] = [];
-    const projectMap = new Map(projects.map(p => [p.id, { name: p.name, path: p.path }]));
+    const projectMap = new Map(projects.map(p => [p.id, { name: p.name, path: p.path, color: p.color }]));
 
     for (const [projectId, threads] of Object.entries(threadsByProject)) {
       for (const thread of threads) {
@@ -40,6 +41,7 @@ export function RunningThreads() {
             ...thread,
             projectName: project?.name ?? projectId,
             projectPath: project?.path ?? '',
+            projectColor: project?.color,
           });
         }
       }
@@ -84,6 +86,7 @@ export function RunningThreads() {
               projectPath={thread.projectPath}
               isSelected={selectedThreadId === thread.id}
               subtitle={thread.projectName}
+              projectColor={thread.projectColor}
               gitStatus={thread.mode === 'worktree' ? gitStatusByThread[thread.id] : undefined}
               onSelect={() => {
                 const store = useThreadStore.getState();

@@ -38,19 +38,12 @@ export function CircuitBreakerDialog() {
           </p>
         )}
 
-        <Button onClick={retryNow} disabled={isHalfOpen} size="lg">
-          {isHalfOpen ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              {t('circuitBreaker.reconnecting')}
-            </>
-          ) : (
-            <>
-              <RefreshCw className="mr-2 h-4 w-4" />
-              {t('circuitBreaker.retryNow')}
-            </>
-          )}
-        </Button>
+        {!isHalfOpen && (
+          <Button onClick={retryNow} size="lg">
+            <RefreshCw className="mr-2 h-4 w-4" />
+            {t('circuitBreaker.retryNow')}
+          </Button>
+        )}
       </div>
     </div>
   );

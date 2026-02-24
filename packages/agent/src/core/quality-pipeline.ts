@@ -217,7 +217,7 @@ export class QualityPipeline {
 
         // Add text if present — prefix with agent name so user knows which agent is speaking
         if (step.text) {
-          contentBlocks.push({ type: 'text', text: `[${agentName}] ${step.text}` });
+          contentBlocks.push({ type: 'text', text: step.text });
         }
 
         // Add tool calls

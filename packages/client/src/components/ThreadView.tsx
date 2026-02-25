@@ -2,7 +2,6 @@ import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, mem
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
-import { useAppStore } from '@/stores/app-store';
 import { useUIStore } from '@/stores/ui-store';
 import { cn } from '@/lib/utils';
 import { Input } from '@/components/ui/input';
@@ -49,12 +48,15 @@ const FILE_PATH_RE = /(?:[A-Za-z]:[\\\/]|\/)[^\s:*?"<>|,()]+(?::\d+)?/g;
 import { toEditorUriWithLine, openFileInEditor, getEditorLabel } from '@/lib/editor-utils';
 import { editorLabels } from '@/stores/settings-store';
 
-// Lazy-load react-markdown + remark-gfm to reduce initial bundle (improves LCP)
+// Prefetch react-markdown + remark-gfm immediately at module load time.
+// By the time ThreadView renders messages, the chunks are already downloaded.
+const _markdownImport = Promise.all([
+  import('react-markdown'),
+  import('remark-gfm'),
+]);
+
 const LazyMarkdownRenderer = lazy(() =>
-  Promise.all([
-    import('react-markdown'),
-    import('remark-gfm'),
-  ]).then(([{ default: ReactMarkdown }, { default: remarkGfm }]) => {
+  _markdownImport.then(([{ default: ReactMarkdown }, { default: remarkGfm }]) => {
     const remarkPlugins = [remarkGfm];
     const markdownComponents = {
       a: ({ href, children }: any) => {
@@ -565,7 +567,7 @@ const MemoizedMessageList = memo(function MemoizedMessageList({
             output={tc.output}
             planText={tc._planText}
             onRespond={(tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode') ? (answer: string) => {
-              useAppStore.getState().handleWSToolOutput(threadId, { toolCallId: tc.id, output: answer });
+              useThreadStore.getState().handleWSToolOutput(threadId, { toolCallId: tc.id, output: answer });
               onSend(answer, { model: '', mode: '' });
             } : undefined}
           />
@@ -594,7 +596,7 @@ const MemoizedMessageList = memo(function MemoizedMessageList({
               ? (answer: string) => {
                 for (const call of ti.calls) {
                   if (!call.output) {
-                    useAppStore.getState().handleWSToolOutput(threadId, { toolCallId: call.id, output: answer });
+                    useThreadStore.getState().handleWSToolOutput(threadId, { toolCallId: call.id, output: answer });
                   }
                 }
                 onSend(answer, { model: '', mode: '' });
@@ -1027,7 +1029,7 @@ export function ThreadView() {
     if (scrollDownRef.current) scrollDownRef.current.style.display = 'none';
 
     startTransition(() => {
-      useAppStore.getState().appendOptimisticMessage(
+      useThreadStore.getState().appendOptimisticMessage(
         thread.id,
         prompt,
         images,
@@ -1058,7 +1060,7 @@ export function ThreadView() {
   const handlePermissionApproval = useCallback(async (toolName: string, approved: boolean) => {
     const thread = activeThreadRef.current;
     if (!thread) return;
-    useAppStore.getState().appendOptimisticMessage(
+    useThreadStore.getState().appendOptimisticMessage(
       thread.id,
       approved ? `Approved: ${toolName}` : `Denied: ${toolName}`
     );

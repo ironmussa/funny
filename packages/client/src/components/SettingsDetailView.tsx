@@ -1,4 +1,5 @@
-import { useAppStore } from '@/stores/app-store';
+import { useShallow } from 'zustand/react/shallow';
+import { useUIStore } from '@/stores/ui-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, ALL_STANDARD_TOOLS, TOOL_LABELS } from '@/stores/settings-store';
 import type { ToolPermission } from '@funny/shared';
@@ -239,9 +240,13 @@ function ProjectColorPicker({ projectId, currentColor }: { projectId: string; cu
 
 /* ── General settings content ── */
 function GeneralSettings() {
-  const { toolPermissions, setToolPermission, resetToolPermissions } = useSettingsStore();
-  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
-  const projects = useAppStore((s) => s.projects);
+  const { toolPermissions, setToolPermission, resetToolPermissions } = useSettingsStore(useShallow(s => ({
+    toolPermissions: s.toolPermissions,
+    setToolPermission: s.setToolPermission,
+    resetToolPermissions: s.resetToolPermissions,
+  })));
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const projects = useProjectStore((s) => s.projects);
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
   const updateProject = useProjectStore((s) => s.updateProject);
   const { t } = useTranslation();
@@ -376,9 +381,9 @@ function GeneralSettings() {
 
 export function SettingsDetailView() {
   const { t } = useTranslation();
-  const activeSettingsPage = useAppStore(s => s.activeSettingsPage);
-  const selectedProjectId = useAppStore(s => s.selectedProjectId);
-  const projects = useAppStore(s => s.projects);
+  const activeSettingsPage = useUIStore(s => s.activeSettingsPage);
+  const selectedProjectId = useProjectStore(s => s.selectedProjectId);
+  const projects = useProjectStore(s => s.projects);
   const page = activeSettingsPage as SettingsItemId | null;
   const label = page ? t(settingsLabelKeys[page] ?? page) : null;
   const selectedProject = projects.find((p) => p.id === selectedProjectId);

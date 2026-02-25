@@ -339,6 +339,8 @@ export interface WSCommentDeletedData {
 export interface WSThreadUpdatedData {
   status?: string;
   archived?: number;
+  branch?: string;
+  worktreePath?: string;
 }
 
 export interface WSAutomationRunUpdatedData {

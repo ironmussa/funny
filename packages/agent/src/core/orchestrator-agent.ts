@@ -119,12 +119,12 @@ ${plan.risks.length > 0 ? `**Risks to watch for:**\n${plan.risks.map((r) => `- $
 2. Implement the changes according to the plan
 3. Follow existing code style and conventions
 4. Write clean, well-structured code
-5. Commit your changes with a descriptive message${issue.number !== 0 ? ` referencing the issue:\n   \`fix/feat(scope): description (Closes #${issue.number})\`` : ':\n   `fix/feat(scope): description`'}
+5. Do NOT run git commit — the pipeline handles committing automatically after you finish
 
 ## Important
 
 - Stay on the current branch — do NOT create new branches
-- Make incremental commits for logical chunks of work
+- Do NOT run git add, git commit, or git push — the pipeline manages the git lifecycle
 - If you encounter something unexpected, adapt the plan sensibly
 - If a risk from the plan materializes, handle it gracefully`;
 }

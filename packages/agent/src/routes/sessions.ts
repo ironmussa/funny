@@ -30,7 +30,7 @@ const StartSessionSchema = z.object({
   projectPath: z.string().min(1),
   model: z.string().optional(),
   provider: z.string().optional(),
-  baseBranch: z.string().optional(),
+  baseBranch: z.string().min(1),
   /** Skip planning and go straight to implementation */
   skipPlan: z.boolean().optional(),
   /** Inline issue details — used when no tracker is configured */
@@ -209,9 +209,11 @@ export function createSessionRoutes(
       fullContext,
     };
 
+    const baseBranch = body.baseBranch;
+
     runIssuePipeline(
       session, issueDetailForPlan, body.projectPath,
-      body.baseBranch ?? config.branch.main,
+      baseBranch,
       sessionStore, orchestratorAgent, eventBus, config,
     ).catch(async (err) => {
       const errorMsg = err.message ?? String(err);
@@ -482,9 +484,40 @@ async function runIssuePipeline(
     'Pipeline: implementation complete',
   );
 
-  // Step 4: Push + create PR
-  const { push, createPR } = await import('@funny/core/git');
+  // Step 4: Commit changes — the pipeline always handles committing, not the LLM
+  const { push, createPR, execute: gitExec } = await import('@funny/core/git');
+  const { executeShell } = await import('@funny/core/git');
   const identity = process.env.GH_TOKEN ? { githubToken: process.env.GH_TOKEN } : undefined;
+
+  const statusResult = await gitExec(
+    'git', ['status', '--porcelain'],
+    { cwd: worktreePath, reject: false },
+  );
+  if (statusResult.stdout.trim().length > 0) {
+    logger.info({ sessionId: session.id }, 'Committing implementation changes');
+    const commitMsg = isPromptOnly
+      ? `feat: ${issue.title}`
+      : `fix: ${issue.title} (Closes #${issue.number})`;
+    await executeShell(`git add -A && git commit -m "${commitMsg.replace(/"/g, '\\"')}"`, {
+      cwd: worktreePath,
+      reject: false,
+    });
+  }
+
+  // Step 5: Push + create PR (only if there are commits ahead of base)
+  const countResult = await gitExec(
+    'git', ['rev-list', '--count', `${baseBranch}..HEAD`],
+    { cwd: worktreePath, reject: false },
+  );
+  const commitsAhead = parseInt(countResult.stdout.trim(), 10) || 0;
+
+  if (commitsAhead === 0) {
+    logger.warn({ sessionId: session.id }, 'No commits on branch — skipping push/PR');
+    await emitError(eventBus, session.id, 'Implementation produced no commits. Nothing to push or create a PR for.', {
+      sessionStore, fatal: true,
+    });
+    return;
+  }
 
   const pushResult = await push(worktreePath, identity);
   if (pushResult.isErr()) {

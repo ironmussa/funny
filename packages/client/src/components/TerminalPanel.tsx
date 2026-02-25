@@ -1,7 +1,8 @@
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useShallow } from 'zustand/react/shallow';
 import { useTerminalStore } from '@/stores/terminal-store';
-import { useAppStore } from '@/stores/app-store';
+import { useProjectStore } from '@/stores/project-store';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import AnsiToHtml from 'ansi-to-html';
@@ -342,9 +343,17 @@ export function TerminalPanel() {
     removeTab,
     setActiveTab,
     togglePanel,
-  } = useTerminalStore();
-  const projects = useAppStore(s => s.projects);
-  const selectedProjectId = useAppStore(s => s.selectedProjectId);
+  } = useTerminalStore(useShallow(s => ({
+    tabs: s.tabs,
+    activeTabId: s.activeTabId,
+    panelVisible: s.panelVisible,
+    addTab: s.addTab,
+    removeTab: s.removeTab,
+    setActiveTab: s.setActiveTab,
+    togglePanel: s.togglePanel,
+  })));
+  const projects = useProjectStore(s => s.projects);
+  const selectedProjectId = useProjectStore(s => s.selectedProjectId);
 
   const [dragging, setDragging] = useState(false);
   const [panelHeight, setPanelHeight] = useState(PANEL_HEIGHT);

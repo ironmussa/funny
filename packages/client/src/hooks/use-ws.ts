@@ -1,5 +1,5 @@
 import { useEffect, startTransition } from 'react';
-import { useAppStore } from '@/stores/app-store';
+import { useThreadStore } from '@/stores/thread-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
@@ -44,7 +44,7 @@ function flushBatch() {
   // Wrap in startTransition so React treats the resulting re-renders
   // as low-priority — user interactions (typing, clicks) can interrupt them.
   startTransition(() => {
-    const store = useAppStore.getState();
+    const store = useThreadStore.getState();
 
     // Flush messages (only the latest per thread — they're cumulative)
     for (const entry of msgs) {
@@ -87,12 +87,12 @@ function handleMessage(e: MessageEvent) {
     // these updates if a higher-priority event (click, keypress) arrives.
     case 'agent:init':
       startTransition(() => {
-        useAppStore.getState().handleWSInit(threadId, data);
+        useThreadStore.getState().handleWSInit(threadId, data);
       });
       break;
     case 'agent:status':
       startTransition(() => {
-        useAppStore.getState().handleWSStatus(threadId, data);
+        useThreadStore.getState().handleWSStatus(threadId, data);
       });
       break;
     case 'agent:result': {
@@ -113,7 +113,7 @@ function handleMessage(e: MessageEvent) {
 
       // Flush pending messages/tool outputs synchronously
       if (msgs.length > 0 || toolOutputs.length > 0) {
-        const store = useAppStore.getState();
+        const store = useThreadStore.getState();
         for (const entry of msgs) store.handleWSMessage(entry.threadId, entry.data);
         for (const entry of toolOutputs) store.handleWSToolOutput(entry.threadId, entry.data);
       }
@@ -121,7 +121,7 @@ function handleMessage(e: MessageEvent) {
       // Defer result dispatch so prior transitions settle first
       requestAnimationFrame(() => {
         startTransition(() => {
-          useAppStore.getState().handleWSResult(threadId, data);
+          useThreadStore.getState().handleWSResult(threadId, data);
         });
       });
 
@@ -144,10 +144,10 @@ function handleMessage(e: MessageEvent) {
           const msgs = Array.from(pendingMessages.values());
           pendingMessages.clear();
           // Note: only flushing messages here, not tool outputs
-          const store = useAppStore.getState();
+          const store = useThreadStore.getState();
           for (const entry of msgs) store.handleWSMessage(entry.threadId, entry.data);
         }
-        useAppStore.getState().handleWSToolCall(threadId, data);
+        useThreadStore.getState().handleWSToolCall(threadId, data);
       });
       // Signal ReviewPane when file-modifying tools are invoked
       if (FILE_MODIFYING_TOOLS.has(data.name)) {
@@ -158,7 +158,7 @@ function handleMessage(e: MessageEvent) {
       break;
     }
     case 'agent:error':
-      useAppStore.getState().handleWSStatus(threadId, { status: 'failed' });
+      useThreadStore.getState().handleWSStatus(threadId, { status: 'failed' });
       break;
     case 'command:output': {
       const termStore = useTerminalStore.getState();
@@ -194,25 +194,31 @@ function handleMessage(e: MessageEvent) {
     case 'thread:created': {
       // New thread created externally (e.g. Chrome extension ingest)
       // Refresh threads for the project so it appears in the sidebar
-      useAppStore.getState().loadThreadsForProject(data.projectId);
+      useThreadStore.getState().loadThreadsForProject(data.projectId);
       break;
     }
     case 'thread:comment_deleted': {
       // Comment deleted server-side — refresh the active thread if it matches
-      const store = useAppStore.getState();
+      const store = useThreadStore.getState();
       if (store.activeThread?.id === threadId) {
         store.refreshActiveThread();
       }
       break;
     }
     case 'thread:updated': {
-      // Thread archived or status changed server-side — refresh thread list
-      const store = useAppStore.getState();
+      // Thread archived, status changed, or branch info updated server-side
+      const store = useThreadStore.getState();
       if (data.status) {
         store.handleWSStatus(threadId, { status: data.status });
       }
       if (data.archived) {
         store.refreshAllLoadedThreads();
+      }
+      if (data.branch || data.worktreePath) {
+        // Branch/worktree info arrived from agent — refresh to pick it up
+        if (store.activeThread?.id === threadId) {
+          store.refreshActiveThread();
+        }
       }
       break;
     }
@@ -251,7 +257,7 @@ function handleMessage(e: MessageEvent) {
       break;
     }
     case 'thread:queue_update': {
-      useAppStore.getState().handleWSQueueUpdate(threadId, data);
+      useThreadStore.getState().handleWSQueueUpdate(threadId, data);
       break;
     }
     case 'workflow:status': {
@@ -318,7 +324,7 @@ function setupWS(ws: WebSocket) {
     // Always re-sync loaded threads on connect — events may have been lost
     // while disconnected (e.g. agent:result emitted when 0 clients were connected)
     console.log('[ws] Syncing all loaded threads with server');
-    useAppStore.getState().refreshAllLoadedThreads();
+    useThreadStore.getState().refreshAllLoadedThreads();
     wasConnected = true;
   };
 

@@ -97,6 +97,7 @@
     "startTask": "Start Task",
     "orTypeNewPrompt": "Or type a new prompt below...",
     "typeToQueue": "Type a follow-up to queue...",
+    "typeToInterrupt": "Type to send a follow-up...",
     "interruptingAgent": "Interrupting agent with new prompt...",
     "messageQueued": "Message queued — will send when agent finishes",
     "queuedMessages": "{{count}} message(s) queued",

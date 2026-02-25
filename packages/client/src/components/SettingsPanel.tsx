@@ -1,6 +1,7 @@
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useAppStore } from '@/stores/app-store';
+import { useUIStore } from '@/stores/ui-store';
+import { useProjectStore } from '@/stores/project-store';
 import { Button } from '@/components/ui/button';
 import {
   Sidebar,
@@ -52,9 +53,9 @@ export const settingsLabelKeys: Record<string, string> = {
 export function SettingsPanel() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const setSettingsOpen = useAppStore(s => s.setSettingsOpen);
-  const activeSettingsPage = useAppStore(s => s.activeSettingsPage);
-  const selectedProjectId = useAppStore(s => s.selectedProjectId);
+  const setSettingsOpen = useUIStore(s => s.setSettingsOpen);
+  const activeSettingsPage = useUIStore(s => s.activeSettingsPage);
+  const selectedProjectId = useProjectStore(s => s.selectedProjectId);
   const authMode = useAuthStore(s => s.mode);
   const authUser = useAuthStore(s => s.user);
 

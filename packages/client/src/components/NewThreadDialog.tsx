@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAppStore } from '@/stores/app-store';
+import { useUIStore } from '@/stores/ui-store';
+import { useThreadStore } from '@/stores/thread-store';
 import { useProjectStore } from '@/stores/project-store';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -32,10 +33,10 @@ import { PROVIDERS, getModelOptions } from '@/lib/providers';
 
 export function NewThreadDialog() {
   const { t } = useTranslation();
-  const newThreadProjectId = useAppStore(s => s.newThreadProjectId);
-  const cancelNewThread = useAppStore(s => s.cancelNewThread);
-  const loadThreadsForProject = useAppStore(s => s.loadThreadsForProject);
-  const selectThread = useAppStore(s => s.selectThread);
+  const newThreadProjectId = useUIStore(s => s.newThreadProjectId);
+  const cancelNewThread = useUIStore(s => s.cancelNewThread);
+  const loadThreadsForProject = useThreadStore(s => s.loadThreadsForProject);
+  const selectThread = useThreadStore(s => s.selectThread);
 
   const projects = useProjectStore(s => s.projects);
   const project = newThreadProjectId ? projects.find(p => p.id === newThreadProjectId) : undefined;

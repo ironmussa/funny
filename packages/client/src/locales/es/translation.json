@@ -97,6 +97,7 @@
     "startTask": "Iniciar Tarea",
     "orTypeNewPrompt": "O escribe un nuevo prompt abajo...",
     "typeToQueue": "Escribe un seguimiento para encolar...",
+    "typeToInterrupt": "Escribe para enviar un seguimiento...",
     "interruptingAgent": "Interrumpiendo agente con nuevo prompt...",
     "messageQueued": "Mensaje en cola — se enviará cuando el agente termine",
     "queuedMessages": "{{count}} mensaje(s) en cola",

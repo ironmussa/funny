@@ -91,6 +91,22 @@ function flushWSBuffer(threadId: string, store: ThreadState) {
   }
 }
 
+// ── Eager thread prefetch ─────────────────────────────────────────
+// Parse the URL at module-load time. If we're on a thread route, start
+// fetching thread data immediately — in parallel with auth bootstrap and
+// project loading — instead of waiting for useRouteSync.
+const _prefetchCache = new Map<string, { threadPromise: ReturnType<typeof api.getThread>; eventsPromise: ReturnType<typeof api.getThreadEvents> }>();
+{
+  const m = window.location.pathname.match(/\/projects\/[^/]+\/threads\/([^/]+)/);
+  if (m) {
+    const threadId = m[1];
+    _prefetchCache.set(threadId, {
+      threadPromise: api.getThread(threadId, 50),
+      eventsPromise: api.getThreadEvents(threadId),
+    });
+  }
+}
+
 // ── Store ────────────────────────────────────────────────────────
 
 const _threadLoadPromises = new Map<string, Promise<void>>();
@@ -136,10 +152,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     if (!threadId) return;
 
-    // Fire both requests in parallel to avoid sequential network round-trips
+    // Use prefetched data if available (fired at module load time), otherwise fetch now
+    const prefetched = _prefetchCache.get(threadId);
+    _prefetchCache.delete(threadId);
     const [result, eventsResult] = await Promise.all([
-      api.getThread(threadId, 50),
-      api.getThreadEvents(threadId),
+      prefetched?.threadPromise ?? api.getThread(threadId, 50),
+      prefetched?.eventsPromise ?? api.getThreadEvents(threadId),
     ]);
 
     if (result.isErr()) {

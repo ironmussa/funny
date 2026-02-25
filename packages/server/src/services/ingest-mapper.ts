@@ -100,7 +100,7 @@ const SILENT_EVENT_TYPES = new Set([
   'session.transition',
   'session.plan_ready',
   'session.plan_set',
-  'session.branch_set',
+  // session.branch_set is handled explicitly below (updates thread with real worktree/branch)
   // session.tool_call and session.tool_result are explicitly handled below (not silent).
 ]);
 
@@ -909,6 +909,30 @@ function resolveCliState(requestId: string): CLIMessageState {
   return state;
 }
 
+// ── Branch set handler ──────────────────────────────────────
+
+function onBranchSet(event: IngestEvent): void {
+  const state = resolveState(event);
+  if (!state) return;
+
+  const branch = event.data.branch as string | undefined;
+  const worktreePath = event.data.worktreePath as string | undefined;
+
+  if (!branch && !worktreePath) return;
+
+  const updates: Record<string, unknown> = {};
+  if (branch) updates.branch = branch;
+  if (worktreePath) updates.worktreePath = worktreePath;
+
+  tm.updateThread(state.threadId, updates as any);
+
+  emitWS(state, {
+    type: 'thread:updated',
+    threadId: state.threadId,
+    data: { branch, worktreePath },
+  });
+}
+
 // ── Public API ───────────────────────────────────────────────
 
 /**
@@ -954,6 +978,9 @@ export function handleIngestEvent(event: IngestEvent): IngestResult {
       return {};
     case 'tool_result':
       onSessionToolResult(event);
+      return {};
+    case 'branch_set':
+      onBranchSet(event);
       return {};
     default:
       // Silently ignore pipeline lifecycle events that are already

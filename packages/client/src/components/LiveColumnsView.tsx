@@ -198,17 +198,14 @@ const ThreadColumn = memo(function ThreadColumn({ threadId }: { threadId: string
   const smoothScrollPending = useRef(false);
   const projects = useProjectStore(s => s.projects);
 
-  // Subscribe to real-time WS updates for this thread via the store
-  const threadsByProject = useThreadStore(s => s.threadsByProject);
-
-  // Find the latest status for this thread from the store
-  const liveStatus = useMemo(() => {
-    for (const threads of Object.values(threadsByProject)) {
+  // Subscribe only to this thread's status — avoids re-rendering when other threads change
+  const liveStatus = useThreadStore(s => {
+    for (const threads of Object.values(s.threadsByProject)) {
       const found = threads.find(t => t.id === threadId);
       if (found) return found.status;
     }
     return null;
-  }, [threadsByProject, threadId]);
+  });
 
   // Load thread data
   useEffect(() => {

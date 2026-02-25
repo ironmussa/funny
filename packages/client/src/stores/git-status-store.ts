@@ -21,6 +21,34 @@ export function _resetCooldowns() {
   _lastFetchByProject.clear();
 }
 
+/** Compare two GitStatusInfo objects for equality on the fields that affect rendering */
+function statusEqual(a: GitStatusInfo, b: GitStatusInfo): boolean {
+  return a.state === b.state
+    && a.dirtyFileCount === b.dirtyFileCount
+    && a.unpushedCommitCount === b.unpushedCommitCount
+    && a.hasRemoteBranch === b.hasRemoteBranch
+    && a.isMergedIntoBase === b.isMergedIntoBase
+    && a.linesAdded === b.linesAdded
+    && a.linesDeleted === b.linesDeleted;
+}
+
+/** Only spread statusByThread when at least one entry actually changed */
+function mergeStatuses(
+  state: Pick<GitStatusState, 'statusByThread'>,
+  updates: Record<string, GitStatusInfo>,
+): { statusByThread: Record<string, GitStatusInfo> } | Record<string, never> {
+  let changed = false;
+  for (const [tid, next] of Object.entries(updates)) {
+    const prev = state.statusByThread[tid];
+    if (!prev || !statusEqual(prev, next)) {
+      changed = true;
+      break;
+    }
+  }
+  if (!changed) return {};
+  return { statusByThread: { ...state.statusByThread, ...updates } };
+}
+
 export const useGitStatusStore = create<GitStatusState>((set, get) => ({
   statusByThread: {},
   loadingProjects: new Set(),
@@ -41,9 +69,7 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
       for (const s of result.value.statuses) {
         updates[s.threadId] = s;
       }
-      set((state) => ({
-        statusByThread: { ...state.statusByThread, ...updates },
-      }));
+      set((state) => mergeStatuses(state, updates));
     }
     // Silently ignore errors — git status is best-effort
     set((s) => {
@@ -59,9 +85,7 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
     try {
       const result = await api.getGitStatus(threadId);
       if (result.isOk()) {
-        set((state) => ({
-          statusByThread: { ...state.statusByThread, [threadId]: result.value },
-        }));
+        set((state) => mergeStatuses(state, { [threadId]: result.value }));
       }
     } finally {
       set((s) => {
@@ -77,9 +101,7 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
     for (const s of statuses) {
       updates[s.threadId] = s;
     }
-    set((state) => ({
-      statusByThread: { ...state.statusByThread, ...updates },
-    }));
+    set((state) => mergeStatuses(state, updates));
   },
 
   clearForThread: (threadId) => {

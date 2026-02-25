@@ -1,5 +1,6 @@
 import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useShallow } from 'zustand/react/shallow';
 import { useSettingsStore, editorLabels, type Theme, type Editor } from '@/stores/settings-store';
 import { cn } from '@/lib/utils';
 import {
@@ -86,7 +87,14 @@ export function GeneralSettingsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { theme, defaultEditor, useInternalEditor, setTheme, setDefaultEditor, setUseInternalEditor } = useSettingsStore();
+  const { theme, defaultEditor, useInternalEditor, setTheme, setDefaultEditor, setUseInternalEditor } = useSettingsStore(useShallow(s => ({
+    theme: s.theme,
+    defaultEditor: s.defaultEditor,
+    useInternalEditor: s.useInternalEditor,
+    setTheme: s.setTheme,
+    setDefaultEditor: s.setDefaultEditor,
+    setUseInternalEditor: s.setUseInternalEditor,
+  })));
   const { t, i18n } = useTranslation();
 
   // Local draft state — only committed to the store on Save

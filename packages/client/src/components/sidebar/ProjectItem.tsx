@@ -69,20 +69,36 @@ export const ProjectItem = memo(function ProjectItem({
   const { t } = useTranslation();
   const [openDropdown, setOpenDropdown] = useState(false);
   // Select only the git statuses for threads visible in *this* project.
-  // We use a selector that returns a JSON-serializable fingerprint to avoid
-  // re-rendering every ProjectItem when an unrelated thread's git status changes.
+  // The selector returns a fingerprint string so Zustand's Object.is check
+  // skips re-renders when unrelated threads' git statuses change.
   const visibleWorktreeIds = useMemo(
     () => threads.filter(t => t.mode === 'worktree').map(t => t.id),
     [threads]
   );
-  const statusByThread = useGitStatusStore((s) => s.statusByThread);
+  const gitStatusFingerprint = useGitStatusStore(
+    useCallback(
+      (s: { statusByThread: Record<string, import('@funny/shared').GitStatusInfo> }) => {
+        // Build a stable fingerprint from only the relevant threads
+        let fp = '';
+        for (const id of visibleWorktreeIds) {
+          const st = s.statusByThread[id];
+          if (st) fp += `${id}:${st.state}:${st.dirtyFileCount}:${st.unpushedCommitCount}:${st.linesAdded}:${st.linesDeleted},`;
+        }
+        return fp;
+      },
+      [visibleWorktreeIds]
+    )
+  );
+  // Derive the actual status objects only when the fingerprint changes
+  const statusByThread = useGitStatusStore.getState().statusByThread;
   const gitStatusForThreads = useMemo(() => {
     const result: Record<string, import('@funny/shared').GitStatusInfo> = {};
     for (const id of visibleWorktreeIds) {
       if (statusByThread[id]) result[id] = statusByThread[id];
     }
     return result;
-  }, [visibleWorktreeIds, statusByThread]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [visibleWorktreeIds, gitStatusFingerprint]);
   // Read selectedThreadId from the store directly, scoped to this project's
   // thread IDs. This avoids passing selectedThreadId as a prop from the parent,
   // which caused *every* ProjectItem to re-render on any thread selection.
@@ -145,14 +161,14 @@ export const ProjectItem = memo(function ProjectItem({
         ref={dragRef}
         className={cn(
           "group/project flex items-center rounded-md select-none",
-          isSelected ? "bg-accent" : "hover:bg-accent/50",
+          !isSelected && "hover:bg-accent/50",
           isDragging && "opacity-50",
           isDropTarget && "ring-2 ring-ring"
         )}
       >
         <CollapsibleTrigger className={cn(
           "flex-1 flex items-center gap-1.5 px-2 py-1 text-xs text-left min-w-0",
-          isSelected ? "text-accent-foreground" : "text-muted-foreground hover:text-foreground",
+          isSelected ? "text-foreground" : "text-muted-foreground hover:text-foreground",
           isDragging ? "cursor-grabbing" : "cursor-pointer"
         )}>
           {isExpanded ? (

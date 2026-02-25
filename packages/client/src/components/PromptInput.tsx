@@ -902,7 +902,7 @@ export const PromptInput = memo(function PromptInput({
     e.stopPropagation();
     setIsDragging(false);
 
-    if (loading || running) return;
+    if (loading) return;
 
     const items = e.dataTransfer?.items;
     if (!items) return;
@@ -1111,7 +1111,7 @@ export const PromptInput = memo(function PromptInput({
             aria-label={t('prompt.messageLabel', 'Message')}
             className="w-full px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none resize-none"
             style={{ minHeight: '4.5rem' }}
-            placeholder={running ? (isQueueMode ? t('thread.typeToQueue') : t('thread.agentWorkingQueue')) : defaultPlaceholder}
+            placeholder={running ? (isQueueMode ? t('thread.typeToQueue') : t('thread.typeToInterrupt')) : defaultPlaceholder}
             value={prompt}
             onChange={(e) => {
               const value = e.target.value;
@@ -1165,7 +1165,7 @@ export const PromptInput = memo(function PromptInput({
                 size="icon-sm"
                 tabIndex={-1}
                 aria-label={t('prompt.attach')}
-                disabled={loading || (running && !isQueueMode)}
+                disabled={loading}
                 className="text-muted-foreground hover:text-foreground"
               >
                 <Paperclip className="h-4 w-4" />
@@ -1206,24 +1206,14 @@ export const PromptInput = memo(function PromptInput({
                     {queuedCount} {t('prompt.queued')}
                   </span>
                 )}
-                {running && !isQueueMode ? (
-                  <Button
-                    onClick={onStop}
-                    variant="destructive"
-                    size="icon-sm"
-                    tabIndex={-1}
-                    aria-label={t('prompt.stopAgent')}
-                  >
-                    <Square className="h-3.5 w-3.5" />
-                  </Button>
-                ) : running && isQueueMode ? (
+                {running ? (
                   <>
                     <Button
                       onClick={handleSubmit}
                       disabled={loading}
                       size="icon-sm"
                       tabIndex={-1}
-                      aria-label={t('prompt.queueMessage')}
+                      aria-label={isQueueMode ? t('prompt.queueMessage') : t('prompt.send', 'Send message')}
                     >
                       {loading ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />

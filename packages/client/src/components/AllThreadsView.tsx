@@ -1,7 +1,9 @@
 import { useState, useMemo, useEffect, useRef, startTransition } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useAppStore } from '@/stores/app-store';
+import { useUIStore } from '@/stores/ui-store';
+import { useThreadStore } from '@/stores/thread-store';
+import { useProjectStore } from '@/stores/project-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { cn } from '@/lib/utils';
 import { ChevronLeft, Archive, Search, ArrowUp, ArrowDown, LayoutList, Columns3, ChevronDown, Check, X } from 'lucide-react';
@@ -92,9 +94,9 @@ export function AllThreadsView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const allThreadsProjectId = useAppStore(s => s.allThreadsProjectId);
-  const threadsByProject = useAppStore(s => s.threadsByProject);
-  const projects = useAppStore(s => s.projects);
+  const allThreadsProjectId = useUIStore(s => s.allThreadsProjectId);
+  const threadsByProject = useThreadStore(s => s.threadsByProject);
+  const projects = useProjectStore(s => s.projects);
   const statusByThread = useGitStatusStore(s => s.statusByThread);
 
   // Project filter from URL query param ?project=<id>

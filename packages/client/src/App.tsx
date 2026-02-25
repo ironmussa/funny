@@ -15,7 +15,10 @@ import { TOAST_DURATION } from '@/lib/utils';
 import { PanelLeft } from 'lucide-react';
 
 const AppSidebar = lazy(() => import('@/components/Sidebar').then(m => ({ default: m.AppSidebar })));
-const ThreadView = lazy(() => import('@/components/ThreadView').then(m => ({ default: m.ThreadView })));
+// Prefetch ThreadView immediately — it's the primary view users always see.
+// This fires the chunk download in parallel with auth bootstrap.
+const threadViewImport = import('@/components/ThreadView').then(m => ({ default: m.ThreadView }));
+const ThreadView = lazy(() => threadViewImport);
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'sidebar_width';
 const DEFAULT_SIDEBAR_WIDTH = 320;
@@ -44,7 +47,8 @@ function CollapsedSidebarStrip() {
 
 // Lazy-load conditional views (bundle-conditional / bundle-dynamic-imports)
 const AllThreadsView = lazy(() => import('@/components/AllThreadsView').then(m => ({ default: m.AllThreadsView })));
-const ReviewPane = lazy(() => import('@/components/ReviewPane').then(m => ({ default: m.ReviewPane })));
+const reviewPaneImport = () => import('@/components/ReviewPane').then(m => ({ default: m.ReviewPane }));
+const ReviewPane = lazy(reviewPaneImport);
 const TerminalPanel = lazy(() => import('@/components/TerminalPanel').then(m => ({ default: m.TerminalPanel })));
 const SettingsDetailView = lazy(() => import('@/components/SettingsDetailView').then(m => ({ default: m.SettingsDetailView })));
 const AutomationInboxView = lazy(() => import('@/components/AutomationInboxView').then(m => ({ default: m.AutomationInboxView })));
@@ -53,11 +57,13 @@ const AnalyticsView = lazy(() => import('@/components/AnalyticsView').then(m => 
 const LiveColumnsView = lazy(() => import('@/components/LiveColumnsView').then(m => ({ default: m.LiveColumnsView })));
 const commandPaletteImport = () => import('@/components/CommandPalette').then(m => ({ default: m.CommandPalette }));
 const CommandPalette = lazy(commandPaletteImport);
-// Prefetch the CommandPalette chunk on idle so Ctrl+K opens instantly
+// Prefetch the CommandPalette and ReviewPane chunks on idle so they open instantly
 if (typeof requestIdleCallback === 'function') {
   requestIdleCallback(() => { commandPaletteImport(); });
+  requestIdleCallback(() => { reviewPaneImport(); });
 } else {
   setTimeout(() => { commandPaletteImport(); }, 2000);
+  setTimeout(() => { reviewPaneImport(); }, 3000);
 }
 const CircuitBreakerDialog = lazy(() => import('@/components/CircuitBreakerDialog').then(m => ({ default: m.CircuitBreakerDialog })));
 const WorkflowProgressPanel = lazy(() => import('@/components/WorkflowProgressPanel').then(m => ({ default: m.WorkflowProgressPanel })));
@@ -79,9 +85,19 @@ export function App() {
   const internalEditorContent = useInternalEditorStore(s => s.initialContent);
   const navigate = useNavigate();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
-  // Track if review pane was ever opened so we keep it mounted (hidden) for fast re-toggle
-  const [reviewPaneEverOpened, setReviewPaneEverOpened] = useState(false);
-  if (reviewPaneOpen && !reviewPaneEverOpened) setReviewPaneEverOpened(true);
+  // Eagerly mount ReviewPane (hidden) after initial load so first toggle is instant.
+  // Deferred via requestIdleCallback to avoid blocking the initial render.
+  const [reviewPaneReady, setReviewPaneReady] = useState(false);
+  useEffect(() => {
+    const mount = () => setReviewPaneReady(true);
+    if (typeof requestIdleCallback === 'function') {
+      const id = requestIdleCallback(mount);
+      return () => cancelIdleCallback(id);
+    } else {
+      const id = setTimeout(mount, 3000);
+      return () => clearTimeout(id);
+    }
+  }, []);
 
   // Register navigate so the store can trigger navigation (e.g. from toasts)
   useEffect(() => { setAppNavigate(navigate); }, [navigate]);
@@ -163,7 +179,7 @@ export function App() {
       <SidebarInset className="flex flex-col overflow-hidden">
         {/* Main content + terminal */}
         <div className="flex-1 flex overflow-hidden min-h-0">
-          <Suspense>
+          <Suspense fallback={<div className="flex-1" />}>
             {settingsOpen ? <SettingsDetailView /> : analyticsOpen ? <AnalyticsView /> : liveColumnsOpen ? <LiveColumnsView /> : automationInboxOpen ? <AutomationInboxView /> : addProjectOpen ? <AddProjectView /> : allThreadsProjectId ? <AllThreadsView /> : workflowRunSelected ? <WorkflowProgressPanel /> : <ThreadView />}
           </Suspense>
         </div>
@@ -172,8 +188,8 @@ export function App() {
       </SidebarInset>
 
       {/* Right sidebar for review pane — CSS transition slide in/out.
-          Keep ReviewPane mounted (hidden) after first open so subsequent
-          toggles don't re-mount / re-fetch, cutting INP ~500ms. */}
+          ReviewPane is eagerly mounted (hidden) after initial idle to eliminate
+          ~500ms first-open delay from lazy loading + mount + diff fetch. */}
       <div
         className={cn(
           'h-full overflow-hidden flex-shrink-0 border-l border-border transition-[width,opacity] duration-200 ease-out',
@@ -182,7 +198,7 @@ export function App() {
             : 'w-0 opacity-0 border-l-0'
         )}
       >
-        {reviewPaneEverOpened && (
+        {(reviewPaneReady || reviewPaneOpen) && (
           <div className="h-full w-[50vw]" style={!(reviewPaneOpen && !settingsOpen && !allThreadsProjectId) ? { visibility: 'hidden' } : undefined}>
             <Suspense><ReviewPane /></Suspense>
           </div>

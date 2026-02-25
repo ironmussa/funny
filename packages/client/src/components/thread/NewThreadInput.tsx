@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
+import { useUIStore } from '@/stores/ui-store';
+import { useThreadStore } from '@/stores/thread-store';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -11,12 +12,12 @@ import { PromptInput } from '../PromptInput';
 export function NewThreadInput() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const newThreadProjectId = useAppStore(s => s.newThreadProjectId);
-  const selectedProjectId = useAppStore(s => s.selectedProjectId);
+  const newThreadProjectId = useUIStore(s => s.newThreadProjectId);
+  const selectedProjectId = useProjectStore(s => s.selectedProjectId);
   const effectiveProjectId = newThreadProjectId || selectedProjectId;
-  const newThreadIdleOnly = useAppStore(s => s.newThreadIdleOnly);
-  const cancelNewThread = useAppStore(s => s.cancelNewThread);
-  const loadThreadsForProject = useAppStore(s => s.loadThreadsForProject);
+  const newThreadIdleOnly = useUIStore(s => s.newThreadIdleOnly);
+  const cancelNewThread = useUIStore(s => s.cancelNewThread);
+  const loadThreadsForProject = useThreadStore(s => s.loadThreadsForProject);
   const projects = useProjectStore(s => s.projects);
   const project = effectiveProjectId ? projects.find(p => p.id === effectiveProjectId) : undefined;
   const defaultThreadMode = project?.defaultMode ?? 'worktree';

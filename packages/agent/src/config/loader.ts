@@ -6,7 +6,7 @@
 
 import { join } from 'path';
 import { parse as parseYAML } from 'yaml';
-import { execSync } from 'child_process';
+import { getDefaultBranch } from '@funny/core/git';
 import { PipelineServiceConfigSchema, type PipelineServiceConfig } from './schema.js';
 import { logger } from '../infrastructure/logger.js';
 
@@ -26,43 +26,6 @@ function resolveEnvVars(obj: unknown): unknown {
     );
   }
   return obj;
-}
-
-/**
- * Detect the default branch of a git repository.
- *
- * Tries `git symbolic-ref refs/remotes/origin/HEAD` first (works when
- * the remote HEAD is set), then falls back to checking if common branch
- * names (`main`, `master`) exist locally.
- */
-function detectDefaultBranch(projectPath: string): string | null {
-  try {
-    const ref = execSync('git symbolic-ref refs/remotes/origin/HEAD', {
-      cwd: projectPath,
-      encoding: 'utf-8',
-      stdio: ['pipe', 'pipe', 'pipe'],
-    }).trim();
-    // ref is like "refs/remotes/origin/main" — extract the last segment
-    const branch = ref.split('/').pop();
-    if (branch) return branch;
-  } catch {
-    // origin/HEAD not set — try common branch names
-  }
-
-  for (const candidate of ['main', 'master']) {
-    try {
-      execSync(`git rev-parse --verify ${candidate}`, {
-        cwd: projectPath,
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
-      return candidate;
-    } catch {
-      // branch doesn't exist, try next
-    }
-  }
-
-  return null;
 }
 
 /**
@@ -111,7 +74,8 @@ export async function loadConfig(projectPath: string): Promise<PipelineServiceCo
 
   // Auto-detect default branch if not explicitly configured
   if (!hasExplicitMain) {
-    const detected = detectDefaultBranch(projectPath);
+    const branchResult = await getDefaultBranch(projectPath);
+    const detected = branchResult.isOk() ? branchResult.value : null;
     if (detected && detected !== config.branch.main) {
       logger.info({ detected, previous: config.branch.main }, 'Auto-detected default branch');
       config.branch.main = detected;

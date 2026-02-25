@@ -97,6 +97,7 @@
     "startTask": "Iniciar Tarefa",
     "orTypeNewPrompt": "Ou digite um novo prompt abaixo...",
     "typeToQueue": "Digite um acompanhamento para enfileirar...",
+    "typeToInterrupt": "Digite para enviar um acompanhamento...",
     "interruptingAgent": "Interrompendo agente com novo prompt...",
     "messageQueued": "Mensagem enfileirada — será enviada quando o agente terminar",
     "queuedMessages": "{{count}} mensagem(ns) enfileirada(s)",

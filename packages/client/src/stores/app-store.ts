@@ -18,12 +18,28 @@ type CombinedState = ReturnType<typeof useProjectStore.getState> &
   ReturnType<typeof useThreadStore.getState> &
   ReturnType<typeof useUIStore.getState>;
 
+// Cache the combined state to avoid creating a new spread object on every
+// getSnapshot call. Rebuilt lazily when any underlying store changes.
+let _cachedCombined: CombinedState | null = null;
+let _storeVersion = 0;
+let _cachedVersion = -1;
+
+// Subscribe at module level to invalidate cache on any store change
+useProjectStore.subscribe(() => { _storeVersion++; _cachedCombined = null; });
+useThreadStore.subscribe(() => { _storeVersion++; _cachedCombined = null; });
+useUIStore.subscribe(() => { _storeVersion++; _cachedCombined = null; });
+
 function getCombinedState(): CombinedState {
-  return {
+  if (_cachedCombined !== null && _cachedVersion === _storeVersion) {
+    return _cachedCombined;
+  }
+  _cachedCombined = {
     ...useProjectStore.getState(),
     ...useThreadStore.getState(),
     ...useUIStore.getState(),
   } as CombinedState;
+  _cachedVersion = _storeVersion;
+  return _cachedCombined;
 }
 
 /** Subscribe to all three stores, calling `onStoreChange` when any one changes. */

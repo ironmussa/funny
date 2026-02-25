@@ -391,8 +391,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   deleteThread: async (threadId, projectId) => {
-    const result = await api.deleteThread(threadId);
-    if (result.isErr()) return;
+    // Optimistic: update UI immediately, then fire API in background
     cleanupThreadActor(threadId);
     const { threadsByProject, selectedThreadId } = get();
     const projectThreads = threadsByProject[projectId] ?? [];
@@ -405,6 +404,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     if (selectedThreadId === threadId) {
       set({ selectedThreadId: null, activeThread: null });
     }
+    // Fire-and-forget: server cleanup (worktree removal, etc.) runs in background
+    api.deleteThread(threadId);
   },
 
   appendOptimisticMessage: (threadId, content, images, model, permissionMode) => {

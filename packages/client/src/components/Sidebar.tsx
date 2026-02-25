@@ -357,52 +357,54 @@ export function AppSidebar() {
       </div>
 
       {/* Projects header (fixed, outside scroll) */}
-      <div className="flex items-center justify-between px-4 pt-4 pb-2 shrink-0">
+      <div className="group/projects-header flex items-center justify-between px-4 pt-4 pb-2 shrink-0">
         <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('sidebar.projects')}</h2>
         <div className="flex items-center gap-0.5">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => {
-                  localStorage.setItem('threadViewMode', 'board');
-                  showGlobalSearch();
-                  navigate('/search?view=board');
-                }}
-                className="text-muted-foreground"
-              >
-                <Columns3 className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">Kanban</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => navigate('/grid')}
-                className="text-muted-foreground"
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">Grid</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => navigate('/analytics')}
-                className="text-muted-foreground"
-              >
-                <BarChart3 className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">{t('sidebar.analytics')}</TooltipContent>
-          </Tooltip>
+          <div className="flex items-center gap-0.5 opacity-0 pointer-events-none group-hover/projects-header:opacity-100 group-hover/projects-header:pointer-events-auto transition-opacity">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => {
+                    localStorage.setItem('threadViewMode', 'board');
+                    showGlobalSearch();
+                    navigate('/search?view=board');
+                  }}
+                  className="text-muted-foreground"
+                >
+                  <Columns3 className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Kanban</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => navigate('/grid')}
+                  className="text-muted-foreground"
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">Grid</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => navigate('/analytics')}
+                  className="text-muted-foreground"
+                >
+                  <BarChart3 className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t('sidebar.analytics')}</TooltipContent>
+            </Tooltip>
+          </div>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

@@ -443,12 +443,6 @@ function TimelineMilestone({
             )}
           >
             <div className={cn(
-              'text-[10px] font-mono tabular-nums mb-0.5 transition-colors',
-              isActive ? 'text-foreground/70' : 'text-muted-foreground/50'
-            )}>
-              {formatRelativeTime(milestone.timestamp)}
-            </div>
-            <div className={cn(
               'text-[11px] leading-snug line-clamp-2 transition-colors',
               milestone.inProgress
                 ? 'text-blue-400 font-medium'
@@ -470,13 +464,7 @@ function TimelineMilestone({
         >
           <div className="space-y-1.5">
             <div className="text-[10px] text-muted-foreground font-mono">
-              {new Date(milestone.timestamp).toLocaleString([], {
-                month: 'short',
-                day: 'numeric',
-                hour: '2-digit',
-                minute: '2-digit',
-                second: '2-digit',
-              })}
+              {formatRelativeTime(milestone.timestamp)}
             </div>
             <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed break-words max-h-[200px] overflow-y-auto">
               {milestone.content.trim()}

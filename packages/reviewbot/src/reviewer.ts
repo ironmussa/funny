@@ -15,46 +15,39 @@ import type { ReviewOptions, ParsedReviewOutput } from './types.js';
 // ── Defaults ───────────────────────────────────────────────────
 
 const DEFAULT_MODEL = 'claude-sonnet-4-5-20250929';
-const DEFAULT_PROVIDER = 'anthropic';
+const DEFAULT_ACP_BASE_URL = 'http://localhost:4010';
 
-// ── Anthropic API call ─────────────────────────────────────────
+// ── ACP API call ────────────────────────────────────────────────
 
-async function callAnthropic(
+async function callACP(
   systemPrompt: string,
   userPrompt: string,
   model: string,
+  acpBaseUrl: string,
 ): Promise<string> {
-  const apiKey = process.env.ANTHROPIC_API_KEY;
-  if (!apiKey) {
-    throw new Error('ANTHROPIC_API_KEY environment variable is required');
-  }
+  const url = `${acpBaseUrl}/v1/runs`;
 
-  const response = await fetch('https://api.anthropic.com/v1/messages', {
+  const response = await fetch(url, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': apiKey,
-      'anthropic-version': '2023-06-01',
-    },
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       model,
-      max_tokens: 8192,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
+      system_prompt: systemPrompt,
+      prompt: userPrompt,
+      stream: false,
     }),
   });
 
   if (!response.ok) {
     const body = await response.text().catch(() => 'Unknown error');
-    throw new Error(`Anthropic API error ${response.status}: ${body.slice(0, 500)}`);
+    throw new Error(`ACP API error ${response.status}: ${body.slice(0, 500)}`);
   }
 
   const data = await response.json() as {
-    content: Array<{ type: string; text?: string }>;
+    result?: { text?: string };
   };
 
-  const textBlock = data.content.find((b) => b.type === 'text');
-  return textBlock?.text ?? '';
+  return data.result?.text ?? '';
 }
 
 // ── Parser ─────────────────────────────────────────────────────
@@ -119,6 +112,7 @@ export class PRReviewer {
   ): Promise<CodeReviewResult> {
     const model = options.model ?? DEFAULT_MODEL;
     const shouldPost = options.post !== false;
+    const acpBaseUrl = options.acpBaseUrl ?? process.env.ACP_BASE_URL ?? DEFAULT_ACP_BASE_URL;
     const startTime = Date.now();
 
     // Step 1: Fetch PR info and diff in parallel
@@ -152,7 +146,7 @@ export class PRReviewer {
     const systemPrompt = buildReviewSystemPrompt();
     const userPrompt = buildReviewUserPrompt(prInfo.title, prInfo.body, diff);
 
-    const llmOutput = await callAnthropic(systemPrompt, userPrompt, model);
+    const llmOutput = await callACP(systemPrompt, userPrompt, model, acpBaseUrl);
 
     // Step 3: Parse LLM output into structured findings
     const parsed = parseReviewOutput(llmOutput);

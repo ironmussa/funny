@@ -11,6 +11,8 @@ export interface ReviewOptions {
   maxTurns?: number;
   /** Whether to post the review to GitHub (default: true) */
   post?: boolean;
+  /** ACP server base URL (default: ACP_BASE_URL env or http://localhost:4010) */
+  acpBaseUrl?: string;
 }
 
 export interface ParsedFinding {

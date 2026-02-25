@@ -88,14 +88,14 @@ export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSele
         className="flex-1 flex items-center gap-1 pl-2 py-1 text-left min-w-0 overflow-hidden"
       >
         {/* Thread status icon */}
-        <div className="relative h-3 w-3 flex-shrink-0">
+        <div className="relative h-3.5 w-3.5 flex-shrink-0">
           <span className={cn(
             'absolute inset-0',
             onPin && !isRunning && 'group-hover/thread:hidden'
           )}>
             <Tooltip>
               <TooltipTrigger asChild>
-                <StatusIcon className={cn('h-3 w-3', threadStatusCfg.className)} />
+                <StatusIcon className={cn('h-3.5 w-3.5', threadStatusCfg.className)} />
               </TooltipTrigger>
               <TooltipContent side="top" className="text-xs">
                 {t(`thread.status.${thread.status}`)}

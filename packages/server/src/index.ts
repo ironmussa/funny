@@ -39,6 +39,7 @@ import { githubRoutes } from './routes/github.js';
 import { analyticsRoutes } from './routes/analytics.js';
 import { logRoutes } from './routes/logs.js';
 import { ingestRoutes } from './routes/ingest.js';
+import { reviewWebhookRoutes } from './routes/review-webhook.js';
 import { wsBroker } from './services/ws-broker.js';
 import { startScheduler } from './services/automation-scheduler.js';
 import { startAgent } from './services/agent-runner.js';
@@ -97,6 +98,9 @@ app.use('*', observability());
 
 // Ingest webhook — mounted BEFORE authMiddleware (uses its own secret-based auth)
 app.route('/api/ingest', ingestRoutes);
+
+// Review webhook — mounted BEFORE authMiddleware (uses webhook secret auth)
+app.route('/api/review-webhook', reviewWebhookRoutes);
 
 app.use('/api/*', authMiddleware);
 

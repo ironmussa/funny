@@ -65,9 +65,10 @@ function SearchablePicker({
   loadingText,
   loading,
   onSelect,
+  onCopy,
   triggerClassName,
   triggerTitle,
-  width = 'w-72',
+  width = 'w-[28rem]',
 }: {
   items: SearchablePickerItem[];
   label: string;
@@ -78,6 +79,7 @@ function SearchablePicker({
   loadingText?: string;
   loading?: boolean;
   onSelect: (key: string) => void;
+  onCopy?: (key: string) => void;
   triggerClassName?: string;
   triggerTitle?: string;
   width?: string;
@@ -97,6 +99,18 @@ function SearchablePicker({
   useEffect(() => {
     setHighlightIndex(-1);
   }, [search]);
+
+  // Scroll selected item into view when popover opens
+  useEffect(() => {
+    if (open && !search) {
+      const selectedIndex = filtered.findIndex((item) => item.isSelected);
+      if (selectedIndex >= 0) {
+        requestAnimationFrame(() => {
+          itemRefs.current[selectedIndex]?.scrollIntoView({ block: 'nearest' });
+        });
+      }
+    }
+  }, [open]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
     if (e.key === 'ArrowDown') {
@@ -157,19 +171,6 @@ function SearchablePicker({
         <div className="px-3 py-2 border-b border-border bg-muted/30">
           <p className="text-sm font-medium text-muted-foreground">{label}</p>
         </div>
-        <div className="px-2 py-1.5 border-b border-border">
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-            placeholder={searchPlaceholder}
-            aria-label={label}
-            autoComplete="off"
-            className="w-full bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
-          />
-        </div>
         <div
           className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-1"
           ref={listRef}
@@ -185,41 +186,68 @@ function SearchablePicker({
             <p className="text-sm text-muted-foreground text-center py-3">{noMatchText}</p>
           )}
           {filtered.map((item, i) => (
-            <button
+            <div
               key={item.key}
-              ref={(el) => { itemRefs.current[i] = el; }}
-              onClick={() => { onSelect(item.key); setOpen(false); setSearch(''); }}
-              onKeyDown={(e) => handleItemKeyDown(e, i)}
-              onFocus={() => setHighlightIndex(i)}
-              onMouseEnter={() => { setHighlightIndex(i); itemRefs.current[i]?.focus(); }}
-              className={cn(
-                'w-full flex items-center gap-2 rounded px-2 py-1.5 text-left text-xs transition-colors outline-none',
-                i === highlightIndex
-                  ? 'bg-accent text-foreground'
-                  : item.isSelected
-                    ? 'bg-accent/50 text-foreground'
-                    : 'text-muted-foreground hover:bg-accent hover:text-foreground'
-              )}
+              className="group/item relative"
             >
-              <GitBranch className="h-3 w-3 shrink-0 text-status-info" />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="font-medium font-mono truncate">{item.label}</span>
-                  {item.badge && (
-                    <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground leading-none">
-                      {item.badge}
+              <button
+                ref={(el) => { itemRefs.current[i] = el; }}
+                onClick={() => { onSelect(item.key); setOpen(false); setSearch(''); }}
+                onKeyDown={(e) => handleItemKeyDown(e, i)}
+                onFocus={() => setHighlightIndex(i)}
+                onMouseEnter={() => { setHighlightIndex(i); itemRefs.current[i]?.focus(); }}
+                className={cn(
+                  'w-full flex items-center gap-2 rounded py-1.5 pl-2 text-left text-xs transition-colors outline-none',
+                  onCopy ? 'pr-7' : 'pr-2',
+                  i === highlightIndex
+                    ? 'bg-accent text-foreground'
+                    : item.isSelected
+                      ? 'bg-accent/50 text-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                )}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium font-mono truncate">{item.label}</span>
+                    {item.badge && (
+                      <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground leading-none">
+                        {item.badge}
+                      </span>
+                    )}
+                  </div>
+                  {item.detail && (
+                    <span className="text-xs text-muted-foreground/70 truncate block font-mono">
+                      {item.detail}
                     </span>
-                  )}
+                    )}
                 </div>
-                {item.detail && (
-                  <span className="text-xs text-muted-foreground/70 truncate block font-mono">
-                    {item.detail}
-                  </span>
-                  )}
-              </div>
-              {item.isSelected && <Check className="h-3 w-3 shrink-0 text-status-info" />}
-            </button>
+                {item.isSelected && <Check className="h-3 w-3 shrink-0 text-status-info" />}
+              </button>
+              {onCopy && (
+                <button
+                  type="button"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-muted-foreground hover:text-foreground opacity-0 group-hover/item:opacity-100 transition-opacity"
+                  onClick={(e) => { e.stopPropagation(); onCopy(item.label); }}
+                  tabIndex={-1}
+                >
+                  <Copy className="h-3 w-3" />
+                </button>
+              )}
+            </div>
           ))}
+        </div>
+        <div className="px-2 py-1.5 border-t border-border">
+          <input
+            ref={searchInputRef}
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            placeholder={searchPlaceholder}
+            aria-label={label}
+            autoComplete="off"
+            className="w-full bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
+          />
         </div>
       </PopoverContent>
     </Popover>
@@ -289,8 +317,9 @@ function WorktreePicker({
         loadingText={t('prompt.loadingWorktrees', 'Loading worktrees\u2026')}
         loading={loading}
         onSelect={(path) => onChange(path)}
+        onCopy={(branch) => { navigator.clipboard.writeText(branch); toast.success('Branch copied'); }}
         triggerTitle={currentPath}
-        width="w-80"
+        width="w-[30rem]"
       />
     </div>
   );
@@ -321,8 +350,9 @@ function BranchPicker({
       searchPlaceholder={t('newThread.searchBranches', 'Search branches\u2026')}
       noMatchText={t('newThread.noBranchesMatch', 'No branches match')}
       onSelect={(branch) => onChange(branch)}
+      onCopy={(branch) => { navigator.clipboard.writeText(branch); toast.success('Branch copied'); }}
       triggerClassName="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted truncate max-w-[200px]"
-      width="w-64"
+      width="w-[30rem]"
     />
   );
 }
@@ -986,9 +1016,7 @@ export const PromptInput = memo(function PromptInput({
                 <img
                   src={`data:${img.source.media_type};base64,${img.source.data}`}
                   alt={`Attachment ${idx + 1}`}
-                  width={80}
-                  height={80}
-                  className="h-20 w-20 object-cover rounded border border-input cursor-pointer hover:opacity-80 transition-opacity"
+                  className="h-20 max-w-48 object-contain rounded border border-input cursor-pointer hover:opacity-80 transition-opacity"
                   onClick={() => { setLightboxIndex(idx); setLightboxOpen(true); }}
                 />
                 <button
@@ -1301,36 +1329,24 @@ export const PromptInput = memo(function PromptInput({
                 {(followUpBranches.length > 0 || activeThreadBranch) && (
                   <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
                     {followUpBranches.length > 0 && (
-                      <span className="group/base flex items-center gap-1 shrink-0">
-                        <BranchPicker
-                          branches={followUpBranches}
-                          selected={followUpSelectedBranch}
-                          onChange={setFollowUpSelectedBranch}
-                        />
-                        <button
-                          type="button"
-                          className="shrink-0 text-muted-foreground hover:text-foreground transition-colors opacity-0 group-hover/base:opacity-100"
-                          onClick={() => { navigator.clipboard.writeText(followUpSelectedBranch); toast.success('Branch copied'); }}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </button>
-                      </span>
+                      <BranchPicker
+                        branches={followUpBranches}
+                        selected={followUpSelectedBranch}
+                        onChange={setFollowUpSelectedBranch}
+                      />
                     )}
                     {activeThreadBranch && followUpBranches.length > 0 && (
                       <ArrowLeft className="h-3 w-3 text-muted-foreground shrink-0" />
                     )}
                     {activeThreadBranch && (
-                      <span className="group/src flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground shrink-0">
+                      <button
+                        type="button"
+                        className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground shrink-0 rounded hover:bg-muted transition-colors"
+                        onClick={() => { navigator.clipboard.writeText(activeThreadBranch); toast.success(t('prompt.branchCopied', 'Branch copied')); }}
+                      >
                         <GitBranch className="h-3 w-3 shrink-0" />
                         <span className="font-mono font-medium text-foreground">{activeThreadBranch}</span>
-                        <button
-                          type="button"
-                          className="shrink-0 hover:text-foreground transition-colors opacity-0 group-hover/src:opacity-100"
-                          onClick={() => { navigator.clipboard.writeText(activeThreadBranch); toast.success('Branch copied'); }}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </button>
-                      </span>
+                      </button>
                     )}
                   </div>
                 )}

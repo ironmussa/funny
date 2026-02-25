@@ -119,38 +119,32 @@ export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSele
             </span>
           )}
         </div>
-        <div className="flex flex-col gap-1 min-w-0 flex-1">
-          <div className="flex items-center gap-1">
-            <span className="text-sm leading-tight truncate">{thread.title}</span>
-            {/* Git status icon (worktree threads only) */}
-            {showGitIcon && GitIcon && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <GitIcon className={cn('h-3 w-3 flex-shrink-0', gitCfg!.className)} />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  {gitTooltip}
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-          {(subtitle || (thread.createdBy && thread.createdBy !== 'user' && thread.createdBy !== '__local__')) && (
-            <div className="flex items-center gap-1 min-w-0">
-              {subtitle && (
-                <ProjectChip name={subtitle} color={projectColor} />
-              )}
-              {/* External creator icon */}
-              {thread.createdBy && thread.createdBy !== 'user' && thread.createdBy !== '__local__' && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Bot className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    {t('thread.createdBy', { creator: thread.createdBy })}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </div>
+        <div className="flex items-center gap-1 min-w-0 flex-1">
+          <span className="text-sm leading-tight truncate">{thread.title}</span>
+          {/* Git status icon (worktree threads only) */}
+          {showGitIcon && GitIcon && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <GitIcon className={cn('h-3 w-3 flex-shrink-0', gitCfg!.className)} />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                {gitTooltip}
+              </TooltipContent>
+            </Tooltip>
+          )}
+          {subtitle && (
+            <ProjectChip name={subtitle} color={projectColor} className="flex-shrink-0" />
+          )}
+          {/* External creator icon */}
+          {thread.createdBy && thread.createdBy !== 'user' && thread.createdBy !== '__local__' && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Bot className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+              </TooltipTrigger>
+              <TooltipContent side="top" className="text-xs">
+                {t('thread.createdBy', { creator: thread.createdBy })}
+              </TooltipContent>
+            </Tooltip>
           )}
         </div>
       </button>

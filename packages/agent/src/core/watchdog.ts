@@ -1,10 +1,10 @@
 /**
- * ReactionEngine — declarative event-driven responses.
+ * Watchdog — declarative event-driven responses.
  *
  * Listens to EventBus events (CI failures, review comments, stuck agents)
  * and executes configured actions: respawn agent, escalate, notify, auto-merge.
  *
- * Reactions are config-driven — no hardcoded behavior.
+ * All behavior is config-driven — no hardcoded logic.
  */
 
 import type { EventBus } from '../infrastructure/event-bus.js';
@@ -25,9 +25,9 @@ export interface ReactionResult {
   message: string;
 }
 
-// ── ReactionEngine ──────────────────────────────────────────────
+// ── Watchdog ──────────────────────────────────────────────
 
-export class ReactionEngine {
+export class Watchdog {
   private stuckTimers = new Map<string, NodeJS.Timeout>();
 
   constructor(
@@ -49,7 +49,7 @@ export class ReactionEngine {
       });
     });
 
-    logger.info('ReactionEngine started');
+    logger.info('Watchdog started');
   }
 
   /** Stop all timers */

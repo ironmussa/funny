@@ -15,7 +15,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { Folder, FolderOpen, FolderOpenDot, Search, Trash2, MoreHorizontal, Terminal, Settings, Pencil, Plus, BarChart3, CircleDot, SquareTerminal, Zap } from 'lucide-react';
+import { Folder, FolderOpen, FolderOpenDot, Search, Trash2, MoreHorizontal, Terminal, Settings, Pencil, Plus, BarChart3, CircleDot, SquareTerminal } from 'lucide-react';
 import {
   Tooltip,
   TooltipContent,
@@ -45,7 +45,6 @@ interface ProjectItemProps {
   onDeleteThread: (projectId: string, threadId: string, title: string) => void;
   onShowAllThreads: (projectId: string) => void;
   onShowIssues: (projectId: string) => void;
-  onTriggerWorkflow?: (projectId: string, projectPath: string) => void;
 }
 
 export const ProjectItem = memo(function ProjectItem({
@@ -63,7 +62,6 @@ export const ProjectItem = memo(function ProjectItem({
   onDeleteThread,
   onShowAllThreads,
   onShowIssues,
-  onTriggerWorkflow,
 }: ProjectItemProps) {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -275,17 +273,6 @@ export const ProjectItem = memo(function ProjectItem({
                   <CircleDot className="h-3.5 w-3.5" />
                   {t('sidebar.githubIssues')}
                 </DropdownMenuItem>
-                {onTriggerWorkflow && (
-                  <DropdownMenuItem
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      onTriggerWorkflow(project.id, project.path);
-                    }}
-                  >
-                    <Zap className="h-3.5 w-3.5" />
-                    Run Pipeline
-                  </DropdownMenuItem>
-                )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={(e) => {

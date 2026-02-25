@@ -39,7 +39,6 @@ import { githubRoutes } from './routes/github.js';
 import { analyticsRoutes } from './routes/analytics.js';
 import { logRoutes } from './routes/logs.js';
 import { ingestRoutes } from './routes/ingest.js';
-import { createPipelineProxyRoutes } from './routes/pipeline-proxy.js';
 import { wsBroker } from './services/ws-broker.js';
 import { startScheduler } from './services/automation-scheduler.js';
 import { startAgent } from './services/agent-runner.js';
@@ -190,7 +189,6 @@ app.route('/api/profile', profileRoutes);
 app.route('/api/github', githubRoutes);
 app.route('/api/analytics', analyticsRoutes);
 app.route('/api/logs', logRoutes);
-app.route('/api/pipeline', createPipelineProxyRoutes());
 
 // Serve static files from client build (only if dist exists)
 if (existsSync(clientDistDir)) {

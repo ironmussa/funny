@@ -1206,38 +1206,23 @@ export const PromptInput = memo(function PromptInput({
                     {queuedCount} {t('prompt.queued')}
                   </span>
                 )}
-                {running ? (
-                  <>
-                    <Button
-                      onClick={handleSubmit}
-                      disabled={loading}
-                      size="icon-sm"
-                      tabIndex={-1}
-                      aria-label={isQueueMode ? t('prompt.queueMessage') : t('prompt.send', 'Send message')}
-                    >
-                      {loading ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <ArrowUp className="h-3.5 w-3.5" />
-                      )}
-                    </Button>
-                    <Button
-                      onClick={onStop}
-                      variant="destructive"
-                      size="icon-sm"
-                      tabIndex={-1}
-                      aria-label={t('prompt.stopAgent')}
-                    >
-                      <Square className="h-3.5 w-3.5" />
-                    </Button>
-                  </>
+                {running && !prompt.trim() ? (
+                  <Button
+                    onClick={onStop}
+                    variant="destructive"
+                    size="icon-sm"
+                    tabIndex={-1}
+                    aria-label={t('prompt.stopAgent')}
+                  >
+                    <Square className="h-3.5 w-3.5" />
+                  </Button>
                 ) : (
                   <Button
                     onClick={handleSubmit}
                     disabled={loading}
                     size="icon-sm"
                     tabIndex={-1}
-                    aria-label={t('prompt.send', 'Send message')}
+                    aria-label={running && isQueueMode ? t('prompt.queueMessage') : t('prompt.send', 'Send message')}
                   >
                     {loading ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />

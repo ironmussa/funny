@@ -16,7 +16,7 @@ import { EventBus } from './infrastructure/event-bus.js';
 import { ModelFactory } from '@funny/core/agents';
 import { SessionStore } from './core/session-store.js';
 import { OrchestratorAgent } from './core/orchestrator-agent.js';
-import { ReactionEngine } from './core/reactions.js';
+import { Watchdog } from './core/watchdog.js';
 import { GitHubTracker } from './trackers/github-tracker.js';
 import type { Tracker } from './trackers/tracker.js';
 import { IngestWebhookAdapter } from './infrastructure/ingest-webhook-adapter.js';
@@ -66,8 +66,8 @@ try {
   logger.warn({ err: err.message }, 'Issue tracker initialization failed — sessions will work without tracker');
 }
 
-// Initialize ReactionEngine
-const reactionEngine = new ReactionEngine(eventBus, sessionStore, config, {
+// Initialize Watchdog
+const watchdog = new Watchdog(eventBus, sessionStore, config, {
   respawnAgent: async (sessionId, prompt) => {
     const session = sessionStore.get(sessionId);
     if (!session || !session.worktreePath || !session.branch) return;
@@ -118,7 +118,7 @@ const reactionEngine = new ReactionEngine(eventBus, sessionStore, config, {
   },
 });
 
-reactionEngine.start();
+watchdog.start();
 
 // ── Ingest webhook adapter (forwards events to the Funny UI server) ──
 const ingestAdapter = new IngestWebhookAdapter(eventBus);
@@ -140,6 +140,6 @@ app.route('/sessions', createSessionRoutes(sessionStore, orchestratorAgent, trac
 
 // ── Exports ─────────────────────────────────────────────────────
 
-export { app, eventBus, config, sessionStore, orchestratorAgent, reactionEngine, tracker, ingestAdapter };
+export { app, eventBus, config, sessionStore, orchestratorAgent, watchdog, tracker, ingestAdapter };
 export type { PipelineEvent, PipelineEventType } from './core/types.js';
 export type { PipelineServiceConfig } from './config/schema.js';

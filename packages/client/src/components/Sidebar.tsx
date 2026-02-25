@@ -37,7 +37,6 @@ import { ThreadList } from './sidebar/ThreadList';
 import { ProjectItem } from './sidebar/ProjectItem';
 import { GeneralSettingsDialog } from './GeneralSettingsDialog';
 import { IssuesDialog } from './IssuesDialog';
-import { WorkflowDialog } from './WorkflowDialog';
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 
 export function AppSidebar() {
@@ -63,7 +62,6 @@ export function AppSidebar() {
   const startNewThread = useUIStore(s => s.startNewThread);
   const setAddProjectOpen = useUIStore(s => s.setAddProjectOpen);
   const showGlobalSearch = useUIStore(s => s.showGlobalSearch);
-  const openWorkflowDialog = useUIStore(s => s.openWorkflowDialog);
   const authMode = useAuthStore(s => s.mode);
   const authUser = useAuthStore(s => s.user);
   const logout = useAuthStore(s => s.logout);
@@ -286,10 +284,6 @@ export function AppSidebar() {
     setIssuesProjectId(projectId);
   }, []);
 
-  const handleTriggerWorkflow = useCallback((projectId: string, projectPath: string) => {
-    openWorkflowDialog(projectId, projectPath);
-  }, [openWorkflowDialog]);
-
   // Memoize per-project thread lists, preserving referential identity for
   // projects whose source threads array didn't change. This prevents
   // unrelated ProjectItem components from re-rendering when only one
@@ -457,7 +451,6 @@ export function AppSidebar() {
               onDeleteThread={handleDeleteThread}
               onShowAllThreads={handleShowAllThreads}
               onShowIssues={handleShowIssues}
-              onTriggerWorkflow={handleTriggerWorkflow}
             />
           ))}
         </div>
@@ -495,7 +488,6 @@ export function AppSidebar() {
       </SidebarFooter>
 
       <GeneralSettingsDialog open={generalSettingsOpen} onOpenChange={setGeneralSettingsOpen} />
-      <WorkflowDialog />
 
       {issuesProjectId && (
         <IssuesDialog

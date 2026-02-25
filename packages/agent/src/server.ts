@@ -2,7 +2,7 @@
  * Bun server bootstrap for the Agent Service.
  */
 
-import { app, reactionEngine } from './index.js';
+import { app, watchdog } from './index.js';
 
 const port = parseInt(process.env.PORT ?? '3002', 10);
 
@@ -16,7 +16,7 @@ async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
   console.log(`[agent] Shutting down (${signal})...`);
-  reactionEngine.stop();
+  watchdog.stop();
   console.log('[agent] Shutdown complete');
   process.exit(0);
 }

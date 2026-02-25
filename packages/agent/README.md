@@ -58,13 +58,13 @@ ci_running → ci_passed → review → merged
 4. **Implement** — Coding agent executes the plan (up to 200 turns)
 5. **Quality check** — Parallel quality agents (tests, security, architecture, style, types)
 6. **Create PR** — Push branch, create PR with `Closes #N`
-7. **Wait for CI** — Durable wait; if CI fails, ReactionEngine auto-respawns agent to fix
+7. **Wait for CI** — Durable wait; if CI fails, Watchdog auto-respawns agent to fix
 8. **Wait for review** — Durable wait; if changes requested, agent auto-applies feedback
 9. **Merge & close** — Squash merge, close issue, cleanup worktree
 
 ### Reactions (Self-Healing)
 
-The **ReactionEngine** listens for events and takes automatic action:
+The **Watchdog** listens for events and takes automatic action:
 
 | Event | Default Action | Behavior |
 |---|---|---|
@@ -344,7 +344,7 @@ src/
 │   ├── session.ts                 # Session class with lifecycle state machine (14 states)
 │   ├── session-store.ts           # In-memory + file-persisted session CRUD
 │   ├── orchestrator-agent.ts      # LLM agent for issue planning + implementation
-│   ├── reactions.ts               # Declarative event-driven reaction engine
+│   ├── watchdog.ts                # Declarative event-driven watchdog
 │   ├── pipeline-runner.ts         # Quality pipeline orchestration
 │   ├── quality-pipeline.ts        # Parallel quality agents with correction cycles
 │   ├── director.ts                # Merge queue management

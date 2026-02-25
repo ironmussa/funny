@@ -249,7 +249,7 @@ export function NewThreadDialog() {
             {t('newThread.prompt')}
           </label>
           <textarea
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm placeholder:text-muted-foreground min-h-[120px] resize-y transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-1 focus:ring-ring"
+            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground min-h-[120px] resize-y transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-1 focus:ring-ring"
             placeholder={t('newThread.promptPlaceholder')}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}

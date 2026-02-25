@@ -167,6 +167,12 @@ export function useRouteSync() {
       if (uiStore.allThreadsProjectId !== '__all__') {
         uiStore.showGlobalSearch();
       }
+      // Clear kanban context when arriving at /search so both state changes
+      // (allThreadsProjectId + kanbanContext) happen in the same effect tick,
+      // preventing the back arrow from flashing in ProjectHeader.
+      if (uiStore.kanbanContext) {
+        uiStore.setKanbanContext(null);
+      }
       return;
     }
 

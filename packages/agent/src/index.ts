@@ -19,6 +19,7 @@ import { OrchestratorAgent } from './core/orchestrator-agent.js';
 import { ReactionEngine } from './core/reactions.js';
 import { GitHubTracker } from './trackers/github-tracker.js';
 import type { Tracker } from './trackers/tracker.js';
+import { IngestWebhookAdapter } from './infrastructure/ingest-webhook-adapter.js';
 import { logger } from './infrastructure/logger.js';
 
 // ── Bootstrap ────────────────────────────────────────────────────
@@ -107,8 +108,10 @@ const reactionEngine = new ReactionEngine(eventBus, sessionStore, config, {
     const session = sessionStore.get(sessionId);
     if (!session?.prNumber) return;
     const { execute } = await import('@funny/core/git');
+    const ghEnv = process.env.GH_TOKEN ? { GH_TOKEN: process.env.GH_TOKEN } : undefined;
     await execute('gh', ['pr', 'merge', String(session.prNumber), '--squash', '--delete-branch'], {
       cwd: session.projectPath,
+      env: ghEnv,
     });
     await sessionStore.transition(sessionId, 'merged', { autoMerged: true });
     logger.info({ sessionId, prNumber: session.prNumber }, 'PR auto-merged');
@@ -116,6 +119,10 @@ const reactionEngine = new ReactionEngine(eventBus, sessionStore, config, {
 });
 
 reactionEngine.start();
+
+// ── Ingest webhook adapter (forwards events to the Funny UI server) ──
+const ingestAdapter = new IngestWebhookAdapter(eventBus);
+ingestAdapter.start();
 
 // ── Hono app ────────────────────────────────────────────────────
 
@@ -133,6 +140,6 @@ app.route('/sessions', createSessionRoutes(sessionStore, orchestratorAgent, trac
 
 // ── Exports ─────────────────────────────────────────────────────
 
-export { app, eventBus, config, sessionStore, orchestratorAgent, reactionEngine, tracker };
+export { app, eventBus, config, sessionStore, orchestratorAgent, reactionEngine, tracker, ingestAdapter };
 export type { PipelineEvent, PipelineEventType } from './core/types.js';
 export type { PipelineServiceConfig } from './config/schema.js';

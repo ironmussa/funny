@@ -1,5 +1,5 @@
 export {
-  execute, executeSync, executeWithLogging, executeResult,
+  execute, executeSync, executeWithLogging, executeResult, executeShell, SHELL,
   ProcessExecutionError,
   type ProcessResult, type ProcessOptions,
 } from './process.js';

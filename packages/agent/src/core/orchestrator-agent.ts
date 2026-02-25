@@ -20,6 +20,7 @@ import type { IssueDetail } from '../trackers/tracker.js';
 import type { ImplementationPlan } from './session.js';
 import type { PipelineServiceConfig } from '../config/schema.js';
 import { logger } from '../infrastructure/logger.js';
+import { executeShell } from '@funny/core/git';
 
 // ── Planner event types ─────────────────────────────────────────
 
@@ -33,15 +34,19 @@ export type PlannerEvent =
 // ── Planning prompt ──────────────────────────────────────────────
 
 function buildPlanningPrompt(issue: IssueDetail, projectPath: string): string {
-  return `You are a senior software architect analyzing a GitHub issue to create an implementation plan.
+  const heading = issue.number === 0
+    ? `## Task: ${issue.title}`
+    : `## Issue #${issue.number}: ${issue.title}`;
 
-## Issue #${issue.number}: ${issue.title}
+  return `You are a senior software architect analyzing a task to create an implementation plan.
+
+${heading}
 
 ${issue.fullContext}
 
 ## Your Task
 
-Analyze this issue and the codebase to create a detailed implementation plan.
+Analyze this task and the codebase to create a detailed implementation plan.
 
 1. **Explore the codebase** — Use the tools to understand the existing architecture
 2. **Identify relevant files** — Find files that need to be modified or created
@@ -86,9 +91,13 @@ function buildImplementingPrompt(
   issue: IssueDetail,
   plan: ImplementationPlan,
 ): string {
+  const heading = issue.number === 0
+    ? `## Task: ${issue.title}`
+    : `## Issue #${issue.number}: ${issue.title}`;
+
   return `You are a senior software engineer implementing a feature based on a pre-approved plan.
 
-## Issue #${issue.number}: ${issue.title}
+${heading}
 
 ${issue.fullContext}
 
@@ -110,8 +119,7 @@ ${plan.risks.length > 0 ? `**Risks to watch for:**\n${plan.risks.map((r) => `- $
 2. Implement the changes according to the plan
 3. Follow existing code style and conventions
 4. Write clean, well-structured code
-5. Commit your changes with a descriptive message referencing the issue:
-   \`fix/feat(scope): description (Closes #${issue.number})\`
+5. Commit your changes with a descriptive message${issue.number !== 0 ? ` referencing the issue:\n   \`fix/feat(scope): description (Closes #${issue.number})\`` : ':\n   `fix/feat(scope): description`'}
 
 ## Important
 
@@ -255,15 +263,19 @@ export class OrchestratorAgent {
 
       if (!response.ok) {
         const errBody = await response.text().catch(() => 'Unknown');
+        const errMsg = `LLM call failed (HTTP ${response.status}): ${errBody.slice(0, 300)}`;
         logger.error({ status: response.status, body: errBody.slice(0, 300) }, 'Planner LLM call failed');
-        break;
+        opts?.onEvent?.({ type: 'error', message: errMsg });
+        throw new Error(errMsg);
       }
 
       const data = await response.json() as any;
 
       if (data.status === 'failed') {
+        const errMsg = `Planner run failed: ${data.error?.message ?? 'Unknown error'}`;
         logger.error({ error: data.error?.message }, 'Planner run failed');
-        break;
+        opts?.onEvent?.({ type: 'error', message: errMsg });
+        throw new Error(errMsg);
       }
 
       const text = data.result?.text ?? '';
@@ -289,11 +301,7 @@ export class OrchestratorAgent {
         try {
           switch (tc.function.name) {
             case 'bash': {
-              // Use cmd on Windows, sh on Unix
-              const isWindows = process.platform === 'win32';
-              const shell = isWindows ? 'cmd' : 'sh';
-              const shellArgs = isWindows ? ['/c', args.command] : ['-c', args.command];
-              const r = await execute(shell, shellArgs, {
+              const r = await executeShell(args.command, {
                 cwd: projectPath,
                 timeout: 30_000,
                 reject: false,
@@ -324,9 +332,13 @@ export class OrchestratorAgent {
               break;
             }
             case 'grep': {
-              const rgArgs = [args.pattern, args.path ?? '.', '--line-number', '--no-heading', '--color=never', '--max-count=50'];
-              if (args.file_glob) rgArgs.push('--glob', args.file_glob);
-              const r = await execute('rg', rgArgs, { cwd: projectPath, timeout: 15_000, reject: false });
+              // Try rg first, fall back to grep -r if rg is not installed.
+              const target = args.path ?? '.';
+              const globFlag = args.file_glob ? ` --glob '${args.file_glob}'` : '';
+              const includeFlag = args.file_glob ? ` --include='${args.file_glob}'` : '';
+              const pat = args.pattern.replace(/'/g, "'\\''");
+              const cmd = `rg '${pat}' '${target}' --line-number --no-heading --color=never --max-count=50${globFlag} 2>/dev/null || grep -r -n '${pat}' '${target}'${includeFlag} | head -50`;
+              const r = await executeShell(cmd, { cwd: projectPath, timeout: 15_000, reject: false });
               result = r.stdout || 'No matches.';
               break;
             }
@@ -352,7 +364,7 @@ export class OrchestratorAgent {
     }
 
     // Parse plan from collected text
-    const plan = this.extractPlan(allText);
+    const plan = this.extractPlan(allText, opts?.onEvent);
     opts?.onEvent?.({ type: 'plan_ready', plan });
 
     logger.info(
@@ -374,7 +386,10 @@ export class OrchestratorAgent {
     plan: ImplementationPlan,
     worktreePath: string,
     branch: string,
-    opts?: { signal?: AbortSignal },
+    opts?: {
+      signal?: AbortSignal;
+      onEvent?: (event: PlannerEvent) => void;
+    },
   ): Promise<{ status: string; findings_count: number }> {
     const { orchestrator } = this.config;
 
@@ -398,24 +413,59 @@ export class OrchestratorAgent {
 
     const resolved = this.modelFactory.resolve(role.provider, role.model);
     const executor = new AgentExecutor(resolved.baseURL, resolved.modelId, resolved.apiKey);
-    const result = await executor.execute(role, context, { signal: opts?.signal });
+    const result = await executor.execute(role, context, {
+      signal: opts?.signal,
+      onStepFinish: async (step) => {
+        if (!opts?.onEvent) return;
 
-    logger.info(
-      { issueNumber: issue.number, status: result.status, fixes: result.fixes_applied },
-      'Issue implementation completed',
-    );
+        if (step.text) {
+          opts.onEvent({ type: 'text', content: step.text, step: step.stepNumber });
+        }
+        for (const tc of step.toolCalls) {
+          opts.onEvent({
+            type: 'tool_call',
+            name: tc.function.name,
+            args: JSON.parse(tc.function.arguments),
+            id: tc.id,
+            step: step.stepNumber,
+          });
+        }
+        for (const tr of step.toolResults) {
+          opts.onEvent({
+            type: 'tool_result',
+            id: tr.toolCallId,
+            name: tr.toolName,
+            result: tr.result.slice(0, 2000),
+            step: step.stepNumber,
+          });
+        }
+      },
+    });
+
+    if (result.status === 'error') {
+      const errMsg = result.findings.map((f) => f.description).join('; ') || 'Unknown implementation error';
+      logger.error({ issueNumber: issue.number, error: errMsg }, 'Issue implementation failed');
+      opts?.onEvent?.({ type: 'error', message: errMsg });
+    } else {
+      logger.info(
+        { issueNumber: issue.number, status: result.status, fixes: result.fixes_applied },
+        'Issue implementation completed',
+      );
+    }
 
     return { status: result.status, findings_count: result.findings.length };
   }
 
   // ── Plan extraction ───────────────────────────────────────────
 
-  private extractPlan(rawText: string): ImplementationPlan {
+  private extractPlan(rawText: string, onEvent?: (event: PlannerEvent) => void): ImplementationPlan {
     const plan = this.parsePlanJson(rawText);
     if (plan) return plan;
 
     // Fallback: return a generic plan
-    logger.warn({ textLength: rawText.length, textPreview: rawText.slice(-500) }, 'Could not parse plan from agent output — using fallback');
+    const msg = 'Could not parse implementation plan from agent output — using fallback plan';
+    logger.warn({ textLength: rawText.length, textPreview: rawText.slice(-500) }, msg);
+    onEvent?.({ type: 'error', message: msg });
     return {
       summary: 'Implementation plan could not be parsed from agent output',
       approach: 'Manual review needed',

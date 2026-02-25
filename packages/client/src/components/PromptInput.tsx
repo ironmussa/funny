@@ -1109,7 +1109,7 @@ export const PromptInput = memo(function PromptInput({
           <textarea
             ref={textareaCallbackRef}
             aria-label={t('prompt.messageLabel', 'Message')}
-            className="w-full px-3 py-2 text-sm bg-transparent placeholder:text-muted-foreground focus:outline-none resize-none"
+            className="w-full px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none resize-none"
             style={{ minHeight: '4.5rem' }}
             placeholder={running ? (isQueueMode ? t('thread.typeToQueue') : t('thread.agentWorkingQueue')) : defaultPlaceholder}
             value={prompt}

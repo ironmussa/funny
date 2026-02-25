@@ -29,12 +29,36 @@ export function createWorktree(
 ): ResultAsync<string, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
-      // Verify the repo has at least one commit
+      // Ensure the repo has at least one commit — git worktree requires it.
+      // If the repo is brand new (no commits), create an empty initial commit
+      // so worktree creation works transparently.
+      let wasEmpty = false;
       const headResult = await execute('git', ['rev-parse', 'HEAD'], { cwd: projectPath, reject: false });
       if (headResult.exitCode !== 0) {
-        throw badRequest(
-          'Cannot create worktree: the repository has no commits yet. Please make an initial commit first.'
+        const commitResult = await execute(
+          'git', ['commit', '--allow-empty', '-m', 'Initial commit'],
+          { cwd: projectPath, reject: false },
         );
+        if (commitResult.exitCode !== 0) {
+          throw badRequest(
+            `Cannot create worktree: the repository has no commits and the auto-commit failed: ${commitResult.stderr}`,
+          );
+        }
+        wasEmpty = true;
+      }
+
+      // Verify the requested baseBranch actually exists as a ref.
+      // Common mismatch: agent detects "master" but the repo uses "main"
+      // (or vice versa). Fall back to HEAD when the ref is invalid.
+      let effectiveBase = baseBranch;
+      if (baseBranch) {
+        const branchCheck = await execute(
+          'git', ['rev-parse', '--verify', baseBranch],
+          { cwd: projectPath, reject: false },
+        );
+        if (branchCheck.exitCode !== 0) {
+          effectiveBase = undefined;
+        }
       }
 
       const base = await getWorktreeBase(projectPath);
@@ -45,7 +69,7 @@ export function createWorktree(
       }
 
       const args = ['worktree', 'add', '-b', branchName, worktreePath];
-      if (baseBranch) args.push(baseBranch);
+      if (effectiveBase) args.push(effectiveBase);
       const result = await git(args, projectPath);
       if (result.isErr()) throw result.error;
       return worktreePath;

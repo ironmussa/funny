@@ -14,7 +14,7 @@ import { z } from 'zod';
 import { zodToJsonSchema } from 'zod-to-json-schema';
 import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { execute } from '../../git/process.js';
+import { executeShell } from '../../git/process.js';
 import type { AgentRole, AgentContext, AgentResult, Finding } from './agent-context.js';
 import { createBrowserTools, type BrowserToolsHandle } from './browser-tools.js';
 import { loadContextDocs } from './context-loader.js';
@@ -385,7 +385,7 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
         timeout: z.number().optional().describe('Timeout in milliseconds (default: 30000)'),
       }),
       execute: async ({ command, timeout }) => {
-        const result = await execute('sh', ['-c', command], {
+        const result = await executeShell(command, {
           cwd,
           timeout: timeout ?? 30_000,
           reject: false,
@@ -464,19 +464,13 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
         file_glob: z.string().optional().describe('File glob filter (e.g., "*.ts")'),
       }),
       execute: async ({ pattern, path: searchPath, file_glob }) => {
-        const rgArgs = [pattern, searchPath ?? '.', '--line-number', '--no-heading', '--color=never'];
-        if (file_glob) rgArgs.push('--glob', file_glob);
-
-        try {
-          const result = await execute('rg', rgArgs, { cwd, timeout: 15_000, reject: false });
-          if (result.exitCode === 0) return result.stdout || 'No matches.';
-          if (result.exitCode === 1) return 'No matches.';
-          throw new Error(result.stderr);
-        } catch {
-          const grepArgs = ['-r', '-n', pattern, searchPath ?? '.'];
-          const result = await execute('grep', grepArgs, { cwd, timeout: 15_000, reject: false });
-          return result.stdout || 'No matches.';
-        }
+        // Build a grep command that works across platforms.
+        // Try rg first, fall back to grep -r if rg is not installed.
+        const target = searchPath ?? '.';
+        const globFlag = file_glob ? ` --glob '${file_glob}'` : '';
+        const cmd = `rg '${pattern.replace(/'/g, "'\\''")}' '${target}' --line-number --no-heading --color=never${globFlag} 2>/dev/null || grep -r -n '${pattern.replace(/'/g, "'\\''")}' '${target}'${file_glob ? ` --include='${file_glob}'` : ''}`;
+        const result = await executeShell(cmd, { cwd, timeout: 15_000, reject: false });
+        return result.stdout || 'No matches.';
       },
     },
   };

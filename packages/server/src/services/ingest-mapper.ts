@@ -356,6 +356,14 @@ function onCompleted(event: IngestEvent): void {
   const state = resolveState(event);
   if (!state) return;
 
+  // If the event carries an error_message (e.g. non-fatal warning from agent),
+  // insert it as a visible chat message before completing the thread.
+  const errorMessage = event.data.error_message as string | undefined;
+  if (errorMessage) {
+    const msgId = tm.insertMessage({ threadId: state.threadId, role: 'assistant', content: errorMessage });
+    emitWS(state, { type: 'agent:message', threadId: state.threadId, data: { messageId: msgId, role: 'assistant', content: errorMessage } });
+  }
+
   const now = new Date().toISOString();
   const costUsd = (event.data.cost_usd as number) ?? (event.data.cost as number) ?? 0;
   const durationMs = (event.data.duration_ms as number) ?? (event.data.duration as number) ?? undefined;
@@ -394,6 +402,13 @@ function onFailed(event: IngestEvent): void {
 
   const state = resolveState(event);
   if (!state) return;
+
+  // If the event carries an error_message, insert it as a visible chat message before failing.
+  const errorMessage = (event.data.error_message as string) ?? (event.data.error as string) ?? undefined;
+  if (errorMessage) {
+    const msgId = tm.insertMessage({ threadId: state.threadId, role: 'assistant', content: `Error: ${errorMessage}` });
+    emitWS(state, { type: 'agent:message', threadId: state.threadId, data: { messageId: msgId, role: 'assistant', content: `Error: ${errorMessage}` } });
+  }
 
   const now = new Date().toISOString();
   const error = (event.data.error as string) ?? (event.data.message as string) ?? 'Failed';
@@ -887,6 +902,7 @@ function resolveCliState(requestId: string): CLIMessageState {
       cliToDbMsgId: new Map(),
       currentAssistantMsgId: null,
       processedToolUseIds: new Map(),
+      resultHandled: false,
     };
     cliStates.set(requestId, state);
   }

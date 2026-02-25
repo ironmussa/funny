@@ -65,6 +65,7 @@ export class SessionStore {
   }
 
   byIssue(issueNumber: number): Session | undefined {
+    if (issueNumber === 0) return undefined; // prompt-only sessions have no real issue
     return this.list().find((s) => s.issue.number === issueNumber);
   }
 
@@ -143,17 +144,27 @@ export class SessionStore {
   private loadFromDisk(): void {
     try {
       const files = readdirSync(this.persistDir).filter((f) => f.endsWith('.json'));
+      let staleCount = 0;
       for (const file of files) {
         try {
           const raw = readFileSync(join(this.persistDir, file), 'utf-8');
           const data = JSON.parse(raw) as SessionData;
           const session = Session.fromData(data);
+
+          // Sessions that were active when the process died can never complete —
+          // mark them as failed so they don't block the parallel limit.
+          if (session.isActive) {
+            session.tryTransition('failed', { error: 'Stale session: agent restarted' });
+            this.persist(session);
+            staleCount++;
+          }
+
           this.sessions.set(session.id, session);
         } catch (err: any) {
           logger.warn({ file, err: err.message }, 'Skipping corrupt session file');
         }
       }
-      logger.info({ count: this.sessions.size }, 'Sessions loaded from disk');
+      logger.info({ count: this.sessions.size, staleRecovered: staleCount }, 'Sessions loaded from disk');
     } catch {
       // Directory doesn't exist or is empty — fine
     }

@@ -75,7 +75,7 @@ export function BashCard({ parsed, output, hideLabel }: { parsed: Record<string,
                   />
                 ) : (
                   <pre
-                    className="font-mono text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-all"
+                    className="font-mono text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap break-all"
                     dangerouslySetInnerHTML={{ __html: htmlOutput! }}
                   />
                 )}

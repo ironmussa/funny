@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { ResultAsync } from 'neverthrow';
 import pLimit from 'p-limit';
 import { processError, internal, type DomainError } from '@funny/shared/errors';
@@ -6,6 +7,42 @@ export interface ProcessResult {
   stdout: string;
   stderr: string;
   exitCode: number;
+}
+
+/**
+ * Cross-platform shell: Git Bash on Windows, sh elsewhere.
+ *
+ * On Windows, bare `bash` can resolve to WSL's bash (C:\Windows\System32\bash.exe)
+ * instead of Git Bash, producing /mnt/c/ paths and a broken environment (no node,
+ * bun, gh, etc.). We resolve Git Bash explicitly via its standard install path.
+ */
+function resolveShell(): string {
+  if (process.platform !== 'win32') return 'sh';
+
+  // Try the standard Git for Windows install path first
+  const gitBashPaths = [
+    'C:\\Program Files\\Git\\bin\\bash.exe',
+    'C:\\Program Files (x86)\\Git\\bin\\bash.exe',
+  ];
+  for (const p of gitBashPaths) {
+    if (existsSync(p)) return p;
+  }
+
+  // Fallback: hope the right bash is first in PATH
+  return 'bash';
+}
+
+export const SHELL = resolveShell();
+
+/**
+ * Execute a shell command string cross-platform.
+ * Wraps the command in `bash -c` (Windows) or `sh -c` (Unix).
+ */
+export async function executeShell(
+  command: string,
+  options: ProcessOptions = {}
+): Promise<ProcessResult> {
+  return execute(SHELL, ['-c', command], options);
 }
 
 export interface ProcessOptions {

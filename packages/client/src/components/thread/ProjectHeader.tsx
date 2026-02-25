@@ -273,7 +273,6 @@ export const ProjectHeader = memo(function ProjectHeader() {
   const setReviewPaneOpen = useUIStore(s => s.setReviewPaneOpen);
   const reviewPaneOpen = useUIStore(s => s.reviewPaneOpen);
   const kanbanContext = useUIStore(s => s.kanbanContext);
-  const setKanbanContext = useUIStore(s => s.setKanbanContext);
   const { openPreview, isTauri } = usePreviewWindow();
   const toggleTerminalPanel = useTerminalStore(s => s.togglePanel);
   const terminalPanelVisible = useTerminalStore(s => s.panelVisible);
@@ -318,12 +317,11 @@ export const ProjectHeader = memo(function ProjectHeader() {
     // Close the review pane when returning to Kanban
     setReviewPaneOpen(false);
 
-    // Navigate to search view with board mode
+    // Navigate to search view with board mode.
+    // kanbanContext is cleared by useRouteSync when it detects the /search route,
+    // ensuring both allThreadsProjectId and kanbanContext update in the same render.
     navigate(`/search?view=board${targetProjectId !== '__all__' ? `&project=${targetProjectId}` : ''}${searchParam}${highlightParam}`);
-
-    // Clear the context after navigation
-    setKanbanContext(null);
-  }, [kanbanContext, navigate, setKanbanContext, setReviewPaneOpen]);
+  }, [kanbanContext, navigate, setReviewPaneOpen]);
 
   return (
     <div className="px-4 py-2 border-b border-border">
@@ -350,7 +348,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
               <Button
                 variant="ghost"
                 size="icon-sm"
-                onClick={() => startTransition(() => navigate(`/projects/${activeThreadProjectId}/threads/${activeThreadParentId}`))}
+                onClick={() => navigate(`/projects/${activeThreadProjectId}/threads/${activeThreadParentId}`)}
                 className="text-muted-foreground hover:text-foreground shrink-0"
               >
                 <ArrowLeft className="h-4 w-4" />

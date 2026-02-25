@@ -1127,7 +1127,7 @@ export function ThreadView() {
     return (
       <div className="flex-1 flex flex-col h-full min-w-0">
         <ProjectHeader />
-        <div className="flex-1 flex items-center justify-center text-muted-foreground px-4">
+        <div className="flex-1 flex items-center justify-center px-4">
           <div className="w-full max-w-3xl">
             <PromptInput
               onSubmit={handleSend}

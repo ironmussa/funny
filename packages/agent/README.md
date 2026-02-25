@@ -46,7 +46,7 @@ ci_running → ci_passed → review → merged
            ci_failed              changes_requested
                 ↓                      ↓
          (auto-retry)           (auto-apply feedback)
-                ↓                      ↓
+                ↓          Pero me refiero específicamente a este error en el proceso de la gente.             ↓
            escalated               escalated
 ```
 

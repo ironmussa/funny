@@ -18,13 +18,15 @@ import type { Tracker } from '../trackers/tracker.js';
 import type { EventBus } from '../infrastructure/event-bus.js';
 import type { PipelineServiceConfig } from '../config/schema.js';
 import { Session } from '../core/session.js';
+import { nanoid } from 'nanoid';
 import type { IssueRef } from '../core/session.js';
 import { logger } from '../infrastructure/logger.js';
 
 // ── Validation schemas ──────────────────────────────────────────
 
 const StartSessionSchema = z.object({
-  issueNumber: z.number().int().min(1),
+  issueNumber: z.number().int().min(1).optional(),
+  prompt: z.string().min(1).optional(),
   projectPath: z.string().min(1),
   model: z.string().optional(),
   provider: z.string().optional(),
@@ -78,22 +80,32 @@ export function createSessionRoutes(
   app.post('/start', zValidator('json', StartSessionSchema), async (c) => {
     const body = c.req.valid('json');
 
-    // Check if issue already has an active session
-    const existing = sessionStore.byIssue(body.issueNumber);
-    if (existing && existing.isActive) {
-      // Allow retrying if the previous session is stuck (no activity for 2+ min)
-      const updatedAt = new Date(existing.updatedAt).getTime();
-      const staleMs = 2 * 60 * 1000;
-      if (Date.now() - updatedAt < staleMs) {
-        return c.json({
-          error: 'Issue already has an active session',
-          sessionId: existing.id,
-          status: existing.status,
-        }, 409);
+    // Must provide either issueNumber, prompt, or title
+    const promptText = body.prompt || body.title;
+    if (!body.issueNumber && !promptText) {
+      return c.json({ error: 'Provide either issueNumber, prompt, or title' }, 400);
+    }
+
+    const isPromptOnly = !body.issueNumber;
+
+    // Check if issue already has an active session (skip for prompt-only)
+    if (!isPromptOnly) {
+      const existing = sessionStore.byIssue(body.issueNumber!);
+      if (existing && existing.isActive) {
+        // Allow retrying if the previous session is stuck (no activity for 2+ min)
+        const updatedAt = new Date(existing.updatedAt).getTime();
+        const staleMs = 2 * 60 * 1000;
+        if (Date.now() - updatedAt < staleMs) {
+          return c.json({
+            error: 'Issue already has an active session',
+            sessionId: existing.id,
+            status: existing.status,
+          }, 409);
+        }
+        // Stale session — cancel it and allow retry
+        await sessionStore.transition(existing.id, 'cancelled', { reason: 'Superseded by new session' });
+        logger.info({ oldSessionId: existing.id, issueNumber: body.issueNumber }, 'Cancelled stale session for retry');
       }
-      // Stale session — cancel it and allow retry
-      await sessionStore.transition(existing.id, 'cancelled', { reason: 'Superseded by new session' });
-      logger.info({ oldSessionId: existing.id, issueNumber: body.issueNumber }, 'Cancelled stale session for retry');
     }
 
     // Check parallel limit
@@ -104,12 +116,24 @@ export function createSessionRoutes(
       }, 429);
     }
 
-    // Fetch issue details from tracker, or use inline data
+    // Build issue ref: from tracker, inline data, or prompt
     let issueRef: IssueRef;
 
-    if (tracker) {
+    if (isPromptOnly) {
+      // Prompt-only session — use title/body or prompt
+      const title = body.title || promptText!.slice(0, 80).replace(/\n/g, ' ');
+      const description = body.body || body.prompt || title;
+      issueRef = {
+        number: 0,
+        title,
+        url: '',
+        repo: config.tracker.repo ?? '',
+        body: description,
+        labels: body.labels ?? [],
+      };
+    } else if (tracker) {
       try {
-        const issueDetail = await tracker.fetchIssueDetail(body.issueNumber);
+        const issueDetail = await tracker.fetchIssueDetail(body.issueNumber!);
         issueRef = {
           number: issueDetail.number,
           title: issueDetail.title,
@@ -124,7 +148,7 @@ export function createSessionRoutes(
     } else if (body.title) {
       // No tracker — use inline issue data
       issueRef = {
-        number: body.issueNumber,
+        number: body.issueNumber!,
         title: body.title,
         url: '',
         repo: config.tracker.repo ?? '',
@@ -133,7 +157,7 @@ export function createSessionRoutes(
       };
     } else {
       return c.json({
-        error: 'No tracker configured. Provide inline issue details (title, body) or install the `gh` CLI.',
+        error: 'No tracker configured. Provide inline issue details (title, body) or a prompt.',
       }, 503);
     }
 
@@ -144,15 +168,19 @@ export function createSessionRoutes(
 
     sessionStore.add(session);
 
+    // Build branch name and title based on mode
+    const branchPrefix = isPromptOnly ? 'prompt' : `issue/${issueRef.number}`;
+    const displayTitle = isPromptOnly ? issueRef.title : `#${issueRef.number}: ${issueRef.title}`;
+
     // Emit accepted event so the ingest mapper creates a thread in the Funny UI.
     await eventBus.publish({
       event_type: 'session.accepted' as any,
       request_id: session.id,
       timestamp: new Date().toISOString(),
       data: {
-        title: `#${issueRef.number}: ${issueRef.title}`,
+        title: displayTitle,
         prompt: issueRef.body ?? issueRef.title,
-        branch: `issue/${issueRef.number}/${slugify(issueRef.title)}`,
+        branch: `${branchPrefix}/${slugify(issueRef.title)}`,
         worktree_path: body.projectPath,
         model: session.model,
         created_by: 'agent-orchestrator',
@@ -161,6 +189,10 @@ export function createSessionRoutes(
 
     // Run inline: plan → implement → PR
     await sessionStore.transition(session.id, 'planning');
+
+    const fullContext = isPromptOnly
+      ? `Task: ${issueRef.title}\n\n${issueRef.body ?? ''}`
+      : `#${issueRef.number}: ${issueRef.title}\n\n${issueRef.body ?? ''}`;
 
     const issueDetailForPlan: import('../trackers/tracker.js').IssueDetail = {
       number: issueRef.number,
@@ -174,7 +206,7 @@ export function createSessionRoutes(
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
       comments: [],
-      fullContext: `#${issueRef.number}: ${issueRef.title}\n\n${issueRef.body ?? ''}`,
+      fullContext,
     };
 
     runIssuePipeline(
@@ -182,14 +214,17 @@ export function createSessionRoutes(
       body.baseBranch ?? config.branch.main,
       sessionStore, orchestratorAgent, eventBus, config,
     ).catch(async (err) => {
-      logger.error({ sessionId: session.id, err: err.message }, 'Issue pipeline failed');
-      await sessionStore.transition(session.id, 'failed', { error: err.message });
+      const errorMsg = err.message ?? String(err);
+      logger.error({ sessionId: session.id, err: errorMsg }, 'Issue pipeline failed');
+      await emitError(eventBus, session.id, `Pipeline failed: ${errorMsg}`, {
+        sessionStore, fatal: true,
+      });
     });
 
-    // Comment on the issue to show it's being worked on
-    if (tracker) {
+    // Comment on the issue to show it's being worked on (only for real issues)
+    if (tracker && !isPromptOnly) {
       tracker.addComment(
-        body.issueNumber,
+        body.issueNumber!,
         `🤖 **funny agent** is now working on this issue.\n\nSession: \`${session.id}\``,
       ).catch((err) => {
         logger.warn({ err: err.message }, 'Failed to comment on issue');
@@ -199,7 +234,7 @@ export function createSessionRoutes(
     return c.json({
       sessionId: session.id,
       status: session.status,
-      issueNumber: body.issueNumber,
+      issueNumber: issueRef.number,
     }, 202);
   });
 
@@ -254,6 +289,36 @@ export function createSessionRoutes(
   return app;
 }
 
+// ── Error reporting helper ───────────────────────────────────────
+
+/**
+ * Publish an error message to the UI (visible in the thread chat)
+ * and optionally transition the session to 'failed'.
+ */
+async function emitError(
+  eventBus: EventBus,
+  sessionId: string,
+  message: string,
+  opts?: { sessionStore?: SessionStore; fatal?: boolean },
+) {
+  await eventBus.publish({
+    event_type: 'session.message' as any,
+    request_id: sessionId,
+    timestamp: new Date().toISOString(),
+    data: { role: 'assistant', content: `Error: ${message}` },
+  });
+
+  if (opts?.fatal && opts.sessionStore) {
+    await opts.sessionStore.transition(sessionId, 'failed', { error: message });
+    await eventBus.publish({
+      event_type: 'session.failed' as any,
+      request_id: sessionId,
+      timestamp: new Date().toISOString(),
+      data: { error: message, error_message: `Error: ${message}` },
+    });
+  }
+}
+
 // ── Issue pipeline ──────────────────────────────────────────────
 
 /**
@@ -270,6 +335,14 @@ async function runIssuePipeline(
   eventBus: EventBus,
   config: PipelineServiceConfig,
 ) {
+  // Emit started so the UI transitions the thread from pending → running
+  await eventBus.publish({
+    event_type: 'session.started' as any,
+    request_id: session.id,
+    timestamp: new Date().toISOString(),
+    data: {},
+  });
+
   // Step 1: Plan
   logger.info({ sessionId: session.id }, 'Pipeline: planning');
   const plan = await orchestratorAgent.planIssue(issue, projectPath, {
@@ -282,6 +355,32 @@ async function runIssuePipeline(
             timestamp: new Date().toISOString(),
             data: { role: 'assistant', content: event.content },
           });
+          break;
+        case 'tool_call':
+          await eventBus.publish({
+            event_type: 'session.tool_call',
+            request_id: session.id,
+            timestamp: new Date().toISOString(),
+            data: {
+              tool_name: event.name,
+              tool_input: event.args,
+              tool_call_id: event.id,
+            },
+          });
+          break;
+        case 'tool_result':
+          await eventBus.publish({
+            event_type: 'session.tool_result',
+            request_id: session.id,
+            timestamp: new Date().toISOString(),
+            data: {
+              tool_call_id: event.id,
+              output: event.result,
+            },
+          });
+          break;
+        case 'error':
+          await emitError(eventBus, session.id, event.message);
           break;
       }
     },
@@ -300,13 +399,17 @@ async function runIssuePipeline(
   );
 
   // Step 2: Create worktree + branch
-  const branchName = `issue/${issue.number}/${slugify(issue.title)}`;
+  const isPromptOnly = issue.number === 0;
+  const branchPrefix = isPromptOnly ? 'prompt' : `issue/${issue.number}`;
+  const branchName = `${branchPrefix}/${slugify(issue.title)}-${nanoid(5)}`;
   const { createWorktree } = await import('@funny/core/git');
 
   const wtResult = await createWorktree(projectPath, branchName, baseBranch);
   if (wtResult.isErr()) {
     logger.error({ err: wtResult.error }, 'Failed to create worktree');
-    await sessionStore.transition(session.id, 'failed', { error: `Worktree creation failed: ${wtResult.error}` });
+    await emitError(eventBus, session.id, `Worktree creation failed: ${wtResult.error}`, {
+      sessionStore, fatal: true,
+    });
     return;
   }
 
@@ -322,7 +425,57 @@ async function runIssuePipeline(
   // Step 3: Implement
   const implResult = await orchestratorAgent.implementIssue(
     issue, plan, worktreePath, branchName,
+    {
+      onEvent: async (event) => {
+        switch (event.type) {
+          case 'text':
+            await eventBus.publish({
+              event_type: 'session.message' as any,
+              request_id: session.id,
+              timestamp: new Date().toISOString(),
+              data: { role: 'assistant', content: event.content },
+            });
+            break;
+          case 'tool_call':
+            await eventBus.publish({
+              event_type: 'session.tool_call',
+              request_id: session.id,
+              timestamp: new Date().toISOString(),
+              data: {
+                tool_name: event.name,
+                tool_input: event.args,
+                tool_call_id: event.id,
+              },
+            });
+            break;
+          case 'tool_result':
+            await eventBus.publish({
+              event_type: 'session.tool_result',
+              request_id: session.id,
+              timestamp: new Date().toISOString(),
+              data: {
+                tool_call_id: event.id,
+                output: event.result,
+              },
+            });
+            break;
+          case 'error':
+            await emitError(eventBus, session.id, event.message);
+            break;
+        }
+      },
+    },
   );
+
+  // Check if implementation had errors
+  if (implResult.status === 'error') {
+    const errorDetail = implResult.findings_count > 0
+      ? `Implementation failed with ${implResult.findings_count} finding(s)`
+      : 'Implementation failed';
+    logger.error({ sessionId: session.id, status: implResult.status }, errorDetail);
+    await emitError(eventBus, session.id, errorDetail, { sessionStore, fatal: true });
+    return;
+  }
 
   logger.info(
     { sessionId: session.id, status: implResult.status, findings: implResult.findings_count },
@@ -331,20 +484,25 @@ async function runIssuePipeline(
 
   // Step 4: Push + create PR
   const { push, createPR } = await import('@funny/core/git');
+  const identity = process.env.GH_TOKEN ? { githubToken: process.env.GH_TOKEN } : undefined;
 
-  const pushResult = await push(worktreePath);
+  const pushResult = await push(worktreePath, identity);
   if (pushResult.isErr()) {
     logger.error({ err: pushResult.error }, 'Failed to push branch');
-    await sessionStore.transition(session.id, 'failed', { error: `Push failed: ${pushResult.error}` });
+    await emitError(eventBus, session.id, `Push failed: ${pushResult.error}`, {
+      sessionStore, fatal: true,
+    });
     return;
   }
 
   await sessionStore.transition(session.id, 'pr_created');
 
-  const prTitle = `fix: ${issue.title} (Closes #${issue.number})`;
+  const prTitle = isPromptOnly
+    ? `feat: ${issue.title}`
+    : `fix: ${issue.title} (Closes #${issue.number})`;
   const prBody = `## Summary\n\n${plan.summary}\n\n## Approach\n\n${plan.approach}\n\n---\n\nAutomated by funny agent session \`${session.id}\``;
 
-  const prResult = await createPR(worktreePath, prTitle, prBody, baseBranch);
+  const prResult = await createPR(worktreePath, prTitle, prBody, baseBranch, identity);
 
   if (prResult.isOk()) {
     const prUrl = prResult.value;
@@ -357,10 +515,28 @@ async function runIssuePipeline(
     );
   } else {
     logger.warn({ err: prResult.error }, 'PR creation failed — session still tracks the pushed branch');
+    await emitError(eventBus, session.id, `PR creation failed: ${prResult.error}. Branch was pushed but PR could not be created.`);
   }
 
   // Transition to waiting for CI
   await sessionStore.transition(session.id, 'ci_running');
+
+  // Emit completed so the UI transitions the thread to completed/review
+  const issueLabel = isPromptOnly ? issue.title : `#${issue.number}: ${issue.title}`;
+  const completionData: Record<string, string> = {
+    result: prResult.isOk()
+      ? `PR created for ${issueLabel}`
+      : `Branch pushed for ${issueLabel} (PR creation failed)`,
+  };
+  if (prResult.isErr()) {
+    completionData.error_message = `Error: PR creation failed: ${prResult.error}. Branch was pushed but PR could not be created.`;
+  }
+  await eventBus.publish({
+    event_type: 'session.completed' as any,
+    request_id: session.id,
+    timestamp: new Date().toISOString(),
+    data: completionData,
+  });
 
   logger.info({ sessionId: session.id }, 'Pipeline: complete, waiting for CI/review');
 }

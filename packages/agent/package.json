@@ -12,6 +12,7 @@
   "dependencies": {
     "@abbacchio/transport": "^0.1.5",
     "@funny/core": "*",
+    "@funny/funny-client": "*",
     "@hono/zod-validator": "^0.4.0",
     "eventemitter3": "^5.0.1",
     "hono": "^4.11.9",

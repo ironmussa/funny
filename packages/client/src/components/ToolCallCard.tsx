@@ -141,7 +141,7 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
                   <div key={key}>
                     <div className="text-xs font-semibold text-muted-foreground uppercase mb-0.5">{key}</div>
                     <div className="rounded bg-background/80 border border-border/40 px-2.5 py-1.5 overflow-x-auto">
-                      <pre className="font-mono text-sm text-foreground/80 leading-relaxed whitespace-pre-wrap break-all">
+                      <pre className="font-mono text-xs text-foreground/80 leading-relaxed whitespace-pre-wrap break-all">
                         {typeof value === 'string' ? value : JSON.stringify(value, null, 2)}
                       </pre>
                     </div>
@@ -153,7 +153,7 @@ export const ToolCallCard = memo(function ToolCallCard({ name, input, output, on
                   <div className="text-xs font-semibold text-muted-foreground uppercase mb-1">{t('tools.output')}</div>
                   <div className="rounded bg-background/80 border border-border/40 px-2.5 py-1.5 overflow-hidden max-h-60">
                     <pre
-                      className="font-mono text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap break-all"
+                      className="font-mono text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap break-all"
                       dangerouslySetInnerHTML={{ __html: htmlOutput! }}
                     />
                   </div>

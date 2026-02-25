@@ -81,6 +81,9 @@ export function NewThreadInput() {
       return false;
     }
 
+    // Set selectedThreadId immediately so WS events are buffered while activeThread loads.
+    // This closes the race condition where the server emits events before the client navigates.
+    useThreadStore.setState({ selectedThreadId: result.value.id });
     await loadThreadsForProject(effectiveProjectId);
     setCreating(false);
     navigate(`/projects/${effectiveProjectId}/threads/${result.value.id}`);

@@ -150,7 +150,14 @@ export function handleWSStatus(
   threadId: string,
   data: { status: string; waitingReason?: string; permissionRequest?: { toolName: string }; stage?: string; permissionMode?: string }
 ): void {
-  const { threadsByProject, activeThread, loadThreadsForProject } = get();
+  const { threadsByProject, activeThread, loadThreadsForProject, selectedThreadId } = get();
+
+  // Buffer status events when thread is selected but not yet fully loaded
+  if (!activeThread?.id || activeThread.id !== threadId) {
+    if (selectedThreadId === threadId) {
+      bufferWSEvent(threadId, 'status', data);
+    }
+  }
 
   const machineEvent = wsEventToMachineEvent('agent:status', data);
   if (!machineEvent) {
@@ -233,7 +240,14 @@ export function handleWSResult(
   threadId: string,
   data: any
 ): void {
-  const { threadsByProject, activeThread, loadThreadsForProject } = get();
+  const { threadsByProject, activeThread, loadThreadsForProject, selectedThreadId } = get();
+
+  // Buffer result events when thread is selected but not yet fully loaded
+  if (!activeThread?.id || activeThread.id !== threadId) {
+    if (selectedThreadId === threadId) {
+      bufferWSEvent(threadId, 'result', data);
+    }
+  }
 
   const machineEvent = wsEventToMachineEvent('agent:result', data);
   if (!machineEvent) {

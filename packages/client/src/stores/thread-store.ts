@@ -87,6 +87,8 @@ function flushWSBuffer(threadId: string, store: ThreadState) {
       case 'message': store.handleWSMessage(threadId, event.data); break;
       case 'tool_call': store.handleWSToolCall(threadId, event.data); break;
       case 'tool_output': store.handleWSToolOutput(threadId, event.data); break;
+      case 'status': store.handleWSStatus(threadId, event.data); break;
+      case 'result': store.handleWSResult(threadId, event.data); break;
     }
   }
 }

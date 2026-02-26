@@ -1,5 +1,6 @@
 import type { Project } from '@funny/shared';
 import { ArrowLeft, Plus, Folder, Loader2, ShieldQuestion } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -27,17 +28,56 @@ type MobileView =
   | { screen: 'chat'; projectId: string; threadId: string }
   | { screen: 'newThread'; projectId: string };
 
-const D4C_FRAMES = ['🐇', '🌀', '🐰', '⭐'];
+const D4C_FRAMES = ['🐇', '🌀', '🐰', '⭐'] as const;
 const D4C_INTERVAL = 600;
+
+const D4C_ANIMATIONS: Record<string, { initial: object; animate: object; exit: object }> = {
+  '🐇': {
+    initial: { y: 12, opacity: 0 },
+    animate: { y: 0, opacity: 1 },
+    exit: { y: -12, opacity: 0 },
+  },
+  '🌀': {
+    initial: { rotate: -180, scale: 0.3, opacity: 0 },
+    animate: { rotate: 0, scale: 1, opacity: 1 },
+    exit: { rotate: 180, scale: 0.3, opacity: 0 },
+  },
+  '🐰': {
+    initial: { y: 14, opacity: 0, scale: 0.8 },
+    animate: { y: 0, opacity: 1, scale: 1 },
+    exit: { y: -10, opacity: 0, scale: 0.8 },
+  },
+  '⭐': {
+    initial: { scale: 0, opacity: 0 },
+    animate: { scale: 1, opacity: 1 },
+    exit: { scale: 0, opacity: 0 },
+  },
+};
 
 function D4CAnimation() {
   const [frame, setFrame] = useState(0);
+  const prefersReducedMotion = useReducedMotion();
   useEffect(() => {
     const id = setInterval(() => setFrame((f) => (f + 1) % D4C_FRAMES.length), D4C_INTERVAL);
     return () => clearInterval(id);
   }, []);
+  const emoji = D4C_FRAMES[frame];
+  const anim = D4C_ANIMATIONS[emoji];
   return (
-    <span className="inline-block w-5 text-center text-base leading-none">{D4C_FRAMES[frame]}</span>
+    <span className="inline-flex w-5 items-center justify-center overflow-hidden text-base leading-none">
+      <AnimatePresence mode="wait">
+        <motion.span
+          key={emoji + frame}
+          initial={prefersReducedMotion ? false : anim.initial}
+          animate={anim.animate}
+          exit={prefersReducedMotion ? undefined : anim.exit}
+          transition={{ duration: 0.25, ease: 'easeOut' }}
+          className="inline-block"
+        >
+          {emoji}
+        </motion.span>
+      </AnimatePresence>
+    </span>
   );
 }
 

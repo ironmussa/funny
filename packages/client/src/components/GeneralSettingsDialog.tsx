@@ -117,10 +117,19 @@ function ThemeCard({
       >
         {/* Mini preview */}
         <div className="flex h-16" style={{ backgroundColor: bg }}>
-          <div className="w-5 border-r" style={{ backgroundColor: sidebar, borderColor: `${fg}15` }} />
+          <div
+            className="w-5 border-r"
+            style={{ backgroundColor: sidebar, borderColor: `${fg}15` }}
+          />
           <div className="flex flex-1 flex-col gap-1 p-2">
-            <div className="h-1.5 w-10 rounded-full" style={{ backgroundColor: fg, opacity: 0.7 }} />
-            <div className="h-1.5 w-14 rounded-full" style={{ backgroundColor: fg, opacity: 0.3 }} />
+            <div
+              className="h-1.5 w-10 rounded-full"
+              style={{ backgroundColor: fg, opacity: 0.7 }}
+            />
+            <div
+              className="h-1.5 w-14 rounded-full"
+              style={{ backgroundColor: fg, opacity: 0.3 }}
+            />
             <div className="h-1.5 w-8 rounded-full" style={{ backgroundColor: accent }} />
           </div>
         </div>
@@ -155,19 +164,15 @@ export function GeneralSettingsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const {
-    defaultEditor,
-    useInternalEditor,
-    setDefaultEditor,
-    setUseInternalEditor,
-  } = useSettingsStore(
-    useShallow((s) => ({
-      defaultEditor: s.defaultEditor,
-      useInternalEditor: s.useInternalEditor,
-      setDefaultEditor: s.setDefaultEditor,
-      setUseInternalEditor: s.setUseInternalEditor,
-    })),
-  );
+  const { defaultEditor, useInternalEditor, setDefaultEditor, setUseInternalEditor } =
+    useSettingsStore(
+      useShallow((s) => ({
+        defaultEditor: s.defaultEditor,
+        useInternalEditor: s.useInternalEditor,
+        setDefaultEditor: s.setDefaultEditor,
+        setUseInternalEditor: s.setUseInternalEditor,
+      })),
+    );
   const { theme, setTheme } = useTheme();
   const { t, i18n } = useTranslation();
 

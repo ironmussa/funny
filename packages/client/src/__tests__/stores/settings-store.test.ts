@@ -1,6 +1,5 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
-
 import type { ToolPermission } from '@funny/shared';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import {
   deriveToolLists,

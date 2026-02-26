@@ -1,7 +1,7 @@
+import { ThemeProvider } from 'next-themes';
 import React, { lazy, Suspense, useEffect, useSyncExternalStore } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { ThemeProvider } from 'next-themes';
 
 import { AppShellSkeleton } from './components/AppShellSkeleton';
 import { TooltipProvider } from './components/ui/tooltip';
@@ -97,7 +97,16 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       defaultTheme="dark"
       enableSystem
       disableTransitionOnChange
-      themes={['light', 'dark', 'system', 'one-dark', 'dracula', 'github-dark', 'night-owl', 'catppuccin']}
+      themes={[
+        'light',
+        'dark',
+        'system',
+        'one-dark',
+        'dracula',
+        'github-dark',
+        'night-owl',
+        'catppuccin',
+      ]}
       value={{
         light: 'light',
         dark: 'dark',

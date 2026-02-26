@@ -201,7 +201,26 @@
     "resetSoftConfirm": "Desfazer o último commit? As alterações serão mantidas.",
     "resetSoftSuccess": "Último commit desfeito",
     "resetSoftFailed": "Erro ao desfazer: {{message}}",
-    "agentRunningTooltip": "O agente está em execução. Aguarde a finalização para realizar ações de git."
+    "agentRunningTooltip": "O agente está em execução. Aguarde a finalização para realizar ações de git.",
+    "progress": {
+      "description": "Progresso da operação git",
+      "done": "Concluído",
+      "unstaging": "Removendo arquivos não selecionados",
+      "staging": "Preparando arquivos selecionados",
+      "committing": "Confirmando alterações",
+      "amending": "Emendando commit",
+      "pushing": "Enviando para origin",
+      "creatingPR": "Criando pull request",
+      "merging": "Mesclando e limpando",
+      "commitTitle": "Commit",
+      "amendTitle": "Emendar Commit",
+      "commitPushTitle": "Commit & Push",
+      "commitPRTitle": "Commit & Criar PR",
+      "commitMergeTitle": "Commit & Merge",
+      "pushTitle": "Enviar para Origin",
+      "mergeTitle": "Mesclar em {{target}}",
+      "createPRTitle": "Criar Pull Request"
+    }
   },
   "newThread": {
     "title": "Nova Thread",

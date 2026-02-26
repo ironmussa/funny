@@ -70,6 +70,7 @@ import { useThreadStore } from '@/stores/thread-store';
 import { getNavigate } from '@/stores/thread-store-internals';
 import { useUIStore } from '@/stores/ui-store';
 
+import { GitProgressModal, type GitProgressStep } from './GitProgressModal';
 import { ReactDiffViewer, DIFF_VIEWER_STYLES } from './tool-cards/utils';
 
 const fileStatusIcons: Record<string, typeof FileCode> = {
@@ -256,6 +257,18 @@ export function ReviewPane() {
   const [prDialog, setPrDialog] = useState<{ title: string; body: string } | null>(null);
   const [hasRebaseConflict, setHasRebaseConflict] = useState(false);
 
+  // Progress modal state
+  const [progressSteps, setProgressSteps] = useState<GitProgressStep[]>([]);
+  const [progressOpen, setProgressOpen] = useState(false);
+  const [progressTitle, setProgressTitle] = useState('');
+
+  const updateStep = useCallback(
+    (id: string, update: Partial<GitProgressStep>) => {
+      setProgressSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...update } : s)));
+    },
+    [],
+  );
+
   // Show standalone merge button when worktree has no dirty files but has unmerged commits.
   // Also require the worktree to actually exist (has a path) and the branch to differ from baseBranch.
   const showMergeOnly =
@@ -275,29 +288,6 @@ export function ReviewPane() {
     gitStatus &&
     gitStatus.unpushedCommitCount > 0 &&
     !hasRebaseConflict;
-
-  const showMergeConflictToast = useCallback(
-    (errorMessage: string, _threadId: string) => {
-      const target = baseBranch || 'main';
-      const lower = errorMessage.toLowerCase();
-      const isConflict =
-        lower.includes('conflict') ||
-        lower.includes('rebase failed') ||
-        lower.includes('merge failed') ||
-        lower.includes('automatic merge failed') ||
-        lower.includes('fix conflicts') ||
-        lower.includes('could not apply');
-
-      if (!isConflict) {
-        toast.error(t('review.mergeFailed', { message: errorMessage }));
-        return;
-      }
-
-      toast.error(t('review.mergeConflict', { target }));
-      setHasRebaseConflict(true);
-    },
-    [t, baseBranch],
-  );
 
   const fileListRef = useRef<HTMLDivElement>(null);
 
@@ -470,47 +460,6 @@ export function ReviewPane() {
     setGeneratingMsg(false);
   };
 
-  const performCommit = async (): Promise<boolean> => {
-    if (!effectiveThreadId || !commitTitle.trim() || checkedFiles.size === 0) return false;
-    const commitMsg = commitBody.trim()
-      ? `${commitTitle.trim()}\n\n${commitBody.trim()}`
-      : commitTitle.trim();
-
-    // Only unstage files that are staged but NOT selected (avoid unstage→restage
-    // cycle which breaks gitignored files that were previously force-staged)
-    const toUnstage = summaries
-      .filter((f) => f.staged && !checkedFiles.has(f.path))
-      .map((f) => f.path);
-    if (toUnstage.length > 0) {
-      const unstageResult = await api.unstageFiles(effectiveThreadId, toUnstage);
-      if (unstageResult.isErr()) {
-        toast.error(t('review.unstageFailed', { message: unstageResult.error.message }));
-        return false;
-      }
-    }
-
-    // Only stage files that are selected but NOT already staged
-    const toStage = Array.from(checkedFiles).filter((p) => {
-      const s = summaries.find((f) => f.path === p);
-      return s && !s.staged;
-    });
-    if (toStage.length > 0) {
-      const stageResult = await api.stageFiles(effectiveThreadId, toStage);
-      if (stageResult.isErr()) {
-        toast.error(t('review.stageFailed', { message: stageResult.error.message }));
-        return false;
-      }
-    }
-
-    const isAmend = selectedAction === 'amend';
-    const result = await api.commit(effectiveThreadId, commitMsg, isAmend);
-    if (result.isErr()) {
-      toast.error(t('review.commitFailed', { message: result.error.message }));
-      return false;
-    }
-    return true;
-  };
-
   const commitLockRef = useRef(false);
   const handleCommitAction = async () => {
     if (!effectiveThreadId || !commitTitle.trim() || checkedFiles.size === 0 || actionInProgress)
@@ -520,71 +469,139 @@ export function ReviewPane() {
     commitLockRef.current = true;
     setActionInProgress(selectedAction);
 
+    // Build steps based on selected action
+    const steps: GitProgressStep[] = [];
+    const toUnstage = summaries
+      .filter((f) => f.staged && !checkedFiles.has(f.path))
+      .map((f) => f.path);
+    const toStage = Array.from(checkedFiles).filter((p) => {
+      const s = summaries.find((f) => f.path === p);
+      return s && !s.staged;
+    });
+
+    if (toUnstage.length > 0) {
+      steps.push({ id: 'unstage', label: t('review.progress.unstaging'), status: 'pending' });
+    }
+    if (toStage.length > 0) {
+      steps.push({ id: 'stage', label: t('review.progress.staging'), status: 'pending' });
+    }
+    const isAmend = selectedAction === 'amend';
+    steps.push({
+      id: 'commit',
+      label: isAmend ? t('review.progress.amending') : t('review.progress.committing'),
+      status: 'pending',
+    });
+    if (selectedAction === 'commit-push' || selectedAction === 'commit-pr') {
+      steps.push({ id: 'push', label: t('review.progress.pushing'), status: 'pending' });
+    }
+    if (selectedAction === 'commit-pr') {
+      steps.push({ id: 'pr', label: t('review.progress.creatingPR'), status: 'pending' });
+    }
+    if (selectedAction === 'commit-merge') {
+      steps.push({ id: 'merge', label: t('review.progress.merging'), status: 'pending' });
+    }
+
+    // Determine title
+    const titleMap: Record<string, string> = {
+      commit: t('review.progress.commitTitle'),
+      amend: t('review.progress.amendTitle'),
+      'commit-push': t('review.progress.commitPushTitle'),
+      'commit-pr': t('review.progress.commitPRTitle'),
+      'commit-merge': t('review.progress.commitMergeTitle'),
+    };
+    setProgressTitle(titleMap[selectedAction] || t('review.progress.commitTitle'));
+    setProgressSteps(steps);
+    setProgressOpen(true);
+
+    const setStep = (id: string, update: Partial<GitProgressStep>) => {
+      setProgressSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...update } : s)));
+    };
+
     try {
-      const commitSuccess = await performCommit();
-      if (!commitSuccess) {
+      // Unstage
+      if (toUnstage.length > 0) {
+        setStep('unstage', { status: 'running' });
+        const unstageResult = await api.unstageFiles(effectiveThreadId, toUnstage);
+        if (unstageResult.isErr()) {
+          setStep('unstage', { status: 'failed', error: unstageResult.error.message });
+          setActionInProgress(null);
+          return;
+        }
+        setStep('unstage', { status: 'completed' });
+      }
+
+      // Stage
+      if (toStage.length > 0) {
+        setStep('stage', { status: 'running' });
+        const stageResult = await api.stageFiles(effectiveThreadId, toStage);
+        if (stageResult.isErr()) {
+          setStep('stage', { status: 'failed', error: stageResult.error.message });
+          setActionInProgress(null);
+          return;
+        }
+        setStep('stage', { status: 'completed' });
+      }
+
+      // Commit
+      setStep('commit', { status: 'running' });
+      const commitMsg = commitBody.trim()
+        ? `${commitTitle.trim()}\n\n${commitBody.trim()}`
+        : commitTitle.trim();
+      const commitResult = await api.commit(effectiveThreadId, commitMsg, isAmend);
+      if (commitResult.isErr()) {
+        setStep('commit', { status: 'failed', error: commitResult.error.message });
         setActionInProgress(null);
         return;
       }
+      setStep('commit', { status: 'completed' });
 
-      if (selectedAction === 'commit' || selectedAction === 'amend') {
-        toast.success(
-          selectedAction === 'amend'
-            ? t('review.amendSuccess', 'Commit amended')
-            : t('review.commitSuccess'),
-        );
-      } else if (selectedAction === 'commit-push') {
+      // Push (for commit-push and commit-pr)
+      if (selectedAction === 'commit-push' || selectedAction === 'commit-pr') {
+        setStep('push', { status: 'running' });
         const pushResult = await api.push(effectiveThreadId);
         if (pushResult.isErr()) {
-          toast.error(t('review.pushFailed', { message: pushResult.error.message }));
-        } else {
-          toast.success(t('review.pushedSuccess'));
-        }
-      } else if (selectedAction === 'commit-pr') {
-        const pushResult = await api.push(effectiveThreadId);
-        if (pushResult.isErr()) {
-          toast.error(t('review.pushFailed', { message: pushResult.error.message }));
+          setStep('push', { status: 'failed', error: pushResult.error.message });
           setActionInProgress(null);
-          await refresh();
+          if (selectedAction === 'commit-pr') await refresh();
           return;
         }
+        setStep('push', { status: 'completed' });
+      }
+
+      // Create PR (for commit-pr)
+      if (selectedAction === 'commit-pr') {
+        setStep('pr', { status: 'running' });
         const prResult = await api.createPR(
           effectiveThreadId,
           commitTitle.trim(),
           commitBody.trim(),
         );
         if (prResult.isErr()) {
-          toast.error(t('review.prFailed', { message: prResult.error.message }));
-        } else if (prResult.value.url) {
-          toast.success(
-            <div>
-              {t('review.prCreated')}
-              <a
-                href={prResult.value.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="ml-2 underline"
-              >
-                View PR
-              </a>
-            </div>,
-          );
-        } else {
-          toast.success(t('review.prCreated'));
+          setStep('pr', { status: 'failed', error: prResult.error.message });
+          setActionInProgress(null);
+          return;
         }
-      } else if (selectedAction === 'commit-merge') {
+        setStep('pr', { status: 'completed', url: prResult.value.url || undefined });
+      }
+
+      // Merge (for commit-merge)
+      if (selectedAction === 'commit-merge') {
+        setStep('merge', { status: 'running' });
         const mergeResult = await api.merge(effectiveThreadId, { cleanup: true });
         if (mergeResult.isErr()) {
-          showMergeConflictToast(mergeResult.error.message, effectiveThreadId);
+          const lower = mergeResult.error.message.toLowerCase();
+          const isConflict =
+            lower.includes('conflict') ||
+            lower.includes('rebase failed') ||
+            lower.includes('merge failed');
+          setStep('merge', { status: 'failed', error: mergeResult.error.message });
+          if (isConflict) setHasRebaseConflict(true);
           setActionInProgress(null);
           await refresh();
           return;
         }
-        const target = useThreadStore.getState().activeThread?.baseBranch || 'base';
-        toast.success(t('review.commitAndMergeSuccess', { target }));
-        // Refresh thread data so mode/branch/worktreePath reflect the cleanup
+        setStep('merge', { status: 'completed' });
         await useThreadStore.getState().refreshActiveThread();
-        // Update git status to reflect merged state
         useGitStatusStore.getState().fetchForThread(effectiveThreadId);
       }
 
@@ -626,11 +643,19 @@ export function ReviewPane() {
   const handlePushOnly = async () => {
     if (!effectiveThreadId || pushInProgress) return;
     setPushInProgress(true);
+
+    const steps: GitProgressStep[] = [
+      { id: 'push', label: t('review.progress.pushing'), status: 'running' },
+    ];
+    setProgressTitle(t('review.progress.pushTitle'));
+    setProgressSteps(steps);
+    setProgressOpen(true);
+
     const pushResult = await api.push(effectiveThreadId);
     if (pushResult.isErr()) {
-      toast.error(t('review.pushFailed', { message: pushResult.error.message }));
+      updateStep('push', { status: 'failed', error: pushResult.error.message });
     } else {
-      toast.success(t('review.pushedSuccess'));
+      updateStep('push', { status: 'completed' });
     }
     setPushInProgress(false);
     useGitStatusStore.getState().fetchForThread(effectiveThreadId);
@@ -639,20 +664,29 @@ export function ReviewPane() {
   const handleMergeOnly = async () => {
     if (!effectiveThreadId || mergeInProgress) return;
     setMergeInProgress(true);
+
+    const target = baseBranch || 'base';
+    const steps: GitProgressStep[] = [
+      { id: 'merge', label: t('review.progress.merging'), status: 'running' },
+    ];
+    setProgressTitle(t('review.progress.mergeTitle', { target }));
+    setProgressSteps(steps);
+    setProgressOpen(true);
+
     const mergeResult = await api.merge(effectiveThreadId, { cleanup: true });
     if (mergeResult.isErr()) {
-      showMergeConflictToast(mergeResult.error.message, effectiveThreadId);
+      updateStep('merge', { status: 'failed', error: mergeResult.error.message });
+      const lower = mergeResult.error.message.toLowerCase();
+      const isConflict =
+        lower.includes('conflict') ||
+        lower.includes('rebase failed') ||
+        lower.includes('merge failed') ||
+        lower.includes('automatic merge failed') ||
+        lower.includes('fix conflicts') ||
+        lower.includes('could not apply');
+      if (isConflict) setHasRebaseConflict(true);
     } else {
-      const target = baseBranch || 'base';
-      const branch = useThreadStore.getState().activeThread?.branch || '';
-      toast.success(
-        t('review.mergeSuccess', {
-          branch,
-          target,
-          defaultValue: `Merged "${branch}" into "${target}" successfully`,
-        }),
-      );
-      // Refresh thread data so mode/branch/worktreePath reflect the cleanup
+      updateStep('merge', { status: 'completed' });
       await useThreadStore.getState().refreshActiveThread();
     }
     setMergeInProgress(false);
@@ -662,38 +696,40 @@ export function ReviewPane() {
   const handleCreatePROnly = async () => {
     if (!effectiveThreadId || prInProgress || !prDialog) return;
     setPrInProgress(true);
+
+    const steps: GitProgressStep[] = [];
+    const needsPush = gitStatus && gitStatus.unpushedCommitCount > 0;
+    if (needsPush) {
+      steps.push({ id: 'push', label: t('review.progress.pushing'), status: 'pending' });
+    }
+    steps.push({ id: 'pr', label: t('review.progress.creatingPR'), status: 'pending' });
+
+    setProgressTitle(t('review.progress.createPRTitle'));
+    setProgressSteps(steps);
+    setProgressOpen(true);
+
     // Push first if there are unpushed commits
-    if (gitStatus && gitStatus.unpushedCommitCount > 0) {
+    if (needsPush) {
+      updateStep('push', { status: 'running' });
       const pushResult = await api.push(effectiveThreadId);
       if (pushResult.isErr()) {
-        toast.error(t('review.pushFailed', { message: pushResult.error.message }));
+        updateStep('push', { status: 'failed', error: pushResult.error.message });
         setPrInProgress(false);
         return;
       }
+      updateStep('push', { status: 'completed' });
     }
+
+    updateStep('pr', { status: 'running' });
     const prResult = await api.createPR(
       effectiveThreadId,
       prDialog.title.trim(),
       prDialog.body.trim(),
     );
     if (prResult.isErr()) {
-      toast.error(t('review.prFailed', { message: prResult.error.message }));
-    } else if (prResult.value.url) {
-      toast.success(
-        <div>
-          {t('review.prCreated')}
-          <a
-            href={prResult.value.url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="ml-2 underline"
-          >
-            View PR
-          </a>
-        </div>,
-      );
+      updateStep('pr', { status: 'failed', error: prResult.error.message });
     } else {
-      toast.success(t('review.prCreated'));
+      updateStep('pr', { status: 'completed', url: prResult.value.url || undefined });
     }
     setPrInProgress(false);
     setPrDialog(null);
@@ -1759,6 +1795,14 @@ export function ReviewPane() {
           })()}
         </DialogContent>
       </Dialog>
+
+      {/* Git operation progress modal */}
+      <GitProgressModal
+        open={progressOpen}
+        onOpenChange={setProgressOpen}
+        steps={progressSteps}
+        title={progressTitle}
+      />
     </div>
   );
 }

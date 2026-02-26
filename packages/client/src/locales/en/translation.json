@@ -201,7 +201,26 @@
     "resetSoftConfirm": "Undo the last commit? Changes will be kept.",
     "resetSoftSuccess": "Last commit undone",
     "resetSoftFailed": "Reset failed: {{message}}",
-    "agentRunningTooltip": "The agent is currently running. Wait for it to finish before performing git actions."
+    "agentRunningTooltip": "The agent is currently running. Wait for it to finish before performing git actions.",
+    "progress": {
+      "description": "Git operation progress",
+      "done": "Done",
+      "unstaging": "Unstaging unchecked files",
+      "staging": "Staging selected files",
+      "committing": "Committing changes",
+      "amending": "Amending commit",
+      "pushing": "Pushing to origin",
+      "creatingPR": "Creating pull request",
+      "merging": "Merging and cleaning up",
+      "commitTitle": "Commit",
+      "amendTitle": "Amend Commit",
+      "commitPushTitle": "Commit & Push",
+      "commitPRTitle": "Commit & Create PR",
+      "commitMergeTitle": "Commit & Merge",
+      "pushTitle": "Push to Origin",
+      "mergeTitle": "Merge into {{target}}",
+      "createPRTitle": "Create Pull Request"
+    }
   },
   "newThread": {
     "title": "New Thread",

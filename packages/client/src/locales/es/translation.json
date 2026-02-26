@@ -201,7 +201,26 @@
     "resetSoftConfirm": "¿Deshacer el último commit? Los cambios se mantendrán.",
     "resetSoftSuccess": "Último commit deshecho",
     "resetSoftFailed": "Error al deshacer: {{message}}",
-    "agentRunningTooltip": "El agente se está ejecutando actualmente. Espere a que finalice para realizar acciones de git."
+    "agentRunningTooltip": "El agente se está ejecutando actualmente. Espere a que finalice para realizar acciones de git.",
+    "progress": {
+      "description": "Progreso de operación git",
+      "done": "Listo",
+      "unstaging": "Quitando archivos no seleccionados",
+      "staging": "Preparando archivos seleccionados",
+      "committing": "Confirmando cambios",
+      "amending": "Enmendando commit",
+      "pushing": "Enviando a origin",
+      "creatingPR": "Creando pull request",
+      "merging": "Fusionando y limpiando",
+      "commitTitle": "Commit",
+      "amendTitle": "Enmendar Commit",
+      "commitPushTitle": "Commit & Push",
+      "commitPRTitle": "Commit & Crear PR",
+      "commitMergeTitle": "Commit & Merge",
+      "pushTitle": "Push a Origin",
+      "mergeTitle": "Fusionar en {{target}}",
+      "createPRTitle": "Crear Pull Request"
+    }
   },
   "newThread": {
     "title": "Nuevo Hilo",

@@ -3,7 +3,14 @@
  * Maps friendly model names to full model IDs and provides helpers.
  */
 
-import type { AgentProvider, AgentModel, ClaudeModel, CodexModel, GeminiModel, PermissionMode } from './types.js';
+import type {
+  AgentProvider,
+  AgentModel,
+  ClaudeModel,
+  CodexModel,
+  GeminiModel,
+  PermissionMode,
+} from './types.js';
 
 // ── Model ID mappings ─────────────────────────────────────────
 
@@ -15,7 +22,7 @@ const CLAUDE_MODEL_IDS: Record<ClaudeModel, string> = {
 };
 
 const CODEX_MODEL_IDS: Record<CodexModel, string> = {
-  'o3': 'o3',
+  o3: 'o3',
   'o4-mini': 'o4-mini',
   'codex-mini': 'codex-mini',
 };
@@ -43,7 +50,7 @@ const CLAUDE_MODEL_LABELS: Record<ClaudeModel, string> = {
 };
 
 const CODEX_MODEL_LABELS: Record<CodexModel, string> = {
-  'o3': 'o3',
+  o3: 'o3',
   'o4-mini': 'o4-mini',
   'codex-mini': 'Codex Mini',
 };
@@ -75,8 +82,17 @@ const CLAUDE_PERMISSION_MAP: Record<PermissionMode, string> = {
 // ── Default tools per provider ────────────────────────────────
 
 const CLAUDE_DEFAULT_TOOLS = [
-  'Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep',
-  'WebSearch', 'WebFetch', 'Task', 'TodoWrite', 'NotebookEdit',
+  'Read',
+  'Edit',
+  'Write',
+  'Bash',
+  'Glob',
+  'Grep',
+  'WebSearch',
+  'WebFetch',
+  'Task',
+  'TodoWrite',
+  'NotebookEdit',
 ];
 
 const CODEX_DEFAULT_TOOLS: string[] = [];
@@ -131,18 +147,21 @@ export function getProviderModels(provider: AgentProvider): AgentModel[] {
 /** Get all available models for a provider with display labels. */
 export function getProviderModelsWithLabels(provider: AgentProvider): ModelInfo[] {
   if (provider === 'claude') {
-    return (Object.keys(CLAUDE_MODEL_LABELS) as ClaudeModel[]).map(k => ({
-      value: k, label: CLAUDE_MODEL_LABELS[k],
+    return (Object.keys(CLAUDE_MODEL_LABELS) as ClaudeModel[]).map((k) => ({
+      value: k,
+      label: CLAUDE_MODEL_LABELS[k],
     }));
   }
   if (provider === 'codex') {
-    return (Object.keys(CODEX_MODEL_LABELS) as CodexModel[]).map(k => ({
-      value: k, label: CODEX_MODEL_LABELS[k],
+    return (Object.keys(CODEX_MODEL_LABELS) as CodexModel[]).map((k) => ({
+      value: k,
+      label: CODEX_MODEL_LABELS[k],
     }));
   }
   if (provider === 'gemini') {
-    return (Object.keys(GEMINI_MODEL_LABELS) as GeminiModel[]).map(k => ({
-      value: k, label: GEMINI_MODEL_LABELS[k],
+    return (Object.keys(GEMINI_MODEL_LABELS) as GeminiModel[]).map((k) => ({
+      value: k,
+      label: GEMINI_MODEL_LABELS[k],
     }));
   }
   return [];
@@ -152,7 +171,10 @@ export function getProviderModelsWithLabels(provider: AgentProvider): ModelInfo[
  * Resolve permission mode to the provider-specific SDK value.
  * Returns undefined for providers that don't support permission modes.
  */
-export function resolvePermissionMode(provider: AgentProvider, mode: PermissionMode): string | undefined {
+export function resolvePermissionMode(
+  provider: AgentProvider,
+  mode: PermissionMode,
+): string | undefined {
   if (provider === 'claude') return CLAUDE_PERMISSION_MAP[mode];
   // Codex and Gemini don't have permission modes — they run autonomously
   return undefined;

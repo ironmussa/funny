@@ -5,10 +5,12 @@
  */
 
 import { join } from 'path';
-import { parse as parseYAML } from 'yaml';
+
 import { getDefaultBranch } from '@funny/core/git';
-import { PipelineServiceConfigSchema, type PipelineServiceConfig } from './schema.js';
+import { parse as parseYAML } from 'yaml';
+
 import { logger } from '../infrastructure/logger.js';
+import { PipelineServiceConfigSchema, type PipelineServiceConfig } from './schema.js';
 
 /**
  * Recursively resolve `${VAR_NAME}` patterns in config values.
@@ -21,9 +23,7 @@ function resolveEnvVars(obj: unknown): unknown {
     return obj.map(resolveEnvVars);
   }
   if (obj !== null && typeof obj === 'object') {
-    return Object.fromEntries(
-      Object.entries(obj).map(([k, v]) => [k, resolveEnvVars(v)]),
-    );
+    return Object.fromEntries(Object.entries(obj).map(([k, v]) => [k, resolveEnvVars(v)]));
   }
   return obj;
 }

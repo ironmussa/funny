@@ -60,9 +60,7 @@ export async function loadContextDocs(opts: LoadContextDocsOptions): Promise<str
       const content = readFileSync(filePath, 'utf-8');
       const remaining = maxChars - totalChars;
       const trimmed =
-        content.length > remaining
-          ? content.slice(0, remaining) + '\n...[truncated]'
-          : content;
+        content.length > remaining ? content.slice(0, remaining) + '\n...[truncated]' : content;
 
       docs.push({ path: match, content: trimmed });
       totalChars += trimmed.length;
@@ -71,8 +69,5 @@ export async function loadContextDocs(opts: LoadContextDocsOptions): Promise<str
 
   if (docs.length === 0) return '';
 
-  return (
-    '\n\n## Project Knowledge\n' +
-    docs.map((d) => `### ${d.path}\n${d.content}`).join('\n\n')
-  );
+  return '\n\n## Project Knowledge\n' + docs.map((d) => `### ${d.path}\n${d.content}`).join('\n\n');
 }

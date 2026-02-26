@@ -1,6 +1,12 @@
 import { describe, test, expect, beforeEach } from 'vitest';
+
 import { BaseAgentProcess } from '../agents/base-process.js';
-import type { ClaudeProcessOptions, CLIMessage, CLISystemMessage, CLIResultMessage } from '../agents/types.js';
+import type {
+  ClaudeProcessOptions,
+  CLIMessage,
+  CLISystemMessage,
+  CLIResultMessage,
+} from '../agents/types.js';
 
 // ── Concrete test implementation ────────────────────────────────
 
@@ -229,7 +235,7 @@ describe('BaseAgentProcess', () => {
         subtype: 'error_max_turns',
         startTime: Date.now(),
         numTurns: 200,
-        totalCost: 1.50,
+        totalCost: 1.5,
       });
 
       const msg = messages[0] as CLIResultMessage;

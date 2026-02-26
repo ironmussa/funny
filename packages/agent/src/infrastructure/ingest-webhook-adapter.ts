@@ -14,8 +14,9 @@
  */
 
 import { FunnyClient, FunnyClientError } from '@funny/funny-client';
-import type { EventBus } from './event-bus.js';
+
 import type { PipelineEvent } from '../core/types.js';
+import type { EventBus } from './event-bus.js';
 import { logger } from './logger.js';
 
 const DEFAULT_BASE_URL = 'http://localhost:3001';
@@ -35,9 +36,8 @@ export class IngestWebhookAdapter {
     private eventBus: EventBus,
     opts?: IngestWebhookAdapterOptions,
   ) {
-    const baseUrl = opts?.baseUrl
-      ?? this.extractBaseUrl(process.env.INGEST_WEBHOOK_URL)
-      ?? DEFAULT_BASE_URL;
+    const baseUrl =
+      opts?.baseUrl ?? this.extractBaseUrl(process.env.INGEST_WEBHOOK_URL) ?? DEFAULT_BASE_URL;
     const secret = opts?.secret ?? process.env.INGEST_WEBHOOK_SECRET ?? '';
 
     this.client = new FunnyClient({
@@ -53,7 +53,10 @@ export class IngestWebhookAdapter {
 
     const handler = (event: PipelineEvent) => {
       this.forward(event).catch((err) => {
-        logger.warn({ err: err.message, eventType: event.event_type }, 'Ingest webhook forward failed');
+        logger.warn(
+          { err: err.message, eventType: event.event_type },
+          'Ingest webhook forward failed',
+        );
       });
     };
 

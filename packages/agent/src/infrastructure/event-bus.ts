@@ -5,10 +5,12 @@
  * Persists events to {EVENTS_PATH}/{request_id}.jsonl via Bun.write().
  */
 
-import EventEmitter from 'eventemitter3';
-import { join } from 'path';
 import { mkdirSync, existsSync } from 'fs';
 import { appendFile } from 'fs/promises';
+import { join } from 'path';
+
+import EventEmitter from 'eventemitter3';
+
 import type { PipelineEvent, PipelineEventType } from '../core/types.js';
 import { logger } from './logger.js';
 
@@ -54,10 +56,7 @@ export class EventBus extends EventEmitter<EventBusEvents> {
   /**
    * Subscribe to a specific event type. Returns an unsubscribe function.
    */
-  onEventType(
-    eventType: PipelineEventType,
-    handler: (event: PipelineEvent) => void,
-  ): () => void {
+  onEventType(eventType: PipelineEventType, handler: (event: PipelineEvent) => void): () => void {
     const wrappedHandler = (event: PipelineEvent) => {
       if (event.event_type === eventType) handler(event);
     };

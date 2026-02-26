@@ -1,31 +1,24 @@
-import {
-  CircleCheck,
-  Info,
-  LoaderCircle,
-  OctagonX,
-  TriangleAlert,
-} from "lucide-react"
-import { useSettingsStore } from "@/stores/settings-store"
-import { Toaster as Sonner } from "sonner"
+import { CircleCheck, Info, LoaderCircle, OctagonX, TriangleAlert } from 'lucide-react';
+import { Toaster as Sonner } from 'sonner';
 
-type ToasterProps = React.ComponentProps<typeof Sonner>
+import { useSettingsStore } from '@/stores/settings-store';
 
-function useResolvedTheme(): "light" | "dark" {
-  const theme = useSettingsStore((s) => s.theme)
-  if (theme === "system") {
-    return window.matchMedia("(prefers-color-scheme: dark)").matches
-      ? "dark"
-      : "light"
+type ToasterProps = React.ComponentProps<typeof Sonner>;
+
+function useResolvedTheme(): 'light' | 'dark' {
+  const theme = useSettingsStore((s) => s.theme);
+  if (theme === 'system') {
+    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
   }
-  return theme
+  return theme;
 }
 
 const Toaster = ({ ...props }: ToasterProps) => {
-  const theme = useResolvedTheme()
+  const theme = useResolvedTheme();
 
   return (
     <Sonner
-      theme={theme as ToasterProps["theme"]}
+      theme={theme as ToasterProps['theme']}
       className="toaster group"
       icons={{
         success: <CircleCheck className="h-4 w-4" />,
@@ -37,17 +30,15 @@ const Toaster = ({ ...props }: ToasterProps) => {
       toastOptions={{
         classNames: {
           toast:
-            "group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg",
-          description: "group-[.toast]:text-muted-foreground",
-          actionButton:
-            "group-[.toast]:bg-primary group-[.toast]:text-primary-foreground",
-          cancelButton:
-            "group-[.toast]:bg-muted group-[.toast]:text-muted-foreground",
+            'group toast group-[.toaster]:bg-background group-[.toaster]:text-foreground group-[.toaster]:border-border group-[.toaster]:shadow-lg',
+          description: 'group-[.toast]:text-muted-foreground',
+          actionButton: 'group-[.toast]:bg-primary group-[.toast]:text-primary-foreground',
+          cancelButton: 'group-[.toast]:bg-muted group-[.toast]:text-muted-foreground',
         },
       }}
       {...props}
     />
-  )
-}
+  );
+};
 
-export { Toaster }
+export { Toaster };

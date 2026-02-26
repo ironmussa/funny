@@ -3,9 +3,11 @@
  * Creates a fresh DB with the same schema for each test suite.
  */
 import { Database } from 'bun:sqlite';
-import { drizzle } from 'drizzle-orm/bun-sqlite';
-import * as schema from '../../db/schema.js';
+
 import { sql } from 'drizzle-orm';
+import { drizzle } from 'drizzle-orm/bun-sqlite';
+
+import * as schema from '../../db/schema.js';
 
 export function createTestDb() {
   const sqlite = new Database(':memory:');
@@ -138,7 +140,10 @@ export function createTestDb() {
 }
 
 /** Insert a test project and return it */
-export function seedProject(db: ReturnType<typeof createTestDb>['db'], overrides: Partial<typeof schema.projects.$inferInsert> = {}) {
+export function seedProject(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: Partial<typeof schema.projects.$inferInsert> = {},
+) {
   const project = {
     id: overrides.id ?? 'test-project-1',
     name: overrides.name ?? 'Test Project',
@@ -150,7 +155,10 @@ export function seedProject(db: ReturnType<typeof createTestDb>['db'], overrides
 }
 
 /** Insert a test thread and return it */
-export function seedThread(db: ReturnType<typeof createTestDb>['db'], overrides: Partial<typeof schema.threads.$inferInsert> = {}) {
+export function seedThread(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: Partial<typeof schema.threads.$inferInsert> = {},
+) {
   const thread = {
     id: overrides.id ?? 'test-thread-1',
     projectId: overrides.projectId ?? 'test-project-1',
@@ -175,7 +183,10 @@ export function seedThread(db: ReturnType<typeof createTestDb>['db'], overrides:
 }
 
 /** Insert a test message and return it */
-export function seedMessage(db: ReturnType<typeof createTestDb>['db'], overrides: Partial<typeof schema.messages.$inferInsert> = {}) {
+export function seedMessage(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: Partial<typeof schema.messages.$inferInsert> = {},
+) {
   const message = {
     id: overrides.id ?? 'test-msg-1',
     threadId: overrides.threadId ?? 'test-thread-1',
@@ -188,7 +199,10 @@ export function seedMessage(db: ReturnType<typeof createTestDb>['db'], overrides
 }
 
 /** Insert a test tool call and return it */
-export function seedToolCall(db: ReturnType<typeof createTestDb>['db'], overrides: Partial<typeof schema.toolCalls.$inferInsert> = {}) {
+export function seedToolCall(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: Partial<typeof schema.toolCalls.$inferInsert> = {},
+) {
   const toolCall = {
     id: overrides.id ?? 'test-tc-1',
     messageId: overrides.messageId ?? 'test-msg-1',

@@ -1,14 +1,4 @@
-import { useState, memo, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-} from '@/components/ui/dropdown-menu';
+import type { Thread, ThreadStatus, GitStatusInfo } from '@funny/shared';
 import {
   Archive,
   Trash2,
@@ -20,16 +10,23 @@ import {
   PinOff,
   Bot,
 } from 'lucide-react';
-import { statusConfig, gitSyncStateConfig, timeAgo } from '@/lib/thread-utils';
-import type { Thread, ThreadStatus, GitStatusInfo } from '@funny/shared';
+import { useState, memo, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
-import { ProjectChip } from '@/components/ui/project-chip';
-import { api } from '@/lib/api';
 import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
+import { ProjectChip } from '@/components/ui/project-chip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { api } from '@/lib/api';
+import { statusConfig, gitSyncStateConfig, timeAgo } from '@/lib/thread-utils';
+import { cn } from '@/lib/utils';
 
 interface ThreadItemProps {
   thread: Thread;
@@ -45,7 +42,19 @@ interface ThreadItemProps {
   gitStatus?: GitStatusInfo;
 }
 
-export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSelected, onSelect, subtitle, projectColor, timeValue, onArchive, onPin, onDelete, gitStatus }: ThreadItemProps) {
+export const ThreadItem = memo(function ThreadItem({
+  thread,
+  projectPath,
+  isSelected,
+  onSelect,
+  subtitle,
+  projectColor,
+  timeValue,
+  onArchive,
+  onPin,
+  onDelete,
+  gitStatus,
+}: ThreadItemProps) {
   const { t } = useTranslation();
   const [openDropdown, setOpenDropdown] = useState(false);
   const handleDropdownChange = useCallback((open: boolean) => setOpenDropdown(open), []);
@@ -80,19 +89,18 @@ export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSele
         'group/thread w-full flex items-stretch rounded-md min-w-0',
         isSelected
           ? 'bg-accent text-accent-foreground'
-          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground'
+          : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
       )}
     >
       <button
         onClick={onSelect}
-        className="flex-1 flex items-center gap-1 pl-2 py-1 text-left min-w-0 overflow-hidden"
+        className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden py-1 pl-2 text-left"
       >
         {/* Thread status icon */}
         <div className="relative h-3.5 w-3.5 flex-shrink-0">
-          <span className={cn(
-            'absolute inset-0',
-            onPin && !isRunning && 'group-hover/thread:hidden'
-          )}>
+          <span
+            className={cn('absolute inset-0', onPin && !isRunning && 'group-hover/thread:hidden')}
+          >
             <Tooltip>
               <TooltipTrigger asChild>
                 <StatusIcon className={cn('h-3.5 w-3.5', threadStatusCfg.className)} />
@@ -105,22 +113,18 @@ export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSele
           {/* Pin toggle – shown on hover */}
           {onPin && !isRunning && (
             <span
-              className="absolute inset-0 hidden group-hover/thread:flex items-center justify-center cursor-pointer text-muted-foreground hover:text-foreground"
+              className="absolute inset-0 hidden cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground group-hover/thread:flex"
               onClick={(e) => {
                 e.stopPropagation();
                 onPin();
               }}
             >
-              {thread.pinned ? (
-                <PinOff className="h-3 w-3" />
-              ) : (
-                <Pin className="h-3 w-3" />
-              )}
+              {thread.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
             </span>
           )}
         </div>
-        <div className="flex items-center gap-1 min-w-0 flex-1">
-          <span className="text-sm leading-tight truncate">{thread.title}</span>
+        <div className="flex min-w-0 flex-1 items-center gap-1">
+          <span className="truncate text-sm leading-tight">{thread.title}</span>
           {/* Git status icon (worktree threads only) */}
           {showGitIcon && GitIcon && (
             <Tooltip>
@@ -148,17 +152,21 @@ export const ThreadItem = memo(function ThreadItem({ thread, projectPath, isSele
           )}
         </div>
       </button>
-      <div className="flex-shrink-0 pr-1.5 pl-2 py-1 grid place-items-center justify-items-center min-w-[2.5rem]">
-        <span className={cn(
-          'col-start-1 row-start-1 text-xs text-muted-foreground leading-4 h-4 group-hover/thread:opacity-0 group-hover/thread:pointer-events-none',
-          openDropdown && 'opacity-0 pointer-events-none'
-        )}>
+      <div className="grid min-w-[2.5rem] flex-shrink-0 place-items-center justify-items-center py-1 pl-2 pr-1.5">
+        <span
+          className={cn(
+            'col-start-1 row-start-1 text-xs text-muted-foreground leading-4 h-4 group-hover/thread:opacity-0 group-hover/thread:pointer-events-none',
+            openDropdown && 'opacity-0 pointer-events-none',
+          )}
+        >
           {displayTime}
         </span>
-        <div className={cn(
-          'col-start-1 row-start-1 flex items-center opacity-0 group-hover/thread:opacity-100',
-          openDropdown && '!opacity-100'
-        )}>
+        <div
+          className={cn(
+            'col-start-1 row-start-1 flex items-center opacity-0 group-hover/thread:opacity-100',
+            openDropdown && '!opacity-100',
+          )}
+        >
           <DropdownMenu onOpenChange={handleDropdownChange}>
             <DropdownMenuTrigger asChild>
               <Button

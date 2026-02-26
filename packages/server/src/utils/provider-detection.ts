@@ -4,8 +4,9 @@
  */
 
 import type { AgentProvider } from '@funny/shared';
+
+import { log } from '../lib/logger.js';
 import { checkClaudeBinaryAvailability, validateClaudeBinary } from './claude-binary.js';
-import { log } from '../lib/abbacchio.js';
 
 export interface ProviderAvailability {
   available: boolean;
@@ -35,7 +36,9 @@ async function checkClaudeAvailability(): Promise<ProviderAvailability> {
 
   let cliVersion: string | undefined;
   if (cliResult.available && cliResult.path) {
-    try { cliVersion = validateClaudeBinary(cliResult.path); } catch {}
+    try {
+      cliVersion = validateClaudeBinary(cliResult.path);
+    } catch {}
   }
 
   return {
@@ -44,7 +47,9 @@ async function checkClaudeAvailability(): Promise<ProviderAvailability> {
     cliAvailable: cliResult.available,
     cliPath: cliResult.path,
     cliVersion,
-    error: !sdkAvailable ? 'Claude Agent SDK not found. Run: npm install @anthropic-ai/claude-agent-sdk' : undefined,
+    error: !sdkAvailable
+      ? 'Claude Agent SDK not found. Run: npm install @anthropic-ai/claude-agent-sdk'
+      : undefined,
   };
 }
 
@@ -91,10 +96,7 @@ async function checkCodexAvailability(): Promise<ProviderAvailability> {
 export async function getAvailableProviders(): Promise<Map<AgentProvider, ProviderAvailability>> {
   if (cachedProviders) return cachedProviders;
 
-  const [claude, codex] = await Promise.all([
-    checkClaudeAvailability(),
-    checkCodexAvailability(),
-  ]);
+  const [claude, codex] = await Promise.all([checkClaudeAvailability(), checkCodexAvailability()]);
 
   cachedProviders = new Map<AgentProvider, ProviderAvailability>();
   cachedProviders.set('claude', claude);
@@ -113,9 +115,18 @@ export async function logProviderStatus(): Promise<void> {
   const providers = await getAvailableProviders();
   for (const [name, info] of providers) {
     if (info.available) {
-      log.info(`Provider ${name}: available`, { namespace: 'server', provider: name, cliPath: info.cliPath, cliVersion: info.cliVersion });
+      log.info(`Provider ${name}: available`, {
+        namespace: 'server',
+        provider: name,
+        cliPath: info.cliPath,
+        cliVersion: info.cliVersion,
+      });
     } else {
-      log.info(`Provider ${name}: not available`, { namespace: 'server', provider: name, error: info.error ?? 'unknown error' });
+      log.info(`Provider ${name}: not available`, {
+        namespace: 'server',
+        provider: name,
+        error: info.error ?? 'unknown error',
+      });
     }
   }
 }

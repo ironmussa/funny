@@ -1,15 +1,16 @@
+import { Inbox } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Inbox } from 'lucide-react';
+
 import { Badge } from '@/components/ui/badge';
 import { useAutomationStore } from '@/stores/automation-store';
 import { useUIStore } from '@/stores/ui-store';
 
 export function AutomationInboxButton() {
   const navigate = useNavigate();
-  const inboxCount = useAutomationStore(s => s.inboxCount);
-  const loadInbox = useAutomationStore(s => s.loadInbox);
-  const automationInboxOpen = useUIStore(s => s.automationInboxOpen);
+  const inboxCount = useAutomationStore((s) => s.inboxCount);
+  const loadInbox = useAutomationStore((s) => s.loadInbox);
+  const automationInboxOpen = useUIStore((s) => s.automationInboxOpen);
 
   // Keep a stable ref to avoid restarting the interval on re-renders
   const loadInboxRef = useRef(loadInbox);
@@ -31,9 +32,9 @@ export function AutomationInboxButton() {
           navigate('/inbox');
         }
       }}
-      className={`w-full flex items-center gap-2 p-2 text-sm rounded-md transition-colors ${
+      className={`flex w-full items-center gap-2 rounded-md p-2 text-sm transition-colors ${
         automationInboxOpen
-          ? 'bg-sidebar-accent text-sidebar-accent-foreground font-medium'
+          ? 'bg-sidebar-accent font-medium text-sidebar-accent-foreground'
           : 'text-sidebar-foreground hover:bg-sidebar-accent hover:text-sidebar-accent-foreground'
       }`}
     >

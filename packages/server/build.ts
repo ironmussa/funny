@@ -47,10 +47,7 @@ if (!result.success) {
 
 // Copy pty-helper.mjs to dist/ — it's spawned as a separate Node.js child process
 // and references import.meta.dir at runtime (which resolves to dist/)
-await cp(
-  join(ROOT, 'src', 'services', 'pty-helper.mjs'),
-  join(DIST, 'pty-helper.mjs'),
-);
+await cp(join(ROOT, 'src', 'services', 'pty-helper.mjs'), join(DIST, 'pty-helper.mjs'));
 
 console.log('Server build complete!');
 for (const output of result.outputs) {

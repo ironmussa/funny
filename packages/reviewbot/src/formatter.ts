@@ -2,8 +2,8 @@
  * Formats CodeReviewFindings into GitHub-flavored markdown for PR reviews.
  */
 
-import type { CodeReviewFinding, ReviewFindingSeverity } from '@funny/shared';
 import type { ReviewEvent } from '@funny/core/git';
+import type { CodeReviewFinding, ReviewFindingSeverity } from '@funny/shared';
 
 const SEVERITY_EMOJI: Record<ReviewFindingSeverity, string> = {
   critical: '🔴',
@@ -21,9 +21,7 @@ const SEVERITY_ORDER: ReviewFindingSeverity[] = ['critical', 'high', 'medium', '
 export function decideReviewEvent(findings: CodeReviewFinding[]): ReviewEvent {
   if (findings.length === 0) return 'APPROVE';
 
-  const hasBlocking = findings.some(
-    (f) => f.severity === 'critical' || f.severity === 'high',
-  );
+  const hasBlocking = findings.some((f) => f.severity === 'critical' || f.severity === 'high');
   if (hasBlocking) return 'REQUEST_CHANGES';
 
   const hasMedium = findings.some((f) => f.severity === 'medium');
@@ -35,10 +33,7 @@ export function decideReviewEvent(findings: CodeReviewFinding[]): ReviewEvent {
 /**
  * Format findings into a markdown review body for GitHub.
  */
-export function formatReviewBody(
-  summary: string,
-  findings: CodeReviewFinding[],
-): string {
+export function formatReviewBody(summary: string, findings: CodeReviewFinding[]): string {
   const lines: string[] = [];
 
   // Header
@@ -64,9 +59,7 @@ export function formatReviewBody(
 
     for (const finding of group) {
       const emoji = SEVERITY_EMOJI[finding.severity];
-      const location = finding.line
-        ? `\`${finding.file}:${finding.line}\``
-        : `\`${finding.file}\``;
+      const location = finding.line ? `\`${finding.file}:${finding.line}\`` : `\`${finding.file}\``;
 
       lines.push(`${emoji} **${finding.severity}** (${finding.category}) — ${location}`);
       lines.push(`  ${finding.description}`);

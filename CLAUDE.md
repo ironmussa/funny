@@ -67,6 +67,7 @@ bun run db:studio
 **Database:** SQLite via better-sqlite3 + Drizzle ORM. DB file lives at `~/.funny/data.db`. Tables are auto-created on startup via `db/migrate.ts` (raw SQL, not Drizzle migrations). Schema in `db/schema.ts` defines: `projects`, `threads`, `messages`, `tool_calls`.
 
 **Key services:**
+
 - `agent-runner.ts` — Spawns Claude CLI processes via `claude-process.ts`. Parses NDJSON stream output, persists messages/tool_calls to DB, and emits WebSocket events via `ws-broker`. Supports session resumption.
 - `claude-process.ts` — Manages a single Claude CLI process (`claude --print --output-format stream-json`). Reads NDJSON stdout, emits typed messages.
 - `worktree-manager.ts` — Creates/lists/removes git worktrees in a `.funny-worktrees` directory adjacent to the project. Uses synchronous git operations.
@@ -75,6 +76,7 @@ bun run db:studio
 - `diff-service.ts` — Re-exports from `git-v2.ts` for backward compatibility.
 
 **Route groups:**
+
 - `/api/projects` — CRUD + branch listing
 - `/api/threads` — CRUD + start/stop agents + send follow-up messages
 - `/api/git/:threadId/*` — Diff, stage, unstage, revert, commit, push, create PR
@@ -92,6 +94,7 @@ bun run db:studio
 **UI components:** Built with shadcn/ui (Radix UI primitives + Tailwind). Components in `components/ui/` include Button, Select, Dialog, ScrollArea, Tooltip, and Collapsible.
 
 **Key components:**
+
 - `Sidebar` — Project list with collapsible accordion, thread list with status badges, folder picker for adding projects
 - `NewThreadDialog` — Thread creation with mode (local/worktree), model (haiku/sonnet/opus), branch selection, and prompt
 - `ThreadView` — Chat-style message display with tool call cards, input, stop button, and review pane toggle
@@ -126,12 +129,14 @@ AUTH_MODE=multi bun run dev
 ```
 
 On first startup in multi mode, a default admin account is created automatically:
+
 - **Username:** `admin`
 - **Password:** `admin`
 
 The admin can create additional users from **Settings > Users** in the UI. Self-registration is disabled.
 
 **Key details:**
+
 - Sessions expire after 7 days
 - Auth secret is auto-generated and stored at `~/.funny/auth-secret`
 - Each user only sees their own projects, threads, and automations
@@ -237,6 +242,6 @@ Do not install other component libraries (Material UI, Ant Design, Chakra UI, Ma
 All base component imports must come from `@/components/ui/`. Example:
 
 ```tsx
-import { Button } from "@/components/ui/button"
-import { Dialog, DialogContent, DialogHeader } from "@/components/ui/dialog"
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader } from '@/components/ui/dialog';
 ```

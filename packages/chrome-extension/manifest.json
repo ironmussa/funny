@@ -3,16 +3,8 @@
   "name": "Funny - UI Annotator",
   "version": "0.1.0",
   "description": "Select and annotate UI elements, send them to Funny for AI-powered analysis and fixes.",
-  "permissions": [
-    "activeTab",
-    "storage",
-    "notifications",
-    "scripting"
-  ],
-  "host_permissions": [
-    "http://localhost:3001/*",
-    "http://127.0.0.1:3001/*"
-  ],
+  "permissions": ["activeTab", "storage", "notifications", "scripting"],
+  "host_permissions": ["http://localhost:3001/*", "http://127.0.0.1:3001/*"],
   "background": {
     "service_worker": "background.js"
   },

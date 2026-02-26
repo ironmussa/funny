@@ -37,10 +37,10 @@ X-Webhook-Secret: <your-secret>
 
 There are two ways to target a thread:
 
-| Field | Use case |
-|---|---|
+| Field        | Use case                                                                                                       |
+| ------------ | -------------------------------------------------------------------------------------------------------------- |
 | `request_id` | For new threads created via `*.accepted`. All subsequent events for the same thread use the same `request_id`. |
-| `thread_id` | For sending events to any existing thread (created in the UI or via API). Takes priority over `request_id`. |
+| `thread_id`  | For sending events to any existing thread (created in the UI or via API). Takes priority over `request_id`.    |
 
 You can mix both: create a thread with `request_id`, then later reference it by `thread_id` if you know it.
 
@@ -48,15 +48,15 @@ You can mix both: create a thread with `request_id`, then later reference it by 
 
 The `event_type` field uses a suffix-based routing system. The suffix (last segment after `.`) determines the action:
 
-| Suffix | Action | Required fields |
-|---|---|---|
-| `*.accepted` | Create a new thread (or link to existing via `thread_id`) | `data.title`, `metadata.projectId` |
-| `*.started` | Mark thread as running | — |
-| `*.cli_message` | Send a Claude CLI message (assistant text, tool calls, results) | `data.cli_message` |
-| `*.message` | Send a simple text message | `data.text` or `data.content` |
-| `*.completed` | Mark thread as completed | — |
-| `*.failed` | Mark thread as failed | — |
-| `*.stopped` | Mark thread as stopped | — |
+| Suffix          | Action                                                          | Required fields                    |
+| --------------- | --------------------------------------------------------------- | ---------------------------------- |
+| `*.accepted`    | Create a new thread (or link to existing via `thread_id`)       | `data.title`, `metadata.projectId` |
+| `*.started`     | Mark thread as running                                          | —                                  |
+| `*.cli_message` | Send a Claude CLI message (assistant text, tool calls, results) | `data.cli_message`                 |
+| `*.message`     | Send a simple text message                                      | `data.text` or `data.content`      |
+| `*.completed`   | Mark thread as completed                                        | —                                  |
+| `*.failed`      | Mark thread as failed                                           | —                                  |
+| `*.stopped`     | Mark thread as stopped                                          | —                                  |
 
 The prefix can be anything (e.g. `agent.accepted`, `pipeline.cli_message`, `mybot.completed`).
 
@@ -325,24 +325,24 @@ When creating a thread with `*.accepted`, the following fields are available:
 
 ### `data` fields
 
-| Field | Type | Default | Description |
-|---|---|---|---|
-| `title` | string | `External: <id>` | Thread title shown in sidebar |
-| `prompt` | string | — | Initial user message |
-| `model` | string | `sonnet` | Model label (`sonnet`, `opus`, `haiku`) |
-| `branch` | string | — | Git branch name |
-| `base_branch` | string | — | Base branch for diffs |
-| `worktree_path` | string | — | Worktree directory (sets mode to `worktree`) |
+| Field           | Type   | Default          | Description                                  |
+| --------------- | ------ | ---------------- | -------------------------------------------- |
+| `title`         | string | `External: <id>` | Thread title shown in sidebar                |
+| `prompt`        | string | —                | Initial user message                         |
+| `model`         | string | `sonnet`         | Model label (`sonnet`, `opus`, `haiku`)      |
+| `branch`        | string | —                | Git branch name                              |
+| `base_branch`   | string | —                | Base branch for diffs                        |
+| `worktree_path` | string | —                | Worktree directory (sets mode to `worktree`) |
 
 ### `metadata` fields
 
-| Field | Type | Required | Description |
-|---|---|---|---|
-| `projectId` | string | Yes* | Funny project ID to attach the thread to |
-| `userId` | string | No | User ID (defaults to `__local__`) |
-| `prompt` | string | No | Alternative location for initial prompt |
+| Field       | Type   | Required | Description                              |
+| ----------- | ------ | -------- | ---------------------------------------- |
+| `projectId` | string | Yes\*    | Funny project ID to attach the thread to |
+| `userId`    | string | No       | User ID (defaults to `__local__`)        |
+| `prompt`    | string | No       | Alternative location for initial prompt  |
 
-*`projectId` can be omitted if `worktree_path` matches a known project path.
+\*`projectId` can be omitted if `worktree_path` matches a known project path.
 
 ---
 
@@ -360,14 +360,14 @@ curl http://localhost:3001/api/projects \
 
 ## Responses
 
-| Status | Body | Meaning |
-|---|---|---|
-| `200` | `{ "status": "ok" }` | Event processed |
-| `200` | `{ "status": "ok", "skipped": true }` | No `request_id` or `thread_id` — ignored |
-| `400` | `{ "error": "..." }` | Invalid event structure |
-| `401` | `{ "error": "Unauthorized" }` | Wrong or missing `X-Webhook-Secret` |
-| `500` | `{ "error": "..." }` | Processing error (e.g. unknown `thread_id`) |
-| `503` | `{ "error": "..." }` | `INGEST_WEBHOOK_SECRET` not configured |
+| Status | Body                                  | Meaning                                     |
+| ------ | ------------------------------------- | ------------------------------------------- |
+| `200`  | `{ "status": "ok" }`                  | Event processed                             |
+| `200`  | `{ "status": "ok", "skipped": true }` | No `request_id` or `thread_id` — ignored    |
+| `400`  | `{ "error": "..." }`                  | Invalid event structure                     |
+| `401`  | `{ "error": "Unauthorized" }`         | Wrong or missing `X-Webhook-Secret`         |
+| `500`  | `{ "error": "..." }`                  | Processing error (e.g. unknown `thread_id`) |
+| `503`  | `{ "error": "..." }`                  | `INGEST_WEBHOOK_SECRET` not configured      |
 
 ---
 

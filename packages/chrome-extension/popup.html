@@ -1,320 +1,358 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Funny Annotator</title>
-  <style>
-    * {
-      box-sizing: border-box;
-      margin: 0;
-      padding: 0;
-    }
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Funny Annotator</title>
+    <style>
+      * {
+        box-sizing: border-box;
+        margin: 0;
+        padding: 0;
+      }
 
-    body {
-      width: 360px;
-      min-height: 200px;
-      background: #0f0f0f;
-      color: #e5e5e5;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-      font-size: 13px;
-    }
+      body {
+        width: 360px;
+        min-height: 200px;
+        background: #0f0f0f;
+        color: #e5e5e5;
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        font-size: 13px;
+      }
 
-    /* Header */
-    .header {
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 16px;
-      border-bottom: 1px solid #222;
-    }
+      /* Header */
+      .header {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px;
+        border-bottom: 1px solid #222;
+      }
 
-    .header-title {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+      .header-title {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
 
-    .header-title h1 {
-      font-size: 15px;
-      font-weight: 700;
-      color: white;
-    }
+      .header-title h1 {
+        font-size: 15px;
+        font-weight: 700;
+        color: white;
+      }
 
-    .header-logo {
-      width: 20px;
-      height: 20px;
-      background: #22c55e;
-      border-radius: 6px;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-weight: 900;
-      font-size: 12px;
-      color: white;
-    }
+      .header-logo {
+        width: 20px;
+        height: 20px;
+        background: #22c55e;
+        border-radius: 6px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 900;
+        font-size: 12px;
+        color: white;
+      }
 
-    .connection-dot {
-      width: 8px;
-      height: 8px;
-      border-radius: 50%;
-      background: #666;
-    }
-    .connection-dot.connected { background: #22c55e; }
-    .connection-dot.error { background: #dc2626; }
+      .connection-dot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #666;
+      }
+      .connection-dot.connected {
+        background: #22c55e;
+      }
+      .connection-dot.error {
+        background: #dc2626;
+      }
 
-    /* Sections */
-    .section {
-      padding: 14px 16px;
-      border-bottom: 1px solid #1a1a1a;
-    }
+      /* Sections */
+      .section {
+        padding: 14px 16px;
+        border-bottom: 1px solid #1a1a1a;
+      }
 
-    .section-label {
-      font-size: 11px;
-      font-weight: 600;
-      text-transform: uppercase;
-      letter-spacing: 0.5px;
-      color: #666;
-      margin-bottom: 8px;
-    }
+      .section-label {
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        color: #666;
+        margin-bottom: 8px;
+      }
 
-    /* Form elements */
-    .field {
-      margin-bottom: 10px;
-    }
+      /* Form elements */
+      .field {
+        margin-bottom: 10px;
+      }
 
-    .field label {
-      display: block;
-      font-size: 12px;
-      color: #888;
-      margin-bottom: 4px;
-    }
+      .field label {
+        display: block;
+        font-size: 12px;
+        color: #888;
+        margin-bottom: 4px;
+      }
 
-    .field input, .field select {
-      width: 100%;
-      background: #1a1a1a;
-      border: 1px solid #333;
-      border-radius: 8px;
-      color: #e5e5e5;
-      font-size: 13px;
-      padding: 8px 10px;
-      outline: none;
-    }
-    .field input:focus, .field select:focus {
-      border-color: #3b82f6;
-    }
+      .field input,
+      .field select {
+        width: 100%;
+        background: #1a1a1a;
+        border: 1px solid #333;
+        border-radius: 8px;
+        color: #e5e5e5;
+        font-size: 13px;
+        padding: 8px 10px;
+        outline: none;
+      }
+      .field input:focus,
+      .field select:focus {
+        border-color: #3b82f6;
+      }
 
-    .field select {
-      cursor: pointer;
-    }
+      .field select {
+        cursor: pointer;
+      }
 
-    /* Buttons */
-    .btn {
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      width: 100%;
-      padding: 10px;
-      border: none;
-      border-radius: 10px;
-      font-size: 13px;
-      font-weight: 600;
-      cursor: pointer;
-      gap: 8px;
-      transition: all 0.15s ease;
-    }
+      /* Buttons */
+      .btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        width: 100%;
+        padding: 10px;
+        border: none;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 600;
+        cursor: pointer;
+        gap: 8px;
+        transition: all 0.15s ease;
+      }
 
-    .btn-primary {
-      background: #22c55e;
-      color: white;
-    }
-    .btn-primary:hover { background: #16a34a; }
-    .btn-primary:disabled {
-      opacity: 0.5;
-      cursor: not-allowed;
-    }
+      .btn-primary {
+        background: #22c55e;
+        color: white;
+      }
+      .btn-primary:hover {
+        background: #16a34a;
+      }
+      .btn-primary:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+      }
 
-    .btn-secondary {
-      background: #222;
-      color: #ccc;
-    }
-    .btn-secondary:hover { background: #333; }
+      .btn-secondary {
+        background: #222;
+        color: #ccc;
+      }
+      .btn-secondary:hover {
+        background: #333;
+      }
 
-    .btn-ghost {
-      background: transparent;
-      color: #888;
-      font-weight: 400;
-      font-size: 12px;
-    }
-    .btn-ghost:hover { color: #ccc; }
+      .btn-ghost {
+        background: transparent;
+        color: #888;
+        font-weight: 400;
+        font-size: 12px;
+      }
+      .btn-ghost:hover {
+        color: #ccc;
+      }
 
-    /* Status */
-    .status-bar {
-      padding: 10px 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      font-size: 12px;
-      color: #666;
-    }
+      /* Status */
+      .status-bar {
+        padding: 10px 16px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: #666;
+      }
 
-    .status-bar.error { color: #dc2626; }
-    .status-bar.success { color: #22c55e; }
+      .status-bar.error {
+        color: #dc2626;
+      }
+      .status-bar.success {
+        color: #22c55e;
+      }
 
-    /* Annotation list */
-    .annotation-list {
-      max-height: 200px;
-      overflow-y: auto;
-    }
+      /* Annotation list */
+      .annotation-list {
+        max-height: 200px;
+        overflow-y: auto;
+      }
 
-    .annotation-item {
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-      padding: 8px 0;
-      border-bottom: 1px solid #1a1a1a;
-    }
-    .annotation-item:last-child { border-bottom: none; }
+      .annotation-item {
+        display: flex;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 8px 0;
+        border-bottom: 1px solid #1a1a1a;
+      }
+      .annotation-item:last-child {
+        border-bottom: none;
+      }
 
-    .annotation-number {
-      width: 22px;
-      height: 22px;
-      min-width: 22px;
-      background: #3b82f6;
-      color: white;
-      font-size: 11px;
-      font-weight: 700;
-      border-radius: 50%;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
+      .annotation-number {
+        width: 22px;
+        height: 22px;
+        min-width: 22px;
+        background: #3b82f6;
+        color: white;
+        font-size: 11px;
+        font-weight: 700;
+        border-radius: 50%;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
 
-    .annotation-info {
-      flex: 1;
-      min-width: 0;
-    }
+      .annotation-info {
+        flex: 1;
+        min-width: 0;
+      }
 
-    .annotation-name {
-      font-size: 12px;
-      font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
-      color: #22c55e;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+      .annotation-name {
+        font-size: 12px;
+        font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+        color: #22c55e;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
 
-    .annotation-comment {
-      font-size: 12px;
-      color: #888;
-      margin-top: 2px;
-      white-space: nowrap;
-      overflow: hidden;
-      text-overflow: ellipsis;
-    }
+      .annotation-comment {
+        font-size: 12px;
+        color: #888;
+        margin-top: 2px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
 
-    .annotation-badges {
-      display: flex;
-      gap: 4px;
-      margin-top: 4px;
-    }
+      .annotation-badges {
+        display: flex;
+        gap: 4px;
+        margin-top: 4px;
+      }
 
-    .annotation-badge {
-      font-size: 10px;
-      padding: 1px 6px;
-      border-radius: 4px;
-      background: #222;
-      color: #888;
-    }
-    .annotation-badge.fix { color: #f97316; }
-    .annotation-badge.change { color: #3b82f6; }
-    .annotation-badge.blocking { color: #dc2626; background: #1c0808; }
-    .annotation-badge.important { color: #f59e0b; background: #1a1400; }
+      .annotation-badge {
+        font-size: 10px;
+        padding: 1px 6px;
+        border-radius: 4px;
+        background: #222;
+        color: #888;
+      }
+      .annotation-badge.fix {
+        color: #f97316;
+      }
+      .annotation-badge.change {
+        color: #3b82f6;
+      }
+      .annotation-badge.blocking {
+        color: #dc2626;
+        background: #1c0808;
+      }
+      .annotation-badge.important {
+        color: #f59e0b;
+        background: #1a1400;
+      }
 
-    .empty-state {
-      text-align: center;
-      padding: 20px;
-      color: #555;
-      font-size: 12px;
-    }
+      .empty-state {
+        text-align: center;
+        padding: 20px;
+        color: #555;
+        font-size: 12px;
+      }
 
-    .hidden { display: none !important; }
-  </style>
-</head>
-<body>
-
-  <!-- Header -->
-  <div class="header">
-    <div class="header-title">
-      <div class="header-logo">F</div>
-      <h1>Funny Annotator</h1>
+      .hidden {
+        display: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <!-- Header -->
+    <div class="header">
+      <div class="header-title">
+        <div class="header-logo">F</div>
+        <h1>Funny Annotator</h1>
+      </div>
+      <div class="connection-dot" id="connectionDot" title="Not connected"></div>
     </div>
-    <div class="connection-dot" id="connectionDot" title="Not connected"></div>
-  </div>
 
-  <!-- Activate button -->
-  <div class="section">
-    <button class="btn btn-primary" id="activateBtn">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"></circle>
-        <line x1="12" y1="8" x2="12" y2="16"></line>
-        <line x1="8" y1="12" x2="16" y2="12"></line>
-      </svg>
-      Start Annotating
-    </button>
-  </div>
+    <!-- Activate button -->
+    <div class="section">
+      <button class="btn btn-primary" id="activateBtn">
+        <svg
+          width="16"
+          height="16"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          stroke-width="2"
+        >
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="8" x2="12" y2="16"></line>
+          <line x1="8" y1="12" x2="16" y2="12"></line>
+        </svg>
+        Start Annotating
+      </button>
+    </div>
 
-  <!-- Annotations list -->
-  <div class="section" id="annotationsSection">
-    <div class="section-label">Annotations</div>
-    <div id="annotationList" class="annotation-list">
-      <div class="empty-state">No annotations yet. Click "Start Annotating" and select elements on the page.</div>
+    <!-- Annotations list -->
+    <div class="section" id="annotationsSection">
+      <div class="section-label">Annotations</div>
+      <div id="annotationList" class="annotation-list">
+        <div class="empty-state">
+          No annotations yet. Click "Start Annotating" and select elements on the page.
+        </div>
+      </div>
     </div>
-  </div>
 
-  <!-- Settings -->
-  <div class="section">
-    <div class="section-label">Connection</div>
-    <div class="field">
-      <label>Funny Server URL</label>
-      <input type="text" id="serverUrl" placeholder="http://localhost:3001" />
-    </div>
-    <div class="field">
-      <label>Project</label>
-      <select id="projectSelect">
-        <option value="">Loading projects...</option>
-      </select>
-    </div>
-    <div class="field">
-      <label>Provider</label>
-      <select id="providerSelect">
-        <!-- Populated dynamically from GET /api/setup/status -->
-        <option value="">Loading...</option>
-      </select>
-    </div>
-    <div style="display: flex; gap: 8px;">
-      <div class="field" style="flex:1">
-        <label>Model</label>
-        <select id="modelSelect">
-          <!-- Populated dynamically based on provider -->
+    <!-- Settings -->
+    <div class="section">
+      <div class="section-label">Connection</div>
+      <div class="field">
+        <label>Funny Server URL</label>
+        <input type="text" id="serverUrl" placeholder="http://localhost:3001" />
+      </div>
+      <div class="field">
+        <label>Project</label>
+        <select id="projectSelect">
+          <option value="">Loading projects...</option>
         </select>
       </div>
-      <div class="field" style="flex:1">
-        <label>Mode</label>
-        <select id="modeSelect">
-          <option value="local">Local</option>
-          <option value="worktree">Worktree</option>
+      <div class="field">
+        <label>Provider</label>
+        <select id="providerSelect">
+          <!-- Populated dynamically from GET /api/setup/status -->
+          <option value="">Loading...</option>
         </select>
       </div>
+      <div style="display: flex; gap: 8px">
+        <div class="field" style="flex: 1">
+          <label>Model</label>
+          <select id="modelSelect">
+            <!-- Populated dynamically based on provider -->
+          </select>
+        </div>
+        <div class="field" style="flex: 1">
+          <label>Mode</label>
+          <select id="modeSelect">
+            <option value="local">Local</option>
+            <option value="worktree">Worktree</option>
+          </select>
+        </div>
+      </div>
+      <button class="btn btn-secondary" id="testConnectionBtn">Test Connection</button>
     </div>
-    <button class="btn btn-secondary" id="testConnectionBtn">Test Connection</button>
-  </div>
 
-  <!-- Status bar -->
-  <div class="status-bar" id="statusBar">
-    <span id="statusText">Not connected</span>
-  </div>
+    <!-- Status bar -->
+    <div class="status-bar" id="statusBar">
+      <span id="statusText">Not connected</span>
+    </div>
 
-  <script src="popup.js"></script>
-</body>
+    <script src="popup.js"></script>
+  </body>
 </html>

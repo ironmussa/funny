@@ -1,5 +1,6 @@
-import { create } from 'zustand';
 import type { Automation, AutomationRun, InboxItem } from '@funny/shared';
+import { create } from 'zustand';
+
 import { api } from '@/lib/api';
 
 interface AutomationState {
@@ -11,7 +12,9 @@ interface AutomationState {
   loadAutomations: (projectId: string) => Promise<void>;
   loadInbox: (options?: { projectId?: string; triageStatus?: string }) => Promise<void>;
   loadRuns: (automationId: string) => Promise<void>;
-  createAutomation: (data: Parameters<typeof api.createAutomation>[0]) => Promise<Automation | null>;
+  createAutomation: (
+    data: Parameters<typeof api.createAutomation>[0],
+  ) => Promise<Automation | null>;
   updateAutomation: (id: string, data: Parameters<typeof api.updateAutomation>[1]) => Promise<void>;
   deleteAutomation: (id: string, projectId: string) => Promise<void>;
   triggerAutomation: (id: string) => Promise<void>;
@@ -32,7 +35,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     const result = await api.listAutomations(projectId);
     result.match(
       (automations) => {
-        set(state => ({
+        set((state) => ({
           automationsByProject: { ...state.automationsByProject, [projectId]: automations },
         }));
       },
@@ -44,7 +47,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     const result = await api.getAutomationInbox(options);
     result.match(
       (inbox) => {
-        const pendingCount = inbox.filter(item => item.run.triageStatus === 'pending').length;
+        const pendingCount = inbox.filter((item) => item.run.triageStatus === 'pending').length;
         set({ inbox, inboxCount: pendingCount });
       },
       (error) => console.error('[automation-store] Failed to load inbox:', error.message),
@@ -64,7 +67,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     if (result.isErr()) return null;
     const automation = result.value;
     const projectId = data.projectId;
-    set(state => ({
+    set((state) => ({
       automationsByProject: {
         ...state.automationsByProject,
         [projectId]: [automation, ...(state.automationsByProject[projectId] || [])],
@@ -77,10 +80,10 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     const result = await api.updateAutomation(id, data);
     if (result.isErr()) return;
     const updated = result.value;
-    set(state => {
+    set((state) => {
       const newByProject = { ...state.automationsByProject };
       for (const [pid, automations] of Object.entries(newByProject)) {
-        newByProject[pid] = automations.map(a => a.id === id ? updated : a);
+        newByProject[pid] = automations.map((a) => (a.id === id ? updated : a));
       }
       return { automationsByProject: newByProject };
     });
@@ -89,10 +92,10 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   deleteAutomation: async (id, projectId) => {
     const result = await api.deleteAutomation(id);
     if (result.isErr()) return;
-    set(state => ({
+    set((state) => ({
       automationsByProject: {
         ...state.automationsByProject,
-        [projectId]: (state.automationsByProject[projectId] || []).filter(a => a.id !== id),
+        [projectId]: (state.automationsByProject[projectId] || []).filter((a) => a.id !== id),
       },
     }));
   },
@@ -105,13 +108,13 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
   triageRun: async (runId, status) => {
     const result = await api.triageRun(runId, status);
     if (result.isErr()) return;
-    set(state => {
-      const updatedInbox = state.inbox.map(item =>
-        item.run.id === runId
-          ? { ...item, run: { ...item.run, triageStatus: status } }
-          : item
+    set((state) => {
+      const updatedInbox = state.inbox.map((item) =>
+        item.run.id === runId ? { ...item, run: { ...item.run, triageStatus: status } } : item,
       );
-      const pendingCount = updatedInbox.filter(item => item.run.triageStatus === 'pending').length;
+      const pendingCount = updatedInbox.filter(
+        (item) => item.run.triageStatus === 'pending',
+      ).length;
       return { inbox: updatedInbox, inboxCount: pendingCount };
     });
   },

@@ -1,7 +1,8 @@
+import { resolve } from 'path';
+
+import react from '@vitejs/plugin-react';
 /// <reference types="vitest" />
 import { defineConfig, loadEnv } from 'vite';
-import react from '@vitejs/plugin-react';
-import { resolve } from 'path';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
@@ -24,11 +25,11 @@ export default defineConfig(({ mode }) => {
       rollupOptions: {
         output: {
           manualChunks: {
-            'markdown': ['react-markdown', 'remark-gfm'],
-            'motion': ['motion'],
-            'syntax': ['shiki'],
-            'monaco': ['@monaco-editor/react'],
-            'mermaid': ['mermaid'],
+            markdown: ['react-markdown', 'remark-gfm'],
+            motion: ['motion'],
+            syntax: ['shiki'],
+            monaco: ['@monaco-editor/react'],
+            mermaid: ['mermaid'],
           },
         },
       },

@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
-import { useThreadStore } from '@/stores/thread-store';
+
 import { formatInput, getTodos } from '@/components/tool-cards/utils';
 import type { TodoItem } from '@/components/tool-cards/utils';
+import { useThreadStore } from '@/stores/thread-store';
 
 export interface TodoSnapshot {
   todos: TodoItem[];

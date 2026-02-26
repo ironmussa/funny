@@ -18,11 +18,11 @@ services:
       POSTGRES_PASSWORD: hatchet
       POSTGRES_DB: hatchet
     ports:
-      - "5435:5432"
+      - '5435:5432'
     volumes:
       - hatchet-pg-data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U hatchet"]
+      test: ['CMD-SHELL', 'pg_isready -U hatchet']
       interval: 5s
       timeout: 5s
       retries: 5
@@ -33,12 +33,12 @@ services:
       RABBITMQ_DEFAULT_USER: user
       RABBITMQ_DEFAULT_PASS: password
     ports:
-      - "5673:5672"
-      - "15673:15672"
+      - '5673:5672'
+      - '15673:15672'
     volumes:
       - hatchet-rabbitmq-data:/var/lib/rabbitmq
     healthcheck:
-      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      test: ['CMD', 'rabbitmq-diagnostics', 'check_running']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -57,8 +57,8 @@ services:
     environment:
       DATABASE_URL: postgres://hatchet:hatchet@postgres:5432/hatchet?sslmode=disable
       SERVER_MSGQUEUE_RABBITMQ_URL: amqp://user:password@rabbitmq:5672/
-      SERVER_AUTH_COOKIE_INSECURE: "t"
-      SERVER_GRPC_INSECURE: "t"
+      SERVER_AUTH_COOKIE_INSECURE: 't'
+      SERVER_GRPC_INSECURE: 't'
       SERVER_GRPC_BROADCAST_ADDRESS: hatchet-engine:7077
     volumes:
       - hatchet-config:/hatchet/config
@@ -75,11 +75,11 @@ services:
     environment:
       DATABASE_URL: postgres://hatchet:hatchet@postgres:5432/hatchet?sslmode=disable
       SERVER_MSGQUEUE_RABBITMQ_URL: amqp://user:password@rabbitmq:5672/
-      SERVER_AUTH_COOKIE_INSECURE: "t"
-      SERVER_GRPC_INSECURE: "t"
+      SERVER_AUTH_COOKIE_INSECURE: 't'
+      SERVER_GRPC_INSECURE: 't'
       SERVER_GRPC_BROADCAST_ADDRESS: hatchet-engine:7077
     ports:
-      - "7077:7070"
+      - '7077:7070'
     volumes:
       - hatchet-config:/hatchet/config
     depends_on:
@@ -89,7 +89,7 @@ services:
   hatchet-dashboard:
     image: ghcr.io/hatchet-dev/hatchet/hatchet-dashboard:latest
     ports:
-      - "8080:80"
+      - '8080:80'
     environment:
       NEXT_PUBLIC_API_URL: http://localhost:7077
 

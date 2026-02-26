@@ -1,13 +1,15 @@
-import { useEffect, useMemo, useCallback, memo, startTransition } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { useThreadStore } from '@/stores/thread-store';
-import { useProjectStore } from '@/stores/project-store';
-import { useGitStatusStore } from '@/stores/git-status-store';
-import { timeAgo } from '@/lib/thread-utils';
-import { useMinuteTick } from '@/hooks/use-minute-tick';
-import { ThreadItem } from './ThreadItem';
 import type { Thread, ThreadStatus, GitStatusInfo } from '@funny/shared';
+import { useEffect, useMemo, useCallback, memo, startTransition } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+
+import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { timeAgo } from '@/lib/thread-utils';
+import { useGitStatusStore } from '@/stores/git-status-store';
+import { useProjectStore } from '@/stores/project-store';
+import { useThreadStore } from '@/stores/thread-store';
+
+import { ThreadItem } from './ThreadItem';
 
 const RUNNING_STATUSES = new Set<ThreadStatus>(['running', 'waiting', 'pending']);
 const FINISHED_STATUSES = new Set<ThreadStatus>(['completed', 'failed', 'stopped', 'interrupted']);
@@ -20,7 +22,12 @@ interface EnrichedThread extends Thread {
 }
 
 interface ThreadListProps {
-  onArchiveThread: (threadId: string, projectId: string, title: string, isWorktree: boolean) => void;
+  onArchiveThread: (
+    threadId: string,
+    projectId: string,
+    title: string,
+    isWorktree: boolean,
+  ) => void;
   onDeleteThread: (threadId: string, projectId: string, title: string, isWorktree: boolean) => void;
 }
 
@@ -28,13 +35,15 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
   const { t } = useTranslation();
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
   const navigate = useNavigate();
-  const threadsByProject = useThreadStore(s => s.threadsByProject);
-  const selectedThreadId = useThreadStore(s => s.selectedThreadId);
-  const projects = useProjectStore(s => s.projects);
+  const threadsByProject = useThreadStore((s) => s.threadsByProject);
+  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  const projects = useProjectStore((s) => s.projects);
 
   const { threads, totalCount } = useMemo(() => {
     const result: EnrichedThread[] = [];
-    const projectMap = new Map(projects.map(p => [p.id, { name: p.name, path: p.path, color: p.color }]));
+    const projectMap = new Map(
+      projects.map((p) => [p.id, { name: p.name, path: p.path, color: p.color }]),
+    );
 
     for (const [projectId, projectThreads] of Object.entries(threadsByProject)) {
       for (const thread of projectThreads) {
@@ -91,28 +100,50 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
 
   // Stable callbacks that avoid creating new closures per thread inside .map().
   // ThreadItem is memo'd, so stable references prevent unnecessary re-renders.
-  const handleSelect = useCallback((threadId: string, projectId: string) => {
-    startTransition(() => {
-      const store = useThreadStore.getState();
-      if (store.selectedThreadId === threadId && (!store.activeThread || store.activeThread.id !== threadId)) {
-        store.selectThread(threadId);
-      }
-      navigate(`/projects/${projectId}/threads/${threadId}`);
-    });
-  }, [navigate]);
+  const handleSelect = useCallback(
+    (threadId: string, projectId: string) => {
+      startTransition(() => {
+        const store = useThreadStore.getState();
+        if (
+          store.selectedThreadId === threadId &&
+          (!store.activeThread || store.activeThread.id !== threadId)
+        ) {
+          store.selectThread(threadId);
+        }
+        navigate(`/projects/${projectId}/threads/${threadId}`);
+      });
+    },
+    [navigate],
+  );
 
-  const handleArchive = useCallback((thread: EnrichedThread) => {
-    onArchiveThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch && thread.provider !== 'external');
-  }, [onArchiveThread]);
+  const handleArchive = useCallback(
+    (thread: EnrichedThread) => {
+      onArchiveThread(
+        thread.id,
+        thread.projectId,
+        thread.title,
+        thread.mode === 'worktree' && !!thread.branch && thread.provider !== 'external',
+      );
+    },
+    [onArchiveThread],
+  );
 
-  const handleDelete = useCallback((thread: EnrichedThread) => {
-    onDeleteThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch && thread.provider !== 'external');
-  }, [onDeleteThread]);
+  const handleDelete = useCallback(
+    (thread: EnrichedThread) => {
+      onDeleteThread(
+        thread.id,
+        thread.projectId,
+        thread.title,
+        thread.mode === 'worktree' && !!thread.branch && thread.provider !== 'external',
+      );
+    },
+    [onDeleteThread],
+  );
 
   if (threads.length === 0) return null;
 
   return (
-    <div className="space-y-0.5 min-w-0">
+    <div className="min-w-0 space-y-0.5">
       {threads.map((thread) => {
         const isRunning = RUNNING_STATUSES.has(thread.status);
         return (
@@ -132,7 +163,7 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
       {totalCount > 5 && (
         <button
           onClick={() => navigate('/search?status=completed,failed,stopped,interrupted')}
-          className="text-sm text-muted-foreground hover:text-foreground px-2 py-1.5 transition-colors"
+          className="px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
         >
           {t('sidebar.viewAll')}
         </button>
@@ -162,9 +193,18 @@ const ThreadListItem = memo(function ThreadListItem({
   onDelete?: (thread: EnrichedThread) => void;
   t: ReturnType<typeof useTranslation>['t'];
 }) {
-  const handleSelect = useCallback(() => onSelect(thread.id, thread.projectId), [onSelect, thread.id, thread.projectId]);
-  const handleArchive = useMemo(() => onArchive ? () => onArchive(thread) : undefined, [onArchive, thread]);
-  const handleDelete = useMemo(() => onDelete ? () => onDelete(thread) : undefined, [onDelete, thread]);
+  const handleSelect = useCallback(
+    () => onSelect(thread.id, thread.projectId),
+    [onSelect, thread.id, thread.projectId],
+  );
+  const handleArchive = useMemo(
+    () => (onArchive ? () => onArchive(thread) : undefined),
+    [onArchive, thread],
+  );
+  const handleDelete = useMemo(
+    () => (onDelete ? () => onDelete(thread) : undefined),
+    [onDelete, thread],
+  );
 
   return (
     <ThreadItem

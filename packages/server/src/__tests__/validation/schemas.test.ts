@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'bun:test';
+
 import {
   createProjectSchema,
   createThreadSchema,
@@ -82,7 +83,10 @@ describe('threadStageSchema', () => {
 
 describe('createProjectSchema', () => {
   test('accepts valid project', () => {
-    const result = createProjectSchema.safeParse({ name: 'My Project', path: '/home/user/project' });
+    const result = createProjectSchema.safeParse({
+      name: 'My Project',
+      path: '/home/user/project',
+    });
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.name).toBe('My Project');
@@ -336,14 +340,16 @@ describe('sendMessageSchema', () => {
   test('accepts with optional images array', () => {
     const result = sendMessageSchema.safeParse({
       content: 'test',
-      images: [{
-        type: 'image',
-        source: {
-          type: 'base64',
-          media_type: 'image/png',
-          data: 'base64data',
+      images: [
+        {
+          type: 'image',
+          source: {
+            type: 'base64',
+            media_type: 'image/png',
+            data: 'base64data',
+          },
         },
-      }],
+      ],
     });
     expect(result.success).toBe(true);
   });

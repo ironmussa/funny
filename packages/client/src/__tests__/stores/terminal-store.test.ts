@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
+
 import { useTerminalStore } from '@/stores/terminal-store';
 import type { TerminalTab } from '@/stores/terminal-store';
 

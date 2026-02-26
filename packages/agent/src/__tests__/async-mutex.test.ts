@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'bun:test';
+
 import { AsyncMutex } from '../infrastructure/async-mutex.js';
 
 describe('AsyncMutex', () => {
@@ -64,9 +65,15 @@ describe('AsyncMutex', () => {
     const release = await mutex.acquire();
 
     // Queue up 3 waiters
-    const p1 = mutex.runExclusive(async () => { results.push(1); });
-    const p2 = mutex.runExclusive(async () => { results.push(2); });
-    const p3 = mutex.runExclusive(async () => { results.push(3); });
+    const p1 = mutex.runExclusive(async () => {
+      results.push(1);
+    });
+    const p2 = mutex.runExclusive(async () => {
+      results.push(2);
+    });
+    const p3 = mutex.runExclusive(async () => {
+      results.push(3);
+    });
 
     // Release — all waiters should run in order
     release();

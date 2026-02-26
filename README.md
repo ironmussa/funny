@@ -69,18 +69,18 @@ funny --help
 
 ### CLI Options
 
-| Option | Description | Default |
-|--------|-------------|---------|
-| `-p, --port <port>` | Server port | `3001` |
-| `-h, --host <host>` | Server host | `127.0.0.1` |
-| `--help` | Show help message | - |
+| Option              | Description       | Default     |
+| ------------------- | ----------------- | ----------- |
+| `-p, --port <port>` | Server port       | `3001`      |
+| `-h, --host <host>` | Server host       | `127.0.0.1` |
+| `--help`            | Show help message | -           |
 
 ### Environment Variables
 
-| Variable | Description | Default |
-|----------|-------------|---------|
-| `PORT` | Server port | `3001` |
-| `HOST` | Server hostname | `127.0.0.1` |
+| Variable      | Description                           | Default         |
+| ------------- | ------------------------------------- | --------------- |
+| `PORT`        | Server port                           | `3001`          |
+| `HOST`        | Server hostname                       | `127.0.0.1`     |
 | `CORS_ORIGIN` | Custom CORS origins (comma-separated) | Auto-configured |
 
 ## Kanban Board
@@ -167,12 +167,14 @@ bun test
 ### Tech Stack
 
 **Server:**
+
 - Hono (HTTP framework)
 - [Claude Agent SDK](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk) (`@anthropic-ai/claude-agent-sdk`)
 - Drizzle ORM + SQLite
 - WebSocket (real-time updates)
 
 **Client:**
+
 - React 19
 - Vite
 - Zustand (state management)

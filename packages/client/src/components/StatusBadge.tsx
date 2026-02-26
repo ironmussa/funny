@@ -1,7 +1,8 @@
-import { cn } from '@/lib/utils';
-import { useTranslation } from 'react-i18next';
-import { getStatusLabels } from '@/lib/thread-utils';
 import type { ThreadStatus } from '@funny/shared';
+import { useTranslation } from 'react-i18next';
+
+import { getStatusLabels } from '@/lib/thread-utils';
+import { cn } from '@/lib/utils';
 
 const badgeStyles: Record<ThreadStatus, string> = {
   idle: 'bg-status-neutral/10 text-status-neutral/80',
@@ -21,16 +22,13 @@ export function StatusBadge({ status }: { status: ThreadStatus }) {
 
   return (
     <span
-      className={cn(
-        'inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium',
-        style
-      )}
+      className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', style)}
     >
       {status === 'running' && (
-        <span className="mr-1 h-1.5 w-1.5 rounded-full bg-status-info animate-pulse" />
+        <span className="mr-1 h-1.5 w-1.5 animate-pulse rounded-full bg-status-info" />
       )}
       {status === 'waiting' && (
-        <span className="mr-1 h-1.5 w-1.5 rounded-full bg-status-warning animate-pulse" />
+        <span className="mr-1 h-1.5 w-1.5 animate-pulse rounded-full bg-status-warning" />
       )}
       {statusLabels[status]}
     </span>

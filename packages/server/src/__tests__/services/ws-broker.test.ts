@@ -109,8 +109,16 @@ describe('WSBroker', () => {
   });
 
   test('emit handles all dead clients', () => {
-    const deadWs1 = { send: () => { throw new Error('dead'); } };
-    const deadWs2 = { send: () => { throw new Error('dead'); } };
+    const deadWs1 = {
+      send: () => {
+        throw new Error('dead');
+      },
+    };
+    const deadWs2 = {
+      send: () => {
+        throw new Error('dead');
+      },
+    };
 
     broker.addClient(deadWs1);
     broker.addClient(deadWs2);

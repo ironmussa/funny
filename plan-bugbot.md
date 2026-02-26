@@ -54,6 +54,7 @@ packages/reviewbot/
 ```
 
 **`reviewer.ts`** — La clase principal `PRReviewer`:
+
 - `review(cwd, prNumber, options?)` — flujo completo:
   1. `getPRInfo()` + `getPRDiff()` desde `@funny/core/git`
   2. Ejecuta `AgentExecutor` con prompt de review + diff como contexto
@@ -62,11 +63,13 @@ packages/reviewbot/
   5. `postPRReview()` en GitHub
 
 **`prompts.ts`** — System prompt que le dice al agente:
+
 - Analiza el diff buscando: bugs, seguridad, performance, lógica, estilo
 - Devuelve JSON estructurado con findings
 - NO aplica cambios, solo reporta
 
 **`formatter.ts`** — Convierte `CodeReviewFinding[]` en markdown para GitHub:
+
 - Agrupa por severidad
 - Incluye file:line references
 - Incluye suggestions cuando hay
@@ -75,6 +78,7 @@ packages/reviewbot/
 ### Paso 4: Integración webhook en `@funny/agent`
 
 Extender `packages/agent/src/routes/webhooks.ts`:
+
 - `pull_request.opened` → trigger review
 - `pull_request.synchronize` → trigger review
 - Importa `PRReviewer` de `@funny/reviewbot`

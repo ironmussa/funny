@@ -1,17 +1,38 @@
+import type { StartupCommand, Message, ToolCall } from '@funny/shared';
+import {
+  GitCompare,
+  Globe,
+  Terminal,
+  ExternalLink,
+  Pin,
+  PinOff,
+  Rocket,
+  Play,
+  Square,
+  Loader2,
+  Columns3,
+  ArrowLeft,
+  FolderOpen,
+  Copy,
+  ClipboardList,
+  Check,
+  EllipsisVertical,
+  Trash2,
+} from 'lucide-react';
 import { memo, useState, useEffect, useCallback, startTransition } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useThreadStore } from '@/stores/thread-store';
-import { useProjectStore } from '@/stores/project-store';
-import { useUIStore } from '@/stores/ui-store';
-import { useTerminalStore } from '@/stores/terminal-store';
-import { useGitStatusStore } from '@/stores/git-status-store';
-import { editorLabels, type Editor } from '@/stores/settings-store';
-import { usePreviewWindow } from '@/hooks/use-preview-window';
-import { GitCompare, Globe, Terminal, ExternalLink, Pin, PinOff, Rocket, Play, Square, Loader2, Columns3, ArrowLeft, FolderOpen, Copy, ClipboardList, Check, EllipsisVertical, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
-import { api } from '@/lib/api';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+
+import {
+  Breadcrumb,
+  BreadcrumbList,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from '@/components/ui/breadcrumb';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -27,25 +48,16 @@ import {
   DropdownMenuTrigger,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Breadcrumb,
-  BreadcrumbList,
-  BreadcrumbItem,
-  BreadcrumbLink,
-  BreadcrumbPage,
-  BreadcrumbSeparator,
-} from '@/components/ui/breadcrumb';
-import type { StartupCommand, Message, ToolCall } from '@funny/shared';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { usePreviewWindow } from '@/hooks/use-preview-window';
+import { api } from '@/lib/api';
+import { useGitStatusStore } from '@/stores/git-status-store';
+import { useProjectStore } from '@/stores/project-store';
+import { editorLabels, type Editor } from '@/stores/settings-store';
+import { useTerminalStore } from '@/stores/terminal-store';
+import { useThreadStore } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
 
 type MessageWithToolCalls = Message & { toolCalls?: ToolCall[] };
 
@@ -62,7 +74,9 @@ function threadToMarkdown(messages: MessageWithToolCalls[], includeToolCalls: bo
         try {
           const parsed = typeof tc.input === 'string' ? JSON.parse(tc.input) : tc.input;
           inputStr = JSON.stringify(parsed, null, 2);
-        } catch { inputStr = String(tc.input); }
+        } catch {
+          inputStr = String(tc.input);
+        }
         lines.push(`### Tool: ${tc.name}\n\n\`\`\`json\n${inputStr}\n\`\`\`\n`);
         if (tc.output) {
           lines.push(`**Output:**\n\n\`\`\`\n${tc.output}\n\`\`\`\n`);
@@ -76,16 +90,16 @@ function threadToMarkdown(messages: MessageWithToolCalls[], includeToolCalls: bo
 const MoreActionsMenu = memo(function MoreActionsMenu() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const threadId = useThreadStore(s => s.activeThread?.id);
-  const threadProjectId = useThreadStore(s => s.activeThread?.projectId);
-  const threadTitle = useThreadStore(s => s.activeThread?.title);
-  const threadMode = useThreadStore(s => s.activeThread?.mode);
-  const threadBranch = useThreadStore(s => s.activeThread?.branch);
-  const threadPinned = useThreadStore(s => s.activeThread?.pinned);
-  const hasMessages = useThreadStore(s => (s.activeThread?.messages?.length ?? 0) > 0);
-  const pinThread = useThreadStore(s => s.pinThread);
-  const deleteThread = useThreadStore(s => s.deleteThread);
-  const setReviewPaneOpen = useUIStore(s => s.setReviewPaneOpen);
+  const threadId = useThreadStore((s) => s.activeThread?.id);
+  const threadProjectId = useThreadStore((s) => s.activeThread?.projectId);
+  const threadTitle = useThreadStore((s) => s.activeThread?.title);
+  const threadMode = useThreadStore((s) => s.activeThread?.mode);
+  const threadBranch = useThreadStore((s) => s.activeThread?.branch);
+  const threadPinned = useThreadStore((s) => s.activeThread?.pinned);
+  const hasMessages = useThreadStore((s) => (s.activeThread?.messages?.length ?? 0) > 0);
+  const pinThread = useThreadStore((s) => s.pinThread);
+  const deleteThread = useThreadStore((s) => s.deleteThread);
+  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const [copiedText, setCopiedText] = useState(false);
   const [copiedTools, setCopiedTools] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -118,95 +132,117 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
 
   return (
     <>
-    <DropdownMenu>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <DropdownMenuTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              className="text-muted-foreground"
-            >
-              <EllipsisVertical className="h-4 w-4" />
+      <DropdownMenu>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon-sm" className="text-muted-foreground">
+                <EllipsisVertical className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+          </TooltipTrigger>
+          <TooltipContent>{t('thread.moreActions', 'More actions')}</TooltipContent>
+        </Tooltip>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            onClick={() => handleCopy(false)}
+            disabled={!hasMessages}
+            className="cursor-pointer"
+          >
+            {copiedText ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+            {t('thread.copyText', 'Copy text only')}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={() => handleCopy(true)}
+            disabled={!hasMessages}
+            className="cursor-pointer"
+          >
+            {copiedTools ? (
+              <Check className="mr-2 h-4 w-4" />
+            ) : (
+              <ClipboardList className="mr-2 h-4 w-4" />
+            )}
+            {t('thread.copyWithTools', 'Copy with tool calls')}
+          </DropdownMenuItem>
+          {threadId && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => pinThread(threadId, threadProjectId!, !threadPinned)}
+                className="cursor-pointer"
+              >
+                {threadPinned ? (
+                  <>
+                    <PinOff className="mr-2 h-4 w-4" />
+                    {t('sidebar.unpin', 'Unpin')}
+                  </>
+                ) : (
+                  <>
+                    <Pin className="mr-2 h-4 w-4" />
+                    {t('sidebar.pin', 'Pin')}
+                  </>
+                )}
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={() => {
+                  setReviewPaneOpen(false);
+                  navigate(`/search?view=board&project=${threadProjectId}&highlight=${threadId}`);
+                }}
+                className="cursor-pointer"
+              >
+                <Columns3 className="mr-2 h-4 w-4" />
+                {t('kanban.viewOnBoard', 'View on Board')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setDeleteOpen(true)}
+                className="cursor-pointer text-status-error focus:text-status-error"
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                {t('common.delete', 'Delete')}
+              </DropdownMenuItem>
+            </>
+          )}
+        </DropdownMenuContent>
+      </DropdownMenu>
+      <Dialog
+        open={deleteOpen}
+        onOpenChange={(open) => {
+          if (!open) setDeleteOpen(false);
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('dialog.deleteThread')}</DialogTitle>
+            <DialogDescription className="break-all">
+              {t('dialog.deleteThreadDesc', {
+                title:
+                  threadTitle && threadTitle.length > 80
+                    ? threadTitle.slice(0, 80) + '…'
+                    : threadTitle,
+              })}
+            </DialogDescription>
+          </DialogHeader>
+          {isWorktree && (
+            <p className="rounded-md bg-status-warning/10 px-3 py-2 text-xs text-status-warning/80">
+              {t('dialog.worktreeWarning')}
+            </p>
+          )}
+          <DialogFooter>
+            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(false)}>
+              {t('common.cancel')}
             </Button>
-          </DropdownMenuTrigger>
-        </TooltipTrigger>
-        <TooltipContent>{t('thread.moreActions', 'More actions')}</TooltipContent>
-      </Tooltip>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem
-          onClick={() => handleCopy(false)}
-          disabled={!hasMessages}
-          className="cursor-pointer"
-        >
-          {copiedText ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
-          {t('thread.copyText', 'Copy text only')}
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() => handleCopy(true)}
-          disabled={!hasMessages}
-          className="cursor-pointer"
-        >
-          {copiedTools ? <Check className="h-4 w-4 mr-2" /> : <ClipboardList className="h-4 w-4 mr-2" />}
-          {t('thread.copyWithTools', 'Copy with tool calls')}
-        </DropdownMenuItem>
-        {threadId && (
-          <>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => pinThread(threadId, threadProjectId!, !threadPinned)}
-              className="cursor-pointer"
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDeleteConfirm}
+              loading={deleteLoading}
             >
-              {threadPinned
-                ? <><PinOff className="h-4 w-4 mr-2" />{t('sidebar.unpin', 'Unpin')}</>
-                : <><Pin className="h-4 w-4 mr-2" />{t('sidebar.pin', 'Pin')}</>
-              }
-            </DropdownMenuItem>
-            <DropdownMenuItem
-              onClick={() => {
-                setReviewPaneOpen(false);
-                navigate(`/search?view=board&project=${threadProjectId}&highlight=${threadId}`);
-              }}
-              className="cursor-pointer"
-            >
-              <Columns3 className="h-4 w-4 mr-2" />
-              {t('kanban.viewOnBoard', 'View on Board')}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onClick={() => setDeleteOpen(true)}
-              className="text-status-error focus:text-status-error cursor-pointer"
-            >
-              <Trash2 className="h-4 w-4 mr-2" />
-              {t('common.delete', 'Delete')}
-            </DropdownMenuItem>
-          </>
-        )}
-      </DropdownMenuContent>
-    </DropdownMenu>
-    <Dialog open={deleteOpen} onOpenChange={(open) => { if (!open) setDeleteOpen(false); }}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle>{t('dialog.deleteThread')}</DialogTitle>
-          <DialogDescription className="break-all">
-            {t('dialog.deleteThreadDesc', { title: threadTitle && threadTitle.length > 80 ? threadTitle.slice(0, 80) + '…' : threadTitle })}
-          </DialogDescription>
-        </DialogHeader>
-        {isWorktree && (
-          <p className="text-xs text-status-warning/80 bg-status-warning/10 rounded-md px-3 py-2">
-            {t('dialog.worktreeWarning')}
-          </p>
-        )}
-        <DialogFooter>
-          <Button variant="outline" size="sm" onClick={() => setDeleteOpen(false)}>
-            {t('common.cancel')}
-          </Button>
-          <Button variant="destructive" size="sm" onClick={handleDeleteConfirm} loading={deleteLoading}>
-            {t('common.delete')}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+              {t('common.delete')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 });
@@ -268,7 +304,7 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
       </Tooltip>
       <PopoverContent align="end" className="w-64 p-2">
         {commands.length === 0 ? (
-          <p className="text-xs text-muted-foreground text-center py-3">
+          <p className="py-3 text-center text-xs text-muted-foreground">
             {t('startup.noCommands')}
           </p>
         ) : (
@@ -278,23 +314,25 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
               return (
                 <div
                   key={cmd.id}
-                  className="flex items-center justify-between gap-2 px-2 py-1.5 rounded-md hover:bg-accent/50 transition-colors"
+                  className="flex items-center justify-between gap-2 rounded-md px-2 py-1.5 transition-colors hover:bg-accent/50"
                 >
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       {isRunning && (
-                        <Loader2 className="h-3 w-3 animate-spin text-status-success flex-shrink-0" />
+                        <Loader2 className="h-3 w-3 flex-shrink-0 animate-spin text-status-success" />
                       )}
-                      <span className="text-sm truncate">{cmd.label}</span>
+                      <span className="truncate text-sm">{cmd.label}</span>
                     </div>
-                    <span className="text-xs text-muted-foreground font-mono truncate block mt-0.5">{cmd.command}</span>
+                    <span className="mt-0.5 block truncate font-mono text-xs text-muted-foreground">
+                      {cmd.command}
+                    </span>
                   </div>
                   {isRunning ? (
                     <Button
                       variant="ghost"
                       size="icon-xs"
                       onClick={() => handleStop(cmd)}
-                      className="text-status-error hover:text-status-error/80 flex-shrink-0"
+                      className="flex-shrink-0 text-status-error hover:text-status-error/80"
                     >
                       <Square className="h-3 w-3" />
                     </Button>
@@ -303,7 +341,7 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
                       variant="ghost"
                       size="icon-xs"
                       onClick={() => handleRun(cmd)}
-                      className="text-status-success hover:text-status-success/80 flex-shrink-0"
+                      className="flex-shrink-0 text-status-success hover:text-status-success/80"
                     >
                       <Play className="h-3 w-3" />
                     </Button>
@@ -321,29 +359,31 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
 export const ProjectHeader = memo(function ProjectHeader() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const activeThreadId = useThreadStore(s => s.activeThread?.id);
-  const activeThreadProjectId = useThreadStore(s => s.activeThread?.projectId);
-  const activeThreadTitle = useThreadStore(s => s.activeThread?.title);
-  const activeThreadWorktreePath = useThreadStore(s => s.activeThread?.worktreePath);
-  const activeThreadParentId = useThreadStore(s => s.activeThread?.parentThreadId);
-  const selectedProjectId = useProjectStore(s => s.selectedProjectId);
-  const projects = useProjectStore(s => s.projects);
-  const setReviewPaneOpen = useUIStore(s => s.setReviewPaneOpen);
-  const reviewPaneOpen = useUIStore(s => s.reviewPaneOpen);
-  const kanbanContext = useUIStore(s => s.kanbanContext);
+  const activeThreadId = useThreadStore((s) => s.activeThread?.id);
+  const activeThreadProjectId = useThreadStore((s) => s.activeThread?.projectId);
+  const activeThreadTitle = useThreadStore((s) => s.activeThread?.title);
+  const activeThreadWorktreePath = useThreadStore((s) => s.activeThread?.worktreePath);
+  const activeThreadParentId = useThreadStore((s) => s.activeThread?.parentThreadId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const projects = useProjectStore((s) => s.projects);
+  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
+  const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
+  const kanbanContext = useUIStore((s) => s.kanbanContext);
   const { openPreview, isTauri } = usePreviewWindow();
-  const toggleTerminalPanel = useTerminalStore(s => s.togglePanel);
-  const terminalPanelVisible = useTerminalStore(s => s.panelVisible);
-  const setPanelVisible = useTerminalStore(s => s.setPanelVisible);
-  const addTab = useTerminalStore(s => s.addTab);
-  const gitStatus = useGitStatusStore(s => activeThreadId ? s.statusByThread[activeThreadId] : undefined);
-  const fetchForThread = useGitStatusStore(s => s.fetchForThread);
+  const toggleTerminalPanel = useTerminalStore((s) => s.togglePanel);
+  const terminalPanelVisible = useTerminalStore((s) => s.panelVisible);
+  const setPanelVisible = useTerminalStore((s) => s.setPanelVisible);
+  const addTab = useTerminalStore((s) => s.addTab);
+  const gitStatus = useGitStatusStore((s) =>
+    activeThreadId ? s.statusByThread[activeThreadId] : undefined,
+  );
+  const fetchForThread = useGitStatusStore((s) => s.fetchForThread);
 
   const projectId = activeThreadProjectId ?? selectedProjectId;
-  const project = projects.find(p => p.id === projectId);
+  const project = projects.find((p) => p.id === projectId);
   const tabs = useTerminalStore((s) => s.tabs);
   const runningWithPort = tabs.filter(
-    (tab) => tab.projectId === projectId && tab.commandId && tab.alive && tab.port
+    (tab) => tab.projectId === projectId && tab.commandId && tab.alive && tab.port,
   );
   const showGitStats = gitStatus && (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0);
 
@@ -369,7 +409,9 @@ export const ProjectHeader = memo(function ProjectHeader() {
     if (!kanbanContext) return;
 
     const targetProjectId = kanbanContext.projectId || '__all__';
-    const searchParam = kanbanContext.search ? `&search=${encodeURIComponent(kanbanContext.search)}` : '';
+    const searchParam = kanbanContext.search
+      ? `&search=${encodeURIComponent(kanbanContext.search)}`
+      : '';
     const highlightParam = kanbanContext.threadId ? `&highlight=${kanbanContext.threadId}` : '';
 
     // Close the review pane when returning to Kanban
@@ -378,63 +420,67 @@ export const ProjectHeader = memo(function ProjectHeader() {
     // Navigate to search view with board mode.
     // kanbanContext is cleared by useRouteSync when it detects the /search route,
     // ensuring both allThreadsProjectId and kanbanContext update in the same render.
-    navigate(`/search?view=board${targetProjectId !== '__all__' ? `&project=${targetProjectId}` : ''}${searchParam}${highlightParam}`);
+    navigate(
+      `/search?view=board${targetProjectId !== '__all__' ? `&project=${targetProjectId}` : ''}${searchParam}${highlightParam}`,
+    );
   }, [kanbanContext, navigate, setReviewPaneOpen]);
 
   return (
-    <div className="px-4 py-2 border-b border-border">
+    <div className="border-b border-border px-4 py-2">
       <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 min-w-0 max-w-[50%]">
-        {kanbanContext && activeThreadId && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={handleBackToKanban}
-                className="text-muted-foreground hover:text-foreground shrink-0"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('kanban.backToBoard', 'Back to Kanban')}</TooltipContent>
-          </Tooltip>
-        )}
-        {!kanbanContext && activeThreadParentId && (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => navigate(`/projects/${activeThreadProjectId}/threads/${activeThreadParentId}`)}
-                className="text-muted-foreground hover:text-foreground shrink-0"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('thread.backToParent', 'Back to parent thread')}</TooltipContent>
-          </Tooltip>
-        )}
-        <Breadcrumb className="min-w-0">
-          <BreadcrumbList>
-            {project && (
-              <BreadcrumbItem className="flex-shrink-0">
-                <BreadcrumbLink className="text-sm whitespace-nowrap cursor-default flex items-center gap-1.5">
-                  <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
-                  {project.name}
-                </BreadcrumbLink>
-              </BreadcrumbItem>
-            )}
-            {project && activeThreadId && <BreadcrumbSeparator />}
-            {activeThreadId && (
-              <BreadcrumbItem className="overflow-hidden flex-1">
-                <BreadcrumbPage className="text-sm truncate block">
-                  {activeThreadTitle}
-                </BreadcrumbPage>
-              </BreadcrumbItem>
-            )}
-          </BreadcrumbList>
-        </Breadcrumb>
+        <div className="flex min-w-0 max-w-[50%] items-center gap-2">
+          {kanbanContext && activeThreadId && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={handleBackToKanban}
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('kanban.backToBoard', 'Back to Kanban')}</TooltipContent>
+            </Tooltip>
+          )}
+          {!kanbanContext && activeThreadParentId && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() =>
+                    navigate(`/projects/${activeThreadProjectId}/threads/${activeThreadParentId}`)
+                  }
+                  className="shrink-0 text-muted-foreground hover:text-foreground"
+                >
+                  <ArrowLeft className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('thread.backToParent', 'Back to parent thread')}</TooltipContent>
+            </Tooltip>
+          )}
+          <Breadcrumb className="min-w-0">
+            <BreadcrumbList>
+              {project && (
+                <BreadcrumbItem className="flex-shrink-0">
+                  <BreadcrumbLink className="flex cursor-default items-center gap-1.5 whitespace-nowrap text-sm">
+                    <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                    {project.name}
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+              )}
+              {project && activeThreadId && <BreadcrumbSeparator />}
+              {activeThreadId && (
+                <BreadcrumbItem className="flex-1 overflow-hidden">
+                  <BreadcrumbPage className="block truncate text-sm">
+                    {activeThreadTitle}
+                  </BreadcrumbPage>
+                </BreadcrumbItem>
+              )}
+            </BreadcrumbList>
+          </Breadcrumb>
         </div>
         <div className="flex items-center gap-2">
           <StartupCommandsPopover projectId={projectId!} />
@@ -465,11 +511,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-sm"
-                    className="text-muted-foreground"
-                  >
+                  <Button variant="ghost" size="icon-sm" className="text-muted-foreground">
                     <ExternalLink className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -495,7 +537,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                 size="icon-sm"
                 onClick={() => {
                   if (!selectedProjectId) return;
-                  const projectTabs = tabs.filter(t => t.projectId === selectedProjectId);
+                  const projectTabs = tabs.filter((t) => t.projectId === selectedProjectId);
 
                   if (projectTabs.length === 0 && !terminalPanelVisible) {
                     const cwd = project?.path ?? 'C:\\';
@@ -529,7 +571,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                 className={`${showGitStats ? 'h-8 px-2' : 'h-8 w-8'} ${reviewPaneOpen ? 'text-primary' : 'text-muted-foreground'}`}
               >
                 {showGitStats ? (
-                  <div className="flex items-center gap-2 text-xs font-mono font-semibold">
+                  <div className="flex items-center gap-2 font-mono text-xs font-semibold">
                     <span className="text-status-success">+{gitStatus.linesAdded}</span>
                     <span className="text-status-error">-{gitStatus.linesDeleted}</span>
                   </div>

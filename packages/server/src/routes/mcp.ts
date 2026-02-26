@@ -1,22 +1,24 @@
+import { badRequest } from '@funny/shared/errors';
 import { Hono } from 'hono';
+import { err } from 'neverthrow';
+
+import { startOAuthFlow, handleOAuthCallback } from '../services/mcp-oauth.js';
 import {
   listMcpServers,
   addMcpServer,
   removeMcpServer,
   RECOMMENDED_SERVERS,
 } from '../services/mcp-service.js';
-import { startOAuthFlow, handleOAuthCallback } from '../services/mcp-oauth.js';
-import { addMcpServerSchema, validate } from '../validation/schemas.js';
 import { resultToResponse } from '../utils/result-response.js';
-import { badRequest } from '@funny/shared/errors';
-import { err } from 'neverthrow';
+import { addMcpServerSchema, validate } from '../validation/schemas.js';
 
 const app = new Hono();
 
 // List MCP servers for a project
 app.get('/servers', async (c) => {
   const projectPath = c.req.query('projectPath');
-  if (!projectPath) return resultToResponse(c, err(badRequest('projectPath query parameter required')));
+  if (!projectPath)
+    return resultToResponse(c, err(badRequest('projectPath query parameter required')));
 
   const result = await listMcpServers(projectPath);
   if (result.isErr()) return resultToResponse(c, result);
@@ -40,7 +42,8 @@ app.delete('/servers/:name', async (c) => {
   const projectPath = c.req.query('projectPath');
   const scope = c.req.query('scope') as 'project' | 'user' | undefined;
 
-  if (!projectPath) return resultToResponse(c, err(badRequest('projectPath query parameter required')));
+  if (!projectPath)
+    return resultToResponse(c, err(badRequest('projectPath query parameter required')));
 
   const result = await removeMcpServer({ name, projectPath, scope });
   if (result.isErr()) return resultToResponse(c, result);
@@ -67,7 +70,11 @@ app.post('/oauth/start', async (c) => {
 
   const server = servers.find((s) => s.name === serverName);
   if (!server) return resultToResponse(c, err(badRequest(`Server "${serverName}" not found`)));
-  if (!server.url) return resultToResponse(c, err(badRequest(`Server "${serverName}" has no URL (only HTTP servers support OAuth)`)));
+  if (!server.url)
+    return resultToResponse(
+      c,
+      err(badRequest(`Server "${serverName}" has no URL (only HTTP servers support OAuth)`)),
+    );
 
   const url = new URL(c.req.url);
   const callbackBaseUrl = `${url.protocol}//${url.host}`;
@@ -129,7 +136,12 @@ app.get('/oauth/callback', async (c) => {
 
 /** Escape HTML special characters to prevent XSS */
 function escapeHtml(s: string): string {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+  return s
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function renderCallbackPage(success: boolean, error?: string): string {

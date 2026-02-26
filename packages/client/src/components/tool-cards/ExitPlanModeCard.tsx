@@ -1,12 +1,21 @@
+import { FileCode2, CheckCircle2, XCircle, Send } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { FileCode2, CheckCircle2, XCircle, Send } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { Input } from '@/components/ui/input';
 
-export function ExitPlanModeCard({ plan, onRespond, output }: { plan?: string; onRespond?: (answer: string) => void; output?: string }) {
+import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
+
+export function ExitPlanModeCard({
+  plan,
+  onRespond,
+  output,
+}: {
+  plan?: string;
+  onRespond?: (answer: string) => void;
+  output?: string;
+}) {
   const { t } = useTranslation();
   const [input, setInput] = useState('');
   const alreadyAnswered = !!output;
@@ -39,60 +48,49 @@ export function ExitPlanModeCard({ plan, onRespond, output }: { plan?: string; o
   };
 
   return (
-    <div className="text-sm max-w-full overflow-hidden">
+    <div className="max-w-full overflow-hidden text-sm">
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
         <FileCode2 className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
         <span className="font-medium text-foreground">{t('tools.plan')}</span>
-        {!submitted && <span className="text-muted-foreground">{t('thread.planWaitingForResponse')}</span>}
+        {!submitted && (
+          <span className="text-muted-foreground">{t('thread.planWaitingForResponse')}</span>
+        )}
         {submitted && (
-          <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded bg-status-success/10 text-status-success/80 font-medium ml-auto">
+          <span className="ml-auto flex-shrink-0 rounded bg-status-success/10 px-1.5 py-0.5 text-xs font-medium text-status-success/80">
             {t('tools.answered')}
           </span>
         )}
       </div>
 
       {plan && (
-        <div className="border-t border-border/40 px-4 py-3 max-h-[500px] overflow-y-auto">
-          <div className="prose prose-xs prose-invert max-w-none
-            prose-headings:text-foreground prose-headings:font-semibold
-            prose-h1:text-xs prose-h1:mb-1.5 prose-h1:mt-0
-            prose-h2:text-xs prose-h2:mb-1 prose-h2:mt-2.5
-            prose-h3:text-sm prose-h3:mb-1 prose-h3:mt-2
-            prose-p:text-xs prose-p:text-muted-foreground prose-p:leading-relaxed prose-p:my-0.5
-            prose-li:text-sm prose-li:text-muted-foreground prose-li:leading-relaxed prose-li:my-0
-            prose-ul:my-0.5 prose-ol:my-0.5
-            prose-code:text-xs prose-code:bg-background/80 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-foreground
-            prose-pre:bg-background/80 prose-pre:rounded prose-pre:p-2 prose-pre:my-1
-            prose-strong:text-foreground
-          ">
-            <ReactMarkdown remarkPlugins={[remarkGfm]}>
-              {plan}
-            </ReactMarkdown>
+        <div className="max-h-[500px] overflow-y-auto border-t border-border/40 px-4 py-3">
+          <div
+            className="prose prose-xs prose-invert prose-headings:text-foreground prose-headings:font-semibold prose-h1:text-xs prose-h1:mb-1.5 prose-h1:mt-0 prose-h2:text-xs prose-h2:mb-1 prose-h2:mt-2.5 prose-h3:text-sm prose-h3:mb-1 prose-h3:mt-2 prose-p:text-xs prose-p:text-muted-foreground prose-p:leading-relaxed prose-p:my-0.5 prose-li:text-sm prose-li:text-muted-foreground prose-li:leading-relaxed prose-li:my-0 prose-ul:my-0.5 prose-ol:my-0.5 prose-code:text-xs prose-code:bg-background/80 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-foreground prose-pre:bg-background/80 prose-pre:rounded prose-pre:p-2 prose-pre:my-1 prose-strong:text-foreground max-w-none"
+          >
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>{plan}</ReactMarkdown>
           </div>
         </div>
       )}
 
       {alreadyAnswered && (
         <div className="border-t border-border/40 px-3 py-2">
-          <p className="text-xs text-primary font-medium">
-            → {output}
-          </p>
+          <p className="text-xs font-medium text-primary">→ {output}</p>
         </div>
       )}
 
       {onRespond && !submitted && (
-        <div className="border-t border-border/40 px-3 py-2.5 space-y-2">
+        <div className="space-y-2 border-t border-border/40 px-3 py-2.5">
           <div className="flex gap-2">
             <button
               onClick={handleAccept}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+              className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
               <CheckCircle2 className="h-3.5 w-3.5" />
               {t('tools.acceptPlan')}
             </button>
             <button
               onClick={handleReject}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-muted text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+              className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
             >
               <XCircle className="h-3.5 w-3.5" />
               {t('thread.rejectPlan')}
@@ -112,7 +110,7 @@ export function ExitPlanModeCard({ plan, onRespond, output }: { plan?: string; o
                 }
               }}
               placeholder={t('thread.waitingInputPlaceholder')}
-              className="flex-1 h-auto py-1.5"
+              className="h-auto flex-1 py-1.5"
             />
             <button
               onClick={handleSubmitInput}
@@ -121,7 +119,7 @@ export function ExitPlanModeCard({ plan, onRespond, output }: { plan?: string; o
                 'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
                 input.trim()
                   ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                  : 'bg-muted text-muted-foreground cursor-not-allowed'
+                  : 'bg-muted text-muted-foreground cursor-not-allowed',
               )}
             >
               <Send className="h-3 w-3" />

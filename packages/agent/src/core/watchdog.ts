@@ -7,11 +7,11 @@
  * All behavior is config-driven — no hardcoded logic.
  */
 
-import type { EventBus } from '../infrastructure/event-bus.js';
-import type { SessionStore } from './session-store.js';
 import type { PipelineServiceConfig } from '../config/schema.js';
-import type { PipelineEvent } from './types.js';
+import type { EventBus } from '../infrastructure/event-bus.js';
 import { logger } from '../infrastructure/logger.js';
+import type { SessionStore } from './session-store.js';
+import type { PipelineEvent } from './types.js';
 
 // ── Reaction types ──────────────────────────────────────────────
 
@@ -101,7 +101,10 @@ export class Watchdog {
     const reaction = this.config.reactions.ci_failed;
     const attempts = session.incrementCIAttempts();
 
-    await this.publishReaction(sessionId, 'ci_failed', reaction.action, { attempts, maxRetries: reaction.max_retries });
+    await this.publishReaction(sessionId, 'ci_failed', reaction.action, {
+      attempts,
+      maxRetries: reaction.max_retries,
+    });
 
     if (attempts > reaction.max_retries) {
       logger.warn({ sessionId, attempts }, 'CI retry budget exhausted — escalating');
@@ -116,7 +119,10 @@ export class Watchdog {
     } else if (reaction.action === 'escalate') {
       await this.escalate(sessionId, 'CI failed — configured to escalate immediately');
     } else {
-      await this.handlers.notify(sessionId, `CI failed on session ${sessionId} (attempt ${attempts})`);
+      await this.handlers.notify(
+        sessionId,
+        `CI failed on session ${sessionId} (attempt ${attempts})`,
+      );
     }
   }
 
@@ -130,11 +136,17 @@ export class Watchdog {
     const reaction = this.config.reactions.changes_requested;
     const attempts = session.incrementReviewAttempts();
 
-    await this.publishReaction(sessionId, 'changes_requested', reaction.action, { attempts, maxRetries: reaction.max_retries });
+    await this.publishReaction(sessionId, 'changes_requested', reaction.action, {
+      attempts,
+      maxRetries: reaction.max_retries,
+    });
 
     if (attempts > reaction.max_retries) {
       logger.warn({ sessionId, attempts }, 'Review retry budget exhausted — escalating');
-      await this.escalate(sessionId, `Review changes requested ${attempts} times — exceeded retry budget`);
+      await this.escalate(
+        sessionId,
+        `Review changes requested ${attempts} times — exceeded retry budget`,
+      );
       return;
     }
 
@@ -145,7 +157,10 @@ export class Watchdog {
     } else if (reaction.action === 'escalate') {
       await this.escalate(sessionId, 'Changes requested — configured to escalate immediately');
     } else {
-      await this.handlers.notify(sessionId, `Review changes requested on session ${sessionId} (attempt ${attempts})`);
+      await this.handlers.notify(
+        sessionId,
+        `Review changes requested on session ${sessionId} (attempt ${attempts})`,
+      );
     }
   }
 
@@ -225,9 +240,12 @@ export class Watchdog {
     });
   }
 
-  private interpolate(template: string, session: { issue: { number: number }; prNumber: number | null }): string {
+  private interpolate(
+    template: string,
+    session: { issue: { number: number }; prNumber: number | null },
+  ): string {
     return template
-      .replace(/\#\{issueNumber\}/g, String(session.issue.number))
-      .replace(/\#\{prNumber\}/g, String(session.prNumber ?? ''));
+      .replace(/#\{issueNumber\}/g, String(session.issue.number))
+      .replace(/#\{prNumber\}/g, String(session.prNumber ?? ''));
   }
 }

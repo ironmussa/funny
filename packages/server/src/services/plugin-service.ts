@@ -5,10 +5,12 @@
  */
 
 import { readFileSync, readdirSync, existsSync } from 'fs';
-import { join, basename } from 'path';
 import { homedir } from 'os';
+import { join, basename } from 'path';
+
 import type { Plugin, PluginCommand } from '@funny/shared';
-import { log } from '../lib/abbacchio.js';
+
+import { log } from '../lib/logger.js';
 
 const PLUGINS_DIR = join(homedir(), '.claude', 'plugins');
 const INSTALLED_FILE = join(PLUGINS_DIR, 'installed_plugins.json');

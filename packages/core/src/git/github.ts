@@ -5,9 +5,10 @@
  * Returns ResultAsync<T, DomainError> per codebase convention.
  */
 
-import { ResultAsync } from 'neverthrow';
-import { execute, ProcessExecutionError } from './process.js';
 import { processError, internal, type DomainError } from '@funny/shared/errors';
+import { ResultAsync } from 'neverthrow';
+
+import { execute, ProcessExecutionError } from './process.js';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -54,7 +55,10 @@ export type ReviewEvent = 'APPROVE' | 'REQUEST_CHANGES' | 'COMMENT';
 /**
  * Fetch PR reviews and inline comments via `gh pr view`.
  */
-export function fetchPRReviews(cwd: string, prNumber: number): ResultAsync<PRReviewData, DomainError> {
+export function fetchPRReviews(
+  cwd: string,
+  prNumber: number,
+): ResultAsync<PRReviewData, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
       const result = await execute(
@@ -101,7 +105,10 @@ export function fetchPRReviews(cwd: string, prNumber: number): ResultAsync<PRRev
 /**
  * Check if a PR is approved via `gh pr view --json reviewDecision`.
  */
-export function checkPRApprovalStatus(cwd: string, prNumber: number): ResultAsync<ReviewDecision, DomainError> {
+export function checkPRApprovalStatus(
+  cwd: string,
+  prNumber: number,
+): ResultAsync<ReviewDecision, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
       const result = await execute(
@@ -157,8 +164,13 @@ export function getPRInfo(cwd: string, prNumber: number): ResultAsync<PRInfo, Do
     (async () => {
       const result = await execute(
         'gh',
-        ['pr', 'view', String(prNumber), '--json',
-          'number,title,body,author,headRefName,baseRefName,additions,deletions,changedFiles'],
+        [
+          'pr',
+          'view',
+          String(prNumber),
+          '--json',
+          'number,title,body,author,headRefName,baseRefName,additions,deletions,changedFiles',
+        ],
         { cwd, timeout: 30_000, reject: false },
       );
 
@@ -194,11 +206,11 @@ export function getPRInfo(cwd: string, prNumber: number): ResultAsync<PRInfo, Do
 export function getPRDiff(cwd: string, prNumber: number): ResultAsync<string, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
-      const result = await execute(
-        'gh',
-        ['pr', 'diff', String(prNumber)],
-        { cwd, timeout: 60_000, reject: false },
-      );
+      const result = await execute('gh', ['pr', 'diff', String(prNumber)], {
+        cwd,
+        timeout: 60_000,
+        reject: false,
+      });
 
       if (result.exitCode !== 0) {
         throw new Error(`gh pr diff failed: ${result.stderr || result.stdout}`);

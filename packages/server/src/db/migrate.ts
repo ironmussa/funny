@@ -1,6 +1,7 @@
-import { db } from './index.js';
 import { sql } from 'drizzle-orm';
-import { log } from '../lib/abbacchio.js';
+
+import { log } from '../lib/logger.js';
+import { db } from './index.js';
 
 // ── Migration tracking ──────────────────────────────────────────
 
@@ -24,7 +25,9 @@ function hasRun(name: string): boolean {
 }
 
 function markRun(name: string) {
-  db.run(sql`INSERT INTO _migrations (name, applied_at) VALUES (${name}, ${new Date().toISOString()})`);
+  db.run(
+    sql`INSERT INTO _migrations (name, applied_at) VALUES (${name}, ${new Date().toISOString()})`,
+  );
 }
 
 /** Helper to safely add a column (idempotent) */
@@ -95,7 +98,7 @@ const migrations: Migration[] = [
     name: '002_thread_extras',
     up() {
       addColumn('threads', 'archived', 'INTEGER NOT NULL', '0');
-      addColumn('threads', 'permission_mode', "TEXT NOT NULL", "'autoEdit'");
+      addColumn('threads', 'permission_mode', 'TEXT NOT NULL', "'autoEdit'");
       addColumn('threads', 'base_branch', 'TEXT');
     },
   },
@@ -195,9 +198,9 @@ const migrations: Migration[] = [
   {
     name: '007_multi_user',
     up() {
-      addColumn('projects', 'user_id', "TEXT NOT NULL", "'__local__'");
-      addColumn('threads', 'user_id', "TEXT NOT NULL", "'__local__'");
-      addColumn('automations', 'user_id', "TEXT NOT NULL", "'__local__'");
+      addColumn('projects', 'user_id', 'TEXT NOT NULL', "'__local__'");
+      addColumn('threads', 'user_id', 'TEXT NOT NULL', "'__local__'");
+      addColumn('automations', 'user_id', 'TEXT NOT NULL', "'__local__'");
 
       db.run(sql`
         CREATE TABLE IF NOT EXISTS user_profiles (
@@ -217,7 +220,7 @@ const migrations: Migration[] = [
     name: '008_kanban_and_stage_history',
     up() {
       addColumn('threads', 'pinned', 'INTEGER NOT NULL', '0');
-      addColumn('threads', 'stage', "TEXT NOT NULL", "'backlog'");
+      addColumn('threads', 'stage', 'TEXT NOT NULL', "'backlog'");
 
       db.run(sql`
         CREATE TABLE IF NOT EXISTS stage_history (
@@ -230,8 +233,12 @@ const migrations: Migration[] = [
       `);
 
       // Backfill stages based on current status
-      db.run(sql`UPDATE threads SET stage = 'in_progress' WHERE status IN ('running', 'waiting') AND stage = 'backlog'`);
-      db.run(sql`UPDATE threads SET stage = 'review' WHERE status IN ('completed', 'failed', 'stopped', 'interrupted') AND stage = 'backlog'`);
+      db.run(
+        sql`UPDATE threads SET stage = 'in_progress' WHERE status IN ('running', 'waiting') AND stage = 'backlog'`,
+      );
+      db.run(
+        sql`UPDATE threads SET stage = 'review' WHERE status IN ('completed', 'failed', 'stopped', 'interrupted') AND stage = 'backlog'`,
+      );
 
       // Backfill stage_history for threads without history
       db.run(sql`
@@ -262,15 +269,15 @@ const migrations: Migration[] = [
     name: '010_idle_threads',
     up() {
       addColumn('threads', 'initial_prompt', 'TEXT');
-      addColumn('threads', 'model', "TEXT NOT NULL", "'sonnet'");
+      addColumn('threads', 'model', 'TEXT NOT NULL', "'sonnet'");
     },
   },
 
   {
     name: '011_multi_provider',
     up() {
-      addColumn('threads', 'provider', "TEXT NOT NULL", "'claude'");
-      addColumn('automations', 'provider', "TEXT NOT NULL", "'claude'");
+      addColumn('threads', 'provider', 'TEXT NOT NULL', "'claude'");
+      addColumn('automations', 'provider', 'TEXT NOT NULL', "'claude'");
     },
   },
 
@@ -369,7 +376,7 @@ const migrations: Migration[] = [
   {
     name: '017_follow_up_mode',
     up() {
-      addColumn('projects', 'follow_up_mode', "TEXT NOT NULL", "'interrupt'");
+      addColumn('projects', 'follow_up_mode', 'TEXT NOT NULL', "'interrupt'");
 
       db.run(sql`
         CREATE TABLE IF NOT EXISTS message_queue (
@@ -398,7 +405,7 @@ const migrations: Migration[] = [
   {
     name: '018_thread_source',
     up() {
-      addColumn('threads', 'source', "TEXT NOT NULL", "'web'");
+      addColumn('threads', 'source', 'TEXT NOT NULL', "'web'");
     },
   },
 

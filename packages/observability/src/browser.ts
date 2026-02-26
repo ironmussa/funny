@@ -157,9 +157,7 @@ export class BrowserLogger {
     });
 
     window.addEventListener('unhandledrejection', (event) => {
-      const message = event.reason instanceof Error
-        ? event.reason.message
-        : String(event.reason);
+      const message = event.reason instanceof Error ? event.reason.message : String(event.reason);
       this.error(`Unhandled rejection: ${message}`);
     });
   }

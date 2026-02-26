@@ -11,8 +11,8 @@
  */
 
 import { createSdkMcpServer, tool } from '@anthropic-ai/claude-agent-sdk';
-import { z } from 'zod';
 import type { Browser, Page } from 'playwright';
+import { z } from 'zod';
 
 export interface CdpMcpServerOptions {
   /** Base URL of the containerized app (e.g., http://localhost:30042) */
@@ -72,10 +72,12 @@ export function createCdpMcpServer(opts: CdpMcpServerOptions): CdpMcpServerResul
           await p.goto(args.url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
           const title = await p.title();
           return {
-            content: [{
-              type: 'text' as const,
-              text: `Navigated to: ${p.url()}\nTitle: ${title}`,
-            }],
+            content: [
+              {
+                type: 'text' as const,
+                text: `Navigated to: ${p.url()}\nTitle: ${title}`,
+              },
+            ],
           };
         },
       ),
@@ -84,7 +86,10 @@ export function createCdpMcpServer(opts: CdpMcpServerOptions): CdpMcpServerResul
         'cdp_screenshot',
         'Take a screenshot of the current browser page. Returns a PNG image.',
         {
-          fullPage: z.boolean().optional().default(false)
+          fullPage: z
+            .boolean()
+            .optional()
+            .default(false)
             .describe('Whether to capture the full scrollable page'),
         },
         async (args) => {
@@ -94,11 +99,13 @@ export function createCdpMcpServer(opts: CdpMcpServerOptions): CdpMcpServerResul
             type: 'png',
           });
           return {
-            content: [{
-              type: 'image' as const,
-              data: buffer.toString('base64'),
-              mimeType: 'image/png' as const,
-            }],
+            content: [
+              {
+                type: 'image' as const,
+                data: buffer.toString('base64'),
+                mimeType: 'image/png' as const,
+              },
+            ],
           };
         },
       ),
@@ -107,7 +114,9 @@ export function createCdpMcpServer(opts: CdpMcpServerOptions): CdpMcpServerResul
         'cdp_get_dom',
         'Get the HTML content of the current page or a specific element. Useful for inspecting the DOM structure.',
         {
-          selector: z.string().optional()
+          selector: z
+            .string()
+            .optional()
             .describe('CSS selector to get HTML for. Omit to get the full page body.'),
         },
         async (args) => {
@@ -118,10 +127,12 @@ export function createCdpMcpServer(opts: CdpMcpServerOptions): CdpMcpServerResul
             const element = await p.$(args.selector);
             if (!element) {
               return {
-                content: [{
-                  type: 'text' as const,
-                  text: `No element found matching selector: ${args.selector}`,
-                }],
+                content: [
+                  {
+                    type: 'text' as const,
+                    text: `No element found matching selector: ${args.selector}`,
+                  },
+                ],
               };
             }
             html = await element.evaluate((el) => el.outerHTML);
@@ -136,10 +147,12 @@ export function createCdpMcpServer(opts: CdpMcpServerOptions): CdpMcpServerResul
           }
 
           return {
-            content: [{
-              type: 'text' as const,
-              text: html,
-            }],
+            content: [
+              {
+                type: 'text' as const,
+                text: html,
+              },
+            ],
           };
         },
       ),

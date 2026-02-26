@@ -1,7 +1,8 @@
 import { existsSync } from 'node:fs';
+
+import { processError, internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 import pLimit from 'p-limit';
-import { processError, internal, type DomainError } from '@funny/shared/errors';
 
 export interface ProcessResult {
   stdout: string;
@@ -40,7 +41,7 @@ export const SHELL = resolveShell();
  */
 export async function executeShell(
   command: string,
-  options: ProcessOptions = {}
+  options: ProcessOptions = {},
 ): Promise<ProcessResult> {
   return execute(SHELL, ['-c', command], options);
 }
@@ -61,7 +62,7 @@ export class ProcessExecutionError extends Error {
     public exitCode: number,
     public stdout: string,
     public stderr: string,
-    public command: string
+    public command: string,
   ) {
     super(message);
     this.name = 'ProcessExecutionError';
@@ -80,7 +81,7 @@ const processPool = pLimit(6);
 export async function execute(
   command: string,
   args: string[],
-  options: ProcessOptions = {}
+  options: ProcessOptions = {},
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   if (options.skipPool) return _executeRaw(command, args, options);
   return processPool(() => _executeRaw(command, args, options));
@@ -89,7 +90,7 @@ export async function execute(
 async function _executeRaw(
   command: string,
   args: string[],
-  options: ProcessOptions
+  options: ProcessOptions,
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const proc = Bun.spawn([command, ...args], {
     cwd: options.cwd,
@@ -105,11 +106,7 @@ async function _executeRaw(
   const timeoutPromise = new Promise<never>((_, reject) => {
     timeoutId = setTimeout(() => {
       proc.kill();
-      reject(
-        new Error(
-          `Command timed out after ${timeoutMs}ms: ${command} ${args.join(' ')}`
-        )
-      );
+      reject(new Error(`Command timed out after ${timeoutMs}ms: ${command} ${args.join(' ')}`));
     }, timeoutMs);
   });
 
@@ -135,7 +132,7 @@ async function _executeRaw(
         exitCode,
         stdout,
         stderr,
-        `${command} ${args.join(' ')}`
+        `${command} ${args.join(' ')}`,
       );
     }
 
@@ -153,7 +150,7 @@ async function _executeRaw(
 export function executeSync(
   command: string,
   args: string[],
-  options: ProcessOptions = {}
+  options: ProcessOptions = {},
 ): { stdout: string; stderr: string; exitCode: number } {
   const result = Bun.spawnSync([command, ...args], {
     cwd: options.cwd,
@@ -174,7 +171,7 @@ export function executeSync(
       exitCode,
       stdout,
       stderr,
-      `${command} ${args.join(' ')}`
+      `${command} ${args.join(' ')}`,
     );
   }
 
@@ -187,7 +184,7 @@ export function executeSync(
 export async function executeWithLogging(
   command: string,
   args: string[],
-  options: ProcessOptions = {}
+  options: ProcessOptions = {},
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const start = Date.now();
   const argsStr = args.join(' ');
@@ -211,15 +208,12 @@ export async function executeWithLogging(
 export function executeResult(
   command: string,
   args: string[],
-  options: ProcessOptions = {}
+  options: ProcessOptions = {},
 ): ResultAsync<ProcessResult, DomainError> {
-  return ResultAsync.fromPromise(
-    execute(command, args, options),
-    (error) => {
-      if (error instanceof ProcessExecutionError) {
-        return processError(error.message, error.exitCode, error.stderr);
-      }
-      return internal(String(error));
+  return ResultAsync.fromPromise(execute(command, args, options), (error) => {
+    if (error instanceof ProcessExecutionError) {
+      return processError(error.message, error.exitCode, error.stderr);
     }
-  );
+    return internal(String(error));
+  });
 }

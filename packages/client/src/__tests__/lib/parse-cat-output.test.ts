@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'vitest';
+
 import { parseCatOutput } from '@/lib/parse-cat-output';
 
 describe('parseCatOutput', () => {
@@ -43,7 +44,8 @@ describe('parseCatOutput', () => {
 
   describe('multi-line output', () => {
     test('preserves indentation in content', () => {
-      const input = '     1\tfunction foo() {\n     2\t  if (true) {\n     3\t    return;\n     4\t  }\n     5\t}';
+      const input =
+        '     1\tfunction foo() {\n     2\t  if (true) {\n     3\t    return;\n     4\t  }\n     5\t}';
       const result = parseCatOutput(input);
       expect(result.code).toBe('function foo() {\n  if (true) {\n    return;\n  }\n}');
     });

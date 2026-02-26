@@ -1,21 +1,53 @@
-import { Hono } from 'hono';
 import { existsSync } from 'fs';
-import * as tm from '../services/thread-manager.js';
-import { log } from '../lib/abbacchio.js';
-import { getDiff, getDiffSummary, getSingleFileDiff, stageFiles, unstageFiles, revertFiles, addToGitignore, commit, push, pull, createPR, mergeBranch, git, getStatusSummary, deriveGitSyncState, getLog, stash, stashPop, stashList, resetSoft, type GitIdentityOptions, removeWorktree, removeBranch, sanitizePath } from '@funny/core/git';
-import { validate, mergeSchema, stageFilesSchema, commitSchema, createPRSchema } from '../validation/schemas.js';
-import { requireThread, requireThreadCwd, requireProject } from '../utils/route-helpers.js';
-import { resultToResponse } from '../utils/result-response.js';
-import { badRequest, internal } from '@funny/shared/errors';
-import { query } from '@anthropic-ai/claude-agent-sdk';
-import { err } from 'neverthrow';
-import { getAuthMode } from '../lib/auth-mode.js';
-import { getGitIdentity, getGithubToken } from '../services/profile-service.js';
 
-import type { HonoEnv } from '../types/hono-env.js';
-import { wsBroker } from '../services/ws-broker.js';
+import { query } from '@anthropic-ai/claude-agent-sdk';
+import {
+  getDiff,
+  getDiffSummary,
+  getSingleFileDiff,
+  stageFiles,
+  unstageFiles,
+  revertFiles,
+  addToGitignore,
+  commit,
+  push,
+  pull,
+  createPR,
+  mergeBranch,
+  git,
+  getStatusSummary,
+  deriveGitSyncState,
+  getLog,
+  stash,
+  stashPop,
+  stashList,
+  resetSoft,
+  type GitIdentityOptions,
+  removeWorktree,
+  removeBranch,
+  sanitizePath,
+} from '@funny/core/git';
+import { badRequest, internal } from '@funny/shared/errors';
+import { Hono } from 'hono';
+import { err } from 'neverthrow';
+
+import { getAuthMode } from '../lib/auth-mode.js';
+import { log } from '../lib/logger.js';
+import { getGitIdentity, getGithubToken } from '../services/profile-service.js';
 import { threadEventBus } from '../services/thread-event-bus.js';
 import { saveThreadEvent } from '../services/thread-event-service.js';
+import * as tm from '../services/thread-manager.js';
+import { wsBroker } from '../services/ws-broker.js';
+import type { HonoEnv } from '../types/hono-env.js';
+import { resultToResponse } from '../utils/result-response.js';
+import { requireThread, requireThreadCwd, requireProject } from '../utils/route-helpers.js';
+import {
+  validate,
+  mergeSchema,
+  stageFilesSchema,
+  commitSchema,
+  createPRSchema,
+} from '../validation/schemas.js';
 
 export const gitRoutes = new Hono<HonoEnv>();
 
@@ -25,7 +57,8 @@ export const gitRoutes = new Hono<HonoEnv>();
  * In multi-user mode, uses the authenticated user's profile.
  */
 function resolveIdentity(userId: string): GitIdentityOptions | undefined {
-  const effectiveUserId = (getAuthMode() === 'local' || userId === '__local__') ? '__local__' : userId;
+  const effectiveUserId =
+    getAuthMode() === 'local' || userId === '__local__' ? '__local__' : userId;
   const author = getGitIdentity(effectiveUserId) ?? undefined;
   const githubToken = getGithubToken(effectiveUserId) ?? undefined;
   if (!author && !githubToken) return undefined;
@@ -71,28 +104,22 @@ gitRoutes.get('/status', async (c) => {
   const userId = c.get('userId') as string;
   const threads = tm.listThreads({ projectId, userId });
   const worktreeThreads = threads.filter(
-    (t) => t.mode === 'worktree' && t.worktreePath && t.branch
+    (t) => t.mode === 'worktree' && t.worktreePath && t.branch,
   );
   // Threads whose worktrees were cleaned up after merge
-  const mergedThreads = threads.filter(
-    (t) => !t.worktreePath && !t.branch && t.baseBranch
-  );
+  const mergedThreads = threads.filter((t) => !t.worktreePath && !t.branch && t.baseBranch);
 
   const results = await Promise.allSettled(
     worktreeThreads.map(async (thread) => {
       const summaryResult = await getStatusSummary(
         thread.worktreePath!,
         thread.baseBranch ?? undefined,
-        project.path
+        project.path,
       );
       if (summaryResult.isErr()) return null;
       const summary = summaryResult.value;
-      return {
-        threadId: thread.id,
-        state: deriveGitSyncState(summary),
-        ...summary,
-      };
-    })
+      return Object.assign({ threadId: thread.id, state: deriveGitSyncState(summary) }, summary);
+    }),
   );
 
   const statuses = [
@@ -144,11 +171,7 @@ gitRoutes.get('/:threadId/status', async (c) => {
   const project = projectResult.value;
 
   const cwd = thread.worktreePath || project.path;
-  const summaryResult = await getStatusSummary(
-    cwd,
-    thread.baseBranch ?? undefined,
-    project.path
-  );
+  const summaryResult = await getStatusSummary(cwd, thread.baseBranch ?? undefined, project.path);
   if (summaryResult.isErr()) return resultToResponse(c, summaryResult);
   const summary = summaryResult.value;
 
@@ -169,7 +192,12 @@ gitRoutes.get('/:threadId/diff/summary', async (c) => {
     return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
   }
   const excludeRaw = c.req.query('exclude');
-  const excludePatterns = excludeRaw ? excludeRaw.split(',').map(s => s.trim()).filter(Boolean) : undefined;
+  const excludePatterns = excludeRaw
+    ? excludeRaw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : undefined;
   const maxFilesRaw = c.req.query('maxFiles');
   const maxFiles = maxFilesRaw ? parseInt(maxFilesRaw, 10) : undefined;
   const result = await getDiffSummary(cwd, { excludePatterns, maxFiles });
@@ -334,7 +362,13 @@ gitRoutes.post('/:threadId/pr', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
   const identity = resolveIdentity(userId);
-  const result = await createPR(cwd, parsed.value.title, parsed.value.body, thread?.baseBranch ?? undefined, identity);
+  const result = await createPR(
+    cwd,
+    parsed.value.title,
+    parsed.value.body,
+    thread?.baseBranch ?? undefined,
+    identity,
+  );
   if (result.isErr()) return resultToResponse(c, result);
 
   const prUrl = result.value;
@@ -370,14 +404,14 @@ gitRoutes.post('/:threadId/generate-commit-message', async (c) => {
   const diffResult = await getDiff(cwd);
   if (diffResult.isErr()) return resultToResponse(c, diffResult);
   const diffs = diffResult.value;
-  const relevantDiffs = includeUnstaged ? diffs : diffs.filter(d => d.staged);
+  const relevantDiffs = includeUnstaged ? diffs : diffs.filter((d) => d.staged);
 
   if (relevantDiffs.length === 0) {
     return resultToResponse(c, err(badRequest('No files to generate a commit message for')));
   }
 
   let diffSummary = relevantDiffs
-    .map(d => `--- ${d.status}: ${d.path} ---\n${d.diff || '(no diff)'}`)
+    .map((d) => `--- ${d.status}: ${d.path} ---\n${d.diff || '(no diff)'}`)
     .join('\n\n');
 
   // Truncate diff to stay within command-line length limits (~32k on Windows).
@@ -438,7 +472,10 @@ ${diffSummary}`;
 
       return resultText ? { text: resultText } : { error: 'No output received' };
     } catch (e: any) {
-      log.error('SDK query error generating commit message', { namespace: 'git', error: e.message });
+      log.error('SDK query error generating commit message', {
+        namespace: 'git',
+        error: e.message,
+      });
       return { error: e.message || 'Unknown error' };
     } finally {
       clearTimeout(timeout);
@@ -459,8 +496,11 @@ ${diffSummary}`;
     /unauthorized/i,
     /api key.*invalid/i,
   ];
-  if (errorPatterns.some(p => p.test(trimmed))) {
-    log.error('SDK auth error generating commit message', { namespace: 'git', output: trimmed.slice(0, 200) });
+  if (errorPatterns.some((p) => p.test(trimmed))) {
+    log.error('SDK auth error generating commit message', {
+      namespace: 'git',
+      output: trimmed.slice(0, 200),
+    });
     return resultToResponse(c, err(internal(trimmed.split('\n')[0])));
   }
 
@@ -468,7 +508,10 @@ ${diffSummary}`;
   const bodyMatch = trimmed.match(/^BODY:\s*([\s\S]+)/m);
 
   if (!titleMatch) {
-    log.error('Unexpected output from commit message generation', { namespace: 'git', output: trimmed.slice(0, 500) });
+    log.error('Unexpected output from commit message generation', {
+      namespace: 'git',
+      output: trimmed.slice(0, 500),
+    });
     return resultToResponse(c, err(internal('Failed to generate commit message')));
   }
 
@@ -500,11 +543,20 @@ gitRoutes.post('/:threadId/merge', async (c) => {
 
   const targetBranch = parsed.value.targetBranch || thread.baseBranch;
   if (!targetBranch) {
-    return resultToResponse(c, err(badRequest('No target branch specified and no baseBranch set on thread')));
+    return resultToResponse(
+      c,
+      err(badRequest('No target branch specified and no baseBranch set on thread')),
+    );
   }
 
   const identity = resolveIdentity(userId);
-  const mergeResult = await mergeBranch(project.path, thread.branch, targetBranch, identity, thread.worktreePath ?? undefined);
+  const mergeResult = await mergeBranch(
+    project.path,
+    thread.branch,
+    targetBranch,
+    identity,
+    thread.worktreePath ?? undefined,
+  );
   if (mergeResult.isErr()) return resultToResponse(c, mergeResult);
 
   threadEventBus.emit('git:merged', {
@@ -520,13 +572,20 @@ gitRoutes.post('/:threadId/merge', async (c) => {
     const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
     const pushResult = await git(['push', 'origin', targetBranch], project.path, env);
     if (pushResult.isErr()) {
-      return resultToResponse(c, err(badRequest(`Merge succeeded but push failed: ${pushResult.error.message}`)));
+      return resultToResponse(
+        c,
+        err(badRequest(`Merge succeeded but push failed: ${pushResult.error.message}`)),
+      );
     }
   }
 
   if (parsed.value.cleanup && thread.worktreePath) {
-    await removeWorktree(project.path, thread.worktreePath).catch((e) => log.warn('Failed to remove worktree after merge', { namespace: 'git', error: String(e) }));
-    await removeBranch(project.path, thread.branch).catch((e) => log.warn('Failed to remove branch after merge', { namespace: 'git', error: String(e) }));
+    await removeWorktree(project.path, thread.worktreePath).catch((e) =>
+      log.warn('Failed to remove worktree after merge', { namespace: 'git', error: String(e) }),
+    );
+    await removeBranch(project.path, thread.branch).catch((e) =>
+      log.warn('Failed to remove branch after merge', { namespace: 'git', error: String(e) }),
+    );
     tm.updateThread(threadId, { worktreePath: null, branch: null, mode: 'local' });
     // Do NOT call cleanupThreadState — the thread remains active for follow-ups.
     // In-memory deduplication maps (processedToolUseIds, cliToDbMsgId) must be
@@ -537,16 +596,18 @@ gitRoutes.post('/:threadId/merge', async (c) => {
       type: 'git:status',
       threadId,
       data: {
-        statuses: [{
-          threadId,
-          state: 'merged' as const,
-          dirtyFileCount: 0,
-          unpushedCommitCount: 0,
-          hasRemoteBranch: false,
-          isMergedIntoBase: true,
-          linesAdded: 0,
-          linesDeleted: 0,
-        }],
+        statuses: [
+          {
+            threadId,
+            state: 'merged' as const,
+            dirtyFileCount: 0,
+            unpushedCommitCount: 0,
+            hasRemoteBranch: false,
+            isMergedIntoBase: true,
+            linesAdded: 0,
+            linesDeleted: 0,
+          },
+        ],
       },
     });
   }

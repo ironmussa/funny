@@ -1,5 +1,6 @@
-import { create } from 'zustand';
 import type { GitStatusInfo } from '@funny/shared';
+import { create } from 'zustand';
+
 import { api } from '@/lib/api';
 
 interface GitStatusState {
@@ -26,13 +27,15 @@ export function _resetCooldowns() {
 
 /** Compare two GitStatusInfo objects for equality on the fields that affect rendering */
 function statusEqual(a: GitStatusInfo, b: GitStatusInfo): boolean {
-  return a.state === b.state
-    && a.dirtyFileCount === b.dirtyFileCount
-    && a.unpushedCommitCount === b.unpushedCommitCount
-    && a.hasRemoteBranch === b.hasRemoteBranch
-    && a.isMergedIntoBase === b.isMergedIntoBase
-    && a.linesAdded === b.linesAdded
-    && a.linesDeleted === b.linesDeleted;
+  return (
+    a.state === b.state &&
+    a.dirtyFileCount === b.dirtyFileCount &&
+    a.unpushedCommitCount === b.unpushedCommitCount &&
+    a.hasRemoteBranch === b.hasRemoteBranch &&
+    a.isMergedIntoBase === b.isMergedIntoBase &&
+    a.linesAdded === b.linesAdded &&
+    a.linesDeleted === b.linesDeleted
+  );
 }
 
 /** Only spread statusByThread when at least one entry actually changed */

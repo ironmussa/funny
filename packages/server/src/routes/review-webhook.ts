@@ -7,10 +7,12 @@
  * Mounted WITHOUT authMiddleware — uses webhook secret for auth.
  */
 
-import { Hono } from 'hono';
 import { timingSafeEqual } from 'crypto';
+
+import { Hono } from 'hono';
+
+import { log } from '../lib/logger.js';
 import { handlePRWebhook, type PRWebhookPayload } from '../services/review-service.js';
-import { log } from '../lib/abbacchio.js';
 
 const reviewWebhookRoutes = new Hono();
 
@@ -23,8 +25,10 @@ reviewWebhookRoutes.post('/webhook', async (c) => {
   }
 
   const provided = c.req.header('X-Webhook-Secret') ?? c.req.header('X-Hub-Signature-256') ?? '';
-  if (provided.length !== WEBHOOK_SECRET.length ||
-      !timingSafeEqual(Buffer.from(provided), Buffer.from(WEBHOOK_SECRET))) {
+  if (
+    provided.length !== WEBHOOK_SECRET.length ||
+    !timingSafeEqual(Buffer.from(provided), Buffer.from(WEBHOOK_SECRET))
+  ) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
@@ -45,7 +49,10 @@ reviewWebhookRoutes.post('/webhook', async (c) => {
     const result = await handlePRWebhook(body);
 
     if (!result) {
-      return c.json({ status: 'ok', skipped: true, reason: 'No matching project or ignored action' }, 200);
+      return c.json(
+        { status: 'ok', skipped: true, reason: 'No matching project or ignored action' },
+        200,
+      );
     }
 
     return c.json({ status: 'ok', thread_id: result.threadId }, 200);

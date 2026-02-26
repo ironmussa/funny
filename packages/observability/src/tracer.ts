@@ -1,8 +1,8 @@
 import { trace } from '@opentelemetry/api';
+import type { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import type { Resource } from '@opentelemetry/resources';
 import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
 import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
-import type { Resource } from '@opentelemetry/resources';
-import type { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 
 let provider: NodeTracerProvider | null = null;
 

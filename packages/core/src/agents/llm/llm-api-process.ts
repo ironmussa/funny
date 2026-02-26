@@ -13,19 +13,17 @@
  */
 
 import { randomUUID } from 'crypto';
-import type { CLIMessage } from '../types.js';
+
 import { BaseAgentProcess, type ResultSubtype } from '../base-process.js';
+import type { CLIMessage } from '../types.js';
+import type { AgentRole, AgentContext, AgentResult } from './agent-context.js';
 import { AgentExecutor, type StepInfo } from './agent-executor.js';
 import { ModelFactory } from './model-factory.js';
-import type { AgentRole, AgentContext, AgentResult } from './agent-context.js';
 
 export class LLMApiProcess extends BaseAgentProcess {
   private modelFactory: ModelFactory;
 
-  constructor(
-    options: import('../types.js').ClaudeProcessOptions,
-    modelFactory?: ModelFactory,
-  ) {
+  constructor(options: import('../types.js').ClaudeProcessOptions, modelFactory?: ModelFactory) {
     super(options);
     this.modelFactory = modelFactory ?? new ModelFactory();
   }
@@ -108,7 +106,7 @@ export class LLMApiProcess extends BaseAgentProcess {
     return {
       role: {
         name: 'interactive',
-        systemPrompt: 'You are a helpful coding assistant. Answer the user\'s request.',
+        systemPrompt: "You are a helpful coding assistant. Answer the user's request.",
         model: this.options.model ?? 'claude-sonnet-4-5-20250929',
         provider: providerName,
         tools: [],
@@ -128,8 +126,15 @@ export class LLMApiProcess extends BaseAgentProcess {
   private detectProvider(): string {
     const model = this.options.model ?? '';
     if (model.includes('claude')) return 'anthropic';
-    if (model.includes('gpt') || model.includes('o1') || model.includes('o3') || model.includes('o4')) return 'openai';
-    if (model.includes('llama') || model.includes('mistral') || model.includes('codellama')) return 'ollama';
+    if (
+      model.includes('gpt') ||
+      model.includes('o1') ||
+      model.includes('o3') ||
+      model.includes('o4')
+    )
+      return 'openai';
+    if (model.includes('llama') || model.includes('mistral') || model.includes('codellama'))
+      return 'ollama';
     return 'anthropic';
   }
 

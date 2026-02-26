@@ -11,8 +11,8 @@
  * instead of importing @funny/core/git directly.
  */
 
-import type { EventHandler } from './types.js';
 import type { GitChangedEvent } from '../thread-event-bus.js';
+import type { EventHandler } from './types.js';
 
 export const gitStatusHandler: EventHandler<'git:changed'> = {
   name: 'emit-git-status-on-change',
@@ -39,7 +39,7 @@ export const gitStatusHandler: EventHandler<'git:changed'> = {
     const summaryResult = await ctx.getGitStatusSummary(
       worktreePath,
       thread.baseBranch ?? undefined,
-      project.path
+      project.path,
     );
 
     if (summaryResult.isErr()) {
@@ -53,11 +53,13 @@ export const gitStatusHandler: EventHandler<'git:changed'> = {
       type: 'git:status',
       threadId,
       data: {
-        statuses: [{
-          threadId,
-          state: ctx.deriveGitSyncState(summary),
-          ...summary,
-        }],
+        statuses: [
+          {
+            threadId,
+            state: ctx.deriveGitSyncState(summary),
+            ...summary,
+          },
+        ],
       },
     });
   },

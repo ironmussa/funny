@@ -136,7 +136,11 @@ describe('useCircuitBreakerStore', () => {
     });
 
     test('recordFailure in half-open starts a new cooldown', () => {
-      useCircuitBreakerStore.setState({ state: 'half-open', failureCount: 3, _cooldownTimer: null });
+      useCircuitBreakerStore.setState({
+        state: 'half-open',
+        failureCount: 3,
+        _cooldownTimer: null,
+      });
 
       useCircuitBreakerStore.getState().recordFailure();
       expect(useCircuitBreakerStore.getState()._cooldownTimer).not.toBeNull();

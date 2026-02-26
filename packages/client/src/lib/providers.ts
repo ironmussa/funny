@@ -74,9 +74,7 @@ export function getModelOptions(
 /**
  * Get all models across all providers as `{ value, label }` pairs.
  */
-export function getAllModelOptions(
-  t: (key: string) => string,
-): { value: string; label: string }[] {
+export function getAllModelOptions(t: (key: string) => string): { value: string; label: string }[] {
   return ALL_MODELS.map((m) => {
     const translated = t(`thread.model.${m.i18nKey}`);
     const label = translated.startsWith('thread.model.') ? m.fallback : translated;

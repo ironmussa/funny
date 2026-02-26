@@ -1,10 +1,8 @@
+import type { RunTriageStatus } from '@funny/shared';
+import { Check, ChevronsUpDown, Inbox, Settings, Search } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useProjectStore } from '@/stores/project-store';
-import { useThreadStore } from '@/stores/thread-store';
-import { useAutomationStore } from '@/stores/automation-store';
-import { useUIStore } from '@/stores/ui-store';
-import { Input } from '@/components/ui/input';
+
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -15,23 +13,26 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
+import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
-import { Check, ChevronsUpDown, Inbox, Settings, Search } from 'lucide-react';
-import type { RunTriageStatus } from '@funny/shared';
+import { useAutomationStore } from '@/stores/automation-store';
+import { useProjectStore } from '@/stores/project-store';
+import { useThreadStore } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
 
 export function AutomationInboxView() {
   const navigate = useNavigate();
-  const projects = useProjectStore(s => s.projects);
+  const projects = useProjectStore((s) => s.projects);
 
-  const inbox = useAutomationStore(s => s.inbox);
-  const inboxCount = useAutomationStore(s => s.inboxCount);
-  const loadInbox = useAutomationStore(s => s.loadInbox);
-  const triageRun = useAutomationStore(s => s.triageRun);
+  const inbox = useAutomationStore((s) => s.inbox);
+  const inboxCount = useAutomationStore((s) => s.inboxCount);
+  const loadInbox = useAutomationStore((s) => s.loadInbox);
+  const triageRun = useAutomationStore((s) => s.triageRun);
 
-  const setAutomationInboxOpen = useUIStore(s => s.setAutomationInboxOpen);
-  const selectThread = useThreadStore(s => s.selectThread);
-  const selectedThreadId = useThreadStore(s => s.selectedThreadId);
+  const setAutomationInboxOpen = useUIStore((s) => s.setAutomationInboxOpen);
+  const selectThread = useThreadStore((s) => s.selectThread);
+  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
 
   const [filterProjectId, setFilterProjectId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
@@ -52,21 +53,22 @@ export function AutomationInboxView() {
 
     // Filter by triage status
     if (triageStatusFilter !== 'all') {
-      items = items.filter(item => item.run.triageStatus === triageStatusFilter);
+      items = items.filter((item) => item.run.triageStatus === triageStatusFilter);
     }
 
     // Filter by project
     if (filterProjectId) {
-      items = items.filter(item => item.thread.projectId === filterProjectId);
+      items = items.filter((item) => item.thread.projectId === filterProjectId);
     }
 
     // Filter by search query
     if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase();
-      items = items.filter(item =>
-        item.automation.name.toLowerCase().includes(query) ||
-        item.thread.title.toLowerCase().includes(query) ||
-        item.run.summary?.toLowerCase().includes(query)
+      items = items.filter(
+        (item) =>
+          item.automation.name.toLowerCase().includes(query) ||
+          item.thread.title.toLowerCase().includes(query) ||
+          item.run.summary?.toLowerCase().includes(query),
       );
     }
 
@@ -75,8 +77,8 @@ export function AutomationInboxView() {
 
   // Build list of projects that have inbox items
   const projectsWithItems = useMemo(() => {
-    const ids = new Set(inbox.map(item => item.thread.projectId));
-    return projects.filter(p => ids.has(p.id));
+    const ids = new Set(inbox.map((item) => item.thread.projectId));
+    return projects.filter((p) => ids.has(p.id));
   }, [inbox, projects]);
 
   const handleSelectItem = (threadId: string) => {
@@ -93,14 +95,12 @@ export function AutomationInboxView() {
   };
 
   return (
-    <div className="flex-1 flex flex-col overflow-hidden">
+    <div className="flex flex-1 flex-col overflow-hidden">
       {/* Header */}
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+      <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <div className="flex items-center gap-2">
           <Inbox className="h-4 w-4 text-muted-foreground" />
-          <h2 className="text-sm font-medium">
-            Automation Inbox
-          </h2>
+          <h2 className="text-sm font-medium">Automation Inbox</h2>
           {inboxCount > 0 && (
             <Badge variant="secondary" className="h-5 min-w-5 px-1 leading-none">
               {inboxCount}
@@ -110,7 +110,7 @@ export function AutomationInboxView() {
         <Button
           variant="ghost"
           size="sm"
-          className="h-7 text-xs gap-1.5 text-muted-foreground"
+          className="h-7 gap-1.5 text-xs text-muted-foreground"
           onClick={handleGoToSettings}
         >
           <Settings className="h-3.5 w-3.5" />
@@ -119,12 +119,13 @@ export function AutomationInboxView() {
       </div>
 
       {/* Triage Status Filter Tabs */}
-      <div className="flex items-center gap-0 px-6 border-b border-border/40">
+      <div className="flex items-center gap-0 border-b border-border/40 px-6">
         {(['all', 'pending', 'reviewed', 'dismissed'] as const).map((status) => {
           const isActive = triageStatusFilter === status;
-          const count = status === 'all'
-            ? inbox.length
-            : inbox.filter(item => item.run.triageStatus === status).length;
+          const count =
+            status === 'all'
+              ? inbox.length
+              : inbox.filter((item) => item.run.triageStatus === status).length;
 
           return (
             <button
@@ -134,17 +135,17 @@ export function AutomationInboxView() {
                 'px-4 py-2 text-xs font-medium transition-colors relative border-b-2',
                 isActive
                   ? 'text-foreground border-primary'
-                  : 'text-muted-foreground border-transparent hover:text-foreground/80'
+                  : 'text-muted-foreground border-transparent hover:text-foreground/80',
               )}
             >
               {status === 'all' ? 'All' : status.charAt(0).toUpperCase() + status.slice(1)}
               {count > 0 && (
-                <span className={cn(
-                  'ml-1.5 text-xs px-1.5 py-0.5 rounded-full',
-                  isActive
-                    ? 'bg-primary/10 text-primary'
-                    : 'bg-muted text-muted-foreground'
-                )}>
+                <span
+                  className={cn(
+                    'ml-1.5 text-xs px-1.5 py-0.5 rounded-full',
+                    isActive ? 'bg-primary/10 text-primary' : 'bg-muted text-muted-foreground',
+                  )}
+                >
                   {count}
                 </span>
               )}
@@ -154,9 +155,9 @@ export function AutomationInboxView() {
       </div>
 
       {/* Search Bar */}
-      <div className="px-6 py-3 border-b border-border">
+      <div className="border-b border-border px-6 py-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="text"
             placeholder="Search by automation name, thread title, or summary..."
@@ -169,7 +170,7 @@ export function AutomationInboxView() {
 
       {/* Project filter */}
       {projectsWithItems.length > 1 && (
-        <div className="flex items-center gap-2 px-6 py-2 border-b border-border">
+        <div className="flex items-center gap-2 border-b border-border px-6 py-2">
           <Popover open={filterOpen} onOpenChange={setFilterOpen}>
             <PopoverTrigger asChild>
               <Button
@@ -179,7 +180,7 @@ export function AutomationInboxView() {
                 className="h-7 w-[200px] justify-between text-xs font-normal"
               >
                 {filterProjectId
-                  ? projectsWithItems.find(p => p.id === filterProjectId)?.name
+                  ? projectsWithItems.find((p) => p.id === filterProjectId)?.name
                   : 'All projects'}
                 <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
               </Button>
@@ -192,20 +193,36 @@ export function AutomationInboxView() {
                   <CommandGroup>
                     <CommandItem
                       value="all"
-                      onSelect={() => { setFilterProjectId(null); setFilterOpen(false); }}
+                      onSelect={() => {
+                        setFilterProjectId(null);
+                        setFilterOpen(false);
+                      }}
                       className="text-xs"
                     >
-                      <Check className={cn('mr-2 h-3 w-3', !filterProjectId ? 'opacity-100' : 'opacity-0')} />
+                      <Check
+                        className={cn(
+                          'mr-2 h-3 w-3',
+                          !filterProjectId ? 'opacity-100' : 'opacity-0',
+                        )}
+                      />
                       All projects
                     </CommandItem>
-                    {projectsWithItems.map(p => (
+                    {projectsWithItems.map((p) => (
                       <CommandItem
                         key={p.id}
                         value={p.name}
-                        onSelect={() => { setFilterProjectId(p.id); setFilterOpen(false); }}
+                        onSelect={() => {
+                          setFilterProjectId(p.id);
+                          setFilterOpen(false);
+                        }}
                         className="text-xs"
                       >
-                        <Check className={cn('mr-2 h-3 w-3', filterProjectId === p.id ? 'opacity-100' : 'opacity-0')} />
+                        <Check
+                          className={cn(
+                            'mr-2 h-3 w-3',
+                            filterProjectId === p.id ? 'opacity-100' : 'opacity-0',
+                          )}
+                        />
                         {p.name}
                       </CommandItem>
                     ))}
@@ -220,15 +237,15 @@ export function AutomationInboxView() {
       {/* Content */}
       <div className="flex-1 overflow-y-auto p-6">
         {filteredInbox.length === 0 ? (
-          <div className="flex flex-col items-center justify-center h-full text-muted-foreground">
-            <Inbox className="h-8 w-8 mb-3 opacity-50" />
+          <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
+            <Inbox className="mb-3 h-8 w-8 opacity-50" />
             <p className="text-sm">No pending reviews.</p>
-            <p className="text-xs mt-1">Automation results that need review will appear here.</p>
+            <p className="mt-1 text-xs">Automation results that need review will appear here.</p>
           </div>
         ) : (
-          <div className="max-w-2xl mx-auto space-y-3">
+          <div className="mx-auto max-w-2xl space-y-3">
             {filteredInbox.map(({ run, automation, thread }) => {
-              const itemProject = projects.find(p => p.id === thread.projectId);
+              const itemProject = projects.find((p) => p.id === thread.projectId);
               return (
                 <div
                   key={run.id}
@@ -236,27 +253,27 @@ export function AutomationInboxView() {
                     'rounded-lg border bg-card p-4 space-y-3 cursor-pointer transition-colors',
                     selectedThreadId === thread.id
                       ? 'border-primary/50 bg-accent/30'
-                      : 'border-border/50 hover:border-border'
+                      : 'border-border/50 hover:border-border',
                   )}
                   onClick={() => handleSelectItem(thread.id)}
                 >
                   <div className="flex items-center justify-between">
                     <div className="min-w-0">
-                      <p className="text-sm font-medium truncate">{automation.name}</p>
-                      <p className="text-xs text-muted-foreground truncate">
-                        {itemProject && (
-                          <span className="font-medium">{itemProject.name} · </span>
-                        )}
+                      <p className="truncate text-sm font-medium">{automation.name}</p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {itemProject && <span className="font-medium">{itemProject.name} · </span>}
                         {thread.title}
                       </p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={cn(
-                        'text-xs px-1.5 py-0.5 rounded-full',
-                        run.hasFindings
-                          ? 'bg-status-warning/10 text-status-warning/80'
-                          : 'bg-muted text-muted-foreground'
-                      )}>
+                      <span
+                        className={cn(
+                          'text-xs px-1.5 py-0.5 rounded-full',
+                          run.hasFindings
+                            ? 'bg-status-warning/10 text-status-warning/80'
+                            : 'bg-muted text-muted-foreground',
+                        )}
+                      >
                         {run.hasFindings ? 'Has findings' : 'No findings'}
                       </span>
                       <span className="text-xs text-muted-foreground">
@@ -264,10 +281,8 @@ export function AutomationInboxView() {
                       </span>
                     </div>
                   </div>
-                  {run.summary && (
-                    <p className="text-xs text-muted-foreground">{run.summary}</p>
-                  )}
-                  <div className="flex items-center gap-2 justify-end">
+                  {run.summary && <p className="text-xs text-muted-foreground">{run.summary}</p>}
+                  <div className="flex items-center justify-end gap-2">
                     <Button
                       variant="ghost"
                       size="sm"
@@ -286,7 +301,10 @@ export function AutomationInboxView() {
                           variant="ghost"
                           size="sm"
                           className="h-7 text-xs"
-                          onClick={(e) => { e.stopPropagation(); triageRun(run.id, 'dismissed'); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triageRun(run.id, 'dismissed');
+                          }}
                         >
                           Dismiss
                         </Button>
@@ -294,7 +312,10 @@ export function AutomationInboxView() {
                           variant="outline"
                           size="sm"
                           className="h-7 text-xs"
-                          onClick={(e) => { e.stopPropagation(); triageRun(run.id, 'reviewed'); }}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            triageRun(run.id, 'reviewed');
+                          }}
                         >
                           Mark Reviewed
                         </Button>

@@ -1,11 +1,13 @@
-import { Hono } from 'hono';
 import { readdirSync, existsSync, statSync } from 'fs';
-import { join, parse as parsePath, resolve, normalize } from 'path';
 import { homedir, platform } from 'os';
+import { join, parse as parsePath, resolve, normalize } from 'path';
+
 import { getRemoteUrl, extractRepoName, initRepo, execute } from '@funny/core/git';
+import { Hono } from 'hono';
+
 import * as pm from '../services/project-manager.js';
-import { resultToResponse } from '../utils/result-response.js';
 import type { HonoEnv } from '../types/hono-env.js';
+import { resultToResponse } from '../utils/result-response.js';
 
 const app = new Hono<HonoEnv>();
 
@@ -32,10 +34,13 @@ function isPathAllowed(targetPath: string, userId: string): boolean {
 /** Return 403 response if path is not in an allowed directory */
 function checkAllowedPath(path: string, userId: string): Response | null {
   if (!isPathAllowed(path, userId)) {
-    return new Response(JSON.stringify({ error: 'Access denied: path is outside allowed directories' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ error: 'Access denied: path is outside allowed directories' }),
+      {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
   }
   return null;
 }
@@ -86,7 +91,13 @@ app.get('/list', (c) => {
     const dirs = entries
       .filter((e) => {
         if (!e.isDirectory()) return false;
-        if (e.name.startsWith('.') || e.name === 'node_modules' || e.name === '$Recycle.Bin' || e.name === 'System Volume Information') return false;
+        if (
+          e.name.startsWith('.') ||
+          e.name === 'node_modules' ||
+          e.name === '$Recycle.Bin' ||
+          e.name === 'System Volume Information'
+        )
+          return false;
         return true;
       })
       .map((e) => ({
@@ -227,9 +238,10 @@ app.post('/open-in-editor', async (c) => {
     windsurf: { cmd: 'windsurf', args: [dirPath] },
     zed: { cmd: 'zed', args: [dirPath] },
     sublime: { cmd: 'subl', args: [dirPath] },
-    vim: platform() === 'win32'
-      ? { cmd: 'cmd', args: ['/c', 'start', 'cmd', '/k', 'vim', dirPath] }
-      : { cmd: 'x-terminal-emulator', args: ['-e', 'vim', dirPath] },
+    vim:
+      platform() === 'win32'
+        ? { cmd: 'cmd', args: ['/c', 'start', 'cmd', '/k', 'vim', dirPath] }
+        : { cmd: 'x-terminal-emulator', args: ['-e', 'vim', dirPath] },
   };
 
   const editorConfig = editorCommands[editor];
@@ -307,12 +319,11 @@ app.get('/files', async (c) => {
   const query = c.req.query('query') || '';
 
   try {
-    const result = await execute('git', [
-      'ls-files',
-      '--cached',
-      '--others',
-      '--exclude-standard',
-    ], { cwd: dirPath, reject: false, timeout: 10_000 });
+    const result = await execute(
+      'git',
+      ['ls-files', '--cached', '--others', '--exclude-standard'],
+      { cwd: dirPath, reject: false, timeout: 10_000 },
+    );
 
     if (result.exitCode !== 0) {
       return c.json({ files: [], truncated: false, error: 'Not a git repository or git error' });
@@ -320,12 +331,12 @@ app.get('/files', async (c) => {
 
     let files = result.stdout
       .split('\n')
-      .map(f => f.trim())
+      .map((f) => f.trim())
       .filter(Boolean);
 
     if (query) {
       const lowerQuery = query.toLowerCase();
-      files = files.filter(f => f.toLowerCase().includes(lowerQuery));
+      files = files.filter((f) => f.toLowerCase().includes(lowerQuery));
     }
 
     const truncated = files.length > 200;

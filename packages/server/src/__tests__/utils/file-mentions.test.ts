@@ -1,14 +1,18 @@
 import { describe, test, expect, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, writeFileSync, rmSync } from 'fs';
-import { join } from 'path';
 import { tmpdir } from 'os';
+import { join } from 'path';
+
 import { augmentPromptWithFiles } from '../../utils/file-mentions.js';
 
 describe('augmentPromptWithFiles', () => {
   let testDir: string;
 
   beforeEach(() => {
-    testDir = join(tmpdir(), `file-mentions-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    testDir = join(
+      tmpdir(),
+      `file-mentions-test-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    );
     mkdirSync(testDir, { recursive: true });
   });
 
@@ -46,10 +50,11 @@ describe('augmentPromptWithFiles', () => {
     writeFileSync(join(testDir, 'a.txt'), 'content a');
     writeFileSync(join(testDir, 'b.txt'), 'content b');
 
-    const result = await augmentPromptWithFiles('prompt', [
-      { path: 'a.txt' },
-      { path: 'b.txt' },
-    ], testDir);
+    const result = await augmentPromptWithFiles(
+      'prompt',
+      [{ path: 'a.txt' }, { path: 'b.txt' }],
+      testDir,
+    );
 
     expect(result).toContain('<referenced-files>');
     expect(result).toContain('<file path="a.txt">');
@@ -74,9 +79,11 @@ describe('augmentPromptWithFiles', () => {
     mkdirSync(join(testDir, 'src', 'utils'), { recursive: true });
     writeFileSync(join(testDir, 'src', 'utils', 'helper.ts'), 'export const x = 1;');
 
-    const result = await augmentPromptWithFiles('prompt', [
-      { path: 'src/utils/helper.ts' },
-    ], testDir);
+    const result = await augmentPromptWithFiles(
+      'prompt',
+      [{ path: 'src/utils/helper.ts' }],
+      testDir,
+    );
 
     expect(result).toContain('<file path="src/utils/helper.ts">');
     expect(result).toContain('export const x = 1;');
@@ -91,9 +98,7 @@ describe('augmentPromptWithFiles', () => {
     writeFileSync(join(outsideDir, 'secret.txt'), 'sensitive data');
 
     try {
-      const result = await augmentPromptWithFiles('prompt', [
-        { path: '../secret.txt' },
-      ], testDir);
+      const result = await augmentPromptWithFiles('prompt', [{ path: '../secret.txt' }], testDir);
 
       // The file should be silently skipped; prompt returned unchanged
       expect(result).toBe('prompt');
@@ -103,9 +108,11 @@ describe('augmentPromptWithFiles', () => {
   });
 
   test('blocks deeply nested path traversal', async () => {
-    const result = await augmentPromptWithFiles('prompt', [
-      { path: 'src/../../etc/passwd' },
-    ], testDir);
+    const result = await augmentPromptWithFiles(
+      'prompt',
+      [{ path: 'src/../../etc/passwd' }],
+      testDir,
+    );
 
     // Should be silently skipped
     expect(result).toBe('prompt');
@@ -139,9 +146,7 @@ describe('augmentPromptWithFiles', () => {
   // ── File not found ─────────────────────────────────────────
 
   test('shows "not found" note for missing files', async () => {
-    const result = await augmentPromptWithFiles('prompt', [
-      { path: 'nonexistent.ts' },
-    ], testDir);
+    const result = await augmentPromptWithFiles('prompt', [{ path: 'nonexistent.ts' }], testDir);
 
     expect(result).toContain('<file path="nonexistent.ts"');
     expect(result).toContain('File not found or unreadable');
@@ -164,14 +169,18 @@ describe('augmentPromptWithFiles', () => {
     // File 6: 90KB (would exceed 500KB total)
     writeFileSync(join(testDir, 'file6.txt'), 'f'.repeat(90 * 1024));
 
-    const result = await augmentPromptWithFiles('prompt', [
-      { path: 'file1.txt' },
-      { path: 'file2.txt' },
-      { path: 'file3.txt' },
-      { path: 'file4.txt' },
-      { path: 'file5.txt' },
-      { path: 'file6.txt' },
-    ], testDir);
+    const result = await augmentPromptWithFiles(
+      'prompt',
+      [
+        { path: 'file1.txt' },
+        { path: 'file2.txt' },
+        { path: 'file3.txt' },
+        { path: 'file4.txt' },
+        { path: 'file5.txt' },
+        { path: 'file6.txt' },
+      ],
+      testDir,
+    );
 
     // First five files should have their content inlined
     expect(result).toContain('a'.repeat(100));
@@ -192,11 +201,11 @@ describe('augmentPromptWithFiles', () => {
     writeFileSync(join(testDir, 'good.txt'), 'valid content');
     writeFileSync(join(testDir, 'huge.txt'), 'x'.repeat(101 * 1024));
 
-    const result = await augmentPromptWithFiles('prompt', [
-      { path: 'good.txt' },
-      { path: 'missing.txt' },
-      { path: 'huge.txt' },
-    ], testDir);
+    const result = await augmentPromptWithFiles(
+      'prompt',
+      [{ path: 'good.txt' }, { path: 'missing.txt' }, { path: 'huge.txt' }],
+      testDir,
+    );
 
     expect(result).toContain('<referenced-files>');
     // Inlined file

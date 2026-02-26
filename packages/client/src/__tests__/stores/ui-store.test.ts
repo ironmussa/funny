@@ -140,7 +140,11 @@ describe('useUIStore', () => {
 
   describe('startNewThread', () => {
     test('sets projectId and clears other panels', () => {
-      useUIStore.setState({ allThreadsProjectId: '__all__', automationInboxOpen: true, addProjectOpen: true });
+      useUIStore.setState({
+        allThreadsProjectId: '__all__',
+        automationInboxOpen: true,
+        addProjectOpen: true,
+      });
       useUIStore.getState().startNewThread('project-1');
 
       const state = useUIStore.getState();

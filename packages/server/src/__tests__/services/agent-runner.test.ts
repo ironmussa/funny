@@ -1,5 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
+
 import { eq } from 'drizzle-orm';
+
 import { createTestDb, seedProject, seedThread } from '../helpers/test-db.js';
 
 // Test agent runner logic by reimplementing the key functions against test DB.
@@ -243,13 +245,16 @@ describe('Agent Runner State Machine Edge Cases', () => {
   test('multiple tool_use blocks create multiple tool_call records', () => {
     const msgId = 'msg-multi-tool';
 
-    testDb.db.insert(testDb.schema.messages).values({
-      id: msgId,
-      threadId: 't1',
-      role: 'assistant',
-      content: 'Using multiple tools',
-      timestamp: new Date().toISOString(),
-    }).run();
+    testDb.db
+      .insert(testDb.schema.messages)
+      .values({
+        id: msgId,
+        threadId: 't1',
+        role: 'assistant',
+        content: 'Using multiple tools',
+        timestamp: new Date().toISOString(),
+      })
+      .run();
 
     // Simulate multiple tool_use blocks
     const tools = [
@@ -259,12 +264,15 @@ describe('Agent Runner State Machine Edge Cases', () => {
     ];
 
     for (const tool of tools) {
-      testDb.db.insert(testDb.schema.toolCalls).values({
-        id: tool.id,
-        messageId: msgId,
-        name: tool.name,
-        input: tool.input,
-      }).run();
+      testDb.db
+        .insert(testDb.schema.toolCalls)
+        .values({
+          id: tool.id,
+          messageId: msgId,
+          name: tool.name,
+          input: tool.input,
+        })
+        .run();
     }
 
     const toolCalls = testDb.db
@@ -279,30 +287,39 @@ describe('Agent Runner State Machine Edge Cases', () => {
 
   test('text → tool_use → new text creates separate messages', () => {
     // First assistant message with text
-    testDb.db.insert(testDb.schema.messages).values({
-      id: 'msg-1',
-      threadId: 't1',
-      role: 'assistant',
-      content: 'Let me read the file',
-      timestamp: new Date().toISOString(),
-    }).run();
+    testDb.db
+      .insert(testDb.schema.messages)
+      .values({
+        id: 'msg-1',
+        threadId: 't1',
+        role: 'assistant',
+        content: 'Let me read the file',
+        timestamp: new Date().toISOString(),
+      })
+      .run();
 
     // Tool call on that message
-    testDb.db.insert(testDb.schema.toolCalls).values({
-      id: 'tc-1',
-      messageId: 'msg-1',
-      name: 'Read',
-      input: '{"file":"test.ts"}',
-    }).run();
+    testDb.db
+      .insert(testDb.schema.toolCalls)
+      .values({
+        id: 'tc-1',
+        messageId: 'msg-1',
+        name: 'Read',
+        input: '{"file":"test.ts"}',
+      })
+      .run();
 
     // Second assistant message after tool result (new message ID)
-    testDb.db.insert(testDb.schema.messages).values({
-      id: 'msg-2',
-      threadId: 't1',
-      role: 'assistant',
-      content: 'I see the issue, let me fix it',
-      timestamp: new Date().toISOString(),
-    }).run();
+    testDb.db
+      .insert(testDb.schema.messages)
+      .values({
+        id: 'msg-2',
+        threadId: 't1',
+        role: 'assistant',
+        content: 'I see the issue, let me fix it',
+        timestamp: new Date().toISOString(),
+      })
+      .run();
 
     const messages = testDb.db
       .select()
@@ -324,20 +341,26 @@ describe('Agent Runner State Machine Edge Cases', () => {
 
   test('assistant message with only tool_use (no text) still gets a message record', () => {
     // The agent runner always creates a message even if content is empty
-    testDb.db.insert(testDb.schema.messages).values({
-      id: 'msg-empty',
-      threadId: 't1',
-      role: 'assistant',
-      content: '',
-      timestamp: new Date().toISOString(),
-    }).run();
+    testDb.db
+      .insert(testDb.schema.messages)
+      .values({
+        id: 'msg-empty',
+        threadId: 't1',
+        role: 'assistant',
+        content: '',
+        timestamp: new Date().toISOString(),
+      })
+      .run();
 
-    testDb.db.insert(testDb.schema.toolCalls).values({
-      id: 'tc-only',
-      messageId: 'msg-empty',
-      name: 'Glob',
-      input: '{"pattern":"**/*.ts"}',
-    }).run();
+    testDb.db
+      .insert(testDb.schema.toolCalls)
+      .values({
+        id: 'tc-only',
+        messageId: 'msg-empty',
+        name: 'Glob',
+        input: '{"pattern":"**/*.ts"}',
+      })
+      .run();
 
     const msg = testDb.db
       .select()
@@ -359,7 +382,8 @@ describe('Agent Runner State Machine Edge Cases', () => {
     // Simulate: result.subtype !== 'success' → status = 'failed'
     const finalStatus = 'error_max_turns' === 'success' ? 'completed' : 'failed';
 
-    testDb.db.update(testDb.schema.threads)
+    testDb.db
+      .update(testDb.schema.threads)
       .set({ status: finalStatus, cost: 0.12, completedAt: new Date().toISOString() })
       .where(eq(testDb.schema.threads.id, 't1'))
       .run();
@@ -377,7 +401,8 @@ describe('Agent Runner State Machine Edge Cases', () => {
   test('error_during_execution result sets thread to failed', () => {
     const finalStatus = 'error_during_execution' === 'success' ? 'completed' : 'failed';
 
-    testDb.db.update(testDb.schema.threads)
+    testDb.db
+      .update(testDb.schema.threads)
       .set({ status: finalStatus, completedAt: new Date().toISOString() })
       .where(eq(testDb.schema.threads.id, 't1'))
       .run();
@@ -392,7 +417,8 @@ describe('Agent Runner State Machine Edge Cases', () => {
   });
 
   test('stopAgent sets thread status to stopped', () => {
-    testDb.db.update(testDb.schema.threads)
+    testDb.db
+      .update(testDb.schema.threads)
       .set({ status: 'stopped' })
       .where(eq(testDb.schema.threads.id, 't1'))
       .run();
@@ -410,22 +436,27 @@ describe('Agent Runner State Machine Edge Cases', () => {
     const msgId = 'msg-stream';
 
     // First chunk: partial content
-    testDb.db.insert(testDb.schema.messages).values({
-      id: msgId,
-      threadId: 't1',
-      role: 'assistant',
-      content: 'Hello',
-      timestamp: new Date().toISOString(),
-    }).run();
+    testDb.db
+      .insert(testDb.schema.messages)
+      .values({
+        id: msgId,
+        threadId: 't1',
+        role: 'assistant',
+        content: 'Hello',
+        timestamp: new Date().toISOString(),
+      })
+      .run();
 
     // Second chunk: more complete content (replaces, not appends)
-    testDb.db.update(testDb.schema.messages)
+    testDb.db
+      .update(testDb.schema.messages)
       .set({ content: 'Hello, I will help you' })
       .where(eq(testDb.schema.messages.id, msgId))
       .run();
 
     // Third chunk: full content
-    testDb.db.update(testDb.schema.messages)
+    testDb.db
+      .update(testDb.schema.messages)
       .set({ content: 'Hello, I will help you fix the bug in the auth module.' })
       .where(eq(testDb.schema.messages.id, msgId))
       .run();

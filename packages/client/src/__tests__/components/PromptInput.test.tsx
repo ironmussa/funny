@@ -1,8 +1,10 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '../helpers/render';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
+
 import { PromptInput } from '@/components/PromptInput';
 import { useAppStore } from '@/stores/app-store';
+
+import { renderWithProviders } from '../helpers/render';
 
 // ── Mocks ───────────────────────────────────────────────────────
 
@@ -29,7 +31,16 @@ vi.mock('@/components/ImageLightbox', () => ({
 
 beforeEach(() => {
   useAppStore.setState({
-    projects: [{ id: 'p1', name: 'Test', path: '/tmp/test', userId: '__local__', createdAt: '', sortOrder: 0 }],
+    projects: [
+      {
+        id: 'p1',
+        name: 'Test',
+        path: '/tmp/test',
+        userId: '__local__',
+        createdAt: '',
+        sortOrder: 0,
+      },
+    ],
     selectedProjectId: 'p1',
     selectedThreadId: null,
     activeThread: null,
@@ -52,7 +63,7 @@ describe('PromptInput', () => {
     expect(onSubmit).toHaveBeenCalledWith(
       'Hello agent',
       expect.objectContaining({ model: 'opus', mode: 'autoEdit' }),
-      undefined
+      undefined,
     );
   });
 
@@ -82,15 +93,13 @@ describe('PromptInput', () => {
 
     // Running state — stop button visible
     const { unmount } = renderWithProviders(
-      <PromptInput onSubmit={vi.fn()} onStop={onStop} running={true} />
+      <PromptInput onSubmit={vi.fn()} onStop={onStop} running={true} />,
     );
     expect(screen.getAllByTitle('prompt.stopAgent').length).toBeGreaterThan(0);
     unmount();
 
     // Not running — send button visible (no stop button)
-    renderWithProviders(
-      <PromptInput onSubmit={vi.fn()} running={false} />
-    );
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} running={false} />);
     expect(screen.queryByTitle('prompt.stopAgent')).toBeNull();
   });
 

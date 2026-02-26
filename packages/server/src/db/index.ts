@@ -1,10 +1,12 @@
 import { Database } from 'bun:sqlite';
-import { drizzle } from 'drizzle-orm/bun-sqlite';
-import { resolve } from 'path';
-import { homedir } from 'os';
 import { mkdirSync } from 'fs';
+import { homedir } from 'os';
+import { resolve } from 'path';
+
+import { drizzle } from 'drizzle-orm/bun-sqlite';
+
+import { log } from '../lib/logger.js';
 import * as schema from './schema.js';
-import { log } from '../lib/abbacchio.js';
 
 const dbDir = resolve(homedir(), '.funny');
 mkdirSync(dbDir, { recursive: true });

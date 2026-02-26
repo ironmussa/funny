@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { resolve, dirname } from 'path';
 import { mkdirSync, rmSync, existsSync, writeFileSync } from 'fs';
+import { resolve, dirname } from 'path';
+
 import { executeSync } from '@funny/core/git';
 
 const TEST_REPO = resolve(import.meta.dir, '..', '..', '..', '.test-tmp-worktree-repo');
@@ -25,7 +26,9 @@ function cleanupRepo() {
     if (existsSync(TEST_REPO)) {
       executeSync('git', ['worktree', 'prune'], { cwd: TEST_REPO, reject: false });
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   rmSync(WORKTREE_DIR, { recursive: true, force: true });
   rmSync(TEST_REPO, { recursive: true, force: true });
 }
@@ -108,12 +111,7 @@ describe('worktree-manager', () => {
     });
 
     test('filters out main worktree', () => {
-      const output = [
-        'worktree /repo',
-        'HEAD aaa111',
-        'branch refs/heads/main',
-        '',
-      ].join('\n');
+      const output = ['worktree /repo', 'HEAD aaa111', 'branch refs/heads/main', ''].join('\n');
 
       const result = parseWorktreeList(output, '/managed-worktrees');
       expect(result).toHaveLength(0);
@@ -131,17 +129,26 @@ describe('worktree-manager', () => {
     mkdirSync(WORKTREE_DIR, { recursive: true });
 
     // Get the current branch name to use as base
-    const currentBranch = executeSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: TEST_REPO }).stdout.trim();
+    const currentBranch = executeSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: TEST_REPO,
+    }).stdout.trim();
 
     // Create worktree
-    executeSync('git', ['worktree', 'add', '-b', branchName, worktreePath, currentBranch], { cwd: TEST_REPO });
+    executeSync('git', ['worktree', 'add', '-b', branchName, worktreePath, currentBranch], {
+      cwd: TEST_REPO,
+    });
     expect(existsSync(worktreePath)).toBe(true);
 
     // List worktrees
-    const output = executeSync('git', ['worktree', 'list', '--porcelain'], { cwd: TEST_REPO }).stdout;
+    const output = executeSync('git', ['worktree', 'list', '--porcelain'], {
+      cwd: TEST_REPO,
+    }).stdout;
     expect(output).toContain(branchName);
 
     // Remove worktree
-    executeSync('git', ['worktree', 'remove', '-f', worktreePath], { cwd: TEST_REPO, reject: false });
+    executeSync('git', ['worktree', 'remove', '-f', worktreePath], {
+      cwd: TEST_REPO,
+      reject: false,
+    });
   });
 });

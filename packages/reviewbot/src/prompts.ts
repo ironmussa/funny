@@ -63,16 +63,11 @@ If the code looks good and you find no issues, return:
   - **suggestion**: Improvement idea, not a bug`;
 }
 
-export function buildReviewUserPrompt(
-  prTitle: string,
-  prBody: string,
-  diff: string,
-): string {
+export function buildReviewUserPrompt(prTitle: string, prBody: string, diff: string): string {
   // Truncate diff if extremely large to stay within context limits
   const maxDiffLength = 100_000;
-  const truncatedDiff = diff.length > maxDiffLength
-    ? diff.slice(0, maxDiffLength) + '\n\n... (diff truncated)'
-    : diff;
+  const truncatedDiff =
+    diff.length > maxDiffLength ? diff.slice(0, maxDiffLength) + '\n\n... (diff truncated)' : diff;
 
   return `## Pull Request: ${prTitle}
 

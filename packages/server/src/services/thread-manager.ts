@@ -52,6 +52,4 @@ export {
 } from './comment-repository.js';
 
 // Search
-export {
-  searchThreadIdsByContent,
-} from './search-service.js';
+export { searchThreadIdsByContent } from './search-service.js';

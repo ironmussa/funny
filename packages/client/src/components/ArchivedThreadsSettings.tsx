@@ -1,20 +1,21 @@
+import type { Thread } from '@funny/shared';
+import { ArchiveRestore, Trash2 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAppStore } from '@/stores/app-store';
-import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import { ArchiveRestore, Trash2 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+
 import { ThreadListView } from '@/components/ThreadListView';
-import type { Thread } from '@funny/shared';
+import { Button } from '@/components/ui/button';
+import { api } from '@/lib/api';
+import { useAppStore } from '@/stores/app-store';
 
 const PAGE_SIZE_OPTIONS = [100, 250, 500, 1000] as const;
 const DEFAULT_PAGE_SIZE = 100;
 
 export function ArchivedThreadsSettings() {
   const { t } = useTranslation();
-  const projects = useAppStore(s => s.projects);
-  const loadThreadsForProject = useAppStore(s => s.loadThreadsForProject);
+  const projects = useAppStore((s) => s.projects);
+  const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
   const [threads, setThreads] = useState<Thread[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -24,10 +25,7 @@ export function ArchivedThreadsSettings() {
   const [limit, setLimit] = useState(DEFAULT_PAGE_SIZE);
   const debounceRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const projectMap = useMemo(
-    () => Object.fromEntries(projects.map((p) => [p.id, p])),
-    [projects]
-  );
+  const projectMap = useMemo(() => Object.fromEntries(projects.map((p) => [p.id, p])), [projects]);
 
   const fetchArchived = useCallback(async (p: number, l: number, s: string) => {
     setLoading(true);
@@ -103,12 +101,12 @@ export function ArchivedThreadsSettings() {
         emptyMessage={t('archived.noArchived')}
         searchEmptyMessage={t('allThreads.noMatch')}
         renderExtraBadges={(thread) => (
-          <span className="text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded truncate max-w-[150px]">
+          <span className="max-w-[150px] truncate rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
             {projectMap[thread.projectId]?.name ?? '—'}
           </span>
         )}
         renderActions={(thread) => (
-          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <div className="flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
             <Button
               variant="ghost"
               size="icon-xs"

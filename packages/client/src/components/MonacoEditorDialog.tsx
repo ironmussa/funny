@@ -1,22 +1,18 @@
+import { Editor, type BeforeMount } from '@monaco-editor/react';
+import { Loader2, Save, X, Maximize2, Minimize2, Eye, EyeOff, BookOpen, Code } from 'lucide-react';
+import mermaid from 'mermaid';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Editor, type BeforeMount } from '@monaco-editor/react';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { api } from '@/lib/api';
-import { cn } from '@/lib/utils';
-import { toast } from 'sonner';
-import { Loader2, Save, X, Maximize2, Minimize2, Eye, EyeOff, BookOpen, Code } from 'lucide-react';
-import { useSettingsStore } from '@/stores/settings-store';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import mermaid from 'mermaid';
+import { toast } from 'sonner';
+
+import { Button } from '@/components/ui/button';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settings-store';
 
 interface MonacoEditorDialogProps {
   open: boolean;
@@ -25,7 +21,12 @@ interface MonacoEditorDialogProps {
   initialContent: string | null;
 }
 
-export function MonacoEditorDialog({ open, onOpenChange, filePath, initialContent }: MonacoEditorDialogProps) {
+export function MonacoEditorDialog({
+  open,
+  onOpenChange,
+  filePath,
+  initialContent,
+}: MonacoEditorDialogProps) {
   const { t } = useTranslation();
   const theme = useSettingsStore((s) => s.theme);
   const [content, setContent] = useState<string>('');
@@ -43,7 +44,8 @@ export function MonacoEditorDialog({ open, onOpenChange, filePath, initialConten
 
   // Derive Monaco theme from Funny theme
   const isDark =
-    theme === 'dark' || (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+    theme === 'dark' ||
+    (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
   const monacoTheme = isDark ? 'funny-dark' : 'vs';
 
   // Define custom dark theme with black background
@@ -85,7 +87,7 @@ export function MonacoEditorDialog({ open, onOpenChange, filePath, initialConten
   const handleClose = () => {
     if (isDirty) {
       const confirmed = confirm(
-        t('editor.unsavedChanges', 'You have unsaved changes. Close without saving?')
+        t('editor.unsavedChanges', 'You have unsaved changes. Close without saving?'),
       );
       if (!confirmed) return;
     }
@@ -101,20 +103,29 @@ export function MonacoEditorDialog({ open, onOpenChange, filePath, initialConten
             : 'max-w-5xl max-h-[85vh] h-[85vh] p-0',
           '[&>button:last-child]:hidden',
           '!duration-0',
-          'overflow-hidden'
+          'overflow-hidden',
         )}
       >
-        <DialogHeader className="px-6 pt-4 pb-2 border-b border-border/50 overflow-hidden">
+        <DialogHeader className="overflow-hidden border-b border-border/50 px-6 pb-2 pt-4">
           <div className="flex items-center justify-between gap-2">
-            <DialogTitle className="font-mono text-sm min-w-0 overflow-hidden whitespace-nowrap text-ellipsis" style={{ direction: 'rtl', textAlign: 'left' }}>{filePath}</DialogTitle>
-            <div className="flex items-center gap-1 flex-shrink-0">
+            <DialogTitle
+              className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-sm"
+              style={{ direction: 'rtl', textAlign: 'left' }}
+            >
+              {filePath}
+            </DialogTitle>
+            <div className="flex flex-shrink-0 items-center gap-1">
               {/* Markdown preview toggle */}
               {isMarkdown && (
                 <Button
                   variant="ghost"
                   size="icon"
                   onClick={() => setShowPreview(!showPreview)}
-                  title={showPreview ? t('editor.showCode', 'Show code') : t('editor.showPreview', 'Show preview')}
+                  title={
+                    showPreview
+                      ? t('editor.showCode', 'Show code')
+                      : t('editor.showPreview', 'Show preview')
+                  }
                   className="h-8 w-8"
                 >
                   {showPreview ? <Code className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />}
@@ -140,7 +151,11 @@ export function MonacoEditorDialog({ open, onOpenChange, filePath, initialConten
                 title={isFullscreen ? t('editor.exitFullscreen') : t('editor.fullscreen')}
                 className="h-8 w-8"
               >
-                {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+                {isFullscreen ? (
+                  <Minimize2 className="h-4 w-4" />
+                ) : (
+                  <Maximize2 className="h-4 w-4" />
+                )}
               </Button>
 
               {/* Close button */}
@@ -187,20 +202,20 @@ export function MonacoEditorDialog({ open, onOpenChange, filePath, initialConten
         </div>
 
         {/* Footer with save/cancel */}
-        <div className="px-6 py-3 border-t border-border/50 flex items-center justify-between">
+        <div className="flex items-center justify-between border-t border-border/50 px-6 py-3">
           <div className="text-xs text-muted-foreground">
             {isDirty && <span>{t('editor.modified', 'Modified')}</span>}
           </div>
           <div className="flex items-center gap-2">
             <Button variant="outline" size="sm" onClick={handleClose}>
-              <X className="h-3.5 w-3.5 mr-1" />
+              <X className="mr-1 h-3.5 w-3.5" />
               {t('common.cancel', 'Cancel')}
             </Button>
             <Button size="sm" onClick={handleSave} disabled={!isDirty || saving}>
               {saving ? (
-                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
               ) : (
-                <Save className="h-3.5 w-3.5 mr-1" />
+                <Save className="mr-1 h-3.5 w-3.5" />
               )}
               {t('common.save', 'Save')}
             </Button>
@@ -230,21 +245,21 @@ function MermaidBlock({ chart }: { chart: string }) {
       .catch((err) => {
         if (!cancelled) setError(err instanceof Error ? err.message : String(err));
       });
-    return () => { cancelled = true; };
+    return () => {
+      cancelled = true;
+    };
   }, [chart]);
 
   if (error) {
     return (
-      <pre className="text-xs text-red-400 bg-red-950/30 rounded p-3 overflow-auto">
-        {error}
-      </pre>
+      <pre className="overflow-auto rounded bg-red-950/30 p-3 text-xs text-red-400">{error}</pre>
     );
   }
 
   return (
     <div
       ref={containerRef}
-      className="flex justify-center my-4 [&>svg]:max-w-full"
+      className="my-4 flex justify-center [&>svg]:max-w-full"
       dangerouslySetInnerHTML={{ __html: svg }}
     />
   );
@@ -273,17 +288,13 @@ const markdownPreviewComponents: Components = {
 
     // Inline code
     return (
-      <code className="bg-muted px-1.5 py-0.5 rounded text-xs" {...props}>
+      <code className="rounded bg-muted px-1.5 py-0.5 text-xs" {...props}>
         {children}
       </code>
     );
   },
   pre({ children }) {
-    return (
-      <pre className="bg-muted/50 rounded-md p-3 overflow-auto text-sm">
-        {children}
-      </pre>
-    );
+    return <pre className="overflow-auto rounded-md bg-muted/50 p-3 text-sm">{children}</pre>;
   },
 };
 

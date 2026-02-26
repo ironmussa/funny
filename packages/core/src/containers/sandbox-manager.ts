@@ -13,10 +13,11 @@
 
 import { spawn, execSync, type ChildProcess } from 'child_process';
 import { existsSync } from 'fs';
-import { resolve, dirname, join } from 'path';
-import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { homedir } from 'os';
+import { resolve, dirname, join } from 'path';
+import { fileURLToPath } from 'url';
+
 import { execute } from '../git/process.js';
 import type { SandboxState, SandboxManagerOptions } from './types.js';
 
@@ -28,17 +29,14 @@ const CONTAINER_SDK_PATH = '/opt/claude-sdk';
 const CONTAINER_SOURCE_MOUNT = '/mnt/source';
 
 // Common Podman install locations per platform (use forward slashes — works on all OSes)
-const PODMAN_SEARCH_PATHS = process.platform === 'win32'
-  ? [
-      'C:/Program Files/RedHat/Podman/podman.exe',
-      `${process.env.LOCALAPPDATA}/Programs/Podman/podman.exe`,
-      `${process.env.ProgramFiles}/RedHat/Podman/podman.exe`,
-    ]
-  : [
-      '/usr/bin/podman',
-      '/usr/local/bin/podman',
-      '/opt/homebrew/bin/podman',
-    ];
+const PODMAN_SEARCH_PATHS =
+  process.platform === 'win32'
+    ? [
+        'C:/Program Files/RedHat/Podman/podman.exe',
+        `${process.env.LOCALAPPDATA}/Programs/Podman/podman.exe`,
+        `${process.env.ProgramFiles}/RedHat/Podman/podman.exe`,
+      ]
+    : ['/usr/bin/podman', '/usr/local/bin/podman', '/opt/homebrew/bin/podman'];
 
 /**
  * Resolve the host path to the Claude Agent SDK directory.
@@ -55,10 +53,11 @@ function resolveHostSdkPath(): string {
  */
 async function getHostBranch(worktreePath: string): Promise<string | null> {
   try {
-    const result = await execute(
-      'git', ['rev-parse', '--abbrev-ref', 'HEAD'],
-      { cwd: worktreePath, reject: false, timeout: 10_000 },
-    );
+    const result = await execute('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+      cwd: worktreePath,
+      reject: false,
+      timeout: 10_000,
+    });
     const branch = result.stdout.trim();
     return branch && result.exitCode === 0 ? branch : null;
   } catch {
@@ -71,10 +70,11 @@ async function getHostBranch(worktreePath: string): Promise<string | null> {
  */
 async function getHostRemoteUrl(worktreePath: string): Promise<string | null> {
   try {
-    const result = await execute(
-      'git', ['remote', 'get-url', 'origin'],
-      { cwd: worktreePath, reject: false, timeout: 10_000 },
-    );
+    const result = await execute('git', ['remote', 'get-url', 'origin'], {
+      cwd: worktreePath,
+      reject: false,
+      timeout: 10_000,
+    });
     const url = result.stdout.trim();
     return url && result.exitCode === 0 ? url : null;
   } catch {
@@ -145,8 +145,8 @@ export class SandboxManager {
     const p = this.getPodmanPath();
     if (!p) {
       throw new Error(
-        'Podman is required but was not found. '
-        + 'Install it from https://podman.io/docs/installation'
+        'Podman is required but was not found. ' +
+          'Install it from https://podman.io/docs/installation',
       );
     }
     return p;
@@ -164,10 +164,7 @@ export class SandboxManager {
     const podman = this.requirePodman();
 
     // Check if image already exists
-    const check = await execute(
-      podman, ['image', 'exists', this.imageName],
-      { reject: false },
-    );
+    const check = await execute(podman, ['image', 'exists', this.imageName], { reject: false });
 
     if (check.exitCode === 0) {
       this.imageReady = true;
@@ -244,14 +241,17 @@ export class SandboxManager {
 
       // Build podman run args — mount worktree as READ-ONLY at /mnt/source
       const runArgs = [
-        'run', '-d',
-        '--name', containerName,
-        '-v', `${worktreePath}:${CONTAINER_SOURCE_MOUNT}:ro`,
-        '-v', `${sdkPath}:${CONTAINER_SDK_PATH}:ro`,
-        ...(existsSync(hostClaudeDir)
-          ? ['-v', `${hostClaudeDir}:${containerHome}/.claude`]
-          : []),
-        '-w', CONTAINER_WORKSPACE,
+        'run',
+        '-d',
+        '--name',
+        containerName,
+        '-v',
+        `${worktreePath}:${CONTAINER_SOURCE_MOUNT}:ro`,
+        '-v',
+        `${sdkPath}:${CONTAINER_SDK_PATH}:ro`,
+        ...(existsSync(hostClaudeDir) ? ['-v', `${hostClaudeDir}:${containerHome}/.claude`] : []),
+        '-w',
+        CONTAINER_WORKSPACE,
       ];
 
       // Pass through environment variables the agent needs
@@ -276,26 +276,47 @@ export class SandboxManager {
       state.containerId = result.stdout.trim();
       state.status = 'running';
 
-      console.log(`[sandbox] Container ${containerName} running (id=${state.containerId.slice(0, 12)})`);
+      console.log(
+        `[sandbox] Container ${containerName} running (id=${state.containerId.slice(0, 12)})`,
+      );
 
       // Set safe.directory so git doesn't complain about ownership
-      await execute(podman, [
-        'exec', '--user', 'sandbox', containerName,
-        'git', 'config', '--global', 'safe.directory', '*',
-      ], { reject: false, timeout: 10_000 });
+      await execute(
+        podman,
+        [
+          'exec',
+          '--user',
+          'sandbox',
+          containerName,
+          'git',
+          'config',
+          '--global',
+          'safe.directory',
+          '*',
+        ],
+        { reject: false, timeout: 10_000 },
+      );
 
       // Copy worktree files (excluding .git) from read-only mount to /workspace.
       // Run as root first to copy, then chown to sandbox user.
       console.log(`[sandbox] Copying worktree files to ${CONTAINER_WORKSPACE}...`);
-      const copyResult = await execute(podman, [
-        'exec', containerName,
-        'sh', '-c',
-        // Use rsync-like copy: cp -a copies recursively preserving attributes,
-        // --exclude .git skips the worktree's .git pointer file.
-        // We use find + cp to skip .git since cp doesn't have --exclude.
-        `cd ${CONTAINER_SOURCE_MOUNT} && find . -mindepth 1 -maxdepth 1 ! -name .git -exec cp -a {} ${CONTAINER_WORKSPACE}/ \\; && chown -R sandbox:sandbox ${CONTAINER_WORKSPACE}`,
-      ], { reject: false, timeout: 120_000 });
-      console.log(`[sandbox] Copy files: exit=${copyResult.exitCode} stderr=${copyResult.stderr.slice(0, 200)}`);
+      const copyResult = await execute(
+        podman,
+        [
+          'exec',
+          containerName,
+          'sh',
+          '-c',
+          // Use rsync-like copy: cp -a copies recursively preserving attributes,
+          // --exclude .git skips the worktree's .git pointer file.
+          // We use find + cp to skip .git since cp doesn't have --exclude.
+          `cd ${CONTAINER_SOURCE_MOUNT} && find . -mindepth 1 -maxdepth 1 ! -name .git -exec cp -a {} ${CONTAINER_WORKSPACE}/ \\; && chown -R sandbox:sandbox ${CONTAINER_WORKSPACE}`,
+        ],
+        { reject: false, timeout: 120_000 },
+      );
+      console.log(
+        `[sandbox] Copy files: exit=${copyResult.exitCode} stderr=${copyResult.stderr.slice(0, 200)}`,
+      );
 
       if (copyResult.exitCode !== 0) {
         throw new Error(`Failed to copy worktree files: ${copyResult.stderr}`);
@@ -313,20 +334,21 @@ export class SandboxManager {
           `git remote add origin "${remoteUrl}"`,
           `git fetch origin ${branch || 'HEAD'} --depth=50`,
           // Set the branch to track the remote
-          branch
-            ? `git checkout -b ${branch} FETCH_HEAD`
-            : 'git checkout FETCH_HEAD',
+          branch ? `git checkout -b ${branch} FETCH_HEAD` : 'git checkout FETCH_HEAD',
           // Stage all current files so `git status` shows a clean tree
           'git add -A',
           // Reset to match the fetched commit — working tree already has the right files
           'git reset HEAD',
         ].join(' && ');
 
-        const initResult = await execute(podman, [
-          'exec', '--user', 'sandbox', containerName,
-          'sh', '-c', gitInitScript,
-        ], { reject: false, timeout: 120_000 });
-        console.log(`[sandbox] Git init+fetch: exit=${initResult.exitCode} stderr=${initResult.stderr.slice(0, 500)}`);
+        const initResult = await execute(
+          podman,
+          ['exec', '--user', 'sandbox', containerName, 'sh', '-c', gitInitScript],
+          { reject: false, timeout: 120_000 },
+        );
+        console.log(
+          `[sandbox] Git init+fetch: exit=${initResult.exitCode} stderr=${initResult.stderr.slice(0, 500)}`,
+        );
 
         if (initResult.exitCode !== 0) {
           console.warn(`[sandbox] Git clone approach failed, falling back to local-only init`);
@@ -339,16 +361,40 @@ export class SandboxManager {
       }
 
       // Verify git is working
-      const verifyGitStatus = await execute(podman, [
-        'exec', '--user', 'sandbox', containerName,
-        'git', '-C', CONTAINER_WORKSPACE, 'status', '--short',
-      ], { reject: false, timeout: 10_000 });
-      console.log(`[sandbox] Verify git status: exit=${verifyGitStatus.exitCode} stdout=${verifyGitStatus.stdout.slice(0, 200)} stderr=${verifyGitStatus.stderr.slice(0, 200)}`);
+      const verifyGitStatus = await execute(
+        podman,
+        [
+          'exec',
+          '--user',
+          'sandbox',
+          containerName,
+          'git',
+          '-C',
+          CONTAINER_WORKSPACE,
+          'status',
+          '--short',
+        ],
+        { reject: false, timeout: 10_000 },
+      );
+      console.log(
+        `[sandbox] Verify git status: exit=${verifyGitStatus.exitCode} stdout=${verifyGitStatus.stdout.slice(0, 200)} stderr=${verifyGitStatus.stderr.slice(0, 200)}`,
+      );
 
-      const verifyBranch = await execute(podman, [
-        'exec', '--user', 'sandbox', containerName,
-        'git', '-C', CONTAINER_WORKSPACE, 'branch', '--show-current',
-      ], { reject: false, timeout: 10_000 });
+      const verifyBranch = await execute(
+        podman,
+        [
+          'exec',
+          '--user',
+          'sandbox',
+          containerName,
+          'git',
+          '-C',
+          CONTAINER_WORKSPACE,
+          'branch',
+          '--show-current',
+        ],
+        { reject: false, timeout: 10_000 },
+      );
       console.log(`[sandbox] Container branch: ${verifyBranch.stdout.trim()}`);
 
       return state;
@@ -375,13 +421,18 @@ export class SandboxManager {
       branch ? `git checkout -b ${branch}` : '',
       'git add -A',
       'git commit -m "Initial commit (sandbox snapshot)"',
-    ].filter(Boolean).join(' && ');
+    ]
+      .filter(Boolean)
+      .join(' && ');
 
-    const result = await execute(podman, [
-      'exec', '--user', 'sandbox', containerName,
-      'sh', '-c', script,
-    ], { reject: false, timeout: 60_000 });
-    console.log(`[sandbox] Fallback git init: exit=${result.exitCode} stderr=${result.stderr.slice(0, 200)}`);
+    const result = await execute(
+      podman,
+      ['exec', '--user', 'sandbox', containerName, 'sh', '-c', script],
+      { reject: false, timeout: 60_000 },
+    );
+    console.log(
+      `[sandbox] Fallback git init: exit=${result.exitCode} stderr=${result.stderr.slice(0, 200)}`,
+    );
   }
 
   /**
@@ -399,10 +450,7 @@ export class SandboxManager {
     if (!podman) return;
 
     try {
-      await execute(
-        podman, ['rm', '-f', state.containerName],
-        { reject: false, timeout: 30_000 },
-      );
+      await execute(podman, ['rm', '-f', state.containerName], { reject: false, timeout: 30_000 });
     } catch (error: any) {
       console.warn(`[sandbox] Error removing container: ${error.message}`);
     }
@@ -422,7 +470,9 @@ export class SandboxManager {
    *
    * Node's ChildProcess already satisfies the SDK's SpawnedProcess interface.
    */
-  createSpawnFn(requestId: string): (options: {
+  createSpawnFn(
+    requestId: string,
+  ): (options: {
     command: string;
     args: string[];
     cwd?: string;
@@ -466,10 +516,22 @@ export class SandboxManager {
       };
       // Skip host-only env vars that don't apply inside the container
       const skipEnvKeys = new Set([
-        'PATH', 'SHELL', 'TERM', 'LANG', 'HOSTNAME',
-        'PROGRAMFILES', 'PROGRAMDATA', 'APPDATA', 'LOCALAPPDATA',
-        'SYSTEMROOT', 'WINDIR', 'COMSPEC', 'PATHEXT',
-        'npm_config_prefix', 'NVM_DIR', 'NVM_HOME',
+        'PATH',
+        'SHELL',
+        'TERM',
+        'LANG',
+        'HOSTNAME',
+        'PROGRAMFILES',
+        'PROGRAMDATA',
+        'APPDATA',
+        'LOCALAPPDATA',
+        'SYSTEMROOT',
+        'WINDIR',
+        'COMSPEC',
+        'PATHEXT',
+        'npm_config_prefix',
+        'NVM_DIR',
+        'NVM_HOME',
       ]);
       for (const [key, value] of Object.entries(options.env)) {
         if (value !== undefined && !(key in envOverrides) && !skipEnvKeys.has(key)) {
@@ -525,9 +587,7 @@ export class SandboxManager {
     if (entries.length === 0) return;
 
     console.log(`[sandbox] Stopping ${entries.length} sandbox(es)...`);
-    await Promise.allSettled(
-      entries.map((requestId) => this.stopSandbox(requestId)),
-    );
+    await Promise.allSettled(entries.map((requestId) => this.stopSandbox(requestId)));
     console.log('[sandbox] All sandboxes stopped.');
   }
 
@@ -555,11 +615,7 @@ export class SandboxManager {
       if (names.length === 0) return 0;
 
       console.log(`[sandbox] Found ${names.length} orphaned container(s), removing...`);
-      await execute(
-        podman,
-        ['rm', '-f', ...names],
-        { reject: false, timeout: 30_000 },
-      );
+      await execute(podman, ['rm', '-f', ...names], { reject: false, timeout: 30_000 });
       console.log(`[sandbox] Removed ${names.length} orphaned container(s): ${names.join(', ')}`);
       return names.length;
     } catch (err: any) {

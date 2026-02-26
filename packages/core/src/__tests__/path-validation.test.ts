@@ -1,8 +1,15 @@
-import { describe, test, expect } from 'vitest';
-import { resolve, join } from 'path';
 import { mkdirSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
-import { validatePath, validatePathSync, pathExists, sanitizePath } from '../git/path-validation.js';
+import { resolve, join } from 'path';
+
+import { describe, test, expect } from 'vitest';
+
+import {
+  validatePath,
+  validatePathSync,
+  pathExists,
+  sanitizePath,
+} from '../git/path-validation.js';
 
 const TMP = resolve(tmpdir(), 'core-path-validation-test');
 /** A real, resolved base directory suitable for sanitizePath tests on all OSes */

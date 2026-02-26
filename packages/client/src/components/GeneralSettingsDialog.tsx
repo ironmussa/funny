@@ -1,8 +1,12 @@
+import type { UserProfile } from '@funny/shared';
+import { Sun, Moon, Monitor } from 'lucide-react';
 import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
-import { useSettingsStore, editorLabels, type Theme, type Editor } from '@/stores/settings-store';
-import { cn } from '@/lib/utils';
+
+import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   Dialog,
   DialogContent,
@@ -10,6 +14,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -17,13 +22,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Button } from '@/components/ui/button';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Input } from '@/components/ui/input';
-import { Sun, Moon, Monitor } from 'lucide-react';
 import { api } from '@/lib/api';
-import { toast } from 'sonner';
-import type { UserProfile } from '@funny/shared';
+import { cn } from '@/lib/utils';
+import { useSettingsStore, editorLabels, type Theme, type Editor } from '@/stores/settings-store';
 
 function getLanguageName(code: string): string {
   try {
@@ -44,10 +45,10 @@ function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3.5 border-b border-border/50 last:border-b-0">
+    <div className="flex items-center justify-between gap-4 border-b border-border/50 px-4 py-3.5 last:border-b-0">
       <div className="min-w-0">
         <p className="text-sm font-medium text-foreground">{title}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
       </div>
       <div className="flex-shrink-0">{children}</div>
     </div>
@@ -73,7 +74,7 @@ function SegmentedControl<T extends string>({
             'flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-sm transition-colors',
             value === opt.value
               ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
+              : 'text-muted-foreground hover:text-foreground',
           )}
         >
           {opt.icon}
@@ -91,14 +92,23 @@ export function GeneralSettingsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { theme, defaultEditor, useInternalEditor, setTheme, setDefaultEditor, setUseInternalEditor } = useSettingsStore(useShallow(s => ({
-    theme: s.theme,
-    defaultEditor: s.defaultEditor,
-    useInternalEditor: s.useInternalEditor,
-    setTheme: s.setTheme,
-    setDefaultEditor: s.setDefaultEditor,
-    setUseInternalEditor: s.setUseInternalEditor,
-  })));
+  const {
+    theme,
+    defaultEditor,
+    useInternalEditor,
+    setTheme,
+    setDefaultEditor,
+    setUseInternalEditor,
+  } = useSettingsStore(
+    useShallow((s) => ({
+      theme: s.theme,
+      defaultEditor: s.defaultEditor,
+      useInternalEditor: s.useInternalEditor,
+      setTheme: s.setTheme,
+      setDefaultEditor: s.setDefaultEditor,
+      setUseInternalEditor: s.setUseInternalEditor,
+    })),
+  );
   const { t, i18n } = useTranslation();
 
   // Local draft state — only committed to the store on Save
@@ -145,7 +155,19 @@ export function GeneralSettingsDialog({
       }
     }
     onOpenChange(false);
-  }, [draftEditor, draftUseInternalEditor, draftTheme, draftLanguage, githubToken, setDefaultEditor, setUseInternalEditor, setTheme, i18n, t, onOpenChange]);
+  }, [
+    draftEditor,
+    draftUseInternalEditor,
+    draftTheme,
+    draftLanguage,
+    githubToken,
+    setDefaultEditor,
+    setUseInternalEditor,
+    setTheme,
+    i18n,
+    t,
+    onOpenChange,
+  ]);
 
   const handleClearToken = useCallback(async () => {
     setTokenSaving(true);
@@ -164,18 +186,18 @@ export function GeneralSettingsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md max-h-[85vh] flex flex-col p-0 gap-0">
-        <DialogHeader className="px-6 pt-6 pb-4 flex-shrink-0">
+      <DialogContent className="flex max-h-[85vh] max-w-md flex-col gap-0 p-0">
+        <DialogHeader className="flex-shrink-0 px-6 pb-4 pt-6">
           <DialogTitle>{t('settings.title')}</DialogTitle>
         </DialogHeader>
 
-        <div className="px-6 pb-5 space-y-5 overflow-y-auto flex-1 min-h-0">
+        <div className="min-h-0 flex-1 space-y-5 overflow-y-auto px-6 pb-5">
           {/* General section */}
           <div>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2">
+            <h3 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {t('settings.general')}
             </h3>
-            <div className="rounded-lg border border-border/50 overflow-hidden">
+            <div className="overflow-hidden rounded-lg border border-border/50">
               <SettingRow
                 title={t('settings.defaultEditor')}
                 description={t('settings.defaultEditorDesc')}
@@ -204,10 +226,7 @@ export function GeneralSettingsDialog({
                 />
               </SettingRow>
 
-              <SettingRow
-                title={t('settings.language')}
-                description={t('settings.languageDesc')}
-              >
+              <SettingRow title={t('settings.language')} description={t('settings.languageDesc')}>
                 <Select value={draftLanguage} onValueChange={setDraftLanguage}>
                   <SelectTrigger className="w-[140px]">
                     <SelectValue />
@@ -226,21 +245,30 @@ export function GeneralSettingsDialog({
 
           {/* Appearance section */}
           <div>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2">
+            <h3 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {t('settings.appearance')}
             </h3>
-            <div className="rounded-lg border border-border/50 overflow-hidden">
-              <SettingRow
-                title={t('settings.theme')}
-                description={t('settings.themeDesc')}
-              >
+            <div className="overflow-hidden rounded-lg border border-border/50">
+              <SettingRow title={t('settings.theme')} description={t('settings.themeDesc')}>
                 <SegmentedControl<Theme>
                   value={draftTheme}
                   onChange={setDraftTheme}
                   options={[
-                    { value: 'light', label: t('settings.light'), icon: <Sun className="h-3 w-3" /> },
-                    { value: 'dark', label: t('settings.dark'), icon: <Moon className="h-3 w-3" /> },
-                    { value: 'system', label: t('settings.system'), icon: <Monitor className="h-3 w-3" /> },
+                    {
+                      value: 'light',
+                      label: t('settings.light'),
+                      icon: <Sun className="h-3 w-3" />,
+                    },
+                    {
+                      value: 'dark',
+                      label: t('settings.dark'),
+                      icon: <Moon className="h-3 w-3" />,
+                    },
+                    {
+                      value: 'system',
+                      label: t('settings.system'),
+                      icon: <Monitor className="h-3 w-3" />,
+                    },
                   ]}
                 />
               </SettingRow>
@@ -249,26 +277,32 @@ export function GeneralSettingsDialog({
 
           {/* GitHub section */}
           <div>
-            <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2">
+            <h3 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               GitHub
             </h3>
-            <div className="rounded-lg border border-border/50 overflow-hidden">
+            <div className="overflow-hidden rounded-lg border border-border/50">
               <div className="px-4 py-3.5">
-                <p className="text-sm font-medium text-foreground">{t('profile.githubTokenLabel')}</p>
-                <p className="text-xs text-muted-foreground mt-0.5 mb-2">{t('profile.githubTokenDesc')}</p>
+                <p className="text-sm font-medium text-foreground">
+                  {t('profile.githubTokenLabel')}
+                </p>
+                <p className="mb-2 mt-0.5 text-xs text-muted-foreground">
+                  {t('profile.githubTokenDesc')}
+                </p>
                 <div className="flex items-center gap-2">
                   <Input
                     type="password"
                     value={githubToken}
                     onChange={(e) => setGithubToken(e.target.value)}
-                    placeholder={hasGithubToken ? t('profile.tokenSaved') : t('profile.tokenPlaceholder')}
+                    placeholder={
+                      hasGithubToken ? t('profile.tokenSaved') : t('profile.tokenPlaceholder')
+                    }
                     className="text-sm"
                   />
                   {hasGithubToken && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="text-xs text-destructive hover:text-destructive shrink-0"
+                      className="shrink-0 text-xs text-destructive hover:text-destructive"
                       onClick={handleClearToken}
                       disabled={tokenSaving}
                     >
@@ -281,13 +315,11 @@ export function GeneralSettingsDialog({
           </div>
         </div>
 
-        <DialogFooter className="px-6 py-4 flex-shrink-0 border-t border-border/50">
+        <DialogFooter className="flex-shrink-0 border-t border-border/50 px-6 py-4">
           <Button variant="outline" onClick={handleCancel}>
             {t('common.cancel')}
           </Button>
-          <Button onClick={handleSave}>
-            {t('common.save')}
-          </Button>
+          <Button onClick={handleSave}>{t('common.save')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

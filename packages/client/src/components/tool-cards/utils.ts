@@ -1,6 +1,7 @@
 import { lazy, useMemo } from 'react';
-import { useThreadStore } from '@/stores/thread-store';
+
 import { useProjectStore } from '@/stores/project-store';
+import { useThreadStore } from '@/stores/thread-store';
 
 export const ReactDiffViewer = lazy(() => import('react-diff-viewer-continued'));
 
@@ -81,7 +82,9 @@ export interface Question {
   multiSelect: boolean;
 }
 
-export function formatInput(input: string | Record<string, unknown> | null | undefined): Record<string, unknown> {
+export function formatInput(
+  input: string | Record<string, unknown> | null | undefined,
+): Record<string, unknown> {
   if (!input) return {};
   if (typeof input === 'string') {
     try {
@@ -101,7 +104,7 @@ export function getTodos(parsed: Record<string, unknown>): TodoItem[] | null {
 
 export function getFilePath(name: string, parsed: Record<string, unknown>): string | null {
   if (name === 'Read' || name === 'Write' || name === 'Edit') {
-    return parsed.file_path as string ?? null;
+    return (parsed.file_path as string) ?? null;
   }
   return null;
 }
@@ -112,26 +115,30 @@ export function getQuestions(parsed: Record<string, unknown>): Question[] | null
   return questions as Question[];
 }
 
-export function getSummary(name: string, parsed: Record<string, unknown>, t: (key: string) => string): string | null {
+export function getSummary(
+  name: string,
+  parsed: Record<string, unknown>,
+  t: (key: string) => string,
+): string | null {
   switch (name) {
     case 'Read':
     case 'Write':
     case 'Edit':
-      return parsed.file_path as string ?? null;
+      return (parsed.file_path as string) ?? null;
     case 'Bash':
-      return parsed.command as string ?? null;
+      return (parsed.command as string) ?? null;
     case 'Glob':
-      return parsed.pattern as string ?? null;
+      return (parsed.pattern as string) ?? null;
     case 'Grep':
-      return parsed.pattern as string ?? null;
+      return (parsed.pattern as string) ?? null;
     case 'Task':
-      return parsed.description as string ?? null;
+      return (parsed.description as string) ?? null;
     case 'WebSearch':
-      return parsed.query as string ?? null;
+      return (parsed.query as string) ?? null;
     case 'WebFetch':
-      return parsed.url as string ?? null;
+      return (parsed.url as string) ?? null;
     case 'NotebookEdit':
-      return parsed.notebook_path as string ?? null;
+      return (parsed.notebook_path as string) ?? null;
     case 'TodoWrite': {
       const todos = getTodos(parsed);
       if (!todos) return null;
@@ -167,7 +174,14 @@ export function getToolLabel(name: string, t: (key: string) => string): string {
 }
 
 // Re-export editor utilities from the central module
-export { toEditorUri, toEditorUriWithLine, hasEditorUri, openFileInEditor, openFileInInternalEditor, getEditorLabel } from '@/lib/editor-utils';
+export {
+  toEditorUri,
+  toEditorUriWithLine,
+  hasEditorUri,
+  openFileInEditor,
+  openFileInInternalEditor,
+  getEditorLabel,
+} from '@/lib/editor-utils';
 
 const EXT_TO_SHIKI_LANG: Record<string, string> = {
   ts: 'typescript',
@@ -246,12 +260,12 @@ export function getFileName(filePath: string): string {
  * Hook that returns the current thread's project path (for stripping from absolute file paths).
  */
 export function useCurrentProjectPath(): string | undefined {
-  const projectId = useThreadStore(s => s.activeThread?.projectId);
-  const worktreePath = useThreadStore(s => s.activeThread?.worktreePath);
-  const projects = useProjectStore(s => s.projects);
+  const projectId = useThreadStore((s) => s.activeThread?.projectId);
+  const worktreePath = useThreadStore((s) => s.activeThread?.worktreePath);
+  const projects = useProjectStore((s) => s.projects);
   return useMemo(
-    () => worktreePath || projects.find(p => p.id === projectId)?.path,
-    [projects, projectId, worktreePath]
+    () => worktreePath || projects.find((p) => p.id === projectId)?.path,
+    [projects, projectId, worktreePath],
   );
 }
 

@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuthStore } from '@/stores/auth-store';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useAuthStore } from '@/stores/auth-store';
 
 export function LoginPage() {
   const { t } = useTranslation();
@@ -63,9 +64,7 @@ export function LoginPage() {
             />
           </div>
 
-          {error && (
-            <p className="text-sm text-destructive">{error}</p>
-          )}
+          {error && <p className="text-sm text-destructive">{error}</p>}
 
           <Button type="submit" className="w-full" disabled={loading || !username || !password}>
             {loading ? t('auth.signingIn') : t('auth.signIn')}

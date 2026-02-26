@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'vitest';
+
 import {
   formatInput,
   getTodos,
@@ -75,7 +76,12 @@ describe('getFilePath', () => {
 describe('getQuestions', () => {
   test('returns questions array when present', () => {
     const questions = [
-      { question: 'Which?', header: 'Choice', options: [{ label: 'A', description: 'option a' }], multiSelect: false },
+      {
+        question: 'Which?',
+        header: 'Choice',
+        options: [{ label: 'A', description: 'option a' }],
+        multiSelect: false,
+      },
     ];
     expect(getQuestions({ questions })).toEqual(questions);
   });
@@ -139,9 +145,7 @@ describe('getSummary', () => {
   });
 
   test('returns question count for AskUserQuestion', () => {
-    const questions = [
-      { question: 'Q1?', header: 'H', options: [], multiSelect: false },
-    ];
+    const questions = [{ question: 'Q1?', header: 'H', options: [], multiSelect: false }];
     expect(getSummary('AskUserQuestion', { questions }, t)).toBe('1 tools.questions');
   });
 
@@ -196,7 +200,9 @@ describe('toEditorUri', () => {
   });
 
   test('normalizes Windows backslashes', () => {
-    expect(toEditorUri('C:\\Users\\test\\file.ts', 'vscode')).toBe('vscode://file/C:/Users/test/file.ts');
+    expect(toEditorUri('C:\\Users\\test\\file.ts', 'vscode')).toBe(
+      'vscode://file/C:/Users/test/file.ts',
+    );
   });
 
   test('adds leading slash to relative paths', () => {
@@ -206,11 +212,15 @@ describe('toEditorUri', () => {
 
 describe('toEditorUriWithLine', () => {
   test('appends line number to URI', () => {
-    expect(toEditorUriWithLine('/home/user/file.ts:42', 'vscode')).toBe('vscode://file/home/user/file.ts:42');
+    expect(toEditorUriWithLine('/home/user/file.ts:42', 'vscode')).toBe(
+      'vscode://file/home/user/file.ts:42',
+    );
   });
 
   test('works without line number', () => {
-    expect(toEditorUriWithLine('/home/user/file.ts', 'cursor')).toBe('cursor://file/home/user/file.ts');
+    expect(toEditorUriWithLine('/home/user/file.ts', 'cursor')).toBe(
+      'cursor://file/home/user/file.ts',
+    );
   });
 
   test('returns null for editors without URI scheme', () => {

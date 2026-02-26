@@ -1,4 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
+
 import { Hono } from 'hono';
 import { ok, err } from 'neverthrow';
 
@@ -52,7 +53,9 @@ describe('Worktree Routes', () => {
   });
 
   test('GET /worktrees returns 404 when project not found', async () => {
-    mockRequireProject.mockReturnValue(err({ type: 'NOT_FOUND', message: 'Project not found' }) as any);
+    mockRequireProject.mockReturnValue(
+      err({ type: 'NOT_FOUND', message: 'Project not found' }) as any,
+    );
     const res = await app.request('/worktrees?projectId=nonexistent');
     expect(res.status).toBe(404);
   });
@@ -74,7 +77,9 @@ describe('Worktree Routes', () => {
   });
 
   test('POST /worktrees returns 404 when project not found', async () => {
-    mockRequireProject.mockReturnValue(err({ type: 'NOT_FOUND', message: 'Project not found' }) as any);
+    mockRequireProject.mockReturnValue(
+      err({ type: 'NOT_FOUND', message: 'Project not found' }) as any,
+    );
     const res = await app.request('/worktrees', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },

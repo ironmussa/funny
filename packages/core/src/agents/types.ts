@@ -42,11 +42,7 @@ export interface CLIUserMessage {
 
 export interface CLIResultMessage {
   type: 'result';
-  subtype:
-  | 'success'
-  | 'error_max_turns'
-  | 'error_during_execution'
-  | 'error_max_budget_usd';
+  subtype: 'success' | 'error_max_turns' | 'error_during_execution' | 'error_max_budget_usd';
   is_error: boolean;
   duration_ms: number;
   num_turns: number;
@@ -56,11 +52,7 @@ export interface CLIResultMessage {
   errors?: string[];
 }
 
-export type CLIMessage =
-  | CLISystemMessage
-  | CLIAssistantMessage
-  | CLIUserMessage
-  | CLIResultMessage;
+export type CLIMessage = CLISystemMessage | CLIAssistantMessage | CLIUserMessage | CLIResultMessage;
 
 // ── Process Options ────────────────────────────────────────────────
 

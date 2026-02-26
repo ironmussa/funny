@@ -5,14 +5,14 @@
  * for transitioning thread status with resume-reason tracking.
  */
 
-import { createActor } from 'xstate';
+import type { ThreadStatus } from '@funny/shared';
 import {
   threadMachine,
   type ThreadEvent,
   type ThreadContext,
   type ResumeReason,
 } from '@funny/shared/thread-machine';
-import type { ThreadStatus } from '@funny/shared';
+import { createActor } from 'xstate';
 
 // ── Types ─────────────────────────────────────────────────────────
 

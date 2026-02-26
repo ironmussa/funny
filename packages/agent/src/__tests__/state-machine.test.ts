@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'bun:test';
+
 import { StateMachine, TransitionError } from '../core/state-machine.js';
 
 // ── StateMachine generic tests ──────────────────────────────────

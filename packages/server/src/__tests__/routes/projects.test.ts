@@ -1,6 +1,8 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { Hono } from 'hono';
+
 import { eq } from 'drizzle-orm';
+import { Hono } from 'hono';
+
 import { createTestDb, seedProject } from '../helpers/test-db.js';
 
 describe('Project Routes', () => {

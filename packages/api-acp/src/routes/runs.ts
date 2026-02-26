@@ -10,8 +10,9 @@
  * tool calls, and proper cancellation.
  */
 
-import { Hono } from 'hono';
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { Hono } from 'hono';
+
 import { resolveModel } from '../utils/model-resolver.js';
 import * as registry from '../utils/run-registry.js';
 import type { RunResult, RunUsage, ToolCallInfo } from '../utils/run-registry.js';
@@ -46,17 +47,26 @@ interface CreateRunRequest {
 // ── JSON Repair (reused from former chat.ts) ─────────────
 
 function repairJsonArgs(args: string): string {
-  try { JSON.parse(args); return args; } catch {}
+  try {
+    JSON.parse(args);
+    return args;
+  } catch {}
 
   let s = args.trim();
   for (let i = 0; i < 3; i++) {
     if (s.endsWith('}}')) {
       const attempt = s.slice(0, -1);
-      try { JSON.parse(attempt); return attempt; } catch {}
+      try {
+        JSON.parse(attempt);
+        return attempt;
+      } catch {}
     }
     if (s.endsWith(']]')) {
       const attempt = s.slice(0, -1);
-      try { JSON.parse(attempt); return attempt; } catch {}
+      try {
+        JSON.parse(attempt);
+        return attempt;
+      } catch {}
     }
     s = s.slice(0, -1);
     if (!s) break;
@@ -65,18 +75,27 @@ function repairJsonArgs(args: string): string {
   s = args.trim();
   for (let i = 0; i < 3; i++) {
     s += '}';
-    try { JSON.parse(s); return s; } catch {}
+    try {
+      JSON.parse(s);
+      return s;
+    } catch {}
   }
 
   s = args.trim();
   for (let i = 0; i < 3; i++) {
     s += ']';
-    try { JSON.parse(s); return s; } catch {}
+    try {
+      JSON.parse(s);
+      return s;
+    } catch {}
   }
 
   if (!args.trim().startsWith('{')) {
     const attempt = `{${args.trim()}}`;
-    try { JSON.parse(attempt); return attempt; } catch {}
+    try {
+      JSON.parse(attempt);
+      return attempt;
+    } catch {}
   }
 
   console.warn(`[api-acp] WARNING: could not repair JSON args: ${args.slice(0, 200)}`);
@@ -96,9 +115,18 @@ function tryParseJsonArray(raw: string): any[] | null {
   let braces = 0;
   let brackets = 0;
   for (const ch of s) {
-    if (escape) { escape = false; continue; }
-    if (ch === '\\' && inString) { escape = true; continue; }
-    if (ch === '"') { inString = !inString; continue; }
+    if (escape) {
+      escape = false;
+      continue;
+    }
+    if (ch === '\\' && inString) {
+      escape = true;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
     if (inString) continue;
     if (ch === '{') braces++;
     if (ch === '}') braces--;
@@ -175,12 +203,14 @@ function parseToolCalls(text: string): { toolCalls: ToolCallInfo[]; textContent:
 function buildToolInstruction(tools: OpenAIToolDef[]): string {
   if (!tools.length) return '';
 
-  const toolDescriptions = tools.map((t) => {
-    const params = t.function.parameters
-      ? `\n  Parameters: ${JSON.stringify(t.function.parameters)}`
-      : '';
-    return `- ${t.function.name}: ${t.function.description ?? 'No description'}${params}`;
-  }).join('\n');
+  const toolDescriptions = tools
+    .map((t) => {
+      const params = t.function.parameters
+        ? `\n  Parameters: ${JSON.stringify(t.function.parameters)}`
+        : '';
+      return `- ${t.function.name}: ${t.function.description ?? 'No description'}${params}`;
+    })
+    .join('\n');
 
   return `
 You have access to the following tools. To call a tool, output a JSON array inside a fenced code block:
@@ -216,7 +246,9 @@ runsRoute.post('/', async (c) => {
   const body = await c.req.json<CreateRunRequest>();
   const { model: requestedModel, system_prompt, prompt, tools, max_turns, stream } = body;
 
-  console.log(`[api-acp] POST /v1/runs model=${requestedModel} stream=${stream} tools=${tools?.length ?? 0}`);
+  console.log(
+    `[api-acp] POST /v1/runs model=${requestedModel} stream=${stream} tools=${tools?.length ?? 0}`,
+  );
 
   if (!requestedModel) {
     return c.json({ error: { message: 'model is required', type: 'invalid_request_error' } }, 400);
@@ -226,7 +258,7 @@ runsRoute.post('/', async (c) => {
   }
 
   const { modelId } = resolveModel(requestedModel);
-  const hasTools = !!(tools?.length);
+  const hasTools = !!tools?.length;
   const toolInstruction = hasTools ? buildToolInstruction(tools) : '';
   const fullSystemPrompt = [system_prompt, toolInstruction].filter(Boolean).join('\n\n');
 
@@ -235,9 +267,26 @@ runsRoute.post('/', async (c) => {
   const run = registry.register(runId, requestedModel, abortController);
 
   if (stream) {
-    return handleStreaming(run, modelId, prompt, fullSystemPrompt, hasTools, max_turns, abortController);
+    return handleStreaming(
+      run,
+      modelId,
+      prompt,
+      fullSystemPrompt,
+      hasTools,
+      max_turns,
+      abortController,
+    );
   }
-  return handleNonStreaming(c, run, modelId, prompt, fullSystemPrompt, hasTools, max_turns, abortController);
+  return handleNonStreaming(
+    c,
+    run,
+    modelId,
+    prompt,
+    fullSystemPrompt,
+    hasTools,
+    max_turns,
+    abortController,
+  );
 });
 
 // ── GET /:id — Get Run Status ───────────────────────────
@@ -261,7 +310,10 @@ runsRoute.post('/:id/cancel', (c) => {
     if (!run) {
       return c.json({ error: { message: 'Run not found', type: 'not_found' } }, 404);
     }
-    return c.json({ error: { message: `Run is already ${run.status}`, type: 'invalid_request_error' } }, 400);
+    return c.json(
+      { error: { message: `Run is already ${run.status}`, type: 'invalid_request_error' } },
+      400,
+    );
   }
   return c.json(registry.get(id));
 });
@@ -302,7 +354,9 @@ async function handleNonStreaming(
     registry.setQuery(run.id, gen);
 
     for await (const msg of gen) {
-      dbg(`[api-acp] SDK msg type=${msg.type}${(msg as any).subtype ? ` subtype=${(msg as any).subtype}` : ''}`);
+      dbg(
+        `[api-acp] SDK msg type=${msg.type}${(msg as any).subtype ? ` subtype=${(msg as any).subtype}` : ''}`,
+      );
       if (msg.type === 'assistant') {
         const raw = msg as any;
         if (raw.message?.content) {
@@ -372,7 +426,9 @@ function handleStreaming(
         controller.enqueue(encoder.encode(sseEvent('run.created', registry.get(run.id))));
 
         // Emit run.status → running
-        controller.enqueue(encoder.encode(sseEvent('run.status', { id: run.id, status: 'running' })));
+        controller.enqueue(
+          encoder.encode(sseEvent('run.status', { id: run.id, status: 'running' })),
+        );
 
         let inputTokens = 0;
         let outputTokens = 0;
@@ -407,7 +463,9 @@ function handleStreaming(
                   // In tool mode, buffer text to parse tool_calls at the end.
                   // In normal mode, stream text deltas immediately.
                   if (!hasTools) {
-                    controller.enqueue(encoder.encode(sseEvent('text.delta', { delta: block.text })));
+                    controller.enqueue(
+                      encoder.encode(sseEvent('text.delta', { delta: block.text })),
+                    );
                   }
                 }
               }
@@ -438,7 +496,9 @@ function handleStreaming(
           if (parsed) {
             // Emit text content if any
             if (parsed.textContent) {
-              controller.enqueue(encoder.encode(sseEvent('text.delta', { delta: parsed.textContent })));
+              controller.enqueue(
+                encoder.encode(sseEvent('text.delta', { delta: parsed.textContent })),
+              );
             }
             // Emit each tool call
             for (const tc of parsed.toolCalls) {
@@ -463,7 +523,9 @@ function handleStreaming(
       } catch (err: any) {
         console.error('[api-acp] stream error:', err.message);
         registry.setFailed(run.id, err.message);
-        controller.enqueue(encoder.encode(sseEvent('run.failed', { id: run.id, error: { message: err.message } })));
+        controller.enqueue(
+          encoder.encode(sseEvent('run.failed', { id: run.id, error: { message: err.message } })),
+        );
         controller.enqueue(encoder.encode(sseEvent('done', '[DONE]')));
         controller.close();
       }

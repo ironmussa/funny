@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+
 import { useReviewPaneStore } from '@/stores/review-pane-store';
 
 /**
@@ -12,7 +13,7 @@ import { useReviewPaneStore } from '@/stores/review-pane-store';
 export function useAutoRefreshDiff(
   threadId: string | undefined,
   onRefresh: () => void,
-  debounceMs = 2000
+  debounceMs = 2000,
 ) {
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const onRefreshRef = useRef(onRefresh);

@@ -1,6 +1,7 @@
-import { create } from 'zustand';
-import { api } from '@/lib/api';
 import { toast } from 'sonner';
+import { create } from 'zustand';
+
+import { api } from '@/lib/api';
 
 interface InternalEditorState {
   isOpen: boolean;

@@ -5,22 +5,23 @@
  * Flow: Issue → Plan → Implement → PR → CI/Review reactions.
  */
 
+import { ModelFactory } from '@funny/core/agents';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
+
 import { loadConfig } from './config/loader.js';
 import type { PipelineServiceConfig } from './config/schema.js';
-import { createWebhookRoutes } from './routes/webhooks.js';
-import { createSessionRoutes } from './routes/sessions.js';
-import { EventBus } from './infrastructure/event-bus.js';
-import { ModelFactory } from '@funny/core/agents';
-import { SessionStore } from './core/session-store.js';
 import { OrchestratorAgent } from './core/orchestrator-agent.js';
+import { SessionStore } from './core/session-store.js';
 import { Watchdog } from './core/watchdog.js';
-import { GitHubTracker } from './trackers/github-tracker.js';
-import type { Tracker } from './trackers/tracker.js';
+import { EventBus } from './infrastructure/event-bus.js';
 import { IngestWebhookAdapter } from './infrastructure/ingest-webhook-adapter.js';
 import { logger } from './infrastructure/logger.js';
+import { createSessionRoutes } from './routes/sessions.js';
+import { createWebhookRoutes } from './routes/webhooks.js';
+import { GitHubTracker } from './trackers/github-tracker.js';
+import type { Tracker } from './trackers/tracker.js';
 
 // ── Bootstrap ────────────────────────────────────────────────────
 
@@ -63,7 +64,10 @@ try {
     logger.info({ tracker: 'github', repo: config.tracker.repo }, 'Issue tracker initialized');
   }
 } catch (err: any) {
-  logger.warn({ err: err.message }, 'Issue tracker initialization failed — sessions will work without tracker');
+  logger.warn(
+    { err: err.message },
+    'Issue tracker initialization failed — sessions will work without tracker',
+  );
 }
 
 // Initialize Watchdog
@@ -73,27 +77,29 @@ const watchdog = new Watchdog(eventBus, sessionStore, config, {
     if (!session || !session.worktreePath || !session.branch) return;
 
     // Re-run the implementing agent with the new prompt
-    orchestratorAgent.implementIssue(
-      {
-        number: session.issue.number,
-        title: session.issue.title,
-        state: 'open',
-        body: session.issue.body ?? null,
-        url: session.issue.url,
-        labels: session.issue.labels.map((l) => ({ name: l, color: '' })),
-        assignee: null,
-        commentsCount: 0,
-        createdAt: '',
-        updatedAt: '',
-        comments: [],
-        fullContext: `${session.issue.body ?? ''}\n\n---\n\n**Agent instructions:** ${prompt}`,
-      },
-      session.plan!,
-      session.worktreePath,
-      session.branch,
-    ).catch((err) => {
-      logger.error({ sessionId, err: err.message }, 'Respawned agent failed');
-    });
+    orchestratorAgent
+      .implementIssue(
+        {
+          number: session.issue.number,
+          title: session.issue.title,
+          state: 'open',
+          body: session.issue.body ?? null,
+          url: session.issue.url,
+          labels: session.issue.labels.map((l) => ({ name: l, color: '' })),
+          assignee: null,
+          commentsCount: 0,
+          createdAt: '',
+          updatedAt: '',
+          comments: [],
+          fullContext: `${session.issue.body ?? ''}\n\n---\n\n**Agent instructions:** ${prompt}`,
+        },
+        session.plan!,
+        session.worktreePath,
+        session.branch,
+      )
+      .catch((err) => {
+        logger.error({ sessionId, err: err.message }, 'Respawned agent failed');
+      });
   },
   notify: async (sessionId, message) => {
     logger.info({ sessionId, message }, 'Session notification');
@@ -136,7 +142,10 @@ app.get('/health', (c) => c.json({ status: 'ok', service: 'agent' }));
 
 // Mount route groups
 app.route('/webhooks', createWebhookRoutes(eventBus, config));
-app.route('/sessions', createSessionRoutes(sessionStore, orchestratorAgent, tracker, eventBus, config));
+app.route(
+  '/sessions',
+  createSessionRoutes(sessionStore, orchestratorAgent, tracker, eventBus, config),
+);
 
 // ── Exports ─────────────────────────────────────────────────────
 

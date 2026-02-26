@@ -1,8 +1,10 @@
-import { describe, test, expect, vi } from 'vitest';
-import { screen } from '@testing-library/react';
-import { renderWithProviders } from '../helpers/render';
-import { StatusBadge } from '@/components/StatusBadge';
 import type { ThreadStatus } from '@funny/shared';
+import { screen } from '@testing-library/react';
+import { describe, test, expect, vi } from 'vitest';
+
+import { StatusBadge } from '@/components/StatusBadge';
+
+import { renderWithProviders } from '../helpers/render';
 
 vi.mock('react-i18next', () => ({
   useTranslation: () => ({
@@ -13,8 +15,14 @@ vi.mock('react-i18next', () => ({
 
 describe('StatusBadge', () => {
   const statuses: ThreadStatus[] = [
-    'idle', 'pending', 'running', 'waiting',
-    'completed', 'failed', 'stopped', 'interrupted',
+    'idle',
+    'pending',
+    'running',
+    'waiting',
+    'completed',
+    'failed',
+    'stopped',
+    'interrupted',
   ];
 
   test.each(statuses)('renders badge for status "%s"', (status) => {

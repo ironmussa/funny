@@ -1,12 +1,8 @@
 import { describe, test, expect } from 'bun:test';
-import { resolve, join } from 'path';
 import { mkdirSync, rmSync } from 'fs';
-import {
-  validatePath,
-  validatePathSync,
-  pathExists,
-  sanitizePath,
-} from '@funny/core/git';
+import { resolve, join } from 'path';
+
+import { validatePath, validatePathSync, pathExists, sanitizePath } from '@funny/core/git';
 
 const TEST_DIR = resolve(import.meta.dir, '..', '..', '..', '.test-tmp-path-validation');
 
@@ -73,7 +69,7 @@ describe('validatePathSync', () => {
 
   test('throws for non-existent path', () => {
     expect(() => validatePathSync('/this/path/does/not/exist/xyz123')).toThrow(
-      'Path does not exist'
+      'Path does not exist',
     );
   });
 });
@@ -95,7 +91,9 @@ describe('pathExists', () => {
 
 describe('sanitizePath', () => {
   // Use a resolved absolute path for the current platform
-  const base = resolve(process.platform === 'win32' ? 'C:\\Users\\test\\project' : '/home/user/project');
+  const base = resolve(
+    process.platform === 'win32' ? 'C:\\Users\\test\\project' : '/home/user/project',
+  );
 
   test('resolves safe path within base', () => {
     const result = sanitizePath(base, 'src/file.ts');

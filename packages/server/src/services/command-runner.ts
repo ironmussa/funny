@@ -4,9 +4,9 @@
  * Follows the same pattern as agent-runner.ts + claude-process.ts.
  */
 
-import { wsBroker } from './ws-broker.js';
+import { log } from '../lib/logger.js';
 import * as pm from './project-manager.js';
-import { log } from '../lib/abbacchio.js';
+import { wsBroker } from './ws-broker.js';
 
 const KILL_GRACE_MS = 3_000;
 const IS_WINDOWS = process.platform === 'win32';
@@ -88,12 +88,16 @@ export async function startCommand(
 
   activeCommands.set(commandId, entry);
 
-  emitWS('command:status', {
-    commandId,
+  emitWS(
+    'command:status',
+    {
+      commandId,
+      projectId,
+      label,
+      status: 'running',
+    },
     projectId,
-    label,
-    status: 'running',
-  }, projectId);
+  );
 
   // Stream stdout
   readStream(proc.stdout as ReadableStream<Uint8Array>, commandId, 'stdout', projectId);
@@ -106,25 +110,33 @@ export async function startCommand(
       log.info(`Command "${label}" exited`, { namespace: 'command-runner', exitCode });
       entry.exited = true;
       activeCommands.delete(commandId);
-      emitWS('command:status', {
-        commandId,
+      emitWS(
+        'command:status',
+        {
+          commandId,
+          projectId,
+          label,
+          status: 'exited',
+          exitCode,
+        },
         projectId,
-        label,
-        status: 'exited',
-        exitCode,
-      }, projectId);
+      );
     })
     .catch((err) => {
       log.error(`Command "${label}" error`, { namespace: 'command-runner', error: err });
       entry.exited = true;
       activeCommands.delete(commandId);
-      emitWS('command:status', {
-        commandId,
+      emitWS(
+        'command:status',
+        {
+          commandId,
+          projectId,
+          label,
+          status: 'exited',
+          exitCode: 1,
+        },
         projectId,
-        label,
-        status: 'exited',
-        exitCode: 1,
-      }, projectId);
+      );
     });
 }
 
@@ -171,7 +183,7 @@ export async function stopCommand(commandId: string): Promise<void> {
             killProcessTree(entry.proc, 9); // SIGKILL
           }
           resolve();
-        }, KILL_GRACE_MS)
+        }, KILL_GRACE_MS),
       ),
     ]);
   }
@@ -179,12 +191,16 @@ export async function stopCommand(commandId: string): Promise<void> {
   entry.exited = true;
   activeCommands.delete(commandId);
 
-  emitWS('command:status', {
-    commandId,
-    projectId: entry.projectId,
-    label: entry.label,
-    status: 'stopped',
-  }, entry.projectId);
+  emitWS(
+    'command:status',
+    {
+      commandId,
+      projectId: entry.projectId,
+      label: entry.label,
+      status: 'stopped',
+    },
+    entry.projectId,
+  );
 }
 
 export function getRunningCommands(): string[] {

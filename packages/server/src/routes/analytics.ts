@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
-import type { HonoEnv } from '../types/hono-env.js';
+
 import { getOverview, getTimeline } from '../services/analytics-service.js';
+import type { HonoEnv } from '../types/hono-env.js';
 
 export const analyticsRoutes = new Hono<HonoEnv>();
 

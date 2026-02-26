@@ -41,7 +41,12 @@ export function resolveModel(model: string): ResolvedModel {
     return { provider: 'anthropic', modelId: model };
   }
 
-  if (model.startsWith('gpt-') || model.startsWith('o1') || model.startsWith('o3') || model.startsWith('o4')) {
+  if (
+    model.startsWith('gpt-') ||
+    model.startsWith('o1') ||
+    model.startsWith('o3') ||
+    model.startsWith('o4')
+  ) {
     return { provider: 'openai', modelId: model };
   }
 

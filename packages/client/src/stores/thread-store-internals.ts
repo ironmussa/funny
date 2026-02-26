@@ -50,7 +50,9 @@ export function bufferWSEvent(threadId: string, type: string, data: any): void {
   wsEventBuffer.set(threadId, buf);
 }
 
-export function getAndClearWSBuffer(threadId: string): Array<{ type: string; data: any }> | undefined {
+export function getAndClearWSBuffer(
+  threadId: string,
+): Array<{ type: string; data: any }> | undefined {
   const events = wsEventBuffer.get(threadId);
   if (events?.length) {
     wsEventBuffer.delete(threadId);

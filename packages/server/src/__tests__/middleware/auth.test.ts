@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach, mock } from 'bun:test';
+
 import { Hono } from 'hono';
 
 // ---------------------------------------------------------------------------
@@ -30,9 +31,7 @@ mock.module('../../lib/auth.js', () => ({
 // Import module under test AFTER mocks are registered
 // ---------------------------------------------------------------------------
 
-const { authMiddleware, requireAdmin } = await import(
-  '../../middleware/auth.js'
-);
+const { authMiddleware, requireAdmin } = await import('../../middleware/auth.js');
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -48,9 +47,7 @@ function createApp() {
   app.get('/api/auth/login', (c) => c.json({ login: true }));
   app.get('/api/auth/some-other', (c) => c.json({ auth: true }));
   app.get('/api/mcp/oauth/callback', (c) => c.json({ callback: true }));
-  app.get('/api/projects', (c) =>
-    c.json({ userId: c.get('userId'), role: c.get('userRole') }),
-  );
+  app.get('/api/projects', (c) => c.json({ userId: c.get('userId'), role: c.get('userRole') }));
   return app;
 }
 
@@ -59,9 +56,7 @@ function createAdminApp() {
   const app = new Hono();
   app.use('*', authMiddleware);
   app.use('/api/admin/*', requireAdmin);
-  app.get('/api/admin/users', (c) =>
-    c.json({ userId: c.get('userId'), role: c.get('userRole') }),
-  );
+  app.get('/api/admin/users', (c) => c.json({ userId: c.get('userId'), role: c.get('userRole') }));
   return app;
 }
 

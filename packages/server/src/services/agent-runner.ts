@@ -1,19 +1,26 @@
-import { wsBroker } from './ws-broker.js';
-import * as tm from './thread-manager.js';
-import * as pm from './project-manager.js';
-import * as mq from './message-queue.js';
-import type { WSEvent, AgentProvider, AgentModel, PermissionMode, ThreadStatus } from '@funny/shared';
 import { AgentOrchestrator, defaultProcessFactory } from '@funny/core/agents';
 import type { IAgentProcessFactory } from '@funny/core/agents';
-import type { IThreadManager, IWSBroker } from './server-interfaces.js';
-import { AgentStateTracker } from './agent-state.js';
-import { AgentMessageHandler, type ProjectLookup } from './agent-message-handler.js';
-import { threadEventBus } from './thread-event-bus.js';
-import { log } from '../lib/abbacchio.js';
-import { transitionStatus } from './thread-status-machine.js';
+import type {
+  WSEvent,
+  AgentProvider,
+  AgentModel,
+  PermissionMode,
+  ThreadStatus,
+} from '@funny/shared';
 import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
 import type { ThreadEvent } from '@funny/shared/thread-machine';
+
+import { log } from '../lib/logger.js';
+import { AgentMessageHandler, type ProjectLookup } from './agent-message-handler.js';
+import { AgentStateTracker } from './agent-state.js';
+import * as mq from './message-queue.js';
+import * as pm from './project-manager.js';
+import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import { buildThreadContext, needsContextRecovery } from './thread-context-builder.js';
+import { threadEventBus } from './thread-event-bus.js';
+import * as tm from './thread-manager.js';
+import { transitionStatus } from './thread-status-machine.js';
+import { wsBroker } from './ws-broker.js';
 
 // ── AgentRunner class ───────────────────────────────────────────
 
@@ -40,7 +47,11 @@ export class AgentRunner {
     this.orchestrator.on('agent:error', (threadId: string, err: Error) => {
       log.error('Agent error', { namespace: 'agent', threadId, error: err.message });
       const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
-      const { status } = transitionStatus(threadId, { type: 'FAIL', error: err.message }, currentStatus as ThreadStatus);
+      const { status } = transitionStatus(
+        threadId,
+        { type: 'FAIL', error: err.message },
+        currentStatus as ThreadStatus,
+      );
       this.threadManager.updateThread(threadId, { status, completedAt: new Date().toISOString() });
       this.emitWS(threadId, 'agent:error', { error: err.message });
       this.emitWS(threadId, 'agent:status', { status });
@@ -50,7 +61,11 @@ export class AgentRunner {
     this.orchestrator.on('agent:unexpected-exit', (threadId: string) => {
       log.error('Agent exited unexpectedly', { namespace: 'agent', threadId });
       const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
-      const { status } = transitionStatus(threadId, { type: 'FAIL' }, currentStatus as ThreadStatus);
+      const { status } = transitionStatus(
+        threadId,
+        { type: 'FAIL' },
+        currentStatus as ThreadStatus,
+      );
       this.threadManager.updateThread(threadId, { status, completedAt: new Date().toISOString() });
       this.emitWS(threadId, 'agent:error', {
         error: 'Agent process exited unexpectedly without a result',
@@ -62,13 +77,21 @@ export class AgentRunner {
     this.orchestrator.on('agent:stopped', (threadId: string) => {
       log.info('Agent stopped', { namespace: 'agent', threadId });
       const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
-      const { status } = transitionStatus(threadId, { type: 'STOP' }, currentStatus as ThreadStatus);
+      const { status } = transitionStatus(
+        threadId,
+        { type: 'STOP' },
+        currentStatus as ThreadStatus,
+      );
       this.threadManager.updateThread(threadId, { status, completedAt: new Date().toISOString() });
       this.emitWS(threadId, 'agent:status', { status });
       this.emitAgentCompleted(threadId, 'stopped');
       // Process queue after manual stop
       this.processQueue(threadId).catch((err) => {
-        log.error('Queue drain failed after stop', { namespace: 'queue', threadId, error: String(err) });
+        log.error('Queue drain failed after stop', {
+          namespace: 'queue',
+          threadId,
+          error: String(err),
+        });
       });
     });
 
@@ -80,7 +103,11 @@ export class AgentRunner {
     // Drain queue when agent completes (completed or failed)
     threadEventBus.on('agent:completed', (event) => {
       this.processQueue(event.threadId).catch((err) => {
-        log.error('Queue drain failed after completion', { namespace: 'queue', threadId: event.threadId, error: String(err) });
+        log.error('Queue drain failed after completion', {
+          namespace: 'queue',
+          threadId: event.threadId,
+          error: String(err),
+        });
       });
     });
 
@@ -95,11 +122,17 @@ export class AgentRunner {
           adopted++;
         } else {
           // Process exited during the transition — mark thread status
-          log.info('Surviving agent already exited, skipping adoption', { namespace: 'agent', threadId });
+          log.info('Surviving agent already exited, skipping adoption', {
+            namespace: 'agent',
+            threadId,
+          });
         }
       }
       if (adopted > 0) {
-        log.info(`Adopted ${adopted} surviving agent(s) from previous instance`, { namespace: 'agent', count: adopted });
+        log.info(`Adopted ${adopted} surviving agent(s) from previous instance`, {
+          namespace: 'agent',
+          count: adopted,
+        });
       }
       delete (globalThis as any).__funnyActiveAgents;
     }
@@ -159,7 +192,12 @@ export class AgentRunner {
     const currentThread = this.threadManager.getThread(threadId);
     const currentStatus = (currentThread?.status ?? 'pending') as ThreadStatus;
     const startEvent = this.pickStartEvent(currentStatus);
-    const { status: newStatus, resumeReason } = transitionStatus(threadId, startEvent, currentStatus, currentThread?.cost ?? 0);
+    const { status: newStatus, resumeReason } = transitionStatus(
+      threadId,
+      startEvent,
+      currentStatus,
+      currentThread?.cost ?? 0,
+    );
 
     // Update thread status + provider in DB
     this.threadManager.updateThread(threadId, { status: newStatus, provider });
@@ -169,9 +207,13 @@ export class AgentRunner {
       const fromStage = currentThread.stage;
       this.threadManager.updateThread(threadId, { stage: 'in_progress' });
       threadEventBus.emit('thread:stage-changed', {
-        threadId, projectId: currentThread.projectId, userId: currentThread.userId,
-        worktreePath: currentThread.worktreePath ?? null, cwd,
-        fromStage, toStage: 'in_progress',
+        threadId,
+        projectId: currentThread.projectId,
+        userId: currentThread.userId,
+        worktreePath: currentThread.worktreePath ?? null,
+        cwd,
+        fromStage,
+        toStage: 'in_progress',
       });
     }
 
@@ -242,18 +284,26 @@ export class AgentRunner {
       });
 
       threadEventBus.emit('agent:started', {
-        threadId, projectId: thread?.projectId ?? '', userId: thread?.userId ?? '',
-        worktreePath: thread?.worktreePath ?? null, cwd,
-        model, provider,
+        threadId,
+        projectId: thread?.projectId ?? '',
+        userId: thread?.userId ?? '',
+        worktreePath: thread?.worktreePath ?? null,
+        cwd,
+        model,
+        provider,
       });
     } catch (err: any) {
-      log.error(`Failed to start ${provider} process`, { namespace: 'agent', threadId, error: err.message });
+      log.error(`Failed to start ${provider} process`, {
+        namespace: 'agent',
+        threadId,
+        error: err.message,
+      });
       this.threadManager.updateThread(threadId, {
         status: 'failed',
-        completedAt: new Date().toISOString()
+        completedAt: new Date().toISOString(),
       });
       this.emitWS(threadId, 'agent:error', {
-        error: err.message || `Failed to start ${provider} agent process`
+        error: err.message || `Failed to start ${provider} agent process`,
       });
       this.emitWS(threadId, 'agent:status', { status: 'failed' });
       throw err;
@@ -300,7 +350,11 @@ export class AgentRunner {
         nextMessage: peekNext?.content?.slice(0, 100),
       });
     } catch (err: any) {
-      log.error('Failed to auto-send queued message', { namespace: 'queue', threadId, error: err.message });
+      log.error('Failed to auto-send queued message', {
+        namespace: 'queue',
+        threadId,
+        error: err.message,
+      });
     }
   }
 
@@ -361,16 +415,11 @@ export class AgentRunner {
   extractActiveAgents(): Map<string, any> {
     return this.orchestrator.extractActiveAgents();
   }
-
 }
 
 // ── Default singleton (backward-compatible exports) ─────────────
 
-const defaultRunner = new AgentRunner(
-  tm,
-  wsBroker,
-  defaultProcessFactory,
-);
+const defaultRunner = new AgentRunner(tm, wsBroker, defaultProcessFactory);
 
 export const startAgent = defaultRunner.startAgent.bind(defaultRunner);
 export const stopAgent = defaultRunner.stopAgent.bind(defaultRunner);
@@ -381,17 +430,21 @@ export const extractActiveAgents = defaultRunner.extractActiveAgents.bind(defaul
 
 // ── Self-register with ShutdownManager ──────────────────────
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
-shutdownManager.register('agent-runner', async (mode) => {
-  if (mode === 'hotReload') {
-    // Preserve running agents for adoption by the next instance
-    const surviving = extractActiveAgents();
-    if (surviving.size > 0) {
-      (globalThis as any).__funnyActiveAgents = surviving;
-      console.log(`[shutdown] Preserved ${surviving.size} agent(s) for next instance`);
+shutdownManager.register(
+  'agent-runner',
+  async (mode) => {
+    if (mode === 'hotReload') {
+      // Preserve running agents for adoption by the next instance
+      const surviving = extractActiveAgents();
+      if (surviving.size > 0) {
+        (globalThis as any).__funnyActiveAgents = surviving;
+        console.log(`[shutdown] Preserved ${surviving.size} agent(s) for next instance`);
+      } else {
+        await stopAllAgents();
+      }
     } else {
       await stopAllAgents();
     }
-  } else {
-    await stopAllAgents();
-  }
-}, ShutdownPhase.SERVICES);
+  },
+  ShutdownPhase.SERVICES,
+);

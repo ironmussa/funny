@@ -19,11 +19,13 @@ funny nacio para resolver el dolor de manejar multiples agentes Claude Code en p
 **Solucion:** Agregar timestamps relativos ("hace 1 min", "hace 10 min") en cada tarjeta de respuesta del LLM dentro del ThreadView.
 
 ### Que se anade:
+
 - En cada tarjeta/burbuja de mensaje del asistente, un texto sutil mostrando el tiempo relativo desde que fue generada (ej: "1m ago", "10m ago", "2h ago")
 - El timestamp se actualiza en vivo (cada 60 segundos) para mantenerse relativo
 - Estilo discreto (texto pequeno, color muted) para no agregar ruido visual
 
 ### Archivos a modificar:
+
 - `packages/client/src/components/ThreadView.tsx` — En el renderizado de mensajes del asistente, agregar el timestamp relativo usando el campo `timestamp` que ya existe en cada mensaje.
 - Posiblemente reutilizar la funcion `timeAgo` de `packages/client/src/lib/thread-utils.ts` que ya se usa en el sidebar.
 
@@ -38,6 +40,7 @@ funny nacio para resolver el dolor de manejar multiples agentes Claude Code en p
 **Solucion:** Defaults configurables que se persisten en los settings generales de la app.
 
 ### Que se modifica:
+
 - `packages/client/src/stores/settings-store.ts` — Anadir `defaultModel: 'sonnet' | 'opus' | 'haiku'` y `defaultPermissionMode: string` al store (ya tiene `defaultThreadMode`). Persistidos en localStorage via Zustand persist.
 - `packages/client/src/components/PromptInput.tsx` — Cambiar `useState<string>('opus')` -> `useState<string>(defaultModel)` leyendo del settings store. Igual para mode.
 - `packages/client/src/components/NewThreadDialog.tsx` — Leer defaults del settings store en vez de hardcodear.
@@ -54,12 +57,14 @@ funny nacio para resolver el dolor de manejar multiples agentes Claude Code en p
 **Solucion:** Cambiar el titulo a algo que mejor represente su funcion de monitoreo/actividad.
 
 ### Opciones de nombre:
+
 - "Activity" — Comunica que es un feed de actividad reciente
 - "Recent Activity" — Mas descriptivo
 - "Agent Activity" — Especifico al contexto de agentes
 - Otra sugerencia del usuario
 
 ### Archivos a modificar:
+
 - `packages/client/src/components/sidebar/ThreadList.tsx` o el componente padre que renderiza el header de esta seccion
 - Archivos de traduccion si existen (i18n)
 
@@ -69,10 +74,10 @@ funny nacio para resolver el dolor de manejar multiples agentes Claude Code en p
 
 ## Orden de Implementacion Sugerido
 
-| # | Mejora | Esfuerzo | Impacto |
-|---|--------|----------|---------|
-| 1 | Timestamps en Tarjetas LLM | Bajo | Medio |
-| 2 | Defaults Inteligentes | Muy Bajo | Medio |
-| 3 | Renombrar Seccion Sidebar | Muy Bajo | Bajo |
+| #   | Mejora                     | Esfuerzo | Impacto |
+| --- | -------------------------- | -------- | ------- |
+| 1   | Timestamps en Tarjetas LLM | Bajo     | Medio   |
+| 2   | Defaults Inteligentes      | Muy Bajo | Medio   |
+| 3   | Renombrar Seccion Sidebar  | Muy Bajo | Bajo    |
 
 Las 3 mejoras son independientes y pueden implementarse en paralelo.

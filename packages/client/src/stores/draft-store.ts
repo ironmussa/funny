@@ -1,5 +1,5 @@
-import { create } from 'zustand';
 import type { ImageAttachment } from '@funny/shared';
+import { create } from 'zustand';
 
 interface ThreadDraft {
   prompt?: string;
@@ -11,7 +11,12 @@ interface ThreadDraft {
 
 interface DraftState {
   drafts: Record<string, ThreadDraft>;
-  setPromptDraft: (threadId: string, prompt: string, images: ImageAttachment[], selectedFiles: string[]) => void;
+  setPromptDraft: (
+    threadId: string,
+    prompt: string,
+    images: ImageAttachment[],
+    selectedFiles: string[],
+  ) => void;
   setCommitDraft: (threadId: string, title: string, body: string) => void;
   clearPromptDraft: (threadId: string) => void;
   clearCommitDraft: (threadId: string) => void;
@@ -36,7 +41,7 @@ export const useDraftStore = create<DraftState>((set, get) => ({
       }
       return;
     }
-    set(state => ({
+    set((state) => ({
       drafts: {
         ...state.drafts,
         [threadId]: { ...state.drafts[threadId], prompt, images, selectedFiles },
@@ -58,7 +63,7 @@ export const useDraftStore = create<DraftState>((set, get) => ({
       }
       return;
     }
-    set(state => ({
+    set((state) => ({
       drafts: {
         ...state.drafts,
         [threadId]: { ...state.drafts[threadId], commitTitle: title, commitBody: body },

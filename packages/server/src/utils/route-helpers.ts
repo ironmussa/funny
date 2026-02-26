@@ -6,10 +6,11 @@
  * is not enforced since there is only one user.
  */
 
-import { ok, err, type Result } from 'neverthrow';
-import * as tm from '../services/thread-manager.js';
-import * as pm from '../services/project-manager.js';
 import { notFound, forbidden, type DomainError } from '@funny/shared/errors';
+import { ok, err, type Result } from 'neverthrow';
+
+import * as pm from '../services/project-manager.js';
+import * as tm from '../services/thread-manager.js';
 
 /** Check that a thread belongs to the requesting user (multi-user mode) */
 function checkOwnership(thread: { userId: string }, userId: string): Result<void, DomainError> {
@@ -20,7 +21,10 @@ function checkOwnership(thread: { userId: string }, userId: string): Result<void
 }
 
 /** Get a thread by ID or return Err(NOT_FOUND). Verifies ownership in multi-user mode. */
-export function requireThread(id: string, userId?: string): Result<ReturnType<typeof tm.getThread> & {}, DomainError> {
+export function requireThread(
+  id: string,
+  userId?: string,
+): Result<ReturnType<typeof tm.getThread> & {}, DomainError> {
   const thread = tm.getThread(id);
   if (!thread) return err(notFound('Thread not found'));
   if (userId) {
@@ -31,7 +35,10 @@ export function requireThread(id: string, userId?: string): Result<ReturnType<ty
 }
 
 /** Get a thread with messages by ID or return Err(NOT_FOUND). Verifies ownership in multi-user mode. */
-export function requireThreadWithMessages(id: string, userId?: string): Result<NonNullable<ReturnType<typeof tm.getThreadWithMessages>>, DomainError> {
+export function requireThreadWithMessages(
+  id: string,
+  userId?: string,
+): Result<NonNullable<ReturnType<typeof tm.getThreadWithMessages>>, DomainError> {
   const result = tm.getThreadWithMessages(id);
   if (!result) return err(notFound('Thread not found'));
   if (userId) {
@@ -42,7 +49,10 @@ export function requireThreadWithMessages(id: string, userId?: string): Result<N
 }
 
 /** Get a project by ID or return Err(NOT_FOUND). Verifies ownership in multi-user mode. */
-export function requireProject(id: string, userId?: string): Result<NonNullable<ReturnType<typeof pm.getProject>>, DomainError> {
+export function requireProject(
+  id: string,
+  userId?: string,
+): Result<NonNullable<ReturnType<typeof pm.getProject>>, DomainError> {
   const project = pm.getProject(id);
   if (!project) return err(notFound('Project not found'));
   if (userId) {

@@ -1,7 +1,3 @@
-import { ResultAsync } from 'neverthrow';
-import type { DomainError } from '@funny/shared/errors';
-import { internal } from '@funny/shared/errors';
-import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 import type {
   Project,
   Thread,
@@ -25,6 +21,11 @@ import type {
   PaginatedMessages,
   QueuedMessage,
 } from '@funny/shared';
+import type { DomainError } from '@funny/shared/errors';
+import { internal } from '@funny/shared/errors';
+import { ResultAsync } from 'neverthrow';
+
+import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
 const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
@@ -125,14 +126,22 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
 
         const body = await res.json().catch(() => ({}));
         const rawError = body.error;
-        const message = typeof rawError === 'string' ? rawError
-          : rawError ? JSON.stringify(rawError)
-          : `HTTP ${res.status}`;
-        const type: DomainError['type'] = res.status === 404 ? 'NOT_FOUND'
-          : res.status === 403 ? 'FORBIDDEN'
-          : res.status === 409 ? 'CONFLICT'
-          : res.status >= 500 ? 'INTERNAL'
-          : 'BAD_REQUEST';
+        const message =
+          typeof rawError === 'string'
+            ? rawError
+            : rawError
+              ? JSON.stringify(rawError)
+              : `HTTP ${res.status}`;
+        const type: DomainError['type'] =
+          res.status === 404
+            ? 'NOT_FOUND'
+            : res.status === 403
+              ? 'FORBIDDEN'
+              : res.status === 409
+                ? 'CONFLICT'
+                : res.status >= 500
+                  ? 'INTERNAL'
+                  : 'BAD_REQUEST';
         throw { type, message } as DomainError;
       }
 
@@ -146,7 +155,7 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
         return error as DomainError;
       }
       return internal(String(error));
-    }
+    },
   );
 }
 
@@ -157,13 +166,25 @@ export const api = {
     request<Project>('/projects', { method: 'POST', body: JSON.stringify({ name, path }) }),
   renameProject: (id: string, name: string) =>
     request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify({ name }) }),
-  updateProject: (id: string, data: { name?: string; color?: string | null; followUpMode?: string; defaultProvider?: string | null; defaultModel?: string | null; defaultMode?: string | null; defaultPermissionMode?: string | null }) =>
-    request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
+  updateProject: (
+    id: string,
+    data: {
+      name?: string;
+      color?: string | null;
+      followUpMode?: string;
+      defaultProvider?: string | null;
+      defaultModel?: string | null;
+      defaultMode?: string | null;
+      defaultPermissionMode?: string | null;
+    },
+  ) => request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteProject: (id: string) => request<{ ok: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
   reorderProjects: (projectIds: string[]) =>
     request<void>('/projects/reorder', { method: 'PUT', body: JSON.stringify({ projectIds }) }),
   listBranches: (projectId: string) =>
-    request<{ branches: string[]; defaultBranch: string | null; currentBranch: string | null }>(`/projects/${projectId}/branches`),
+    request<{ branches: string[]; defaultBranch: string | null; currentBranch: string | null }>(
+      `/projects/${projectId}/branches`,
+    ),
 
   // Threads
   listThreads: (projectId?: string, includeArchived?: boolean) => {
@@ -176,7 +197,9 @@ export const api = {
   searchThreadContent: (query: string, projectId?: string) => {
     const params = new URLSearchParams({ q: query });
     if (projectId) params.set('projectId', projectId);
-    return request<{ threadIds: string[]; snippets: Record<string, string> }>(`/threads/search/content?${params.toString()}`);
+    return request<{ threadIds: string[]; snippets: Record<string, string> }>(
+      `/threads/search/content?${params.toString()}`,
+    );
   },
   getThread: (id: string, messageLimit?: number) => {
     const params = messageLimit ? `?messageLimit=${messageLimit}` : '';
@@ -187,7 +210,9 @@ export const api = {
     return request<PaginatedMessages>(`/threads/${threadId}/messages?${params.toString()}`);
   },
   getThreadEvents: (threadId: string) => {
-    return request<{ events: Array<import('@funny/shared').ThreadEvent> }>(`/threads/${threadId}/events`);
+    return request<{ events: Array<import('@funny/shared').ThreadEvent> }>(
+      `/threads/${threadId}/events`,
+    );
   },
   createThread: (data: {
     projectId: string;
@@ -213,14 +238,43 @@ export const api = {
     prompt?: string;
     stage?: string;
   }) => request<Thread>('/threads/idle', { method: 'POST', body: JSON.stringify(data) }),
-  sendMessage: (threadId: string, content: string, opts?: { provider?: string; model?: string; permissionMode?: string; allowedTools?: string[]; disallowedTools?: string[]; fileReferences?: { path: string }[]; baseBranch?: string }, images?: ImageAttachment[]) =>
+  sendMessage: (
+    threadId: string,
+    content: string,
+    opts?: {
+      provider?: string;
+      model?: string;
+      permissionMode?: string;
+      allowedTools?: string[];
+      disallowedTools?: string[];
+      fileReferences?: { path: string }[];
+      baseBranch?: string;
+    },
+    images?: ImageAttachment[],
+  ) =>
     request<{ ok: boolean }>(`/threads/${threadId}/message`, {
       method: 'POST',
-      body: JSON.stringify({ content, provider: opts?.provider, model: opts?.model, permissionMode: opts?.permissionMode, images, allowedTools: opts?.allowedTools, disallowedTools: opts?.disallowedTools, fileReferences: opts?.fileReferences, baseBranch: opts?.baseBranch }),
+      body: JSON.stringify({
+        content,
+        provider: opts?.provider,
+        model: opts?.model,
+        permissionMode: opts?.permissionMode,
+        images,
+        allowedTools: opts?.allowedTools,
+        disallowedTools: opts?.disallowedTools,
+        fileReferences: opts?.fileReferences,
+        baseBranch: opts?.baseBranch,
+      }),
     }),
   stopThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}/stop`, { method: 'POST' }),
-  approveTool: (threadId: string, toolName: string, approved: boolean, allowedTools?: string[], disallowedTools?: string[]) =>
+  approveTool: (
+    threadId: string,
+    toolName: string,
+    approved: boolean,
+    allowedTools?: string[],
+    disallowedTools?: string[],
+  ) =>
     request<{ ok: boolean }>(`/threads/${threadId}/approve-tool`, {
       method: 'POST',
       body: JSON.stringify({ toolName, approved, allowedTools, disallowedTools }),
@@ -229,10 +283,11 @@ export const api = {
     request<{ ok: boolean }>(`/threads/${threadId}`, { method: 'DELETE' }),
 
   // Queue management
-  listQueue: (threadId: string) =>
-    request<QueuedMessage[]>(`/threads/${threadId}/queue`),
+  listQueue: (threadId: string) => request<QueuedMessage[]>(`/threads/${threadId}/queue`),
   cancelQueuedMessage: (threadId: string, messageId: string) =>
-    request<{ ok: boolean; queuedCount: number }>(`/threads/${threadId}/queue/${messageId}`, { method: 'DELETE' }),
+    request<{ ok: boolean; queuedCount: number }>(`/threads/${threadId}/queue/${messageId}`, {
+      method: 'DELETE',
+    }),
   archiveThread: (threadId: string, archived: boolean) =>
     request<Thread>(`/threads/${threadId}`, {
       method: 'PATCH',
@@ -266,7 +321,7 @@ export const api = {
     if (params?.search) p.set('search', params.search);
     const qs = p.toString();
     return request<{ threads: Thread[]; total: number; page: number; limit: number }>(
-      `/threads/archived${qs ? `?${qs}` : ''}`
+      `/threads/archived${qs ? `?${qs}` : ''}`,
     );
   },
 
@@ -278,12 +333,12 @@ export const api = {
     if (maxFiles) params.set('maxFiles', String(maxFiles));
     const qs = params.toString();
     return request<import('@funny/shared').DiffSummaryResponse>(
-      `/git/${threadId}/diff/summary${qs ? `?${qs}` : ''}`
+      `/git/${threadId}/diff/summary${qs ? `?${qs}` : ''}`,
     );
   },
   getFileDiff: (threadId: string, filePath: string, staged: boolean) =>
     request<{ diff: string }>(
-      `/git/${threadId}/diff/file?path=${encodeURIComponent(filePath)}&staged=${staged}`
+      `/git/${threadId}/diff/file?path=${encodeURIComponent(filePath)}&staged=${staged}`,
     ),
   stageFiles: (threadId: string, paths: string[]) =>
     request<{ ok: boolean }>(`/git/${threadId}/stage`, {
@@ -329,12 +384,17 @@ export const api = {
     }),
   getGitStatuses: (projectId: string) =>
     request<{ statuses: GitStatusInfo[] }>(`/git/status?projectId=${projectId}`),
-  getGitStatus: (threadId: string) =>
-    request<GitStatusInfo>(`/git/${threadId}/status`),
+  getGitStatus: (threadId: string) => request<GitStatusInfo>(`/git/${threadId}/status`),
   getGitLog: (threadId: string, limit = 20) =>
-    request<{ entries: Array<{ hash: string; shortHash: string; author: string; relativeDate: string; message: string }> }>(
-      `/git/${threadId}/log?limit=${limit}`
-    ),
+    request<{
+      entries: Array<{
+        hash: string;
+        shortHash: string;
+        author: string;
+        relativeDate: string;
+        message: string;
+      }>;
+    }>(`/git/${threadId}/log?limit=${limit}`),
   pull: (threadId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/pull`, { method: 'POST' }),
   stash: (threadId: string) =>
@@ -343,14 +403,13 @@ export const api = {
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/stash/pop`, { method: 'POST' }),
   stashList: (threadId: string) =>
     request<{ entries: Array<{ index: string; message: string; relativeDate: string }> }>(
-      `/git/${threadId}/stash/list`
+      `/git/${threadId}/stash/list`,
     ),
   resetSoft: (threadId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/reset-soft`, { method: 'POST' }),
 
   // Startup Commands
-  listCommands: (projectId: string) =>
-    request<StartupCommand[]>(`/projects/${projectId}/commands`),
+  listCommands: (projectId: string) => request<StartupCommand[]>(`/projects/${projectId}/commands`),
   addCommand: (projectId: string, label: string, command: string) =>
     request<StartupCommand>(`/projects/${projectId}/commands`, {
       method: 'POST',
@@ -370,13 +429,17 @@ export const api = {
 
   // MCP Servers
   listMcpServers: (projectPath: string) =>
-    request<{ servers: McpServer[] }>(`/mcp/servers?projectPath=${encodeURIComponent(projectPath)}`),
+    request<{ servers: McpServer[] }>(
+      `/mcp/servers?projectPath=${encodeURIComponent(projectPath)}`,
+    ),
   addMcpServer: (data: McpAddRequest) =>
     request<{ ok: boolean }>('/mcp/servers', { method: 'POST', body: JSON.stringify(data) }),
   removeMcpServer: (name: string, projectPath: string) =>
-    request<{ ok: boolean }>(`/mcp/servers/${encodeURIComponent(name)}?projectPath=${encodeURIComponent(projectPath)}`, { method: 'DELETE' }),
-  getRecommendedMcpServers: () =>
-    request<{ servers: McpServer[] }>('/mcp/recommended'),
+    request<{ ok: boolean }>(
+      `/mcp/servers/${encodeURIComponent(name)}?projectPath=${encodeURIComponent(projectPath)}`,
+      { method: 'DELETE' },
+    ),
+  getRecommendedMcpServers: () => request<{ servers: McpServer[] }>('/mcp/recommended'),
   startMcpOAuth: (serverName: string, projectPath: string) =>
     request<{ authUrl: string }>('/mcp/oauth/start', {
       method: 'POST',
@@ -390,9 +453,14 @@ export const api = {
 
   // Worktrees
   listWorktrees: (projectId: string) =>
-    request<Array<{ path: string; branch: string; commit: string; isMain: boolean }>>(`/worktrees?projectId=${projectId}`),
+    request<Array<{ path: string; branch: string; commit: string; isMain: boolean }>>(
+      `/worktrees?projectId=${projectId}`,
+    ),
   createWorktree: (data: { projectId: string; branchName: string; baseBranch?: string }) =>
-    request<{ path: string; branch: string }>('/worktrees', { method: 'POST', body: JSON.stringify(data) }),
+    request<{ path: string; branch: string }>('/worktrees', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
   removeWorktree: (projectId: string, worktreePath: string) =>
     request<{ ok: boolean }>('/worktrees', {
       method: 'DELETE',
@@ -401,17 +469,17 @@ export const api = {
 
   // Skills
   listSkills: (projectPath?: string) =>
-    request<{ skills: Skill[] }>(`/skills${projectPath ? `?projectPath=${encodeURIComponent(projectPath)}` : ''}`),
+    request<{ skills: Skill[] }>(
+      `/skills${projectPath ? `?projectPath=${encodeURIComponent(projectPath)}` : ''}`,
+    ),
   addSkill: (identifier: string) =>
     request<{ ok: boolean }>('/skills', { method: 'POST', body: JSON.stringify({ identifier }) }),
   removeSkill: (name: string) =>
     request<{ ok: boolean }>(`/skills/${encodeURIComponent(name)}`, { method: 'DELETE' }),
-  getRecommendedSkills: () =>
-    request<{ skills: Skill[] }>('/skills/recommended'),
+  getRecommendedSkills: () => request<{ skills: Skill[] }>('/skills/recommended'),
 
   // Plugins
-  listPlugins: () =>
-    request<PluginListResponse>('/plugins'),
+  listPlugins: () => request<PluginListResponse>('/plugins'),
 
   // Automations
   listAutomations: (projectId?: string) =>
@@ -446,10 +514,14 @@ export const api = {
     request<UserProfile>('/profile', { method: 'PUT', body: JSON.stringify(data) }),
 
   // Browse (filesystem)
-  browseRoots: () =>
-    request<{ roots: string[]; home: string }>('/browse/roots'),
+  browseRoots: () => request<{ roots: string[]; home: string }>('/browse/roots'),
   browseList: (path: string) =>
-    request<{ path: string; parent: string | null; dirs: Array<{ name: string; path: string }>; error?: string }>(`/browse/list?path=${encodeURIComponent(path)}`),
+    request<{
+      path: string;
+      parent: string | null;
+      dirs: Array<{ name: string; path: string }>;
+      error?: string;
+    }>(`/browse/list?path=${encodeURIComponent(path)}`),
   openInEditor: (path: string, editor: string) =>
     request<{ ok: boolean }>('/browse/open-in-editor', {
       method: 'POST',
@@ -481,16 +553,21 @@ export const api = {
   },
 
   // GitHub
-  githubStatus: () =>
-    request<{ connected: boolean; login?: string }>('/github/status'),
+  githubStatus: () => request<{ connected: boolean; login?: string }>('/github/status'),
   githubStartDevice: () =>
-    request<{ device_code: string; user_code: string; verification_uri: string; expires_in: number; interval: number }>(
-      '/github/oauth/device', { method: 'POST' }
-    ),
+    request<{
+      device_code: string;
+      user_code: string;
+      verification_uri: string;
+      expires_in: number;
+      interval: number;
+    }>('/github/oauth/device', { method: 'POST' }),
   githubPoll: (deviceCode: string) =>
-    request<{ status: 'pending' | 'success' | 'expired' | 'denied'; scopes?: string; interval?: number }>(
-      '/github/oauth/poll', { method: 'POST', body: JSON.stringify({ deviceCode }) }
-    ),
+    request<{
+      status: 'pending' | 'success' | 'expired' | 'denied';
+      scopes?: string;
+      interval?: number;
+    }>('/github/oauth/poll', { method: 'POST', body: JSON.stringify({ deviceCode }) }),
   githubDisconnect: () =>
     request<{ ok: boolean }>('/github/oauth/disconnect', { method: 'DELETE' }),
   githubUser: () =>
@@ -509,14 +586,20 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ cloneUrl, destinationPath, name }),
     }),
-  githubIssues: (projectId: string, params?: { state?: string; page?: number; per_page?: number }) => {
+  githubIssues: (
+    projectId: string,
+    params?: { state?: string; page?: number; per_page?: number },
+  ) => {
     const p = new URLSearchParams({ projectId });
     if (params?.state) p.set('state', params.state);
     if (params?.page) p.set('page', String(params.page));
     if (params?.per_page) p.set('per_page', String(params.per_page));
-    return request<{ issues: import('@funny/shared').GitHubIssue[]; hasMore: boolean; owner: string; repo: string }>(
-      `/github/issues?${p.toString()}`
-    );
+    return request<{
+      issues: import('@funny/shared').GitHubIssue[];
+      hasMore: boolean;
+      owner: string;
+      repo: string;
+    }>(`/github/issues?${p.toString()}`);
   },
 
   // Analytics
@@ -539,12 +622,20 @@ export const api = {
   },
 
   // Logs (observability)
-  sendLogs: (logs: Array<{ level: string; message: string; attributes?: Record<string, string> }>) =>
-    request<{ ok: boolean }>('/logs', { method: 'POST', body: JSON.stringify({ logs }) }),
+  sendLogs: (
+    logs: Array<{ level: string; message: string; attributes?: Record<string, string> }>,
+  ) => request<{ ok: boolean }>('/logs', { method: 'POST', body: JSON.stringify({ logs }) }),
 
   // Setup
   setupStatus: () =>
-    request<{ claudeCli: { available: boolean; path: string | null; error: string | null; version: string | null } }>('/setup/status'),
+    request<{
+      claudeCli: {
+        available: boolean;
+        path: string | null;
+        error: string | null;
+        version: string | null;
+      };
+    }>('/setup/status'),
 
   // Files (internal editor)
   readFile: (path: string) =>
@@ -554,5 +645,4 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ path, content }),
     }),
-
 };

@@ -74,15 +74,12 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
   markExited: (id) =>
     set((state) => ({
-      tabs: state.tabs.map((t) =>
-        t.id === id ? { ...t, alive: false } : t
-      ),
+      tabs: state.tabs.map((t) => (t.id === id ? { ...t, alive: false } : t)),
     })),
 
   setPanelVisible: (visible) => set({ panelVisible: visible }),
 
-  togglePanel: () =>
-    set((state) => ({ panelVisible: !state.panelVisible })),
+  togglePanel: () => set((state) => ({ panelVisible: !state.panelVisible })),
 
   appendCommandOutput: (commandId, data) =>
     set((state) => ({
@@ -94,9 +91,7 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
 
   markCommandExited: (commandId) =>
     set((state) => ({
-      tabs: state.tabs.map((t) =>
-        t.commandId === commandId ? { ...t, alive: false } : t
-      ),
+      tabs: state.tabs.map((t) => (t.commandId === commandId ? { ...t, alive: false } : t)),
     })),
 
   registerPtyCallback: (ptyId, callback) =>

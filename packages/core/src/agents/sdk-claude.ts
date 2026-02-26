@@ -8,8 +8,9 @@
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { SDKMessage, HookCallback, Query } from '@anthropic-ai/claude-agent-sdk';
-import type { CLIMessage } from './types.js';
+
 import { BaseAgentProcess } from './base-process.js';
+import type { CLIMessage } from './types.js';
 
 export class SDKClaudeProcess extends BaseAgentProcess {
   private activeQuery: Query | null = null;
@@ -40,10 +41,12 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       tools: { type: 'preset', preset: 'claude_code' },
       settingSources: ['user', 'project'],
       hooks: {
-        PreToolUse: [{
-          matcher: '.*',
-          hooks: [this.preToolUseHook.bind(this) as HookCallback],
-        }],
+        PreToolUse: [
+          {
+            matcher: '.*',
+            hooks: [this.preToolUseHook.bind(this) as HookCallback],
+          },
+        ],
       },
       stderr: (data: string) => {
         console.error('[sdk-claude-process:stderr]', data.trimEnd());
@@ -116,16 +119,18 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     if (this.options.mcpServers) {
       sdkOptions.mcpServers = this.options.mcpServers;
       // Auto-allow all tools from MCP servers
-      const mcpWildcards = Object.keys(this.options.mcpServers).map(
-        (name) => `mcp__${name}__*`
-      );
-      sdkOptions.allowedTools = [
-        ...(sdkOptions.allowedTools || []),
-        ...mcpWildcards,
-      ];
+      const mcpWildcards = Object.keys(this.options.mcpServers).map((name) => `mcp__${name}__*`);
+      sdkOptions.allowedTools = [...(sdkOptions.allowedTools || []), ...mcpWildcards];
     }
 
-    console.log('[sdk-claude-process] Starting query with executable:', sdkOptions.executable, 'model:', sdkOptions.model, 'cwd:', sdkOptions.cwd);
+    console.log(
+      '[sdk-claude-process] Starting query with executable:',
+      sdkOptions.executable,
+      'model:',
+      sdkOptions.model,
+      'cwd:',
+      sdkOptions.cwd,
+    );
     const gen = query({ prompt: promptInput, options: sdkOptions });
     this.activeQuery = gen;
 
@@ -162,9 +167,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   }
 
   private async *createStreamingPrompt(): AsyncGenerator<any, void, unknown> {
-    const content: any[] = [
-      { type: 'text', text: this.options.prompt },
-    ];
+    const content: any[] = [{ type: 'text', text: this.options.prompt }];
     if (this.options.images?.length) {
       content.push(...this.options.images);
     }

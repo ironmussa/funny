@@ -10,7 +10,7 @@
  *   Phase 3 (FINAL):    Platform cleanup (Windows tree kill) + process.exit
  */
 
-import { log } from '../lib/abbacchio.js';
+import { log } from '../lib/logger.js';
 
 export const ShutdownPhase = {
   SERVER: 0,

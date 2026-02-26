@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { EventBus } from '../infrastructure/event-bus.js';
-import { join } from 'path';
 import { mkdirSync, rmSync, existsSync } from 'fs';
+import { join } from 'path';
+
 import type { PipelineEvent } from '../core/types.js';
+import { EventBus } from '../infrastructure/event-bus.js';
 
 const TEST_DIR = join(import.meta.dir, '..', '..', '.test-tmp-event-bus');
 
@@ -173,10 +174,12 @@ describe('EventBus', () => {
   it('preserves event data fields in persisted events', async () => {
     const bus = new EventBus(TEST_DIR);
 
-    await bus.publish(makeEvent({
-      request_id: 'req-data',
-      data: { branch: 'feature/auth', filesChanged: 5, status: 'implementing' },
-    }));
+    await bus.publish(
+      makeEvent({
+        request_id: 'req-data',
+        data: { branch: 'feature/auth', filesChanged: 5, status: 'implementing' },
+      }),
+    );
 
     const events = await bus.getEvents('req-data');
     expect(events.length).toBe(1);

@@ -1,5 +1,6 @@
 import type { ErrorHandler } from 'hono';
-import { log } from '../lib/abbacchio.js';
+
+import { log } from '../lib/logger.js';
 
 /**
  * Hono global error handler — safety net for unexpected errors.
@@ -12,7 +13,11 @@ export const handleError: ErrorHandler = (err, c) => {
 
   // ProcessExecutionError — git / CLI command failures that escaped Result handling
   if (e?.name === 'ProcessExecutionError') {
-    log.error('Process execution error', { namespace: 'error-handler', command: e.command, stderr: e.stderr });
+    log.error('Process execution error', {
+      namespace: 'error-handler',
+      command: e.command,
+      stderr: e.stderr,
+    });
     // Return a generic message; full details logged server-side only
     return c.json({ error: 'Command execution failed' }, 400);
   }

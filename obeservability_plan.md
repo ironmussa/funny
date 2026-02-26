@@ -3,6 +3,7 @@
 ## Goal
 
 Create a new `packages/observability` package that provides:
+
 1. **App instrumentation** — Hono middleware that auto-captures HTTP metrics and traces via OpenTelemetry
 2. **Local observability stack** — Docker Compose with Vector + Victoria Metrics/Logs/Traces
 
@@ -55,6 +56,7 @@ packages/observability/
 For every HTTP request:
 
 ### Metrics (→ Vector → Victoria Metrics)
+
 - `http.server.request.duration` — Histogram of request duration in ms
 - `http.server.request.total` — Counter of total requests
 - `http.server.active_requests` — UpDownCounter of in-flight requests
@@ -62,6 +64,7 @@ For every HTTP request:
 Labels: `http.method`, `http.route`, `http.status_code`
 
 ### Traces (→ Vector → Victoria Traces)
+
 - One span per HTTP request with:
   - `http.method`, `http.route`, `http.status_code`, `http.url`
   - Duration automatically recorded
@@ -72,21 +75,21 @@ Labels: `http.method`, `http.route`, `http.status_code`
 
 ```yaml
 services:
-  vector:          # OTLP receiver + fan-out
+  vector: # OTLP receiver + fan-out
     image: timberio/vector:latest-alpine
-    ports: ["4318:4318"]
+    ports: ['4318:4318']
 
   victoria-metrics: # Time series DB (PromQL)
     image: victoriametrics/victoria-metrics:latest
-    ports: ["8428:8428"]
+    ports: ['8428:8428']
 
-  victoria-logs:    # Log storage (LogQL)
+  victoria-logs: # Log storage (LogQL)
     image: victoriametrics/victoria-logs:latest
-    ports: ["9428:9428"]
+    ports: ['9428:9428']
 
-  victoria-traces:  # Distributed tracing (TraceQL)
+  victoria-traces: # Distributed tracing (TraceQL)
     image: victoriametrics/victoria-traces:latest
-    ports: ["9411:9411"]
+    ports: ['9411:9411']
 ```
 
 ## Vector Config (vector.toml)
@@ -100,12 +103,12 @@ services:
 
 Via environment variables with sensible defaults:
 
-| Env Var | Default | Description |
-|---------|---------|-------------|
+| Env Var                       | Default                 | Description                 |
+| ----------------------------- | ----------------------- | --------------------------- |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | OTLP HTTP endpoint (Vector) |
-| `OTEL_SERVICE_NAME` | `funny-server` | Service name in telemetry |
-| `OTEL_ENABLED` | `true` | Kill switch for telemetry |
-| `OTEL_EXPORT_INTERVAL_MS` | `10000` | Metrics export interval |
+| `OTEL_SERVICE_NAME`           | `funny-server`          | Service name in telemetry   |
+| `OTEL_ENABLED`                | `true`                  | Kill switch for telemetry   |
+| `OTEL_EXPORT_INTERVAL_MS`     | `10000`                 | Metrics export interval     |
 
 ## Integration with Server
 

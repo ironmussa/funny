@@ -1,10 +1,11 @@
+import type { UserProfile } from '@funny/shared';
 import { useState, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { api } from '@/lib/api';
+import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { toast } from 'sonner';
-import type { UserProfile } from '@funny/shared';
+import { api } from '@/lib/api';
 
 export function ProfileSettings() {
   const { t } = useTranslation();
@@ -67,13 +68,13 @@ export function ProfileSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2">
+        <h3 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t('profile.gitIdentity')}
         </h3>
-        <div className="rounded-lg border border-border/50 overflow-hidden">
-          <div className="px-4 py-3.5 border-b border-border/50">
+        <div className="overflow-hidden rounded-lg border border-border/50">
+          <div className="border-b border-border/50 px-4 py-3.5">
             <label className="text-sm font-medium text-foreground">{t('profile.gitName')}</label>
-            <p className="text-xs text-muted-foreground mt-0.5 mb-2">{t('profile.gitNameDesc')}</p>
+            <p className="mb-2 mt-0.5 text-xs text-muted-foreground">{t('profile.gitNameDesc')}</p>
             <Input
               value={gitName}
               onChange={(e) => setGitName(e.target.value)}
@@ -82,7 +83,7 @@ export function ProfileSettings() {
           </div>
           <div className="px-4 py-3.5">
             <label className="text-sm font-medium text-foreground">{t('profile.gitEmail')}</label>
-            <p className="text-xs text-muted-foreground mt-0.5 mb-2">{t('profile.gitEmailDesc')}</p>
+            <p className="mb-2 mt-0.5 text-xs text-muted-foreground">{t('profile.gitEmailDesc')}</p>
             <Input
               type="email"
               value={gitEmail}
@@ -94,25 +95,31 @@ export function ProfileSettings() {
       </div>
 
       <div>
-        <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2">
+        <h3 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
           {t('profile.githubToken')}
         </h3>
-        <div className="rounded-lg border border-border/50 overflow-hidden">
+        <div className="overflow-hidden rounded-lg border border-border/50">
           <div className="px-4 py-3.5">
-            <label className="text-sm font-medium text-foreground">{t('profile.githubTokenLabel')}</label>
-            <p className="text-xs text-muted-foreground mt-0.5 mb-2">{t('profile.githubTokenDesc')}</p>
+            <label className="text-sm font-medium text-foreground">
+              {t('profile.githubTokenLabel')}
+            </label>
+            <p className="mb-2 mt-0.5 text-xs text-muted-foreground">
+              {t('profile.githubTokenDesc')}
+            </p>
             <div className="flex items-center gap-2">
               <Input
                 type="password"
                 value={githubToken}
                 onChange={(e) => setGithubToken(e.target.value)}
-                placeholder={hasGithubToken ? t('profile.tokenSaved') : t('profile.tokenPlaceholder')}
+                placeholder={
+                  hasGithubToken ? t('profile.tokenSaved') : t('profile.tokenPlaceholder')
+                }
               />
               {hasGithubToken && (
                 <Button
                   variant="ghost"
                   size="sm"
-                  className="text-xs text-destructive hover:text-destructive shrink-0"
+                  className="shrink-0 text-xs text-destructive hover:text-destructive"
                   onClick={handleClearToken}
                   disabled={saving}
                 >

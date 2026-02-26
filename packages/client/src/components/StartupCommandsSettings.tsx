@@ -1,23 +1,20 @@
+import type { StartupCommand } from '@funny/shared';
+import { Play, Plus, Pencil, Trash2, X, Check, Square, Loader2, Terminal } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { useAppStore } from '@/stores/app-store';
-import { useTerminalStore } from '@/stores/terminal-store';
-import { api } from '@/lib/api';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { Play, Plus, Pencil, Trash2, X, Check, Square, Loader2, Terminal } from 'lucide-react';
-import type { StartupCommand } from '@funny/shared';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { api } from '@/lib/api';
+import { useAppStore } from '@/stores/app-store';
+import { useTerminalStore } from '@/stores/terminal-store';
 
 export function StartupCommandsSettings() {
   const { t } = useTranslation();
-  const selectedProjectId = useAppStore(s => s.selectedProjectId);
-  const projects = useAppStore(s => s.projects);
+  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const projects = useAppStore((s) => s.projects);
   const [commands, setCommands] = useState<StartupCommand[]>([]);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -160,7 +157,7 @@ export function StartupCommandsSettings() {
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-xs gap-1.5"
+          className="h-7 gap-1.5 text-xs"
           onClick={() => {
             cancelEdit();
             setAdding(true);
@@ -173,14 +170,9 @@ export function StartupCommandsSettings() {
 
       {/* Command list */}
       {commands.length === 0 && !adding && (
-        <div className="text-center py-8">
-          <p className="text-sm text-muted-foreground mb-3">{t('startup.noCommands')}</p>
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => setAdding(true)}
-          >
+        <div className="py-8 text-center">
+          <p className="mb-3 text-sm text-muted-foreground">{t('startup.noCommands')}</p>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
             <Plus className="h-3.5 w-3.5" />
             {t('startup.addFirst')}
           </Button>
@@ -192,10 +184,12 @@ export function StartupCommandsSettings() {
 
         if (editingId === cmd.id) {
           return (
-            <div key={cmd.id} className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+            <div key={cmd.id} className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
               <div className="grid grid-cols-4 gap-2">
                 <div>
-                  <label className="text-xs text-muted-foreground block mb-1">{t('startup.label')}</label>
+                  <label className="mb-1 block text-xs text-muted-foreground">
+                    {t('startup.label')}
+                  </label>
                   <Input
                     className="h-auto py-1.5"
                     placeholder={t('startup.label')}
@@ -205,7 +199,9 @@ export function StartupCommandsSettings() {
                   />
                 </div>
                 <div className="col-span-3">
-                  <label className="text-xs text-muted-foreground block mb-1">{t('startup.command')}</label>
+                  <label className="mb-1 block text-xs text-muted-foreground">
+                    {t('startup.command')}
+                  </label>
                   <Input
                     className="h-auto py-1.5 font-mono"
                     placeholder={t('startup.command')}
@@ -218,13 +214,13 @@ export function StartupCommandsSettings() {
                   />
                 </div>
               </div>
-              <div className="flex items-center gap-2 justify-end pt-1">
+              <div className="flex items-center justify-end gap-2 pt-1">
                 <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={cancelEdit}>
-                  <X className="h-3.5 w-3.5 mr-1" />
+                  <X className="mr-1 h-3.5 w-3.5" />
                   {t('common.cancel')}
                 </Button>
                 <Button size="sm" className="h-7 text-xs" onClick={() => handleUpdate(cmd.id)}>
-                  <Check className="h-3.5 w-3.5 mr-1" />
+                  <Check className="mr-1 h-3.5 w-3.5" />
                   {t('common.save')}
                 </Button>
               </div>
@@ -235,20 +231,22 @@ export function StartupCommandsSettings() {
         return (
           <div
             key={cmd.id}
-            className="group flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border border-border/50 bg-card hover:bg-accent/30 transition-colors"
+            className="group flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-card px-3 py-2.5 transition-colors hover:bg-accent/30"
           >
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 {isRunning && (
-                  <Loader2 className="h-3.5 w-3.5 animate-spin text-status-success flex-shrink-0" />
+                  <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-status-success" />
                 )}
-                <span className="text-sm font-medium truncate">{cmd.label}</span>
+                <span className="truncate text-sm font-medium">{cmd.label}</span>
               </div>
-              <span className="text-xs text-muted-foreground font-mono truncate block mt-0.5">{cmd.command}</span>
+              <span className="mt-0.5 block truncate font-mono text-xs text-muted-foreground">
+                {cmd.command}
+              </span>
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+            <div className="flex flex-shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
               {isRunning ? (
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -311,10 +309,12 @@ export function StartupCommandsSettings() {
 
       {/* Add form */}
       {adding && (
-        <div className="rounded-lg border border-border bg-muted/30 p-3 space-y-2">
+        <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
           <div className="grid grid-cols-4 gap-2">
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">{t('startup.label')}</label>
+              <label className="mb-1 block text-xs text-muted-foreground">
+                {t('startup.label')}
+              </label>
               <Input
                 className="h-auto py-1.5"
                 placeholder={t('startup.label')}
@@ -324,7 +324,9 @@ export function StartupCommandsSettings() {
               />
             </div>
             <div className="col-span-3">
-              <label className="text-xs text-muted-foreground block mb-1">{t('startup.command')}</label>
+              <label className="mb-1 block text-xs text-muted-foreground">
+                {t('startup.command')}
+              </label>
               <Input
                 className="h-auto py-1.5 font-mono"
                 placeholder={t('startup.commandPlaceholder')}
@@ -337,13 +339,13 @@ export function StartupCommandsSettings() {
               />
             </div>
           </div>
-          <div className="flex items-center gap-2 justify-end pt-1">
+          <div className="flex items-center justify-end gap-2 pt-1">
             <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={cancelEdit}>
-              <X className="h-3.5 w-3.5 mr-1" />
+              <X className="mr-1 h-3.5 w-3.5" />
               {t('common.cancel')}
             </Button>
             <Button size="sm" className="h-7 text-xs" onClick={handleAdd}>
-              <Check className="h-3.5 w-3.5 mr-1" />
+              <Check className="mr-1 h-3.5 w-3.5" />
               {t('startup.addCommand')}
             </Button>
           </div>

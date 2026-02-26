@@ -1,34 +1,46 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useProjectStore } from '@/stores/project-store';
-import { useUIStore } from '@/stores/ui-store';
-import { useThreadStore } from '@/stores/thread-store';
-import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
-import { api } from '@/lib/api';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+
+import { api } from '@/lib/api';
+import { useProjectStore } from '@/stores/project-store';
+import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
+import { useThreadStore } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
+
 import { PromptInput } from '../PromptInput';
 
 export function NewThreadInput() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const newThreadProjectId = useUIStore(s => s.newThreadProjectId);
-  const selectedProjectId = useProjectStore(s => s.selectedProjectId);
+  const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const effectiveProjectId = newThreadProjectId || selectedProjectId;
-  const newThreadIdleOnly = useUIStore(s => s.newThreadIdleOnly);
-  const cancelNewThread = useUIStore(s => s.cancelNewThread);
-  const loadThreadsForProject = useThreadStore(s => s.loadThreadsForProject);
-  const projects = useProjectStore(s => s.projects);
-  const project = effectiveProjectId ? projects.find(p => p.id === effectiveProjectId) : undefined;
+  const newThreadIdleOnly = useUIStore((s) => s.newThreadIdleOnly);
+  const cancelNewThread = useUIStore((s) => s.cancelNewThread);
+  const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
+  const projects = useProjectStore((s) => s.projects);
+  const project = effectiveProjectId
+    ? projects.find((p) => p.id === effectiveProjectId)
+    : undefined;
   const defaultThreadMode = project?.defaultMode ?? 'worktree';
-  const toolPermissions = useSettingsStore(s => s.toolPermissions);
+  const toolPermissions = useSettingsStore((s) => s.toolPermissions);
 
   const [creating, setCreating] = useState(false);
 
   const handleCreate = async (
     prompt: string,
-    opts: { provider?: string; model: string; mode: string; threadMode?: string; baseBranch?: string; sendToBacklog?: boolean; fileReferences?: { path: string }[] },
-    images?: any[]
+    opts: {
+      provider?: string;
+      model: string;
+      mode: string;
+      threadMode?: string;
+      baseBranch?: string;
+      sendToBacklog?: boolean;
+      fileReferences?: { path: string }[];
+    },
+    images?: any[],
   ): Promise<boolean> => {
     if (!effectiveProjectId || creating) return false;
     setCreating(true);
@@ -91,7 +103,7 @@ export function NewThreadInput() {
   };
 
   return (
-    <div className="flex-1 flex items-center justify-center text-muted-foreground px-4">
+    <div className="flex flex-1 items-center justify-center px-4 text-muted-foreground">
       <div className="w-full max-w-3xl">
         <PromptInput
           key={effectiveProjectId}

@@ -66,12 +66,12 @@ ci_running → ci_passed → review → merged
 
 The **Watchdog** listens for events and takes automatic action:
 
-| Event | Default Action | Behavior |
-|---|---|---|
-| CI failed | `respawn_agent` | Agent reads failure logs, fixes code, pushes (up to 3 retries) |
-| Changes requested | `respawn_agent` | Agent reads review comments, applies fixes (up to 2 retries) |
-| Approved + CI green | `notify` | Sends notification (or `auto_merge` if configured) |
-| Agent stuck | `escalate` | Escalates after 15 min of inactivity |
+| Event               | Default Action  | Behavior                                                       |
+| ------------------- | --------------- | -------------------------------------------------------------- |
+| CI failed           | `respawn_agent` | Agent reads failure logs, fixes code, pushes (up to 3 retries) |
+| Changes requested   | `respawn_agent` | Agent reads review comments, applies fixes (up to 2 retries)   |
+| Approved + CI green | `notify`        | Sends notification (or `auto_merge` if configured)             |
+| Agent stuck         | `escalate`      | Escalates after 15 min of inactivity                           |
 
 All reactions are config-driven — no hardcoded behavior.
 
@@ -95,13 +95,13 @@ bun src/server.ts
 
 ### Environment Variables
 
-| Variable | Default | Description |
-|---|---|---|
-| `PORT` | `3002` | HTTP server port |
-| `PROJECT_PATH` | `process.cwd()` | Root of the git repo to operate on |
-| `HATCHET_CLIENT_TOKEN` | — | Hatchet API token (enables durable workflows) |
-| `INGEST_WEBHOOK_URL` | `http://localhost:3001/api/ingest/webhook` | Where to forward events for UI visibility |
-| `INGEST_WEBHOOK_SECRET` | — | Shared secret for webhook authentication |
+| Variable                | Default                                    | Description                                   |
+| ----------------------- | ------------------------------------------ | --------------------------------------------- |
+| `PORT`                  | `3002`                                     | HTTP server port                              |
+| `PROJECT_PATH`          | `process.cwd()`                            | Root of the git repo to operate on            |
+| `HATCHET_CLIENT_TOKEN`  | —                                          | Hatchet API token (enables durable workflows) |
+| `INGEST_WEBHOOK_URL`    | `http://localhost:3001/api/ingest/webhook` | Where to forward events for UI visibility     |
+| `INGEST_WEBHOOK_SECRET` | —                                          | Shared secret for webhook authentication      |
 
 Bun reads `.env` automatically — no `dotenv` needed.
 
@@ -114,46 +114,46 @@ The service reads `.pipeline/config.yaml` from the project root. If the file doe
 ```yaml
 # ── Issue Tracker ──────────────────────────────────────────────
 tracker:
-  type: github                    # github | linear (linear coming soon)
-  repo: owner/repo                # auto-detected from git remote if not set
-  labels: [agent-ready]           # only pick issues with this label
+  type: github # github | linear (linear coming soon)
+  repo: owner/repo # auto-detected from git remote if not set
+  labels: [agent-ready] # only pick issues with this label
   exclude_labels: [wontfix, blocked]
-  max_parallel: 5                 # max concurrent sessions
+  max_parallel: 5 # max concurrent sessions
 
 # ── Orchestrator Agent ─────────────────────────────────────────
 orchestrator:
   model: claude-sonnet-4-5-20250929
   provider: funny-api-acp
-  auto_decompose: true            # split complex issues into sub-tasks
-  plan_approval: false            # require human approval before implementing
+  auto_decompose: true # split complex issues into sub-tasks
+  plan_approval: false # require human approval before implementing
   max_planning_turns: 30
   max_implementing_turns: 200
 
 # ── Sessions ───────────────────────────────────────────────────
 sessions:
-  max_retries_ci: 3               # CI fix attempts before escalating
-  max_retries_review: 2           # review feedback cycles before escalating
-  escalate_after_min: 30          # escalate stuck sessions after N minutes
-  auto_merge: false               # auto-merge when approved + CI green
+  max_retries_ci: 3 # CI fix attempts before escalating
+  max_retries_review: 2 # review feedback cycles before escalating
+  escalate_after_min: 30 # escalate stuck sessions after N minutes
+  auto_merge: false # auto-merge when approved + CI green
 
 # ── Reactions ──────────────────────────────────────────────────
 reactions:
   ci_failed:
-    action: respawn_agent         # respawn_agent | notify | escalate
-    prompt: "CI failed on this PR. Read the failure logs and fix the issues."
+    action: respawn_agent # respawn_agent | notify | escalate
+    prompt: 'CI failed on this PR. Read the failure logs and fix the issues.'
     max_retries: 3
   changes_requested:
     action: respawn_agent
-    prompt: "Review comments have been posted. Address each comment."
+    prompt: 'Review comments have been posted. Address each comment.'
     max_retries: 2
     escalate_after_min: 30
   approved_and_green:
-    action: notify                # notify | auto_merge
-    message: "PR approved and CI green — ready to merge"
+    action: notify # notify | auto_merge
+    message: 'PR approved and CI green — ready to merge'
   agent_stuck:
     action: escalate
     after_min: 15
-    message: "Session stuck — needs human review"
+    message: 'Session stuck — needs human review'
 
 # ── Quality Pipeline (existing) ────────────────────────────────
 tiers:
@@ -167,15 +167,15 @@ tiers:
     agents: [tests, security, architecture, style, types]
 
 branch:
-  pipeline_prefix: "pipeline/"
-  integration_prefix: "integration/"
+  pipeline_prefix: 'pipeline/'
+  integration_prefix: 'integration/'
   main: main
 
 auto_correction:
   max_attempts: 2
 
 director:
-  schedule_interval_ms: 0         # 0 = disabled
+  schedule_interval_ms: 0 # 0 = disabled
   auto_trigger_delay_ms: 500
 
 cleanup:
@@ -185,7 +185,7 @@ cleanup:
 adapters:
   webhooks:
     - url: https://example.com/webhook
-      secret: "${WEBHOOK_SECRET}"
+      secret: '${WEBHOOK_SECRET}'
       events: [pipeline.completed, pipeline.failed]
 
 logging:
@@ -198,23 +198,23 @@ The server runs on `http://localhost:3002` by default. The primary entrypoint is
 
 ### Health
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/health` | Returns `{ status: "ok" }` |
+| Method | Path      | Description                |
+| ------ | --------- | -------------------------- |
+| GET    | `/health` | Returns `{ status: "ok" }` |
 
 ### Sessions — Primary API
 
 These are the endpoints you'll use to process issues autonomously. Each session takes an issue from your backlog and drives it to a merged PR.
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/sessions` | List all sessions (filter with `?status=implementing`) |
-| GET | `/sessions/:id` | Session detail with full event log |
-| POST | `/sessions/start` | Start a session for a single issue |
-| POST | `/sessions/batch` | Process multiple issues from backlog (requires Hatchet) |
-| POST | `/sessions/:id/escalate` | Manually escalate a stuck session |
-| POST | `/sessions/:id/cancel` | Cancel a session |
-| DELETE | `/sessions/:id` | Remove a session record |
+| Method | Path                     | Description                                             |
+| ------ | ------------------------ | ------------------------------------------------------- |
+| GET    | `/sessions`              | List all sessions (filter with `?status=implementing`)  |
+| GET    | `/sessions/:id`          | Session detail with full event log                      |
+| POST   | `/sessions/start`        | Start a session for a single issue                      |
+| POST   | `/sessions/batch`        | Process multiple issues from backlog (requires Hatchet) |
+| POST   | `/sessions/:id/escalate` | Manually escalate a stuck session                       |
+| POST   | `/sessions/:id/cancel`   | Cancel a session                                        |
+| DELETE | `/sessions/:id`          | Remove a session record                                 |
 
 #### POST /sessions/start
 
@@ -264,11 +264,12 @@ Scans the backlog, prioritizes issues, and spawns parallel sessions (up to `maxP
 
 Configure GitHub webhooks to point here for automatic CI/review reactions on sessions.
 
-| Method | Path | Description |
-|---|---|---|
-| POST | `/webhooks/github` | Receive GitHub webhook events |
+| Method | Path               | Description                   |
+| ------ | ------------------ | ----------------------------- |
+| POST   | `/webhooks/github` | Receive GitHub webhook events |
 
 Supported GitHub events:
+
 - **`check_suite`** (success/failure) — Triggers session reactions (auto-fix CI failures)
 - **`pull_request_review`** (changes_requested) — Triggers session reactions (auto-apply review feedback)
 - **`pull_request_review`** (approved) — Advances session to merged (or notifies for manual merge)
@@ -276,11 +277,11 @@ Supported GitHub events:
 
 ### Logs
 
-| Method | Path | Description |
-|---|---|---|
-| GET | `/logs/pipeline/:id` | Logs for a specific pipeline request |
-| GET | `/logs/system` | System-level logs |
-| GET | `/logs/requests` | List all request IDs with logs |
+| Method | Path                 | Description                          |
+| ------ | -------------------- | ------------------------------------ |
+| GET    | `/logs/pipeline/:id` | Logs for a specific pipeline request |
+| GET    | `/logs/system`       | System-level logs                    |
+| GET    | `/logs/requests`     | List all request IDs with logs       |
 
 ## GitHub Webhook Setup
 

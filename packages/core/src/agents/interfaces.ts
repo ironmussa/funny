@@ -4,6 +4,7 @@
  */
 
 import type { AgentProvider } from '@funny/shared';
+
 import type { CLIMessage, ClaudeProcessOptions } from './types.js';
 
 // ── Agent process (provider-agnostic) ───────────────────────────

@@ -1,7 +1,7 @@
 import React, { lazy, Suspense, useEffect, useSyncExternalStore } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
-import { AbbacchioProvider } from '@abbacchio/browser-transport/react';
+
 import { AppShellSkeleton } from './components/AppShellSkeleton';
 import { TooltipProvider } from './components/ui/tooltip';
 import { useAuthStore } from './stores/auth-store';
@@ -15,11 +15,17 @@ import './i18n/config';
 
 // Lazy-load conditional views to reduce initial bundle (~175KB savings)
 const App = lazy(() => import('./App').then((m) => ({ default: m.App })));
-const MobilePage = lazy(() => import('./components/MobilePage').then((m) => ({ default: m.MobilePage })));
-const LoginPage = lazy(() => import('./components/LoginPage').then((m) => ({ default: m.LoginPage })));
-const PreviewBrowser = lazy(() => import('./components/PreviewBrowser').then((m) => ({ default: m.PreviewBrowser })));
+const MobilePage = lazy(() =>
+  import('./components/MobilePage').then((m) => ({ default: m.MobilePage })),
+);
+const LoginPage = lazy(() =>
+  import('./components/LoginPage').then((m) => ({ default: m.LoginPage })),
+);
+const PreviewBrowser = lazy(() =>
+  import('./components/PreviewBrowser').then((m) => ({ default: m.PreviewBrowser })),
+);
 const SetupWizard = lazy(() =>
-  import('./components/SetupWizard').then((m) => ({ default: m.SetupWizard }))
+  import('./components/SetupWizard').then((m) => ({ default: m.SetupWizard })),
 );
 
 // The preview window sets this flag via Tauri's initialization_script
@@ -35,11 +41,7 @@ const getSnapshot = () => mobileQuery.matches;
 
 function ResponsiveShell() {
   const isMobile = useSyncExternalStore(subscribe, getSnapshot);
-  return (
-    <Suspense fallback={<AppShellSkeleton />}>
-      {isMobile ? <MobilePage /> : <App />}
-    </Suspense>
-  );
+  return <Suspense fallback={<AppShellSkeleton />}>{isMobile ? <MobilePage /> : <App />}</Suspense>;
 }
 
 function AuthGate() {
@@ -69,11 +71,13 @@ function AuthGate() {
   // Setup not completed -> show setup wizard
   if (!setupCompleted) {
     return (
-      <Suspense fallback={
-        <div className="flex min-h-screen items-center justify-center bg-background">
-          <div className="text-muted-foreground text-sm">Loading...</div>
-        </div>
-      }>
+      <Suspense
+        fallback={
+          <div className="flex min-h-screen items-center justify-center bg-background">
+            <div className="text-sm text-muted-foreground">Loading...</div>
+          </div>
+        }
+      >
         <SetupWizard />
       </Suspense>
     );
@@ -87,23 +91,16 @@ function AuthGate() {
   );
 }
 
-const abbacchioUrl = import.meta.env.VITE_ABBACCHIO_URL || 'http://localhost:4000/api/logs';
-const abbacchioChannel = import.meta.env.VITE_ABBACCHIO_CHANNEL || 'funny-client';
-
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <AbbacchioProvider
-      url={abbacchioUrl}
-      channel={abbacchioChannel}
-      captureConsole
-    >
-      <TooltipProvider delayDuration={300} skipDelayDuration={0}>
-        {isPreviewWindow ? (
-          <Suspense fallback={null}><PreviewBrowser /></Suspense>
-        ) : (
-          <AuthGate />
-        )}
-      </TooltipProvider>
-    </AbbacchioProvider>
-  </React.StrictMode>
+    <TooltipProvider delayDuration={300} skipDelayDuration={0}>
+      {isPreviewWindow ? (
+        <Suspense fallback={null}>
+          <PreviewBrowser />
+        </Suspense>
+      ) : (
+        <AuthGate />
+      )}
+    </TooltipProvider>
+  </React.StrictMode>,
 );

@@ -6,11 +6,13 @@
  */
 
 import { randomBytes, createHash } from 'crypto';
-import { db, schema } from '../db/index.js';
+
 import { eq, and } from 'drizzle-orm';
-import { addMcpServer, removeMcpServer } from './mcp-service.js';
+
+import { db, schema } from '../db/index.js';
 import { encrypt } from '../lib/crypto.js';
-import { log } from '../lib/abbacchio.js';
+import { log } from '../lib/logger.js';
+import { addMcpServer, removeMcpServer } from './mcp-service.js';
 
 // ── Types ─────────────────────────────────────────────────────
 
@@ -70,10 +72,14 @@ const stateCleanupTimer = setInterval(() => {
 
 // ── Self-register with ShutdownManager ──────────────────────
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
-shutdownManager.register('mcp-oauth-timer', () => {
-  clearInterval(stateCleanupTimer);
-  pendingStates.clear();
-}, ShutdownPhase.SERVICES);
+shutdownManager.register(
+  'mcp-oauth-timer',
+  () => {
+    clearInterval(stateCleanupTimer);
+    pendingStates.clear();
+  },
+  ShutdownPhase.SERVICES,
+);
 
 // ── PKCE utilities ────────────────────────────────────────────
 

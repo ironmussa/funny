@@ -73,26 +73,26 @@ Clients must then include the header `Authorization: Bearer my-secret-key`.
 
 ## API Endpoints
 
-| Method | Path                      | Description                          |
-| ------ | ------------------------- | ------------------------------------ |
-| GET    | `/`                       | Health check                         |
-| GET    | `/v1/models`              | List available models                |
-| POST   | `/v1/runs`                | Create a run (start agent query)     |
-| GET    | `/v1/runs/:id`            | Get run status                       |
-| POST   | `/v1/runs/:id/cancel`     | Cancel an in-flight run              |
+| Method | Path                  | Description                      |
+| ------ | --------------------- | -------------------------------- |
+| GET    | `/`                   | Health check                     |
+| GET    | `/v1/models`          | List available models            |
+| POST   | `/v1/runs`            | Create a run (start agent query) |
+| GET    | `/v1/runs/:id`        | Get run status                   |
+| POST   | `/v1/runs/:id/cancel` | Cancel an in-flight run          |
 
 ### POST `/v1/runs`
 
 **Request body:**
 
-| Field           | Type       | Required | Description                     |
-| --------------- | ---------- | -------- | ------------------------------- |
-| `model`         | `string`   | Yes      | Model ID or alias               |
-| `prompt`        | `string`   | Yes      | User prompt                     |
-| `system_prompt` | `string`   | No       | System prompt                   |
-| `tools`         | `array`    | No       | Tool definitions (function calling) |
-| `max_turns`     | `number`   | No       | Max agent turns                 |
-| `stream`        | `boolean`  | No       | Enable SSE streaming            |
+| Field           | Type      | Required | Description                         |
+| --------------- | --------- | -------- | ----------------------------------- |
+| `model`         | `string`  | Yes      | Model ID or alias                   |
+| `prompt`        | `string`  | Yes      | User prompt                         |
+| `system_prompt` | `string`  | No       | System prompt                       |
+| `tools`         | `array`   | No       | Tool definitions (function calling) |
+| `max_turns`     | `number`  | No       | Max agent turns                     |
+| `stream`        | `boolean` | No       | Enable SSE streaming                |
 
 **Non-streaming response:**
 
@@ -145,15 +145,15 @@ created → running → completed
 
 ### Claude (via Anthropic)
 
-| Alias              | Resolves to                    |
-| ------------------ | ------------------------------ |
-| `claude-sonnet`    | `claude-sonnet-4-5-20250929`   |
-| `claude-sonnet-4.5`| `claude-sonnet-4-5-20250929`   |
-| `claude-sonnet-4.6`| `claude-sonnet-4-6`            |
-| `claude-opus`      | `claude-opus-4-6`              |
-| `claude-opus-4.6`  | `claude-opus-4-6`              |
-| `claude-haiku`     | `claude-haiku-4-5-20251001`    |
-| `claude-haiku-4.5` | `claude-haiku-4-5-20251001`    |
+| Alias               | Resolves to                  |
+| ------------------- | ---------------------------- |
+| `claude-sonnet`     | `claude-sonnet-4-5-20250929` |
+| `claude-sonnet-4.5` | `claude-sonnet-4-5-20250929` |
+| `claude-sonnet-4.6` | `claude-sonnet-4-6`          |
+| `claude-opus`       | `claude-opus-4-6`            |
+| `claude-opus-4.6`   | `claude-opus-4-6`            |
+| `claude-haiku`      | `claude-haiku-4-5-20251001`  |
+| `claude-haiku-4.5`  | `claude-haiku-4-5-20251001`  |
 
 Full model IDs (e.g. `claude-sonnet-4-5-20250929`) are also accepted directly.
 

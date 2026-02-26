@@ -10,8 +10,9 @@
  */
 
 import { randomUUID } from 'crypto';
-import type { CLIMessage } from './types.js';
+
 import { BaseAgentProcess } from './base-process.js';
+import type { CLIMessage } from './types.js';
 
 // Lazy-loaded SDK types (avoid crash if not installed)
 type CodexSDK = typeof import('@openai/codex-sdk');
@@ -116,7 +117,6 @@ export class CodexProcess extends BaseAgentProcess {
         totalCost,
         result: lastResult || undefined,
       });
-
     } catch (err: any) {
       if (!this.isAborted) {
         this.emitResult({
@@ -179,16 +179,19 @@ export class CodexProcess extends BaseAgentProcess {
     // Function/tool call output
     if (item.type === 'function_call_output' || item.type === 'tool_result') {
       const toolUseId = item.call_id ?? item.tool_use_id ?? '';
-      const output = typeof item.output === 'string' ? item.output : JSON.stringify(item.output ?? '');
+      const output =
+        typeof item.output === 'string' ? item.output : JSON.stringify(item.output ?? '');
 
       return {
         type: 'user',
         message: {
-          content: [{
-            type: 'tool_result',
-            tool_use_id: toolUseId,
-            content: output,
-          }],
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: toolUseId,
+              content: output,
+            },
+          ],
         },
       };
     }

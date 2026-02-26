@@ -1,6 +1,7 @@
 import { describe, test, expect, beforeAll, afterAll } from 'bun:test';
-import { resolve } from 'path';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
+import { resolve } from 'path';
+
 import {
   extractRepoName,
   isGitRepo,

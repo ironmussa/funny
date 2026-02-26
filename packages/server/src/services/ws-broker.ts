@@ -1,6 +1,7 @@
-import type { ServerWebSocket } from 'bun';
 import type { WSEvent } from '@funny/shared';
-import { log } from '../lib/abbacchio.js';
+import type { ServerWebSocket } from 'bun';
+
+import { log } from '../lib/logger.js';
 
 class WSBroker {
   private clients = new Map<ServerWebSocket<unknown>, string>(); // ws → userId
@@ -36,7 +37,12 @@ class WSBroker {
     }
 
     if (sent === 0 && event.type === 'agent:result') {
-      log.warn('agent:result sent to 0 clients', { namespace: 'ws', threadId: event.threadId, userId, total: this.clients.size });
+      log.warn('agent:result sent to 0 clients', {
+        namespace: 'ws',
+        threadId: event.threadId,
+        userId,
+        total: this.clients.size,
+      });
     }
   }
 
@@ -60,7 +66,11 @@ class WSBroker {
     }
 
     if (sent === 0 && event.type === 'agent:result') {
-      log.warn('agent:result sent to 0 clients (broadcast)', { namespace: 'ws', threadId: event.threadId, total: this.clients.size });
+      log.warn('agent:result sent to 0 clients (broadcast)', {
+        namespace: 'ws',
+        threadId: event.threadId,
+        total: this.clients.size,
+      });
     }
   }
 

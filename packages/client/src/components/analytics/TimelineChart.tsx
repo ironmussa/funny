@@ -35,56 +35,92 @@ const TOOLTIP_CONTENT_STYLE: React.CSSProperties = {
   color: 'hsl(var(--foreground))',
 };
 
-export function TimelineChart({ created, completed, movedToPlanning, movedToReview, movedToDone, movedToArchived, groupBy = 'day' }: Props) {
+export function TimelineChart({
+  created,
+  completed,
+  movedToPlanning,
+  movedToReview,
+  movedToDone,
+  movedToArchived,
+  groupBy = 'day',
+}: Props) {
   const { t } = useTranslation();
 
   const chartData = useMemo(() => {
-    const dateMap = new Map<string, {
-      date: string;
-      created: number;
-      completed: number;
-      movedToPlanning: number;
-      movedToReview: number;
-      movedToDone: number;
-      movedToArchived: number;
-    }>();
+    const dateMap = new Map<
+      string,
+      {
+        date: string;
+        created: number;
+        completed: number;
+        movedToPlanning: number;
+        movedToReview: number;
+        movedToDone: number;
+        movedToArchived: number;
+      }
+    >();
 
-    const empty = { created: 0, completed: 0, movedToPlanning: 0, movedToReview: 0, movedToDone: 0, movedToArchived: 0 };
+    const empty = {
+      created: 0,
+      completed: 0,
+      movedToPlanning: 0,
+      movedToReview: 0,
+      movedToDone: 0,
+      movedToArchived: 0,
+    };
 
     for (const item of created) {
       const existing = dateMap.get(item.date);
-      if (existing) { existing.created = item.count; }
-      else { dateMap.set(item.date, { ...empty, date: item.date, created: item.count }); }
+      if (existing) {
+        existing.created = item.count;
+      } else {
+        dateMap.set(item.date, { ...empty, date: item.date, created: item.count });
+      }
     }
 
     for (const item of completed) {
       const existing = dateMap.get(item.date);
-      if (existing) { existing.completed = item.count; }
-      else { dateMap.set(item.date, { ...empty, date: item.date, completed: item.count }); }
+      if (existing) {
+        existing.completed = item.count;
+      } else {
+        dateMap.set(item.date, { ...empty, date: item.date, completed: item.count });
+      }
     }
 
     for (const item of movedToPlanning) {
       const existing = dateMap.get(item.date);
-      if (existing) { existing.movedToPlanning = item.count; }
-      else { dateMap.set(item.date, { ...empty, date: item.date, movedToPlanning: item.count }); }
+      if (existing) {
+        existing.movedToPlanning = item.count;
+      } else {
+        dateMap.set(item.date, { ...empty, date: item.date, movedToPlanning: item.count });
+      }
     }
 
     for (const item of movedToReview) {
       const existing = dateMap.get(item.date);
-      if (existing) { existing.movedToReview = item.count; }
-      else { dateMap.set(item.date, { ...empty, date: item.date, movedToReview: item.count }); }
+      if (existing) {
+        existing.movedToReview = item.count;
+      } else {
+        dateMap.set(item.date, { ...empty, date: item.date, movedToReview: item.count });
+      }
     }
 
     for (const item of movedToDone) {
       const existing = dateMap.get(item.date);
-      if (existing) { existing.movedToDone = item.count; }
-      else { dateMap.set(item.date, { ...empty, date: item.date, movedToDone: item.count }); }
+      if (existing) {
+        existing.movedToDone = item.count;
+      } else {
+        dateMap.set(item.date, { ...empty, date: item.date, movedToDone: item.count });
+      }
     }
 
     for (const item of movedToArchived) {
       const existing = dateMap.get(item.date);
-      if (existing) { existing.movedToArchived = item.count; }
-      else { dateMap.set(item.date, { ...empty, date: item.date, movedToArchived: item.count }); }
+      if (existing) {
+        existing.movedToArchived = item.count;
+      } else {
+        dateMap.set(item.date, { ...empty, date: item.date, movedToArchived: item.count });
+      }
     }
 
     return Array.from(dateMap.values()).sort((a, b) => a.date.localeCompare(b.date));
@@ -92,9 +128,7 @@ export function TimelineChart({ created, completed, movedToPlanning, movedToRevi
 
   if (chartData.length === 0) {
     return (
-      <div className="text-center text-muted-foreground py-8 text-sm">
-        {t('analytics.noData')}
-      </div>
+      <div className="py-8 text-center text-sm text-muted-foreground">{t('analytics.noData')}</div>
     );
   }
 
@@ -142,13 +176,8 @@ export function TimelineChart({ created, completed, movedToPlanning, movedToRevi
           axisLine={false}
           allowDecimals={false}
         />
-        <Tooltip
-          contentStyle={TOOLTIP_CONTENT_STYLE}
-          labelFormatter={formatDate}
-        />
-        <Legend
-          wrapperStyle={{ fontSize: '12px' }}
-        />
+        <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} labelFormatter={formatDate} />
+        <Legend wrapperStyle={{ fontSize: '12px' }} />
         <Bar
           dataKey="created"
           fill="#3b82f6"

@@ -1,7 +1,9 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
-import { resolve } from 'path';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
+import { resolve } from 'path';
+
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+
 import {
   git,
   isGitRepo,
@@ -287,7 +289,7 @@ describe('git operations', () => {
           isMergedIntoBase: true,
           linesAdded: 0,
           linesDeleted: 0,
-        })
+        }),
       ).toBe('merged');
     });
 
@@ -300,7 +302,7 @@ describe('git operations', () => {
           isMergedIntoBase: false,
           linesAdded: 10,
           linesDeleted: 5,
-        })
+        }),
       ).toBe('dirty');
     });
 
@@ -313,7 +315,7 @@ describe('git operations', () => {
           isMergedIntoBase: false,
           linesAdded: 0,
           linesDeleted: 0,
-        })
+        }),
       ).toBe('unpushed');
     });
 
@@ -326,7 +328,7 @@ describe('git operations', () => {
           isMergedIntoBase: false,
           linesAdded: 0,
           linesDeleted: 0,
-        })
+        }),
       ).toBe('pushed');
     });
 
@@ -339,7 +341,7 @@ describe('git operations', () => {
           isMergedIntoBase: false,
           linesAdded: 0,
           linesDeleted: 0,
-        })
+        }),
       ).toBe('clean');
     });
 
@@ -353,7 +355,7 @@ describe('git operations', () => {
           isMergedIntoBase: true,
           linesAdded: 10,
           linesDeleted: 5,
-        })
+        }),
       ).toBe('dirty');
 
       // unpushed takes priority over merged
@@ -365,7 +367,7 @@ describe('git operations', () => {
           isMergedIntoBase: true,
           linesAdded: 0,
           linesDeleted: 0,
-        })
+        }),
       ).toBe('unpushed');
 
       // dirty takes priority over unpushed
@@ -377,7 +379,7 @@ describe('git operations', () => {
           isMergedIntoBase: false,
           linesAdded: 5,
           linesDeleted: 0,
-        })
+        }),
       ).toBe('dirty');
     });
   });
@@ -624,7 +626,7 @@ describe('git operations', () => {
       const result = await getDiffSummary(repoPath, { excludePatterns: ['*.log'] });
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
-        const paths = result.value.files.map(f => f.path);
+        const paths = result.value.files.map((f) => f.path);
         expect(paths).toContain('keep.txt');
         expect(paths).not.toContain('skip.log');
       }

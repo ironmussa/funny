@@ -1,7 +1,5 @@
 import { describe, test, expect } from 'bun:test';
-import { Hono } from 'hono';
-import { ok, err } from 'neverthrow';
-import { resultToResponse } from '../../utils/result-response.js';
+
 import {
   notFound,
   badRequest,
@@ -11,6 +9,10 @@ import {
   conflict,
   internal,
 } from '@funny/shared/errors';
+import { Hono } from 'hono';
+import { ok, err } from 'neverthrow';
+
+import { resultToResponse } from '../../utils/result-response.js';
 
 describe('resultToResponse', () => {
   function createApp(handler: (c: any) => Response | Promise<Response>) {
@@ -22,9 +24,7 @@ describe('resultToResponse', () => {
   // ── Success responses ──────────────────────────────────────
 
   test('ok result returns 200 by default', async () => {
-    const app = createApp((c) =>
-      resultToResponse(c, ok({ id: '1', name: 'Test' }))
-    );
+    const app = createApp((c) => resultToResponse(c, ok({ id: '1', name: 'Test' })));
 
     const res = await app.request('/test');
     expect(res.status).toBe(200);
@@ -33,9 +33,7 @@ describe('resultToResponse', () => {
   });
 
   test('ok result returns custom success status (201)', async () => {
-    const app = createApp((c) =>
-      resultToResponse(c, ok({ created: true }), 201)
-    );
+    const app = createApp((c) => resultToResponse(c, ok({ created: true }), 201));
 
     const res = await app.request('/test');
     expect(res.status).toBe(201);
@@ -44,18 +42,14 @@ describe('resultToResponse', () => {
   });
 
   test('ok result returns custom success status (204)', async () => {
-    const app = createApp((c) =>
-      resultToResponse(c, ok(null), 204)
-    );
+    const app = createApp((c) => resultToResponse(c, ok(null), 204));
 
     const res = await app.request('/test');
     expect(res.status).toBe(204);
   });
 
   test('ok result with array value', async () => {
-    const app = createApp((c) =>
-      resultToResponse(c, ok([{ id: '1' }, { id: '2' }]))
-    );
+    const app = createApp((c) => resultToResponse(c, ok([{ id: '1' }, { id: '2' }])));
 
     const res = await app.request('/test');
     expect(res.status).toBe(200);
@@ -66,9 +60,7 @@ describe('resultToResponse', () => {
   // ── Error responses ────────────────────────────────────────
 
   test('err(notFound) returns 404', async () => {
-    const app = createApp((c) =>
-      resultToResponse(c, err(notFound('Project not found')))
-    );
+    const app = createApp((c) => resultToResponse(c, err(notFound('Project not found'))));
 
     const res = await app.request('/test');
     expect(res.status).toBe(404);
@@ -77,9 +69,7 @@ describe('resultToResponse', () => {
   });
 
   test('err(badRequest) returns 400', async () => {
-    const app = createApp((c) =>
-      resultToResponse(c, err(badRequest('Missing required field')))
-    );
+    const app = createApp((c) => resultToResponse(c, err(badRequest('Missing required field'))));
 
     const res = await app.request('/test');
     expect(res.status).toBe(400);
@@ -88,9 +78,7 @@ describe('resultToResponse', () => {
   });
 
   test('err(forbidden) returns 403', async () => {
-    const app = createApp((c) =>
-      resultToResponse(c, err(forbidden('Access denied')))
-    );
+    const app = createApp((c) => resultToResponse(c, err(forbidden('Access denied'))));
 
     const res = await app.request('/test');
     expect(res.status).toBe(403);
@@ -99,9 +87,7 @@ describe('resultToResponse', () => {
   });
 
   test('err(validationErr) returns 400', async () => {
-    const app = createApp((c) =>
-      resultToResponse(c, err(validationErr('name is required')))
-    );
+    const app = createApp((c) => resultToResponse(c, err(validationErr('name is required'))));
 
     const res = await app.request('/test');
     expect(res.status).toBe(400);
@@ -111,7 +97,7 @@ describe('resultToResponse', () => {
 
   test('err(processError) returns 400', async () => {
     const app = createApp((c) =>
-      resultToResponse(c, err(processError('git diff failed', 1, 'fatal error')))
+      resultToResponse(c, err(processError('git diff failed', 1, 'fatal error'))),
     );
 
     const res = await app.request('/test');
@@ -121,9 +107,7 @@ describe('resultToResponse', () => {
   });
 
   test('err(conflict) returns 409', async () => {
-    const app = createApp((c) =>
-      resultToResponse(c, err(conflict('Branch already exists')))
-    );
+    const app = createApp((c) => resultToResponse(c, err(conflict('Branch already exists'))));
 
     const res = await app.request('/test');
     expect(res.status).toBe(409);
@@ -132,9 +116,7 @@ describe('resultToResponse', () => {
   });
 
   test('err(internal) returns 500', async () => {
-    const app = createApp((c) =>
-      resultToResponse(c, err(internal('Unexpected database failure')))
-    );
+    const app = createApp((c) => resultToResponse(c, err(internal('Unexpected database failure'))));
 
     const res = await app.request('/test');
     expect(res.status).toBe(500);

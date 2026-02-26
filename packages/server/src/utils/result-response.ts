@@ -1,6 +1,6 @@
+import type { DomainError, DomainErrorType } from '@funny/shared/errors';
 import type { Context } from 'hono';
 import type { Result } from 'neverthrow';
-import type { DomainError, DomainErrorType } from '@funny/shared/errors';
 
 const STATUS_MAP: Record<DomainErrorType, number> = {
   NOT_FOUND: 404,

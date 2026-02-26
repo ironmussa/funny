@@ -1,17 +1,3 @@
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { useUIStore } from '@/stores/ui-store';
-import { useProjectStore } from '@/stores/project-store';
-import { Button } from '@/components/ui/button';
-import {
-  Sidebar,
-  SidebarContent,
-  SidebarHeader,
-  SidebarMenu,
-  SidebarMenuItem,
-  SidebarMenuButton,
-} from '@/components/ui/sidebar';
-import { useAuthStore } from '@/stores/auth-store';
 import {
   ArrowLeft,
   Settings,
@@ -24,6 +10,21 @@ import {
   Users,
   User,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+
+import { Button } from '@/components/ui/button';
+import {
+  Sidebar,
+  SidebarContent,
+  SidebarHeader,
+  SidebarMenu,
+  SidebarMenuItem,
+  SidebarMenuButton,
+} from '@/components/ui/sidebar';
+import { useAuthStore } from '@/stores/auth-store';
+import { useProjectStore } from '@/stores/project-store';
+import { useUIStore } from '@/stores/ui-store';
 
 const baseSettingsItems = [
   { id: 'general', label: 'General', icon: Settings },
@@ -53,11 +54,11 @@ export const settingsLabelKeys: Record<string, string> = {
 export function SettingsPanel() {
   const navigate = useNavigate();
   const { t } = useTranslation();
-  const setSettingsOpen = useUIStore(s => s.setSettingsOpen);
-  const activeSettingsPage = useUIStore(s => s.activeSettingsPage);
-  const selectedProjectId = useProjectStore(s => s.selectedProjectId);
-  const authMode = useAuthStore(s => s.mode);
-  const authUser = useAuthStore(s => s.user);
+  const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
+  const activeSettingsPage = useUIStore((s) => s.activeSettingsPage);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const authMode = useAuthStore((s) => s.mode);
+  const authUser = useAuthStore((s) => s.user);
 
   // Build items list dynamically
   // Hide "Archived Threads" when viewing per-project settings
@@ -70,9 +71,7 @@ export function SettingsPanel() {
   }
 
   const settingsPath = (pageId: string) =>
-    selectedProjectId
-      ? `/projects/${selectedProjectId}/settings/${pageId}`
-      : `/settings/${pageId}`;
+    selectedProjectId ? `/projects/${selectedProjectId}/settings/${pageId}` : `/settings/${pageId}`;
 
   return (
     <Sidebar collapsible="offcanvas">

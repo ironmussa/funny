@@ -6,6 +6,7 @@
  */
 
 import { EventEmitter } from 'events';
+
 import type { ThreadStage, ThreadStatus, AgentProvider, AgentModel } from '@funny/shared';
 
 // ── Event payloads ────────────────────────────────────────────────
@@ -99,10 +100,7 @@ export class ThreadEventBus extends EventEmitter {
     return super.emit(event, ...args);
   }
 
-  override on<K extends keyof ThreadEventMap>(
-    event: K,
-    listener: ThreadEventMap[K],
-  ): this {
+  override on<K extends keyof ThreadEventMap>(event: K, listener: ThreadEventMap[K]): this {
     return super.on(event, listener as (...args: any[]) => void);
   }
 }

@@ -1,4 +1,5 @@
 import { setup } from 'xstate';
+
 import type { ThreadStatus } from './types.js';
 
 /**
@@ -34,12 +35,12 @@ import type { ThreadStatus } from './types.js';
 // ── Types ─────────────────────────────────────────────────────────
 
 export type ResumeReason =
-  | 'fresh'              // First start, no session to resume
-  | 'waiting-response'   // User responded to question/plan/permission
-  | 'interrupted'        // Genuine resume after stop/fail/interrupt
-  | 'follow-up'          // New message sent after agent completed
-  | 'post-merge'         // Follow-up after worktree merge
-  | null;                // Unknown / not set
+  | 'fresh' // First start, no session to resume
+  | 'waiting-response' // User responded to question/plan/permission
+  | 'interrupted' // Genuine resume after stop/fail/interrupt
+  | 'follow-up' // New message sent after agent completed
+  | 'post-merge' // Follow-up after worktree merge
+  | null; // Unknown / not set
 
 export interface ThreadContext {
   threadId: string;
@@ -91,11 +92,21 @@ export const threadMachine = setup({
     clearResultInfo: ({ context }) => {
       context.resultInfo = undefined;
     },
-    setResumeFresh: ({ context }) => { context.resumeReason = 'fresh'; },
-    setResumeWaitingResponse: ({ context }) => { context.resumeReason = 'waiting-response'; },
-    setResumeInterrupted: ({ context }) => { context.resumeReason = 'interrupted'; },
-    setResumeFollowUp: ({ context }) => { context.resumeReason = 'follow-up'; },
-    clearResumeReason: ({ context }) => { context.resumeReason = null; },
+    setResumeFresh: ({ context }) => {
+      context.resumeReason = 'fresh';
+    },
+    setResumeWaitingResponse: ({ context }) => {
+      context.resumeReason = 'waiting-response';
+    },
+    setResumeInterrupted: ({ context }) => {
+      context.resumeReason = 'interrupted';
+    },
+    setResumeFollowUp: ({ context }) => {
+      context.resumeReason = 'follow-up';
+    },
+    clearResumeReason: ({ context }) => {
+      context.resumeReason = null;
+    },
   },
 }).createMachine({
   id: 'thread',
@@ -111,7 +122,11 @@ export const threadMachine = setup({
       on: {
         START: { target: 'running', actions: ['clearResultInfo', 'setResumeFresh'] },
         SET_STATUS: [
-          { target: 'running', guard: ({ event }) => event.status === 'running', actions: 'setResumeFresh' },
+          {
+            target: 'running',
+            guard: ({ event }) => event.status === 'running',
+            actions: 'setResumeFresh',
+          },
           { target: 'waiting', guard: ({ event }) => event.status === 'waiting' },
           { target: 'completed', guard: ({ event }) => event.status === 'completed' },
           { target: 'failed', guard: ({ event }) => event.status === 'failed' },
@@ -138,11 +153,31 @@ export const threadMachine = setup({
         STOP: { target: 'stopped', actions: 'clearResumeReason' },
         INTERRUPT: { target: 'interrupted', actions: 'clearResumeReason' },
         SET_STATUS: [
-          { target: 'completed', guard: ({ event }) => event.status === 'completed', actions: 'clearResumeReason' },
-          { target: 'failed', guard: ({ event }) => event.status === 'failed', actions: 'clearResumeReason' },
-          { target: 'stopped', guard: ({ event }) => event.status === 'stopped', actions: 'clearResumeReason' },
-          { target: 'interrupted', guard: ({ event }) => event.status === 'interrupted', actions: 'clearResumeReason' },
-          { target: 'waiting', guard: ({ event }) => event.status === 'waiting', actions: 'clearResumeReason' },
+          {
+            target: 'completed',
+            guard: ({ event }) => event.status === 'completed',
+            actions: 'clearResumeReason',
+          },
+          {
+            target: 'failed',
+            guard: ({ event }) => event.status === 'failed',
+            actions: 'clearResumeReason',
+          },
+          {
+            target: 'stopped',
+            guard: ({ event }) => event.status === 'stopped',
+            actions: 'clearResumeReason',
+          },
+          {
+            target: 'interrupted',
+            guard: ({ event }) => event.status === 'interrupted',
+            actions: 'clearResumeReason',
+          },
+          {
+            target: 'waiting',
+            guard: ({ event }) => event.status === 'waiting',
+            actions: 'clearResumeReason',
+          },
         ],
       },
     },
@@ -166,10 +201,26 @@ export const threadMachine = setup({
         },
         STOP: { target: 'stopped', actions: 'clearResumeReason' },
         SET_STATUS: [
-          { target: 'running', guard: ({ event }) => event.status === 'running', actions: 'setResumeWaitingResponse' },
-          { target: 'completed', guard: ({ event }) => event.status === 'completed', actions: 'clearResumeReason' },
-          { target: 'failed', guard: ({ event }) => event.status === 'failed', actions: 'clearResumeReason' },
-          { target: 'stopped', guard: ({ event }) => event.status === 'stopped', actions: 'clearResumeReason' },
+          {
+            target: 'running',
+            guard: ({ event }) => event.status === 'running',
+            actions: 'setResumeWaitingResponse',
+          },
+          {
+            target: 'completed',
+            guard: ({ event }) => event.status === 'completed',
+            actions: 'clearResumeReason',
+          },
+          {
+            target: 'failed',
+            guard: ({ event }) => event.status === 'failed',
+            actions: 'clearResumeReason',
+          },
+          {
+            target: 'stopped',
+            guard: ({ event }) => event.status === 'stopped',
+            actions: 'clearResumeReason',
+          },
         ],
       },
     },
@@ -181,7 +232,11 @@ export const threadMachine = setup({
         STOP: { target: 'stopped', actions: 'clearResultInfo' },
         INTERRUPT: { target: 'interrupted', actions: 'clearResultInfo' },
         SET_STATUS: [
-          { target: 'running', guard: ({ event }) => event.status === 'running', actions: ['clearResultInfo', 'setResumeFollowUp'] },
+          {
+            target: 'running',
+            guard: ({ event }) => event.status === 'running',
+            actions: ['clearResultInfo', 'setResumeFollowUp'],
+          },
           { target: 'stopped', guard: ({ event }) => event.status === 'stopped' },
           { target: 'interrupted', guard: ({ event }) => event.status === 'interrupted' },
         ],
@@ -192,7 +247,11 @@ export const threadMachine = setup({
         RESTART: { target: 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
         START: { target: 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
         SET_STATUS: [
-          { target: 'running', guard: ({ event }) => event.status === 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
+          {
+            target: 'running',
+            guard: ({ event }) => event.status === 'running',
+            actions: ['clearResultInfo', 'setResumeInterrupted'],
+          },
         ],
       },
     },
@@ -201,7 +260,11 @@ export const threadMachine = setup({
         RESTART: { target: 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
         START: { target: 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
         SET_STATUS: [
-          { target: 'running', guard: ({ event }) => event.status === 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
+          {
+            target: 'running',
+            guard: ({ event }) => event.status === 'running',
+            actions: ['clearResultInfo', 'setResumeInterrupted'],
+          },
         ],
       },
     },
@@ -210,7 +273,11 @@ export const threadMachine = setup({
         RESTART: { target: 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
         START: { target: 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
         SET_STATUS: [
-          { target: 'running', guard: ({ event }) => event.status === 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
+          {
+            target: 'running',
+            guard: ({ event }) => event.status === 'running',
+            actions: ['clearResultInfo', 'setResumeInterrupted'],
+          },
         ],
       },
     },
@@ -223,10 +290,7 @@ export const threadMachine = setup({
  * Map WebSocket event types to machine events.
  * Used by the client to translate incoming WS messages.
  */
-export function wsEventToMachineEvent(
-  wsEventType: string,
-  data: any
-): ThreadEvent | null {
+export function wsEventToMachineEvent(wsEventType: string, data: any): ThreadEvent | null {
   switch (wsEventType) {
     case 'agent:status':
       if (data.status === 'running') return { type: 'START' };
@@ -258,7 +322,10 @@ export function wsEventToMachineEvent(
  * Map a ResumeReason to the appropriate system prefix for Claude session resume.
  * Returns undefined when no prefix is needed (fresh start).
  */
-export function getResumeSystemPrefix(reason: ResumeReason, isPostMerge?: boolean): string | undefined {
+export function getResumeSystemPrefix(
+  reason: ResumeReason,
+  isPostMerge?: boolean,
+): string | undefined {
   if (isPostMerge) {
     return '[SYSTEM NOTE: This is a follow-up after your previous work was merged into the main branch. The worktree and feature branch have been cleaned up. You are now working in the main project directory. Your conversation history is preserved — continue naturally.]';
   }

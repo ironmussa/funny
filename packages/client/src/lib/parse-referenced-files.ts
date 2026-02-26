@@ -6,9 +6,7 @@ export function parseReferencedFiles(content: string): {
   files: string[];
   cleanContent: string;
 } {
-  const match = content.match(
-    /^\s*<referenced-files>\s*([\s\S]*?)\s*<\/referenced-files>\s*/
-  );
+  const match = content.match(/^\s*<referenced-files>\s*([\s\S]*?)\s*<\/referenced-files>\s*/);
   if (!match) return { files: [], cleanContent: content };
 
   const xmlBlock = match[0];

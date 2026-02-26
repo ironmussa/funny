@@ -6,6 +6,7 @@
  * triggers re-renders when the selector result changes (shallow equality check).
  */
 import { useSyncExternalStore, useRef, useCallback } from 'react';
+
 import { useProjectStore } from './project-store';
 import { useThreadStore } from './thread-store';
 import { useUIStore } from './ui-store';
@@ -25,9 +26,18 @@ let _storeVersion = 0;
 let _cachedVersion = -1;
 
 // Subscribe at module level to invalidate cache on any store change
-useProjectStore.subscribe(() => { _storeVersion++; _cachedCombined = null; });
-useThreadStore.subscribe(() => { _storeVersion++; _cachedCombined = null; });
-useUIStore.subscribe(() => { _storeVersion++; _cachedCombined = null; });
+useProjectStore.subscribe(() => {
+  _storeVersion++;
+  _cachedCombined = null;
+});
+useThreadStore.subscribe(() => {
+  _storeVersion++;
+  _cachedCombined = null;
+});
+useUIStore.subscribe(() => {
+  _storeVersion++;
+  _cachedCombined = null;
+});
 
 function getCombinedState(): CombinedState {
   if (_cachedCombined !== null && _cachedVersion === _storeVersion) {
@@ -47,7 +57,11 @@ function subscribeToCombined(onStoreChange: () => void): () => void {
   const unsub1 = useProjectStore.subscribe(onStoreChange);
   const unsub2 = useThreadStore.subscribe(onStoreChange);
   const unsub3 = useUIStore.subscribe(onStoreChange);
-  return () => { unsub1(); unsub2(); unsub3(); };
+  return () => {
+    unsub1();
+    unsub2();
+    unsub3();
+  };
 }
 
 /**
@@ -78,8 +92,39 @@ useAppStore.getState = getCombinedState;
 
 // setState support for tests
 useAppStore.setState = (partial: Partial<CombinedState>) => {
-  const projectKeys = ['projects', 'expandedProjects', 'selectedProjectId', 'initialized', 'loadProjects', 'toggleProject', 'selectProject', 'deleteProject', 'reorderProjects', 'renameProject'];
-  const threadKeys = ['threadsByProject', 'selectedThreadId', 'activeThread', 'loadThreadsForProject', 'selectThread', 'archiveThread', 'pinThread', 'deleteThread', 'appendOptimisticMessage', 'refreshActiveThread', 'refreshAllLoadedThreads', 'clearProjectThreads', 'handleWSInit', 'handleWSMessage', 'handleWSToolCall', 'handleWSToolOutput', 'handleWSStatus', 'handleWSResult', 'handleWSQueueUpdate'];
+  const projectKeys = [
+    'projects',
+    'expandedProjects',
+    'selectedProjectId',
+    'initialized',
+    'loadProjects',
+    'toggleProject',
+    'selectProject',
+    'deleteProject',
+    'reorderProjects',
+    'renameProject',
+  ];
+  const threadKeys = [
+    'threadsByProject',
+    'selectedThreadId',
+    'activeThread',
+    'loadThreadsForProject',
+    'selectThread',
+    'archiveThread',
+    'pinThread',
+    'deleteThread',
+    'appendOptimisticMessage',
+    'refreshActiveThread',
+    'refreshAllLoadedThreads',
+    'clearProjectThreads',
+    'handleWSInit',
+    'handleWSMessage',
+    'handleWSToolCall',
+    'handleWSToolOutput',
+    'handleWSStatus',
+    'handleWSResult',
+    'handleWSQueueUpdate',
+  ];
 
   const projectPartial: Record<string, any> = {};
   const threadPartial: Record<string, any> = {};

@@ -1,10 +1,11 @@
-import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import type { CLIMessage } from '@funny/core/agents';
-import type { WSEvent, ThreadStatus } from '@funny/shared';
-import type { AgentStateTracker } from './agent-state.js';
-import { threadEventBus } from './thread-event-bus.js';
 import { getStatusSummary, deriveGitSyncState } from '@funny/core/git';
-import { log } from '../lib/abbacchio.js';
+import type { WSEvent, ThreadStatus } from '@funny/shared';
+
+import { log } from '../lib/logger.js';
+import type { AgentStateTracker } from './agent-state.js';
+import type { IThreadManager, IWSBroker } from './server-interfaces.js';
+import { threadEventBus } from './thread-event-bus.js';
 import { transitionStatus } from './thread-status-machine.js';
 
 /**
@@ -13,16 +14,14 @@ import { transitionStatus } from './thread-status-machine.js';
  * escaped Unicode instead of raw UTF-8 characters.
  */
 function decodeUnicodeEscapes(str: string): string {
-  return str.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
-    String.fromCharCode(parseInt(hex, 16))
-  );
+  return str.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
 /**
  * Handles all CLI messages from Claude processes — system init,
  * assistant text/tool_use, user tool_result, and result.
  */
-export type ProjectLookup = (id: string) => { path: string;[key: string]: any } | undefined;
+export type ProjectLookup = (id: string) => { path: string; [key: string]: any } | undefined;
 
 export class AgentMessageHandler {
   private _getProject: ProjectLookup | undefined;
@@ -37,7 +36,7 @@ export class AgentMessageHandler {
   }
 
   /** Lazy-load project-manager to avoid importing the singleton DB in tests */
-  private getProject(id: string): { path: string;[key: string]: any } | undefined {
+  private getProject(id: string): { path: string; [key: string]: any } | undefined {
     if (!this._getProject) {
       const pm = require('./project-manager.js');
       this._getProject = pm.getProject;
@@ -106,7 +105,7 @@ export class AgentMessageHandler {
       msg.message.content
         .filter((b): b is { type: 'text'; text: string } => 'text' in b && !!b.text)
         .map((b) => b.text)
-        .join('\n\n')
+        .join('\n\n'),
     );
 
     if (textContent) {
@@ -114,7 +113,11 @@ export class AgentMessageHandler {
       if (msgId) {
         this.threadManager.updateMessage(msgId, textContent);
       } else {
-        msgId = this.threadManager.insertMessage({ threadId, role: 'assistant', content: textContent });
+        msgId = this.threadManager.insertMessage({
+          threadId,
+          role: 'assistant',
+          content: textContent,
+        });
       }
       this.state.currentAssistantMsgId.set(threadId, msgId);
       cliMap.set(cliMsgId, msgId);
@@ -143,12 +146,21 @@ export class AgentMessageHandler {
         }
 
         log.info(`tool_use: ${block.name}`, { namespace: 'agent', threadId, tool: block.name });
-        log.debug('tool_use input', { namespace: 'agent', threadId, tool: block.name, input: block.input });
+        log.debug('tool_use input', {
+          namespace: 'agent',
+          threadId,
+          tool: block.name,
+          input: block.input,
+        });
 
         // Ensure there's always a parent assistant message for tool calls
         let parentMsgId = this.state.currentAssistantMsgId.get(threadId) || cliMap.get(cliMsgId);
         if (!parentMsgId) {
-          parentMsgId = this.threadManager.insertMessage({ threadId, role: 'assistant', content: '' });
+          parentMsgId = this.threadManager.insertMessage({
+            threadId,
+            role: 'assistant',
+            content: '',
+          });
           this.emitWS(threadId, 'agent:message', {
             messageId: parentMsgId,
             role: 'assistant',
@@ -184,13 +196,21 @@ export class AgentMessageHandler {
         if (block.name === 'AskUserQuestion') {
           this.state.pendingUserInput.set(threadId, 'question');
           const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
-          const { status } = transitionStatus(threadId, { type: 'WAIT' }, currentStatus as ThreadStatus);
+          const { status } = transitionStatus(
+            threadId,
+            { type: 'WAIT' },
+            currentStatus as ThreadStatus,
+          );
           this.threadManager.updateThread(threadId, { status });
           this.emitWS(threadId, 'agent:status', { status, waitingReason: 'question' });
         } else if (block.name === 'ExitPlanMode') {
           this.state.pendingUserInput.set(threadId, 'plan');
           const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
-          const { status } = transitionStatus(threadId, { type: 'WAIT' }, currentStatus as ThreadStatus);
+          const { status } = transitionStatus(
+            threadId,
+            { type: 'WAIT' },
+            currentStatus as ThreadStatus,
+          );
           this.threadManager.updateThread(threadId, { status });
           this.emitWS(threadId, 'agent:status', { status, waitingReason: 'plan' });
         } else {
@@ -216,8 +236,18 @@ export class AgentMessageHandler {
         if (toolCallId && block.content) {
           const decodedOutput = decodeUnicodeEscapes(block.content);
 
-          log.info(`tool_result: ${toolCallId}`, { namespace: 'agent', threadId, toolCallId, chars: decodedOutput.length });
-          log.debug('tool_result output', { namespace: 'agent', threadId, toolCallId, output: decodedOutput.slice(0, 500) });
+          log.info(`tool_result: ${toolCallId}`, {
+            namespace: 'agent',
+            threadId,
+            toolCallId,
+            chars: decodedOutput.length,
+          });
+          log.debug('tool_result output', {
+            namespace: 'agent',
+            threadId,
+            toolCallId,
+            output: decodedOutput.slice(0, 500),
+          });
 
           this.threadManager.updateToolCallOutput(toolCallId, decodedOutput);
           this.emitWS(threadId, 'agent:tool_output', {
@@ -236,7 +266,7 @@ export class AgentMessageHandler {
 
           // Detect permission denial pattern
           const permissionDeniedMatch = decodedOutput.match(
-            /(?:requested permissions? to use|hasn't been granted|hasn't granted|permission.*denied|not in the allowed tools list)/i
+            /(?:requested permissions? to use|hasn't been granted|hasn't granted|permission.*denied|not in the allowed tools list)/i,
           );
 
           if (permissionDeniedMatch && tc?.name) {
@@ -273,7 +303,13 @@ export class AgentMessageHandler {
   private handleResult(threadId: string, msg: CLIMessage & { type: 'result' }): void {
     if (this.state.resultReceived.has(threadId)) return;
 
-    log.info('Agent completed', { namespace: 'agent', threadId, status: msg.subtype, cost: msg.total_cost_usd, durationMs: msg.duration_ms });
+    log.info('Agent completed', {
+      namespace: 'agent',
+      threadId,
+      status: msg.subtype,
+      cost: msg.total_cost_usd,
+      durationMs: msg.duration_ms,
+    });
     this.state.resultReceived.add(threadId);
     this.state.currentAssistantMsgId.delete(threadId);
 
@@ -294,7 +330,12 @@ export class AgentMessageHandler {
         ? { type: 'COMPLETE' as const, cost: msg.total_cost_usd, duration: msg.duration_ms }
         : { type: 'FAIL' as const, cost: msg.total_cost_usd, duration: msg.duration_ms };
 
-    const { status: finalStatus } = transitionStatus(threadId, resultEvent, currentStatus as ThreadStatus, msg.total_cost_usd ?? 0);
+    const { status: finalStatus } = transitionStatus(
+      threadId,
+      resultEvent,
+      currentStatus as ThreadStatus,
+      msg.total_cost_usd ?? 0,
+    );
     this.state.pendingUserInput.delete(threadId);
 
     this.threadManager.updateThread(threadId, {
@@ -310,10 +351,13 @@ export class AgentMessageHandler {
         this.threadManager.updateThread(threadId, { stage: 'review' });
         const project = this.getProject(threadForStage.projectId);
         threadEventBus.emit('thread:stage-changed', {
-          threadId, projectId: threadForStage.projectId, userId: threadForStage.userId,
+          threadId,
+          projectId: threadForStage.projectId,
+          userId: threadForStage.userId,
           worktreePath: threadForStage.worktreePath ?? null,
           cwd: threadForStage.worktreePath ?? project?.path ?? '',
-          fromStage: 'in_progress', toStage: 'review',
+          fromStage: 'in_progress',
+          toStage: 'review',
         });
       }
 
@@ -322,7 +366,9 @@ export class AgentMessageHandler {
       if (t) {
         const proj = this.getProject(t.projectId);
         threadEventBus.emit('agent:completed', {
-          threadId, projectId: t.projectId, userId: t.userId,
+          threadId,
+          projectId: t.projectId,
+          userId: t.userId,
           worktreePath: t.worktreePath ?? null,
           cwd: t.worktreePath ?? proj?.path ?? '',
           status: finalStatus as 'completed' | 'failed' | 'stopped',
@@ -334,9 +380,12 @@ export class AgentMessageHandler {
     const threadWithStage = this.threadManager.getThread(threadId);
 
     // Build the error text from the result or errors array
-    const errorText = finalStatus === 'failed'
-      ? (msg.result ? decodeUnicodeEscapes(msg.result) : (msg.errors?.[0] ?? undefined))
-      : undefined;
+    const errorText =
+      finalStatus === 'failed'
+        ? msg.result
+          ? decodeUnicodeEscapes(msg.result)
+          : (msg.errors?.[0] ?? undefined)
+        : undefined;
 
     this.emitWS(threadId, 'agent:result', {
       result: msg.result ? decodeUnicodeEscapes(msg.result) : msg.result,
@@ -369,17 +418,19 @@ export class AgentMessageHandler {
     const summaryResult = await getStatusSummary(
       thread.worktreePath,
       thread.baseBranch ?? undefined,
-      project.path
+      project.path,
     );
     if (summaryResult.isErr()) return;
     const summary = summaryResult.value;
 
     this.emitWS(threadId, 'git:status', {
-      statuses: [{
-        threadId,
-        state: deriveGitSyncState(summary),
-        ...summary,
-      }],
+      statuses: [
+        {
+          threadId,
+          state: deriveGitSyncState(summary),
+          ...summary,
+        },
+      ],
     });
   }
 }

@@ -45,7 +45,7 @@ const ANTHROPIC_MODEL_ALIASES: Record<string, string> = {
 const OPENAI_MODEL_ALIASES: Record<string, string> = {
   'gpt-4': 'gpt-4-turbo',
   'gpt-4o': 'gpt-4o',
-  'o1': 'o1',
+  o1: 'o1',
   // Claude short names — for OpenAI-compatible servers backed by Claude
   opus: 'claude-opus-4-6',
   sonnet: 'claude-sonnet-4-5-20250929',
@@ -99,31 +99,37 @@ export class ModelFactory {
 
     switch (provider) {
       case 'anthropic': {
-        const baseURL = overrides?.baseURL ?? this.config.anthropic?.baseURL ?? 'https://api.anthropic.com';
-        const apiKey = overrides?.apiKey ?? this.config.anthropic?.apiKey ?? process.env.ANTHROPIC_API_KEY;
+        const baseURL =
+          overrides?.baseURL ?? this.config.anthropic?.baseURL ?? 'https://api.anthropic.com';
+        const apiKey =
+          overrides?.apiKey ?? this.config.anthropic?.apiKey ?? process.env.ANTHROPIC_API_KEY;
         return { baseURL, apiKey, modelId: resolvedId };
       }
 
       case 'openai': {
-        const baseURL = overrides?.baseURL ?? this.config.openai?.baseURL ?? 'https://api.openai.com/v1';
-        const apiKey = overrides?.apiKey ?? this.config.openai?.apiKey ?? process.env.OPENAI_API_KEY;
+        const baseURL =
+          overrides?.baseURL ?? this.config.openai?.baseURL ?? 'https://api.openai.com/v1';
+        const apiKey =
+          overrides?.apiKey ?? this.config.openai?.apiKey ?? process.env.OPENAI_API_KEY;
         return { baseURL, apiKey, modelId: resolvedId };
       }
 
       case 'funny-api-acp': {
-        const baseURL = overrides?.baseURL
-          ?? this.config['funny-api-acp']?.baseURL
-          ?? process.env.API_ACP_URL
-          ?? 'http://localhost:4010';
+        const baseURL =
+          overrides?.baseURL ??
+          this.config['funny-api-acp']?.baseURL ??
+          process.env.API_ACP_URL ??
+          'http://localhost:4010';
         const apiKey = overrides?.apiKey ?? this.config['funny-api-acp']?.apiKey;
         return { baseURL, apiKey, modelId: resolvedId };
       }
 
       case 'ollama': {
-        const baseURL = overrides?.baseURL
-          ?? this.config.ollama?.baseURL
-          ?? process.env.OLLAMA_BASE_URL
-          ?? 'http://localhost:11434/v1';
+        const baseURL =
+          overrides?.baseURL ??
+          this.config.ollama?.baseURL ??
+          process.env.OLLAMA_BASE_URL ??
+          'http://localhost:11434/v1';
         return { baseURL, apiKey: 'ollama', modelId: resolvedId };
       }
 

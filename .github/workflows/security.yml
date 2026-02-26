@@ -16,7 +16,7 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0  # Full history for better secret detection
+          fetch-depth: 0 # Full history for better secret detection
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@v2
@@ -34,7 +34,7 @@ jobs:
       # Dependency vulnerability scanning with Snyk
       - name: Run Snyk security scan
         uses: snyk/actions/node@master
-        continue-on-error: true  # Don't fail the build, just report
+        continue-on-error: true # Don't fail the build, just report
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
         with:
@@ -52,7 +52,7 @@ jobs:
       # Audit CI - stricter enforcement
       - name: Audit dependencies with strict thresholds
         run: npx audit-ci --moderate --package-manager auto
-        continue-on-error: false  # Fail the build on moderate+ vulnerabilities
+        continue-on-error: false # Fail the build on moderate+ vulnerabilities
 
       # Generate security report
       - name: Generate security summary

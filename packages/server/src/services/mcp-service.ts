@@ -3,12 +3,13 @@
  * Uses `claude mcp list/add/remove` commands.
  */
 
-import { ResultAsync } from 'neverthrow';
-import { getClaudeBinaryPath } from '../utils/claude-binary.js';
 import { execute, ProcessExecutionError } from '@funny/core/git';
-import { processError, internal, type DomainError } from '@funny/shared/errors';
 import type { McpServer, McpServerType } from '@funny/shared';
-import { log } from '../lib/abbacchio.js';
+import { processError, internal, type DomainError } from '@funny/shared/errors';
+import { ResultAsync } from 'neverthrow';
+
+import { log } from '../lib/logger.js';
+import { getClaudeBinaryPath } from '../utils/claude-binary.js';
 
 /**
  * List MCP servers configured for a project.
@@ -38,7 +39,7 @@ export function listMcpServers(projectPath: string): ResultAsync<McpServer[], Do
         return [];
       }
     })(),
-    (error) => internal(String(error))
+    (error) => internal(String(error)),
   );
 }
 
@@ -55,10 +56,18 @@ function parseMcpListOutput(output: string): McpServer[] {
 
   for (const line of lines) {
     const trimmed = line.trim();
-    if (!trimmed || trimmed.startsWith('─') || trimmed.startsWith('Name') || trimmed.startsWith('Checking')) continue;
+    if (
+      !trimmed ||
+      trimmed.startsWith('─') ||
+      trimmed.startsWith('Name') ||
+      trimmed.startsWith('Checking')
+    )
+      continue;
 
     // Match lines WITH explicit type: "name: value (HTTP|SSE|stdio) - status"
-    const typedMatch = trimmed.match(/^(\S+):\s+(.+?)\s+\((HTTP|http|SSE|sse|stdio|STDIO)\)(?:\s*-\s*(.+))?/);
+    const typedMatch = trimmed.match(
+      /^(\S+):\s+(.+?)\s+\((HTTP|http|SSE|sse|stdio|STDIO)\)(?:\s*-\s*(.+))?/,
+    );
     if (typedMatch) {
       const name = typedMatch[1];
       const value = typedMatch[2].trim();
@@ -195,7 +204,7 @@ export function addMcpServer(opts: {
         return processError(error.message, error.exitCode, error.stderr);
       }
       return internal(String(error));
-    }
+    },
   );
 }
 
@@ -225,7 +234,7 @@ export function removeMcpServer(opts: {
         return processError(error.message, error.exitCode, error.stderr);
       }
       return internal(String(error));
-    }
+    },
   );
 }
 

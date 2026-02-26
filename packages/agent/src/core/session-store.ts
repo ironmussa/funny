@@ -6,11 +6,19 @@
  * Emits events on state transitions via the EventBus.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import {
+  existsSync,
+  mkdirSync,
+  readdirSync,
+  readFileSync,
+  writeFileSync,
+  unlinkSync,
+} from 'node:fs';
 import { join } from 'node:path';
-import { Session, type SessionData, type SessionStatus } from './session.js';
+
 import type { EventBus } from '../infrastructure/event-bus.js';
 import { logger } from '../infrastructure/logger.js';
+import { Session, type SessionData, type SessionStatus } from './session.js';
 
 // ── SessionStore ────────────────────────────────────────────────
 
@@ -164,7 +172,10 @@ export class SessionStore {
           logger.warn({ file, err: err.message }, 'Skipping corrupt session file');
         }
       }
-      logger.info({ count: this.sessions.size, staleRecovered: staleCount }, 'Sessions loaded from disk');
+      logger.info(
+        { count: this.sessions.size, staleRecovered: staleCount },
+        'Sessions loaded from disk',
+      );
     } catch {
       // Directory doesn't exist or is empty — fine
     }

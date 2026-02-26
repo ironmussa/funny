@@ -1,5 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
+
 import { Hono } from 'hono';
+
 import { rateLimit } from '../../middleware/rate-limit.js';
 
 describe('rateLimit middleware', () => {

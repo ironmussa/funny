@@ -16,12 +16,7 @@ export interface HandlerServiceContext {
   // Thread operations
   getThread(id: string): Record<string, any> | undefined;
   updateThread(id: string, updates: Record<string, any>): void;
-  insertComment(data: {
-    threadId: string;
-    userId: string;
-    source: string;
-    content: string;
-  }): any;
+  insertComment(data: { threadId: string; userId: string; source: string; content: string }): any;
 
   // Project operations
   getProject(id: string): Record<string, any> | undefined;
@@ -66,10 +61,7 @@ export interface EventHandler<K extends keyof ThreadEventMap = keyof ThreadEvent
   event: K;
 
   /** Optional predicate — return true to run the action. If omitted, action always runs. */
-  filter?: (
-    payload: Parameters<ThreadEventMap[K]>[0],
-    ctx: HandlerServiceContext,
-  ) => boolean;
+  filter?: (payload: Parameters<ThreadEventMap[K]>[0], ctx: HandlerServiceContext) => boolean;
 
   /** The action to perform. Receives the typed event payload and the service context. */
   action: (

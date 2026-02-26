@@ -1,7 +1,8 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { Hono } from 'hono';
-import { homedir } from 'os';
 import { readdirSync } from 'fs';
+import { homedir } from 'os';
+
+import { Hono } from 'hono';
 
 describe('Browse Routes', () => {
   let app: Hono;
@@ -20,7 +21,9 @@ describe('Browse Routes', () => {
             try {
               readdirSync(drive);
               drives.push(drive);
-            } catch { /* skip */ }
+            } catch {
+              /* skip */
+            }
           }
         } else {
           drives.push('/');

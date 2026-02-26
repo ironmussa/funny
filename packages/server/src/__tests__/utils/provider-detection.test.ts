@@ -3,7 +3,9 @@ import { describe, test, expect, mock, beforeEach } from 'bun:test';
 // Mock claude-binary before importing provider-detection
 mock.module('../../utils/claude-binary.js', () => ({
   checkClaudeBinaryAvailability: () => ({ available: false, error: 'not found' }),
-  validateClaudeBinary: () => { throw new Error('not found'); },
+  validateClaudeBinary: () => {
+    throw new Error('not found');
+  },
 }));
 
 // Mock the SDK imports — return empty objects so dynamic import() succeeds

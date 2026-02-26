@@ -22,7 +22,9 @@ export function buildThreadContext(threadId: string): string | null {
   const parts: string[] = [];
 
   // Add system note explaining this is a recovered context
-  parts.push('[SYSTEM NOTE: Your previous session cannot be resumed (the working directory was removed after a merge). Below is the complete conversation history to restore context. Continue naturally from where the conversation left off.]');
+  parts.push(
+    '[SYSTEM NOTE: Your previous session cannot be resumed (the working directory was removed after a merge). Below is the complete conversation history to restore context. Continue naturally from where the conversation left off.]',
+  );
   parts.push('');
   parts.push('=== CONVERSATION HISTORY ===');
   parts.push('');

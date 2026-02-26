@@ -1,10 +1,11 @@
+import type { MiddlewareHandler } from 'hono';
+
 import { loadConfig, createResource, type ObservabilityConfig } from './config.js';
 import { createTraceExporter, createMetricExporter, createLogExporter } from './exporter.js';
-import { initTracer, shutdownTracer } from './tracer.js';
-import { initMetrics, shutdownMetrics } from './metrics.js';
 import { initLogger, shutdownLogger } from './logger.js';
+import { initMetrics, shutdownMetrics } from './metrics.js';
 import { observabilityMiddleware } from './middleware.js';
-import type { MiddlewareHandler } from 'hono';
+import { initTracer, shutdownTracer } from './tracer.js';
 
 let initialized = false;
 
@@ -41,7 +42,9 @@ export function observability(overrides?: Partial<ObservabilityConfig>): Middlew
   const config = loadConfig(overrides);
 
   if (!config.enabled) {
-    return async (_c, next) => { await next(); };
+    return async (_c, next) => {
+      await next();
+    };
   }
 
   ensureInitialized(overrides);

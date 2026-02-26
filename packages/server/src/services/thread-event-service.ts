@@ -3,10 +3,11 @@
  * to the database for historical tracking and UI display.
  */
 
+import { eq, desc } from 'drizzle-orm';
+
 import { db } from '../db/index.js';
 import { threadEvents } from '../db/schema.js';
-import { log } from '../lib/abbacchio.js';
-import { eq, desc } from 'drizzle-orm';
+import { log } from '../lib/logger.js';
 
 export interface ThreadEvent {
   id?: string;

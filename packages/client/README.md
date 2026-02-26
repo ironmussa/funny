@@ -68,21 +68,27 @@ src/
 ## Key Features
 
 ### Real-Time Agent Streaming
+
 WebSocket connection at `/ws` receives all agent events — messages, tool calls, status changes, git updates — and dispatches them to the appropriate Zustand stores. Events are filtered per-user in multi-user mode.
 
 ### Chat Interface
+
 Messages stream in real time with markdown rendering (react-markdown + remark-gfm). Tool calls appear as collapsible cards showing the tool name, a human-readable summary, and expandable JSON input/output.
 
 ### Code Review
+
 The ReviewPane shows git diffs with syntax highlighting (react-diff-viewer), file-level stage/unstage/revert controls, commit message input with AI generation, and one-click push and PR creation.
 
 ### Command Palette
+
 `Cmd+K` / `Ctrl+K` opens a fuzzy search across all projects and settings pages (powered by cmdk).
 
 ### State Management
+
 Six Zustand stores with clear separation of concerns. No global re-renders — each component subscribes to exactly the slices it needs.
 
 ### Dual Auth Mode
+
 The `AuthGate` in `main.tsx` detects the server's auth mode and either auto-authenticates (local mode) or shows a login page (multi mode). The API client automatically switches between bearer tokens and session cookies.
 
 ## Styling

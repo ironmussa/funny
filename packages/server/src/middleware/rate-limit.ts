@@ -1,12 +1,20 @@
 import type { Context, Next } from 'hono';
+
 import { shutdownManager, ShutdownPhase } from '../services/shutdown-manager.js';
 
 let pruneTimer: ReturnType<typeof setInterval> | null = null;
 
 // ── Self-register with ShutdownManager ──────────────────────
-shutdownManager.register('rate-limit-timer', () => {
-  if (pruneTimer) { clearInterval(pruneTimer); pruneTimer = null; }
-}, ShutdownPhase.SERVICES);
+shutdownManager.register(
+  'rate-limit-timer',
+  () => {
+    if (pruneTimer) {
+      clearInterval(pruneTimer);
+      pruneTimer = null;
+    }
+  },
+  ShutdownPhase.SERVICES,
+);
 
 /**
  * Simple in-memory sliding-window rate limiter.

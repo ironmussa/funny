@@ -1,7 +1,13 @@
-import { describe, test, expect, beforeEach } from 'vitest';
 import { EventEmitter } from 'events';
+
+import { describe, test, expect, beforeEach } from 'vitest';
+
+import type {
+  IAgentProcess,
+  IAgentProcessFactory,
+  AgentProcessOptions,
+} from '../agents/interfaces.js';
 import { AgentOrchestrator } from '../agents/orchestrator.js';
-import type { IAgentProcess, IAgentProcessFactory, AgentProcessOptions } from '../agents/interfaces.js';
 import type { CLIMessage } from '../agents/types.js';
 
 // ── Mock process ────────────────────────────────────────────────
@@ -441,39 +447,47 @@ describe('AgentOrchestrator', () => {
 
   describe('multi-provider support', () => {
     test('resolves Gemini model ID correctly', async () => {
-      await orchestrator.startAgent(baseOpts({
-        provider: 'gemini',
-        model: 'gemini-3-flash-preview',
-      }));
+      await orchestrator.startAgent(
+        baseOpts({
+          provider: 'gemini',
+          model: 'gemini-3-flash-preview',
+        }),
+      );
 
       expect(factory.lastProcess.options.model).toBe('gemini-3-flash-preview');
       expect(factory.lastProcess.options.provider).toBe('gemini');
     });
 
     test('resolves Codex model ID correctly', async () => {
-      await orchestrator.startAgent(baseOpts({
-        provider: 'codex',
-        model: 'o4-mini',
-      }));
+      await orchestrator.startAgent(
+        baseOpts({
+          provider: 'codex',
+          model: 'o4-mini',
+        }),
+      );
 
       expect(factory.lastProcess.options.model).toBe('o4-mini');
       expect(factory.lastProcess.options.provider).toBe('codex');
     });
 
     test('Gemini has no permission mode', async () => {
-      await orchestrator.startAgent(baseOpts({
-        provider: 'gemini',
-        model: 'gemini-2.5-flash',
-      }));
+      await orchestrator.startAgent(
+        baseOpts({
+          provider: 'gemini',
+          model: 'gemini-2.5-flash',
+        }),
+      );
 
       expect(factory.lastProcess.options.permissionMode).toBeUndefined();
     });
 
     test('uses provider-specific default tools', async () => {
-      await orchestrator.startAgent(baseOpts({
-        provider: 'gemini',
-        model: 'gemini-2.5-flash',
-      }));
+      await orchestrator.startAgent(
+        baseOpts({
+          provider: 'gemini',
+          model: 'gemini-2.5-flash',
+        }),
+      );
 
       // Gemini has no default tools (managed by ACP)
       expect(factory.lastProcess.options.allowedTools).toEqual([]);

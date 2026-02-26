@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAuthStore } from '@/stores/auth-store';
-import { authClient } from '@/lib/auth-client';
+
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { authClient } from '@/lib/auth-client';
+import { useAuthStore } from '@/stores/auth-store';
 
 interface UserEntry {
   id: string;
@@ -32,14 +33,16 @@ export function UserManagement() {
       setLoading(true);
       const res = await authClient.admin.listUsers({ query: { limit: 100 } });
       if (res.data?.users) {
-        setUsers(res.data.users.map((u: any) => ({
-          id: u.id,
-          name: u.name || '',
-          username: u.username || '',
-          email: u.email || '',
-          role: u.role || 'user',
-          createdAt: u.createdAt || '',
-        })));
+        setUsers(
+          res.data.users.map((u: any) => ({
+            id: u.id,
+            name: u.name || '',
+            username: u.username || '',
+            email: u.email || '',
+            role: u.role || 'user',
+            createdAt: u.createdAt || '',
+          })),
+        );
       }
     } catch (err) {
       console.error('[UserManagement] Failed to list users:', err);
@@ -104,9 +107,11 @@ export function UserManagement() {
       </div>
 
       {showCreate && (
-        <div className="mx-4 p-3 rounded-md border border-border space-y-3">
+        <div className="mx-4 space-y-3 rounded-md border border-border p-3">
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">{t('users.username')}</label>
+            <label className="text-xs font-medium text-muted-foreground">
+              {t('users.username')}
+            </label>
             <Input
               value={newUsername}
               onChange={(e) => setNewUsername(e.target.value)}
@@ -115,7 +120,9 @@ export function UserManagement() {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">{t('users.displayName')}</label>
+            <label className="text-xs font-medium text-muted-foreground">
+              {t('users.displayName')}
+            </label>
             <Input
               value={newDisplayName}
               onChange={(e) => setNewDisplayName(e.target.value)}
@@ -123,7 +130,9 @@ export function UserManagement() {
             />
           </div>
           <div className="space-y-1.5">
-            <label className="text-xs font-medium text-muted-foreground">{t('users.password')}</label>
+            <label className="text-xs font-medium text-muted-foreground">
+              {t('users.password')}
+            </label>
             <Input
               type="password"
               value={newPassword}
@@ -151,7 +160,11 @@ export function UserManagement() {
             </div>
           </div>
           {error && <p className="text-xs text-destructive">{error}</p>}
-          <Button size="sm" onClick={handleCreate} disabled={creating || !newUsername.trim() || !newPassword.trim()}>
+          <Button
+            size="sm"
+            onClick={handleCreate}
+            disabled={creating || !newUsername.trim() || !newPassword.trim()}
+          >
             {creating ? t('users.creating') : t('users.create')}
           </Button>
         </div>
@@ -159,12 +172,17 @@ export function UserManagement() {
 
       <div className="space-y-1 px-4">
         {users.map((user) => (
-          <div key={user.id} className="flex items-center justify-between py-2 px-3 rounded-md hover:bg-accent/50">
+          <div
+            key={user.id}
+            className="flex items-center justify-between rounded-md px-3 py-2 hover:bg-accent/50"
+          >
             <div className="min-w-0">
-              <p className="text-sm font-medium text-foreground truncate">
+              <p className="truncate text-sm font-medium text-foreground">
                 {user.name || user.username}
                 {user.role === 'admin' && (
-                  <span className="ml-2 text-xs text-primary font-normal">{t('users.roleAdmin')}</span>
+                  <span className="ml-2 text-xs font-normal text-primary">
+                    {t('users.roleAdmin')}
+                  </span>
                 )}
               </p>
               <p className="text-xs text-muted-foreground">@{user.username}</p>

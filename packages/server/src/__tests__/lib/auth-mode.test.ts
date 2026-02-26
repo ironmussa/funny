@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'bun:test';
+
 import { resolveAuthMode, getAuthMode } from '../../lib/auth-mode.js';
 
 describe('resolveAuthMode', () => {

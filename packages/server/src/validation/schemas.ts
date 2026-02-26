@@ -1,6 +1,6 @@
-import { z } from 'zod';
-import { ok, err, type Result } from 'neverthrow';
 import { validationErr, type DomainError } from '@funny/shared/errors';
+import { ok, err, type Result } from 'neverthrow';
+import { z } from 'zod';
 
 // ── Enums ────────────────────────────────────────────────────────
 
@@ -8,11 +8,23 @@ export const threadModeSchema = z.enum(['local', 'worktree']);
 export const agentProviderSchema = z.enum(['claude', 'codex', 'gemini']);
 export const claudeModelSchema = z.enum(['sonnet', 'sonnet-4.6', 'opus', 'haiku']);
 export const codexModelSchema = z.enum(['o3', 'o4-mini', 'codex-mini']);
-export const geminiModelSchema = z.enum(['gemini-2.0-flash', 'gemini-2.5-flash', 'gemini-2.5-pro', 'gemini-3-flash-preview', 'gemini-3-pro-preview']);
+export const geminiModelSchema = z.enum([
+  'gemini-2.0-flash',
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+  'gemini-3-flash-preview',
+  'gemini-3-pro-preview',
+]);
 export const agentModelSchema = z.union([claudeModelSchema, codexModelSchema, geminiModelSchema]);
 export const permissionModeSchema = z.enum(['plan', 'autoEdit', 'confirmEdit']);
 export const threadStageSchema = z.enum(['backlog', 'planning', 'in_progress', 'review', 'done']);
-export const threadSourceSchema = z.enum(['web', 'chrome_extension', 'api', 'automation', 'ingest']);
+export const threadSourceSchema = z.enum([
+  'web',
+  'chrome_extension',
+  'api',
+  'automation',
+  'ingest',
+]);
 
 // ── Image attachment ─────────────────────────────────────────────
 
@@ -46,7 +58,11 @@ export const followUpModeSchema = z.enum(['interrupt', 'queue']);
 
 export const updateProjectSchema = z.object({
   name: z.string().min(1, 'name is required').optional(),
-  color: z.string().regex(/^#[0-9A-Fa-f]{6}$/, 'color must be a valid hex color (#RRGGBB)').nullable().optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9A-Fa-f]{6}$/, 'color must be a valid hex color (#RRGGBB)')
+    .nullable()
+    .optional(),
   followUpMode: followUpModeSchema.optional(),
   defaultProvider: agentProviderSchema.nullable().optional(),
   defaultModel: agentModelSchema.nullable().optional(),
@@ -164,19 +180,25 @@ export const gitInitSchema = z.object({
 
 // ── Automations ─────────────────────────────────────────────────
 
-export const automationScheduleSchema = z.string().min(1, 'schedule is required').refine(
-  (val) => {
-    try {
-      // Validate cron expression using croner
-      const { Cron } = require('croner');
-      new Cron(val); // throws if invalid
-      return true;
-    } catch {
-      return false;
-    }
-  },
-  { message: 'Invalid cron expression. Examples: "*/30 * * * *" (every 30 min), "0 9 * * *" (daily at 9am), "0 */6 * * *" (every 6 hours)' }
-);
+export const automationScheduleSchema = z
+  .string()
+  .min(1, 'schedule is required')
+  .refine(
+    (val) => {
+      try {
+        // Validate cron expression using croner
+        const { Cron } = require('croner');
+        new Cron(val); // throws if invalid
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    {
+      message:
+        'Invalid cron expression. Examples: "*/30 * * * *" (every 30 min), "0 9 * * *" (daily at 9am), "0 */6 * * *" (every 6 hours)',
+    },
+  );
 
 export const automationModeSchema = z.enum(['default']);
 

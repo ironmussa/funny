@@ -1,20 +1,18 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { useThreadStore } from '@/stores/thread-store';
-import { useProjectStore } from '@/stores/project-store';
-import { cn } from '@/lib/utils';
-import { timeAgo } from '@/lib/thread-utils';
-import { useMinuteTick } from '@/hooks/use-minute-tick';
-import { History, ChevronRight } from 'lucide-react';
-import { ThreadItem } from './ThreadItem';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
 import type { Thread, ThreadStatus } from '@funny/shared';
+import { History, ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { timeAgo } from '@/lib/thread-utils';
+import { cn } from '@/lib/utils';
 import { useGitStatusStore } from '@/stores/git-status-store';
+import { useProjectStore } from '@/stores/project-store';
+import { useThreadStore } from '@/stores/thread-store';
+
+import { ThreadItem } from './ThreadItem';
 
 const FINISHED_STATUSES: ThreadStatus[] = ['completed', 'failed', 'stopped', 'interrupted'];
 
@@ -25,7 +23,12 @@ interface FinishedThread extends Thread {
 }
 
 interface RecentThreadsProps {
-  onArchiveThread: (threadId: string, projectId: string, title: string, isWorktree: boolean) => void;
+  onArchiveThread: (
+    threadId: string,
+    projectId: string,
+    title: string,
+    isWorktree: boolean,
+  ) => void;
   onDeleteThread: (threadId: string, projectId: string, title: string, isWorktree: boolean) => void;
 }
 
@@ -33,15 +36,17 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
   const { t } = useTranslation();
   useMinuteTick();
   const navigate = useNavigate();
-  const threadsByProject = useThreadStore(s => s.threadsByProject);
-  const selectedThreadId = useThreadStore(s => s.selectedThreadId);
-  const projects = useProjectStore(s => s.projects);
+  const threadsByProject = useThreadStore((s) => s.threadsByProject);
+  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  const projects = useProjectStore((s) => s.projects);
   const gitStatusByThread = useGitStatusStore((s) => s.statusByThread);
   const [isExpanded, setIsExpanded] = useState(true);
 
   const { recentThreads, totalCount } = useMemo(() => {
     const result: FinishedThread[] = [];
-    const projectMap = new Map(projects.map(p => [p.id, { name: p.name, path: p.path, color: p.color }]));
+    const projectMap = new Map(
+      projects.map((p) => [p.id, { name: p.name, path: p.path, color: p.color }]),
+    );
 
     for (const [projectId, threads] of Object.entries(threadsByProject)) {
       for (const thread of threads) {
@@ -79,23 +84,19 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
   if (recentThreads.length === 0) return null;
 
   return (
-    <Collapsible
-      open={isExpanded}
-      onOpenChange={setIsExpanded}
-      className="mb-1 min-w-0"
-    >
-      <CollapsibleTrigger className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-left text-muted-foreground hover:text-foreground min-w-0 transition-colors w-full">
+    <Collapsible open={isExpanded} onOpenChange={setIsExpanded} className="mb-1 min-w-0">
+      <CollapsibleTrigger className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground">
         <ChevronRight
           className={cn(
             'h-3 w-3 flex-shrink-0 transition-transform duration-200',
-            isExpanded && 'rotate-90'
+            isExpanded && 'rotate-90',
           )}
         />
         <History className="h-3.5 w-3.5 flex-shrink-0" />
         <span className="truncate font-medium">{t('sidebar.recentThreads')}</span>
       </CollapsibleTrigger>
       <CollapsibleContent className="data-[state=open]:animate-slide-down">
-        <div className="ml-3 pl-1 mt-0.5 space-y-0.5 min-w-0">
+        <div className="ml-3 mt-0.5 min-w-0 space-y-0.5 pl-1">
           {recentThreads.map((thread) => (
             <ThreadItem
               key={thread.id}
@@ -108,19 +109,36 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
               gitStatus={thread.mode === 'worktree' ? gitStatusByThread[thread.id] : undefined}
               onSelect={() => {
                 const store = useThreadStore.getState();
-                if (store.selectedThreadId === thread.id && (!store.activeThread || store.activeThread.id !== thread.id)) {
+                if (
+                  store.selectedThreadId === thread.id &&
+                  (!store.activeThread || store.activeThread.id !== thread.id)
+                ) {
                   store.selectThread(thread.id);
                 }
                 navigate(`/projects/${thread.projectId}/threads/${thread.id}`);
               }}
-              onArchive={() => onArchiveThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch && thread.provider !== 'external')}
-              onDelete={() => onDeleteThread(thread.id, thread.projectId, thread.title, thread.mode === 'worktree' && !!thread.branch && thread.provider !== 'external')}
+              onArchive={() =>
+                onArchiveThread(
+                  thread.id,
+                  thread.projectId,
+                  thread.title,
+                  thread.mode === 'worktree' && !!thread.branch && thread.provider !== 'external',
+                )
+              }
+              onDelete={() =>
+                onDeleteThread(
+                  thread.id,
+                  thread.projectId,
+                  thread.title,
+                  thread.mode === 'worktree' && !!thread.branch && thread.provider !== 'external',
+                )
+              }
             />
           ))}
           {totalCount > 5 && (
             <button
               onClick={() => navigate('/search?status=completed,failed,stopped,interrupted')}
-              className="text-sm text-muted-foreground hover:text-foreground px-2 py-1.5 transition-colors"
+              className="px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               {t('sidebar.viewAll')}
             </button>

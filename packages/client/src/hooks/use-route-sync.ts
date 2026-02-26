@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
 import { useLocation, matchPath } from 'react-router-dom';
+
+import { settingsItems } from '@/components/SettingsPanel';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
-import { settingsItems } from '@/components/SettingsPanel';
 
 function parseRoute(pathname: string) {
   // Project-scoped settings: /projects/:projectId/settings/:pageId
@@ -33,10 +34,7 @@ function parseRoute(pathname: string) {
     };
   }
 
-  const threadMatch = matchPath(
-    '/projects/:projectId/threads/:threadId',
-    pathname
-  );
+  const threadMatch = matchPath('/projects/:projectId/threads/:threadId', pathname);
   if (threadMatch) {
     return {
       settingsPage: null,
@@ -64,31 +62,79 @@ function parseRoute(pathname: string) {
 
   // Automation inbox: /inbox
   if (pathname === '/inbox') {
-    return { settingsPage: null, projectId: null, threadId: null, globalSearch: false, inbox: true, analytics: false, liveColumns: false };
+    return {
+      settingsPage: null,
+      projectId: null,
+      threadId: null,
+      globalSearch: false,
+      inbox: true,
+      analytics: false,
+      liveColumns: false,
+    };
   }
 
   // Search: /search (with optional ?project=<id> query param)
   if (pathname === '/search') {
-    return { settingsPage: null, projectId: null, threadId: null, globalSearch: true, inbox: false, analytics: false, liveColumns: false };
+    return {
+      settingsPage: null,
+      projectId: null,
+      threadId: null,
+      globalSearch: true,
+      inbox: false,
+      analytics: false,
+      liveColumns: false,
+    };
   }
 
   // Project-scoped analytics: /projects/:projectId/analytics
   const projectAnalyticsMatch = matchPath('/projects/:projectId/analytics', pathname);
   if (projectAnalyticsMatch) {
-    return { settingsPage: null, projectId: projectAnalyticsMatch.params.projectId!, threadId: null, globalSearch: false, inbox: false, analytics: true, liveColumns: false };
+    return {
+      settingsPage: null,
+      projectId: projectAnalyticsMatch.params.projectId!,
+      threadId: null,
+      globalSearch: false,
+      inbox: false,
+      analytics: true,
+      liveColumns: false,
+    };
   }
 
   // Analytics: /analytics
   if (pathname === '/analytics') {
-    return { settingsPage: null, projectId: null, threadId: null, globalSearch: false, inbox: false, analytics: true, liveColumns: false };
+    return {
+      settingsPage: null,
+      projectId: null,
+      threadId: null,
+      globalSearch: false,
+      inbox: false,
+      analytics: true,
+      liveColumns: false,
+    };
   }
 
   // Grid columns: /grid
   if (pathname === '/grid') {
-    return { settingsPage: null, projectId: null, threadId: null, globalSearch: false, inbox: false, analytics: false, liveColumns: true };
+    return {
+      settingsPage: null,
+      projectId: null,
+      threadId: null,
+      globalSearch: false,
+      inbox: false,
+      analytics: false,
+      liveColumns: true,
+    };
   }
 
-  return { settingsPage: null, projectId: null, threadId: null, globalSearch: false, inbox: false, analytics: false, liveColumns: false };
+  return {
+    settingsPage: null,
+    projectId: null,
+    threadId: null,
+    globalSearch: false,
+    inbox: false,
+    analytics: false,
+    liveColumns: false,
+  };
 }
 
 const validSettingsIds = new Set(settingsItems.map((i) => i.id));
@@ -96,13 +142,14 @@ const validSettingsIds = new Set(settingsItems.map((i) => i.id));
 export function useRouteSync() {
   const location = useLocation();
   // Subscribe only to `initialized` from project-store (not the entire app state)
-  const initialized = useProjectStore(s => s.initialized);
+  const initialized = useProjectStore((s) => s.initialized);
 
   // Sync URL → store whenever location changes (wait for auth + projects first)
   useEffect(() => {
     if (!initialized) return;
 
-    const { settingsPage, projectId, threadId, globalSearch, inbox, analytics, liveColumns } = parseRoute(location.pathname);
+    const { settingsPage, projectId, threadId, globalSearch, inbox, analytics, liveColumns } =
+      parseRoute(location.pathname);
     // Use imperative getState() to avoid subscribing to store changes
     const projectStore = useProjectStore.getState();
     const threadStore = useThreadStore.getState();
@@ -111,7 +158,8 @@ export function useRouteSync() {
     if (settingsPage && validSettingsIds.has(settingsPage as any)) {
       if (!uiStore.settingsOpen) uiStore.setSettingsOpen(true);
       if (uiStore.activeSettingsPage !== settingsPage) uiStore.setActiveSettingsPage(settingsPage);
-      if (projectId && projectId !== projectStore.selectedProjectId) projectStore.selectProject(projectId);
+      if (projectId && projectId !== projectStore.selectedProjectId)
+        projectStore.selectProject(projectId);
       return;
     }
 
@@ -125,6 +173,8 @@ export function useRouteSync() {
       if (!uiStore.automationInboxOpen) {
         uiStore.setAutomationInboxOpen(true);
       }
+      // Clear search/allThreads when entering inbox
+      if (uiStore.allThreadsProjectId) uiStore.closeAllThreads();
       return;
     }
 
@@ -141,6 +191,8 @@ export function useRouteSync() {
       if (!uiStore.analyticsOpen) {
         uiStore.setAnalyticsOpen(true);
       }
+      // Clear search/allThreads when entering analytics
+      if (uiStore.allThreadsProjectId) uiStore.closeAllThreads();
       return;
     }
 
@@ -154,6 +206,8 @@ export function useRouteSync() {
       if (!uiStore.liveColumnsOpen) {
         uiStore.setLiveColumnsOpen(true);
       }
+      // Clear search/allThreads when entering grid
+      if (uiStore.allThreadsProjectId) uiStore.closeAllThreads();
       return;
     }
 
@@ -173,6 +227,9 @@ export function useRouteSync() {
       if (uiStore.kanbanContext) {
         uiStore.setKanbanContext(null);
       }
+      // Clear other views when entering search
+      if (uiStore.analyticsOpen) uiStore.setAnalyticsOpen(false);
+      if (uiStore.liveColumnsOpen) uiStore.setLiveColumnsOpen(false);
       return;
     }
 
@@ -184,7 +241,11 @@ export function useRouteSync() {
     if (threadId) {
       // Re-select if the thread ID changed, or if the thread ID matches but
       // activeThread failed to load (e.g. due to a race condition or API error).
-      if (threadId !== threadStore.selectedThreadId || !threadStore.activeThread || threadStore.activeThread.id !== threadId) {
+      if (
+        threadId !== threadStore.selectedThreadId ||
+        !threadStore.activeThread ||
+        threadStore.activeThread.id !== threadId
+      ) {
         threadStore.selectThread(threadId);
       }
       if (projectId && projectId !== projectStore.selectedProjectId) {

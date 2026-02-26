@@ -1,7 +1,9 @@
-import { Hono } from 'hono';
 import { readFile, writeFile, stat } from 'fs/promises';
-import { normalize, resolve } from 'path';
 import { homedir } from 'os';
+import { normalize, resolve } from 'path';
+
+import { Hono } from 'hono';
+
 import * as pm from '../services/project-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
 
@@ -30,21 +32,47 @@ function isPathAllowed(targetPath: string, userId: string): boolean {
 /** Return 403 response if path is not in an allowed directory */
 function checkAllowedPath(path: string, userId: string): Response | null {
   if (!isPathAllowed(path, userId)) {
-    return new Response(JSON.stringify({ error: 'Access denied: path is outside allowed directories' }), {
-      status: 403,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    return new Response(
+      JSON.stringify({ error: 'Access denied: path is outside allowed directories' }),
+      {
+        status: 403,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
   }
   return null;
 }
 
 /** Binary file extensions that should not be edited in the internal editor */
 const BINARY_EXTENSIONS = [
-  '.png', '.jpg', '.jpeg', '.gif', '.bmp', '.ico', '.webp', '.svg',
-  '.pdf', '.zip', '.tar', '.gz', '.7z', '.rar',
-  '.exe', '.dll', '.so', '.dylib', '.bin',
-  '.mp3', '.mp4', '.wav', '.avi', '.mov',
-  '.ttf', '.woff', '.woff2', '.eot',
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.bmp',
+  '.ico',
+  '.webp',
+  '.svg',
+  '.pdf',
+  '.zip',
+  '.tar',
+  '.gz',
+  '.7z',
+  '.rar',
+  '.exe',
+  '.dll',
+  '.so',
+  '.dylib',
+  '.bin',
+  '.mp3',
+  '.mp4',
+  '.wav',
+  '.avi',
+  '.mov',
+  '.ttf',
+  '.woff',
+  '.woff2',
+  '.eot',
 ];
 
 /**

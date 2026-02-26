@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+
 import {
   listSkills,
   listProjectSkills,
@@ -6,8 +7,8 @@ import {
   removeSkill,
   RECOMMENDED_SKILLS,
 } from '../services/skills-service.js';
-import { addSkillSchema, validate } from '../validation/schemas.js';
 import { resultToResponse } from '../utils/result-response.js';
+import { addSkillSchema, validate } from '../validation/schemas.js';
 
 const app = new Hono();
 

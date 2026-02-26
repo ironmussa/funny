@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'bun:test';
+
 import { DEFAULT_CONFIG } from '../config/defaults.js';
 
 describe('DEFAULT_CONFIG', () => {

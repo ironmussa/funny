@@ -6,6 +6,7 @@
  */
 
 import { execute } from '@funny/core/git';
+
 import { logger } from '../infrastructure/logger.js';
 import type {
   Tracker,
@@ -29,7 +30,8 @@ export class GitHubTracker implements Tracker {
   /** Auto-detect repo from git remote */
   static async fromCwd(cwd: string): Promise<GitHubTracker> {
     const { stdout } = await execute(
-      'gh', ['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'],
+      'gh',
+      ['repo', 'view', '--json', 'nameWithOwner', '-q', '.nameWithOwner'],
       { cwd, reject: false },
     );
     const repo = stdout.trim();
@@ -40,8 +42,14 @@ export class GitHubTracker implements Tracker {
   }
 
   async fetchIssues(filter: IssueFilter): Promise<Issue[]> {
-    const args = ['issue', 'list', '--repo', this.repo, '--json',
-      'number,title,state,body,url,labels,assignees,comments,createdAt,updatedAt'];
+    const args = [
+      'issue',
+      'list',
+      '--repo',
+      this.repo,
+      '--json',
+      'number,title,state,body,url,labels,assignees,comments,createdAt,updatedAt',
+    ];
 
     args.push('--state', filter.state ?? 'open');
 
@@ -69,30 +77,32 @@ export class GitHubTracker implements Tracker {
 
     const raw = JSON.parse(stdout) as any[];
 
-    let issues = raw.map((item): Issue => ({
-      number: item.number,
-      title: item.title,
-      state: item.state?.toLowerCase() === 'open' ? 'open' : 'closed',
-      body: item.body ?? null,
-      url: item.url,
-      labels: (item.labels ?? []).map((l: any): IssueLabel => ({
-        name: l.name,
-        color: l.color ?? '',
-      })),
-      assignee: item.assignees?.[0]
-        ? { login: item.assignees[0].login, avatarUrl: item.assignees[0].avatarUrl }
-        : null,
-      commentsCount: Array.isArray(item.comments) ? item.comments.length : (item.comments ?? 0),
-      createdAt: item.createdAt,
-      updatedAt: item.updatedAt,
-    }));
+    let issues = raw.map(
+      (item): Issue => ({
+        number: item.number,
+        title: item.title,
+        state: item.state?.toLowerCase() === 'open' ? 'open' : 'closed',
+        body: item.body ?? null,
+        url: item.url,
+        labels: (item.labels ?? []).map(
+          (l: any): IssueLabel => ({
+            name: l.name,
+            color: l.color ?? '',
+          }),
+        ),
+        assignee: item.assignees?.[0]
+          ? { login: item.assignees[0].login, avatarUrl: item.assignees[0].avatarUrl }
+          : null,
+        commentsCount: Array.isArray(item.comments) ? item.comments.length : (item.comments ?? 0),
+        createdAt: item.createdAt,
+        updatedAt: item.updatedAt,
+      }),
+    );
 
     // Client-side filtering for excludeLabels (gh CLI doesn't support negation)
     if (filter.excludeLabels?.length) {
       const excludeSet = new Set(filter.excludeLabels);
-      issues = issues.filter((i) =>
-        !i.labels.some((l) => excludeSet.has(l.name)),
-      );
+      issues = issues.filter((i) => !i.labels.some((l) => excludeSet.has(l.name)));
     }
 
     return issues;
@@ -101,19 +111,29 @@ export class GitHubTracker implements Tracker {
   async fetchIssueDetail(issueNumber: number): Promise<IssueDetail> {
     // Fetch issue details
     const { stdout: issueJson } = await execute(
-      'gh', ['issue', 'view', String(issueNumber), '--repo', this.repo, '--json',
-        'number,title,state,body,url,labels,assignees,comments,createdAt,updatedAt'],
+      'gh',
+      [
+        'issue',
+        'view',
+        String(issueNumber),
+        '--repo',
+        this.repo,
+        '--json',
+        'number,title,state,body,url,labels,assignees,comments,createdAt,updatedAt',
+      ],
       { cwd: this.cwd },
     );
 
     const item = JSON.parse(issueJson);
 
-    const comments: IssueComment[] = (item.comments ?? []).map((c: any): IssueComment => ({
-      id: c.id ?? 0,
-      author: c.author?.login ?? 'unknown',
-      body: c.body ?? '',
-      createdAt: c.createdAt ?? '',
-    }));
+    const comments: IssueComment[] = (item.comments ?? []).map(
+      (c: any): IssueComment => ({
+        id: c.id ?? 0,
+        author: c.author?.login ?? 'unknown',
+        body: c.body ?? '',
+        createdAt: c.createdAt ?? '',
+      }),
+    );
 
     // Build full context for the orchestrator agent
     const contextParts = [
@@ -132,13 +152,20 @@ export class GitHubTracker implements Tracker {
     return {
       number: item.number,
       title: item.title,
-      state: item.state?.toLowerCase() === 'OPEN' ? 'open' : (item.state?.toLowerCase() === 'open' ? 'open' : 'closed'),
+      state:
+        item.state?.toLowerCase() === 'OPEN'
+          ? 'open'
+          : item.state?.toLowerCase() === 'open'
+            ? 'open'
+            : 'closed',
       body: item.body ?? null,
       url: item.url,
-      labels: (item.labels ?? []).map((l: any): IssueLabel => ({
-        name: l.name,
-        color: l.color ?? '',
-      })),
+      labels: (item.labels ?? []).map(
+        (l: any): IssueLabel => ({
+          name: l.name,
+          color: l.color ?? '',
+        }),
+      ),
       assignee: item.assignees?.[0]
         ? { login: item.assignees[0].login, avatarUrl: item.assignees[0].avatarUrl }
         : null,
@@ -152,7 +179,8 @@ export class GitHubTracker implements Tracker {
 
   async addComment(issueNumber: number, body: string): Promise<void> {
     await execute(
-      'gh', ['issue', 'comment', String(issueNumber), '--repo', this.repo, '--body', body],
+      'gh',
+      ['issue', 'comment', String(issueNumber), '--repo', this.repo, '--body', body],
       { cwd: this.cwd },
     );
     logger.info({ repo: this.repo, issueNumber }, 'Comment added to issue');
@@ -174,7 +202,8 @@ export class GitHubTracker implements Tracker {
 
   async assignIssue(issueNumber: number, assignee: string): Promise<void> {
     await execute(
-      'gh', ['issue', 'edit', String(issueNumber), '--repo', this.repo, '--add-assignee', assignee],
+      'gh',
+      ['issue', 'edit', String(issueNumber), '--repo', this.repo, '--add-assignee', assignee],
       { cwd: this.cwd },
     );
   }
@@ -183,10 +212,9 @@ export class GitHubTracker implements Tracker {
     if (comment) {
       await this.addComment(issueNumber, comment);
     }
-    await execute(
-      'gh', ['issue', 'close', String(issueNumber), '--repo', this.repo],
-      { cwd: this.cwd },
-    );
+    await execute('gh', ['issue', 'close', String(issueNumber), '--repo', this.repo], {
+      cwd: this.cwd,
+    });
     logger.info({ repo: this.repo, issueNumber }, 'Issue closed');
   }
 }

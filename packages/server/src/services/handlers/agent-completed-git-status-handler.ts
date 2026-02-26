@@ -7,8 +7,8 @@
  * the client never learns about it.
  */
 
-import type { EventHandler } from './types.js';
 import type { AgentCompletedEvent } from '../thread-event-bus.js';
+import type { EventHandler } from './types.js';
 
 export const agentCompletedGitStatusHandler: EventHandler<'agent:completed'> = {
   name: 'refresh-git-status-on-agent-completed',
@@ -45,11 +45,13 @@ export const agentCompletedGitStatusHandler: EventHandler<'agent:completed'> = {
       type: 'git:status',
       threadId,
       data: {
-        statuses: [{
-          threadId,
-          state: ctx.deriveGitSyncState(summary),
-          ...summary,
-        }],
+        statuses: [
+          {
+            threadId,
+            state: ctx.deriveGitSyncState(summary),
+            ...summary,
+          },
+        ],
       },
     });
   },

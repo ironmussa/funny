@@ -1,7 +1,13 @@
-import { metrics, type Meter, type Counter, type Histogram, type UpDownCounter } from '@opentelemetry/api';
-import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
-import type { Resource } from '@opentelemetry/resources';
+import {
+  metrics,
+  type Meter,
+  type Counter,
+  type Histogram,
+  type UpDownCounter,
+} from '@opentelemetry/api';
 import type { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
+import type { Resource } from '@opentelemetry/resources';
+import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 
 let meterProvider: MeterProvider | null = null;
 
@@ -11,7 +17,11 @@ export interface HttpInstruments {
   activeRequests: UpDownCounter;
 }
 
-export function initMetrics(resource: Resource, exporter: OTLPMetricExporter, exportIntervalMs: number): void {
+export function initMetrics(
+  resource: Resource,
+  exporter: OTLPMetricExporter,
+  exportIntervalMs: number,
+): void {
   const reader = new PeriodicExportingMetricReader({
     exporter,
     exportIntervalMillis: exportIntervalMs,

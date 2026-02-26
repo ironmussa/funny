@@ -3,9 +3,6 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "scripts": {
-    "test": "bun test"
-  },
   "main": "./src/types.ts",
   "types": "./src/types.ts",
   "exports": {
@@ -13,6 +10,9 @@
     "./errors": "./src/errors.ts",
     "./models": "./src/models.ts",
     "./thread-machine": "./src/thread-machine.ts"
+  },
+  "scripts": {
+    "test": "bun test"
   },
   "dependencies": {
     "xstate": "^5.28.0"

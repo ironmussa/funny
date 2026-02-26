@@ -1,12 +1,14 @@
+import { randomBytes } from 'crypto';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { homedir } from 'os';
+import { resolve } from 'path';
+
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin, username } from 'better-auth/plugins';
+
 import { db } from '../db/index.js';
-import { resolve } from 'path';
-import { homedir } from 'os';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
-import { randomBytes } from 'crypto';
-import { log } from './abbacchio.js';
+import { log } from './logger.js';
 
 const AUTH_DIR = resolve(homedir(), '.funny');
 const SECRET_PATH = resolve(AUTH_DIR, 'auth-secret');
@@ -40,10 +42,7 @@ export const auth = betterAuth({
       maxAge: 5 * 60, // 5 minutes
     },
   },
-  plugins: [
-    username(),
-    admin(),
-  ],
+  plugins: [username(), admin()],
 });
 
 /**
@@ -65,7 +64,12 @@ export async function initBetterAuth(): Promise<void> {
           role: 'admin',
         },
       });
-      log.info('Created default admin account', { namespace: 'auth', username: 'admin', password, important: 'Change this password immediately!' });
+      log.info('Created default admin account', {
+        namespace: 'auth',
+        username: 'admin',
+        password,
+        important: 'Change this password immediately!',
+      });
     }
   } catch (err) {
     log.error('Failed to initialize Better Auth', { namespace: 'auth', error: err });

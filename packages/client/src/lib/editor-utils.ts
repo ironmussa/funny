@@ -1,6 +1,6 @@
+import { api } from '@/lib/api';
 import { useSettingsStore, editorLabels } from '@/stores/settings-store';
 import type { Editor } from '@/stores/settings-store';
-import { api } from '@/lib/api';
 
 /**
  * URI protocol schemes for each supported editor.

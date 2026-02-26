@@ -5,8 +5,9 @@
  * Cleanup via dispose() closes the browser and releases resources.
  */
 
-import { z } from 'zod';
 import type { Browser, Page } from 'playwright';
+import { z } from 'zod';
+
 import type { ToolDef } from './agent-executor.js';
 
 export interface BrowserToolsContext {
@@ -68,7 +69,10 @@ export function createBrowserTools(ctx: BrowserToolsContext): BrowserToolsHandle
     browser_screenshot: {
       description: 'Take a screenshot of the current page. Returns base64 PNG.',
       parameters: z.object({
-        fullPage: z.boolean().optional().default(false)
+        fullPage: z
+          .boolean()
+          .optional()
+          .default(false)
           .describe('Whether to capture the full scrollable page'),
       }),
       execute: async ({ fullPage }) => {
@@ -82,7 +86,10 @@ export function createBrowserTools(ctx: BrowserToolsContext): BrowserToolsHandle
       description: 'Click an element matching a CSS selector.',
       parameters: z.object({
         selector: z.string().describe('CSS selector of the element to click'),
-        timeout: z.number().optional().default(5000)
+        timeout: z
+          .number()
+          .optional()
+          .default(5000)
           .describe('Max time in ms to wait for the element'),
       }),
       execute: async ({ selector, timeout }) => {
@@ -95,8 +102,7 @@ export function createBrowserTools(ctx: BrowserToolsContext): BrowserToolsHandle
     browser_get_dom: {
       description: 'Get the HTML content of the current page or a specific element.',
       parameters: z.object({
-        selector: z.string().optional()
-          .describe('CSS selector. Omit to get the full page body.'),
+        selector: z.string().optional().describe('CSS selector. Omit to get the full page body.'),
       }),
       execute: async ({ selector }) => {
         const p = await ensurePage();
@@ -123,9 +129,7 @@ export function createBrowserTools(ctx: BrowserToolsContext): BrowserToolsHandle
       parameters: z.object({}),
       execute: async () => {
         await ensurePage(); // ensure listener is set up
-        return consoleErrors.length
-          ? consoleErrors.join('\n')
-          : 'No console errors detected.';
+        return consoleErrors.length ? consoleErrors.join('\n') : 'No console errors detected.';
       },
     },
   };

@@ -6,13 +6,14 @@
  * and records the result.
  */
 
-import { nanoid } from 'nanoid';
-import { PRReviewer } from '@funny/reviewbot';
 import { getRemoteUrl } from '@funny/core/git';
+import { PRReviewer } from '@funny/reviewbot';
+import { nanoid } from 'nanoid';
+
+import { log } from '../lib/logger.js';
 import * as pm from './project-manager.js';
 import * as tm from './thread-manager.js';
 import { wsBroker } from './ws-broker.js';
-import { log } from '../lib/abbacchio.js';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -70,7 +71,9 @@ const reviewer = new PRReviewer();
  * Handle a GitHub pull_request webhook event.
  * Only processes `opened` and `synchronize` actions.
  */
-export async function handlePRWebhook(payload: PRWebhookPayload): Promise<{ threadId: string } | null> {
+export async function handlePRWebhook(
+  payload: PRWebhookPayload,
+): Promise<{ threadId: string } | null> {
   const { action, number: prNumber, pull_request: pr, repository: repo } = payload;
 
   if (action !== 'opened' && action !== 'synchronize') {
@@ -113,10 +116,17 @@ export async function handlePRWebhook(payload: PRWebhookPayload): Promise<{ thre
   const promptContent = `Review PR #${prNumber}: ${pr.title}\n\n${pr.html_url}`;
   tm.insertMessage({ threadId, role: 'user', content: promptContent });
 
-  wsBroker.emit({ type: 'thread:created', threadId, data: { projectId: project.id, title, source: 'ingest' } });
+  wsBroker.emit({
+    type: 'thread:created',
+    threadId,
+    data: { projectId: project.id, title, source: 'ingest' },
+  });
   wsBroker.emit({ type: 'agent:status', threadId, data: { status: 'running' } });
 
-  log.info(`Starting review for PR #${prNumber} on ${repo.full_name}`, { namespace: 'reviewbot', threadId });
+  log.info(`Starting review for PR #${prNumber} on ${repo.full_name}`, {
+    namespace: 'reviewbot',
+    threadId,
+  });
 
   // Run review asynchronously (don't block the webhook response)
   runReview(project.path, prNumber, threadId).catch((err) => {
@@ -136,12 +146,16 @@ async function runReview(cwd: string, prNumber: number, threadId: string): Promi
     const result = await reviewer.review(cwd, prNumber);
 
     const now = new Date().toISOString();
-    const content = `**Review: ${result.status}**\n\n${result.summary}\n\n` +
+    const content =
+      `**Review: ${result.status}**\n\n${result.summary}\n\n` +
       (result.findings.length > 0
         ? `### Findings (${result.findings.length})\n\n` +
-          result.findings.map((f) =>
-            `- **[${f.severity}]** ${f.file}${f.line ? `:${f.line}` : ''} — ${f.description}`
-          ).join('\n')
+          result.findings
+            .map(
+              (f) =>
+                `- **[${f.severity}]** ${f.file}${f.line ? `:${f.line}` : ''} — ${f.description}`,
+            )
+            .join('\n')
         : 'No issues found.');
 
     const msgId = tm.insertMessage({ threadId, role: 'assistant', content });
@@ -152,7 +166,11 @@ async function runReview(cwd: string, prNumber: number, threadId: string): Promi
       completedAt: now,
     });
 
-    wsBroker.emit({ type: 'agent:message', threadId, data: { messageId: msgId, role: 'assistant', content } });
+    wsBroker.emit({
+      type: 'agent:message',
+      threadId,
+      data: { messageId: msgId, role: 'assistant', content },
+    });
     wsBroker.emit({
       type: 'agent:result',
       threadId,
@@ -165,7 +183,10 @@ async function runReview(cwd: string, prNumber: number, threadId: string): Promi
       },
     });
 
-    log.info(`Review completed for PR #${prNumber}: ${result.status}`, { namespace: 'reviewbot', threadId });
+    log.info(`Review completed for PR #${prNumber}: ${result.status}`, {
+      namespace: 'reviewbot',
+      threadId,
+    });
   } catch (err: any) {
     const now = new Date().toISOString();
     const errorMsg = `Review failed: ${err.message || String(err)}`;
@@ -177,7 +198,11 @@ async function runReview(cwd: string, prNumber: number, threadId: string): Promi
       completedAt: now,
     });
 
-    wsBroker.emit({ type: 'agent:message', threadId, data: { messageId: msgId, role: 'assistant', content: errorMsg } });
+    wsBroker.emit({
+      type: 'agent:message',
+      threadId,
+      data: { messageId: msgId, role: 'assistant', content: errorMsg },
+    });
     wsBroker.emit({
       type: 'agent:result',
       threadId,

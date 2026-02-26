@@ -16,6 +16,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+
 import { modelsRoute } from './routes/models.js';
 import { runsRoute } from './routes/runs.js';
 import { getAdvertisedModels } from './utils/model-resolver.js';
@@ -33,10 +34,7 @@ if (requiredKey) {
   app.use('/v1/*', async (c, next) => {
     const auth = c.req.header('Authorization');
     if (!auth || auth !== `Bearer ${requiredKey}`) {
-      return c.json(
-        { error: { message: 'Invalid API key', type: 'authentication_error' } },
-        401,
-      );
+      return c.json({ error: { message: 'Invalid API key', type: 'authentication_error' } }, 401);
     }
     await next();
   });

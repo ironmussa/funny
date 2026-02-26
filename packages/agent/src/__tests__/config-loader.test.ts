@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'bun:test';
-import { loadConfig } from '../config/loader.js';
-import { join } from 'path';
 import { mkdirSync, rmSync, existsSync } from 'fs';
+import { join } from 'path';
+
+import { loadConfig } from '../config/loader.js';
 
 const TEST_DIR = join(import.meta.dir, '..', '..', '.test-tmp-config-loader');
 

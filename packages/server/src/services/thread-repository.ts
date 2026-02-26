@@ -4,8 +4,9 @@
  */
 
 import { eq, and, or, ne, like, desc, count as drizzleCount, sql } from 'drizzle-orm';
+
 import { db, schema } from '../db/index.js';
-import { log } from '../lib/abbacchio.js';
+import { log } from '../lib/logger.js';
 import { getCommentCounts } from './comment-repository.js';
 import { recordStageChange } from './stage-history.js';
 
@@ -35,11 +36,16 @@ export function listThreads(opts: {
 
   const condition = filters.length > 0 ? and(...filters) : undefined;
   const completionTime = sql`COALESCE(${schema.threads.completedAt}, ${schema.threads.createdAt})`;
-  const threads = db.select().from(schema.threads).where(condition).orderBy(desc(schema.threads.pinned), desc(completionTime)).all();
+  const threads = db
+    .select()
+    .from(schema.threads)
+    .where(condition)
+    .orderBy(desc(schema.threads.pinned), desc(completionTime))
+    .all();
 
   if (threads.length > 0) {
-    const counts = getCommentCounts(threads.map(t => t.id));
-    return threads.map(t => ({ ...t, commentCount: counts.get(t.id) ?? 0 }));
+    const counts = getCommentCounts(threads.map((t) => t.id));
+    return threads.map((t) => ({ ...t, commentCount: counts.get(t.id) ?? 0 }));
   }
   return threads;
 }
@@ -66,8 +72,8 @@ export function listArchivedThreads(opts: {
       or(
         like(schema.threads.title, `%${safeSearch}%`),
         like(schema.threads.branch, `%${safeSearch}%`),
-        like(schema.threads.status, `%${safeSearch}%`)
-      ) as any
+        like(schema.threads.status, `%${safeSearch}%`),
+      ) as any,
     );
   }
 
@@ -99,7 +105,11 @@ export function getThread(id: string) {
 
 /** Get a thread by its external request ID (used by ingest mapper) */
 export function getThreadByExternalRequestId(requestId: string) {
-  return db.select().from(schema.threads).where(eq(schema.threads.externalRequestId, requestId)).get();
+  return db
+    .select()
+    .from(schema.threads)
+    .where(eq(schema.threads.externalRequestId, requestId))
+    .get();
 }
 
 /** Insert a new thread */
@@ -128,10 +138,11 @@ export function updateThread(
     provider: string;
     initTools: string;
     initCwd: string;
-  }>
+  }>,
 ) {
   if (updates.stage !== undefined) {
-    const currentThread = db.select({ stage: schema.threads.stage })
+    const currentThread = db
+      .select({ stage: schema.threads.stage })
       .from(schema.threads)
       .where(eq(schema.threads.id, id))
       .get();
@@ -142,7 +153,8 @@ export function updateThread(
   }
 
   if (updates.archived !== undefined) {
-    const currentThread = db.select({ stage: schema.threads.stage, archived: schema.threads.archived })
+    const currentThread = db
+      .select({ stage: schema.threads.stage, archived: schema.threads.archived })
       .from(schema.threads)
       .where(eq(schema.threads.id, id))
       .get();
@@ -167,14 +179,12 @@ export function deleteThread(id: string) {
 /** Mark stale (running/waiting) threads as interrupted. Called on server startup. */
 export function markStaleThreadsInterrupted(): void {
   const staleCondition = and(
-    or(
-      eq(schema.threads.status, 'running'),
-      eq(schema.threads.status, 'waiting'),
-    ),
+    or(eq(schema.threads.status, 'running'), eq(schema.threads.status, 'waiting')),
     ne(schema.threads.provider, 'external'),
   );
 
-  const stale = db.select({ id: schema.threads.id })
+  const stale = db
+    .select({ id: schema.threads.id })
     .from(schema.threads)
     .where(staleCondition)
     .all();
@@ -184,7 +194,10 @@ export function markStaleThreadsInterrupted(): void {
       .set({ status: 'interrupted', completedAt: new Date().toISOString() })
       .where(staleCondition)
       .run();
-    log.info(`Marked ${stale.length} stale thread(s) as interrupted`, { namespace: 'thread-manager', count: stale.length });
+    log.info(`Marked ${stale.length} stale thread(s) as interrupted`, {
+      namespace: 'thread-manager',
+      count: stale.length,
+    });
   }
 }
 
@@ -199,7 +212,8 @@ export function markStaleExternalThreadsStopped(): void {
     eq(schema.threads.provider, 'external'),
   );
 
-  const stale = db.select({ id: schema.threads.id })
+  const stale = db
+    .select({ id: schema.threads.id })
     .from(schema.threads)
     .where(staleCondition)
     .all();
@@ -209,6 +223,9 @@ export function markStaleExternalThreadsStopped(): void {
       .set({ status: 'stopped', completedAt: new Date().toISOString() })
       .where(staleCondition)
       .run();
-    log.info(`Marked ${stale.length} stale external thread(s) as stopped`, { namespace: 'thread-manager', count: stale.length });
+    log.info(`Marked ${stale.length} stale external thread(s) as stopped`, {
+      namespace: 'thread-manager',
+      count: stale.length,
+    });
   }
 }

@@ -10,8 +10,9 @@
  */
 
 import { Hono } from 'hono';
-import type { EventBus } from '../infrastructure/event-bus.js';
+
 import type { PipelineServiceConfig } from '../config/schema.js';
+import type { EventBus } from '../infrastructure/event-bus.js';
 import { logger } from '../infrastructure/logger.js';
 
 // ── HMAC signature validation ────────────────────────────────────
@@ -30,16 +31,15 @@ async function verifySignature(
     ['sign'],
   );
   const sig = await crypto.subtle.sign('HMAC', key, encoder.encode(payload));
-  const expected = `sha256=${Array.from(new Uint8Array(sig)).map((b) => b.toString(16).padStart(2, '0')).join('')}`;
+  const expected = `sha256=${Array.from(new Uint8Array(sig))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('')}`;
   return signature === expected;
 }
 
 // ── Route factory ────────────────────────────────────────────────
 
-export function createWebhookRoutes(
-  eventBus: EventBus,
-  config: PipelineServiceConfig,
-): Hono {
+export function createWebhookRoutes(eventBus: EventBus, config: PipelineServiceConfig): Hono {
   const app = new Hono();
 
   app.post('/github', async (c) => {
@@ -118,7 +118,10 @@ export function createWebhookRoutes(
       const issueNumber = issueMatch ? parseInt(issueMatch[1], 10) : null;
 
       if (reviewState === 'approved') {
-        logger.info({ headRef, prNumber, reviewer: review?.user?.login }, 'PR approved via webhook');
+        logger.info(
+          { headRef, prNumber, reviewer: review?.user?.login },
+          'PR approved via webhook',
+        );
 
         await eventBus.publish({
           event_type: 'session.review_requested',

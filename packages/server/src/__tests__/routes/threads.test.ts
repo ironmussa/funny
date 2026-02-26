@@ -1,7 +1,15 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { Hono } from 'hono';
+
 import { eq, and } from 'drizzle-orm';
-import { createTestDb, seedProject, seedThread, seedMessage, seedToolCall } from '../helpers/test-db.js';
+import { Hono } from 'hono';
+
+import {
+  createTestDb,
+  seedProject,
+  seedThread,
+  seedMessage,
+  seedToolCall,
+} from '../helpers/test-db.js';
 
 describe('Thread Routes', () => {
   let app: Hono;
@@ -20,7 +28,10 @@ describe('Thread Routes', () => {
       if (projectId) {
         const conditions = includeArchived
           ? eq(testDb.schema.threads.projectId, projectId)
-          : and(eq(testDb.schema.threads.projectId, projectId), eq(testDb.schema.threads.archived, 0));
+          : and(
+              eq(testDb.schema.threads.projectId, projectId),
+              eq(testDb.schema.threads.archived, 0),
+            );
         const threads = testDb.db.select().from(testDb.schema.threads).where(conditions).all();
         return c.json(threads);
       }
@@ -29,16 +40,30 @@ describe('Thread Routes', () => {
         return c.json(testDb.db.select().from(testDb.schema.threads).all());
       }
 
-      return c.json(testDb.db.select().from(testDb.schema.threads).where(eq(testDb.schema.threads.archived, 0)).all());
+      return c.json(
+        testDb.db
+          .select()
+          .from(testDb.schema.threads)
+          .where(eq(testDb.schema.threads.archived, 0))
+          .all(),
+      );
     });
 
     // GET /:id
     app.get('/:id', (c) => {
       const id = c.req.param('id');
-      const thread = testDb.db.select().from(testDb.schema.threads).where(eq(testDb.schema.threads.id, id)).get();
+      const thread = testDb.db
+        .select()
+        .from(testDb.schema.threads)
+        .where(eq(testDb.schema.threads.id, id))
+        .get();
       if (!thread) return c.json({ error: 'Thread not found' }, 404);
 
-      const messages = testDb.db.select().from(testDb.schema.messages).where(eq(testDb.schema.messages.threadId, id)).all();
+      const messages = testDb.db
+        .select()
+        .from(testDb.schema.messages)
+        .where(eq(testDb.schema.messages.threadId, id))
+        .all();
       const toolCalls = testDb.db.select().from(testDb.schema.toolCalls).all();
       const messagesWithTools = messages.map((msg) => ({
         ...msg,
@@ -53,7 +78,11 @@ describe('Thread Routes', () => {
       const id = c.req.param('id');
       const body = await c.req.json<{ archived?: boolean }>();
 
-      const thread = testDb.db.select().from(testDb.schema.threads).where(eq(testDb.schema.threads.id, id)).get();
+      const thread = testDb.db
+        .select()
+        .from(testDb.schema.threads)
+        .where(eq(testDb.schema.threads.id, id))
+        .get();
       if (!thread) return c.json({ error: 'Thread not found' }, 404);
 
       const updates: Record<string, any> = {};
@@ -62,10 +91,18 @@ describe('Thread Routes', () => {
       }
 
       if (Object.keys(updates).length > 0) {
-        testDb.db.update(testDb.schema.threads).set(updates).where(eq(testDb.schema.threads.id, id)).run();
+        testDb.db
+          .update(testDb.schema.threads)
+          .set(updates)
+          .where(eq(testDb.schema.threads.id, id))
+          .run();
       }
 
-      const updated = testDb.db.select().from(testDb.schema.threads).where(eq(testDb.schema.threads.id, id)).get();
+      const updated = testDb.db
+        .select()
+        .from(testDb.schema.threads)
+        .where(eq(testDb.schema.threads.id, id))
+        .get();
       return c.json(updated);
     });
 

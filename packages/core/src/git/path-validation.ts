@@ -1,8 +1,9 @@
-import { resolve, isAbsolute } from 'path';
-import { access } from 'fs/promises';
 import { accessSync } from 'fs';
-import { ok, err, type Result, ResultAsync } from 'neverthrow';
+import { access } from 'fs/promises';
+import { resolve, isAbsolute } from 'path';
+
 import { badRequest, forbidden, type DomainError } from '@funny/shared/errors';
+import { ok, err, type Result, ResultAsync } from 'neverthrow';
 
 /**
  * Validates that a path exists and is accessible (async).
@@ -15,7 +16,7 @@ export function validatePath(path: string): ResultAsync<string, DomainError> {
 
   return ResultAsync.fromPromise(
     access(path).then(() => resolve(path)),
-    () => badRequest(`Path does not exist or is not accessible: ${path}`)
+    () => badRequest(`Path does not exist or is not accessible: ${path}`),
   );
 }
 

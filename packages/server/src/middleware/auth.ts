@@ -1,4 +1,5 @@
 import type { Context, Next } from 'hono';
+
 import { getAuthMode } from '../lib/auth-mode.js';
 import { validateToken } from '../services/auth-service.js';
 

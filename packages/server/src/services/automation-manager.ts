@@ -1,5 +1,6 @@
 import { eq, and, or, desc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+
 import { db, schema } from '../db/index.js';
 
 // Lazy import to avoid circular dependency (scheduler imports us)
@@ -35,16 +36,16 @@ export function listAutomations(projectId?: string, userId?: string) {
   }
 
   const condition = filters.length > 0 ? and(...filters) : undefined;
-  return db.select().from(schema.automations)
+  return db
+    .select()
+    .from(schema.automations)
     .where(condition)
     .orderBy(desc(schema.automations.createdAt))
     .all();
 }
 
 export function getAutomation(id: string) {
-  return db.select().from(schema.automations)
-    .where(eq(schema.automations.id, id))
-    .get();
+  return db.select().from(schema.automations).where(eq(schema.automations.id, id)).get();
 }
 
 export async function createAutomation(data: {
@@ -59,22 +60,24 @@ export async function createAutomation(data: {
   const id = nanoid();
   const now = new Date().toISOString();
 
-  db.insert(schema.automations).values({
-    id,
-    projectId: data.projectId,
-    userId: data.userId || '__local__',
-    name: data.name,
-    prompt: data.prompt,
-    schedule: data.schedule,
-    model: data.model || 'sonnet',
-    mode: 'local',
-    permissionMode: data.permissionMode || 'autoEdit',
-    baseBranch: null,
-    enabled: 1,
-    maxRunHistory: 20,
-    createdAt: now,
-    updatedAt: now,
-  }).run();
+  db.insert(schema.automations)
+    .values({
+      id,
+      projectId: data.projectId,
+      userId: data.userId || '__local__',
+      name: data.name,
+      prompt: data.prompt,
+      schedule: data.schedule,
+      model: data.model || 'sonnet',
+      mode: 'local',
+      permissionMode: data.permissionMode || 'autoEdit',
+      baseBranch: null,
+      enabled: 1,
+      maxRunHistory: 20,
+      createdAt: now,
+      updatedAt: now,
+    })
+    .run();
 
   const automation = getAutomation(id)!;
 
@@ -87,8 +90,7 @@ export async function createAutomation(data: {
 
 export async function updateAutomation(id: string, updates: Record<string, any>) {
   updates.updatedAt = new Date().toISOString();
-  db.update(schema.automations).set(updates)
-    .where(eq(schema.automations.id, id)).run();
+  db.update(schema.automations).set(updates).where(eq(schema.automations.id, id)).run();
 
   // Notify scheduler to reschedule the cron job
   const automation = getAutomation(id);
@@ -120,25 +122,30 @@ export function createRun(data: {
 }
 
 export function updateRun(id: string, updates: Record<string, any>) {
-  db.update(schema.automationRuns).set(updates)
-    .where(eq(schema.automationRuns.id, id)).run();
+  db.update(schema.automationRuns).set(updates).where(eq(schema.automationRuns.id, id)).run();
 }
 
 export function listRuns(automationId: string) {
-  return db.select().from(schema.automationRuns)
+  return db
+    .select()
+    .from(schema.automationRuns)
     .where(eq(schema.automationRuns.automationId, automationId))
     .orderBy(desc(schema.automationRuns.startedAt))
     .all();
 }
 
 export function listRunningRuns() {
-  return db.select().from(schema.automationRuns)
+  return db
+    .select()
+    .from(schema.automationRuns)
     .where(eq(schema.automationRuns.status, 'running'))
     .all();
 }
 
 export function getRunByThreadId(threadId: string) {
-  return db.select().from(schema.automationRuns)
+  return db
+    .select()
+    .from(schema.automationRuns)
     .where(eq(schema.automationRuns.threadId, threadId))
     .get();
 }
@@ -151,10 +158,7 @@ export function listPendingReviewRuns(projectId?: string) {
 /** Get inbox runs with flexible filtering */
 export function listInboxRuns(options?: { projectId?: string; triageStatus?: string }) {
   const conditions = [
-    or(
-      eq(schema.automationRuns.status, 'completed'),
-      eq(schema.automationRuns.status, 'failed'),
-    ),
+    or(eq(schema.automationRuns.status, 'completed'), eq(schema.automationRuns.status, 'failed')),
   ];
 
   // Filter by triage status if specified
@@ -167,11 +171,12 @@ export function listInboxRuns(options?: { projectId?: string; triageStatus?: str
     conditions.push(eq(schema.automations.projectId, options.projectId));
   }
 
-  return db.select({
-    run: schema.automationRuns,
-    automation: schema.automations,
-    thread: schema.threads,
-  })
+  return db
+    .select({
+      run: schema.automationRuns,
+      automation: schema.automations,
+      thread: schema.threads,
+    })
     .from(schema.automationRuns)
     .innerJoin(schema.automations, eq(schema.automationRuns.automationId, schema.automations.id))
     .innerJoin(schema.threads, eq(schema.automationRuns.threadId, schema.threads.id))

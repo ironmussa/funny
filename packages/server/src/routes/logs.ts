@@ -1,6 +1,7 @@
-import { Hono } from 'hono';
-import type { HonoEnv } from '../types/hono-env.js';
 import { emitLog } from '@funny/observability';
+import { Hono } from 'hono';
+
+import type { HonoEnv } from '../types/hono-env.js';
 
 export const logRoutes = new Hono<HonoEnv>();
 
@@ -23,7 +24,9 @@ logRoutes.post('/', async (c) => {
   for (const entry of entries) {
     if (!entry.message || typeof entry.message !== 'string') continue;
 
-    const level = VALID_LEVELS.has(entry.level) ? entry.level as 'debug' | 'info' | 'warn' | 'error' : 'info';
+    const level = VALID_LEVELS.has(entry.level)
+      ? (entry.level as 'debug' | 'info' | 'warn' | 'error')
+      : 'info';
     const attrs: Record<string, string> = {
       'log.source': 'browser',
       'user.id': userId,

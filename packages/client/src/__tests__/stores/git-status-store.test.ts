@@ -1,7 +1,7 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { okAsync, errAsync } from 'neverthrow';
-import type { DomainError } from '@funny/shared/errors';
 import type { GitStatusInfo } from '@funny/shared';
+import type { DomainError } from '@funny/shared/errors';
+import { okAsync, errAsync } from 'neverthrow';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('@/lib/api', () => ({
   api: {
@@ -52,11 +52,14 @@ describe('GitStatusStore', () => {
   describe('fetchForProject', () => {
     test('updates statusByThread with statuses from API', async () => {
       const s1 = makeStatus({ threadId: 't1', state: 'dirty', dirtyFileCount: 2, linesAdded: 5 });
-      const s2 = makeStatus({ threadId: 't2', state: 'pushed', dirtyFileCount: 0, unpushedCommitCount: 0 });
+      const s2 = makeStatus({
+        threadId: 't2',
+        state: 'pushed',
+        dirtyFileCount: 0,
+        unpushedCommitCount: 0,
+      });
 
-      mockApi.getGitStatuses.mockReturnValueOnce(
-        okAsync({ statuses: [s1, s2] }) as any,
-      );
+      mockApi.getGitStatuses.mockReturnValueOnce(okAsync({ statuses: [s1, s2] }) as any);
 
       await useGitStatusStore.getState().fetchForProject('p1');
 
@@ -81,7 +84,9 @@ describe('GitStatusStore', () => {
 
       // Use a deferred promise so the first call stays in-flight
       let resolve!: () => void;
-      const gate = new Promise<void>((r) => { resolve = r; });
+      const gate = new Promise<void>((r) => {
+        resolve = r;
+      });
 
       mockApi.getGitStatuses.mockImplementation(() => {
         // Return a ResultAsync that waits on the gate before resolving
@@ -107,9 +112,7 @@ describe('GitStatusStore', () => {
     });
 
     test('removes project from loadingProjects after completion', async () => {
-      mockApi.getGitStatuses.mockReturnValueOnce(
-        okAsync({ statuses: [] }) as any,
-      );
+      mockApi.getGitStatuses.mockReturnValueOnce(okAsync({ statuses: [] }) as any);
 
       await useGitStatusStore.getState().fetchForProject('p1');
 
@@ -162,9 +165,7 @@ describe('GitStatusStore', () => {
     });
 
     test('removes thread from _loadingThreads after completion', async () => {
-      mockApi.getGitStatus.mockReturnValueOnce(
-        okAsync(makeStatus({ threadId: 't1' })) as any,
-      );
+      mockApi.getGitStatus.mockReturnValueOnce(okAsync(makeStatus({ threadId: 't1' })) as any);
 
       await useGitStatusStore.getState().fetchForThread('t1');
 

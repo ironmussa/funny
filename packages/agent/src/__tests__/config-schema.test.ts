@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'bun:test';
+
 import { PipelineServiceConfigSchema } from '../config/schema.js';
 
 describe('PipelineServiceConfigSchema', () => {

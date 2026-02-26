@@ -37,12 +37,12 @@ docker compose up -d
 
 This starts 4 services:
 
-| Service | Port | Purpose |
-|---------|------|---------|
-| Vector | 4318 | OTLP HTTP receiver, fans out to Victoria |
-| Victoria Metrics | 8428 | Time series DB for metrics (PromQL) |
-| Victoria Logs | 9428 | Log storage (LogQL) |
-| Victoria Traces | 10428 | Distributed tracing (TraceQL) |
+| Service          | Port  | Purpose                                  |
+| ---------------- | ----- | ---------------------------------------- |
+| Vector           | 4318  | OTLP HTTP receiver, fans out to Victoria |
+| Victoria Metrics | 8428  | Time series DB for metrics (PromQL)      |
+| Victoria Logs    | 9428  | Log storage (LogQL)                      |
+| Victoria Traces  | 10428 | Distributed tracing (TraceQL)            |
 
 To stop: `docker compose down` (add `-v` to also delete stored data).
 
@@ -118,16 +118,19 @@ The middleware is already wired in `packages/server/src/index.ts`. Telemetry flo
 ### Query your data
 
 **Metrics** (Victoria Metrics UI):
+
 ```
 http://localhost:8428/vmui
 ```
 
 **Logs** (Victoria Logs UI):
+
 ```
 http://localhost:9428/select/vmui
 ```
 
 **Traces** — query via API:
+
 ```bash
 curl http://localhost:10428/select/0/vmui
 ```
@@ -137,16 +140,19 @@ curl http://localhost:10428/select/0/vmui
 The middleware auto-instruments every HTTP request with:
 
 ### Metrics
-| Metric | Type | Description |
-|--------|------|-------------|
-| `http.server.request.duration` | Histogram | Request duration in ms |
-| `http.server.request.total` | Counter | Total request count |
-| `http.server.active_requests` | UpDownCounter | In-flight requests |
+
+| Metric                         | Type          | Description            |
+| ------------------------------ | ------------- | ---------------------- |
+| `http.server.request.duration` | Histogram     | Request duration in ms |
+| `http.server.request.total`    | Counter       | Total request count    |
+| `http.server.active_requests`  | UpDownCounter | In-flight requests     |
 
 Labels: `http.method`, `http.route`, `http.status_code`
 
 ### Traces
+
 One span per HTTP request with:
+
 - `http.method`, `http.route`, `http.status_code`, `http.url`
 - Duration automatically recorded
 - Error status set on 5xx responses
@@ -163,8 +169,8 @@ import { BrowserLogger } from '@funny/observability/browser';
 
 // Works in React, Vue, Svelte, vanilla JS — anything with a browser
 const logger = new BrowserLogger({
-  endpoint: '/api/logs',           // your server's log ingest endpoint
-  authToken: 'my-token',           // optional: Authorization header
+  endpoint: '/api/logs', // your server's log ingest endpoint
+  authToken: 'my-token', // optional: Authorization header
   defaultAttributes: { app: 'my-app' },
 });
 
@@ -173,11 +179,12 @@ logger.error('API failed', { 'api.url': '/users' });
 logger.warn('Slow render', { 'duration.ms': '1200' });
 
 // Namespaced child loggers
-const navLog = logger.child({ 'component': 'navbar' });
+const navLog = logger.child({ component: 'navbar' });
 navLog.info('Menu opened');
 ```
 
 Features:
+
 - Batches logs (flushes every 5s or every 25 entries)
 - Auto-captures `window.onerror` and `unhandledrejection`
 - Flushes on `beforeunload` (uses `keepalive: true`)
@@ -199,20 +206,23 @@ function MyComponent() {
 
 Via environment variables:
 
-| Env Var | Default | Description |
-|---------|---------|-------------|
-| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | OTLP HTTP endpoint (Vector) |
-| `OTEL_SERVICE_NAME` | `funny-server` | Service name in telemetry |
-| `OTEL_ENABLED` | `true` | Set to `false` to disable telemetry |
-| `OTEL_EXPORT_INTERVAL_MS` | `10000` | Metrics export interval (ms) |
+| Env Var                       | Default                 | Description                         |
+| ----------------------------- | ----------------------- | ----------------------------------- |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `http://localhost:4318` | OTLP HTTP endpoint (Vector)         |
+| `OTEL_SERVICE_NAME`           | `funny-server`          | Service name in telemetry           |
+| `OTEL_ENABLED`                | `true`                  | Set to `false` to disable telemetry |
+| `OTEL_EXPORT_INTERVAL_MS`     | `10000`                 | Metrics export interval (ms)        |
 
 Or pass overrides programmatically:
 
 ```typescript
-app.use('*', observability({
-  endpoint: 'http://my-collector:4318',
-  serviceName: 'my-service',
-}));
+app.use(
+  '*',
+  observability({
+    endpoint: 'http://my-collector:4318',
+    serviceName: 'my-service',
+  }),
+);
 ```
 
 ## Integration
@@ -250,11 +260,11 @@ packages/observability/
 
 ### Exports
 
-| Import | Environment | Purpose |
-|--------|-------------|---------|
-| `@funny/observability` | Node/Bun | Server SDK: middleware, traces, metrics, emitLog |
-| `@funny/observability/browser` | Browser | BrowserLogger: vanilla JS client for any framework |
-| `@funny/observability/logger` | Node/Bun | Direct access to LoggerProvider + emitLog |
+| Import                         | Environment | Purpose                                            |
+| ------------------------------ | ----------- | -------------------------------------------------- |
+| `@funny/observability`         | Node/Bun    | Server SDK: middleware, traces, metrics, emitLog   |
+| `@funny/observability/browser` | Browser     | BrowserLogger: vanilla JS client for any framework |
+| `@funny/observability/logger`  | Node/Bun    | Direct access to LoggerProvider + emitLog          |
 
 ## Scripts
 
@@ -288,15 +298,15 @@ http_server_active_requests
 
 ```html
 <script type="module">
-import { BrowserLogger } from '@funny/observability/browser';
+  import { BrowserLogger } from '@funny/observability/browser';
 
-const log = new BrowserLogger({ endpoint: 'https://myserver.com/api/logs' });
+  const log = new BrowserLogger({ endpoint: 'https://myserver.com/api/logs' });
 
-document.getElementById('btn').addEventListener('click', () => {
-  log.info('Button clicked', { 'button.id': 'btn' });
-});
+  document.getElementById('btn').addEventListener('click', () => {
+    log.info('Button clicked', { 'button.id': 'btn' });
+  });
 
-// Errors are captured automatically (window.onerror, unhandledrejection)
+  // Errors are captured automatically (window.onerror, unhandledrejection)
 </script>
 ```
 
@@ -324,7 +334,7 @@ export function Dashboard() {
   const handleRefresh = () => {
     log.info('User refreshed data');
     fetchData().catch((err) => {
-      log.error('Failed to fetch data', { 'error': err.message });
+      log.error('Failed to fetch data', { error: err.message });
     });
   };
 
@@ -402,7 +412,7 @@ import { emitLog } from '@funny/observability';
 
 // In any server-side code
 emitLog('info', 'Job started', { 'job.id': '123', 'job.type': 'sync' });
-emitLog('error', 'Job failed', { 'job.id': '123', 'error': 'timeout' });
+emitLog('error', 'Job failed', { 'job.id': '123', error: 'timeout' });
 ```
 
 ## Data Retention

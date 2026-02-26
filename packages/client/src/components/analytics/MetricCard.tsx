@@ -18,12 +18,10 @@ const colorClasses: Record<string, string> = {
 
 export function MetricCard({ title, value, icon, color }: Props) {
   return (
-    <div className="border border-border rounded-lg p-4">
-      <div className="flex items-center justify-between mb-2">
+    <div className="rounded-lg border border-border p-4">
+      <div className="mb-2 flex items-center justify-between">
         <span className="text-xs text-muted-foreground">{title}</span>
-        <div className={cn('p-1.5 rounded-md', colorClasses[color])}>
-          {icon}
-        </div>
+        <div className={cn('p-1.5 rounded-md', colorClasses[color])}>{icon}</div>
       </div>
       <p className="text-2xl font-bold">{value}</p>
     </div>

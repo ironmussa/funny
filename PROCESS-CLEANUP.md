@@ -56,7 +56,7 @@ if (process.platform === 'win32' && !sdkOptions.spawnClaudeCodeProcess) {
   const { spawn } = await import('child_process');
   sdkOptions.spawnClaudeCodeProcess = (options) => {
     const child = spawn(options.command, options.args, {
-      stdio: ['pipe', 'pipe', 'pipe'],  // ← triggers HANDLE_LIST restriction
+      stdio: ['pipe', 'pipe', 'pipe'], // ← triggers HANDLE_LIST restriction
       cwd: options.cwd,
       env: options.env,
       windowsHide: true,
@@ -68,6 +68,7 @@ if (process.platform === 'win32' && !sdkOptions.spawnClaudeCodeProcess) {
 ```
 
 Same pattern already used by:
+
 - `sandbox-manager.ts:490` (Podman execution)
 - `pty-manager.ts:23-31` (PTY helper with explicit comment about handle inheritance)
 
@@ -121,18 +122,18 @@ Each service self-registers at import time:
 
 ### Registered services
 
-| Service              | File                              | Phase    | Notes                              |
-|----------------------|-----------------------------------|----------|------------------------------------|
-| http-server          | index.ts                          | SERVER   | Releases port immediately          |
-| observability        | index.ts                          | SERVICES | Flushes telemetry (hard only)      |
-| automation-scheduler | automation-scheduler.ts           | SERVICES | Stops cron jobs + polling timer    |
-| pty-manager          | pty-manager.ts                    | SERVICES | taskkill /F /T on Windows          |
-| agent-runner         | agent-runner.ts                   | SERVICES | Mode-aware: extract vs kill        |
-| command-runner       | command-runner.ts                 | SERVICES | Kills all running commands         |
-| rate-limit-timer     | middleware/rate-limit.ts          | SERVICES | Clears prune interval              |
-| mcp-oauth-timer      | mcp-oauth.ts                      | SERVICES | Clears state cleanup interval      |
-| database             | db/index.ts                       | DATABASE | WAL checkpoint + close             |
-| process-exit         | index.ts                          | FINAL    | Windows tree kill + process.exit   |
+| Service              | File                     | Phase    | Notes                            |
+| -------------------- | ------------------------ | -------- | -------------------------------- |
+| http-server          | index.ts                 | SERVER   | Releases port immediately        |
+| observability        | index.ts                 | SERVICES | Flushes telemetry (hard only)    |
+| automation-scheduler | automation-scheduler.ts  | SERVICES | Stops cron jobs + polling timer  |
+| pty-manager          | pty-manager.ts           | SERVICES | taskkill /F /T on Windows        |
+| agent-runner         | agent-runner.ts          | SERVICES | Mode-aware: extract vs kill      |
+| command-runner       | command-runner.ts        | SERVICES | Kills all running commands       |
+| rate-limit-timer     | middleware/rate-limit.ts | SERVICES | Clears prune interval            |
+| mcp-oauth-timer      | mcp-oauth.ts             | SERVICES | Clears state cleanup interval    |
+| database             | db/index.ts              | DATABASE | WAL checkpoint + close           |
+| process-exit         | index.ts                 | FINAL    | Windows tree kill + process.exit |
 
 ### Two shutdown modes
 
@@ -189,15 +190,15 @@ tail -f ~/.funny/logs/server-2026-02-22.log
 
 ## Key files
 
-| File | Role |
-|------|------|
-| `packages/core/src/agents/sdk-claude.ts` | Root cause fix: custom spawn with handle isolation |
-| `packages/server/src/services/shutdown-manager.ts` | Centralized shutdown registry |
-| `packages/server/src/kill-port.ts` | Pre-startup ghost socket cleanup |
-| `packages/server/src/dev-watch.ts` | Dev wrapper: file watch + process tree kill |
-| `packages/client/vite.config.ts` | Proxy timeout (10s) to prevent infinite hangs |
-| `packages/client/src/hooks/use-ws.ts` | WebSocket reconnection + circuit breaker reset |
-| `packages/client/src/stores/circuit-breaker-store.ts` | HTTP circuit breaker (opens after 3 failures) |
-| `packages/client/src/stores/auth-store.ts` | Auth init (`_bootstrapPromise` at module load) |
-| `packages/server/src/services/pty-manager.ts` | PTY helper with handle isolation pattern |
-| `packages/core/src/containers/sandbox-manager.ts` | Sandbox spawn with same handle isolation pattern |
+| File                                                  | Role                                               |
+| ----------------------------------------------------- | -------------------------------------------------- |
+| `packages/core/src/agents/sdk-claude.ts`              | Root cause fix: custom spawn with handle isolation |
+| `packages/server/src/services/shutdown-manager.ts`    | Centralized shutdown registry                      |
+| `packages/server/src/kill-port.ts`                    | Pre-startup ghost socket cleanup                   |
+| `packages/server/src/dev-watch.ts`                    | Dev wrapper: file watch + process tree kill        |
+| `packages/client/vite.config.ts`                      | Proxy timeout (10s) to prevent infinite hangs      |
+| `packages/client/src/hooks/use-ws.ts`                 | WebSocket reconnection + circuit breaker reset     |
+| `packages/client/src/stores/circuit-breaker-store.ts` | HTTP circuit breaker (opens after 3 failures)      |
+| `packages/client/src/stores/auth-store.ts`            | Auth init (`_bootstrapPromise` at module load)     |
+| `packages/server/src/services/pty-manager.ts`         | PTY helper with handle isolation pattern           |
+| `packages/core/src/containers/sandbox-manager.ts`     | Sandbox spawn with same handle isolation pattern   |

@@ -1,7 +1,8 @@
-import { useEffect, useRef } from 'react';
-import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
+import { Terminal } from '@xterm/xterm';
+import { useEffect, useRef } from 'react';
+
 import { useTerminalStore } from '@/stores/terminal-store';
 
 const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;

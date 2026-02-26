@@ -112,7 +112,15 @@ export interface Project {
 // ─── Threads ─────────────────────────────────────────────
 
 export type ThreadMode = 'local' | 'worktree';
-export type ThreadStatus = 'idle' | 'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'stopped' | 'interrupted';
+export type ThreadStatus =
+  | 'idle'
+  | 'pending'
+  | 'running'
+  | 'waiting'
+  | 'completed'
+  | 'failed'
+  | 'stopped'
+  | 'interrupted';
 export type ThreadStage = 'backlog' | 'planning' | 'in_progress' | 'review' | 'done' | 'archived';
 export type WaitingReason = 'question' | 'plan' | 'permission';
 
@@ -122,7 +130,12 @@ export type ThreadSource = 'web' | 'chrome_extension' | 'api' | 'automation' | '
 
 export type ClaudeModel = 'sonnet' | 'sonnet-4.6' | 'opus' | 'haiku';
 export type CodexModel = 'o3' | 'o4-mini' | 'codex-mini';
-export type GeminiModel = 'gemini-2.0-flash' | 'gemini-2.5-flash' | 'gemini-2.5-pro' | 'gemini-3-flash-preview' | 'gemini-3-pro-preview';
+export type GeminiModel =
+  | 'gemini-2.0-flash'
+  | 'gemini-2.5-flash'
+  | 'gemini-2.5-pro'
+  | 'gemini-3-flash-preview'
+  | 'gemini-3-pro-preview';
 export type AgentModel = ClaudeModel | CodexModel | GeminiModel;
 export type PermissionMode = 'plan' | 'autoEdit' | 'confirmEdit';
 
@@ -665,7 +678,12 @@ export interface InboxItem {
 
 // ─── Thread Events ──────────────────────────────────────
 
-export type ThreadEventType = 'git:changed' | 'git:commit' | 'git:push' | 'git:merge' | 'git:pr_created';
+export type ThreadEventType =
+  | 'git:changed'
+  | 'git:commit'
+  | 'git:push'
+  | 'git:merge'
+  | 'git:pr_created';
 
 export interface ThreadEvent {
   id: string;
@@ -678,7 +696,13 @@ export interface ThreadEvent {
 // ─── Code Review (ReviewBot) ────────────────────────────
 
 export type ReviewFindingSeverity = 'critical' | 'high' | 'medium' | 'low' | 'suggestion';
-export type ReviewFindingCategory = 'bug' | 'security' | 'performance' | 'style' | 'logic' | 'maintainability';
+export type ReviewFindingCategory =
+  | 'bug'
+  | 'security'
+  | 'performance'
+  | 'style'
+  | 'logic'
+  | 'maintainability';
 
 export interface CodeReviewFinding {
   severity: ReviewFindingSeverity;

@@ -5,18 +5,28 @@
 
 import { eq, and, lt, asc, desc, inArray } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+
 import { db, schema } from '../db/index.js';
 
 /** Enrich raw message rows with parsed images and their tool calls */
-function enrichMessages(messages: (typeof schema.messages.$inferSelect)[], allToolCalls?: (typeof schema.toolCalls.$inferSelect)[]) {
+function enrichMessages(
+  messages: (typeof schema.messages.$inferSelect)[],
+  allToolCalls?: (typeof schema.toolCalls.$inferSelect)[],
+) {
   const messageIds = messages.map((m) => m.id);
-  const toolCalls = allToolCalls ?? (messageIds.length > 0
-    ? db.select().from(schema.toolCalls).where(
-        messageIds.length === 1
-          ? eq(schema.toolCalls.messageId, messageIds[0])
-          : inArray(schema.toolCalls.messageId, messageIds)
-      ).all()
-    : []);
+  const toolCalls =
+    allToolCalls ??
+    (messageIds.length > 0
+      ? db
+          .select()
+          .from(schema.toolCalls)
+          .where(
+            messageIds.length === 1
+              ? eq(schema.toolCalls.messageId, messageIds[0])
+              : inArray(schema.toolCalls.messageId, messageIds),
+          )
+          .all()
+      : []);
 
   return messages.map((msg) => ({
     ...msg,
@@ -59,21 +69,22 @@ export function getThreadWithMessages(id: string, messageLimit?: number) {
     ...thread,
     messages: enrichMessages(messages),
     hasMore,
-    initInfo: thread.initTools ? {
-      tools: JSON.parse(thread.initTools) as string[],
-      cwd: thread.initCwd ?? '',
-      model: thread.model ?? '',
-    } : undefined,
+    initInfo: thread.initTools
+      ? {
+          tools: JSON.parse(thread.initTools) as string[],
+          cwd: thread.initCwd ?? '',
+          model: thread.model ?? '',
+        }
+      : undefined,
   };
 }
 
 /** Get paginated messages for a thread, older than cursor.
  *  Returns messages in ASC order (oldest first). */
-export function getThreadMessages(opts: {
-  threadId: string;
-  cursor?: string;
-  limit: number;
-}): { messages: ReturnType<typeof enrichMessages>; hasMore: boolean } {
+export function getThreadMessages(opts: { threadId: string; cursor?: string; limit: number }): {
+  messages: ReturnType<typeof enrichMessages>;
+  hasMore: boolean;
+} {
   const { threadId, cursor, limit } = opts;
 
   const rows = db
@@ -82,7 +93,7 @@ export function getThreadMessages(opts: {
     .where(
       cursor
         ? and(eq(schema.messages.threadId, threadId), lt(schema.messages.timestamp, cursor))
-        : eq(schema.messages.threadId, threadId)
+        : eq(schema.messages.threadId, threadId),
     )
     .orderBy(desc(schema.messages.timestamp))
     .limit(limit + 1)

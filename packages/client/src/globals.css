@@ -243,14 +243,13 @@
     background-color: hsl(var(--muted) / 0.3);
   }
 
-  .prose>*:first-child {
+  .prose > *:first-child {
     margin-top: 0;
   }
 
-  .prose>*:last-child {
+  .prose > *:last-child {
     margin-bottom: 0;
   }
-
 
   /* Sonner toast close button – inside the toast, aligned right */
   [data-sonner-toaster] {
@@ -259,7 +258,7 @@
     --toast-close-button-transform: translate(0, 0);
   }
 
-  [data-sonner-toast][data-styled=true] [data-close-button] {
+  [data-sonner-toast][data-styled='true'] [data-close-button] {
     top: 50%;
     right: 8px;
     transform: translateY(-50%);
@@ -271,16 +270,15 @@
     width: 24px;
   }
 
-  [data-sonner-toast][data-styled=true]:hover [data-close-button]:hover {
+  [data-sonner-toast][data-styled='true']:hover [data-close-button]:hover {
     opacity: 1;
     background: transparent;
     border: none;
   }
 
-  [data-sonner-toast][data-styled=true] {
+  [data-sonner-toast][data-styled='true'] {
     padding-right: 36px;
   }
-
 
   /* Terminal panel xterm.js overrides */
   .xterm {

@@ -3,9 +3,13 @@
  * Extracted from thread-store.ts for testability and separation of concerns.
  */
 
-import { createActor } from 'xstate';
-import { threadMachine, wsEventToMachineEvent, type ThreadContext } from '@funny/shared/thread-machine';
 import type { ThreadStatus } from '@funny/shared';
+import {
+  threadMachine,
+  wsEventToMachineEvent,
+  type ThreadContext,
+} from '@funny/shared/thread-machine';
+import { createActor } from 'xstate';
 
 export { wsEventToMachineEvent };
 
@@ -13,7 +17,11 @@ export { wsEventToMachineEvent };
 
 const threadActors = new Map<string, ReturnType<typeof createActor<typeof threadMachine>>>();
 
-export function getThreadActor(threadId: string, initialStatus: ThreadStatus = 'pending', cost: number = 0) {
+export function getThreadActor(
+  threadId: string,
+  initialStatus: ThreadStatus = 'pending',
+  cost: number = 0,
+) {
   let actor = threadActors.get(threadId);
   if (!actor) {
     actor = createActor(threadMachine, {
@@ -32,7 +40,7 @@ export function transitionThreadStatus(
   threadId: string,
   event: ReturnType<typeof wsEventToMachineEvent>,
   currentStatus: ThreadStatus,
-  cost: number = 0
+  cost: number = 0,
 ): ThreadStatus {
   if (!event) return currentStatus;
   const actor = getThreadActor(threadId, currentStatus, cost);

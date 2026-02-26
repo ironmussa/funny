@@ -1,22 +1,19 @@
-import { useTranslation } from 'react-i18next';
-import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import { Plus } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAppStore } from '@/stores/app-store';
 
 export function AddProjectForm() {
   const { t } = useTranslation();
-  const setAddProjectOpen = useAppStore(s => s.setAddProjectOpen);
-  const projects = useAppStore(s => s.projects);
+  const setAddProjectOpen = useAppStore((s) => s.setAddProjectOpen);
+  const projects = useAppStore((s) => s.projects);
 
   return (
-    <div className="px-2 pt-2 pb-1">
-      <div className="group/projects flex items-center justify-between mb-1">
-        <span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
+    <div className="px-2 pb-1 pt-2">
+      <div className="group/projects mb-1 flex items-center justify-between">
+        <span className="text-xs font-medium uppercase tracking-wider text-muted-foreground">
           {t('sidebar.projects')}
         </span>
         <Tooltip>
@@ -36,7 +33,7 @@ export function AddProjectForm() {
       {projects.length === 0 && (
         <button
           onClick={() => setAddProjectOpen(true)}
-          className="w-full text-left px-2 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+          className="w-full cursor-pointer px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
         >
           {t('sidebar.noProjects')}
         </button>

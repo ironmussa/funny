@@ -14,9 +14,9 @@ import type { WSEvent } from '@funny/shared';
 // ── Thread query / mutation ────────────────────────────────────
 
 export interface IThreadQuery {
-  getThread(id: string): { sessionId: string | null;[key: string]: any } | undefined;
+  getThread(id: string): { sessionId: string | null; [key: string]: any } | undefined;
   updateThread(id: string, updates: Record<string, any>): void;
-  getThreadWithMessages(id: string): { messages: any[];[key: string]: any } | null;
+  getThreadWithMessages(id: string): { messages: any[]; [key: string]: any } | null;
 }
 
 // ── Message repository ──────────────────────────────────────────
@@ -45,7 +45,9 @@ export interface IToolCallRepository {
   }): string;
   updateToolCallOutput(id: string, output: string): void;
   findToolCall(messageId: string, name: string, input: string): { id: string } | undefined;
-  getToolCall(id: string): { id: string; name: string; input: string | null; output?: string | null } | undefined;
+  getToolCall(
+    id: string,
+  ): { id: string; name: string; input: string | null; output?: string | null } | undefined;
 }
 
 // ── Combined interface (backward-compatible) ────────────────────

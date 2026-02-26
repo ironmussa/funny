@@ -11,11 +11,12 @@
  * crash if the SDK is not installed.
  */
 
-import { randomUUID } from 'crypto';
 import { spawn, type ChildProcess } from 'child_process';
+import { randomUUID } from 'crypto';
 import { Readable, Writable } from 'stream';
-import type { CLIMessage } from './types.js';
+
 import { BaseAgentProcess, type ResultSubtype } from './base-process.js';
+import type { CLIMessage } from './types.js';
 
 // Lazy-loaded SDK types (avoid crash if not installed)
 type ACPSDK = typeof import('@agentclientprotocol/sdk');
@@ -28,10 +29,20 @@ type ACPRequestPermissionResponse = import('@agentclientprotocol/sdk').RequestPe
 
 /** Known Gemini CLI built-in tools (ACP doesn't expose a listTools API). */
 const GEMINI_BUILTIN_TOOLS = [
-  'read_file', 'write_file', 'replace', 'list_directory',
-  'glob', 'grep_search', 'run_shell_command', 'web_fetch',
-  'google_web_search', 'codebase_investigator', 'save_memory',
-  'ask_user', 'activate_skill', 'cli_help',
+  'read_file',
+  'write_file',
+  'replace',
+  'list_directory',
+  'glob',
+  'grep_search',
+  'run_shell_command',
+  'web_fetch',
+  'google_web_search',
+  'codebase_investigator',
+  'save_memory',
+  'ask_user',
+  'activate_skill',
+  'cli_help',
 ];
 
 export class GeminiACPProcess extends BaseAgentProcess {
@@ -56,7 +67,7 @@ export class GeminiACPProcess extends BaseAgentProcess {
     } catch {
       throw new Error(
         'ACP SDK not installed. Run: bun add @agentclientprotocol/sdk\n' +
-        'Also ensure gemini-cli is installed: npm install -g @google/gemini-cli or see https://github.com/google/gemini-cli',
+          'Also ensure gemini-cli is installed: npm install -g @google/gemini-cli or see https://github.com/google/gemini-cli',
       );
     }
 
@@ -64,7 +75,9 @@ export class GeminiACPProcess extends BaseAgentProcess {
 
     // Resolve Gemini binary
     const geminiBin = this.resolveGeminiBinary();
-    console.log(`[gemini-acp] resolved binary: ${geminiBin}, platform: ${process.platform}, shell: ${process.platform === 'win32'}`);
+    console.log(
+      `[gemini-acp] resolved binary: ${geminiBin}, platform: ${process.platform}, shell: ${process.platform === 'win32'}`,
+    );
 
     // Build CLI args
     const args = ['--experimental-acp'];
@@ -89,11 +102,14 @@ export class GeminiACPProcess extends BaseAgentProcess {
     child.on('error', (err: any) => {
       if (!this._exited && !this.isAborted) {
         if (err.code === 'ENOENT') {
-          this.emit('error', new Error(
-            '\'gemini\' binary not found in PATH or failed to spawn.\n' +
-            'Please install it via: npm install -g @google/gemini-cli\n' +
-            'Or see https://github.com/google/gemini-cli for details.'
-          ));
+          this.emit(
+            'error',
+            new Error(
+              "'gemini' binary not found in PATH or failed to spawn.\n" +
+                'Please install it via: npm install -g @google/gemini-cli\n' +
+                'Or see https://github.com/google/gemini-cli for details.',
+            ),
+          );
         } else {
           this.emit('error', err);
         }
@@ -145,7 +161,9 @@ export class GeminiACPProcess extends BaseAgentProcess {
       },
 
       // Auto-allow all permission requests (matches autoEdit behavior)
-      requestPermission: async (params: ACPRequestPermissionRequest): Promise<ACPRequestPermissionResponse> => {
+      requestPermission: async (
+        params: ACPRequestPermissionRequest,
+      ): Promise<ACPRequestPermissionResponse> => {
         // Find the first "allow" option
         const allowOption = params.options.find(
           (opt) => opt.kind === 'allow_once' || opt.kind === 'allow_always',
@@ -171,10 +189,7 @@ export class GeminiACPProcess extends BaseAgentProcess {
     };
 
     // Create client-side ACP connection
-    const connection = new ClientSideConnection(
-      (_agent: ACPAgent) => acpClient,
-      stream,
-    );
+    const connection = new ClientSideConnection((_agent: ACPAgent) => acpClient, stream);
 
     // Emit init message
     this.emitInit(
@@ -216,13 +231,14 @@ export class GeminiACPProcess extends BaseAgentProcess {
       numTurns = 1;
 
       // Map stop reason
-      const subtype: ResultSubtype = promptResponse.stopReason === 'end_turn'
-        ? 'success'
-        : promptResponse.stopReason === 'cancelled'
-          ? 'error_during_execution'
-          : promptResponse.stopReason === 'max_tokens'
-            ? 'error_max_turns'
-            : 'success';
+      const subtype: ResultSubtype =
+        promptResponse.stopReason === 'end_turn'
+          ? 'success'
+          : promptResponse.stopReason === 'cancelled'
+            ? 'error_during_execution'
+            : promptResponse.stopReason === 'max_tokens'
+              ? 'error_max_turns'
+              : 'success';
 
       // Emit result
       this.emitResult({
@@ -233,7 +249,6 @@ export class GeminiACPProcess extends BaseAgentProcess {
         totalCost,
         result: lastAssistantText || undefined,
       });
-
     } catch (err: any) {
       if (!this.isAborted) {
         this.emitResult({
@@ -290,12 +305,14 @@ export class GeminiACPProcess extends BaseAgentProcess {
           type: 'assistant',
           message: {
             id: randomUUID(),
-            content: [{
-              type: 'tool_use',
-              id: toolCallId,
-              name: update.title || 'tool',
-              input: update.rawInput ?? {},
-            }],
+            content: [
+              {
+                type: 'tool_use',
+                id: toolCallId,
+                name: update.title || 'tool',
+                input: update.rawInput ?? {},
+              },
+            ],
           },
         };
         this.emit('message', msg);
@@ -308,20 +325,23 @@ export class GeminiACPProcess extends BaseAgentProcess {
 
         if (update.status === 'completed' || update.status === 'failed') {
           // Emit as tool result
-          const output = update.rawOutput != null
-            ? (typeof update.rawOutput === 'string'
-              ? update.rawOutput
-              : JSON.stringify(update.rawOutput))
-            : update.title ?? '';
+          const output =
+            update.rawOutput != null
+              ? typeof update.rawOutput === 'string'
+                ? update.rawOutput
+                : JSON.stringify(update.rawOutput)
+              : (update.title ?? '');
 
           const msg: CLIMessage = {
             type: 'user',
             message: {
-              content: [{
-                type: 'tool_result',
-                tool_use_id: toolCallId,
-                content: output,
-              }],
+              content: [
+                {
+                  type: 'tool_result',
+                  tool_use_id: toolCallId,
+                  content: output,
+                },
+              ],
             },
           };
           this.emit('message', msg);
@@ -335,9 +355,8 @@ export class GeminiACPProcess extends BaseAgentProcess {
         if (entries.length > 0) {
           const planText = entries
             .map((e: any, i: number) => {
-              const status = e.status === 'completed' ? '[x]'
-                : e.status === 'in_progress' ? '[~]'
-                  : '[ ]';
+              const status =
+                e.status === 'completed' ? '[x]' : e.status === 'in_progress' ? '[~]' : '[ ]';
               return `${status} ${i + 1}. ${e.title ?? e.description ?? 'Task'}`;
             })
             .join('\n');

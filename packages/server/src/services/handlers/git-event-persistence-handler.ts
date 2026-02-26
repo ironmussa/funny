@@ -6,8 +6,8 @@
  * Decouples route handlers from direct thread-event-service calls.
  */
 
-import type { EventHandler } from './types.js';
 import type { GitCommittedEvent, GitPushedEvent, GitMergedEvent } from '../thread-event-bus.js';
+import type { EventHandler } from './types.js';
 import type { HandlerServiceContext } from './types.js';
 
 function broadcastThreadEvent(

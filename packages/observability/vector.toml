@@ -4,8 +4,8 @@
 [sources.otlp]
 type = "opentelemetry"
 
-  [sources.otlp.http]
-  address = "0.0.0.0:4318"
+[sources.otlp.http]
+address = "0.0.0.0:4318"
 
 # Sink: Metrics → Victoria Metrics via Prometheus remote write
 [sinks.victoria_metrics]
@@ -22,8 +22,8 @@ compression = "gzip"
 encoding.codec = "json"
 framing.method = "newline_delimited"
 
-  [sinks.victoria_logs.healthcheck]
-  enabled = false
+[sinks.victoria_logs.healthcheck]
+enabled = false
 
 # Sink: Traces → Victoria Traces via OTLP HTTP
 [sinks.victoria_traces]
@@ -33,5 +33,5 @@ uri = "http://victoria-traces:10428/insert/opentelemetry/v1/traces"
 compression = "gzip"
 encoding.codec = "native_json"
 
-  [sinks.victoria_traces.healthcheck]
-  enabled = false
+[sinks.victoria_traces.healthcheck]
+enabled = false

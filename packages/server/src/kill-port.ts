@@ -14,7 +14,11 @@ const isWindows = process.platform === 'win32';
 function findListeningPids(targetPort: number): number[] {
   try {
     if (isWindows) {
-      const result = Bun.spawnSync(['cmd', '/c', `netstat -ano | findstr :${targetPort} | findstr LISTENING`]);
+      const result = Bun.spawnSync([
+        'cmd',
+        '/c',
+        `netstat -ano | findstr :${targetPort} | findstr LISTENING`,
+      ]);
       const output = result.stdout.toString().trim();
       if (!output) return [];
       const pids = new Set<number>();
@@ -31,7 +35,10 @@ function findListeningPids(targetPort: number): number[] {
       const result = Bun.spawnSync(['lsof', '-ti', `:${targetPort}`]);
       const output = result.stdout.toString().trim();
       if (!output) return [];
-      return output.split('\n').map(s => parseInt(s, 10)).filter(p => p && p !== process.pid);
+      return output
+        .split('\n')
+        .map((s) => parseInt(s, 10))
+        .filter((p) => p && p !== process.pid);
     }
   } catch {
     return [];
@@ -78,7 +85,9 @@ async function isPortBindable(targetPort: number, hostname: string): Promise<boo
       port: targetPort,
       hostname,
       reusePort: false,
-      fetch() { return new Response(''); },
+      fetch() {
+        return new Response('');
+      },
     });
     testServer.stop(true);
     return true;
@@ -102,8 +111,11 @@ function findGhostHandleHolders(targetPort: number): number[] {
   // Build our parent chain (don't kill ourselves or our ancestors)
   const safeChain = new Set<number>([process.pid]);
   try {
-    const r = Bun.spawnSync(['powershell', '-NoProfile', '-Command',
-      `$p = ${process.pid}; while ($p -gt 0) { $p; $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$p" -ErrorAction SilentlyContinue; if (-not $proc) { break }; $p = $proc.ParentProcessId }`
+    const r = Bun.spawnSync([
+      'powershell',
+      '-NoProfile',
+      '-Command',
+      `$p = ${process.pid}; while ($p -gt 0) { $p; $proc = Get-CimInstance Win32_Process -Filter "ProcessId=$p" -ErrorAction SilentlyContinue; if (-not $proc) { break }; $p = $proc.ParentProcessId }`,
     ]);
     for (const line of r.stdout.toString().trim().split('\n')) {
       const pid = parseInt(line.trim(), 10);
@@ -142,7 +154,9 @@ async function killPort(targetPort: number): Promise<void> {
     if (isWindows) {
       Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${pid}`]);
     } else {
-      try { process.kill(pid, 'SIGKILL'); } catch {}
+      try {
+        process.kill(pid, 'SIGKILL');
+      } catch {}
     }
   }
 
@@ -151,7 +165,9 @@ async function killPort(targetPort: number): Promise<void> {
     console.log(`[kill-port] Ghost sockets detected — searching for inherited handle holders...`);
     const suspects = findGhostHandleHolders(targetPort);
     if (suspects.length > 0) {
-      console.log(`[kill-port] Found ${suspects.length} suspect process(es): ${suspects.join(', ')}`);
+      console.log(
+        `[kill-port] Found ${suspects.length} suspect process(es): ${suspects.join(', ')}`,
+      );
       for (const pid of suspects) {
         console.log(`[kill-port] Killing suspect PID ${pid}`);
         Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${pid}`]);
@@ -180,8 +196,11 @@ async function killPort(targetPort: number): Promise<void> {
   // Last resort on Windows: PowerShell to find and kill by connection
   if (isWindows) {
     console.log(`[kill-port] Trying PowerShell to free port ${targetPort}...`);
-    Bun.spawnSync(['powershell', '-NoProfile', '-Command',
-      `Get-NetTCPConnection -LocalPort ${targetPort} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`
+    Bun.spawnSync([
+      'powershell',
+      '-NoProfile',
+      '-Command',
+      `Get-NetTCPConnection -LocalPort ${targetPort} -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force -ErrorAction SilentlyContinue }`,
     ]);
     for (let i = 0; i < 6; i++) {
       await Bun.sleep(500);
@@ -192,7 +211,9 @@ async function killPort(targetPort: number): Promise<void> {
     }
   }
 
-  console.warn(`[kill-port] Port ${targetPort} may still be in use — server will attempt reusePort`);
+  console.warn(
+    `[kill-port] Port ${targetPort} may still be in use — server will attempt reusePort`,
+  );
 }
 
 await killPort(port);

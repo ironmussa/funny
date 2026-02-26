@@ -1,4 +1,5 @@
 import { create } from 'zustand';
+
 import { useProjectStore } from './project-store';
 import { useThreadStore, invalidateSelectThread } from './thread-store';
 
@@ -25,7 +26,9 @@ interface UIState {
   showGlobalSearch: () => void;
   setAnalyticsOpen: (open: boolean) => void;
   setLiveColumnsOpen: (open: boolean) => void;
-  setKanbanContext: (context: { projectId?: string; search?: string; threadId?: string } | null) => void;
+  setKanbanContext: (
+    context: { projectId?: string; search?: string; threadId?: string } | null,
+  ) => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -41,21 +44,43 @@ export const useUIStore = create<UIState>((set) => ({
   liveColumnsOpen: false,
   kanbanContext: null,
   setReviewPaneOpen: (open) => set({ reviewPaneOpen: open }),
-  setSettingsOpen: (open) => set(open ? { settingsOpen: true, automationInboxOpen: false, addProjectOpen: false } : { settingsOpen: false, activeSettingsPage: null }),
+  setSettingsOpen: (open) =>
+    set(
+      open
+        ? { settingsOpen: true, automationInboxOpen: false, addProjectOpen: false }
+        : { settingsOpen: false, activeSettingsPage: null },
+    ),
   setActiveSettingsPage: (page) => set({ activeSettingsPage: page }),
   setAutomationInboxOpen: (open) => {
     if (open) {
       invalidateSelectThread();
       useThreadStore.setState({ selectedThreadId: null, activeThread: null });
     }
-    set(open ? { automationInboxOpen: true, reviewPaneOpen: false, settingsOpen: false, activeSettingsPage: null, allThreadsProjectId: null, addProjectOpen: false } : { automationInboxOpen: false });
+    set(
+      open
+        ? {
+            automationInboxOpen: true,
+            reviewPaneOpen: false,
+            settingsOpen: false,
+            activeSettingsPage: null,
+            allThreadsProjectId: null,
+            addProjectOpen: false,
+          }
+        : { automationInboxOpen: false },
+    );
   },
 
   setAddProjectOpen: (open) => {
     if (open) {
       invalidateSelectThread();
       useThreadStore.setState({ selectedThreadId: null, activeThread: null });
-      set({ addProjectOpen: true, settingsOpen: false, automationInboxOpen: false, allThreadsProjectId: null, newThreadProjectId: null });
+      set({
+        addProjectOpen: true,
+        settingsOpen: false,
+        automationInboxOpen: false,
+        allThreadsProjectId: null,
+        newThreadProjectId: null,
+      });
     } else {
       set({ addProjectOpen: false });
     }
@@ -65,7 +90,13 @@ export const useUIStore = create<UIState>((set) => ({
     invalidateSelectThread();
     useProjectStore.getState().selectProject(projectId);
     useThreadStore.setState({ selectedThreadId: null, activeThread: null });
-    set({ newThreadProjectId: projectId, newThreadIdleOnly: idleOnly ?? false, allThreadsProjectId: null, automationInboxOpen: false, addProjectOpen: false });
+    set({
+      newThreadProjectId: projectId,
+      newThreadIdleOnly: idleOnly ?? false,
+      allThreadsProjectId: null,
+      automationInboxOpen: false,
+      addProjectOpen: false,
+    });
   },
 
   cancelNewThread: () => {
@@ -79,7 +110,15 @@ export const useUIStore = create<UIState>((set) => ({
   showGlobalSearch: () => {
     invalidateSelectThread();
     useThreadStore.setState({ selectedThreadId: null, activeThread: null });
-    set({ allThreadsProjectId: '__all__', newThreadProjectId: null, automationInboxOpen: false, addProjectOpen: false, settingsOpen: false, analyticsOpen: false, reviewPaneOpen: false });
+    set({
+      allThreadsProjectId: '__all__',
+      newThreadProjectId: null,
+      automationInboxOpen: false,
+      addProjectOpen: false,
+      settingsOpen: false,
+      analyticsOpen: false,
+      reviewPaneOpen: false,
+    });
   },
 
   setAnalyticsOpen: (open) => {
@@ -87,7 +126,20 @@ export const useUIStore = create<UIState>((set) => ({
       invalidateSelectThread();
       useThreadStore.setState({ selectedThreadId: null, activeThread: null });
     }
-    set(open ? { analyticsOpen: true, reviewPaneOpen: false, settingsOpen: false, activeSettingsPage: null, allThreadsProjectId: null, addProjectOpen: false, automationInboxOpen: false, liveColumnsOpen: false } : { analyticsOpen: false });
+    set(
+      open
+        ? {
+            analyticsOpen: true,
+            reviewPaneOpen: false,
+            settingsOpen: false,
+            activeSettingsPage: null,
+            allThreadsProjectId: null,
+            addProjectOpen: false,
+            automationInboxOpen: false,
+            liveColumnsOpen: false,
+          }
+        : { analyticsOpen: false },
+    );
   },
 
   setLiveColumnsOpen: (open) => {
@@ -95,9 +147,21 @@ export const useUIStore = create<UIState>((set) => ({
       invalidateSelectThread();
       useThreadStore.setState({ selectedThreadId: null, activeThread: null });
     }
-    set(open ? { liveColumnsOpen: true, reviewPaneOpen: false, settingsOpen: false, activeSettingsPage: null, allThreadsProjectId: null, addProjectOpen: false, automationInboxOpen: false, analyticsOpen: false } : { liveColumnsOpen: false });
+    set(
+      open
+        ? {
+            liveColumnsOpen: true,
+            reviewPaneOpen: false,
+            settingsOpen: false,
+            activeSettingsPage: null,
+            allThreadsProjectId: null,
+            addProjectOpen: false,
+            automationInboxOpen: false,
+            analyticsOpen: false,
+          }
+        : { liveColumnsOpen: false },
+    );
   },
 
   setKanbanContext: (context) => set({ kanbanContext: context }),
-
 }));

@@ -1,4 +1,5 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
+
 import {
   ThreadEventBus,
   threadEventBus,

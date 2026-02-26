@@ -31,6 +31,7 @@ npm install execa
 ```
 
 **Advantages:**
+
 - ✅ Better error handling with detailed error objects
 - ✅ Cross-platform by default (handles Windows path issues)
 - ✅ Promise-based (async) with sync options when needed
@@ -84,10 +85,12 @@ export function gitSync(args: string[], cwd: string): string {
 ## Alternative Libraries (Considered but Not Recommended)
 
 ### 1. **zx** (by Google)
+
 ```typescript
 import { $ } from 'zx';
 const output = await $`git status`;
 ```
+
 - ✅ Very clean template literal syntax
 - ✅ Great for scripting
 - ❌ Too opinionated (auto-prints, colorizes)
@@ -95,19 +98,23 @@ const output = await $`git status`;
 - ❌ Overkill for this use case
 
 ### 2. **shelljs**
+
 ```typescript
 import shell from 'shelljs';
 shell.exec('git status');
 ```
+
 - ❌ Older, less active maintenance
 - ❌ Synchronous by default
 - ❌ Larger bundle size
 - ❌ Not as modern as execa
 
 ### 3. **native child_process**
+
 ```typescript
 import { spawn } from 'child_process';
 ```
+
 - ✅ Built-in, no dependencies
 - ❌ Verbose API
 - ❌ Poor error handling
@@ -174,7 +181,7 @@ export interface ProcessOptions {
 export async function execute(
   command: string,
   args: string[],
-  options: ProcessOptions = {}
+  options: ProcessOptions = {},
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   try {
     const result = await execa(command, args, {
@@ -198,7 +205,7 @@ export async function execute(
         error.exitCode,
         error.stdout,
         error.stderr,
-        error.command
+        error.command,
       );
     }
     throw error;
@@ -211,7 +218,7 @@ export class ProcessExecutionError extends Error {
     public exitCode: number,
     public stdout: string,
     public stderr: string,
-    public command: string
+    public command: string,
   ) {
     super(message);
     this.name = 'ProcessExecutionError';
@@ -226,19 +233,13 @@ export class ProcessExecutionError extends Error {
 import { execute } from './process.js';
 import { validatePath } from './path-validation.js';
 
-export async function git(
-  args: string[],
-  cwd: string
-): Promise<string> {
+export async function git(args: string[], cwd: string): Promise<string> {
   await validatePath(cwd);
   const { stdout } = await execute('git', args, { cwd });
   return stdout.trim();
 }
 
-export async function gitSafe(
-  args: string[],
-  cwd: string
-): Promise<string | null> {
+export async function gitSafe(args: string[], cwd: string): Promise<string | null> {
   try {
     return await git(args, cwd);
   } catch {
@@ -257,12 +258,15 @@ export async function getCurrentBranch(cwd: string): Promise<string> {
 
 export async function listBranches(cwd: string): Promise<string[]> {
   const output = await git(['branch', '--format=%(refname:short)'], cwd);
-  return output.split('\n').map(b => b.trim()).filter(Boolean);
+  return output
+    .split('\n')
+    .map((b) => b.trim())
+    .filter(Boolean);
 }
 
 export async function stageFiles(cwd: string, paths: string[]): Promise<void> {
   // Execute in parallel for better performance
-  await Promise.all(paths.map(path => git(['add', path], cwd)));
+  await Promise.all(paths.map((path) => git(['add', path], cwd)));
 }
 
 export async function commit(cwd: string, message: string): Promise<string> {
@@ -289,9 +293,7 @@ for (const path of paths) {
 }
 
 // ✅ FAST - Parallel (1 second total)
-await Promise.all(
-  paths.map(path => git(['add', path], cwd))
-);
+await Promise.all(paths.map((path) => git(['add', path], cwd)));
 ```
 
 ### 2. Batch Operations When Possible
@@ -354,9 +356,7 @@ describe('process execution', () => {
   it('should handle command injection attempts', async () => {
     // This is safe because args are passed as array
     const maliciousInput = '; rm -rf /';
-    await expect(
-      execute('git', ['commit', '-m', maliciousInput], {})
-    ).rejects.toThrow();
+    await expect(execute('git', ['commit', '-m', maliciousInput], {})).rejects.toThrow();
   });
 });
 ```
@@ -367,11 +367,7 @@ describe('process execution', () => {
 import { execute } from './process.js';
 
 // Wrapper with logging
-export async function executeWithLogging(
-  command: string,
-  args: string[],
-  options: ProcessOptions
-) {
+export async function executeWithLogging(command: string, args: string[], options: ProcessOptions) {
   const start = Date.now();
   console.log(`[exec] ${command} ${args.join(' ')}`);
 
@@ -402,6 +398,7 @@ export async function executeWithLogging(
 ## Summary
 
 **Use `execa`** - it's the industry standard for modern Node.js process execution:
+
 - Most secure (proper argument escaping)
 - Best error handling
 - Cross-platform by default

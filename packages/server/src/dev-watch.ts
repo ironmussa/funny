@@ -56,8 +56,12 @@ async function killServer(): Promise<void> {
       Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${pid}`]);
     } catch {}
   } else {
-    try { process.kill(-pid, 'SIGTERM'); } catch {}
-    try { child.kill(); } catch {}
+    try {
+      process.kill(-pid, 'SIGTERM');
+    } catch {}
+    try {
+      child.kill();
+    } catch {}
   }
 
   // Wait for exit

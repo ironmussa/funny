@@ -1,5 +1,7 @@
 import { describe, test, expect } from 'bun:test';
+
 import { Hono } from 'hono';
+
 import { handleError } from '../../middleware/error-handler.js';
 
 describe('handleError', () => {

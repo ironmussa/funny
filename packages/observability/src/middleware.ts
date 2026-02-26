@@ -1,7 +1,8 @@
-import { type MiddlewareHandler } from 'hono';
 import { SpanStatusCode, context, propagation } from '@opentelemetry/api';
-import { getTracer } from './tracer.js';
+import { type MiddlewareHandler } from 'hono';
+
 import { getMeter, createHttpInstruments, type HttpInstruments } from './metrics.js';
+import { getTracer } from './tracer.js';
 
 let instruments: HttpInstruments | null = null;
 

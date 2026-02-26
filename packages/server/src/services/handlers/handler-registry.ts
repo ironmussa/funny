@@ -7,16 +7,18 @@
  *   2. Import it here and add it to the allHandlers array
  */
 
+import { log } from '../../lib/logger.js';
 import { threadEventBus, type ThreadEventMap } from '../thread-event-bus.js';
-import type { EventHandler, HandlerServiceContext } from './types.js';
-import { log } from '../../lib/abbacchio.js';
-
-// ── Import handlers ─────────────────────────────────────────────
-
-import { commentHandler } from './comment-handler.js';
-import { gitStatusHandler } from './git-status-handler.js';
-import { gitCommitPersistenceHandler, gitPushPersistenceHandler, gitMergePersistenceHandler } from './git-event-persistence-handler.js';
 import { agentCompletedGitStatusHandler } from './agent-completed-git-status-handler.js';
+// ── Import handlers ─────────────────────────────────────────────
+import { commentHandler } from './comment-handler.js';
+import {
+  gitCommitPersistenceHandler,
+  gitPushPersistenceHandler,
+  gitMergePersistenceHandler,
+} from './git-event-persistence-handler.js';
+import { gitStatusHandler } from './git-status-handler.js';
+import type { EventHandler, HandlerServiceContext } from './types.js';
 
 // ── Handler list ────────────────────────────────────────────────
 
@@ -44,16 +46,24 @@ export function registerAllHandlers(ctx: HandlerServiceContext): void {
         }
         await handler.action(payload, ctx);
       } catch (err) {
-        log.error(`Handler "${handler.name}" error`, { namespace: 'handler-registry', handler: handler.name, error: err });
+        log.error(`Handler "${handler.name}" error`, {
+          namespace: 'handler-registry',
+          handler: handler.name,
+          error: err,
+        });
       }
     };
 
-    threadEventBus.on(
-      handler.event as keyof ThreadEventMap,
-      wrappedListener as any,
-    );
-    log.debug(`Registered handler "${handler.name}" on "${handler.event}"`, { namespace: 'handler-registry', handler: handler.name, event: handler.event });
+    threadEventBus.on(handler.event as keyof ThreadEventMap, wrappedListener as any);
+    log.debug(`Registered handler "${handler.name}" on "${handler.event}"`, {
+      namespace: 'handler-registry',
+      handler: handler.name,
+      event: handler.event,
+    });
   }
 
-  log.info(`${allHandlers.length} handler(s) registered`, { namespace: 'handler-registry', count: allHandlers.length });
+  log.info(`${allHandlers.length} handler(s) registered`, {
+    namespace: 'handler-registry',
+    count: allHandlers.length,
+  });
 }

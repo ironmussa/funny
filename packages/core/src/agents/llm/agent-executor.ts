@@ -10,10 +10,12 @@
  * Uses the agent run protocol (POST /v1/runs) instead of OpenAI format.
  */
 
-import { z } from 'zod';
-import { zodToJsonSchema } from 'zod-to-json-schema';
 import { readFileSync, existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
+
+import { z } from 'zod';
+import { zodToJsonSchema } from 'zod-to-json-schema';
+
 import { executeShell } from '../../git/process.js';
 import type { AgentRole, AgentContext, AgentResult, Finding } from './agent-context.js';
 import { createBrowserTools, type BrowserToolsHandle } from './browser-tools.js';
@@ -137,7 +139,9 @@ export class AgentExecutor {
         // Call api-acp runs endpoint
         const url = `${this.baseURL}/v1/runs`;
         const prompt = conversationParts.join('\n\n');
-        console.log(`[AgentExecutor] POST ${url} model=${this.modelId} tools=${runTools.length} step=${steps}`);
+        console.log(
+          `[AgentExecutor] POST ${url} model=${this.modelId} tools=${runTools.length} step=${steps}`,
+        );
         const response = await fetch(url, {
           method: 'POST',
           headers: {
@@ -156,11 +160,13 @@ export class AgentExecutor {
 
         if (!response.ok) {
           const errBody = await response.text().catch(() => 'Unknown error');
-          console.error(`[AgentExecutor] ERROR ${response.status} from ${url}: ${errBody.slice(0, 500)}`);
+          console.error(
+            `[AgentExecutor] ERROR ${response.status} from ${url}: ${errBody.slice(0, 500)}`,
+          );
           throw new Error(`api-acp returned ${response.status}: ${errBody}`);
         }
 
-        const data = await response.json() as RunResponse;
+        const data = (await response.json()) as RunResponse;
 
         if (data.status === 'failed') {
           throw new Error(data.error?.message ?? 'Run failed');
@@ -215,7 +221,9 @@ export class AgentExecutor {
         // Append assistant text + tool results to conversation for next turn
         const assistantPart = assistantText
           ? `Assistant: ${assistantText}\n${runToolCalls.map((tc) => `[tool_call: ${tc.function.name}(${tc.function.arguments})]`).join('\n')}`
-          : runToolCalls.map((tc) => `[tool_call: ${tc.function.name}(${tc.function.arguments})]`).join('\n');
+          : runToolCalls
+              .map((tc) => `[tool_call: ${tc.function.name}(${tc.function.arguments})]`)
+              .join('\n');
         conversationParts.push(assistantPart);
         conversationParts.push(toolResultParts.join('\n\n'));
 
@@ -379,7 +387,8 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
 
   const baseTools: Record<string, ToolDef> = {
     bash: {
-      description: 'Run a shell command in the working directory. Returns stdout, stderr, and exit code.',
+      description:
+        'Run a shell command in the working directory. Returns stdout, stderr, and exit code.',
       parameters: z.object({
         command: z.string().describe('The shell command to execute'),
         timeout: z.number().optional().describe('Timeout in milliseconds (default: 30000)'),
@@ -457,10 +466,14 @@ function createTools(cwd: string, role: AgentRole, context: AgentContext): Tools
     },
 
     grep: {
-      description: 'Search file contents for a pattern. Returns matching lines with paths and line numbers.',
+      description:
+        'Search file contents for a pattern. Returns matching lines with paths and line numbers.',
       parameters: z.object({
         pattern: z.string().describe('Text or regex pattern to search for'),
-        path: z.string().optional().describe('Directory or file to search in (relative, default: ".")'),
+        path: z
+          .string()
+          .optional()
+          .describe('Directory or file to search in (relative, default: ".")'),
         file_glob: z.string().optional().describe('File glob filter (e.g., "*.ts")'),
       }),
       execute: async ({ pattern, path: searchPath, file_glob }) => {

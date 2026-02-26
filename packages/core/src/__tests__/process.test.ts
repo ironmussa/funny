@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'vitest';
+
 import { execute, executeSync, executeResult, ProcessExecutionError } from '../git/process.js';
 
 describe('ProcessExecutionError', () => {
@@ -47,10 +48,14 @@ describe('execute', () => {
   });
 
   test('merges environment variables', async () => {
-    const result = await execute('node', ['-e', 'process.stdout.write(process.env.TEST_VAR_CORE || "")'], {
-      env: { TEST_VAR_CORE: 'hello123' },
-      reject: false,
-    });
+    const result = await execute(
+      'node',
+      ['-e', 'process.stdout.write(process.env.TEST_VAR_CORE || "")'],
+      {
+        env: { TEST_VAR_CORE: 'hello123' },
+        reject: false,
+      },
+    );
     // printenv might not exist on Windows, so be flexible
     if (result.exitCode === 0) {
       expect(result.stdout.trim()).toBe('hello123');
@@ -76,9 +81,7 @@ describe('executeSync', () => {
   });
 
   test('throws on non-zero exit by default', () => {
-    expect(() =>
-      executeSync('git', ['log', '--oneline', '-1'], { cwd: '/' })
-    ).toThrow();
+    expect(() => executeSync('git', ['log', '--oneline', '-1'], { cwd: '/' })).toThrow();
   });
 
   test('returns non-zero when reject=false', () => {

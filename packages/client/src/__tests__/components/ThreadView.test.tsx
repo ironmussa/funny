@@ -1,8 +1,10 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
-import { renderWithProviders } from '../helpers/render';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
+
 import { ThreadView } from '@/components/ThreadView';
 import { useAppStore } from '@/stores/app-store';
+
+import { renderWithProviders } from '../helpers/render';
 
 // ── Mocks ───────────────────────────────────────────────────────
 
@@ -38,7 +40,9 @@ vi.mock('@/components/thread/NewThreadInput', () => ({
 
 vi.mock('@/components/thread/AgentStatusCards', () => ({
   AgentResultCard: ({ status, cost }: any) => (
-    <div data-testid="agent-result-card">{status} - ${cost}</div>
+    <div data-testid="agent-result-card">
+      {status} - ${cost}
+    </div>
   ),
   AgentInterruptedCard: () => <div data-testid="agent-interrupted-card" />,
   AgentStoppedCard: () => <div data-testid="agent-stopped-card" />,
@@ -79,7 +83,17 @@ vi.mock('@/components/PromptInput', () => ({
 
 vi.mock('motion/react', () => ({
   motion: {
-    div: ({ children, ...props }: any) => <div {...Object.fromEntries(Object.entries(props).filter(([k]) => !['initial', 'animate', 'transition', 'exit'].includes(k)))}>{children}</div>,
+    div: ({ children, ...props }: any) => (
+      <div
+        {...Object.fromEntries(
+          Object.entries(props).filter(
+            ([k]) => !['initial', 'animate', 'transition', 'exit'].includes(k),
+          ),
+        )}
+      >
+        {children}
+      </div>
+    ),
   },
   AnimatePresence: ({ children }: any) => <>{children}</>,
 }));
@@ -96,7 +110,16 @@ vi.mock('remark-gfm', () => ({
 
 beforeEach(() => {
   useAppStore.setState({
-    projects: [{ id: 'p1', name: 'Test', path: '/tmp/test', userId: '__local__', createdAt: '', sortOrder: 0 }],
+    projects: [
+      {
+        id: 'p1',
+        name: 'Test',
+        path: '/tmp/test',
+        userId: '__local__',
+        createdAt: '',
+        sortOrder: 0,
+      },
+    ],
     selectedProjectId: 'p1',
     selectedThreadId: null,
     activeThread: null,

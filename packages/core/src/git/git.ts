@@ -1,10 +1,12 @@
-import { ok, err, ResultAsync, type Result } from 'neverthrow';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
-import { execute, executeSync, ProcessExecutionError } from './process.js';
-import { validatePath, validatePathSync } from './path-validation.js';
-import { processError, internal, badRequest, type DomainError } from '@funny/shared/errors';
+
 import type { FileDiff, FileDiffSummary, DiffSummaryResponse, GitSyncState } from '@funny/shared';
+import { processError, internal, badRequest, type DomainError } from '@funny/shared/errors';
+import { ok, err, ResultAsync, type Result } from 'neverthrow';
+
+import { validatePath, validatePathSync } from './path-validation.js';
+import { execute, executeSync, ProcessExecutionError } from './process.js';
 
 /** Per-user git identity for multi-user mode. */
 export interface GitIdentityOptions {
@@ -16,17 +18,18 @@ export interface GitIdentityOptions {
  * Execute a git command safely with proper argument escaping.
  * Returns ResultAsync<string, DomainError>.
  */
-export function git(args: string[], cwd: string, env?: Record<string, string>): ResultAsync<string, DomainError> {
+export function git(
+  args: string[],
+  cwd: string,
+  env?: Record<string, string>,
+): ResultAsync<string, DomainError> {
   return validatePath(cwd).andThen((validCwd) =>
-    ResultAsync.fromPromise(
-      execute('git', args, { cwd: validCwd, env }),
-      (error) => {
-        if (error instanceof ProcessExecutionError) {
-          return processError(error.message, error.exitCode, error.stderr);
-        }
-        return internal(String(error));
+    ResultAsync.fromPromise(execute('git', args, { cwd: validCwd, env }), (error) => {
+      if (error instanceof ProcessExecutionError) {
+        return processError(error.message, error.exitCode, error.stderr);
       }
-    ).map((result) => result.stdout.trim())
+      return internal(String(error));
+    }).map((result) => result.stdout.trim()),
   );
 }
 
@@ -36,7 +39,7 @@ export function git(args: string[], cwd: string, env?: Record<string, string>): 
  */
 function gitOptional(args: string[], cwd: string): Promise<string | null> {
   return execute('git', args, { cwd, reject: false })
-    .then((r) => (r.exitCode === 0 && r.stdout.trim()) ? r.stdout.trim() : null)
+    .then((r) => (r.exitCode === 0 && r.stdout.trim() ? r.stdout.trim() : null))
     .catch(() => null);
 }
 
@@ -81,8 +84,9 @@ export function isGitRepoSync(path: string): boolean {
  * Falls back to symbolic-ref for repos with no commits yet.
  */
 export function getCurrentBranch(cwd: string): ResultAsync<string, DomainError> {
-  return git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd)
-    .orElse(() => git(['symbolic-ref', '--short', 'HEAD'], cwd));
+  return git(['rev-parse', '--abbrev-ref', 'HEAD'], cwd).orElse(() =>
+    git(['symbolic-ref', '--short', 'HEAD'], cwd),
+  );
 }
 
 /**
@@ -95,7 +99,10 @@ export function listBranches(cwd: string): ResultAsync<string[], DomainError> {
       // Try local branches first
       const localOutput = await gitOptional(['branch', '--format=%(refname:short)'], cwd);
       if (localOutput) {
-        const locals = localOutput.split('\n').map((b) => b.trim()).filter(Boolean);
+        const locals = localOutput
+          .split('\n')
+          .map((b) => b.trim())
+          .filter(Boolean);
         if (locals.length > 0) return locals;
       }
 
@@ -116,7 +123,7 @@ export function listBranches(cwd: string): ResultAsync<string[], DomainError> {
 
       return [];
     })(),
-    (error) => internal(String(error))
+    (error) => internal(String(error)),
   );
 }
 
@@ -128,7 +135,7 @@ export function getDefaultBranch(cwd: string): ResultAsync<string | null, Domain
     (async () => {
       const remoteHead = await gitOptional(
         ['symbolic-ref', '--short', 'refs/remotes/origin/HEAD'],
-        cwd
+        cwd,
       );
       if (remoteHead) {
         return remoteHead.replace(/^origin\//, '');
@@ -143,7 +150,7 @@ export function getDefaultBranch(cwd: string): ResultAsync<string | null, Domain
 
       return branches.length > 0 ? branches[0] : null;
     })(),
-    (error) => internal(String(error))
+    (error) => internal(String(error)),
   );
 }
 
@@ -151,9 +158,8 @@ export function getDefaultBranch(cwd: string): ResultAsync<string | null, Domain
  * Get the remote URL for origin
  */
 export function getRemoteUrl(cwd: string): ResultAsync<string | null, DomainError> {
-  return ResultAsync.fromPromise(
-    gitOptional(['remote', 'get-url', 'origin'], cwd),
-    (error) => internal(String(error))
+  return ResultAsync.fromPromise(gitOptional(['remote', 'get-url', 'origin'], cwd), (error) =>
+    internal(String(error)),
   );
 }
 
@@ -187,17 +193,21 @@ export function stageFiles(cwd: string, paths: string[]): ResultAsync<void, Doma
   return ResultAsync.fromPromise(
     (async () => {
       // Ask git which of the requested paths are ignored
-      const checkResult = await execute(
-        'git', ['check-ignore', '--stdin'],
-        { cwd, reject: false, stdin: paths.join('\n') }
-      );
+      const checkResult = await execute('git', ['check-ignore', '--stdin'], {
+        cwd,
+        reject: false,
+        stdin: paths.join('\n'),
+      });
       const ignoredSet = new Set(
         checkResult.exitCode === 0 && checkResult.stdout.trim()
-          ? checkResult.stdout.trim().split('\n').map(p => p.trim())
-          : []
+          ? checkResult.stdout
+              .trim()
+              .split('\n')
+              .map((p) => p.trim())
+          : [],
       );
 
-      const filteredPaths = paths.filter(p => !ignoredSet.has(p));
+      const filteredPaths = paths.filter((p) => !ignoredSet.has(p));
       if (filteredPaths.length === 0) return;
 
       const addResult = await git(['add', ...filteredPaths], cwd);
@@ -206,7 +216,7 @@ export function stageFiles(cwd: string, paths: string[]): ResultAsync<void, Doma
     (error) => {
       if ((error as DomainError).type) return error as DomainError;
       return internal(String(error));
-    }
+    },
   );
 }
 
@@ -226,7 +236,7 @@ export function unstageFiles(cwd: string, paths: string[]): ResultAsync<void, Do
     (error) => {
       if ((error as DomainError).type) return error as DomainError;
       return internal(String(error));
-    }
+    },
   );
 }
 
@@ -246,7 +256,7 @@ export function revertFiles(cwd: string, paths: string[]): ResultAsync<void, Dom
     (error) => {
       if ((error as DomainError).type) return error as DomainError;
       return internal(String(error));
-    }
+    },
   );
 }
 
@@ -262,12 +272,13 @@ export function addToGitignore(cwd: string, pattern: string): Result<void, Domai
       content = readFileSync(gitignorePath, 'utf-8');
     }
     const lines = content.split('\n');
-    if (lines.some(l => l.trim() === pattern.trim())) {
+    if (lines.some((l) => l.trim() === pattern.trim())) {
       return ok(undefined);
     }
-    const newContent = content.endsWith('\n') || content === ''
-      ? content + pattern + '\n'
-      : content + '\n' + pattern + '\n';
+    const newContent =
+      content.endsWith('\n') || content === ''
+        ? content + pattern + '\n'
+        : content + '\n' + pattern + '\n';
     writeFileSync(gitignorePath, newContent, 'utf-8');
     return ok(undefined);
   } catch (e) {
@@ -280,7 +291,12 @@ export function addToGitignore(cwd: string, pattern: string): Result<void, Domai
  * When identity.author is provided, adds --author flag for per-user attribution.
  * When amend is true, amends the last commit instead of creating a new one.
  */
-export function commit(cwd: string, message: string, identity?: GitIdentityOptions, amend?: boolean): ResultAsync<string, DomainError> {
+export function commit(
+  cwd: string,
+  message: string,
+  identity?: GitIdentityOptions,
+  amend?: boolean,
+): ResultAsync<string, DomainError> {
   const args = ['commit', '-m', message];
   if (amend) args.push('--amend');
   if (identity?.author) {
@@ -295,9 +311,7 @@ export function commit(cwd: string, message: string, identity?: GitIdentityOptio
  */
 export function push(cwd: string, identity?: GitIdentityOptions): ResultAsync<string, DomainError> {
   const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
-  return getCurrentBranch(cwd).andThen((branch) =>
-    git(['push', '-u', 'origin', branch], cwd, env)
-  );
+  return getCurrentBranch(cwd).andThen((branch) => git(['push', '-u', 'origin', branch], cwd, env));
 }
 
 /**
@@ -309,7 +323,7 @@ export function createPR(
   title: string,
   body: string,
   baseBranch?: string,
-  identity?: GitIdentityOptions
+  identity?: GitIdentityOptions,
 ): ResultAsync<string, DomainError> {
   const args = ['pr', 'create', '--title', title, '--body', body];
   if (baseBranch) {
@@ -323,7 +337,7 @@ export function createPR(
         return processError(error.message, error.exitCode, error.stderr);
       }
       return internal(String(error));
-    }
+    },
   );
 }
 
@@ -352,7 +366,7 @@ export function mergeBranch(
           await execute('git', ['rebase', '--abort'], { cwd: worktreePath, reject: false });
           throw badRequest(
             `Rebase failed — there are conflicts between your branch and ${targetBranch}. ` +
-            `Resolve them in the worktree and try again.`
+              `Resolve them in the worktree and try again.`,
           );
         }
       }
@@ -362,7 +376,7 @@ export function mergeBranch(
       if (statusResult.isErr()) throw statusResult.error;
       if (statusResult.value.trim()) {
         throw badRequest(
-          'Cannot merge: the main working tree has uncommitted changes. Please commit or stash changes first.'
+          'Cannot merge: the main working tree has uncommitted changes. Please commit or stash changes first.',
         );
       }
 
@@ -375,7 +389,13 @@ export function mergeBranch(
         const checkoutResult = await git(['checkout', targetBranch], cwd);
         if (checkoutResult.isErr()) throw checkoutResult.error;
 
-        const mergeArgs = ['merge', '--no-ff', featureBranch, '-m', `Merge branch '${featureBranch}' into ${targetBranch}`];
+        const mergeArgs = [
+          'merge',
+          '--no-ff',
+          featureBranch,
+          '-m',
+          `Merge branch '${featureBranch}' into ${targetBranch}`,
+        ];
         if (identity?.author) {
           mergeArgs.push('--author', `${identity.author.name} <${identity.author.email}>`);
         }
@@ -394,7 +414,7 @@ export function mergeBranch(
         return processError(error.message, error.exitCode, error.stderr);
       }
       return internal(String(error));
-    }
+    },
   );
 }
 
@@ -450,14 +470,19 @@ export function getDiff(cwd: string): ResultAsync<FileDiff[], DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
       // Run all 4 commands in parallel — no dependency between them
-      const [stagedStatusResult, unstagedStatusResult, untrackedResult, stagedDiffResult, unstagedDiffResult] =
-        await Promise.all([
-          execute('git', ['diff', '--staged', '--name-status'], { cwd, reject: false }),
-          execute('git', ['diff', '--name-status'], { cwd, reject: false }),
-          execute('git', ['ls-files', '--others', '--exclude-standard'], { cwd, reject: false }),
-          execute('git', ['diff', '--staged'], { cwd, reject: false }),
-          execute('git', ['diff'], { cwd, reject: false }),
-        ]);
+      const [
+        stagedStatusResult,
+        unstagedStatusResult,
+        untrackedResult,
+        stagedDiffResult,
+        unstagedDiffResult,
+      ] = await Promise.all([
+        execute('git', ['diff', '--staged', '--name-status'], { cwd, reject: false }),
+        execute('git', ['diff', '--name-status'], { cwd, reject: false }),
+        execute('git', ['ls-files', '--others', '--exclude-standard'], { cwd, reject: false }),
+        execute('git', ['diff', '--staged'], { cwd, reject: false }),
+        execute('git', ['diff'], { cwd, reject: false }),
+      ]);
 
       const stagedRaw = stagedStatusResult.exitCode === 0 ? stagedStatusResult.stdout.trim() : '';
       const stagedFiles = stagedRaw
@@ -466,7 +491,8 @@ export function getDiff(cwd: string): ResultAsync<FileDiff[], DomainError> {
         .map(parseStatusLine)
         .filter(Boolean) as { status: FileDiff['status']; path: string }[];
 
-      const unstagedRaw = unstagedStatusResult.exitCode === 0 ? unstagedStatusResult.stdout.trim() : '';
+      const unstagedRaw =
+        unstagedStatusResult.exitCode === 0 ? unstagedStatusResult.stdout.trim() : '';
       const untrackedRaw = untrackedResult.exitCode === 0 ? untrackedResult.stdout.trim() : '';
 
       const unstagedFiles = unstagedRaw
@@ -484,27 +510,37 @@ export function getDiff(cwd: string): ResultAsync<FileDiff[], DomainError> {
 
       // Parse the full diff blobs into per-file maps
       const stagedDiffMap = splitDiffByFile(
-        stagedDiffResult.exitCode === 0 ? stagedDiffResult.stdout : ''
+        stagedDiffResult.exitCode === 0 ? stagedDiffResult.stdout : '',
       );
       const unstagedDiffMap = splitDiffByFile(
-        unstagedDiffResult.exitCode === 0 ? unstagedDiffResult.stdout : ''
+        unstagedDiffResult.exitCode === 0 ? unstagedDiffResult.stdout : '',
       );
 
       const stagedPaths = new Set(stagedFiles.map((f) => f.path));
       const diffs: FileDiff[] = [];
 
       for (const f of stagedFiles) {
-        diffs.push({ path: f.path, status: f.status, diff: stagedDiffMap.get(f.path) ?? '', staged: true });
+        diffs.push({
+          path: f.path,
+          status: f.status,
+          diff: stagedDiffMap.get(f.path) ?? '',
+          staged: true,
+        });
       }
 
       for (const f of allUnstaged) {
         if (stagedPaths.has(f.path)) continue;
-        diffs.push({ path: f.path, status: f.status, diff: unstagedDiffMap.get(f.path) ?? '', staged: false });
+        diffs.push({
+          path: f.path,
+          status: f.status,
+          diff: unstagedDiffMap.get(f.path) ?? '',
+          staged: false,
+        });
       }
 
       return diffs;
     })(),
-    (error) => processError(String(error), 1, '')
+    (error) => processError(String(error), 1, ''),
   );
 }
 
@@ -531,7 +567,7 @@ function matchesAnyPattern(filePath: string, patterns: string[]): boolean {
  */
 export function getDiffSummary(
   cwd: string,
-  options?: { excludePatterns?: string[]; maxFiles?: number }
+  options?: { excludePatterns?: string[]; maxFiles?: number },
 ): ResultAsync<DiffSummaryResponse, DomainError> {
   const exclude = options?.excludePatterns ?? [];
   const maxFiles = options?.maxFiles ?? 0; // 0 = no limit
@@ -551,7 +587,8 @@ export function getDiffSummary(
         .map(parseStatusLine)
         .filter(Boolean) as { status: FileDiffSummary['status']; path: string }[];
 
-      const unstagedRaw = unstagedStatusResult.exitCode === 0 ? unstagedStatusResult.stdout.trim() : '';
+      const unstagedRaw =
+        unstagedStatusResult.exitCode === 0 ? unstagedStatusResult.stdout.trim() : '';
       const untrackedRaw = untrackedResult.exitCode === 0 ? untrackedResult.stdout.trim() : '';
 
       const unstagedFiles = unstagedRaw
@@ -586,7 +623,7 @@ export function getDiffSummary(
 
       return { files, total, truncated };
     })(),
-    (error) => processError(String(error), 1, '')
+    (error) => processError(String(error), 1, ''),
   );
 }
 
@@ -596,19 +633,29 @@ export function getDiffSummary(
 export function getSingleFileDiff(
   cwd: string,
   filePath: string,
-  staged: boolean
+  staged: boolean,
 ): ResultAsync<string, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
       if (staged) {
-        const result = await execute('git', ['diff', '--staged', '--', filePath], { cwd, reject: false });
+        const result = await execute('git', ['diff', '--staged', '--', filePath], {
+          cwd,
+          reject: false,
+        });
         return result.exitCode === 0 ? result.stdout : '';
       }
       // Check if file is untracked
-      const lsResult = await execute('git', ['ls-files', '--others', '--exclude-standard', '--', filePath], { cwd, reject: false });
+      const lsResult = await execute(
+        'git',
+        ['ls-files', '--others', '--exclude-standard', '--', filePath],
+        { cwd, reject: false },
+      );
       if (lsResult.exitCode === 0 && lsResult.stdout.trim()) {
         // Untracked file — use diff --no-index
-        const result = await execute('git', ['diff', '--no-index', '/dev/null', filePath], { cwd, reject: false });
+        const result = await execute('git', ['diff', '--no-index', '/dev/null', filePath], {
+          cwd,
+          reject: false,
+        });
         // --no-index exits with 1 when there are differences (expected)
         return result.stdout;
       }
@@ -616,7 +663,7 @@ export function getSingleFileDiff(
       const result = await execute('git', ['diff', '--', filePath], { cwd, reject: false });
       return result.exitCode === 0 ? result.stdout : '';
     })(),
-    (error) => processError(String(error), 1, '')
+    (error) => processError(String(error), 1, ''),
   );
 }
 
@@ -637,7 +684,7 @@ export interface GitStatusSummary {
 export function getStatusSummary(
   worktreeCwd: string,
   baseBranch?: string,
-  projectCwd?: string
+  projectCwd?: string,
 ): ResultAsync<GitStatusSummary, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
@@ -681,14 +728,27 @@ export function getStatusSummary(
       }
 
       if (!branch) {
-        return { dirtyFileCount, unpushedCommitCount: 0, hasRemoteBranch: false, isMergedIntoBase: false, linesAdded, linesDeleted };
+        return {
+          dirtyFileCount,
+          unpushedCommitCount: 0,
+          hasRemoteBranch: false,
+          isMergedIntoBase: false,
+          linesAdded,
+          linesDeleted,
+        };
       }
 
       // Phase 2: commands that depend on branch name — run in parallel
       const [remoteResult, mergedResult] = await Promise.all([
-        execute('git', ['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], { cwd: worktreeCwd, reject: false }),
+        execute('git', ['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], {
+          cwd: worktreeCwd,
+          reject: false,
+        }),
         baseBranch && projectCwd
-          ? execute('git', ['branch', '--merged', baseBranch, '--format=%(refname:short)'], { cwd: projectCwd, reject: false })
+          ? execute('git', ['branch', '--merged', baseBranch, '--format=%(refname:short)'], {
+              cwd: projectCwd,
+              reject: false,
+            })
           : Promise.resolve(null),
       ]);
 
@@ -698,12 +758,22 @@ export function getStatusSummary(
       // Phase 3: commands that depend on phase 2 results — run in parallel
       const unpushedRef = hasRemoteBranch ? remoteBranch : baseBranch;
 
-      const needsMergeCheck = mergedResult && mergedResult.exitCode === 0 && mergedResult.stdout.trim()
-        && mergedResult.stdout.trim().split('\n').map((b) => b.trim()).includes(branch);
+      const needsMergeCheck =
+        mergedResult &&
+        mergedResult.exitCode === 0 &&
+        mergedResult.stdout.trim() &&
+        mergedResult.stdout
+          .trim()
+          .split('\n')
+          .map((b) => b.trim())
+          .includes(branch);
 
       const [countResult, mergeBaseResult, branchTipResult] = await Promise.all([
         unpushedRef
-          ? execute('git', ['rev-list', '--count', `${unpushedRef}..HEAD`], { cwd: worktreeCwd, reject: false })
+          ? execute('git', ['rev-list', '--count', `${unpushedRef}..HEAD`], {
+              cwd: worktreeCwd,
+              reject: false,
+            })
           : Promise.resolve(null),
         needsMergeCheck && baseBranch && projectCwd
           ? execute('git', ['merge-base', baseBranch, branch], { cwd: projectCwd, reject: false })
@@ -713,8 +783,10 @@ export function getStatusSummary(
           : Promise.resolve(null),
       ]);
 
-      const unpushedCommitCount = countResult && countResult.exitCode === 0
-        ? (parseInt(countResult.stdout.trim(), 10) || 0) : 0;
+      const unpushedCommitCount =
+        countResult && countResult.exitCode === 0
+          ? parseInt(countResult.stdout.trim(), 10) || 0
+          : 0;
 
       let isMergedIntoBase = false;
       if (needsMergeCheck && mergeBaseResult && branchTipResult) {
@@ -725,9 +797,16 @@ export function getStatusSummary(
         }
       }
 
-      return { dirtyFileCount, unpushedCommitCount, hasRemoteBranch, isMergedIntoBase, linesAdded, linesDeleted };
+      return {
+        dirtyFileCount,
+        unpushedCommitCount,
+        hasRemoteBranch,
+        isMergedIntoBase,
+        linesAdded,
+        linesDeleted,
+      };
     })(),
-    (error) => processError(String(error), 1, '')
+    (error) => processError(String(error), 1, ''),
   );
 }
 
@@ -760,10 +839,13 @@ export function getLog(cwd: string, limit = 20): ResultAsync<GitLogEntry[], Doma
   const format = `%H${SEP}%h${SEP}%an${SEP}%ar${SEP}%s`;
   return git(['log', `--format=${format}`, `-n`, String(limit)], cwd).map((output) => {
     if (!output.trim()) return [];
-    return output.trim().split('\n').map((line) => {
-      const [hash, shortHash, author, relativeDate, message] = line.split(SEP);
-      return { hash, shortHash, author, relativeDate, message };
-    });
+    return output
+      .trim()
+      .split('\n')
+      .map((line) => {
+        const [hash, shortHash, author, relativeDate, message] = line.split(SEP);
+        return { hash, shortHash, author, relativeDate, message };
+      });
   });
 }
 
@@ -805,14 +887,20 @@ export function stashPop(cwd: string): ResultAsync<string, DomainError> {
 export function stashList(cwd: string): ResultAsync<StashEntry[], DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
-      const result = await execute('git', ['stash', 'list', '--format=%gd|%gs|%ar'], { cwd, reject: false });
-      if (result.exitCode !== 0 || !result.stdout.trim()) return [];
-      return result.stdout.trim().split('\n').map((line) => {
-        const [index, message, relativeDate] = line.split('|');
-        return { index: index || '', message: message || '', relativeDate: relativeDate || '' };
+      const result = await execute('git', ['stash', 'list', '--format=%gd|%gs|%ar'], {
+        cwd,
+        reject: false,
       });
+      if (result.exitCode !== 0 || !result.stdout.trim()) return [];
+      return result.stdout
+        .trim()
+        .split('\n')
+        .map((line) => {
+          const [index, message, relativeDate] = line.split('|');
+          return { index: index || '', message: message || '', relativeDate: relativeDate || '' };
+        });
     })(),
-    (error) => internal(String(error))
+    (error) => internal(String(error)),
   );
 }
 

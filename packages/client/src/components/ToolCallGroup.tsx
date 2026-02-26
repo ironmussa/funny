@@ -1,9 +1,11 @@
+import { ChevronRight, Wrench, ListTodo } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { ChevronRight, Wrench, ListTodo } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
-import { ToolCallCard } from './ToolCallCard';
+
 import { getToolLabel } from './tool-cards/utils';
+import { ToolCallCard } from './ToolCallCard';
 
 interface ToolCallItem {
   id: string;
@@ -25,15 +27,15 @@ export function ToolCallGroup({ name, calls, onRespond }: ToolCallGroupProps) {
   const isTodo = name === 'TodoWrite';
 
   return (
-    <div className="text-sm max-w-full overflow-hidden">
+    <div className="max-w-full overflow-hidden text-sm">
       <button
         onClick={() => setExpanded(!expanded)}
-        className="flex items-center gap-2 w-full px-3 py-1.5 text-left text-xs hover:bg-accent/30 transition-colors rounded-md overflow-hidden"
+        className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent/30"
       >
         <ChevronRight
           className={cn(
             'h-3 w-3 flex-shrink-0 text-muted-foreground transition-transform duration-150',
-            expanded && 'rotate-90'
+            expanded && 'rotate-90',
           )}
         />
         {isTodo ? (
@@ -41,13 +43,13 @@ export function ToolCallGroup({ name, calls, onRespond }: ToolCallGroupProps) {
         ) : (
           <Wrench className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
         )}
-        <span className="font-medium font-mono text-foreground flex-shrink-0">{label}</span>
-        <span className="inline-flex items-center justify-center bg-muted-foreground/20 text-muted-foreground px-1.5 rounded-full text-xs font-medium leading-4">
+        <span className="flex-shrink-0 font-mono font-medium text-foreground">{label}</span>
+        <span className="inline-flex items-center justify-center rounded-full bg-muted-foreground/20 px-1.5 text-xs font-medium leading-4 text-muted-foreground">
           ×{calls.length}
         </span>
       </button>
       {expanded && (
-        <div className="px-2 pb-2 pt-1 space-y-1.5 border-t border-border/40">
+        <div className="space-y-1.5 border-t border-border/40 px-2 pb-2 pt-1">
           {calls.map((tc) => (
             <ToolCallCard
               key={tc.id}

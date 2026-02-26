@@ -4,10 +4,15 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 vi.stubGlobal('document', {
   documentElement: { classList: { toggle: vi.fn() } },
 });
-vi.stubGlobal('matchMedia', vi.fn().mockReturnValue({
-  matches: false,
-  addEventListener: vi.fn(),
-}));
+vi.stubGlobal(
+  'matchMedia',
+  vi.fn().mockReturnValue({
+    matches: false,
+    addEventListener: vi.fn(),
+  }),
+);
+
+import type { ToolPermission } from '@funny/shared';
 
 import {
   deriveToolLists,
@@ -16,7 +21,6 @@ import {
   editorLabels,
   useSettingsStore,
 } from '@/stores/settings-store';
-import type { ToolPermission } from '@funny/shared';
 
 describe('SettingsStore', () => {
   beforeEach(() => {
@@ -25,7 +29,7 @@ describe('SettingsStore', () => {
       theme: 'dark',
       defaultEditor: 'cursor',
       toolPermissions: Object.fromEntries(
-        ALL_STANDARD_TOOLS.map(tool => [tool, 'allow' as ToolPermission])
+        ALL_STANDARD_TOOLS.map((tool) => [tool, 'allow' as ToolPermission]),
       ),
       setupCompleted: false,
     });
@@ -37,7 +41,7 @@ describe('SettingsStore', () => {
   describe('deriveToolLists', () => {
     test('with all allow returns all in allowedTools', () => {
       const permissions: Record<string, ToolPermission> = Object.fromEntries(
-        ALL_STANDARD_TOOLS.map(tool => [tool, 'allow' as ToolPermission])
+        ALL_STANDARD_TOOLS.map((tool) => [tool, 'allow' as ToolPermission]),
       );
 
       const { allowedTools, disallowedTools } = deriveToolLists(permissions);
@@ -48,7 +52,7 @@ describe('SettingsStore', () => {
 
     test('with all deny returns all in disallowedTools', () => {
       const permissions: Record<string, ToolPermission> = Object.fromEntries(
-        ALL_STANDARD_TOOLS.map(tool => [tool, 'deny' as ToolPermission])
+        ALL_STANDARD_TOOLS.map((tool) => [tool, 'deny' as ToolPermission]),
       );
 
       const { allowedTools, disallowedTools } = deriveToolLists(permissions);

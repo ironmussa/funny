@@ -1,4 +1,5 @@
 import { useTranslation } from 'react-i18next';
+
 import { cn } from '@/lib/utils';
 
 export type TimeRange = 'day' | 'week' | 'month' | 'all';
@@ -28,7 +29,7 @@ export function TimeRangeSelector({ value, onChange }: Props) {
             'px-3 py-1.5 text-xs rounded-sm transition-colors whitespace-nowrap',
             value === opt.value
               ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
+              : 'text-muted-foreground hover:text-foreground',
           )}
         >
           {opt.label}

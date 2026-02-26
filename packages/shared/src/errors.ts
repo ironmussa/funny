@@ -17,7 +17,11 @@ export const notFound = (message: string): DomainError => ({ type: 'NOT_FOUND', 
 export const badRequest = (message: string): DomainError => ({ type: 'BAD_REQUEST', message });
 export const forbidden = (message: string): DomainError => ({ type: 'FORBIDDEN', message });
 export const validationErr = (message: string): DomainError => ({ type: 'VALIDATION', message });
-export const processError = (message: string, exitCode?: number, stderr?: string): DomainError =>
-  ({ type: 'PROCESS_ERROR', message, exitCode, stderr });
+export const processError = (message: string, exitCode?: number, stderr?: string): DomainError => ({
+  type: 'PROCESS_ERROR',
+  message,
+  exitCode,
+  stderr,
+});
 export const conflict = (message: string): DomainError => ({ type: 'CONFLICT', message });
 export const internal = (message: string): DomainError => ({ type: 'INTERNAL', message });

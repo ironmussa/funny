@@ -67,23 +67,23 @@ src/
 
 ## API Routes
 
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/api/health` | Health check |
-| `GET` | `/api/auth/mode` | Get auth mode (local/multi) |
-| `GET/POST` | `/api/projects` | List / create projects |
-| `GET/POST` | `/api/threads` | List / create threads |
-| `POST` | `/api/threads/:id/message` | Send follow-up message to agent |
-| `POST` | `/api/threads/:id/stop` | Stop a running agent |
-| `GET` | `/api/git/:threadId/diff` | Get file diffs |
-| `POST` | `/api/git/:threadId/stage` | Stage files |
-| `POST` | `/api/git/:threadId/commit` | Commit staged changes |
-| `POST` | `/api/git/:threadId/push` | Push to remote |
-| `POST` | `/api/git/:threadId/pr` | Create pull request (via gh CLI) |
-| `POST` | `/api/git/:threadId/merge` | Merge branch into target |
-| `GET/PUT` | `/api/profile` | Get/update user git identity |
-| `GET/POST` | `/api/automations` | List / create automations |
-| `WS` | `/ws` | Real-time event stream |
+| Method     | Path                        | Description                      |
+| ---------- | --------------------------- | -------------------------------- |
+| `GET`      | `/api/health`               | Health check                     |
+| `GET`      | `/api/auth/mode`            | Get auth mode (local/multi)      |
+| `GET/POST` | `/api/projects`             | List / create projects           |
+| `GET/POST` | `/api/threads`              | List / create threads            |
+| `POST`     | `/api/threads/:id/message`  | Send follow-up message to agent  |
+| `POST`     | `/api/threads/:id/stop`     | Stop a running agent             |
+| `GET`      | `/api/git/:threadId/diff`   | Get file diffs                   |
+| `POST`     | `/api/git/:threadId/stage`  | Stage files                      |
+| `POST`     | `/api/git/:threadId/commit` | Commit staged changes            |
+| `POST`     | `/api/git/:threadId/push`   | Push to remote                   |
+| `POST`     | `/api/git/:threadId/pr`     | Create pull request (via gh CLI) |
+| `POST`     | `/api/git/:threadId/merge`  | Merge branch into target         |
+| `GET/PUT`  | `/api/profile`              | Get/update user git identity     |
+| `GET/POST` | `/api/automations`          | List / create automations        |
+| `WS`       | `/ws`                       | Real-time event stream           |
 
 ## Key Design Decisions
 
@@ -95,11 +95,11 @@ src/
 
 ## Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `PORT` | `3001` | Server port |
-| `CLIENT_PORT` | `5173` | Client port (for CORS) |
-| `AUTH_MODE` | `local` | Authentication mode (`local` or `multi`) |
+| Variable      | Default | Description                              |
+| ------------- | ------- | ---------------------------------------- |
+| `PORT`        | `3001`  | Server port                              |
+| `CLIENT_PORT` | `5173`  | Client port (for CORS)                   |
+| `AUTH_MODE`   | `local` | Authentication mode (`local` or `multi`) |
 
 ## Tech Stack
 

@@ -1,18 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { useThreadStore } from '@/stores/thread-store';
-import { useProjectStore } from '@/stores/project-store';
-import { cn } from '@/lib/utils';
-import { ChevronRight } from 'lucide-react';
-import { ThreadItem } from './ThreadItem';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
 import type { Thread } from '@funny/shared';
+import { ChevronRight } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { cn } from '@/lib/utils';
 import { useGitStatusStore } from '@/stores/git-status-store';
+import { useProjectStore } from '@/stores/project-store';
+import { useThreadStore } from '@/stores/thread-store';
+
+import { ThreadItem } from './ThreadItem';
 
 interface RunningThread extends Thread {
   projectName: string;
@@ -23,15 +21,17 @@ interface RunningThread extends Thread {
 export function RunningThreads() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const threadsByProject = useThreadStore(s => s.threadsByProject);
-  const selectedThreadId = useThreadStore(s => s.selectedThreadId);
-  const projects = useProjectStore(s => s.projects);
+  const threadsByProject = useThreadStore((s) => s.threadsByProject);
+  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  const projects = useProjectStore((s) => s.projects);
   const gitStatusByThread = useGitStatusStore((s) => s.statusByThread);
   const [isExpanded, setIsExpanded] = useState(true);
 
   const runningThreads = useMemo(() => {
     const result: RunningThread[] = [];
-    const projectMap = new Map(projects.map(p => [p.id, { name: p.name, path: p.path, color: p.color }]));
+    const projectMap = new Map(
+      projects.map((p) => [p.id, { name: p.name, path: p.path, color: p.color }]),
+    );
 
     for (const [projectId, threads] of Object.entries(threadsByProject)) {
       for (const thread of threads) {
@@ -62,23 +62,21 @@ export function RunningThreads() {
   if (runningThreads.length === 0) return null;
 
   return (
-    <Collapsible
-      open={isExpanded}
-      onOpenChange={setIsExpanded}
-      className="mb-1 min-w-0"
-    >
-      <CollapsibleTrigger className="flex items-center gap-1.5 px-2 py-1.5 text-xs text-left text-muted-foreground hover:text-foreground min-w-0 transition-colors w-full">
+    <Collapsible open={isExpanded} onOpenChange={setIsExpanded} className="mb-1 min-w-0">
+      <CollapsibleTrigger className="flex w-full min-w-0 items-center gap-1.5 px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:text-foreground">
         <ChevronRight
           className={cn(
             'h-3 w-3 flex-shrink-0 transition-transform duration-200',
-            isExpanded && 'rotate-90'
+            isExpanded && 'rotate-90',
           )}
         />
-        <span className="h-1.5 w-1.5 rounded-full bg-status-info animate-pulse flex-shrink-0" />
-        <span className="truncate font-medium">{t('sidebar.activeThreads')} ({runningThreads.length})</span>
+        <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-status-info" />
+        <span className="truncate font-medium">
+          {t('sidebar.activeThreads')} ({runningThreads.length})
+        </span>
       </CollapsibleTrigger>
       <CollapsibleContent className="data-[state=open]:animate-slide-down">
-        <div className="ml-3 pl-1 mt-0.5 space-y-0.5 min-w-0">
+        <div className="ml-3 mt-0.5 min-w-0 space-y-0.5 pl-1">
           {runningThreads.map((thread) => (
             <ThreadItem
               key={thread.id}
@@ -90,7 +88,10 @@ export function RunningThreads() {
               gitStatus={thread.mode === 'worktree' ? gitStatusByThread[thread.id] : undefined}
               onSelect={() => {
                 const store = useThreadStore.getState();
-                if (store.selectedThreadId === thread.id && (!store.activeThread || store.activeThread.id !== thread.id)) {
+                if (
+                  store.selectedThreadId === thread.id &&
+                  (!store.activeThread || store.activeThread.id !== thread.id)
+                ) {
                   store.selectThread(thread.id);
                 }
                 navigate(`/projects/${thread.projectId}/threads/${thread.id}`);

@@ -1,11 +1,26 @@
 import { describe, test, expect, beforeEach, beforeAll, afterAll } from 'bun:test';
-import { Hono } from 'hono';
-import { eq } from 'drizzle-orm';
-import { resolve } from 'path';
 import { mkdirSync, rmSync, writeFileSync } from 'fs';
-import { createTestDb, seedProject, seedThread } from '../helpers/test-db.js';
+import { resolve } from 'path';
+
 import { executeSync } from '@funny/core/git';
-import { getDiff, stageFiles, unstageFiles, commit, getLog, stash, stashPop, stashList, resetSoft, pull, revertFiles, addToGitignore } from '@funny/core/git';
+import {
+  getDiff,
+  stageFiles,
+  unstageFiles,
+  commit,
+  getLog,
+  stash,
+  stashPop,
+  stashList,
+  resetSoft,
+  pull,
+  revertFiles,
+  addToGitignore,
+} from '@funny/core/git';
+import { eq } from 'drizzle-orm';
+import { Hono } from 'hono';
+
+import { createTestDb, seedProject, seedThread } from '../helpers/test-db.js';
 
 const TEST_REPO = resolve(import.meta.dir, '..', '..', '..', '.test-tmp-git-routes');
 

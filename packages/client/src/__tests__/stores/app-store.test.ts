@@ -1,7 +1,8 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { useAppStore } from '@/stores/app-store';
-import { okAsync, errAsync } from 'neverthrow';
 import type { DomainError } from '@funny/shared/errors';
+import { okAsync, errAsync } from 'neverthrow';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
+
+import { useAppStore } from '@/stores/app-store';
 
 // Mock the api module
 vi.mock('@/lib/api', () => ({
@@ -66,9 +67,7 @@ describe('AppStore', () => {
 
   describe('loadThreadsForProject', () => {
     test('fetches and stores threads', async () => {
-      const mockThreads = [
-        { id: 't1', projectId: 'p1', title: 'Thread 1', status: 'completed' },
-      ];
+      const mockThreads = [{ id: 't1', projectId: 'p1', title: 'Thread 1', status: 'completed' }];
       mockApi.listThreads.mockReturnValueOnce(okAsync(mockThreads) as any);
 
       await useAppStore.getState().loadThreadsForProject('p1');
@@ -186,17 +185,16 @@ describe('AppStore', () => {
         selectedThreadId: 't1',
         activeThread: { id: 't1' } as any,
         threadsByProject: {
-          p1: [
-            { id: 't1', projectId: 'p1' } as any,
-            { id: 't2', projectId: 'p1' } as any,
-          ],
+          p1: [{ id: 't1', projectId: 'p1' } as any, { id: 't2', projectId: 'p1' } as any],
         },
       });
 
       await useAppStore.getState().archiveThread('t1', 'p1');
       // Thread stays in list but with archived: true (optimistic update)
       expect(useAppStore.getState().threadsByProject['p1']).toHaveLength(2);
-      const archivedThread = useAppStore.getState().threadsByProject['p1'].find((t: any) => t.id === 't1');
+      const archivedThread = useAppStore
+        .getState()
+        .threadsByProject['p1'].find((t: any) => t.id === 't1');
       expect(archivedThread?.archived).toBe(true);
       // Active thread also gets archived flag
       expect(useAppStore.getState().activeThread?.archived).toBe(true);
@@ -295,9 +293,7 @@ describe('AppStore', () => {
         useAppStore.setState({
           activeThread: {
             id: 't1',
-            messages: [
-              { id: 'msg1', role: 'assistant', content: 'Using tool', toolCalls: [] },
-            ],
+            messages: [{ id: 'msg1', role: 'assistant', content: 'Using tool', toolCalls: [] }],
           } as any,
         });
 
@@ -458,17 +454,15 @@ describe('AppStore', () => {
       });
 
       const messages = useAppStore.getState().activeThread!.messages;
-      expect(messages[0].toolCalls).toHaveLength(0);  // First assistant untouched
-      expect(messages[2].toolCalls).toHaveLength(1);   // Last assistant gets the tool call
+      expect(messages[0].toolCalls).toHaveLength(0); // First assistant untouched
+      expect(messages[2].toolCalls).toHaveLength(1); // Last assistant gets the tool call
     });
 
     test('handleWSToolCall with multiple tools on same message', () => {
       useAppStore.setState({
         activeThread: {
           id: 't1',
-          messages: [
-            { id: 'msg1', role: 'assistant', content: 'Working', toolCalls: [] },
-          ],
+          messages: [{ id: 'msg1', role: 'assistant', content: 'Working', toolCalls: [] }],
         } as any,
       });
 
@@ -507,10 +501,7 @@ describe('AppStore', () => {
         selectedThreadId: 't2',
         activeThread: { id: 't2' } as any,
         threadsByProject: {
-          p1: [
-            { id: 't1', projectId: 'p1' } as any,
-            { id: 't2', projectId: 'p1' } as any,
-          ],
+          p1: [{ id: 't1', projectId: 'p1' } as any, { id: 't2', projectId: 'p1' } as any],
         },
       });
 

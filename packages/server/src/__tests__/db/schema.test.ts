@@ -1,6 +1,14 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
+
 import { eq } from 'drizzle-orm';
-import { createTestDb, seedProject, seedThread, seedMessage, seedToolCall } from '../helpers/test-db.js';
+
+import {
+  createTestDb,
+  seedProject,
+  seedThread,
+  seedMessage,
+  seedToolCall,
+} from '../helpers/test-db.js';
 
 describe('Database Schema', () => {
   let testDb: ReturnType<typeof createTestDb>;
@@ -238,13 +246,16 @@ describe('Database Schema', () => {
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
 
       const longContent = 'a'.repeat(100_000);
-      testDb.db.insert(testDb.schema.messages).values({
-        id: 'long-msg',
-        threadId: 't1',
-        role: 'assistant',
-        content: longContent,
-        timestamp: new Date().toISOString(),
-      }).run();
+      testDb.db
+        .insert(testDb.schema.messages)
+        .values({
+          id: 'long-msg',
+          threadId: 't1',
+          role: 'assistant',
+          content: longContent,
+          timestamp: new Date().toISOString(),
+        })
+        .run();
 
       const msg = testDb.db
         .select()
@@ -260,13 +271,16 @@ describe('Database Schema', () => {
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
 
       const dangerous = "Robert'); DROP TABLE messages;--";
-      testDb.db.insert(testDb.schema.messages).values({
-        id: 'sql-inject',
-        threadId: 't1',
-        role: 'user',
-        content: dangerous,
-        timestamp: new Date().toISOString(),
-      }).run();
+      testDb.db
+        .insert(testDb.schema.messages)
+        .values({
+          id: 'sql-inject',
+          threadId: 't1',
+          role: 'user',
+          content: dangerous,
+          timestamp: new Date().toISOString(),
+        })
+        .run();
 
       // Table still exists and content is stored literally
       const msg = testDb.db
@@ -286,16 +300,25 @@ describe('Database Schema', () => {
       seedThread(testDb.db, { id: 'uni-t', projectId: 'uni-p', title: '🚀 Thread タイトル' });
       seedMessage(testDb.db, { id: 'uni-m', threadId: 'uni-t', content: '絵文字 🎉🔥 content' });
 
-      const project = testDb.db.select().from(testDb.schema.projects)
-        .where(eq(testDb.schema.projects.id, 'uni-p')).get();
+      const project = testDb.db
+        .select()
+        .from(testDb.schema.projects)
+        .where(eq(testDb.schema.projects.id, 'uni-p'))
+        .get();
       expect(project!.name).toBe('日本語プロジェクト');
 
-      const thread = testDb.db.select().from(testDb.schema.threads)
-        .where(eq(testDb.schema.threads.id, 'uni-t')).get();
+      const thread = testDb.db
+        .select()
+        .from(testDb.schema.threads)
+        .where(eq(testDb.schema.threads.id, 'uni-t'))
+        .get();
       expect(thread!.title).toBe('🚀 Thread タイトル');
 
-      const msg = testDb.db.select().from(testDb.schema.messages)
-        .where(eq(testDb.schema.messages.id, 'uni-m')).get();
+      const msg = testDb.db
+        .select()
+        .from(testDb.schema.messages)
+        .where(eq(testDb.schema.messages.id, 'uni-m'))
+        .get();
       expect(msg!.content).toBe('絵文字 🎉🔥 content');
     });
 
@@ -310,8 +333,11 @@ describe('Database Schema', () => {
         completedAt: null,
       });
 
-      const thread = testDb.db.select().from(testDb.schema.threads)
-        .where(eq(testDb.schema.threads.id, 'null-t')).get();
+      const thread = testDb.db
+        .select()
+        .from(testDb.schema.threads)
+        .where(eq(testDb.schema.threads.id, 'null-t'))
+        .get();
 
       expect(thread!.branch).toBeNull();
       expect(thread!.worktreePath).toBeNull();
@@ -324,16 +350,22 @@ describe('Database Schema', () => {
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
       seedMessage(testDb.db, { id: 'm1', threadId: 't1' });
 
-      testDb.db.insert(testDb.schema.toolCalls).values({
-        id: 'tc-null',
-        messageId: 'm1',
-        name: 'Read',
-        input: null,
-        output: null,
-      }).run();
+      testDb.db
+        .insert(testDb.schema.toolCalls)
+        .values({
+          id: 'tc-null',
+          messageId: 'm1',
+          name: 'Read',
+          input: null,
+          output: null,
+        })
+        .run();
 
-      const tc = testDb.db.select().from(testDb.schema.toolCalls)
-        .where(eq(testDb.schema.toolCalls.id, 'tc-null')).get();
+      const tc = testDb.db
+        .select()
+        .from(testDb.schema.toolCalls)
+        .where(eq(testDb.schema.toolCalls.id, 'tc-null'))
+        .get();
 
       expect(tc!.input).toBeNull();
       expect(tc!.output).toBeNull();
@@ -343,37 +375,46 @@ describe('Database Schema', () => {
       seedProject(testDb.db, { id: 'p1' });
       seedThread(testDb.db, { id: 'cost-t', projectId: 'p1', cost: 0.00347 });
 
-      const thread = testDb.db.select().from(testDb.schema.threads)
-        .where(eq(testDb.schema.threads.id, 'cost-t')).get();
+      const thread = testDb.db
+        .select()
+        .from(testDb.schema.threads)
+        .where(eq(testDb.schema.threads.id, 'cost-t'))
+        .get();
 
       expect(thread!.cost).toBeCloseTo(0.00347, 5);
     });
 
     test('foreign key constraint prevents orphan threads', () => {
       expect(() => {
-        testDb.db.insert(testDb.schema.threads).values({
-          id: 'orphan-t',
-          projectId: 'nonexistent-project',
-          title: 'Orphan',
-          mode: 'local',
-          permissionMode: 'autoEdit',
-          status: 'pending',
-          cost: 0,
-          archived: 0,
-          createdAt: new Date().toISOString(),
-        }).run();
+        testDb.db
+          .insert(testDb.schema.threads)
+          .values({
+            id: 'orphan-t',
+            projectId: 'nonexistent-project',
+            title: 'Orphan',
+            mode: 'local',
+            permissionMode: 'autoEdit',
+            status: 'pending',
+            cost: 0,
+            archived: 0,
+            createdAt: new Date().toISOString(),
+          })
+          .run();
       }).toThrow();
     });
 
     test('foreign key constraint prevents orphan messages', () => {
       expect(() => {
-        testDb.db.insert(testDb.schema.messages).values({
-          id: 'orphan-m',
-          threadId: 'nonexistent-thread',
-          role: 'user',
-          content: 'Hello',
-          timestamp: new Date().toISOString(),
-        }).run();
+        testDb.db
+          .insert(testDb.schema.messages)
+          .values({
+            id: 'orphan-m',
+            threadId: 'nonexistent-thread',
+            role: 'user',
+            content: 'Hello',
+            timestamp: new Date().toISOString(),
+          })
+          .run();
       }).toThrow();
     });
   });

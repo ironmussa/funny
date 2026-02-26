@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'bun:test';
+
 import { encrypt, decrypt } from '../../lib/crypto.js';
 
 describe('encrypt', () => {

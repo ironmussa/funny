@@ -1,10 +1,6 @@
 import { describe, test, expect } from 'bun:test';
-import {
-  ProcessExecutionError,
-  execute,
-  executeSync,
-  executeWithLogging,
-} from '@funny/core/git';
+
+import { ProcessExecutionError, execute, executeSync, executeWithLogging } from '@funny/core/git';
 
 describe('ProcessExecutionError', () => {
   test('sets all properties correctly', () => {
@@ -13,7 +9,7 @@ describe('ProcessExecutionError', () => {
       1,
       'stdout output',
       'stderr output',
-      'test --flag'
+      'test --flag',
     );
 
     expect(err.message).toBe('Command failed: test');
@@ -130,19 +126,13 @@ describe('execute edge cases', () => {
   });
 
   test('handles arguments with special characters', async () => {
-    const result = await execute('node', [
-      '-e',
-      'console.log("hello \\"world\\" & <tag>")',
-    ]);
+    const result = await execute('node', ['-e', 'console.log("hello \\"world\\" & <tag>")']);
     expect(result.stdout).toContain('hello');
     expect(result.stdout).toContain('world');
   });
 
   test('handles arguments with spaces', async () => {
-    const result = await execute('node', [
-      '-e',
-      'console.log("hello world with spaces")',
-    ]);
+    const result = await execute('node', ['-e', 'console.log("hello world with spaces")']);
     expect(result.stdout.trim()).toBe('hello world with spaces');
   });
 

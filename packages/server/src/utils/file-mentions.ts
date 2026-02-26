@@ -1,5 +1,5 @@
-import { join, resolve } from 'path';
 import { readFile, stat } from 'fs/promises';
+import { join, resolve } from 'path';
 
 const MAX_FILE_SIZE = 100 * 1024; // 100KB per file
 const MAX_TOTAL_CONTENT = 500 * 1024; // 500KB total
@@ -11,7 +11,7 @@ export interface FileRef {
 export async function augmentPromptWithFiles(
   prompt: string,
   fileReferences: FileRef[] | undefined,
-  basePath: string
+  basePath: string,
 ): Promise<string> {
   if (!fileReferences || fileReferences.length === 0) return prompt;
 
@@ -29,7 +29,7 @@ export async function augmentPromptWithFiles(
 
       if (size > MAX_FILE_SIZE || totalSize + size > MAX_TOTAL_CONTENT) {
         sections.push(
-          `<file path="${ref.path}" note="File too large to inline (${Math.round(size / 1024)}KB). Use the Read tool to access it."></file>`
+          `<file path="${ref.path}" note="File too large to inline (${Math.round(size / 1024)}KB). Use the Read tool to access it."></file>`,
         );
       } else {
         const content = await readFile(fullPath, 'utf-8');
@@ -37,9 +37,7 @@ export async function augmentPromptWithFiles(
         sections.push(`<file path="${ref.path}">\n${content}\n</file>`);
       }
     } catch {
-      sections.push(
-        `<file path="${ref.path}" note="File not found or unreadable"></file>`
-      );
+      sections.push(`<file path="${ref.path}" note="File not found or unreadable"></file>`);
     }
   }
 

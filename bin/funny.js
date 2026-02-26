@@ -1,7 +1,7 @@
 #!/usr/bin/env bun
-import { parseArgs } from 'util';
-import { resolve } from 'path';
 import { existsSync } from 'fs';
+import { resolve } from 'path';
+import { parseArgs } from 'util';
 
 // Parse CLI arguments
 const { values } = parseArgs({

@@ -1,8 +1,10 @@
+import { FolderOpen, Loader2, Plus, Github } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -11,20 +13,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { FolderOpen, Loader2, Plus, Github } from 'lucide-react';
-import { FolderPicker } from './FolderPicker';
-import { CloneRepoView } from './CloneRepoView';
+import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
-import { toast } from 'sonner';
 import { useAppStore } from '@/stores/app-store';
+
+import { CloneRepoView } from './CloneRepoView';
+import { FolderPicker } from './FolderPicker';
 
 type AddMode = 'local' | 'github';
 
 export function AddProjectView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const loadProjects = useAppStore(s => s.loadProjects);
-  const setAddProjectOpen = useAppStore(s => s.setAddProjectOpen);
+  const loadProjects = useAppStore((s) => s.loadProjects);
+  const setAddProjectOpen = useAppStore((s) => s.setAddProjectOpen);
   const [mode, setMode] = useState<AddMode>('local');
   const [newProjectName, setNewProjectName] = useState('');
   const [newProjectPath, setNewProjectPath] = useState('');
@@ -74,10 +76,10 @@ export function AddProjectView() {
   };
 
   return (
-    <div className="flex-1 flex items-center justify-center">
+    <div className="flex flex-1 items-center justify-center">
       <div className="w-full max-w-md space-y-6 px-4">
-        <div className="text-center space-y-2">
-          <div className="mx-auto w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center">
+        <div className="space-y-2 text-center">
+          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
             <Plus className="h-6 w-6 text-primary" />
           </div>
           <h2 className="text-xl font-semibold">{t('sidebar.addProject')}</h2>
@@ -86,7 +88,7 @@ export function AddProjectView() {
         {/* Tab toggle */}
         <div className="flex gap-1 rounded-lg bg-muted p-1">
           <button
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               mode === 'local'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
@@ -97,7 +99,7 @@ export function AddProjectView() {
             {t('github.localFolder')}
           </button>
           <button
-            className={`flex-1 flex items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
+            className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               mode === 'github'
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
@@ -111,13 +113,13 @@ export function AddProjectView() {
 
         {mode === 'local' ? (
           <div className="space-y-4">
-            <p className="text-sm text-muted-foreground text-center">
-              {t('sidebar.addProjectDescription', { defaultValue: 'Enter the project name and select the folder path.' })}
+            <p className="text-center text-sm text-muted-foreground">
+              {t('sidebar.addProjectDescription', {
+                defaultValue: 'Enter the project name and select the folder path.',
+              })}
             </p>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">
-                {t('sidebar.projectName')}
-              </label>
+              <label className="mb-1.5 block text-sm font-medium">{t('sidebar.projectName')}</label>
               <Input
                 placeholder={t('sidebar.projectName')}
                 value={newProjectName}
@@ -126,7 +128,7 @@ export function AddProjectView() {
               />
             </div>
             <div>
-              <label className="text-sm font-medium mb-1.5 block">
+              <label className="mb-1.5 block text-sm font-medium">
                 {t('sidebar.absolutePath')}
               </label>
               <div className="flex gap-2">
@@ -147,11 +149,7 @@ export function AddProjectView() {
               </div>
             </div>
             <div className="flex gap-2 pt-2">
-              <Button
-                variant="outline"
-                className="flex-1"
-                onClick={() => setAddProjectOpen(false)}
-              >
+              <Button variant="outline" className="flex-1" onClick={() => setAddProjectOpen(false)}>
                 {t('common.cancel', { defaultValue: 'Cancel' })}
               </Button>
               <Button
@@ -161,7 +159,7 @@ export function AddProjectView() {
               >
                 {isCreating ? (
                   <>
-                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                     {t('common.loading')}
                   </>
                 ) : (
@@ -197,7 +195,9 @@ export function AddProjectView() {
       <Dialog open={gitInitDialogOpen} onOpenChange={setGitInitDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{t('confirm.gitInitTitle', { defaultValue: 'Initialize Git Repository' })}</DialogTitle>
+            <DialogTitle>
+              {t('confirm.gitInitTitle', { defaultValue: 'Initialize Git Repository' })}
+            </DialogTitle>
             <DialogDescription>
               {t('confirm.notGitRepo', { path: newProjectPath })}
             </DialogDescription>

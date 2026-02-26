@@ -1,6 +1,6 @@
+import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface LightboxImage {
   src: string;
@@ -46,13 +46,13 @@ export function ImageLightbox({ images, initialIndex = 0, open, onClose }: Image
 
   return createPortal(
     <div
-      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 animate-in fade-in-0 duration-200"
+      className="fixed inset-0 z-[100] flex items-center justify-center bg-black/80 duration-200 animate-in fade-in-0"
       onClick={onClose}
     >
       {/* Close button */}
       <button
         onClick={onClose}
-        className="absolute top-4 right-4 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 transition-colors"
+        className="absolute right-4 top-4 z-10 rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70"
       >
         <X className="h-5 w-5" />
       </button>
@@ -60,8 +60,11 @@ export function ImageLightbox({ images, initialIndex = 0, open, onClose }: Image
       {/* Previous button */}
       {images.length > 1 && (
         <button
-          onClick={(e) => { e.stopPropagation(); goPrev(); }}
-          className="absolute left-4 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 transition-colors"
+          onClick={(e) => {
+            e.stopPropagation();
+            goPrev();
+          }}
+          className="absolute left-4 z-10 rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70"
         >
           <ChevronLeft className="h-6 w-6" />
         </button>
@@ -71,15 +74,18 @@ export function ImageLightbox({ images, initialIndex = 0, open, onClose }: Image
       <img
         src={current.src}
         alt={current.alt}
-        className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg shadow-2xl"
+        className="max-h-[90vh] max-w-[90vw] rounded-lg object-contain shadow-2xl"
         onClick={(e) => e.stopPropagation()}
       />
 
       {/* Next button */}
       {images.length > 1 && (
         <button
-          onClick={(e) => { e.stopPropagation(); goNext(); }}
-          className="absolute right-4 z-10 rounded-full bg-black/50 p-2 text-white hover:bg-black/70 transition-colors"
+          onClick={(e) => {
+            e.stopPropagation();
+            goNext();
+          }}
+          className="absolute right-4 z-10 rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70"
         >
           <ChevronRight className="h-6 w-6" />
         </button>
@@ -92,6 +98,6 @@ export function ImageLightbox({ images, initialIndex = 0, open, onClose }: Image
         </div>
       )}
     </div>,
-    document.body
+    document.body,
   );
 }

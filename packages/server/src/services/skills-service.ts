@@ -5,11 +5,13 @@
  */
 
 import { readFileSync, readdirSync, existsSync, rmSync, unlinkSync } from 'fs';
-import { join } from 'path';
 import { homedir } from 'os';
+import { join } from 'path';
+
 import { execute } from '@funny/core/git';
 import type { Skill } from '@funny/shared';
-import { log } from '../lib/abbacchio.js';
+
+import { log } from '../lib/logger.js';
 
 const AGENTS_DIR = join(homedir(), '.agents');
 const SKILLS_DIR = join(AGENTS_DIR, 'skills');
@@ -143,10 +145,10 @@ export async function addSkill(identifier: string): Promise<void> {
     const lines = raw.split('\n').filter((l: string) => l.trim());
     // Look for the most descriptive error line (e.g. "No matching skills found for: ...")
     const errorLine = lines.find((l: string) =>
-      /no matching|not found|error|failed|invalid|does not exist/i.test(l)
+      /no matching|not found|error|failed|invalid|does not exist/i.test(l),
     );
     const meaningful = errorLine || lines[0] || raw;
-    throw new Error(`Failed to install skill "${identifier}": ${meaningful}`);
+    throw new Error(`Failed to install skill "${identifier}": ${meaningful}`, { cause: err });
   }
 }
 

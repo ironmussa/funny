@@ -6,9 +6,7 @@ const PROBE_TIMEOUT_MS = 5_000;
 
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
 const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
-const HEALTH_URL = isTauri
-  ? `http://localhost:${serverPort}/api/health`
-  : '/api/health';
+const HEALTH_URL = isTauri ? `http://localhost:${serverPort}/api/health` : '/api/health';
 
 type CircuitState = 'closed' | 'open' | 'half-open';
 

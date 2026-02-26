@@ -6,8 +6,9 @@
  * a full audit trail of events.
  */
 
-import { StateMachine } from './state-machine.js';
 import { nanoid } from 'nanoid';
+
+import { StateMachine } from './state-machine.js';
 
 // ── Session Status ──────────────────────────────────────────────
 
@@ -28,20 +29,20 @@ export type SessionStatus =
   | 'cancelled';
 
 export const SESSION_TRANSITIONS: Record<SessionStatus, SessionStatus[]> = {
-  created:           ['planning', 'cancelled', 'failed'],
-  planning:          ['implementing', 'escalated', 'cancelled', 'failed'],
-  implementing:      ['quality_check', 'pr_created', 'escalated', 'cancelled', 'failed'],
-  quality_check:     ['pr_created', 'implementing', 'escalated', 'failed'],
-  pr_created:        ['ci_running', 'review', 'escalated', 'cancelled', 'failed'],
-  ci_running:        ['ci_passed', 'ci_failed', 'escalated', 'failed'],
-  ci_passed:         ['review', 'merged', 'escalated'],
-  ci_failed:         ['implementing', 'ci_running', 'escalated', 'failed'],
-  review:            ['changes_requested', 'merged', 'escalated'],
+  created: ['planning', 'cancelled', 'failed'],
+  planning: ['implementing', 'escalated', 'cancelled', 'failed'],
+  implementing: ['quality_check', 'pr_created', 'escalated', 'cancelled', 'failed'],
+  quality_check: ['pr_created', 'implementing', 'escalated', 'failed'],
+  pr_created: ['ci_running', 'review', 'escalated', 'cancelled', 'failed'],
+  ci_running: ['ci_passed', 'ci_failed', 'escalated', 'failed'],
+  ci_passed: ['review', 'merged', 'escalated'],
+  ci_failed: ['implementing', 'ci_running', 'escalated', 'failed'],
+  review: ['changes_requested', 'merged', 'escalated'],
   changes_requested: ['implementing', 'ci_running', 'review', 'escalated', 'failed'],
-  merged:            [],  // terminal
-  failed:            [],  // terminal
-  escalated:         ['implementing', 'cancelled'], // can resume after human intervention
-  cancelled:         [],  // terminal
+  merged: [], // terminal
+  failed: [], // terminal
+  escalated: ['implementing', 'cancelled'], // can resume after human intervention
+  cancelled: [], // terminal
 };
 
 // ── Session Event ───────────────────────────────────────────────
@@ -114,11 +115,15 @@ export class Session {
   private machine: StateMachine<SessionStatus>;
   private data: SessionData;
 
-  constructor(issue: IssueRef, projectPath: string, opts?: {
-    model?: string;
-    provider?: string;
-    metadata?: Record<string, unknown>;
-  }) {
+  constructor(
+    issue: IssueRef,
+    projectPath: string,
+    opts?: {
+      model?: string;
+      provider?: string;
+      metadata?: Record<string, unknown>;
+    },
+  ) {
     const now = new Date().toISOString();
     const id = `session-${nanoid(10)}`;
 
@@ -144,11 +149,7 @@ export class Session {
       metadata: opts?.metadata ?? {},
     };
 
-    this.machine = new StateMachine(
-      SESSION_TRANSITIONS,
-      'created',
-      `session:${id}`,
-    );
+    this.machine = new StateMachine(SESSION_TRANSITIONS, 'created', `session:${id}`);
 
     this.addEvent('session.created', { issueNumber: issue.number, issueTitle: issue.title });
   }
@@ -158,33 +159,63 @@ export class Session {
   static fromData(data: SessionData): Session {
     const session = Object.create(Session.prototype) as Session;
     session.data = { ...data };
-    session.machine = new StateMachine(
-      SESSION_TRANSITIONS,
-      data.status,
-      `session:${data.id}`,
-    );
+    session.machine = new StateMachine(SESSION_TRANSITIONS, data.status, `session:${data.id}`);
     return session;
   }
 
   // ── Getters ───────────────────────────────────────────────────
 
-  get id(): string { return this.data.id; }
-  get status(): SessionStatus { return this.data.status; }
-  get issue(): IssueRef { return this.data.issue; }
-  get plan(): ImplementationPlan | null { return this.data.plan; }
-  get projectPath(): string { return this.data.projectPath; }
-  get branch(): string | null { return this.data.branch; }
-  get worktreePath(): string | null { return this.data.worktreePath; }
-  get threadId(): string | null { return this.data.threadId; }
-  get prNumber(): number | null { return this.data.prNumber; }
-  get prUrl(): string | null { return this.data.prUrl; }
-  get ciAttempts(): number { return this.data.ciAttempts; }
-  get reviewAttempts(): number { return this.data.reviewAttempts; }
-  get events(): readonly SessionEvent[] { return this.data.events; }
-  get model(): string { return this.data.model; }
-  get provider(): string { return this.data.provider; }
-  get updatedAt(): string { return this.data.updatedAt; }
-  get createdAt(): string { return this.data.createdAt; }
+  get id(): string {
+    return this.data.id;
+  }
+  get status(): SessionStatus {
+    return this.data.status;
+  }
+  get issue(): IssueRef {
+    return this.data.issue;
+  }
+  get plan(): ImplementationPlan | null {
+    return this.data.plan;
+  }
+  get projectPath(): string {
+    return this.data.projectPath;
+  }
+  get branch(): string | null {
+    return this.data.branch;
+  }
+  get worktreePath(): string | null {
+    return this.data.worktreePath;
+  }
+  get threadId(): string | null {
+    return this.data.threadId;
+  }
+  get prNumber(): number | null {
+    return this.data.prNumber;
+  }
+  get prUrl(): string | null {
+    return this.data.prUrl;
+  }
+  get ciAttempts(): number {
+    return this.data.ciAttempts;
+  }
+  get reviewAttempts(): number {
+    return this.data.reviewAttempts;
+  }
+  get events(): readonly SessionEvent[] {
+    return this.data.events;
+  }
+  get model(): string {
+    return this.data.model;
+  }
+  get provider(): string {
+    return this.data.provider;
+  }
+  get updatedAt(): string {
+    return this.data.updatedAt;
+  }
+  get createdAt(): string {
+    return this.data.createdAt;
+  }
 
   /** Check if session is in a terminal state */
   get isTerminal(): boolean {
@@ -222,7 +253,10 @@ export class Session {
   setPlan(plan: ImplementationPlan): void {
     this.data.plan = plan;
     this.data.updatedAt = new Date().toISOString();
-    this.addEvent('session.plan_set', { summary: plan.summary, complexity: plan.estimated_complexity });
+    this.addEvent('session.plan_set', {
+      summary: plan.summary,
+      complexity: plan.estimated_complexity,
+    });
   }
 
   setBranch(branch: string, worktreePath: string): void {

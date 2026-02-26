@@ -1,9 +1,10 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Button } from '@/components/ui/button';
 import { Loader2, CheckCircle2, XCircle, ExternalLink, ArrowRight, Terminal } from 'lucide-react';
+import { useState, useEffect, useCallback } from 'react';
+
+import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
-import { useSettingsStore } from '@/stores/settings-store';
 import { cn } from '@/lib/utils';
+import { useSettingsStore } from '@/stores/settings-store';
 
 type CliStatus = {
   available: boolean;
@@ -24,7 +25,7 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
               ? 'w-6 bg-primary'
               : i < current
                 ? 'w-1.5 bg-primary/60'
-                : 'w-1.5 bg-muted-foreground/25'
+                : 'w-1.5 bg-muted-foreground/25',
           )}
         />
       ))}
@@ -35,37 +36,35 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
 function WelcomeSlide({ onNext }: { onNext: () => void }) {
   return (
     <>
-      <div className="text-center space-y-3">
+      <div className="space-y-3 text-center">
         <div className="flex items-center justify-center">
           <Terminal className="h-8 w-8 text-primary" />
         </div>
-        <h1 className="text-2xl font-bold text-foreground">
-          Welcome to funny
-        </h1>
-        <p className="text-sm text-muted-foreground leading-relaxed">
-          Orchestrate multiple Claude Code agents in parallel. Each agent works
-          on its own git branch, so they never conflict.
+        <h1 className="text-2xl font-bold text-foreground">Welcome to funny</h1>
+        <p className="text-sm leading-relaxed text-muted-foreground">
+          Orchestrate multiple Claude Code agents in parallel. Each agent works on its own git
+          branch, so they never conflict.
         </p>
       </div>
 
       <div className="space-y-2 text-sm text-muted-foreground">
         <div className="flex items-start gap-2">
-          <span className="text-primary font-mono text-xs mt-0.5">1.</span>
+          <span className="mt-0.5 font-mono text-xs text-primary">1.</span>
           <span>Create a project by pointing to any git repository</span>
         </div>
         <div className="flex items-start gap-2">
-          <span className="text-primary font-mono text-xs mt-0.5">2.</span>
+          <span className="mt-0.5 font-mono text-xs text-primary">2.</span>
           <span>Spin up threads — each runs a Claude Code agent</span>
         </div>
         <div className="flex items-start gap-2">
-          <span className="text-primary font-mono text-xs mt-0.5">3.</span>
+          <span className="mt-0.5 font-mono text-xs text-primary">3.</span>
           <span>Review changes, commit, and merge when ready</span>
         </div>
       </div>
 
       <Button className="w-full" onClick={onNext}>
         Get Started
-        <ArrowRight className="h-4 w-4 ml-1" />
+        <ArrowRight className="ml-1 h-4 w-4" />
       </Button>
     </>
   );
@@ -81,7 +80,12 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
     if (result.isOk()) {
       setStatus(result.value.claudeCli);
     } else {
-      setStatus({ available: false, path: null, error: 'Could not reach the server', version: null });
+      setStatus({
+        available: false,
+        path: null,
+        error: 'Could not reach the server',
+        version: null,
+      });
     }
     setChecking(false);
   }, []);
@@ -92,16 +96,14 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
 
   return (
     <>
-      <div className="text-center space-y-1">
-        <h2 className="text-lg font-semibold text-foreground">
-          Claude Code CLI
-        </h2>
+      <div className="space-y-1 text-center">
+        <h2 className="text-lg font-semibold text-foreground">Claude Code CLI</h2>
         <p className="text-sm text-muted-foreground">
           funny needs the Claude Code CLI to run agents.
         </p>
       </div>
 
-      <div className="rounded-lg border border-border bg-muted/30 p-4 space-y-3">
+      <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
         {checking ? (
           <div className="flex items-center justify-center gap-2 py-2">
             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -111,31 +113,24 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
           <>
             <div className="flex items-center gap-2">
               <CheckCircle2 className="h-5 w-5 text-status-success" />
-              <span className="text-sm font-medium text-foreground">
-                Claude CLI found
-              </span>
+              <span className="text-sm font-medium text-foreground">Claude CLI found</span>
             </div>
             {status.version && (
-              <div className="text-xs text-muted-foreground font-mono">
-                {status.version}
-              </div>
+              <div className="font-mono text-xs text-muted-foreground">{status.version}</div>
             )}
             {status.path && (
-              <div className="text-xs text-muted-foreground font-mono truncate">
-                {status.path}
-              </div>
+              <div className="truncate font-mono text-xs text-muted-foreground">{status.path}</div>
             )}
           </>
         ) : (
           <>
             <div className="flex items-center gap-2">
               <XCircle className="h-5 w-5 text-status-error" />
-              <span className="text-sm font-medium text-foreground">
-                Claude CLI not found
-              </span>
+              <span className="text-sm font-medium text-foreground">Claude CLI not found</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              Install the Claude Code CLI to continue. Visit the official documentation for installation instructions.
+              Install the Claude Code CLI to continue. Visit the official documentation for
+              installation instructions.
             </p>
             <a
               href="https://docs.anthropic.com/en/docs/claude-code/overview"
@@ -156,13 +151,9 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
             Check Again
           </Button>
         )}
-        <Button
-          className="flex-1"
-          disabled={checking || !status?.available}
-          onClick={onNext}
-        >
+        <Button className="flex-1" disabled={checking || !status?.available} onClick={onNext}>
           Continue
-          <ArrowRight className="h-4 w-4 ml-1" />
+          <ArrowRight className="ml-1 h-4 w-4" />
         </Button>
       </div>
     </>
@@ -172,11 +163,9 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
 function DoneSlide({ onFinish }: { onFinish: () => void }) {
   return (
     <>
-      <div className="text-center space-y-3">
-        <CheckCircle2 className="h-10 w-10 text-status-success mx-auto" />
-        <h2 className="text-lg font-semibold text-foreground">
-          You're all set!
-        </h2>
+      <div className="space-y-3 text-center">
+        <CheckCircle2 className="mx-auto h-10 w-10 text-status-success" />
+        <h2 className="text-lg font-semibold text-foreground">You're all set!</h2>
         <p className="text-sm text-muted-foreground">
           Everything is configured. Add your first project to get started.
         </p>
@@ -184,7 +173,7 @@ function DoneSlide({ onFinish }: { onFinish: () => void }) {
 
       <Button className="w-full" onClick={onFinish}>
         Enter funny
-        <ArrowRight className="h-4 w-4 ml-1" />
+        <ArrowRight className="ml-1 h-4 w-4" />
       </Button>
     </>
   );

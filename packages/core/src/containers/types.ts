@@ -37,12 +37,7 @@ export interface ContainerServiceOptions {
 
 // ── Sandbox types ──────────────────────────────────────────────
 
-export type SandboxStatus =
-  | 'starting'
-  | 'running'
-  | 'stopping'
-  | 'stopped'
-  | 'failed';
+export type SandboxStatus = 'starting' | 'running' | 'stopping' | 'stopped' | 'failed';
 
 export interface SandboxState {
   containerId: string;

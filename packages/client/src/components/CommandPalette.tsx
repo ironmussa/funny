@@ -1,10 +1,8 @@
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { useProjectStore } from '@/stores/project-store';
-import { useUIStore } from '@/stores/ui-store';
-import { useGitStatusStore } from '@/stores/git-status-store';
-import { settingsItems, settingsLabelKeys } from '@/components/SettingsPanel';
 import { FolderOpen } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+
+import { settingsItems, settingsLabelKeys } from '@/components/SettingsPanel';
 import {
   CommandDialog,
   CommandInput,
@@ -14,6 +12,9 @@ import {
   CommandSeparator,
   CommandItem,
 } from '@/components/ui/command';
+import { useGitStatusStore } from '@/stores/git-status-store';
+import { useProjectStore } from '@/stores/project-store';
+import { useUIStore } from '@/stores/ui-store';
 
 interface CommandPaletteProps {
   open: boolean;
@@ -23,9 +24,9 @@ interface CommandPaletteProps {
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const projects = useProjectStore(s => s.projects);
-  const startNewThread = useUIStore(s => s.startNewThread);
-  const setSettingsOpen = useUIStore(s => s.setSettingsOpen);
+  const projects = useProjectStore((s) => s.projects);
+  const startNewThread = useUIStore((s) => s.startNewThread);
+  const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
 
   const handleProjectSelect = (projectId: string) => {
     onOpenChange(false);
@@ -58,11 +59,9 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 onSelect={() => handleProjectSelect(project.id)}
               >
                 <FolderOpen className="h-4 w-4 flex-shrink-0" />
-                <div className="flex flex-col min-w-0">
+                <div className="flex min-w-0 flex-col">
                   <span className="truncate">{project.name}</span>
-                  <span className="text-xs text-muted-foreground truncate">
-                    {project.path}
-                  </span>
+                  <span className="truncate text-xs text-muted-foreground">{project.path}</span>
                 </div>
               </CommandItem>
             ))

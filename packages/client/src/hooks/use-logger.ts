@@ -1,5 +1,5 @@
-import { useMemo } from 'react';
 import { BrowserLogger } from '@funny/observability/browser';
+import { useMemo } from 'react';
 
 /** Singleton instance shared across all hook consumers. */
 let sharedLogger: BrowserLogger | null = null;

@@ -9,11 +9,11 @@
  *   2. Call `registerProvider('name', MyProcess)` before creating agents
  */
 
-import type { IAgentProcessFactory, IAgentProcess, AgentProcessOptions } from './interfaces.js';
-import { SDKClaudeProcess } from './sdk-claude.js';
 import { CodexProcess } from './codex.js';
 import { GeminiACPProcess } from './gemini-acp.js';
+import type { IAgentProcessFactory, IAgentProcess, AgentProcessOptions } from './interfaces.js';
 import { LLMApiProcess } from './llm/llm-api-process.js';
+import { SDKClaudeProcess } from './sdk-claude.js';
 
 type ProcessConstructor = new (opts: AgentProcessOptions) => IAgentProcess;
 

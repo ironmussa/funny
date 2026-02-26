@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+
 import { getAuthToken } from '../services/auth-service.js';
 
 export const authRoutes = new Hono();

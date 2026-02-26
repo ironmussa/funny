@@ -1,7 +1,7 @@
 import { logs, SeverityNumber } from '@opentelemetry/api-logs';
-import { LoggerProvider, BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
-import type { Resource } from '@opentelemetry/resources';
 import type { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
+import type { Resource } from '@opentelemetry/resources';
+import { LoggerProvider, BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
 
 let loggerProvider: LoggerProvider | null = null;
 

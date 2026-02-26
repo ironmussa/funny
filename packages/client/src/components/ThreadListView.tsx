@@ -1,13 +1,14 @@
+import type { Thread, ThreadStatus } from '@funny/shared';
+import { Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { type ReactNode, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { cn } from '@/lib/utils';
-import { Input } from '@/components/ui/input';
-import { statusConfig, timeAgo, getStatusLabels } from '@/lib/thread-utils';
-import { useMinuteTick } from '@/hooks/use-minute-tick';
-import { Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+
 import { Button } from '@/components/ui/button';
 import { HighlightText } from '@/components/ui/highlight-text';
-import type { Thread, ThreadStatus } from '@funny/shared';
+import { Input } from '@/components/ui/input';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { statusConfig, timeAgo, getStatusLabels } from '@/lib/thread-utils';
+import { cn } from '@/lib/utils';
 
 interface ThreadListViewProps {
   threads: Thread[];
@@ -70,51 +71,57 @@ export function ThreadListView({
   // vs mouse-driven (highlight follows mouse but focus stays in search input)
   const keyboardNav = useRef(false);
 
-  const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
-    if (!onThreadClick || threads.length === 0) return;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      keyboardNav.current = true;
-      const next = highlightIndex < threads.length - 1 ? highlightIndex + 1 : 0;
-      setHighlightIndex(next);
-      itemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      keyboardNav.current = true;
-      const prev = highlightIndex > 0 ? highlightIndex - 1 : threads.length - 1;
-      setHighlightIndex(prev);
-      itemRefs.current[prev]?.scrollIntoView({ block: 'nearest' });
-    } else if (e.key === 'Enter' && highlightIndex >= 0 && highlightIndex < threads.length) {
-      e.preventDefault();
-      onThreadClick(threads[highlightIndex]);
-    }
-  }, [threads, onThreadClick, highlightIndex]);
+  const handleSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (!onThreadClick || threads.length === 0) return;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        keyboardNav.current = true;
+        const next = highlightIndex < threads.length - 1 ? highlightIndex + 1 : 0;
+        setHighlightIndex(next);
+        itemRefs.current[next]?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        keyboardNav.current = true;
+        const prev = highlightIndex > 0 ? highlightIndex - 1 : threads.length - 1;
+        setHighlightIndex(prev);
+        itemRefs.current[prev]?.scrollIntoView({ block: 'nearest' });
+      } else if (e.key === 'Enter' && highlightIndex >= 0 && highlightIndex < threads.length) {
+        e.preventDefault();
+        onThreadClick(threads[highlightIndex]);
+      }
+    },
+    [threads, onThreadClick, highlightIndex],
+  );
 
-  const handleItemKeyDown = useCallback((e: React.KeyboardEvent, i: number) => {
-    if (!onThreadClick) return;
-    keyboardNav.current = true;
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (i < threads.length - 1) {
-        setHighlightIndex(i + 1);
-        itemRefs.current[i + 1]?.focus();
-        itemRefs.current[i + 1]?.scrollIntoView({ block: 'nearest' });
+  const handleItemKeyDown = useCallback(
+    (e: React.KeyboardEvent, i: number) => {
+      if (!onThreadClick) return;
+      keyboardNav.current = true;
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (i < threads.length - 1) {
+          setHighlightIndex(i + 1);
+          itemRefs.current[i + 1]?.focus();
+          itemRefs.current[i + 1]?.scrollIntoView({ block: 'nearest' });
+        }
+      } else if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (i > 0) {
+          setHighlightIndex(i - 1);
+          itemRefs.current[i - 1]?.focus();
+          itemRefs.current[i - 1]?.scrollIntoView({ block: 'nearest' });
+        } else {
+          setHighlightIndex(-1);
+          searchInputRef.current?.focus();
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        onThreadClick(threads[i]);
       }
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (i > 0) {
-        setHighlightIndex(i - 1);
-        itemRefs.current[i - 1]?.focus();
-        itemRefs.current[i - 1]?.scrollIntoView({ block: 'nearest' });
-      } else {
-        setHighlightIndex(-1);
-        searchInputRef.current?.focus();
-      }
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      onThreadClick(threads[i]);
-    }
-  }, [threads, onThreadClick]);
+    },
+    [threads, onThreadClick],
+  );
 
   const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
   const currentPage = Math.min(page, totalPages);
@@ -126,9 +133,9 @@ export function ThreadListView({
     <div className={cn('flex flex-col gap-4', className)}>
       {/* Search + optional page size */}
       {!hideSearch && (
-        <div className="flex items-center gap-2 flex-shrink-0">
+        <div className="flex flex-shrink-0 items-center gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
             <Input
               ref={searchInputRef}
               type="text"
@@ -137,14 +144,14 @@ export function ThreadListView({
               onChange={(e) => onSearchChange(e.target.value)}
               onKeyDown={handleSearchKeyDown}
               autoFocus={autoFocusSearch}
-              className="w-full h-auto pl-8 pr-3 py-1.5 text-xs"
+              className="h-auto w-full py-1.5 pl-8 pr-3 text-xs"
             />
           </div>
           {pageSizeOptions && onPageSizeChange && (
             <select
               value={pageSize}
               onChange={(e) => onPageSizeChange(Number(e.target.value))}
-              className="rounded-md border border-input bg-background px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring cursor-pointer"
+              className="cursor-pointer rounded-md border border-input bg-background px-2 py-1.5 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             >
               {pageSizeOptions.map((size) => (
                 <option key={size} value={size}>
@@ -158,16 +165,16 @@ export function ThreadListView({
 
       {/* Thread list */}
       {loading ? (
-        <div className="flex items-center justify-center h-32 text-muted-foreground text-xs flex-shrink-0">
-          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+        <div className="flex h-32 flex-shrink-0 items-center justify-center text-xs text-muted-foreground">
+          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
           {t('common.loading')}
         </div>
       ) : threads.length === 0 ? (
-        <div className="flex items-center justify-center h-32 text-muted-foreground text-xs flex-shrink-0">
+        <div className="flex h-32 flex-shrink-0 items-center justify-center text-xs text-muted-foreground">
           {search ? searchEmptyMessage : emptyMessage}
         </div>
       ) : (
-        <div className="rounded-lg border border-border/50 overflow-y-auto min-h-0 flex-1">
+        <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border/50">
           {threads.map((thread, i) => {
             const s = statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending;
             const Icon = s.icon;
@@ -176,24 +183,33 @@ export function ThreadListView({
             return (
               <Wrapper
                 key={thread.id}
-                ref={(el: HTMLElement | null) => { itemRefs.current[i] = el; }}
+                ref={(el: HTMLElement | null) => {
+                  itemRefs.current[i] = el;
+                }}
                 {...(onThreadClick ? { onClick: () => onThreadClick(thread) } : {})}
                 onKeyDown={(e: React.KeyboardEvent) => handleItemKeyDown(e, i)}
                 onFocus={() => setHighlightIndex(i)}
-                onMouseMove={() => { keyboardNav.current = false; setHighlightIndex(i); }}
+                onMouseMove={() => {
+                  keyboardNav.current = false;
+                  setHighlightIndex(i);
+                }}
                 className={cn(
                   'w-full flex items-center gap-3 px-3 py-2.5 border-b border-border/50 last:border-b-0 group outline-none',
                   onThreadClick && 'text-left hover:bg-accent/50 transition-colors',
-                  i === highlightIndex && 'bg-accent/50'
+                  i === highlightIndex && 'bg-accent/50',
                 )}
               >
                 <Icon className={cn('h-4 w-4 flex-shrink-0', s.className)} />
-                <div className="flex-1 min-w-0">
-                  <HighlightText text={thread.title} query={search} className="text-xs font-medium truncate block" />
-                  <div className="flex items-center gap-2 mt-0.5">
+                <div className="min-w-0 flex-1">
+                  <HighlightText
+                    text={thread.title}
+                    query={search}
+                    className="block truncate text-xs font-medium"
+                  />
+                  <div className="mt-0.5 flex items-center gap-2">
                     {renderExtraBadges?.(thread)}
                     {(thread.branch || thread.baseBranch) && (
-                      <span className="text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded truncate max-w-[150px]">
+                      <span className="max-w-[150px] truncate rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
                         {thread.branch || thread.baseBranch}
                       </span>
                     )}
@@ -202,7 +218,7 @@ export function ThreadListView({
                     </span>
                   </div>
                 </div>
-                <span className="text-xs text-muted-foreground flex-shrink-0 hidden sm:inline">
+                <span className="hidden flex-shrink-0 text-xs text-muted-foreground sm:inline">
                   {timeAgo(thread.completedAt ?? thread.createdAt, t)}
                 </span>
                 {renderActions?.(thread)}
@@ -214,7 +230,7 @@ export function ThreadListView({
 
       {/* Pagination */}
       {totalPages > 1 && (
-        <div className="flex items-center justify-between flex-shrink-0">
+        <div className="flex flex-shrink-0 items-center justify-between">
           <span className="text-sm text-muted-foreground">
             {paginationLabel({ from, to, total: totalCount })}
           </span>
@@ -227,7 +243,7 @@ export function ThreadListView({
             >
               <ChevronLeft className="h-3.5 w-3.5" />
             </Button>
-            <span className="text-sm text-muted-foreground px-2">
+            <span className="px-2 text-sm text-muted-foreground">
               {currentPage} / {totalPages}
             </span>
             <Button

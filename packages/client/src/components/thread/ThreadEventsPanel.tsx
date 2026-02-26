@@ -2,12 +2,13 @@
  * ThreadEventsPanel — Displays git events (commits, pushes, merges) for a thread.
  */
 
-import { useEffect, useState } from 'react';
-import { api } from '@/lib/api';
 import type { ThreadEvent } from '@funny/shared';
 import { GitCommit, GitMerge, Upload, Loader2 } from 'lucide-react';
+import { useEffect, useState } from 'react';
+
 import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 
 interface ThreadEventsPanelProps {
@@ -35,18 +36,40 @@ function EventIcon({ type }: { type: ThreadEvent['type'] }) {
 function EventBadge({ type }: { type: ThreadEvent['type'] }) {
   switch (type) {
     case 'git:commit':
-      return <Badge variant="outline" className="text-xs">Commit</Badge>;
+      return (
+        <Badge variant="outline" className="text-xs">
+          Commit
+        </Badge>
+      );
     case 'git:push':
-      return <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-600 border-blue-500/20">Push</Badge>;
+      return (
+        <Badge
+          variant="outline"
+          className="border-blue-500/20 bg-blue-500/10 text-xs text-blue-600"
+        >
+          Push
+        </Badge>
+      );
     case 'git:merge':
-      return <Badge variant="outline" className="text-xs bg-purple-500/10 text-purple-600 border-purple-500/20">Merge</Badge>;
+      return (
+        <Badge
+          variant="outline"
+          className="border-purple-500/20 bg-purple-500/10 text-xs text-purple-600"
+        >
+          Merge
+        </Badge>
+      );
     default:
       return null;
   }
 }
 
 function parseEventData(data: string): Record<string, any> {
-  try { return JSON.parse(data); } catch { return {}; }
+  try {
+    return JSON.parse(data);
+  } catch {
+    return {};
+  }
 }
 
 export function ThreadEventsPanel({ threadId }: ThreadEventsPanelProps) {
@@ -92,7 +115,7 @@ export function ThreadEventsPanel({ threadId }: ThreadEventsPanelProps) {
 
   return (
     <ScrollArea className="h-full">
-      <div className="p-4 space-y-3">
+      <div className="space-y-3 p-4">
         {events.map((event) => {
           const metadata = parseEventData(event.data);
           return (
@@ -100,13 +123,13 @@ export function ThreadEventsPanel({ threadId }: ThreadEventsPanelProps) {
               key={event.id}
               className={cn(
                 'flex gap-3 p-3 rounded-lg border bg-card text-card-foreground',
-                'hover:bg-accent/50 transition-colors'
+                'hover:bg-accent/50 transition-colors',
               )}
             >
-              <div className="shrink-0 mt-0.5">
+              <div className="mt-0.5 shrink-0">
                 <EventIcon type={event.type} />
               </div>
-              <div className="flex-1 min-w-0 space-y-1">
+              <div className="min-w-0 flex-1 space-y-1">
                 <div className="flex items-center gap-2">
                   <EventBadge type={event.type} />
                   <span className="text-xs text-muted-foreground">
@@ -114,31 +137,32 @@ export function ThreadEventsPanel({ threadId }: ThreadEventsPanelProps) {
                   </span>
                 </div>
                 {Object.keys(metadata).length > 0 && (
-                  <div className="text-sm space-y-1">
+                  <div className="space-y-1 text-sm">
                     {metadata.message && (
-                      <div className="font-medium text-foreground">
-                        {metadata.message}
-                      </div>
+                      <div className="font-medium text-foreground">{metadata.message}</div>
                     )}
                     {metadata.commitSha && (
-                      <div className="text-muted-foreground font-mono text-xs">
+                      <div className="font-mono text-xs text-muted-foreground">
                         {metadata.commitSha.substring(0, 7)}
                       </div>
                     )}
                     {metadata.branch && (
-                      <div className="text-muted-foreground text-xs">
+                      <div className="text-xs text-muted-foreground">
                         Branch: <span className="font-mono">{metadata.branch}</span>
                       </div>
                     )}
                     {metadata.sourceBranch && metadata.targetBranch && (
-                      <div className="text-muted-foreground text-xs">
+                      <div className="text-xs text-muted-foreground">
                         <span className="font-mono">{metadata.sourceBranch}</span>
                         {' → '}
                         <span className="font-mono">{metadata.targetBranch}</span>
                       </div>
                     )}
                     {metadata.conflictResolution && (
-                      <Badge variant="outline" className="text-xs bg-yellow-500/10 text-yellow-600 border-yellow-500/20">
+                      <Badge
+                        variant="outline"
+                        className="border-yellow-500/20 bg-yellow-500/10 text-xs text-yellow-600"
+                      >
                         Conflicts resolved
                       </Badge>
                     )}

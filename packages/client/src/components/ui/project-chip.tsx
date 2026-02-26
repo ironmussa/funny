@@ -15,9 +15,7 @@ export function ProjectChip({ name, color, size = 'default', className }: Projec
     <span
       className={cn(
         'rounded inline-block truncate',
-        size === 'sm'
-          ? 'text-[10px] leading-tight px-1 py-px'
-          : 'text-xs px-1.5 py-0.5',
+        size === 'sm' ? 'text-[10px] leading-tight px-1 py-px' : 'text-xs px-1.5 py-0.5',
         className,
       )}
       style={{

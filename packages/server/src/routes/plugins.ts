@@ -1,4 +1,5 @@
 import { Hono } from 'hono';
+
 import { listPlugins } from '../services/plugin-service.js';
 
 const app = new Hono();

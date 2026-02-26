@@ -8,12 +8,9 @@
 
 import { existsSync } from 'fs';
 import { resolve } from 'path';
+
 import { execute } from '../git/process.js';
-import type {
-  ContainerState,
-  ContainerServiceOptions,
-  StartContainersOptions,
-} from './types.js';
+import type { ContainerState, ContainerServiceOptions, StartContainersOptions } from './types.js';
 
 const COMPOSE_FILE_NAMES = [
   'compose.yml',
@@ -79,19 +76,21 @@ export class ContainerService {
       console.log(`[containers] Starting containers for thread=${threadId} in ${worktreePath}`);
 
       // Launch containers
-      await execute(
-        'podman',
-        ['compose', '-f', composeFile, 'up', '-d', '--build'],
-        { cwd: worktreePath, env, timeout: 120_000 }
-      );
+      await execute('podman', ['compose', '-f', composeFile, 'up', '-d', '--build'], {
+        cwd: worktreePath,
+        env,
+        timeout: 120_000,
+      });
 
       state.status = 'running';
 
       // Parse exposed ports from running containers
       await this.parseExposedPorts(state);
 
-      console.log(`[containers] Running for thread=${threadId}, ports:`,
-        Object.fromEntries(state.exposedPorts));
+      console.log(
+        `[containers] Running for thread=${threadId}, ports:`,
+        Object.fromEntries(state.exposedPorts),
+      );
 
       return state;
     } catch (error: any) {
@@ -105,10 +104,7 @@ export class ContainerService {
   /**
    * Wait for the first exposed port to respond to HTTP requests.
    */
-  async waitForHealthy(
-    worktreePath: string,
-    timeoutMs?: number,
-  ): Promise<void> {
+  async waitForHealthy(worktreePath: string, timeoutMs?: number): Promise<void> {
     const state = this.activeContainers.get(worktreePath);
     if (!state || state.exposedPorts.size === 0) return;
 
@@ -150,11 +146,11 @@ export class ContainerService {
     console.log(`[containers] Stopping containers for thread=${state.threadId}`);
 
     try {
-      await execute(
-        'podman',
-        ['compose', '-f', state.composeFile, 'down', '--remove-orphans'],
-        { cwd: worktreePath, timeout: 30_000, reject: false }
-      );
+      await execute('podman', ['compose', '-f', state.composeFile, 'down', '--remove-orphans'], {
+        cwd: worktreePath,
+        timeout: 30_000,
+        reject: false,
+      });
     } catch (error: any) {
       console.warn(`[containers] Error stopping containers: ${error.message}`);
     }
@@ -177,9 +173,7 @@ export class ContainerService {
     if (entries.length === 0) return;
 
     console.log(`[containers] Stopping ${entries.length} container group(s)...`);
-    await Promise.allSettled(
-      entries.map(([worktreePath]) => this.stopContainers(worktreePath))
-    );
+    await Promise.allSettled(entries.map(([worktreePath]) => this.stopContainers(worktreePath)));
     console.log('[containers] All containers stopped.');
   }
 
@@ -193,7 +187,7 @@ export class ContainerService {
       const result = await execute(
         'podman',
         ['compose', '-f', state.composeFile, 'ps', '--format', 'json'],
-        { cwd: state.worktreePath, reject: false }
+        { cwd: state.worktreePath, reject: false },
       );
 
       if (result.exitCode !== 0 || !result.stdout.trim()) return;

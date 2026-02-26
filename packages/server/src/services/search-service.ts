@@ -4,8 +4,9 @@
  */
 
 import { eq, and, like } from 'drizzle-orm';
-import { db, schema } from '../db/index.js';
 import { sql } from 'drizzle-orm';
+
+import { db, schema } from '../db/index.js';
 
 /** Escape SQL LIKE wildcards so user input is treated as literal text */
 function escapeLike(value: string): string {
@@ -15,7 +16,11 @@ function escapeLike(value: string): string {
 /** Escape FTS5 special characters so user input is treated as literal text.
  *  Wraps each term in double quotes to prevent FTS5 query syntax injection. */
 function escapeFts5Query(value: string): string {
-  return value.trim().split(/\s+/).map(t => `"${t.replace(/"/g, '""')}"`).join(' ');
+  return value
+    .trim()
+    .split(/\s+/)
+    .map((t) => `"${t.replace(/"/g, '""')}"`)
+    .join(' ');
 }
 
 /** Search for thread IDs whose messages contain the given query string.
@@ -37,7 +42,11 @@ export function searchThreadIdsByContent(opts: {
 }
 
 /** Fast path: FTS5 search with snippet() for highlighted context. */
-function searchViaFts5(query: string, projectId: string | undefined, userId: string): Map<string, string> {
+function searchViaFts5(
+  query: string,
+  projectId: string | undefined,
+  userId: string,
+): Map<string, string> {
   const ftsQuery = escapeFts5Query(query);
 
   let stmt = sql`
@@ -66,12 +75,14 @@ function searchViaFts5(query: string, projectId: string | undefined, userId: str
 }
 
 /** Slow fallback: LIKE-based search (used if FTS table doesn't exist yet) */
-function searchViaLike(query: string, projectId: string | undefined, userId: string): Map<string, string> {
+function searchViaLike(
+  query: string,
+  projectId: string | undefined,
+  userId: string,
+): Map<string, string> {
   const safeQuery = escapeLike(query.trim());
 
-  const filters: ReturnType<typeof eq>[] = [
-    like(schema.messages.content, `%${safeQuery}%`),
-  ];
+  const filters: ReturnType<typeof eq>[] = [like(schema.messages.content, `%${safeQuery}%`)];
 
   if (userId !== '__local__') {
     filters.push(eq(schema.threads.userId, userId));

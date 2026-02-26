@@ -3,6 +3,7 @@
  */
 
 import { Hono } from 'hono';
+
 import { getAdvertisedModels } from '../utils/model-resolver.js';
 
 export const modelsRoute = new Hono();

@@ -3,11 +3,12 @@
  * Token is stored at ~/.funny/auth-token and cached in memory.
  */
 
-import { resolve } from 'path';
-import { homedir } from 'os';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { randomBytes, timingSafeEqual } from 'crypto';
-import { log } from '../lib/abbacchio.js';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { homedir } from 'os';
+import { resolve } from 'path';
+
+import { log } from '../lib/logger.js';
 
 const AUTH_DIR = resolve(homedir(), '.funny');
 const TOKEN_PATH = resolve(AUTH_DIR, 'auth-token');

@@ -4,8 +4,8 @@
  * Replaces the old comment-subscriber.ts with the reactive handler pattern.
  */
 
-import type { EventHandler } from './types.js';
 import type { AgentCompletedEvent } from '../thread-event-bus.js';
+import type { EventHandler } from './types.js';
 
 export const commentHandler: EventHandler<'agent:completed'> = {
   name: 'comment-on-completion',

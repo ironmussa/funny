@@ -1,7 +1,7 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { okAsync, errAsync } from 'neverthrow';
-import type { DomainError } from '@funny/shared/errors';
 import type { Project } from '@funny/shared';
+import type { DomainError } from '@funny/shared/errors';
+import { okAsync, errAsync } from 'neverthrow';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 // ── Shared mock state that we can reassign per test ──────────────────
 const mockLoadThreadsForProject = vi.fn().mockResolvedValue(undefined);
@@ -40,8 +40,8 @@ vi.mock('@/stores/git-status-store', () => ({
   },
 }));
 
-import { useProjectStore } from '@/stores/project-store';
 import { api } from '@/lib/api';
+import { useProjectStore } from '@/stores/project-store';
 
 const mockApi = vi.mocked(api);
 
@@ -99,10 +99,7 @@ describe('ProjectStore', () => {
     });
 
     test('triggers thread loading in background for all projects', async () => {
-      const projects = [
-        makeProject({ id: 'p1' }),
-        makeProject({ id: 'p2' }),
-      ];
+      const projects = [makeProject({ id: 'p1' }), makeProject({ id: 'p2' })];
       mockApi.listProjects.mockReturnValueOnce(okAsync(projects) as any);
 
       await useProjectStore.getState().loadProjects();

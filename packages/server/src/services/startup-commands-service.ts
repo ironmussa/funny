@@ -1,5 +1,6 @@
 import { eq, asc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
+
 import { db, schema } from '../db/index.js';
 
 /** List startup commands for a project, ordered by sortOrder */
@@ -13,11 +14,7 @@ export function listCommands(projectId: string) {
 }
 
 /** Create a startup command */
-export function createCommand(data: {
-  projectId: string;
-  label: string;
-  command: string;
-}) {
+export function createCommand(data: { projectId: string; label: string; command: string }) {
   const existing = db
     .select()
     .from(schema.startupCommands)
@@ -40,12 +37,15 @@ export function createCommand(data: {
 }
 
 /** Update a startup command */
-export function updateCommand(cmdId: string, data: {
-  label: string;
-  command: string;
-  port?: number;
-  portEnvVar?: string;
-}) {
+export function updateCommand(
+  cmdId: string,
+  data: {
+    label: string;
+    command: string;
+    port?: number;
+    portEnvVar?: string;
+  },
+) {
   db.update(schema.startupCommands)
     .set({
       label: data.label,
@@ -59,16 +59,10 @@ export function updateCommand(cmdId: string, data: {
 
 /** Delete a startup command */
 export function deleteCommand(cmdId: string) {
-  db.delete(schema.startupCommands)
-    .where(eq(schema.startupCommands.id, cmdId))
-    .run();
+  db.delete(schema.startupCommands).where(eq(schema.startupCommands.id, cmdId)).run();
 }
 
 /** Get a single command by ID */
 export function getCommand(cmdId: string) {
-  return db
-    .select()
-    .from(schema.startupCommands)
-    .where(eq(schema.startupCommands.id, cmdId))
-    .get();
+  return db.select().from(schema.startupCommands).where(eq(schema.startupCommands.id, cmdId)).get();
 }

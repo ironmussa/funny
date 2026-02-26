@@ -58,10 +58,9 @@ export const usePreviewStore = create<PreviewState>((set, get) => ({
   removeTabsForProject: (projectId) =>
     set((state) => {
       const remaining = state.tabs.filter((t) => t.projectId !== projectId);
-      const activeTabId =
-        remaining.some((t) => t.commandId === state.activeTabId)
-          ? state.activeTabId
-          : (remaining[remaining.length - 1]?.commandId ?? null);
+      const activeTabId = remaining.some((t) => t.commandId === state.activeTabId)
+        ? state.activeTabId
+        : (remaining[remaining.length - 1]?.commandId ?? null);
       return { tabs: remaining, activeTabId };
     }),
 

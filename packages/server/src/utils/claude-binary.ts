@@ -3,11 +3,13 @@
  * Finds the claude/claude.exe binary on the system.
  */
 
-import { platform } from 'os';
 import { existsSync } from 'fs';
+import { platform } from 'os';
 import { join } from 'path';
+
 import { executeSync } from '@funny/core/git';
-import { log } from '../lib/abbacchio.js';
+
+import { log } from '../lib/logger.js';
 
 const IS_WINDOWS = platform() === 'win32';
 const BINARY_NAME = IS_WINDOWS ? 'claude.exe' : 'claude';
@@ -84,9 +86,7 @@ export function resolveClaudeBinary(): string {
   const envPath = process.env.CLAUDE_BINARY_PATH;
   if (envPath) {
     if (!existsSync(envPath)) {
-      throw new Error(
-        `CLAUDE_BINARY_PATH is set to "${envPath}" but the file does not exist`
-      );
+      throw new Error(`CLAUDE_BINARY_PATH is set to "${envPath}" but the file does not exist`);
     }
     return envPath;
   }
@@ -99,9 +99,7 @@ export function resolveClaudeBinary(): string {
   const commonResult = findInCommonLocations();
   if (commonResult) return commonResult;
 
-  throw new Error(
-    `Could not find the claude CLI binary. Install it or set CLAUDE_BINARY_PATH.`
-  );
+  throw new Error(`Could not find the claude CLI binary. Install it or set CLAUDE_BINARY_PATH.`);
 }
 
 /**
@@ -113,9 +111,9 @@ export function validateClaudeBinary(binaryPath: string): string {
     const result = executeSync(binaryPath, ['--version'], { timeout: 10_000 });
     return result.stdout.trim();
   } catch (err: any) {
-    throw new Error(
-      `Claude binary at "${binaryPath}" is not functional: ${err.message}`
-    );
+    throw new Error(`Claude binary at "${binaryPath}" is not functional: ${err.message}`, {
+      cause: err,
+    });
   }
 }
 
@@ -141,14 +139,18 @@ export function getClaudeBinaryPath(): string {
  * Check if Claude CLI is installed and available.
  * Returns an object with status and error message if not available.
  */
-export function checkClaudeBinaryAvailability(): { available: boolean; error?: string; path?: string } {
+export function checkClaudeBinaryAvailability(): {
+  available: boolean;
+  error?: string;
+  path?: string;
+} {
   try {
     const binaryPath = getClaudeBinaryPath();
     return { available: true, path: binaryPath };
   } catch (err: any) {
     return {
       available: false,
-      error: err.message || 'Claude CLI binary not found'
+      error: err.message || 'Claude CLI binary not found',
     };
   }
 }

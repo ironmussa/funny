@@ -7,10 +7,17 @@
  */
 
 import { EventEmitter } from 'events';
+
 import type { AgentProvider, AgentModel, PermissionMode } from '@funny/shared';
-import type { CLIMessage } from './types.js';
+import {
+  resolveModelId,
+  resolvePermissionMode,
+  resolveResumePermissionMode,
+  getDefaultAllowedTools,
+} from '@funny/shared/models';
+
 import type { IAgentProcess, IAgentProcessFactory } from './interfaces.js';
-import { resolveModelId, resolvePermissionMode, resolveResumePermissionMode, getDefaultAllowedTools } from '@funny/shared/models';
+import type { CLIMessage } from './types.js';
 
 // ── Types ─────────────────────────────────────────────────────────
 
@@ -76,14 +83,20 @@ export class AgentOrchestrator extends EventEmitter {
       systemPrefix,
     } = options;
 
-    console.log(`[orchestrator] start thread=${threadId} provider=${provider} model=${model} cwd=${cwd}`);
+    console.log(
+      `[orchestrator] start thread=${threadId} provider=${provider} model=${model} cwd=${cwd}`,
+    );
 
     // Kill existing process if still running
     const existing = this.activeAgents.get(threadId);
     if (existing && !existing.exited) {
       console.log(`[orchestrator] stopping existing agent for thread=${threadId} before restart`);
       this.manuallyStopped.add(threadId);
-      try { await existing.kill(); } catch { /* best-effort */ }
+      try {
+        await existing.kill();
+      } catch {
+        /* best-effort */
+      }
       this.activeAgents.delete(threadId);
     }
 
@@ -95,8 +108,9 @@ export class AgentOrchestrator extends EventEmitter {
     let effectivePrompt = prompt;
     if (isResume) {
       console.log(`[orchestrator] Resuming session=${sessionId} for thread=${threadId}`);
-      const prefix = systemPrefix
-        ?? `[SYSTEM NOTE: This is a session resume after an interruption. Your previous session was interrupted mid-execution. Continue from where you left off. Do NOT re-plan or start over — pick up execution from the last completed step.]`;
+      const prefix =
+        systemPrefix ??
+        `[SYSTEM NOTE: This is a session resume after an interruption. Your previous session was interrupted mid-execution. Continue from where you left off. Do NOT re-plan or start over — pick up execution from the last completed step.]`;
       effectivePrompt = `${prefix}\n\n${prompt}`;
     }
 
@@ -202,7 +216,7 @@ export class AgentOrchestrator extends EventEmitter {
           console.error(`[orchestrator] Error killing agent for thread ${threadId}:`, e);
         }
         this.activeAgents.delete(threadId);
-      })
+      }),
     );
     console.log('[orchestrator] All agents stopped.');
   }
@@ -280,7 +294,10 @@ export class AgentOrchestrator extends EventEmitter {
     proc.on('error', (err: Error) => {
       if (!gotMessage) {
         // Resume crashed before producing any output — will retry on exit
-        console.warn(`[orchestrator] Resume error for thread=${threadId}:`, String(err).slice(0, 200));
+        console.warn(
+          `[orchestrator] Resume error for thread=${threadId}:`,
+          String(err).slice(0, 200),
+        );
         return;
       }
       // Session was live (got messages), so this is a real error
@@ -333,7 +350,11 @@ export class AgentOrchestrator extends EventEmitter {
    * If the session is stale (crashes before producing any output),
    * transparently falls back to a fresh session.
    */
-  private startWithResume(threadId: string, processOpts: Record<string, any>, sessionId: string): void {
+  private startWithResume(
+    threadId: string,
+    processOpts: Record<string, any>,
+    sessionId: string,
+  ): void {
     const resumeProc = this.processFactory.create({ ...processOpts, sessionId } as any);
 
     const retryFresh = () => {
@@ -347,7 +368,11 @@ export class AgentOrchestrator extends EventEmitter {
         freshProc.start();
       } catch (freshErr) {
         this.activeAgents.delete(threadId);
-        this.emit('agent:error', threadId, freshErr instanceof Error ? freshErr : new Error(String(freshErr)));
+        this.emit(
+          'agent:error',
+          threadId,
+          freshErr instanceof Error ? freshErr : new Error(String(freshErr)),
+        );
       }
     };
 

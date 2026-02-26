@@ -1,4 +1,5 @@
 import { useCallback } from 'react';
+
 import { usePreviewStore } from '@/stores/preview-store';
 
 const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
@@ -36,42 +37,40 @@ if (isTauri && !isPreviewWindow) {
 }
 
 export function usePreviewWindow() {
-  const openPreview = useCallback(async (opts: {
-    commandId: string;
-    projectId: string;
-    port: number;
-    commandLabel: string;
-  }) => {
-    // In browser mode, simply open a new tab with the localhost URL
-    if (!isTauri) {
-      window.open(`http://localhost:${opts.port}`, '_blank');
-      return;
-    }
+  const openPreview = useCallback(
+    async (opts: { commandId: string; projectId: string; port: number; commandLabel: string }) => {
+      // In browser mode, simply open a new tab with the localhost URL
+      if (!isTauri) {
+        window.open(`http://localhost:${opts.port}`, '_blank');
+        return;
+      }
 
-    const store = usePreviewStore.getState();
-    const tab = {
-      commandId: opts.commandId,
-      projectId: opts.projectId,
-      port: opts.port,
-      label: opts.commandLabel,
-    };
+      const store = usePreviewStore.getState();
+      const tab = {
+        commandId: opts.commandId,
+        projectId: opts.projectId,
+        port: opts.port,
+        label: opts.commandLabel,
+      };
 
-    // Add to local store
-    store.addTab(tab);
+      // Add to local store
+      store.addTab(tab);
 
-    // Open the preview window (or focus if already open)
-    try {
-      await tauriInvoke('open_preview');
-    } catch (err) {
-      console.error('[preview] Error opening preview window:', err);
-      return;
-    }
+      // Open the preview window (or focus if already open)
+      try {
+        await tauriInvoke('open_preview');
+      } catch (err) {
+        console.error('[preview] Error opening preview window:', err);
+        return;
+      }
 
-    // Emit event so the preview window adds the tab.
-    // If the window was just created, the preview:ready handler will also sync,
-    // but this handles the case where the window is already open.
-    await tauriEmit('preview:add-tab', tab);
-  }, []);
+      // Emit event so the preview window adds the tab.
+      // If the window was just created, the preview:ready handler will also sync,
+      // but this handles the case where the window is already open.
+      await tauriEmit('preview:add-tab', tab);
+    },
+    [],
+  );
 
   const closePreview = useCallback(async (commandId: string) => {
     if (!isTauri) return;
@@ -126,5 +125,7 @@ export async function closePreviewForCommand(commandId: string) {
   try {
     const { emit } = await import('@tauri-apps/api/event');
     await emit('preview:remove-tab', { commandId });
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }

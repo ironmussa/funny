@@ -1,3 +1,4 @@
+import type { ThreadStatus, GitSyncState, ThreadStage } from '@funny/shared';
 import {
   Clock,
   Loader2,
@@ -15,7 +16,6 @@ import {
   Eye,
   Archive,
 } from 'lucide-react';
-import type { ThreadStatus, GitSyncState, ThreadStage } from '@funny/shared';
 
 export const statusConfig: Record<ThreadStatus, { icon: typeof Clock; className: string }> = {
   idle: { icon: CircleDot, className: 'text-gray-400' },
@@ -28,7 +28,10 @@ export const statusConfig: Record<ThreadStatus, { icon: typeof Clock; className:
   interrupted: { icon: AlertTriangle, className: 'text-orange-400' },
 };
 
-export const stageConfig: Record<ThreadStage, { icon: typeof Clock; className: string; labelKey: string }> = {
+export const stageConfig: Record<
+  ThreadStage,
+  { icon: typeof Clock; className: string; labelKey: string }
+> = {
   backlog: { icon: LayoutList, className: 'text-gray-400', labelKey: 'kanban.backlog' },
   planning: { icon: Lightbulb, className: 'text-violet-400', labelKey: 'kanban.planning' },
   in_progress: { icon: Play, className: 'text-blue-400', labelKey: 'kanban.inProgress' },
@@ -49,12 +52,23 @@ export function timeAgo(dateStr: string, t: (key: string, opts?: any) => string)
   return t('time.months', { count: Math.floor(days / 30) });
 }
 
-export const gitSyncStateConfig: Record<GitSyncState, { icon: typeof Clock; className: string; labelKey: string }> = {
-  dirty:    { icon: CircleDot,            className: 'text-muted-foreground', labelKey: 'gitStatus.dirty' },
-  unpushed: { icon: ArrowUpCircle,        className: 'text-muted-foreground', labelKey: 'gitStatus.unpushed' },
-  pushed:   { icon: GitPullRequestArrow,  className: 'text-muted-foreground', labelKey: 'gitStatus.pushed' },
-  merged:   { icon: GitMerge,             className: 'text-muted-foreground', labelKey: 'gitStatus.merged' },
-  clean:    { icon: CheckCircle2,         className: 'text-muted-foreground', labelKey: 'gitStatus.clean' },
+export const gitSyncStateConfig: Record<
+  GitSyncState,
+  { icon: typeof Clock; className: string; labelKey: string }
+> = {
+  dirty: { icon: CircleDot, className: 'text-muted-foreground', labelKey: 'gitStatus.dirty' },
+  unpushed: {
+    icon: ArrowUpCircle,
+    className: 'text-muted-foreground',
+    labelKey: 'gitStatus.unpushed',
+  },
+  pushed: {
+    icon: GitPullRequestArrow,
+    className: 'text-muted-foreground',
+    labelKey: 'gitStatus.pushed',
+  },
+  merged: { icon: GitMerge, className: 'text-muted-foreground', labelKey: 'gitStatus.merged' },
+  clean: { icon: CheckCircle2, className: 'text-muted-foreground', labelKey: 'gitStatus.clean' },
 };
 
 /** Map full model IDs (from Claude SDK / Gemini CLI) back to friendly keys used in translations. */

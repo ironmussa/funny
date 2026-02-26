@@ -1,9 +1,10 @@
+import { ListTodo, X, ChevronDown, ChevronUp, Circle, CircleDot, CircleCheck } from 'lucide-react';
+import { motion } from 'motion/react';
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { motion } from 'motion/react';
-import { ListTodo, X, ChevronDown, ChevronUp, Circle, CircleDot, CircleCheck } from 'lucide-react';
-import { cn } from '@/lib/utils';
+
 import type { TodoItem } from '@/components/tool-cards/utils';
+import { cn } from '@/lib/utils';
 
 interface TodoPanelProps {
   todos: TodoItem[];
@@ -40,12 +41,12 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
       transition={{ duration: 0.2, ease: 'easeOut' }}
-      className="absolute top-1/2 -translate-y-1/2 right-4 z-20 w-64 rounded-lg border border-border bg-card/95 backdrop-blur-sm shadow-lg"
+      className="absolute right-4 top-1/2 z-20 w-64 -translate-y-1/2 rounded-lg border border-border bg-card/95 shadow-lg backdrop-blur-sm"
     >
       {/* Header */}
-      <div className="flex items-center gap-2 px-3 py-2 border-b border-border/50">
+      <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2">
         <ListTodo className="h-3.5 w-3.5 text-muted-foreground" />
-        <span className="text-xs font-medium flex-1">{t('todoPanel.title')}</span>
+        <span className="flex-1 text-xs font-medium">{t('todoPanel.title')}</span>
         <motion.span
           key={`${progress.completed}/${progress.total}`}
           initial={{ scale: 1.2 }}
@@ -53,21 +54,23 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
           transition={{ duration: 0.2 }}
           className={cn(
             'text-xs font-mono px-1.5 py-0.5 rounded-full transition-colors duration-300',
-            allDone ? 'bg-status-success/10 text-status-success/80' : 'bg-muted text-muted-foreground'
+            allDone
+              ? 'bg-status-success/10 text-status-success/80'
+              : 'bg-muted text-muted-foreground',
           )}
         >
           {progress.completed}/{progress.total}
         </motion.span>
         <button
           onClick={() => setMinimized((v) => !v)}
-          className="p-0.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+          className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted"
           title={minimized ? t('todoPanel.expand') : t('todoPanel.minimize')}
         >
           {minimized ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
         </button>
         <button
           onClick={onDismiss}
-          className="p-0.5 rounded hover:bg-muted transition-colors text-muted-foreground"
+          className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted"
           title={t('todoPanel.dismiss')}
         >
           <X className="h-3 w-3" />
@@ -78,11 +81,11 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
         <>
           {/* Progress bar */}
           <div className="px-3 pt-2">
-            <div className="h-1 rounded-full bg-muted overflow-hidden">
+            <div className="h-1 overflow-hidden rounded-full bg-muted">
               <motion.div
                 className={cn(
                   'h-full rounded-full',
-                  allDone ? 'bg-status-success/80' : 'bg-status-info/80'
+                  allDone ? 'bg-status-success/80' : 'bg-status-info/80',
                 )}
                 initial={false}
                 animate={{ width: `${pct}%` }}
@@ -92,7 +95,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
           </div>
 
           {/* Animated todo list */}
-          <div ref={listRef} className="px-3 pb-2 max-h-64 overflow-y-auto">
+          <div ref={listRef} className="max-h-64 overflow-y-auto px-3 pb-2">
             <div className="space-y-1 py-1">
               {todos.map((todo, i) => (
                 <motion.div
@@ -112,7 +115,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
                     {todo.status === 'completed' ? (
                       <CircleCheck className="h-3.5 w-3.5 text-status-success/80" />
                     ) : todo.status === 'in_progress' ? (
-                      <CircleDot className="h-3.5 w-3.5 text-status-info animate-pulse" />
+                      <CircleDot className="h-3.5 w-3.5 animate-pulse text-status-info" />
                     ) : (
                       <Circle className="h-3.5 w-3.5 text-muted-foreground/50" />
                     )}
@@ -122,7 +125,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
                       'text-xs leading-relaxed transition-all duration-300',
                       todo.status === 'completed' && 'text-muted-foreground line-through',
                       todo.status === 'in_progress' && 'text-foreground font-medium',
-                      todo.status === 'pending' && 'text-muted-foreground'
+                      todo.status === 'pending' && 'text-muted-foreground',
                     )}
                   >
                     {todo.content}

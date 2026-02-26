@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'bun:test';
+
 import {
   resolveModelId,
   getDefaultModel,
@@ -57,11 +58,15 @@ describe('resolveModelId', () => {
 
   describe('unknown provider', () => {
     test('throws on completely unknown provider', () => {
-      expect(() => resolveModelId('fake' as any, 'sonnet' as any)).toThrow('Unknown provider: fake');
+      expect(() => resolveModelId('fake' as any, 'sonnet' as any)).toThrow(
+        'Unknown provider: fake',
+      );
     });
 
     test('throws on external provider', () => {
-      expect(() => resolveModelId('external' as any, 'sonnet' as any)).toThrow('Unknown provider: external');
+      expect(() => resolveModelId('external' as any, 'sonnet' as any)).toThrow(
+        'Unknown provider: external',
+      );
     });
   });
 });

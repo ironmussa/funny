@@ -1,4 +1,5 @@
 import { describe, test, expect } from 'vitest';
+
 import { cn, TOAST_DURATION } from '@/lib/utils';
 
 describe('cn utility', () => {

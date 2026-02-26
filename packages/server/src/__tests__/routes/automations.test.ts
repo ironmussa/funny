@@ -1,5 +1,7 @@
 import { describe, test, expect, mock, beforeEach } from 'bun:test';
+
 import { Hono } from 'hono';
+
 import type { HonoEnv } from '../../types/hono-env.js';
 
 // Mock data
@@ -21,7 +23,7 @@ const mockAutomation = {
 };
 
 const mockListAutomations = mock(() => [mockAutomation]);
-const mockGetAutomation = mock((id: string) => id === 'auto-1' ? mockAutomation : null);
+const mockGetAutomation = mock((id: string) => (id === 'auto-1' ? mockAutomation : null));
 const mockCreateAutomation = mock((data: any) => ({ ...mockAutomation, ...data }));
 const mockUpdateAutomation = mock(() => {});
 const mockDeleteAutomation = mock(() => {});
@@ -41,7 +43,7 @@ mock.module('../../services/automation-manager.js', () => ({
 }));
 
 mock.module('../../services/project-manager.js', () => ({
-  getProject: (id: string) => id === 'p1' ? { id: 'p1', name: 'Test', path: '/tmp/test' } : null,
+  getProject: (id: string) => (id === 'p1' ? { id: 'p1', name: 'Test', path: '/tmp/test' } : null),
 }));
 
 import { automationRoutes } from '../../routes/automations.js';
@@ -60,7 +62,7 @@ describe('Automation Routes', () => {
     mockListInboxRuns.mockReset();
 
     mockListAutomations.mockReturnValue([mockAutomation]);
-    mockGetAutomation.mockImplementation((id: string) => id === 'auto-1' ? mockAutomation : null);
+    mockGetAutomation.mockImplementation((id: string) => (id === 'auto-1' ? mockAutomation : null));
     mockCreateAutomation.mockImplementation((data: any) => ({ ...mockAutomation, ...data }));
     mockListRuns.mockReturnValue([]);
     mockListInboxRuns.mockReturnValue([]);

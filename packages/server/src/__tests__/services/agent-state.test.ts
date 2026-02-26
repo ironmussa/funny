@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
+
 import { AgentStateTracker } from '../../services/agent-state.js';
 
 /**

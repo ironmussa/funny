@@ -102,7 +102,11 @@ export function setFailed(id: string, message: string): void {
 export function cancel(id: string): boolean {
   const entry = entries.get(id);
   if (!entry) return false;
-  if (entry.run.status === 'completed' || entry.run.status === 'cancelled' || entry.run.status === 'failed') {
+  if (
+    entry.run.status === 'completed' ||
+    entry.run.status === 'cancelled' ||
+    entry.run.status === 'failed'
+  ) {
     return false; // already terminal
   }
   entry.abortController.abort();

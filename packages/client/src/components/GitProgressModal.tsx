@@ -143,8 +143,8 @@ export function GitProgressModal({ open, onOpenChange, steps, title }: GitProgre
           {steps.map((step) => {
             const stepElapsed = getStepElapsed(step.id);
             return (
-              <div key={step.id} className="flex items-start gap-2.5">
-                <div className="mt-0.5 flex-shrink-0">
+              <div key={step.id} className="flex items-center gap-2.5">
+                <div className="flex-shrink-0">
                   {step.status === 'completed' && <Check className="h-4 w-4 text-emerald-500" />}
                   {step.status === 'running' && (
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -194,10 +194,7 @@ export function GitProgressModal({ open, onOpenChange, steps, title }: GitProgre
             );
           })}
         </div>
-        <div className="mt-1 flex items-center justify-between">
-          <span className="text-[10px] tabular-nums text-muted-foreground/50">
-            {formatElapsed(totalElapsed)}
-          </span>
+        <div className="mt-1 flex items-center justify-end gap-3">
           {isFinished && (
             <Button
               size="sm"
@@ -207,6 +204,9 @@ export function GitProgressModal({ open, onOpenChange, steps, title }: GitProgre
               {hasFailed ? t('common.cancel', 'Close') : t('review.progress.done', 'Done')}
             </Button>
           )}
+          <span className="text-[10px] tabular-nums text-muted-foreground/50">
+            {formatElapsed(totalElapsed)}
+          </span>
         </div>
       </DialogContent>
     </Dialog>

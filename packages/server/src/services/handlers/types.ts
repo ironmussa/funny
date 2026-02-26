@@ -37,6 +37,7 @@ export interface HandlerServiceContext {
   // Git
   getGitStatusSummary(cwd: string, baseBranch?: string, mainRepoPath?: string): Promise<any>;
   deriveGitSyncState(summary: any): string;
+  invalidateGitStatusCache(projectId: string): void;
 
   // Thread events
   saveThreadEvent(threadId: string, type: string, data: Record<string, unknown>): Promise<void>;

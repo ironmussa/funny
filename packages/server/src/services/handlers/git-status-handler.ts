@@ -49,6 +49,9 @@ export const gitStatusHandler: EventHandler<'git:changed'> = {
 
     const summary = summaryResult.value;
 
+    // Invalidate the HTTP cache so subsequent fetches don't return stale data
+    ctx.invalidateGitStatusCache(project.id);
+
     ctx.emitToUser(userId, {
       type: 'git:status',
       threadId,

@@ -34,7 +34,7 @@ import { authRoutes } from './routes/auth.js';
 import { automationRoutes } from './routes/automations.js';
 import browseRoutes from './routes/browse.js';
 import filesRoutes from './routes/files.js';
-import { gitRoutes } from './routes/git.js';
+import { gitRoutes, invalidateGitStatusCacheByProject } from './routes/git.js';
 import { githubRoutes } from './routes/github.js';
 import { ingestRoutes } from './routes/ingest.js';
 import { logRoutes } from './routes/logs.js';
@@ -235,6 +235,7 @@ const handlerCtx: HandlerServiceContext = {
   startAgent,
   getGitStatusSummary: getStatusSummary,
   deriveGitSyncState,
+  invalidateGitStatusCache: invalidateGitStatusCacheByProject,
   saveThreadEvent,
   log: (msg) => log.info(msg, { namespace: 'handler' }),
 };

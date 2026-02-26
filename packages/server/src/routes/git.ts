@@ -86,6 +86,11 @@ function invalidateGitStatusCache(threadId: string) {
   if (thread) _gitStatusCache.delete(thread.projectId);
 }
 
+/** Invalidate cached git status by project ID directly. Exported for use by event handlers. */
+export function invalidateGitStatusCacheByProject(projectId: string) {
+  _gitStatusCache.delete(projectId);
+}
+
 // GET /api/git/status?projectId=xxx — bulk git status for all worktree threads
 gitRoutes.get('/status', async (c) => {
   const projectId = c.req.query('projectId');

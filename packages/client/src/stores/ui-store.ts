@@ -96,6 +96,7 @@ export const useUIStore = create<UIState>((set) => ({
       allThreadsProjectId: null,
       automationInboxOpen: false,
       addProjectOpen: false,
+      reviewPaneOpen: false,
     });
   },
 

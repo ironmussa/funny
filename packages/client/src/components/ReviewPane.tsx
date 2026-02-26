@@ -511,79 +511,91 @@ export function ReviewPane() {
     return true;
   };
 
+  const commitLockRef = useRef(false);
   const handleCommitAction = async () => {
     if (!effectiveThreadId || !commitTitle.trim() || checkedFiles.size === 0 || actionInProgress)
       return;
+    // Guard against double-clicks before React state update takes effect
+    if (commitLockRef.current) return;
+    commitLockRef.current = true;
     setActionInProgress(selectedAction);
 
-    const commitSuccess = await performCommit();
-    if (!commitSuccess) {
-      setActionInProgress(null);
-      return;
-    }
-
-    if (selectedAction === 'commit' || selectedAction === 'amend') {
-      toast.success(
-        selectedAction === 'amend'
-          ? t('review.amendSuccess', 'Commit amended')
-          : t('review.commitSuccess'),
-      );
-    } else if (selectedAction === 'commit-push') {
-      const pushResult = await api.push(effectiveThreadId);
-      if (pushResult.isErr()) {
-        toast.error(t('review.pushFailed', { message: pushResult.error.message }));
-      } else {
-        toast.success(t('review.pushedSuccess'));
-      }
-    } else if (selectedAction === 'commit-pr') {
-      const pushResult = await api.push(effectiveThreadId);
-      if (pushResult.isErr()) {
-        toast.error(t('review.pushFailed', { message: pushResult.error.message }));
+    try {
+      const commitSuccess = await performCommit();
+      if (!commitSuccess) {
         setActionInProgress(null);
-        await refresh();
         return;
       }
-      const prResult = await api.createPR(effectiveThreadId, commitTitle.trim(), commitBody.trim());
-      if (prResult.isErr()) {
-        toast.error(t('review.prFailed', { message: prResult.error.message }));
-      } else if (prResult.value.url) {
+
+      if (selectedAction === 'commit' || selectedAction === 'amend') {
         toast.success(
-          <div>
-            {t('review.prCreated')}
-            <a
-              href={prResult.value.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="ml-2 underline"
-            >
-              View PR
-            </a>
-          </div>,
+          selectedAction === 'amend'
+            ? t('review.amendSuccess', 'Commit amended')
+            : t('review.commitSuccess'),
         );
-      } else {
-        toast.success(t('review.prCreated'));
+      } else if (selectedAction === 'commit-push') {
+        const pushResult = await api.push(effectiveThreadId);
+        if (pushResult.isErr()) {
+          toast.error(t('review.pushFailed', { message: pushResult.error.message }));
+        } else {
+          toast.success(t('review.pushedSuccess'));
+        }
+      } else if (selectedAction === 'commit-pr') {
+        const pushResult = await api.push(effectiveThreadId);
+        if (pushResult.isErr()) {
+          toast.error(t('review.pushFailed', { message: pushResult.error.message }));
+          setActionInProgress(null);
+          await refresh();
+          return;
+        }
+        const prResult = await api.createPR(
+          effectiveThreadId,
+          commitTitle.trim(),
+          commitBody.trim(),
+        );
+        if (prResult.isErr()) {
+          toast.error(t('review.prFailed', { message: prResult.error.message }));
+        } else if (prResult.value.url) {
+          toast.success(
+            <div>
+              {t('review.prCreated')}
+              <a
+                href={prResult.value.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="ml-2 underline"
+              >
+                View PR
+              </a>
+            </div>,
+          );
+        } else {
+          toast.success(t('review.prCreated'));
+        }
+      } else if (selectedAction === 'commit-merge') {
+        const mergeResult = await api.merge(effectiveThreadId, { cleanup: true });
+        if (mergeResult.isErr()) {
+          showMergeConflictToast(mergeResult.error.message, effectiveThreadId);
+          setActionInProgress(null);
+          await refresh();
+          return;
+        }
+        const target = useThreadStore.getState().activeThread?.baseBranch || 'base';
+        toast.success(t('review.commitAndMergeSuccess', { target }));
+        // Refresh thread data so mode/branch/worktreePath reflect the cleanup
+        await useThreadStore.getState().refreshActiveThread();
+        // Update git status to reflect merged state
+        useGitStatusStore.getState().fetchForThread(effectiveThreadId);
       }
-    } else if (selectedAction === 'commit-merge') {
-      const mergeResult = await api.merge(effectiveThreadId, { cleanup: true });
-      if (mergeResult.isErr()) {
-        showMergeConflictToast(mergeResult.error.message, effectiveThreadId);
-        setActionInProgress(null);
-        await refresh();
-        return;
-      }
-      const target = useThreadStore.getState().activeThread?.baseBranch || 'base';
-      toast.success(t('review.commitAndMergeSuccess', { target }));
-      // Refresh thread data so mode/branch/worktreePath reflect the cleanup
-      await useThreadStore.getState().refreshActiveThread();
-      // Update git status to reflect merged state
-      useGitStatusStore.getState().fetchForThread(effectiveThreadId);
-    }
 
-    setCommitTitleRaw('');
-    setCommitBodyRaw('');
-    if (effectiveThreadId) clearCommitDraft(effectiveThreadId);
-    setActionInProgress(null);
-    await refresh();
+      setCommitTitleRaw('');
+      setCommitBodyRaw('');
+      if (effectiveThreadId) clearCommitDraft(effectiveThreadId);
+      setActionInProgress(null);
+      await refresh();
+    } finally {
+      commitLockRef.current = false;
+    }
   };
 
   const handleRevertFile = (path: string) => {

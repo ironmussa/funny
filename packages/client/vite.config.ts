@@ -42,9 +42,10 @@ export default defineConfig(({ mode }) => {
         '/api': {
           target: `http://localhost:${serverPort}`,
           changeOrigin: true,
-          // Timeout stale connections after 10s — prevents infinite hangs when
-          // the backend hot-reloads and ghost sockets remain (Windows issue).
-          timeout: 10000,
+          // Timeout stale connections after 60s — must be generous enough for
+          // slow git operations (commit with pre-commit hooks, push, PR creation).
+          // Previously 10s which caused "Failed to fetch" on commits with hooks.
+          timeout: 60_000,
         },
         '/ws': {
           target: `ws://localhost:${serverPort}`,

@@ -32,6 +32,7 @@ export function NewThreadDialog() {
   const { t } = useTranslation();
   const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
   const cancelNewThread = useUIStore((s) => s.cancelNewThread);
+  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
   const selectThread = useThreadStore((s) => s.selectThread);
 
@@ -104,6 +105,7 @@ export function NewThreadDialog() {
 
     await loadThreadsForProject(newThreadProjectId);
     await selectThread(result.value.id);
+    setReviewPaneOpen(false);
     cancelNewThread();
     setCreating(false);
   };

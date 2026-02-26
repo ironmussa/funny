@@ -19,6 +19,7 @@ export function NewThreadInput() {
   const effectiveProjectId = newThreadProjectId || selectedProjectId;
   const newThreadIdleOnly = useUIStore((s) => s.newThreadIdleOnly);
   const cancelNewThread = useUIStore((s) => s.cancelNewThread);
+  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
   const projects = useProjectStore((s) => s.projects);
   const project = effectiveProjectId
@@ -66,6 +67,7 @@ export function NewThreadInput() {
 
       await loadThreadsForProject(effectiveProjectId);
       setCreating(false);
+      setReviewPaneOpen(false);
       toast.success(t('toast.threadCreated', { title: prompt.slice(0, 200) }));
       cancelNewThread();
       return true;
@@ -99,6 +101,7 @@ export function NewThreadInput() {
     useThreadStore.setState({ selectedThreadId: result.value.id });
     await loadThreadsForProject(effectiveProjectId);
     setCreating(false);
+    setReviewPaneOpen(false);
     navigate(`/projects/${effectiveProjectId}/threads/${result.value.id}`);
     return true;
   };

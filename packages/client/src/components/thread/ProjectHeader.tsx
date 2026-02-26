@@ -8,7 +8,7 @@ import { useTerminalStore } from '@/stores/terminal-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { editorLabels, type Editor } from '@/stores/settings-store';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
-import { GitCompare, Globe, Terminal, ExternalLink, Pin, PinOff, Rocket, Play, Square, Loader2, Columns3, ArrowLeft, FolderOpen, Copy, ClipboardList, Check, EllipsisVertical } from 'lucide-react';
+import { GitCompare, Globe, Terminal, ExternalLink, Pin, PinOff, Rocket, Play, Square, Loader2, Columns3, ArrowLeft, FolderOpen, Copy, ClipboardList, Check, EllipsisVertical, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { toast } from 'sonner';
@@ -73,6 +73,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
   const threadPinned = useThreadStore(s => s.activeThread?.pinned);
   const hasMessages = useThreadStore(s => (s.activeThread?.messages?.length ?? 0) > 0);
   const pinThread = useThreadStore(s => s.pinThread);
+  const deleteThread = useThreadStore(s => s.deleteThread);
   const setReviewPaneOpen = useUIStore(s => s.setReviewPaneOpen);
   const [copiedText, setCopiedText] = useState(false);
   const [copiedTools, setCopiedTools] = useState(false);
@@ -145,6 +146,17 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
             >
               <Columns3 className="h-4 w-4 mr-2" />
               {t('kanban.viewOnBoard', 'View on Board')}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={() => {
+                deleteThread(threadId!, threadProjectId!);
+                navigate(`/projects/${threadProjectId}`);
+              }}
+              className="text-status-error focus:text-status-error cursor-pointer"
+            >
+              <Trash2 className="h-4 w-4 mr-2" />
+              {t('common.delete', 'Delete')}
             </DropdownMenuItem>
           </>
         )}

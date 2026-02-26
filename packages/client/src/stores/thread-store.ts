@@ -47,6 +47,18 @@ export interface AgentResultInfo {
   error?: string;
 }
 
+export interface CompactionEvent {
+  trigger: 'manual' | 'auto';
+  preTokens: number;
+  timestamp: string;
+}
+
+export interface ContextUsage {
+  cumulativeInputTokens: number;
+  lastInputTokens: number;
+  lastOutputTokens: number;
+}
+
 export interface ThreadWithMessages extends Thread {
   messages: (import('@funny/shared').Message & { toolCalls?: any[] })[];
   threadEvents?: import('@funny/shared').ThreadEvent[];
@@ -56,6 +68,8 @@ export interface ThreadWithMessages extends Thread {
   pendingPermission?: { toolName: string };
   hasMore?: boolean;
   loadingMore?: boolean;
+  contextUsage?: ContextUsage;
+  compactionEvents?: CompactionEvent[];
 }
 
 export interface ThreadState {
@@ -98,6 +112,14 @@ export interface ThreadState {
   handleWSQueueUpdate: (
     threadId: string,
     data: { threadId: string; queuedCount: number; nextMessage?: string },
+  ) => void;
+  handleWSCompactBoundary: (
+    threadId: string,
+    data: { trigger: 'manual' | 'auto'; preTokens: number; timestamp: string },
+  ) => void;
+  handleWSContextUsage: (
+    threadId: string,
+    data: { inputTokens: number; outputTokens: number; cumulativeInputTokens: number },
   ) => void;
 }
 
@@ -668,5 +690,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
   handleWSQueueUpdate: (threadId, data) => {
     wsHandlers.handleWSQueueUpdate(get, set, threadId, data);
+  },
+
+  handleWSCompactBoundary: (threadId, data) => {
+    wsHandlers.handleWSCompactBoundary(get, set, threadId, data);
+  },
+
+  handleWSContextUsage: (threadId, data) => {
+    wsHandlers.handleWSContextUsage(get, set, threadId, data);
   },
 }));

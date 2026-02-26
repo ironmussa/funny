@@ -52,7 +52,19 @@ export interface CLIResultMessage {
   errors?: string[];
 }
 
-export type CLIMessage = CLISystemMessage | CLIAssistantMessage | CLIUserMessage | CLIResultMessage;
+export interface CLICompactBoundaryMessage {
+  type: 'compact_boundary';
+  trigger: 'manual' | 'auto';
+  preTokens: number;
+  sessionId: string;
+}
+
+export type CLIMessage =
+  | CLISystemMessage
+  | CLIAssistantMessage
+  | CLIUserMessage
+  | CLIResultMessage
+  | CLICompactBoundaryMessage;
 
 // ── Process Options ────────────────────────────────────────────────
 

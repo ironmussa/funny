@@ -238,6 +238,15 @@ export class SDKClaudeProcess extends BaseAgentProcess {
             cwd: (sdkMsg as any).cwd,
           };
         }
+        if ('subtype' in sdkMsg && sdkMsg.subtype === 'compact_boundary') {
+          const raw = sdkMsg as any;
+          return {
+            type: 'compact_boundary',
+            trigger: raw.compact_metadata?.trigger ?? 'auto',
+            preTokens: raw.compact_metadata?.pre_tokens ?? 0,
+            sessionId: raw.session_id ?? '',
+          };
+        }
         return null;
 
       case 'assistant':
@@ -279,7 +288,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       }
 
       default:
-        // stream_event, compact_boundary, hook_*, etc. — skip
+        // stream_event, hook_*, etc. — skip
         return null;
     }
   }

@@ -52,6 +52,8 @@ import { D4CAnimation } from './D4CAnimation';
 import { ImageLightbox } from './ImageLightbox';
 import { PromptInput } from './PromptInput';
 import { AgentResultCard, AgentInterruptedCard, AgentStoppedCard } from './thread/AgentStatusCards';
+import { CompactionEventCard } from './thread/CompactionEventCard';
+import { ContextUsageBar } from './thread/ContextUsageBar';
 import { GitEventCard } from './thread/GitEventCard';
 import { NewThreadInput } from './thread/NewThreadInput';
 import { ProjectHeader } from './thread/ProjectHeader';
@@ -327,7 +329,8 @@ type RenderItem =
   | { type: 'message'; msg: any }
   | ToolItem
   | { type: 'toolcall-run'; items: ToolItem[] }
-  | { type: 'thread-event'; event: import('@funny/shared').ThreadEvent };
+  | { type: 'thread-event'; event: import('@funny/shared').ThreadEvent }
+  | { type: 'compaction-event'; event: import('@/stores/thread-store').CompactionEvent };
 
 /** Group MCP tools by server prefix and show built-in tools individually */
 function groupTools(tools: string[]) {
@@ -416,6 +419,7 @@ const McpToolGroup = memo(function McpToolGroup({
 function getItemTimestamp(item: RenderItem): string {
   if (item.type === 'message') return item.msg.timestamp || '';
   if (item.type === 'thread-event') return item.event.createdAt || '';
+  if (item.type === 'compaction-event') return item.event.timestamp || '';
   if (item.type === 'toolcall') return item.tc.timestamp || '';
   if (item.type === 'toolcall-group') return item.calls[0]?.timestamp || '';
   if (item.type === 'toolcall-run') {
@@ -428,6 +432,7 @@ function getItemTimestamp(item: RenderItem): string {
 function buildGroupedRenderItems(
   messages: any[],
   threadEvents?: import('@funny/shared').ThreadEvent[],
+  compactionEvents?: import('@/stores/thread-store').CompactionEvent[],
 ): RenderItem[] {
   // Flatten all messages into a single stream of items
   const flat: ({ type: 'message'; msg: any } | { type: 'toolcall'; tc: any })[] = [];
@@ -540,14 +545,20 @@ function buildGroupedRenderItems(
     }
   }
 
-  // Interleave thread events (git operations) chronologically
-  if (!threadEvents?.length) return final;
+  // Interleave thread events (git operations) and compaction events chronologically
+  const hasEvents = threadEvents?.length || compactionEvents?.length;
+  if (!hasEvents) return final;
 
-  const eventItems: RenderItem[] = threadEvents
+  const eventItems: RenderItem[] = (threadEvents ?? [])
     .filter((e) => e.type !== 'git:changed')
     .map((e) => ({ type: 'thread-event' as const, event: e }));
 
-  const merged = [...final, ...eventItems];
+  const compactionItems: RenderItem[] = (compactionEvents ?? []).map((e) => ({
+    type: 'compaction-event' as const,
+    event: e,
+  }));
+
+  const merged = [...final, ...eventItems, ...compactionItems];
   merged.sort((a, b) => {
     const tsA = getItemTimestamp(a);
     const tsB = getItemTimestamp(b);
@@ -623,6 +634,7 @@ function getItemKey(item: RenderItem): string {
     return first.type === 'toolcall' ? first.tc.id : first.calls[0].id;
   }
   if (item.type === 'thread-event') return item.event.id;
+  if (item.type === 'compaction-event') return `compact-${item.event.timestamp}`;
   return '';
 }
 
@@ -636,6 +648,7 @@ function estimateItemHeight(item: RenderItem): number {
   if (item.type === 'toolcall-group') return 44;
   if (item.type === 'toolcall-run') return 44 * item.items.length;
   if (item.type === 'thread-event') return 32;
+  if (item.type === 'compaction-event') return 32;
   return 60;
 }
 
@@ -652,6 +665,7 @@ const MemoizedMessageList = memo(
     {
       messages: any[];
       threadEvents?: import('@funny/shared').ThreadEvent[];
+      compactionEvents?: import('@/stores/thread-store').CompactionEvent[];
       threadId: string;
       knownIds: Set<string>;
       prefersReducedMotion: boolean | null;
@@ -664,6 +678,7 @@ const MemoizedMessageList = memo(
     {
       messages,
       threadEvents,
+      compactionEvents,
       threadId,
       knownIds: _knownIds,
       prefersReducedMotion: _prefersReducedMotion,
@@ -677,8 +692,8 @@ const MemoizedMessageList = memo(
     const { t } = useTranslation();
 
     const groupedItems = useMemo(
-      () => buildGroupedRenderItems(messages, threadEvents),
-      [messages, threadEvents],
+      () => buildGroupedRenderItems(messages, threadEvents, compactionEvents),
+      [messages, threadEvents, compactionEvents],
     );
 
     /* ── Windowed rendering ──────────────────────────────────────────── */
@@ -1013,6 +1028,17 @@ const MemoizedMessageList = memo(
                 style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}
               >
                 <GitEventCard event={item.event} />
+              </div>
+            );
+          }
+
+          if (item.type === 'compaction-event') {
+            return (
+              <div
+                key={key}
+                style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}
+              >
+                <CompactionEventCard event={item.event} />
               </div>
             );
           }
@@ -1482,6 +1508,11 @@ export function ThreadView() {
   return (
     <div className="relative flex h-full min-w-0 flex-1 flex-col">
       <ProjectHeader />
+      {isRunning && activeThread.contextUsage && (
+        <ContextUsageBar
+          cumulativeInputTokens={activeThread.contextUsage.cumulativeInputTokens}
+        />
+      )}
 
       {/* Messages + Timeline */}
       <div className="thread-container flex min-h-0 flex-1">
@@ -1519,6 +1550,7 @@ export function ThreadView() {
                 ref={messageListRef}
                 messages={activeThread.messages ?? []}
                 threadEvents={activeThread.threadEvents}
+                compactionEvents={activeThread.compactionEvents}
                 threadId={activeThread.id}
                 knownIds={knownIdsRef.current}
                 prefersReducedMotion={prefersReducedMotion}

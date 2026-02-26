@@ -161,6 +161,16 @@ function handleMessage(e: MessageEvent) {
     case 'agent:error':
       useThreadStore.getState().handleWSStatus(threadId, { status: 'failed' });
       break;
+    case 'agent:compact_boundary':
+      startTransition(() => {
+        useThreadStore.getState().handleWSCompactBoundary(threadId, data);
+      });
+      break;
+    case 'agent:context_usage':
+      startTransition(() => {
+        useThreadStore.getState().handleWSContextUsage(threadId, data);
+      });
+      break;
     case 'command:output': {
       const termStore = useTerminalStore.getState();
       termStore.appendCommandOutput(data.commandId, data.data);

@@ -85,6 +85,23 @@ export class AgentMessageHandler {
       return;
     }
 
+    // Compact boundary — context window was compacted
+    if (msg.type === 'compact_boundary') {
+      log.info('Context compacted', {
+        namespace: 'agent',
+        threadId,
+        trigger: msg.trigger,
+        preTokens: msg.preTokens,
+      });
+      this.state.cumulativeInputTokens.set(threadId, 0);
+      this.emitWS(threadId, 'agent:compact_boundary', {
+        trigger: msg.trigger,
+        preTokens: msg.preTokens,
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
+
     // Result — agent finished
     if (msg.type === 'result') {
       this.handleResult(threadId, msg);
@@ -126,6 +143,19 @@ export class AgentMessageHandler {
         messageId: msgId,
         role: 'assistant',
         content: textContent,
+      });
+    }
+
+    // Emit per-message context usage if available
+    const usage = msg.message.usage;
+    if (usage) {
+      const prev = this.state.cumulativeInputTokens.get(threadId) ?? 0;
+      const cumulative = prev + usage.input_tokens;
+      this.state.cumulativeInputTokens.set(threadId, cumulative);
+      this.emitWS(threadId, 'agent:context_usage', {
+        inputTokens: usage.input_tokens,
+        outputTokens: usage.output_tokens,
+        cumulativeInputTokens: cumulative,
       });
     }
 

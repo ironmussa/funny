@@ -416,6 +416,53 @@ export function handleWSQueueUpdate(
   }
 }
 
+// ── Compact boundary ────────────────────────────────────────────
+
+export function handleWSCompactBoundary(
+  get: Get,
+  set: Set,
+  threadId: string,
+  data: { trigger: 'manual' | 'auto'; preTokens: number; timestamp: string },
+): void {
+  const { activeThread } = get();
+  if (activeThread?.id !== threadId) return;
+
+  set({
+    activeThread: {
+      ...activeThread,
+      compactionEvents: [...(activeThread.compactionEvents ?? []), data],
+      contextUsage: {
+        cumulativeInputTokens: 0,
+        lastInputTokens: 0,
+        lastOutputTokens: 0,
+      },
+    },
+  });
+}
+
+// ── Context usage ───────────────────────────────────────────────
+
+export function handleWSContextUsage(
+  get: Get,
+  set: Set,
+  threadId: string,
+  data: { inputTokens: number; outputTokens: number; cumulativeInputTokens: number },
+): void {
+  const { activeThread } = get();
+  if (activeThread?.id !== threadId) return;
+
+  set({
+    activeThread: {
+      ...activeThread,
+      contextUsage: {
+        cumulativeInputTokens: data.cumulativeInputTokens,
+        lastInputTokens: data.inputTokens,
+        lastOutputTokens: data.outputTokens,
+      },
+    },
+  });
+}
+
 // ── Toast helper ────────────────────────────────────────────────
 
 const ERROR_REASON_MESSAGES: Record<string, string> = {

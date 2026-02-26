@@ -34,6 +34,9 @@ export class AgentStateTracker {
   /** Pending permission requests per thread */
   readonly pendingPermissionRequest = new Map<string, { toolName: string; toolUseId: string }>();
 
+  /** Cumulative input token count per thread (tracks context window usage) */
+  readonly cumulativeInputTokens = new Map<string, number>();
+
   /**
    * Clear stale state when starting a new agent run.
    * processedToolUseIds and cliToDbMsgId are intentionally preserved
@@ -43,6 +46,7 @@ export class AgentStateTracker {
     this.currentAssistantMsgId.delete(threadId);
     this.resultReceived.delete(threadId);
     this.pendingUserInput.delete(threadId);
+    this.cumulativeInputTokens.delete(threadId);
   }
 
   /** Completely remove all in-memory state for a thread. */
@@ -53,5 +57,6 @@ export class AgentStateTracker {
     this.cliToDbMsgId.delete(threadId);
     this.pendingUserInput.delete(threadId);
     this.pendingPermissionRequest.delete(threadId);
+    this.cumulativeInputTokens.delete(threadId);
   }
 }

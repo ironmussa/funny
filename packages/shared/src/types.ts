@@ -283,6 +283,18 @@ export interface WSErrorData {
   error: string;
 }
 
+export interface WSCompactBoundaryData {
+  trigger: 'manual' | 'auto';
+  preTokens: number;
+  timestamp: string;
+}
+
+export interface WSContextUsageData {
+  inputTokens: number;
+  outputTokens: number;
+  cumulativeInputTokens: number;
+}
+
 export interface WSCommandOutputData {
   commandId: string;
   data: string;
@@ -375,6 +387,8 @@ export type WSEvent =
   | { type: 'agent:status'; threadId: string; data: WSStatusData }
   | { type: 'agent:result'; threadId: string; data: WSResultData }
   | { type: 'agent:error'; threadId: string; data: WSErrorData }
+  | { type: 'agent:compact_boundary'; threadId: string; data: WSCompactBoundaryData }
+  | { type: 'agent:context_usage'; threadId: string; data: WSContextUsageData }
   | { type: 'command:output'; threadId: string; data: WSCommandOutputData }
   | { type: 'command:status'; threadId: string; data: WSCommandStatusData }
   | { type: 'automation:run_started'; threadId: string; data: WSAutomationRunStartedData }

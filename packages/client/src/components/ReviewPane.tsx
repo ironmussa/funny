@@ -544,15 +544,15 @@ export function ReviewPane() {
         setStep('stage', { status: 'completed' });
       }
 
-      // Pre-commit hooks + Commit (hooks run as part of git commit)
+      // Pre-commit hooks + Commit
+      // hooks timer starts first; commit timer starts only after hooks completes
       setStep('hooks', { status: 'running' });
-      setStep('commit', { status: 'running' });
       const commitMsg = commitBody.trim()
         ? `${commitTitle.trim()}\n\n${commitBody.trim()}`
         : commitTitle.trim();
       const commitResult = await api.commit(effectiveThreadId, commitMsg, isAmend);
       if (commitResult.isErr()) {
-        // If the error mentions hooks, mark hooks as failed; otherwise mark commit as failed
+        // If the error mentions hooks, mark hooks as failed; otherwise hooks passed but commit failed
         const errMsg = commitResult.error.message.toLowerCase();
         const isHookFailure =
           errMsg.includes('hook') ||
@@ -561,15 +561,18 @@ export function ReviewPane() {
           errMsg.includes('pre-commit');
         if (isHookFailure) {
           setStep('hooks', { status: 'failed', error: commitResult.error.message });
-          setStep('commit', { status: 'pending' });
         } else {
           setStep('hooks', { status: 'completed' });
+          setStep('commit', { status: 'running' });
           setStep('commit', { status: 'failed', error: commitResult.error.message });
         }
         setActionInProgress(null);
         return;
       }
       setStep('hooks', { status: 'completed' });
+      setStep('commit', { status: 'running' });
+      // Brief delay so the timer captures the transition
+      await new Promise((r) => setTimeout(r, 50));
       setStep('commit', { status: 'completed' });
 
       // Push (for commit-push and commit-pr)
@@ -1060,6 +1063,32 @@ export function ReviewPane() {
       <div className="flex min-h-0 flex-1">
         {/* Left: Diff viewer */}
         <div className="flex min-w-0 flex-1 flex-col">
+          {selectedFile && (
+            <div className="flex flex-shrink-0 items-center gap-2 border-b border-sidebar-border px-3 py-1.5">
+              <span
+                className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground"
+                title={selectedFile}
+                style={{ direction: 'rtl', textAlign: 'left' }}
+              >
+                {selectedFile}
+              </span>
+              {selectedDiffContent && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => setExpandedFile(selectedFile)}
+                      className="flex-shrink-0 text-muted-foreground hover:text-foreground"
+                    >
+                      <Maximize2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left">{t('review.expand', 'Expand')}</TooltipContent>
+                </Tooltip>
+              )}
+            </div>
+          )}
           <ScrollArea className="w-full flex-1">
             {selectedFile ? (
               loadingDiff === selectedFile ? (
@@ -1069,19 +1098,6 @@ export function ReviewPane() {
                 </div>
               ) : selectedDiffContent ? (
                 <div className="relative text-xs [&_.diff-container]:font-mono [&_table]:w-max [&_td:last-child]:w-auto [&_td:last-child]:min-w-0">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="secondary"
-                        size="icon-xs"
-                        onClick={() => setExpandedFile(selectedFile)}
-                        className="sticky right-2 top-2 z-10 float-right mr-2 mt-2 opacity-70 shadow-md hover:opacity-100"
-                      >
-                        <Maximize2 className="h-3.5 w-3.5" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="left">{t('review.expand', 'Expand')}</TooltipContent>
-                  </Tooltip>
                   <Suspense
                     fallback={
                       <div className="p-2 text-xs text-muted-foreground">Loading diff\u2026</div>
@@ -1235,16 +1251,9 @@ export function ReviewPane() {
                       >
                         {isChecked && <Check className="h-2.5 w-2.5" />}
                       </button>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span className="flex-1 truncate font-mono text-[11px]">
-                            {f.path.split('/').pop()}
-                          </span>
-                        </TooltipTrigger>
-                        <TooltipContent side="left" className="max-w-[400px] break-all font-mono text-[11px]">
-                          {f.path}
-                        </TooltipContent>
-                      </Tooltip>
+                      <span className="flex-1 truncate font-mono text-[11px]">
+                        {f.path.split('/').pop()}
+                      </span>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button

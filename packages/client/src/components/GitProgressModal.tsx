@@ -39,10 +39,18 @@ function formatElapsed(ms: number) {
 }
 
 /** Tracks per-step elapsed time based on step status transitions. */
-function useStepTimers(steps: GitProgressStep[]) {
+function useStepTimers(steps: GitProgressStep[], open: boolean) {
   const startTimes = useRef<Map<string, number>>(new Map());
   const endTimes = useRef<Map<string, number>>(new Map());
   const [, tick] = useState(0);
+
+  // Reset all timers when the modal opens with a fresh set of steps
+  useEffect(() => {
+    if (open) {
+      startTimes.current.clear();
+      endTimes.current.clear();
+    }
+  }, [open]);
 
   // Track status transitions
   useEffect(() => {
@@ -114,7 +122,7 @@ export function GitProgressModal({ open, onOpenChange, steps, title }: GitProgre
     !isRunning &&
     (steps.every((s) => s.status === 'completed' || s.status === 'failed') || hasFailed);
 
-  const getStepElapsed = useStepTimers(steps);
+  const getStepElapsed = useStepTimers(steps, open);
   const totalElapsed = useTotalTimer(open, isFinished);
 
   return (

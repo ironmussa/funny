@@ -52,6 +52,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
 import { api } from '@/lib/api';
+import { stageConfig } from '@/lib/thread-utils';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { editorLabels, type Editor } from '@/stores/settings-store';
@@ -362,6 +363,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
   const activeThreadId = useThreadStore((s) => s.activeThread?.id);
   const activeThreadProjectId = useThreadStore((s) => s.activeThread?.projectId);
   const activeThreadTitle = useThreadStore((s) => s.activeThread?.title);
+  const activeThreadStage = useThreadStore((s) => s.activeThread?.stage);
   const activeThreadWorktreePath = useThreadStore((s) => s.activeThread?.worktreePath);
   const activeThreadParentId = useThreadStore((s) => s.activeThread?.parentThreadId);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
@@ -472,10 +474,20 @@ export const ProjectHeader = memo(function ProjectHeader() {
               )}
               {project && activeThreadId && <BreadcrumbSeparator />}
               {activeThreadId && (
-                <BreadcrumbItem className="flex-1 overflow-hidden">
+                <BreadcrumbItem className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
                   <BreadcrumbPage className="block truncate text-sm">
                     {activeThreadTitle}
                   </BreadcrumbPage>
+                  {activeThreadStage && activeThreadStage !== 'archived' && (() => {
+                    const cfg = stageConfig[activeThreadStage];
+                    const StageIcon = cfg.icon;
+                    return (
+                      <span className={`inline-flex flex-shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${cfg.className}`}>
+                        <StageIcon className="h-3 w-3" />
+                        {t(cfg.labelKey)}
+                      </span>
+                    );
+                  })()}
                 </BreadcrumbItem>
               )}
             </BreadcrumbList>

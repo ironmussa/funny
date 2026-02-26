@@ -14,11 +14,14 @@ interface GitStatusState {
 }
 
 const FETCH_COOLDOWN_MS = 5_000;
+const THREAD_FETCH_COOLDOWN_MS = 2_000;
 const _lastFetchByProject = new Map<string, number>();
+const _lastFetchByThread = new Map<string, number>();
 
 /** @internal Clear cooldown map — only for tests */
 export function _resetCooldowns() {
   _lastFetchByProject.clear();
+  _lastFetchByThread.clear();
 }
 
 /** Compare two GitStatusInfo objects for equality on the fields that affect rendering */
@@ -81,6 +84,11 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
 
   fetchForThread: async (threadId) => {
     if (get()._loadingThreads.has(threadId)) return;
+    // Skip if fetched recently (prevents duplicate calls from ProjectHeader + ReviewPane)
+    const now = Date.now();
+    const lastFetch = _lastFetchByThread.get(threadId) ?? 0;
+    if (now - lastFetch < THREAD_FETCH_COOLDOWN_MS) return;
+    _lastFetchByThread.set(threadId, now);
     set((s) => ({ _loadingThreads: new Set([...s._loadingThreads, threadId]) }));
     try {
       const result = await api.getGitStatus(threadId);

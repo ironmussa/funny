@@ -146,6 +146,7 @@ const MemoizedDiffView = memo(function MemoizedDiffView({ diff, splitView = fals
 export function ReviewPane() {
   const { t } = useTranslation();
   const setReviewPaneOpen = useUIStore(s => s.setReviewPaneOpen);
+  const reviewPaneOpen = useUIStore(s => s.reviewPaneOpen);
   const selectedProjectId = useProjectStore(s => s.selectedProjectId);
 
   // Derive effectiveThreadId from the active thread only.
@@ -270,6 +271,7 @@ export function ReviewPane() {
       // Check all files by default, preserving existing selections
       setCheckedFiles(prev => {
         const next = new Set(prev);
+        const currentPaths = new Set(data.files.map(d => d.path));
         for (const f of data.files) {
           if (!prev.has(f.path) && prev.size === 0) {
             next.add(f.path);
@@ -278,7 +280,7 @@ export function ReviewPane() {
           }
         }
         for (const p of prev) {
-          if (!data.files.find(d => d.path === p)) next.delete(p);
+          if (!currentPaths.has(p)) next.delete(p);
         }
         return next.size === 0 ? new Set(data.files.map(d => d.path)) : next;
       });
@@ -332,6 +334,9 @@ export function ReviewPane() {
     }
   }, [expandedFile]);
 
+  // Track whether we need to refresh when the pane becomes visible
+  const needsRefreshRef = useRef(false);
+
   // Reset state and refresh when the active thread changes.
   // Using effectiveThreadId (not just gitContextKey) ensures we refresh even
   // when switching between two local threads of the same project that share
@@ -350,8 +355,21 @@ export function ReviewPane() {
     setCommitTitleRaw(draft?.commitTitle ?? '');
     setCommitBodyRaw(draft?.commitBody ?? '');
 
-    refresh();
+    // Only fetch data if the pane is visible; otherwise defer until it opens
+    if (reviewPaneOpen) {
+      refresh();
+    } else {
+      needsRefreshRef.current = true;
+    }
   }, [effectiveThreadId]);
+
+  // Fire deferred refresh when the review pane becomes visible
+  useEffect(() => {
+    if (reviewPaneOpen && needsRefreshRef.current) {
+      needsRefreshRef.current = false;
+      refresh();
+    }
+  }, [reviewPaneOpen]);
 
   // Auto-refresh diffs when agent modifies files (debounced 2s)
   useAutoRefreshDiff(effectiveThreadId, refresh, 2000);
@@ -748,10 +766,12 @@ export function ReviewPane() {
     await refresh();
   };
 
-  // Load stash list on mount / thread change
+  // Load stash list on mount / thread change (only when pane is visible)
   useEffect(() => {
-    refreshStashList();
-  }, [effectiveThreadId]);
+    if (reviewPaneOpen) {
+      refreshStashList();
+    }
+  }, [effectiveThreadId, reviewPaneOpen]);
 
   const canCommit = checkedFiles.size > 0 && commitTitle.trim().length > 0 && !actionInProgress && !isAgentRunning;
 

@@ -20,13 +20,14 @@ import { saveThreadEvent } from '../services/thread-event-service.js';
 export const gitRoutes = new Hono<HonoEnv>();
 
 /**
- * Resolve per-user git identity for multi-user mode.
- * Returns undefined in local mode so all functions behave as before.
+ * Resolve per-user git identity.
+ * In local mode, uses the '__local__' profile for GitHub token support.
+ * In multi-user mode, uses the authenticated user's profile.
  */
 function resolveIdentity(userId: string): GitIdentityOptions | undefined {
-  if (getAuthMode() === 'local' || userId === '__local__') return undefined;
-  const author = getGitIdentity(userId) ?? undefined;
-  const githubToken = getGithubToken(userId) ?? undefined;
+  const effectiveUserId = (getAuthMode() === 'local' || userId === '__local__') ? '__local__' : userId;
+  const author = getGitIdentity(effectiveUserId) ?? undefined;
+  const githubToken = getGithubToken(effectiveUserId) ?? undefined;
   if (!author && !githubToken) return undefined;
   return { author, githubToken };
 }

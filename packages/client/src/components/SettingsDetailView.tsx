@@ -22,7 +22,8 @@ import { getDefaultModel } from '@funny/shared/models';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
 import { Button } from '@/components/ui/button';
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
+import { toast } from 'sonner';
 import { McpServerSettings } from './McpServerSettings';
 import { SkillsSettings } from './SkillsSettings';
 import { WorktreeSettings } from './WorktreeSettings';
@@ -161,8 +162,7 @@ const PASTEL_COLORS = [
 ];
 
 /* ── Color picker area ── */
-function ProjectColorPicker({ projectId, currentColor }: { projectId: string; currentColor?: string }) {
-  const updateProject = useProjectStore((s) => s.updateProject);
+function ProjectColorPicker({ projectId, currentColor, onSave }: { projectId: string; currentColor?: string; onSave: (projectId: string, data: { color: string | null }) => void }) {
 
   return (
     <div className="flex flex-col gap-3 px-4 py-3.5 border-b border-border/50 last:border-b-0">
@@ -173,7 +173,7 @@ function ProjectColorPicker({ projectId, currentColor }: { projectId: string; cu
       {/* Preset pastel colors */}
       <div className="flex items-center gap-1.5">
         <button
-          onClick={() => updateProject(projectId, { color: null })}
+          onClick={() => onSave(projectId, { color: null })}
           className={cn(
             'h-7 w-7 rounded-md border-2 transition-all flex items-center justify-center',
             !currentColor
@@ -188,7 +188,7 @@ function ProjectColorPicker({ projectId, currentColor }: { projectId: string; cu
         {PASTEL_COLORS.map((color) => (
           <button
             key={color}
-            onClick={() => updateProject(projectId, { color })}
+            onClick={() => onSave(projectId, { color })}
             className={cn(
               'h-7 w-7 rounded-md border-2 transition-all',
               currentColor === color
@@ -207,7 +207,7 @@ function ProjectColorPicker({ projectId, currentColor }: { projectId: string; cu
           <input
             type="color"
             value={currentColor || '#7CB9E8'}
-            onChange={(e) => updateProject(projectId, { color: e.target.value })}
+            onChange={(e) => onSave(projectId, { color: e.target.value })}
             aria-label="Custom color picker"
             className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
           />
@@ -251,6 +251,27 @@ function GeneralSettings() {
   const updateProject = useProjectStore((s) => s.updateProject);
   const { t } = useTranslation();
 
+  const saveProject = useCallback(
+    async (projectId: string, data: Parameters<typeof updateProject>[1]) => {
+      await updateProject(projectId, data);
+      toast.success(t('settings.projectSaved'), { id: 'project-settings-saved' });
+    },
+    [updateProject, t]
+  );
+
+  const saveToolPermission = useCallback(
+    (toolName: string, permission: ToolPermission) => {
+      setToolPermission(toolName, permission);
+      toast.success(t('settings.saved'), { id: 'settings-saved' });
+    },
+    [setToolPermission, t]
+  );
+
+  const saveResetToolPermissions = useCallback(() => {
+    resetToolPermissions();
+    toast.success(t('settings.saved'), { id: 'settings-saved' });
+  }, [resetToolPermissions, t]);
+
   return (
     <>
       {/* Project section (only shown when a project is selected) */}
@@ -260,14 +281,14 @@ function GeneralSettings() {
             Project
           </h3>
           <div className="rounded-lg border border-border/50 overflow-hidden mb-6">
-            <ProjectColorPicker projectId={selectedProject.id} currentColor={selectedProject.color} />
+            <ProjectColorPicker projectId={selectedProject.id} currentColor={selectedProject.color} onSave={saveProject} />
             <SettingRow
               title={t('settings.followUpMode')}
               description={t('settings.followUpModeDesc')}
             >
               <SegmentedControl<string>
                 value={selectedProject.followUpMode || 'interrupt'}
-                onChange={(v) => updateProject(selectedProject.id, { followUpMode: v })}
+                onChange={(v) => saveProject(selectedProject.id, { followUpMode: v })}
                 options={[
                   { value: 'interrupt', label: t('settings.followUpInterrupt') },
                   { value: 'queue', label: t('settings.followUpQueue') },
@@ -283,7 +304,7 @@ function GeneralSettings() {
                   value={selectedProject.defaultProvider || 'claude'}
                   onChange={(v) => {
                     const p = v as AgentProvider;
-                    updateProject(selectedProject.id, {
+                    saveProject(selectedProject.id, {
                       defaultProvider: p,
                       defaultModel: getDefaultModel(p),
                     });
@@ -294,7 +315,7 @@ function GeneralSettings() {
                 />
                 <ModelCombobox
                   value={selectedProject.defaultModel || getDefaultModel((selectedProject.defaultProvider || 'claude') as AgentProvider)}
-                  onChange={(v) => updateProject(selectedProject.id, { defaultModel: v })}
+                  onChange={(v) => saveProject(selectedProject.id, { defaultModel: v })}
                   options={getModelOptions(selectedProject.defaultProvider || 'claude', t)}
                   placeholder={t('settings.selectModel')}
                   searchPlaceholder={t('settings.searchModel')}
@@ -307,7 +328,7 @@ function GeneralSettings() {
             >
               <SegmentedControl<string>
                 value={selectedProject.defaultMode || 'worktree'}
-                onChange={(v) => updateProject(selectedProject.id, { defaultMode: v })}
+                onChange={(v) => saveProject(selectedProject.id, { defaultMode: v })}
                 options={[
                   { value: 'local', label: t('thread.mode.local'), icon: <Monitor className="h-3 w-3" /> },
                   { value: 'worktree', label: t('thread.mode.worktree'), icon: <GitBranch className="h-3 w-3" /> },
@@ -320,7 +341,7 @@ function GeneralSettings() {
             >
               <SegmentedControl<string>
                 value={selectedProject.defaultPermissionMode || 'autoEdit'}
-                onChange={(v) => updateProject(selectedProject.id, { defaultPermissionMode: v })}
+                onChange={(v) => saveProject(selectedProject.id, { defaultPermissionMode: v })}
                 options={[
                   { value: 'plan', label: t('prompt.plan') },
                   { value: 'autoEdit', label: t('prompt.autoEdit') },
@@ -354,7 +375,7 @@ function GeneralSettings() {
                 </div>
                 <SegmentedControl<ToolPermission>
                   value={toolPermissions[tool] ?? 'allow'}
-                  onChange={(v) => setToolPermission(tool, v)}
+                  onChange={(v) => saveToolPermission(tool, v)}
                   options={[
                     { value: 'allow', label: t('settings.allow') },
                     { value: 'ask', label: t('settings.ask') },
@@ -366,7 +387,7 @@ function GeneralSettings() {
           </div>
           <div className="mt-3 flex justify-end">
             <button
-              onClick={() => resetToolPermissions()}
+              onClick={() => saveResetToolPermissions()}
               className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
             >
               <RotateCcw className="h-3 w-3" />

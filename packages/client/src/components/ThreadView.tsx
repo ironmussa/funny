@@ -936,15 +936,26 @@ export function ThreadView() {
             // At bottom → highlight the last user message
             setVisibleMessageId(userEls[userEls.length - 1].dataset.userMsg!);
           } else {
-            // Find the last user message whose top is above the viewport center
+            // Find which user message "section" occupies the viewport center.
+            // A section spans from a user message's top to the next user message's top
+            // (or the bottom of the scroll content for the last one).
             const viewportRect = viewport.getBoundingClientRect();
-            const threshold = viewportRect.top + viewportRect.height * 0.4;
+            const probe = viewportRect.top + viewportRect.height * 0.4;
             let found: string | null = null;
-            userEls.forEach((el) => {
-              if (el.getBoundingClientRect().top <= threshold) {
-                found = el.dataset.userMsg!;
+            for (let i = 0; i < userEls.length; i++) {
+              const sectionTop = userEls[i].getBoundingClientRect().top;
+              const sectionBottom = i + 1 < userEls.length
+                ? userEls[i + 1].getBoundingClientRect().top
+                : viewport.scrollHeight + viewportRect.top; // end of content
+              if (sectionTop <= probe && probe < sectionBottom) {
+                found = userEls[i].dataset.userMsg!;
+                break;
               }
-            });
+            }
+            // Fallback: if probe is above all sections, pick the first
+            if (!found) {
+              found = userEls[0].dataset.userMsg!;
+            }
             setVisibleMessageId(found);
           }
         }
@@ -971,6 +982,15 @@ export function ThreadView() {
         });
       } else {
         viewport.scrollTop = viewport.scrollHeight;
+      }
+      // When at bottom, sync visibleMessageId to the last user message.
+      // Setting scrollTop programmatically doesn't always fire a scroll event,
+      // so the scroll handler may never update visibleMessageId.
+      const lastUserMsg = activeThread?.messages?.filter(
+        (m: any) => m.role === 'user' && m.content?.trim()
+      ).at(-1);
+      if (lastUserMsg) {
+        setVisibleMessageId(lastUserMsg.id);
       }
     }
     // Hide scroll-to-bottom button via DOM if content doesn't overflow

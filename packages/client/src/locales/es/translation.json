@@ -132,6 +132,7 @@
     "pushedSuccess": "Enviado exitosamente",
     "pushFailed": "Push fallido: {{message}}",
     "prTitle": "Título del PR:",
+    "prFailed": "Creación de PR fallida: {{message}}",
     "prCreated": "PR creado",
     "binaryOrNoDiff": "(archivo binario o sin diff disponible)",
     "selectFile": "Selecciona un archivo para ver el diff",
@@ -272,7 +273,9 @@
     "followUpMode": "Comportamiento de seguimiento",
     "followUpModeDesc": "Cómo manejar mensajes enviados mientras un agente está ejecutándose",
     "followUpInterrupt": "Interrumpir",
-    "followUpQueue": "Encolar"
+    "followUpQueue": "Encolar",
+    "saved": "Configuración guardada",
+    "projectSaved": "Configuración del proyecto guardada"
   },
   "skills": {
     "showingFor": "Mostrando skills para:",

@@ -132,6 +132,7 @@
     "pushedSuccess": "Pushed successfully",
     "pushFailed": "Push failed: {{message}}",
     "prTitle": "PR title:",
+    "prFailed": "PR creation failed: {{message}}",
     "prCreated": "PR created",
     "binaryOrNoDiff": "(binary file or no diff available)",
     "selectFile": "Select a file to view diff",
@@ -272,7 +273,9 @@
     "followUpMode": "Follow-up behavior",
     "followUpModeDesc": "How to handle messages sent while an agent is running",
     "followUpInterrupt": "Interrupt",
-    "followUpQueue": "Queue"
+    "followUpQueue": "Queue",
+    "saved": "Settings saved",
+    "projectSaved": "Project settings saved"
   },
   "skills": {
     "showingFor": "Showing skills for:",

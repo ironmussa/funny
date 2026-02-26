@@ -12,7 +12,7 @@
   display: none;
 }
 
-@container thread (min-width: 900px) {
+@container thread (min-width: 600px) {
   .thread-timeline {
     display: block;
   }

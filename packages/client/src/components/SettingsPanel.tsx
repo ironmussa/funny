@@ -64,11 +64,9 @@ export function SettingsPanel() {
   const items: Array<{ id: string; label: string; icon: typeof Settings }> = selectedProjectId
     ? [...baseSettingsItems].filter((item) => item.id !== 'archived-threads')
     : [...baseSettingsItems];
-  if (authMode === 'multi') {
-    items.push({ id: 'profile', label: 'Profile', icon: User });
-    if (authUser?.role === 'admin') {
-      items.push({ id: 'users', label: 'Users', icon: Users });
-    }
+  items.push({ id: 'profile', label: 'Profile', icon: User });
+  if (authMode === 'multi' && authUser?.role === 'admin') {
+    items.push({ id: 'users', label: 'Users', icon: Users });
   }
 
   const settingsPath = (pageId: string) =>

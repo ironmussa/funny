@@ -335,7 +335,7 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
     <TooltipProvider delayDuration={200}>
       <div
         ref={containerRef}
-        className="flex flex-col h-full w-[200px] flex-shrink-0 overflow-y-auto"
+        className="thread-timeline flex flex-col h-full w-[200px] flex-shrink-0 overflow-y-auto"
       >
         {/* Timeline */}
         <div className="flex-1 px-3 py-3">
@@ -412,11 +412,10 @@ function TimelineMilestone({
         ) : (
           <div
             className={cn(
-              'w-2.5 h-2.5 rounded-full border-2 flex-shrink-0 mt-0.5 transition-colors',
+              'w-2.5 h-2.5 rounded-full border flex-shrink-0 mt-0.5 transition-colors',
               isActive
                 ? 'border-primary bg-primary'
-                : 'border-primary/60 bg-background',
-              'group-hover/milestone:border-primary group-hover/milestone:bg-primary/20'
+                : 'border-primary bg-transparent'
             )}
           />
         )}

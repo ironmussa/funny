@@ -279,7 +279,8 @@
       "githubDark": "GitHub Dark",
       "nightOwl": "Night Owl",
       "catppuccin": "Catppuccin",
-      "monochrome": "Monochrome"
+      "monochrome": "Monochrome",
+      "monochromeDark": "Monochrome Dark"
     },
     "threads": "Threads",
     "defaultThreadMode": "Default thread mode",

@@ -1,5 +1,5 @@
 import type { UserProfile } from '@funny/shared';
-import { Sun, Moon, Monitor, Check } from 'lucide-react';
+import { Check } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -59,14 +59,10 @@ function SettingRow({
 interface ThemeOption {
   value: string;
   label: string;
-  icon?: React.ReactNode;
-  colors?: { bg: string; sidebar: string; accent: string; fg: string };
+  colors: { bg: string; sidebar: string; accent: string; fg: string };
 }
 
 const THEME_OPTIONS: ThemeOption[] = [
-  { value: 'light', label: 'settings.light', icon: <Sun className="h-3.5 w-3.5" /> },
-  { value: 'dark', label: 'settings.dark', icon: <Moon className="h-3.5 w-3.5" /> },
-  { value: 'system', label: 'settings.system', icon: <Monitor className="h-3.5 w-3.5" /> },
   {
     value: 'one-dark',
     label: 'settings.themes.oneDark',
@@ -97,6 +93,11 @@ const THEME_OPTIONS: ThemeOption[] = [
     label: 'settings.themes.monochrome',
     colors: { bg: '#ffffff', sidebar: '#f7f7f7', accent: '#000000', fg: '#000000' },
   },
+  {
+    value: 'monochrome-dark',
+    label: 'settings.themes.monochromeDark',
+    colors: { bg: '#121212', sidebar: '#0d0d0d', accent: '#ededed', fg: '#ededed' },
+  },
 ];
 
 function ThemeCard({
@@ -110,54 +111,31 @@ function ThemeCard({
   onClick: () => void;
   t: (key: string) => string;
 }) {
-  if (option.colors) {
-    const { bg, sidebar, accent, fg } = option.colors;
-    return (
-      <button
-        onClick={onClick}
-        className={cn(
-          'relative flex flex-col overflow-hidden rounded-lg border-2 transition-colors',
-          selected ? 'border-primary' : 'border-border/50 hover:border-border',
-        )}
-      >
-        {/* Mini preview */}
-        <div className="flex h-16" style={{ backgroundColor: bg }}>
-          <div
-            className="w-5 border-r"
-            style={{ backgroundColor: sidebar, borderColor: `${fg}15` }}
-          />
-          <div className="flex flex-1 flex-col gap-1 p-2">
-            <div
-              className="h-1.5 w-10 rounded-full"
-              style={{ backgroundColor: fg, opacity: 0.7 }}
-            />
-            <div
-              className="h-1.5 w-14 rounded-full"
-              style={{ backgroundColor: fg, opacity: 0.3 }}
-            />
-            <div className="h-1.5 w-8 rounded-full" style={{ backgroundColor: accent }} />
-          </div>
-        </div>
-        <div className="flex items-center justify-between px-2.5 py-1.5">
-          <span className="text-xs font-medium">{t(option.label)}</span>
-          {selected && <Check className="h-3 w-3 text-primary" />}
-        </div>
-      </button>
-    );
-  }
-
-  // Base themes (light/dark/system) — icon-based
+  const { bg, sidebar, accent, fg } = option.colors;
   return (
     <button
       onClick={onClick}
       className={cn(
-        'flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 py-4 transition-colors',
-        selected ? 'border-primary bg-muted/50' : 'border-border/50 hover:border-border',
+        'relative flex flex-col overflow-hidden rounded-lg border-2 transition-colors',
+        selected ? 'border-primary' : 'border-border/50 hover:border-border',
       )}
     >
-      <span className="text-muted-foreground">{option.icon}</span>
-      <span className="text-xs font-medium">{t(option.label)}</span>
-      {selected && <Check className="h-3 w-3 text-primary" />}
+      {/* Mini preview */}
+      <div className="flex h-16" style={{ backgroundColor: bg }}>
+        <div
+          className="w-5 border-r"
+          style={{ backgroundColor: sidebar, borderColor: `${fg}15` }}
+        />
+        <div className="flex flex-1 flex-col gap-1 p-2">
+          <div className="h-1.5 w-10 rounded-full" style={{ backgroundColor: fg, opacity: 0.7 }} />
+          <div className="h-1.5 w-14 rounded-full" style={{ backgroundColor: fg, opacity: 0.3 }} />
+          <div className="h-1.5 w-8 rounded-full" style={{ backgroundColor: accent }} />
+        </div>
+      </div>
+      <div className="flex items-center justify-between px-2.5 py-1.5">
+        <span className="text-xs font-medium">{t(option.label)}</span>
+        {selected && <Check className="h-3 w-3 text-primary" />}
+      </div>
     </button>
   );
 }
@@ -184,7 +162,7 @@ export function GeneralSettingsDialog({
   // Local draft state — only committed to the store on Save
   const [draftEditor, setDraftEditor] = useState<Editor>(defaultEditor);
   const [draftUseInternalEditor, setDraftUseInternalEditor] = useState(useInternalEditor);
-  const [draftTheme, setDraftTheme] = useState(theme ?? 'dark');
+  const [draftTheme, setDraftTheme] = useState(theme ?? 'one-dark');
   const [draftLanguage, setDraftLanguage] = useState(i18n.language);
 
   // GitHub token state (persisted via profile API, not local store)
@@ -197,7 +175,7 @@ export function GeneralSettingsDialog({
     if (open) {
       setDraftEditor(defaultEditor);
       setDraftUseInternalEditor(useInternalEditor);
-      setDraftTheme(theme ?? 'dark');
+      setDraftTheme(theme ?? 'one-dark');
       setDraftLanguage(i18n.language);
       // Load profile to check token status
       api.getProfile().then((result) => {
@@ -319,21 +297,8 @@ export function GeneralSettingsDialog({
               {t('settings.appearance')}
             </h3>
             <p className="px-1 pb-3 text-xs text-muted-foreground">{t('settings.themeDesc')}</p>
-            {/* Base themes */}
-            <div className="grid grid-cols-3 gap-2 pb-3">
-              {THEME_OPTIONS.filter((o) => !o.colors).map((opt) => (
-                <ThemeCard
-                  key={opt.value}
-                  option={opt}
-                  selected={draftTheme === opt.value}
-                  onClick={() => setDraftTheme(opt.value)}
-                  t={t}
-                />
-              ))}
-            </div>
-            {/* Color themes */}
             <div className="grid grid-cols-2 gap-2">
-              {THEME_OPTIONS.filter((o) => !!o.colors).map((opt) => (
+              {THEME_OPTIONS.map((opt) => (
                 <ThemeCard
                   key={opt.value}
                   option={opt}

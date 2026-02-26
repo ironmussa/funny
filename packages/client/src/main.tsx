@@ -94,29 +94,25 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
     <ThemeProvider
       attribute="class"
-      defaultTheme="dark"
-      enableSystem
+      defaultTheme="one-dark"
       disableTransitionOnChange
       themes={[
-        'light',
-        'dark',
-        'system',
         'one-dark',
         'dracula',
         'github-dark',
         'night-owl',
         'catppuccin',
         'monochrome',
+        'monochrome-dark',
       ]}
       value={{
-        light: 'light',
-        dark: 'dark',
         'one-dark': 'theme-one-dark',
         dracula: 'theme-dracula',
         'github-dark': 'theme-github-dark',
         'night-owl': 'theme-night-owl',
         catppuccin: 'theme-catppuccin',
         monochrome: 'theme-monochrome',
+        'monochrome-dark': 'theme-monochrome-dark',
       }}
     >
       <TooltipProvider delayDuration={300} skipDelayDuration={0}>

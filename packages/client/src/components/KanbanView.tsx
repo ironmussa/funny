@@ -7,6 +7,7 @@ import {
   dropTargetForElements,
   monitorForElements,
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
+import { autoScrollForElements } from '@atlaskit/pragmatic-drag-and-drop-auto-scroll/element';
 import { GitBranch, Pin, Plus, Search, Trash2, Chrome, Bot, Webhook, Terminal } from 'lucide-react';
 import {
   Tooltip,
@@ -292,6 +293,7 @@ function AddThreadButton({ projectId, projects, onSelect }: { projectId?: string
 function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, projects, onAddThread, search, contentSnippets, highlightThreadId }: { stage: ThreadStage; threads: Thread[]; projectInfoById?: Record<string, { name: string; color?: string }>; onDelete: (thread: Thread) => void; projectId?: string; projects: Project[]; onAddThread: (projectId: string, stage: ThreadStage) => void; search?: string; contentSnippets?: Map<string, string>; highlightThreadId?: string }) {
   const { t } = useTranslation();
   const ref = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
   const [isDraggedOver, setIsDraggedOver] = useState(false);
   const [visibleCount, setVisibleCount] = useState(20);
 
@@ -308,6 +310,12 @@ function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, pr
       onDrop: () => setIsDraggedOver(false),
     });
   }, [stage]);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    return autoScrollForElements({ element: el });
+  }, []);
 
   // Reset visible count only when search/filter changes, not when a card is moved
   useEffect(() => {
@@ -346,7 +354,7 @@ function KanbanColumn({ stage, threads, projectInfoById, onDelete, projectId, pr
         )}
       </div>
 
-      <div className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[200px]">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto p-2 space-y-2 min-h-[200px]">
         {threads.length === 0 ? (
           <div className="text-center text-xs text-muted-foreground py-8">
             {t('kanban.emptyColumn')}
@@ -614,9 +622,17 @@ export function KanbanView({ threads, projectId, search, contentSnippets, highli
     return monitorForElements({ onDrop: handleDrop });
   }, [handleDrop]);
 
+  const boardRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = boardRef.current;
+    if (!el) return;
+    return autoScrollForElements({ element: el });
+  }, []);
+
   return (
     <>
-      <div className="flex gap-3 h-full overflow-x-auto p-4">
+      <div ref={boardRef} className="flex gap-3 h-full overflow-x-auto p-4">
         {STAGES.map((stage) => (
           <KanbanColumn key={stage} stage={stage} threads={threadsByStage[stage]} projectInfoById={projectInfoById} onDelete={handleDeleteRequest} projectId={projectId} projects={projects} onAddThread={handleAddThread} search={search} contentSnippets={contentSnippets} highlightThreadId={highlightThreadId} />
         ))}

@@ -13,6 +13,7 @@
   "dependencies": {
     "@abbacchio/browser-transport": "^0.1.4",
     "@atlaskit/pragmatic-drag-and-drop": "^1.7.7",
+    "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^2.1.5",
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^1.0.3",
     "@fontsource/geist-mono": "^5.2.7",
     "@fontsource/geist-sans": "^5.2.5",

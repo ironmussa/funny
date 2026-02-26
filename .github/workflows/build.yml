@@ -53,7 +53,7 @@ jobs:
       - name: Build server sidecar
         env:
           TAURI_TARGET_TRIPLE: ${{ matrix.target }}
-        run: node scripts/build-sidecar.js
+        run: bun scripts/build-sidecar.ts
 
       - name: Build Tauri app
         uses: tauri-apps/tauri-action@v0

@@ -50,7 +50,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (state?.annotations?.length) {
       renderAnnotationList(state.annotations);
     }
-  } catch (_) {
+  } catch {
     // Content script not loaded yet
   }
 
@@ -78,8 +78,9 @@ async function loadProviderOptions() {
     providerData = result.providers || {};
 
     providerSelect.innerHTML = '';
-    const availableProviders = Object.entries(providerData!)
-      .filter(([_, info]) => (info as ProviderInfo).available);
+    const availableProviders = Object.entries(providerData!).filter(
+      ([_, info]) => (info as ProviderInfo).available,
+    );
 
     if (availableProviders.length === 0) {
       providerSelect.innerHTML = '<option value="">No providers available</option>';
@@ -93,7 +94,7 @@ async function loadProviderOptions() {
       opt.textContent = (info as ProviderInfo).label || key;
       providerSelect.appendChild(opt);
     });
-  } catch (_) {
+  } catch {
     providerSelect.innerHTML = '<option value="">Failed to load</option>';
     modelSelect.innerHTML = '<option value="">-</option>';
   }
@@ -105,14 +106,13 @@ function applyFromConfig(config: any) {
   const effectiveProvider =
     config.provider && providerData[config.provider]?.available
       ? config.provider
-      : (providerSelect.options[0]?.value || '');
+      : providerSelect.options[0]?.value || '';
 
   if (effectiveProvider) {
     providerSelect.value = effectiveProvider;
   }
 
-  const effectiveModel =
-    config.model || providerData[effectiveProvider]?.defaultModel || '';
+  const effectiveModel = config.model || providerData[effectiveProvider]?.defaultModel || '';
   populateModels(providerSelect.value, effectiveModel);
 
   modeSelect.value = config.mode || 'worktree';
@@ -128,9 +128,7 @@ function populateModels(provider: string, selectedModel?: string) {
 
   const info = providerData[provider];
   const models =
-    info.modelsWithLabels ||
-    info.models?.map((m: string) => ({ value: m, label: m })) ||
-    [];
+    info.modelsWithLabels || info.models?.map((m: string) => ({ value: m, label: m })) || [];
 
   const effectiveModel =
     selectedModel && models.some((m: any) => m.value === selectedModel)
@@ -159,7 +157,10 @@ activateBtn.addEventListener('click', async () => {
   } catch (err: any) {
     const reason = err?.message || '';
     if (reason === 'restricted-page') {
-      setStatus('Browser internal pages (chrome://, extensions, etc.) cannot be annotated', 'error');
+      setStatus(
+        'Browser internal pages (chrome://, extensions, etc.) cannot be annotated',
+        'error',
+      );
     } else if (reason === 'no-tab') {
       setStatus('No active tab found — click on a webpage and try again', 'error');
     } else if (reason === 'injection-failed') {
@@ -222,8 +223,7 @@ function renderAnnotationList(annotations: any[]) {
 
   annotationList.innerHTML = annotations
     .map((ann: any, i: number) => {
-      const names =
-        (ann.elements || []).map((e: any) => e.elementName).join(', ') || 'Unknown';
+      const names = (ann.elements || []).map((e: any) => e.elementName).join(', ') || 'Unknown';
       return `
     <div class="annotation-item">
       <div class="annotation-number">${i + 1}</div>
@@ -250,7 +250,7 @@ async function loadProjects(selectedProjectId: string) {
       if (p.id === selectedProjectId) opt.selected = true;
       projectSelect.appendChild(opt);
     });
-  } catch (_) {
+  } catch {
     projectSelect.innerHTML = '<option value="">Failed to load projects</option>';
   }
 }
@@ -356,7 +356,7 @@ function sendToActiveTab(msg: any): Promise<any> {
           });
         });
         return resolve(response);
-      } catch (_) {
+      } catch {
         // Content script not loaded — try injecting it
       }
 
@@ -365,7 +365,7 @@ function sendToActiveTab(msg: any): Promise<any> {
           target: { tabId: tab.id! },
           files: ['content.js'],
         });
-      } catch (_) {
+      } catch {
         return reject(new Error('injection-failed'));
       }
 

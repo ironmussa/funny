@@ -20,3 +20,9 @@ TODO.md
 packages/client/.env.test
 packages/server/.env.test
 .gitnexus
+
+# Chrome extension compiled output (built from src/*.ts by esbuild)
+packages/chrome-extension/background.js
+packages/chrome-extension/popup.js
+packages/chrome-extension/content.js
+packages/chrome-extension/page-bridge.js

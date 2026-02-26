@@ -3,8 +3,8 @@
   "version": "0.1.1",
   "private": false,
   "description": "Codex App clone powered by Claude Code — parallel agent orchestration with git worktrees",
-  "author": "Anthropic",
   "license": "MIT",
+  "author": "Anthropic",
   "repository": {
     "type": "git",
     "url": "https://github.com/ironmussa/funny.git"
@@ -12,16 +12,13 @@
   "bin": {
     "funny": "./bin/funny.js"
   },
+  "workspaces": [
+    "packages/*"
+  ],
   "files": [
     "bin",
     "packages/server/dist",
     "packages/client/dist"
-  ],
-  "engines": {
-    "bun": ">=1.0.0"
-  },
-  "workspaces": [
-    "packages/*"
   ],
   "scripts": {
     "start": "bun ./bin/funny.js",
@@ -37,13 +34,21 @@
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build",
-    "build:sidecar": "node scripts/build-sidecar.js",
+    "build:sidecar": "bun scripts/build-sidecar.ts",
     "test": "bun run --cwd packages/shared test && bun run --cwd packages/core test && bun run --cwd packages/agent test && bun run --cwd packages/server test && bun run --cwd packages/client test",
     "prepare": "husky",
     "security:check": "npm run security:secrets && npm run security:audit",
     "security:secrets": "npx secretlint \"**/*\"",
     "security:audit": "npx audit-ci --moderate",
-    "security:snyk": "npx snyk test --all-projects"
+    "security:snyk": "npx snyk test --all-projects",
+    "lint": "oxlint .",
+    "lint:fix": "oxlint --fix .",
+    "format": "oxfmt --write .",
+    "format:check": "oxfmt --check ."
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "^0.14.1",
+    "node-pty": "^1.1.0"
   },
   "devDependencies": {
     "@secretlint/secretlint-rule-preset-recommend": "^11.3.1",
@@ -53,17 +58,18 @@
     "concurrently": "^9.2.1",
     "husky": "^9.1.7",
     "neverthrow": "^8.2.0",
+    "oxfmt": "^0.35.0",
+    "oxlint": "^1.50.0",
     "secretlint": "^11.3.1"
   },
-  "dependencies": {
-    "@agentclientprotocol/sdk": "^0.14.1",
-    "node-pty": "^1.1.0"
-  },
   "optionalDependencies": {
-    "playwright": "^1.50.0",
-    "@openai/codex-sdk": "^0.101.0"
+    "@openai/codex-sdk": "^0.101.0",
+    "playwright": "^1.50.0"
   },
   "resolutions": {
     "esbuild": ">=0.24.3"
+  },
+  "engines": {
+    "bun": ">=1.0.0"
   }
 }

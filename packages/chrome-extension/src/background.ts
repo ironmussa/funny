@@ -253,7 +253,7 @@ async function handleGetFullConfig() {
     result.projects = (projectsData as any).projects || projectsData;
     result.providers = setupData.providers || {};
     result.connected = true;
-  } catch (_) {
+  } catch {
     result.projects = [];
     result.providers = {};
     result.connected = false;
@@ -282,7 +282,7 @@ chrome.action.onClicked.addListener(async (tab) => {
 
   try {
     await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_ANNOTATOR' });
-  } catch (_) {
+  } catch {
     try {
       await chrome.scripting.executeScript({
         target: { tabId: tab.id },
@@ -290,7 +290,7 @@ chrome.action.onClicked.addListener(async (tab) => {
       });
       await new Promise((r) => setTimeout(r, 200));
       await chrome.tabs.sendMessage(tab.id, { type: 'TOGGLE_ANNOTATOR' });
-    } catch (_) {
+    } catch {
       // Cannot inject — page may be restricted
     }
   }

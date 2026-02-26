@@ -1,3 +1,4 @@
+import { ThemeProvider } from 'next-themes';
 import React, { lazy, Suspense, useEffect, useSyncExternalStore } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
@@ -9,8 +10,6 @@ import { useSettingsStore } from './stores/settings-store';
 import '@fontsource/geist-sans/latin.css';
 import '@fontsource/geist-mono/latin.css';
 import './globals.css';
-// Eagerly import so the persisted theme is applied before first paint
-import './stores/settings-store';
 import './i18n/config';
 
 // Lazy-load conditional views to reduce initial bundle (~175KB savings)
@@ -93,14 +92,40 @@ function AuthGate() {
 
 ReactDOM.createRoot(document.getElementById('root')!).render(
   <React.StrictMode>
-    <TooltipProvider delayDuration={300} skipDelayDuration={0}>
-      {isPreviewWindow ? (
-        <Suspense fallback={null}>
-          <PreviewBrowser />
-        </Suspense>
-      ) : (
-        <AuthGate />
-      )}
-    </TooltipProvider>
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="dark"
+      enableSystem
+      disableTransitionOnChange
+      themes={[
+        'light',
+        'dark',
+        'system',
+        'one-dark',
+        'dracula',
+        'github-dark',
+        'night-owl',
+        'catppuccin',
+      ]}
+      value={{
+        light: 'light',
+        dark: 'dark',
+        'one-dark': 'theme-one-dark',
+        dracula: 'theme-dracula',
+        'github-dark': 'theme-github-dark',
+        'night-owl': 'theme-night-owl',
+        catppuccin: 'theme-catppuccin',
+      }}
+    >
+      <TooltipProvider delayDuration={300} skipDelayDuration={0}>
+        {isPreviewWindow ? (
+          <Suspense fallback={null}>
+            <PreviewBrowser />
+          </Suspense>
+        ) : (
+          <AuthGate />
+        )}
+      </TooltipProvider>
+    </ThemeProvider>
   </React.StrictMode>,
 );

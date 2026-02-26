@@ -110,6 +110,211 @@
     --status-neutral: 220 9% 46%;
     --status-violet: 263 70% 50%;
   }
+
+  /* ── One Dark Pro ─────────────────────────────────────────── */
+  .theme-one-dark {
+    --background: 220 13% 18%;
+    --foreground: 219 13.5% 71%;
+    --card: 220 9.4% 12.5%;
+    --card-foreground: 220 12.7% 86.1%;
+    --popover: 220 9.4% 12.5%;
+    --popover-foreground: 220 12.7% 86.1%;
+    --primary: 219 13.5% 29%;
+    --primary-foreground: 220 12.7% 86.1%;
+    --secondary: 218.6 13.7% 20%;
+    --secondary-foreground: 219 13.5% 71%;
+    --muted: 218.6 13.7% 20%;
+    --muted-foreground: 219 9.8% 40%;
+    --accent: 218.6 13.7% 20%;
+    --accent-foreground: 220 12.7% 86.1%;
+    --destructive: 3.5 55.2% 49%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 222 13.9% 28.2%;
+    --input: 220 9.4% 12.5%;
+    --ring: 220.2 100% 66.1%;
+    --radius: 0.5rem;
+    --sidebar-background: 216 13.2% 14.9%;
+    --sidebar-foreground: 219 13.5% 71%;
+    --sidebar-primary: 220.2 100% 66.1%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 218.6 13.7% 20%;
+    --sidebar-accent-foreground: 220 12.7% 86.1%;
+    --sidebar-border: 222 13.9% 28.2%;
+    --sidebar-ring: 220.2 100% 66.1%;
+
+    --status-success: 142 69% 58%;
+    --status-error: 3.5 55.2% 49%;
+    --status-warning: 38 92% 50%;
+    --status-info: 220.2 100% 66.1%;
+    --status-pending: 48 96% 53%;
+    --status-interrupted: 25 95% 53%;
+    --status-neutral: 219 9.8% 40%;
+    --status-violet: 263 70% 50%;
+  }
+
+  /* ── Dracula ──────────────────────────────────────────────── */
+  .theme-dracula {
+    --background: 231.4 14.9% 18.4%;
+    --foreground: 60 30% 96.1%;
+    --card: 232.5 13.8% 11.4%;
+    --card-foreground: 60 30% 96.1%;
+    --popover: 232.5 13.8% 11.4%;
+    --popover-foreground: 60 30% 96.1%;
+    --primary: 325.5 100% 73.7%;
+    --primary-foreground: 231.4 14.9% 18.4%;
+    --secondary: 231.8 13.9% 31%;
+    --secondary-foreground: 60 30% 96.1%;
+    --muted: 231.8 13.9% 31%;
+    --muted-foreground: 225.5 26.6% 51.4%;
+    --accent: 231.8 13.9% 31%;
+    --accent-foreground: 60 30% 96.1%;
+    --destructive: 0 100% 66.7%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 232.5 13.8% 11.4%;
+    --input: 231.4 14.9% 18.4%;
+    --ring: 264.7 89.5% 77.6%;
+    --radius: 0.5rem;
+    --sidebar-background: 234.5 14.3% 15.1%;
+    --sidebar-foreground: 60 30% 96.1%;
+    --sidebar-primary: 264.7 89.5% 77.6%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 231.8 13.9% 31%;
+    --sidebar-accent-foreground: 60 30% 96.1%;
+    --sidebar-border: 232.5 13.8% 11.4%;
+    --sidebar-ring: 264.7 89.5% 77.6%;
+
+    --status-success: 135 94.4% 65.1%;
+    --status-error: 0 100% 66.7%;
+    --status-warning: 64.8 91.6% 76.1%;
+    --status-info: 190.6 96.8% 79.6%;
+    --status-pending: 31.1 100% 71.4%;
+    --status-interrupted: 31.1 100% 71.4%;
+    --status-neutral: 225.5 26.6% 51.4%;
+    --status-violet: 264.7 89.5% 77.6%;
+  }
+
+  /* ── GitHub Dark ──────────────────────────────────────────── */
+  .theme-github-dark {
+    --background: 216 27.8% 7.1%;
+    --foreground: 207.7 35.1% 92.7%;
+    --card: 215 15.4% 15.3%;
+    --card-foreground: 207.7 35.1% 92.7%;
+    --popover: 215 15.4% 15.3%;
+    --popover-foreground: 207.7 35.1% 92.7%;
+    --primary: 131.5 58.6% 33.1%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 215 21.4% 11%;
+    --secondary-foreground: 207.7 35.1% 92.7%;
+    --muted: 215 21.4% 11%;
+    --muted-foreground: 214.7 7.9% 52.7%;
+    --accent: 215 21.4% 11%;
+    --accent-foreground: 207.7 35.1% 92.7%;
+    --destructive: 2.7 92.6% 62.9%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 212.3 11.9% 21.4%;
+    --input: 215 21.4% 11%;
+    --ring: 215.4 92.6% 57.6%;
+    --radius: 0.5rem;
+    --sidebar-background: 217.5 80% 2%;
+    --sidebar-foreground: 207.7 35.1% 92.7%;
+    --sidebar-primary: 215.4 92.6% 57.6%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 21.4% 11%;
+    --sidebar-accent-foreground: 207.7 35.1% 92.7%;
+    --sidebar-border: 212.3 11.9% 21.4%;
+    --sidebar-ring: 215.4 92.6% 57.6%;
+
+    --status-success: 142 69% 58%;
+    --status-error: 2.7 92.6% 62.9%;
+    --status-warning: 38 92% 50%;
+    --status-info: 215.4 92.6% 57.6%;
+    --status-pending: 48 96% 53%;
+    --status-interrupted: 25 95% 53%;
+    --status-neutral: 214.7 7.9% 52.7%;
+    --status-violet: 263 70% 50%;
+  }
+
+  /* ── Night Owl ────────────────────────────────────────────── */
+  .theme-night-owl {
+    --background: 206.8 95% 7.8%;
+    --foreground: 217.1 34.4% 88%;
+    --card: 205.7 93.3% 5.9%;
+    --card-foreground: 217.1 34.4% 88%;
+    --popover: 205.7 93.3% 5.9%;
+    --popover-foreground: 217.1 34.4% 88%;
+    --primary: 261.9 46.7% 55.1%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 206.7 48.2% 22%;
+    --secondary-foreground: 217.1 34.4% 88%;
+    --muted: 206.7 48.2% 22%;
+    --muted-foreground: 206.8 22.8% 48.2%;
+    --accent: 206.7 48.2% 22%;
+    --accent-foreground: 217.1 34.4% 88%;
+    --destructive: 1.1 83.2% 62.5%;
+    --destructive-foreground: 0 0% 98%;
+    --border: 206.3 57.1% 16.5%;
+    --input: 206.8 68.1% 13.5%;
+    --ring: 261.9 46.7% 55.1%;
+    --radius: 0.5rem;
+    --sidebar-background: 205.7 93.3% 5.9%;
+    --sidebar-foreground: 217.1 34.4% 88%;
+    --sidebar-primary: 261.9 46.7% 55.1%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 206.7 48.2% 22%;
+    --sidebar-accent-foreground: 217.1 34.4% 88%;
+    --sidebar-border: 206.3 57.1% 16.5%;
+    --sidebar-ring: 261.9 46.7% 55.1%;
+
+    --status-success: 142 69% 58%;
+    --status-error: 1.1 83.2% 62.5%;
+    --status-warning: 38 92% 50%;
+    --status-info: 261.9 46.7% 55.1%;
+    --status-pending: 48 96% 53%;
+    --status-interrupted: 25 95% 53%;
+    --status-neutral: 206.8 22.8% 48.2%;
+    --status-violet: 261.9 46.7% 55.1%;
+  }
+
+  /* ── Catppuccin Mocha ─────────────────────────────────────── */
+  .theme-catppuccin {
+    --background: 240 21.1% 14.9%;
+    --foreground: 226.2 63.9% 88%;
+    --card: 240 22.7% 8.6%;
+    --card-foreground: 226.2 63.9% 88%;
+    --popover: 240 22.7% 8.6%;
+    --popover-foreground: 226.2 63.9% 88%;
+    --primary: 217.2 91.9% 75.9%;
+    --primary-foreground: 240 22.7% 8.6%;
+    --secondary: 236.8 16.2% 22.9%;
+    --secondary-foreground: 226.2 63.9% 88%;
+    --muted: 236.8 16.2% 22.9%;
+    --muted-foreground: 227.6 23.6% 71.8%;
+    --accent: 236.8 16.2% 22.9%;
+    --accent-foreground: 226.2 63.9% 88%;
+    --destructive: 343.3 81.2% 74.9%;
+    --destructive-foreground: 240 22.7% 8.6%;
+    --border: 234.3 13.2% 31.2%;
+    --input: 236.8 16.2% 22.9%;
+    --ring: 217.2 91.9% 75.9%;
+    --radius: 0.5rem;
+    --sidebar-background: 240 21.3% 12%;
+    --sidebar-foreground: 226.2 63.9% 88%;
+    --sidebar-primary: 217.2 91.9% 75.9%;
+    --sidebar-primary-foreground: 240 22.7% 8.6%;
+    --sidebar-accent: 236.8 16.2% 22.9%;
+    --sidebar-accent-foreground: 226.2 63.9% 88%;
+    --sidebar-border: 234.3 13.2% 31.2%;
+    --sidebar-ring: 217.2 91.9% 75.9%;
+
+    --status-success: 115 54.1% 76.1%;
+    --status-error: 343.3 81.2% 74.9%;
+    --status-warning: 40 62.1% 82%;
+    --status-info: 217.2 91.9% 75.9%;
+    --status-pending: 40 62.1% 82%;
+    --status-interrupted: 21.2 85.5% 72.5%;
+    --status-neutral: 227.6 23.6% 71.8%;
+    --status-violet: 267.4 83.5% 80%;
+  }
 }
 
 @layer base {

@@ -1,18 +1,5 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
-
-// Mock browser globals BEFORE importing the store (it accesses them at module level)
-vi.stubGlobal('document', {
-  documentElement: { classList: { toggle: vi.fn() } },
-});
-vi.stubGlobal(
-  'matchMedia',
-  vi.fn().mockReturnValue({
-    matches: false,
-    addEventListener: vi.fn(),
-  }),
-);
-
 import type { ToolPermission } from '@funny/shared';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import {
   deriveToolLists,
@@ -26,7 +13,6 @@ describe('SettingsStore', () => {
   beforeEach(() => {
     // Reset store to default state before each test
     useSettingsStore.setState({
-      theme: 'dark',
       defaultEditor: 'cursor',
       toolPermissions: Object.fromEntries(
         ALL_STANDARD_TOOLS.map((tool) => [tool, 'allow' as ToolPermission]),
@@ -137,7 +123,6 @@ describe('SettingsStore', () => {
     test('has correct default values', () => {
       const state = useSettingsStore.getState();
 
-      expect(state.theme).toBe('dark');
       expect(state.defaultEditor).toBe('cursor');
       expect(state.setupCompleted).toBe(false);
 

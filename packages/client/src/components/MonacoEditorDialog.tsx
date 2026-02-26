@@ -1,6 +1,7 @@
 import { Editor, type BeforeMount } from '@monaco-editor/react';
 import { Loader2, Save, X, Maximize2, Minimize2, Eye, EyeOff, BookOpen, Code } from 'lucide-react';
 import mermaid from 'mermaid';
+import { useTheme } from 'next-themes';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { type Components } from 'react-markdown';
@@ -12,7 +13,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { useSettingsStore } from '@/stores/settings-store';
 
 interface MonacoEditorDialogProps {
   open: boolean;
@@ -28,7 +28,7 @@ export function MonacoEditorDialog({
   initialContent,
 }: MonacoEditorDialogProps) {
   const { t } = useTranslation();
-  const theme = useSettingsStore((s) => s.theme);
+  const { resolvedTheme } = useTheme();
   const [content, setContent] = useState<string>('');
   const [originalContent, setOriginalContent] = useState<string>('');
   const [saving, setSaving] = useState(false);
@@ -42,11 +42,8 @@ export function MonacoEditorDialog({
 
   const isDirty = content !== originalContent;
 
-  // Derive Monaco theme from Funny theme
-  const isDark =
-    theme === 'dark' ||
-    (theme === 'system' && window.matchMedia('(prefers-color-scheme: dark)').matches);
-  const monacoTheme = isDark ? 'funny-dark' : 'vs';
+  // Derive Monaco theme — all custom themes are dark-based
+  const monacoTheme = resolvedTheme === 'light' ? 'vs' : 'funny-dark';
 
   // Define custom dark theme with black background
   const handleBeforeMount: BeforeMount = (monaco) => {

@@ -1,93 +1,66 @@
-# Plan: Git Operation Progress Modal
+# Plan: Agregar 5 temas populares de VS Code a la app
 
-## Goal
+## Enfoque
 
-When the user performs git actions from the ReviewPane (commit, push, create PR, merge, etc.), show a modal dialog with step-by-step progress instead of just a spinner on the button and toast notifications.
+Usar `next-themes` con custom theme names. Cada tema se define como un CSS class selector (`.theme-dracula`, `.theme-one-dark`, etc.) en `globals.css` que sobrescribe las CSS variables. `next-themes` aplica el class en `<html>` automáticamente.
 
-## Approach
+### Temas a agregar (todos dark)
 
-### 1. Create a `GitProgressModal` component
+1. **One Dark Pro** — Inspirado en Atom, tonos azul-grisáceos
+2. **Dracula** — Purple accent, alta legibilidad
+3. **GitHub Dark** — El look de GitHub.com
+4. **Night Owl** — Navy profundo, accent purple (Sarah Drasner)
+5. **Catppuccin Mocha** — Pastel warm, muy trendy
 
-**File:** `packages/client/src/components/GitProgressModal.tsx`
+Se mantienen **light**, **dark** (el actual) y **system** como base.
 
-A shadcn Dialog that shows a list of steps with their statuses (pending, running, completed, failed). Each step shows:
+## Archivos a modificar
 
-- An icon (spinner for running, checkmark for completed, X for failed)
-- Step label (e.g., "Staging files", "Running commit", "Pushing to origin", "Creating PR")
-- Optional output/error text for the completed/failed step
+### 1. `packages/client/src/globals.css`
 
-### 2. Create a `useGitProgress` hook or inline state
+- Agregar 5 bloques CSS con selectores `.theme-one-dark`, `.theme-dracula`, `.theme-github-dark`, `.theme-night-owl`, `.theme-catppuccin`
+- Cada bloque define todas las CSS variables: `--background`, `--foreground`, `--card`, `--popover`, `--primary`, `--secondary`, `--muted`, `--accent`, `--destructive`, `--border`, `--input`, `--ring`, `--sidebar-*`, `--status-*`
+- Valores HSL convertidos desde los hex oficiales de cada tema
 
-**Approach:** Add state management for the progress steps directly in ReviewPane, since all the git operations are already orchestrated there in `handleCommitAction`, `handlePushOnly`, `handleMergeOnly`, `handleCreatePROnly`.
+### 2. `packages/client/src/main.tsx`
 
-Define a type:
+- Actualizar `ThemeProvider` con:
+  - `themes={['light', 'dark', 'system', 'one-dark', 'dracula', 'github-dark', 'night-owl', 'catppuccin']}`
+  - `value={{ 'one-dark': 'theme-one-dark', 'dracula': 'theme-dracula', ... }}` para mapear nombre → CSS class
+  - Los temas custom son dark, así que necesitamos `darkTheme` mapping o simplemente dejar `forcedTheme` para que sonner/monaco detecten dark
 
-```ts
-interface GitProgressStep {
-  id: string;
-  label: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  error?: string;
-  output?: string;
-}
-```
+### 3. `packages/client/src/components/GeneralSettingsDialog.tsx`
 
-And state:
+- Reemplazar el `SegmentedControl` de 3 opciones por un grid/select de temas
+- Mostrar los temas como cards con preview de colores (nombre + mini paleta de 4-5 circles con los colores principales)
+- Mantener Light, Dark, System arriba y los 5 custom temas debajo en la sección Appearance
 
-```ts
-const [progressSteps, setProgressSteps] = useState<GitProgressStep[]>([]);
-const [progressOpen, setProgressOpen] = useState(false);
-```
+### 4. `packages/client/src/components/ui/sonner.tsx`
 
-### 3. Refactor `handleCommitAction` and other handlers
+- Actualizar para que temas custom resuelvan a `'dark'` para Sonner (ya que todos los custom son dark-based)
 
-Instead of just setting `actionInProgress` and calling API methods sequentially, we:
+### 5. `packages/client/src/components/MonacoEditorDialog.tsx`
 
-1. Build the step list based on the selected action
-2. Open the modal
-3. Execute each step, updating the step status as we go
-4. On completion or failure, keep the modal open with final status
-5. User dismisses the modal manually
+- Actualizar para que temas custom resuelvan a `'funny-dark'` en Monaco
 
-**Step lists by action:**
+### 6. Traducciones (`locales/en/translation.json`, `locales/es/translation.json`, `locales/pt/translation.json`)
 
-- **commit**: Unstage unchecked → Stage checked → Commit
-- **amend**: Unstage unchecked → Stage checked → Amend commit
-- **commit-push**: Unstage unchecked → Stage checked → Commit → Push
-- **commit-pr**: Unstage unchecked → Stage checked → Commit → Push → Create PR
-- **commit-merge**: Unstage unchecked → Stage checked → Commit → Merge & Cleanup
-- **push only**: Push to origin
-- **merge only**: Merge into base branch
-- **create PR only**: Push (if needed) → Create PR
+- Agregar keys para nombres de temas y actualizar `themeDesc`
 
-### 4. Add i18n keys
+## Paletas (hex → HSL conversion)
 
-Add new translation keys for step labels under `review.progress.*`:
+| Tema             | background | foreground | muted-fg | accent  | border  |
+| ---------------- | ---------- | ---------- | -------- | ------- | ------- |
+| One Dark Pro     | #282c34    | #abb2bf    | #5c6370  | #528bff | #3e4452 |
+| Dracula          | #282A36    | #F8F8F2    | #6272A4  | #BD93F9 | #191A21 |
+| GitHub Dark      | #0d1117    | #e6edf3    | #7d8590  | #2f81f7 | #30363d |
+| Night Owl        | #011627    | #d6deeb    | #5f7e97  | #7e57c2 | #122d42 |
+| Catppuccin Mocha | #1e1e2e    | #cdd6f4    | #a6adc8  | #89b4fa | #45475a |
 
-- `review.progress.staging` / `review.progress.staged`
-- `review.progress.unstaging` / `review.progress.unstaged`
-- `review.progress.committing` / `review.progress.committed`
-- `review.progress.pushing` / `review.progress.pushed`
-- `review.progress.creatingPR` / `review.progress.prCreated`
-- `review.progress.merging` / `review.progress.merged`
-- `review.progress.amending` / `review.progress.amended`
+## Notas de implementación
 
-### 5. Files to modify
-
-1. **`packages/client/src/components/GitProgressModal.tsx`** — New component (small, ~80 lines)
-2. **`packages/client/src/components/ReviewPane.tsx`** — Add progress state, refactor handlers, render modal
-3. **`packages/client/src/locales/en/translation.json`** — Add progress step translations
-4. **`packages/client/src/locales/es/translation.json`** — Add Spanish translations
-5. **`packages/client/src/locales/pt/translation.json`** — Add Portuguese translations
-
-### Design
-
-- The modal uses shadcn `Dialog` component
-- Steps displayed as a vertical list with status icons
-- Spinner (`Loader2`) for running steps
-- Check icon for completed steps
-- X icon for failed steps
-- Circle icon for pending steps
-- On success: shows all green checkmarks, button says "Done"
-- On failure: shows error message on the failed step, button says "Close"
-- Remove toast notifications for operations that now show in the modal (keep the modal as the single feedback mechanism)
+- `next-themes` con `attribute="class"` pone el class name directamente en `<html>`
+- Usamos el prop `value` de ThemeProvider para mapear theme name → CSS class name
+- `resolvedTheme` para custom themes devuelve el theme name (ej: `"dracula"`) no `"dark"` — necesitamos manejar esto en sonner.tsx y MonacoEditorDialog.tsx
+- Los temas custom no necesitan una versión light, son dark-only
+- `enableSystem` sigue funcionando para light/dark

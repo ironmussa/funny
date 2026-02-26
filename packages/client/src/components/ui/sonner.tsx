@@ -1,24 +1,16 @@
 import { CircleCheck, Info, LoaderCircle, OctagonX, TriangleAlert } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { Toaster as Sonner } from 'sonner';
-
-import { useSettingsStore } from '@/stores/settings-store';
 
 type ToasterProps = React.ComponentProps<typeof Sonner>;
 
-function useResolvedTheme(): 'light' | 'dark' {
-  const theme = useSettingsStore((s) => s.theme);
-  if (theme === 'system') {
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  }
-  return theme;
-}
-
 const Toaster = ({ ...props }: ToasterProps) => {
-  const theme = useResolvedTheme();
+  const { resolvedTheme } = useTheme();
+  const sonnerTheme = resolvedTheme === 'light' ? 'light' : 'dark';
 
   return (
     <Sonner
-      theme={theme as ToasterProps['theme']}
+      theme={sonnerTheme}
       className="toaster group"
       icons={{
         success: <CircleCheck className="h-4 w-4" />,

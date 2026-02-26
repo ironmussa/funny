@@ -2,7 +2,6 @@ import type { ToolPermission } from '@funny/shared';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 
-export type Theme = 'light' | 'dark' | 'system';
 export type Editor = 'cursor' | 'vscode' | 'windsurf' | 'zed' | 'sublime' | 'vim';
 export type ThreadMode = 'local' | 'worktree';
 export type ClaudeModel = 'haiku' | 'sonnet' | 'opus';
@@ -50,12 +49,10 @@ const DEFAULT_TOOL_PERMISSIONS: Record<string, ToolPermission> = Object.fromEntr
 );
 
 interface SettingsState {
-  theme: Theme;
   defaultEditor: Editor;
   useInternalEditor: boolean;
   toolPermissions: Record<string, ToolPermission>;
   setupCompleted: boolean;
-  setTheme: (theme: Theme) => void;
   setDefaultEditor: (editor: Editor) => void;
   setUseInternalEditor: (use: boolean) => void;
   setToolPermission: (toolName: string, permission: ToolPermission) => void;
@@ -78,28 +75,13 @@ export function deriveToolLists(permissions: Record<string, ToolPermission>): {
   return { allowedTools, disallowedTools };
 }
 
-function applyTheme(theme: Theme) {
-  const root = document.documentElement;
-  if (theme === 'system') {
-    const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    root.classList.toggle('dark', prefersDark);
-  } else {
-    root.classList.toggle('dark', theme === 'dark');
-  }
-}
-
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      theme: 'dark',
       defaultEditor: 'cursor',
       useInternalEditor: false,
       toolPermissions: { ...DEFAULT_TOOL_PERMISSIONS },
       setupCompleted: false,
-      setTheme: (theme) => {
-        applyTheme(theme);
-        set({ theme });
-      },
       setDefaultEditor: (editor) => set({ defaultEditor: editor }),
       setUseInternalEditor: (use) => set({ useInternalEditor: use }),
       setToolPermission: (toolName, permission) =>
@@ -111,7 +93,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'funny-settings',
-      version: 6,
+      version: 7,
       migrate: (persisted: any, version: number) => {
         if (version < 2) {
           // Old format had allowedTools: string[]
@@ -147,31 +129,22 @@ export const useSettingsStore = create<SettingsState>()(
         if (version < 6) {
           // Migrate from 'internal' editor to useInternalEditor flag
           const wasInternal = persisted.defaultEditor === 'internal';
-          return {
+          persisted = {
             ...persisted,
             defaultEditor: wasInternal ? 'cursor' : persisted.defaultEditor,
             useInternalEditor: wasInternal ? true : (persisted.useInternalEditor ?? false),
           };
+          version = 6;
+        }
+        if (version < 7) {
+          // Theme moved to next-themes — remove from persisted state
+          const { theme: _removed, setTheme: _removed2, ...rest } = persisted;
+          return rest;
         }
         return persisted as any;
-      },
-      onRehydrateStorage: () => (state) => {
-        if (state) {
-          applyTheme(state.theme);
-        }
       },
     },
   ),
 );
-
-// Listen for system theme changes when in 'system' mode
-if (typeof window !== 'undefined') {
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
-    const { theme } = useSettingsStore.getState();
-    if (theme === 'system') {
-      applyTheme('system');
-    }
-  });
-}
 
 export { editorLabels };

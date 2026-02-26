@@ -1,5 +1,6 @@
 import type { UserProfile } from '@funny/shared';
-import { Sun, Moon, Monitor } from 'lucide-react';
+import { Sun, Moon, Monitor, Check } from 'lucide-react';
+import { useTheme } from 'next-themes';
 import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -24,7 +25,7 @@ import {
 } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { useSettingsStore, editorLabels, type Theme, type Editor } from '@/stores/settings-store';
+import { useSettingsStore, editorLabels, type Editor } from '@/stores/settings-store';
 
 function getLanguageName(code: string): string {
   try {
@@ -55,33 +56,104 @@ function SettingRow({
   );
 }
 
-function SegmentedControl<T extends string>({
-  options,
-  value,
-  onChange,
+interface ThemeOption {
+  value: string;
+  label: string;
+  icon?: React.ReactNode;
+  colors?: { bg: string; sidebar: string; accent: string; fg: string };
+}
+
+const THEME_OPTIONS: ThemeOption[] = [
+  { value: 'light', label: 'settings.light', icon: <Sun className="h-3.5 w-3.5" /> },
+  { value: 'dark', label: 'settings.dark', icon: <Moon className="h-3.5 w-3.5" /> },
+  { value: 'system', label: 'settings.system', icon: <Monitor className="h-3.5 w-3.5" /> },
+  {
+    value: 'one-dark',
+    label: 'settings.themes.oneDark',
+    colors: { bg: '#282c34', sidebar: '#21252b', accent: '#528bff', fg: '#abb2bf' },
+  },
+  {
+    value: 'dracula',
+    label: 'settings.themes.dracula',
+    colors: { bg: '#282A36', sidebar: '#21222C', accent: '#BD93F9', fg: '#F8F8F2' },
+  },
+  {
+    value: 'github-dark',
+    label: 'settings.themes.githubDark',
+    colors: { bg: '#0d1117', sidebar: '#010409', accent: '#2f81f7', fg: '#e6edf3' },
+  },
+  {
+    value: 'night-owl',
+    label: 'settings.themes.nightOwl',
+    colors: { bg: '#011627', sidebar: '#01111d', accent: '#7e57c2', fg: '#d6deeb' },
+  },
+  {
+    value: 'catppuccin',
+    label: 'settings.themes.catppuccin',
+    colors: { bg: '#1e1e2e', sidebar: '#181825', accent: '#89b4fa', fg: '#cdd6f4' },
+  },
+];
+
+function ThemeCard({
+  option,
+  selected,
+  onClick,
+  t,
 }: {
-  options: { value: T; label: string; icon?: React.ReactNode }[];
-  value: T;
-  onChange: (value: T) => void;
+  option: ThemeOption;
+  selected: boolean;
+  onClick: () => void;
+  t: (key: string) => string;
 }) {
+  if (option.colors) {
+    const { bg, sidebar, accent, fg } = option.colors;
+    return (
+      <button
+        onClick={onClick}
+        className={cn(
+          'relative flex flex-col overflow-hidden rounded-lg border-2 transition-colors',
+          selected ? 'border-primary' : 'border-border/50 hover:border-border',
+        )}
+      >
+        {/* Mini preview */}
+        <div className="flex h-16" style={{ backgroundColor: bg }}>
+          <div
+            className="w-5 border-r"
+            style={{ backgroundColor: sidebar, borderColor: `${fg}15` }}
+          />
+          <div className="flex flex-1 flex-col gap-1 p-2">
+            <div
+              className="h-1.5 w-10 rounded-full"
+              style={{ backgroundColor: fg, opacity: 0.7 }}
+            />
+            <div
+              className="h-1.5 w-14 rounded-full"
+              style={{ backgroundColor: fg, opacity: 0.3 }}
+            />
+            <div className="h-1.5 w-8 rounded-full" style={{ backgroundColor: accent }} />
+          </div>
+        </div>
+        <div className="flex items-center justify-between px-2.5 py-1.5">
+          <span className="text-xs font-medium">{t(option.label)}</span>
+          {selected && <Check className="h-3 w-3 text-primary" />}
+        </div>
+      </button>
+    );
+  }
+
+  // Base themes (light/dark/system) — icon-based
   return (
-    <div className="flex rounded-md border border-border bg-muted/30 p-0.5">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          className={cn(
-            'flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-sm transition-colors',
-            value === opt.value
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          {opt.icon}
-          {opt.label}
-        </button>
-      ))}
-    </div>
+    <button
+      onClick={onClick}
+      className={cn(
+        'flex flex-col items-center justify-center gap-1.5 rounded-lg border-2 py-4 transition-colors',
+        selected ? 'border-primary bg-muted/50' : 'border-border/50 hover:border-border',
+      )}
+    >
+      <span className="text-muted-foreground">{option.icon}</span>
+      <span className="text-xs font-medium">{t(option.label)}</span>
+      {selected && <Check className="h-3 w-3 text-primary" />}
+    </button>
   );
 }
 
@@ -92,29 +164,22 @@ export function GeneralSettingsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const {
-    theme,
-    defaultEditor,
-    useInternalEditor,
-    setTheme,
-    setDefaultEditor,
-    setUseInternalEditor,
-  } = useSettingsStore(
-    useShallow((s) => ({
-      theme: s.theme,
-      defaultEditor: s.defaultEditor,
-      useInternalEditor: s.useInternalEditor,
-      setTheme: s.setTheme,
-      setDefaultEditor: s.setDefaultEditor,
-      setUseInternalEditor: s.setUseInternalEditor,
-    })),
-  );
+  const { defaultEditor, useInternalEditor, setDefaultEditor, setUseInternalEditor } =
+    useSettingsStore(
+      useShallow((s) => ({
+        defaultEditor: s.defaultEditor,
+        useInternalEditor: s.useInternalEditor,
+        setDefaultEditor: s.setDefaultEditor,
+        setUseInternalEditor: s.setUseInternalEditor,
+      })),
+    );
+  const { theme, setTheme } = useTheme();
   const { t, i18n } = useTranslation();
 
   // Local draft state — only committed to the store on Save
   const [draftEditor, setDraftEditor] = useState<Editor>(defaultEditor);
   const [draftUseInternalEditor, setDraftUseInternalEditor] = useState(useInternalEditor);
-  const [draftTheme, setDraftTheme] = useState<Theme>(theme);
+  const [draftTheme, setDraftTheme] = useState(theme ?? 'dark');
   const [draftLanguage, setDraftLanguage] = useState(i18n.language);
 
   // GitHub token state (persisted via profile API, not local store)
@@ -127,7 +192,7 @@ export function GeneralSettingsDialog({
     if (open) {
       setDraftEditor(defaultEditor);
       setDraftUseInternalEditor(useInternalEditor);
-      setDraftTheme(theme);
+      setDraftTheme(theme ?? 'dark');
       setDraftLanguage(i18n.language);
       // Load profile to check token status
       api.getProfile().then((result) => {
@@ -248,30 +313,30 @@ export function GeneralSettingsDialog({
             <h3 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               {t('settings.appearance')}
             </h3>
-            <div className="overflow-hidden rounded-lg border border-border/50">
-              <SettingRow title={t('settings.theme')} description={t('settings.themeDesc')}>
-                <SegmentedControl<Theme>
-                  value={draftTheme}
-                  onChange={setDraftTheme}
-                  options={[
-                    {
-                      value: 'light',
-                      label: t('settings.light'),
-                      icon: <Sun className="h-3 w-3" />,
-                    },
-                    {
-                      value: 'dark',
-                      label: t('settings.dark'),
-                      icon: <Moon className="h-3 w-3" />,
-                    },
-                    {
-                      value: 'system',
-                      label: t('settings.system'),
-                      icon: <Monitor className="h-3 w-3" />,
-                    },
-                  ]}
+            <p className="px-1 pb-3 text-xs text-muted-foreground">{t('settings.themeDesc')}</p>
+            {/* Base themes */}
+            <div className="grid grid-cols-3 gap-2 pb-3">
+              {THEME_OPTIONS.filter((o) => !o.colors).map((opt) => (
+                <ThemeCard
+                  key={opt.value}
+                  option={opt}
+                  selected={draftTheme === opt.value}
+                  onClick={() => setDraftTheme(opt.value)}
+                  t={t}
                 />
-              </SettingRow>
+              ))}
+            </div>
+            {/* Color themes */}
+            <div className="grid grid-cols-2 gap-2">
+              {THEME_OPTIONS.filter((o) => !!o.colors).map((opt) => (
+                <ThemeCard
+                  key={opt.value}
+                  option={opt}
+                  selected={draftTheme === opt.value}
+                  onClick={() => setDraftTheme(opt.value)}
+                  t={t}
+                />
+              ))}
             </div>
           </div>
 

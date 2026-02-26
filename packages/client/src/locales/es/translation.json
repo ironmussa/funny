@@ -269,10 +269,17 @@
     "languageDesc": "Elige el idioma de la interfaz",
     "appearance": "Apariencia",
     "theme": "Tema",
-    "themeDesc": "Usa claro, oscuro o el del sistema",
+    "themeDesc": "Elige un tema de color para la interfaz",
     "light": "Claro",
     "dark": "Oscuro",
     "system": "Sistema",
+    "themes": {
+      "oneDark": "One Dark Pro",
+      "dracula": "Dracula",
+      "githubDark": "GitHub Dark",
+      "nightOwl": "Night Owl",
+      "catppuccin": "Catppuccin"
+    },
     "threads": "Hilos",
     "defaultThreadMode": "Modo de hilo predeterminado",
     "defaultThreadModeDesc": "Elige si los nuevos hilos se ejecutan localmente o en un git worktree",

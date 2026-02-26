@@ -269,10 +269,17 @@
     "languageDesc": "Choose the display language for the interface",
     "appearance": "Appearance",
     "theme": "Theme",
-    "themeDesc": "Use light, dark, or match your system",
+    "themeDesc": "Choose a color theme for the interface",
     "light": "Light",
     "dark": "Dark",
     "system": "System",
+    "themes": {
+      "oneDark": "One Dark Pro",
+      "dracula": "Dracula",
+      "githubDark": "GitHub Dark",
+      "nightOwl": "Night Owl",
+      "catppuccin": "Catppuccin"
+    },
     "threads": "Threads",
     "defaultThreadMode": "Default thread mode",
     "defaultThreadModeDesc": "Choose whether new threads run locally or in a git worktree",

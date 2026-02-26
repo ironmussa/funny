@@ -17,7 +17,7 @@ import {
   Sparkles,
   Loader2,
   Check,
-  MoreHorizontal,
+  MoreVertical,
   Undo2,
   EyeOff,
   FolderX,
@@ -1254,6 +1254,23 @@ export function ReviewPane() {
                       <span className="flex-1 truncate font-mono text-[11px]">
                         {f.path.split('/').pop()}
                       </span>
+                      <span
+                        className={cn(
+                          'text-[10px] font-medium flex-shrink-0',
+                          f.status === 'added' && 'text-status-success',
+                          f.status === 'modified' && 'text-status-pending',
+                          f.status === 'deleted' && 'text-destructive',
+                          f.status === 'renamed' && 'text-status-info',
+                        )}
+                      >
+                        {f.status === 'added'
+                          ? 'A'
+                          : f.status === 'modified'
+                            ? 'M'
+                            : f.status === 'deleted'
+                              ? 'D'
+                              : 'R'}
+                      </span>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
@@ -1261,7 +1278,7 @@ export function ReviewPane() {
                             aria-label={t('review.moreActions', 'More actions')}
                             className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
                           >
-                            <MoreHorizontal className="h-3 w-3" />
+                            <MoreVertical className="h-3 w-3" />
                           </button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="min-w-[220px]">
@@ -1338,23 +1355,6 @@ export function ReviewPane() {
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                      <span
-                        className={cn(
-                          'text-[10px] font-medium flex-shrink-0',
-                          f.status === 'added' && 'text-status-success',
-                          f.status === 'modified' && 'text-status-pending',
-                          f.status === 'deleted' && 'text-destructive',
-                          f.status === 'renamed' && 'text-status-info',
-                        )}
-                      >
-                        {f.status === 'added'
-                          ? 'A'
-                          : f.status === 'modified'
-                            ? 'M'
-                            : f.status === 'deleted'
-                              ? 'D'
-                              : 'R'}
-                      </span>
                     </div>
                   );
                 })}

@@ -16,6 +16,7 @@ import { log } from '../../lib/abbacchio.js';
 import { commentHandler } from './comment-handler.js';
 import { gitStatusHandler } from './git-status-handler.js';
 import { gitCommitPersistenceHandler, gitPushPersistenceHandler, gitMergePersistenceHandler } from './git-event-persistence-handler.js';
+import { agentCompletedGitStatusHandler } from './agent-completed-git-status-handler.js';
 
 // ── Handler list ────────────────────────────────────────────────
 
@@ -25,6 +26,7 @@ const allHandlers: EventHandler<any>[] = [
   gitCommitPersistenceHandler,
   gitPushPersistenceHandler,
   gitMergePersistenceHandler,
+  agentCompletedGitStatusHandler,
 ];
 
 // ── Registration ────────────────────────────────────────────────

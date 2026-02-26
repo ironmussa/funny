@@ -44,6 +44,7 @@ export class AgentRunner {
       this.threadManager.updateThread(threadId, { status, completedAt: new Date().toISOString() });
       this.emitWS(threadId, 'agent:error', { error: err.message });
       this.emitWS(threadId, 'agent:status', { status });
+      this.emitAgentCompleted(threadId, status as 'completed' | 'failed' | 'stopped');
     });
 
     this.orchestrator.on('agent:unexpected-exit', (threadId: string) => {
@@ -55,6 +56,7 @@ export class AgentRunner {
         error: 'Agent process exited unexpectedly without a result',
       });
       this.emitWS(threadId, 'agent:status', { status });
+      this.emitAgentCompleted(threadId, status as 'completed' | 'failed' | 'stopped');
     });
 
     this.orchestrator.on('agent:stopped', (threadId: string) => {
@@ -63,6 +65,7 @@ export class AgentRunner {
       const { status } = transitionStatus(threadId, { type: 'STOP' }, currentStatus as ThreadStatus);
       this.threadManager.updateThread(threadId, { status, completedAt: new Date().toISOString() });
       this.emitWS(threadId, 'agent:status', { status });
+      this.emitAgentCompleted(threadId, 'stopped');
       // Process queue after manual stop
       this.processQueue(threadId).catch((err) => {
         log.error('Queue drain failed after stop', { namespace: 'queue', threadId, error: String(err) });
@@ -111,6 +114,25 @@ export class AgentRunner {
     } else {
       this.wsBroker.emit(event);
     }
+  }
+
+  /**
+   * Emit agent:completed on the threadEventBus so reactive handlers
+   * (e.g. git-status refresh) fire for stops/errors/unexpected exits,
+   * not just natural completions from the NDJSON stream.
+   */
+  private emitAgentCompleted(threadId: string, status: 'completed' | 'failed' | 'stopped'): void {
+    const thread = this.threadManager.getThread(threadId);
+    if (!thread) return;
+    const project = thread.projectId ? pm.getProject(thread.projectId) : undefined;
+    threadEventBus.emit('agent:completed', {
+      threadId,
+      projectId: thread.projectId,
+      userId: thread.userId ?? undefined,
+      cwd: thread.worktreePath ?? project?.path ?? '',
+      worktreePath: thread.worktreePath ?? null,
+      status,
+    });
   }
 
   // ── Public API ─────────────────────────────────────────────────

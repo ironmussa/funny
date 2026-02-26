@@ -139,7 +139,7 @@ export function GitProgressModal({ open, onOpenChange, steps, title }: GitProgre
             {t('review.progress.description', 'Git operation progress')}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-2">
+        <div className="max-h-[60vh] space-y-2 overflow-auto">
           {steps.map((step) => {
             const stepElapsed = getStepElapsed(step.id);
             return (
@@ -174,9 +174,9 @@ export function GitProgressModal({ open, onOpenChange, steps, title }: GitProgre
                     )}
                   </div>
                   {step.error && (
-                    <p className="mt-0.5 break-words text-[11px] text-destructive/80">
+                    <pre className="mt-0.5 max-h-40 overflow-auto break-words whitespace-pre-wrap text-[11px] text-destructive/80 font-sans">
                       {step.error}
-                    </p>
+                    </pre>
                   )}
                   {step.url && step.status === 'completed' && (
                     <a

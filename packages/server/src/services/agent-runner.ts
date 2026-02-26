@@ -203,8 +203,8 @@ export class AgentRunner {
     // Update thread status + provider in DB
     this.threadManager.updateThread(threadId, { status: newStatus, provider });
 
-    // Auto-transition stage to 'in_progress' from 'backlog' or 'review'
-    if (currentThread && (currentThread.stage === 'review' || currentThread.stage === 'backlog')) {
+    // Auto-transition stage to 'in_progress' from 'backlog', 'planning', or 'review'
+    if (currentThread && (currentThread.stage === 'review' || currentThread.stage === 'backlog' || currentThread.stage === 'planning')) {
       const fromStage = currentThread.stage;
       this.threadManager.updateThread(threadId, { stage: 'in_progress' });
       threadEventBus.emit('thread:stage-changed', {

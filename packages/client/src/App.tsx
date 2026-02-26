@@ -9,7 +9,7 @@ import { setAppNavigate } from '@/stores/thread-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
-import { Toaster } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
 import { TOAST_DURATION } from '@/lib/utils';
 import { PanelLeft } from 'lucide-react';
 
@@ -202,7 +202,7 @@ export function App() {
         )}
       </div>
 
-      <Toaster position="bottom-right" theme="dark" duration={TOAST_DURATION} />
+      <Toaster position="bottom-right" duration={TOAST_DURATION} />
       <Suspense><CircuitBreakerDialog /></Suspense>
       <Suspense><CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} /></Suspense>
 

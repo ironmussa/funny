@@ -8,7 +8,7 @@ import { api } from '@/lib/api';
 import { cn, TOAST_DURATION } from '@/lib/utils';
 import { resolveModelLabel } from '@/lib/thread-utils';
 import { toast } from 'sonner';
-import { Toaster } from 'sonner';
+import { Toaster } from '@/components/ui/sonner';
 import {
   ArrowLeft,
   Plus,
@@ -113,7 +113,7 @@ export function MobilePage() {
           />
         )}
       </div>
-      <Toaster position="top-center" theme="dark" duration={TOAST_DURATION} />
+      <Toaster position="top-center" duration={TOAST_DURATION} />
     </>
   );
 }

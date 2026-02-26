@@ -106,6 +106,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         'github-dark',
         'night-owl',
         'catppuccin',
+        'monochrome',
       ]}
       value={{
         light: 'light',
@@ -115,6 +116,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         'github-dark': 'theme-github-dark',
         'night-owl': 'theme-night-owl',
         catppuccin: 'theme-catppuccin',
+        monochrome: 'theme-monochrome',
       }}
     >
       <TooltipProvider delayDuration={300} skipDelayDuration={0}>

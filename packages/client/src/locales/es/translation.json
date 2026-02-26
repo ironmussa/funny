@@ -278,7 +278,8 @@
       "dracula": "Dracula",
       "githubDark": "GitHub Dark",
       "nightOwl": "Night Owl",
-      "catppuccin": "Catppuccin"
+      "catppuccin": "Catppuccin",
+      "monochrome": "Monocromático"
     },
     "threads": "Hilos",
     "defaultThreadMode": "Modo de hilo predeterminado",

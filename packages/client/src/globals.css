@@ -275,6 +275,47 @@
     --status-violet: 261.9 46.7% 55.1%;
   }
 
+  /* ── Monochrome (Black & White) ───────────────────────────── */
+  .theme-monochrome {
+    --background: 0 0% 100%;
+    --foreground: 0 0% 0%;
+    --card: 0 0% 100%;
+    --card-foreground: 0 0% 0%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 0 0% 0%;
+    --primary: 0 0% 0%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 94%;
+    --secondary-foreground: 0 0% 0%;
+    --muted: 0 0% 94%;
+    --muted-foreground: 0 0% 40%;
+    --accent: 0 0% 94%;
+    --accent-foreground: 0 0% 0%;
+    --destructive: 0 0% 0%;
+    --destructive-foreground: 0 0% 100%;
+    --border: 0 0% 82%;
+    --input: 0 0% 82%;
+    --ring: 0 0% 0%;
+    --radius: 0.5rem;
+    --sidebar-background: 0 0% 97%;
+    --sidebar-foreground: 0 0% 15%;
+    --sidebar-primary: 0 0% 0%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 0 0% 92%;
+    --sidebar-accent-foreground: 0 0% 0%;
+    --sidebar-border: 0 0% 85%;
+    --sidebar-ring: 0 0% 0%;
+
+    --status-success: 0 0% 30%;
+    --status-error: 0 0% 0%;
+    --status-warning: 0 0% 45%;
+    --status-info: 0 0% 50%;
+    --status-pending: 0 0% 55%;
+    --status-interrupted: 0 0% 35%;
+    --status-neutral: 0 0% 60%;
+    --status-violet: 0 0% 40%;
+  }
+
   /* ── Catppuccin Mocha ─────────────────────────────────────── */
   .theme-catppuccin {
     --background: 240 21.1% 14.9%;

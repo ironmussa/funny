@@ -92,6 +92,11 @@ const THEME_OPTIONS: ThemeOption[] = [
     label: 'settings.themes.catppuccin',
     colors: { bg: '#1e1e2e', sidebar: '#181825', accent: '#89b4fa', fg: '#cdd6f4' },
   },
+  {
+    value: 'monochrome',
+    label: 'settings.themes.monochrome',
+    colors: { bg: '#ffffff', sidebar: '#f7f7f7', accent: '#000000', fg: '#000000' },
+  },
 ];
 
 function ThemeCard({

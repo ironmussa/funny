@@ -1,6 +1,6 @@
 import type { Thread } from '@funny/shared';
 import { Loader2, Columns3, Grid2x2, Plus, Search, GitBranch } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { useReducedMotion } from 'motion/react';
 import {
   useState,
   useEffect,
@@ -31,6 +31,7 @@ import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { useThreadStore, type ThreadWithMessages } from '@/stores/thread-store';
 
+import { D4CAnimation } from './D4CAnimation';
 import { PromptInput } from './PromptInput';
 import { SlideUpPrompt } from './SlideUpPrompt';
 import { ToolCallCard } from './ToolCallCard';
@@ -243,59 +244,6 @@ function buildGroupedRenderItems(messages: any[]): RenderItem[] {
   }
 
   return final;
-}
-
-const D4C_FRAMES = ['🐇', '🌀', '🐰', '⭐'] as const;
-const D4C_INTERVAL = 600;
-
-const D4C_ANIMATIONS: Record<string, { initial: object; animate: object; exit: object }> = {
-  '🐇': {
-    initial: { y: 12, opacity: 0 },
-    animate: { y: 0, opacity: 1 },
-    exit: { y: -12, opacity: 0 },
-  },
-  '🌀': {
-    initial: { rotate: -180, scale: 0.3, opacity: 0 },
-    animate: { rotate: 0, scale: 1, opacity: 1 },
-    exit: { rotate: 180, scale: 0.3, opacity: 0 },
-  },
-  '🐰': {
-    initial: { y: 14, opacity: 0, scale: 0.8 },
-    animate: { y: 0, opacity: 1, scale: 1 },
-    exit: { y: -10, opacity: 0, scale: 0.8 },
-  },
-  '⭐': {
-    initial: { scale: 0, opacity: 0 },
-    animate: { scale: 1, opacity: 1 },
-    exit: { scale: 0, opacity: 0 },
-  },
-};
-
-function D4CAnimation() {
-  const [frame, setFrame] = useState(0);
-  const prefersReducedMotion = useReducedMotion();
-  useEffect(() => {
-    const id = setInterval(() => setFrame((f) => (f + 1) % D4C_FRAMES.length), D4C_INTERVAL);
-    return () => clearInterval(id);
-  }, []);
-  const emoji = D4C_FRAMES[frame];
-  const anim = D4C_ANIMATIONS[emoji];
-  return (
-    <span className="inline-flex w-4 items-center justify-center overflow-hidden text-xs leading-none">
-      <AnimatePresence mode="wait">
-        <motion.span
-          key={emoji + frame}
-          initial={prefersReducedMotion ? false : anim.initial}
-          animate={anim.animate}
-          exit={prefersReducedMotion ? undefined : anim.exit}
-          transition={{ duration: 0.25, ease: 'easeOut' }}
-          className="inline-block"
-        >
-          {emoji}
-        </motion.span>
-      </AnimatePresence>
-    </span>
-  );
 }
 
 /** A single column that loads and streams a thread in real-time */
@@ -560,7 +508,7 @@ const ThreadColumn = memo(function ThreadColumn({ threadId }: { threadId: string
 
           {isRunning && (
             <div className="flex items-center gap-1.5 py-0.5 text-xs text-muted-foreground">
-              <D4CAnimation />
+              <D4CAnimation size="sm" />
               <span>{t('thread.agentWorking')}</span>
             </div>
           )}

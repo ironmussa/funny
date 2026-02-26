@@ -4,12 +4,12 @@
 # Secret detection
 git diff --cached --name-only --diff-filter=ACM | grep -v '^docker/' | xargs -r npx secretlint
 
-# Lint staged JS/TS files
-git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx)$' | xargs -r npx oxlint
-
-# Format staged files (auto-fix and re-stage)
+# Format staged files (auto-fix and re-stage) — run BEFORE lint so format issues never block
 STAGED_FMT=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx|css|json)$')
 if [ -n "$STAGED_FMT" ]; then
   echo "$STAGED_FMT" | xargs npx oxfmt --write
   echo "$STAGED_FMT" | xargs git add
 fi
+
+# Lint staged JS/TS files (runs after format so code is already clean)
+git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx)$' | xargs -r npx oxlint

@@ -194,7 +194,10 @@ export function GitProgressModal({ open, onOpenChange, steps, title }: GitProgre
             );
           })}
         </div>
-        <div className="mt-1 flex items-center justify-end gap-3">
+        <div className="flex flex-col items-end gap-2">
+          <span className="text-[10px] tabular-nums text-muted-foreground/50">
+            {formatElapsed(totalElapsed)}
+          </span>
           {isFinished && (
             <Button
               size="sm"
@@ -204,9 +207,6 @@ export function GitProgressModal({ open, onOpenChange, steps, title }: GitProgre
               {hasFailed ? t('common.cancel', 'Close') : t('review.progress.done', 'Done')}
             </Button>
           )}
-          <span className="text-[10px] tabular-nums text-muted-foreground/50">
-            {formatElapsed(totalElapsed)}
-          </span>
         </div>
       </DialogContent>
     </Dialog>

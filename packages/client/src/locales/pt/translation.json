@@ -207,6 +207,7 @@
       "done": "Concluído",
       "unstaging": "Removendo arquivos não selecionados",
       "staging": "Preparando arquivos selecionados",
+      "runningHooks": "Executando hooks pre-commit",
       "committing": "Confirmando alterações",
       "amending": "Emendando commit",
       "pushing": "Enviando para origin",
@@ -219,7 +220,8 @@
       "commitMergeTitle": "Commit & Merge",
       "pushTitle": "Enviar para Origin",
       "mergeTitle": "Mesclar em {{target}}",
-      "createPRTitle": "Criar Pull Request"
+      "createPRTitle": "Criar Pull Request",
+      "close": "Fechar"
     }
   },
   "newThread": {

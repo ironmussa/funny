@@ -262,12 +262,9 @@ export function ReviewPane() {
   const [progressOpen, setProgressOpen] = useState(false);
   const [progressTitle, setProgressTitle] = useState('');
 
-  const updateStep = useCallback(
-    (id: string, update: Partial<GitProgressStep>) => {
-      setProgressSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...update } : s)));
-    },
-    [],
-  );
+  const updateStep = useCallback((id: string, update: Partial<GitProgressStep>) => {
+    setProgressSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...update } : s)));
+  }, []);
 
   // Show standalone merge button when worktree has no dirty files but has unmerged commits.
   // Also require the worktree to actually exist (has a path) and the branch to differ from baseBranch.
@@ -487,6 +484,11 @@ export function ReviewPane() {
     }
     const isAmend = selectedAction === 'amend';
     steps.push({
+      id: 'hooks',
+      label: t('review.progress.runningHooks'),
+      status: 'pending',
+    });
+    steps.push({
       id: 'commit',
       label: isAmend ? t('review.progress.amending') : t('review.progress.committing'),
       status: 'pending',
@@ -542,17 +544,32 @@ export function ReviewPane() {
         setStep('stage', { status: 'completed' });
       }
 
-      // Commit
+      // Pre-commit hooks + Commit (hooks run as part of git commit)
+      setStep('hooks', { status: 'running' });
       setStep('commit', { status: 'running' });
       const commitMsg = commitBody.trim()
         ? `${commitTitle.trim()}\n\n${commitBody.trim()}`
         : commitTitle.trim();
       const commitResult = await api.commit(effectiveThreadId, commitMsg, isAmend);
       if (commitResult.isErr()) {
-        setStep('commit', { status: 'failed', error: commitResult.error.message });
+        // If the error mentions hooks, mark hooks as failed; otherwise mark commit as failed
+        const errMsg = commitResult.error.message.toLowerCase();
+        const isHookFailure =
+          errMsg.includes('hook') ||
+          errMsg.includes('husky') ||
+          errMsg.includes('lint-staged') ||
+          errMsg.includes('pre-commit');
+        if (isHookFailure) {
+          setStep('hooks', { status: 'failed', error: commitResult.error.message });
+          setStep('commit', { status: 'pending' });
+        } else {
+          setStep('hooks', { status: 'completed' });
+          setStep('commit', { status: 'failed', error: commitResult.error.message });
+        }
         setActionInProgress(null);
         return;
       }
+      setStep('hooks', { status: 'completed' });
       setStep('commit', { status: 'completed' });
 
       // Push (for commit-push and commit-pr)
@@ -1218,7 +1235,16 @@ export function ReviewPane() {
                       >
                         {isChecked && <Check className="h-2.5 w-2.5" />}
                       </button>
-                      <span className="flex-1 truncate font-mono text-[11px]">{f.path}</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="flex-1 truncate font-mono text-[11px]">
+                            {f.path.split('/').pop()}
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="left" className="max-w-[400px] break-all font-mono text-[11px]">
+                          {f.path}
+                        </TooltipContent>
+                      </Tooltip>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button

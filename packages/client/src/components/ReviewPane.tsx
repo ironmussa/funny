@@ -226,6 +226,8 @@ export function ReviewPane() {
   const gitStatus = useGitStatusStore(s => effectiveThreadId ? s.statusByThread[effectiveThreadId] : undefined);
   const [mergeInProgress, setMergeInProgress] = useState(false);
   const [pushInProgress, setPushInProgress] = useState(false);
+  const [prInProgress, setPrInProgress] = useState(false);
+  const [prDialog, setPrDialog] = useState<{ title: string; body: string } | null>(null);
   const [hasRebaseConflict, setHasRebaseConflict] = useState(false);
 
   // Show standalone merge button when worktree has no dirty files but has unmerged commits.
@@ -560,6 +562,29 @@ export function ReviewPane() {
       await useThreadStore.getState().refreshActiveThread();
     }
     setMergeInProgress(false);
+    useGitStatusStore.getState().fetchForThread(effectiveThreadId);
+  };
+
+  const handleCreatePROnly = async () => {
+    if (!effectiveThreadId || prInProgress || !prDialog) return;
+    setPrInProgress(true);
+    const prResult = await api.createPR(effectiveThreadId, prDialog.title.trim(), prDialog.body.trim());
+    if (prResult.isErr()) {
+      toast.error(t('review.prFailed', { message: prResult.error.message }));
+    } else if (prResult.value.url) {
+      toast.success(
+        <div>
+          {t('review.prCreated')}
+          <a href={prResult.value.url} target="_blank" rel="noopener noreferrer" className="underline ml-2">
+            View PR
+          </a>
+        </div>
+      );
+    } else {
+      toast.success(t('review.prCreated'));
+    }
+    setPrInProgress(false);
+    setPrDialog(null);
     useGitStatusStore.getState().fetchForThread(effectiveThreadId);
   };
 
@@ -1247,18 +1272,18 @@ export function ReviewPane() {
             </div>
           )}
 
-          {/* Standalone merge button — shown when no dirty files but worktree has unmerged commits */}
+          {/* Standalone merge / create PR buttons — shown when no dirty files but worktree has unmerged commits */}
           {showMergeOnly && (
             <div className="border-t border-sidebar-border p-3 flex-shrink-0 space-y-3">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <GitMerge className="h-3.5 w-3.5" />
                 <span>{t('review.readyToMerge', { target: baseBranch || 'base', defaultValue: `Ready to merge into ${baseBranch || 'base'}` })}</span>
               </div>
-              <Tooltip>
-                <TooltipTrigger asChild>
-
+              <div className="flex gap-1.5">
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <Button
-                      className="w-full"
+                      className="flex-1"
                       size="sm"
                       onClick={handleMergeOnly}
                       disabled={mergeInProgress || !!isAgentRunning}
@@ -1266,12 +1291,31 @@ export function ReviewPane() {
                       {mergeInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <GitMerge className="h-3.5 w-3.5 mr-1.5" />}
                       {t('review.mergeIntoBranch', { target: baseBranch || 'base', defaultValue: `Merge into ${baseBranch || 'base'}` })}
                     </Button>
-      
-                </TooltipTrigger>
-                {isAgentRunning && (
-                  <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
+                  </TooltipTrigger>
+                  {isAgentRunning && (
+                    <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
+                  )}
+                </Tooltip>
+                {gitStatus?.hasRemoteBranch && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => setPrDialog({ title: threadBranch || '', body: '' })}
+                        disabled={!!isAgentRunning}
+                      >
+                        <GitPullRequest className="h-3.5 w-3.5" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {isAgentRunning
+                        ? t('review.agentRunningTooltip')
+                        : t('review.createPRTooltip', { branch: threadBranch, target: baseBranch || 'base' })}
+                    </TooltipContent>
+                  </Tooltip>
                 )}
-              </Tooltip>
+              </div>
             </div>
           )}
 
@@ -1339,6 +1383,46 @@ export function ReviewPane() {
               }}
             >
               {t('common.confirm', 'Confirm')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Create PR dialog */}
+      <Dialog open={!!prDialog} onOpenChange={(open) => { if (!open) setPrDialog(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('review.createPR')}</DialogTitle>
+            <DialogDescription>
+              {t('review.createPRTooltip', { branch: threadBranch, target: baseBranch || 'base' })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <input
+              className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+              placeholder={t('review.prTitle', 'PR title')}
+              value={prDialog?.title ?? ''}
+              onChange={(e) => setPrDialog(prev => prev ? { ...prev, title: e.target.value } : prev)}
+            />
+            <textarea
+              className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+              rows={4}
+              placeholder={t('review.commitBody', 'Description (optional)')}
+              value={prDialog?.body ?? ''}
+              onChange={(e) => setPrDialog(prev => prev ? { ...prev, body: e.target.value } : prev)}
+            />
+          </div>
+          <div className="flex justify-end gap-2 mt-2">
+            <Button variant="outline" size="sm" onClick={() => setPrDialog(null)}>
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button
+              size="sm"
+              disabled={!prDialog?.title.trim() || prInProgress}
+              onClick={handleCreatePROnly}
+            >
+              {prInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <GitPullRequest className="h-3.5 w-3.5 mr-1.5" />}
+              {t('review.createPR')}
             </Button>
           </div>
         </DialogContent>

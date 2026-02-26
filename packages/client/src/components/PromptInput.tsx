@@ -350,6 +350,7 @@ interface PromptInputProps {
   showBacklog?: boolean;
   projectId?: string;
   initialPrompt?: string;
+  initialImages?: ImageAttachment[];
 }
 
 export const PromptInput = memo(function PromptInput({
@@ -364,6 +365,7 @@ export const PromptInput = memo(function PromptInput({
   showBacklog = false,
   projectId: propProjectId,
   initialPrompt: initialPromptProp,
+  initialImages: initialImagesProp,
 }: PromptInputProps) {
   const { t } = useTranslation();
 
@@ -431,10 +433,11 @@ export const PromptInput = memo(function PromptInput({
   // doesn't accidentally save the stale value back into the draft store.
   const hasSubmittedRef = useRef(false);
 
-  // Load initial prompt when prop changes (e.g. navigating to a backlog thread)
+  // Load initial prompt/images when props change (e.g. navigating to a backlog thread)
   useEffect(() => {
     if (initialPromptProp) setPrompt(initialPromptProp);
-  }, [initialPromptProp]);
+    if (initialImagesProp?.length) setImages(initialImagesProp);
+  }, [initialPromptProp, initialImagesProp]);
 
   // Slash-command state
   const [skills, setSkills] = useState<Skill[]>([]);

@@ -1119,8 +1119,7 @@ export function ThreadView() {
     // opened thread.  The thread-switch effect sets scrolledThreadRef to null;
     // here we detect that the current thread hasn't been "claimed" yet and
     // force-scroll regardless of the userHasScrolledUp flag.
-    const forceScroll =
-      activeThread?.id != null && scrolledThreadRef.current !== activeThread.id;
+    const forceScroll = activeThread?.id != null && scrolledThreadRef.current !== activeThread.id;
     if (forceScroll && activeThread?.id) {
       scrolledThreadRef.current = activeThread.id;
       userHasScrolledUp.current = false;
@@ -1355,6 +1354,19 @@ export function ThreadView() {
               isNewThread
               projectId={activeThread.projectId}
               initialPrompt={activeThread.initialPrompt}
+              initialImages={(() => {
+                const draftMsg = activeThread.messages?.find((m) => m.role === 'user');
+                if (!draftMsg?.images) return undefined;
+                try {
+                  const parsed =
+                    typeof draftMsg.images === 'string'
+                      ? JSON.parse(draftMsg.images)
+                      : draftMsg.images;
+                  return parsed?.length ? parsed : undefined;
+                } catch {
+                  return undefined;
+                }
+              })()}
             />
           </div>
         </div>

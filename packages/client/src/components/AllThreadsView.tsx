@@ -119,8 +119,11 @@ export function AllThreadsView() {
 
   // View mode derived from pathname: /kanban = board, /list (or anything else) = list
   // When ?status= param is present, force list view
-  const viewMode: 'list' | 'board' =
-    searchParams.get('status') ? 'list' : location.pathname === '/kanban' ? 'board' : 'list';
+  const viewMode: 'list' | 'board' = searchParams.get('status')
+    ? 'list'
+    : location.pathname === '/kanban'
+      ? 'board'
+      : 'list';
 
   // Project filter from URL query param ?project=<id>
   const [projectFilter, setProjectFilter] = useState<string | null>(() => {

@@ -42,8 +42,8 @@ export function MonacoEditorDialog({
 
   const isDirty = content !== originalContent;
 
-  // Derive Monaco theme — all custom themes are dark-based
-  const monacoTheme = resolvedTheme === 'light' ? 'vs' : 'funny-dark';
+  // Derive Monaco theme — monochrome (light) uses VS, everything else is dark-based
+  const monacoTheme = resolvedTheme === 'monochrome' ? 'vs' : 'funny-dark';
 
   // Define custom dark theme with black background
   const handleBeforeMount: BeforeMount = (monaco) => {

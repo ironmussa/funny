@@ -16,9 +16,14 @@
  */
 
 import { EventEmitter } from 'events';
-import type { CLIMessage, CLISystemMessage, CLIResultMessage, ClaudeProcessOptions } from './types.js';
 
-export type ResultSubtype = 'success' | 'error_max_turns' | 'error_during_execution' | 'error_max_budget_usd';
+import type { CLISystemMessage, CLIResultMessage, ClaudeProcessOptions } from './types.js';
+
+export type ResultSubtype =
+  | 'success'
+  | 'error_max_turns'
+  | 'error_during_execution'
+  | 'error_max_budget_usd';
 
 export abstract class BaseAgentProcess extends EventEmitter {
   protected abortController = new AbortController();

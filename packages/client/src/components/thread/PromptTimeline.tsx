@@ -1,8 +1,16 @@
-import { useMemo, useRef, useEffect, type RefObject } from 'react';
-import { cn } from '@/lib/utils';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
-import { ListTodo, MessageCircleQuestion, FileCode2, Play, CheckCircle2, Loader2 } from 'lucide-react';
 import type { Message, ToolCall, ThreadStatus } from '@funny/shared';
+import {
+  ListTodo,
+  MessageCircleQuestion,
+  FileCode2,
+  Play,
+  CheckCircle2,
+  Loader2,
+} from 'lucide-react';
+import { useMemo, useRef, useEffect, type RefObject } from 'react';
+
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 type MilestoneType = 'prompt' | 'todo' | 'question' | 'plan' | 'start' | 'end';
 
@@ -72,7 +80,7 @@ function getToolCallSummary(name: string, parsed: Record<string, unknown>): stri
   if (name === 'AskUserQuestion') {
     const questions = parsed.questions;
     if (!Array.isArray(questions) || questions.length === 0) return null;
-    return questions[0].question as string ?? 'Question';
+    return (questions[0].question as string) ?? 'Question';
   }
 
   if (name === 'ExitPlanMode') {
@@ -97,7 +105,13 @@ interface PromptTimelineProps {
   messagesScrollRef?: RefObject<HTMLDivElement | null>;
 }
 
-export function PromptTimeline({ messages, activeMessageId, threadStatus, onScrollToMessage, messagesScrollRef }: PromptTimelineProps) {
+export function PromptTimeline({
+  messages,
+  activeMessageId,
+  threadStatus,
+  onScrollToMessage,
+  messagesScrollRef,
+}: PromptTimelineProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const isSyncing = useRef(false);
 
@@ -171,23 +185,38 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
         }
       }
     }
-    const lastTodoSnapshot = todoSnapshots.length > 0 ? todoSnapshots[todoSnapshots.length - 1] : null;
+    const lastTodoSnapshot =
+      todoSnapshots.length > 0 ? todoSnapshots[todoSnapshots.length - 1] : null;
 
     // Build a map of each todo's first-appearance timestamp and latest status.
     // Key = todo content string. We track when a todo first appeared in any snapshot
     // and its most recent status from the last snapshot that contains it.
-    const todoFirstSeen = new Map<string, { timestamp: string; toolCallId: string; snapshotIdx: number }>();
-    const todoLatestStatus = new Map<string, { status: string; activeForm?: string; content?: string }>();
+    const todoFirstSeen = new Map<
+      string,
+      { timestamp: string; toolCallId: string; snapshotIdx: number }
+    >();
+    const todoLatestStatus = new Map<
+      string,
+      { status: string; activeForm?: string; content?: string }
+    >();
 
     for (let si = 0; si < todoSnapshots.length; si++) {
       const snap = todoSnapshots[si];
       for (const todo of snap.todos) {
         const key = todo.content || todo.activeForm || '';
         if (!todoFirstSeen.has(key)) {
-          todoFirstSeen.set(key, { timestamp: snap.timestamp, toolCallId: snap.toolCallId, snapshotIdx: si });
+          todoFirstSeen.set(key, {
+            timestamp: snap.timestamp,
+            toolCallId: snap.toolCallId,
+            snapshotIdx: si,
+          });
         }
         // Always update to latest status
-        todoLatestStatus.set(key, { status: todo.status, activeForm: todo.activeForm, content: todo.content });
+        todoLatestStatus.set(key, {
+          status: todo.status,
+          activeForm: todo.activeForm,
+          content: todo.content,
+        });
       }
     }
 
@@ -240,11 +269,14 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
         for (const tc of m.toolCalls) {
           if (tc.name === 'TodoWrite') {
             // Emit todos that first appeared in snapshots up to and including this one
-            while (nextSnapshotToEmit < todoSnapshots.length && todoSnapshots[nextSnapshotToEmit].toolCallId === tc.id) {
+            while (
+              nextSnapshotToEmit < todoSnapshots.length &&
+              todoSnapshots[nextSnapshotToEmit].toolCallId === tc.id
+            ) {
               break;
             }
             // Find which snapshot index this tool call corresponds to
-            const snapIdx = todoSnapshots.findIndex(s => s.toolCallId === tc.id);
+            const snapIdx = todoSnapshots.findIndex((s) => s.toolCallId === tc.id);
             if (snapIdx < 0) continue;
 
             // Emit all pending snapshot groups up to this one
@@ -255,13 +287,19 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
                 const latest = todoLatestStatus.get(key);
                 const firstSeen = todoFirstSeen.get(key);
                 if (!latest || !firstSeen) continue;
-                const isFinishedThread = threadStatus === 'completed' || threadStatus === 'failed' || threadStatus === 'stopped';
+                const isFinishedThread =
+                  threadStatus === 'completed' ||
+                  threadStatus === 'failed' ||
+                  threadStatus === 'stopped';
                 const isInProgress = latest.status === 'in_progress' && !isFinishedThread;
-                const isCompleted = latest.status === 'completed' || (latest.status === 'in_progress' && isFinishedThread);
+                const isCompleted =
+                  latest.status === 'completed' ||
+                  (latest.status === 'in_progress' && isFinishedThread);
                 const step = `${todoIndex + 1}/${totalTodos}`;
-                const label = isInProgress && latest.activeForm
-                  ? latest.activeForm
-                  : latest.content || latest.activeForm || `Task ${todoIndex + 1}`;
+                const label =
+                  isInProgress && latest.activeForm
+                    ? latest.activeForm
+                    : latest.content || latest.activeForm || `Task ${todoIndex + 1}`;
                 result.push({
                   id: `todo-${tc.id}-${todoIndex}`,
                   content: `${step} · ${label}`,
@@ -301,10 +339,16 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
     }
 
     // End marker — only for finished threads
-    const isFinished = threadStatus === 'completed' || threadStatus === 'failed' || threadStatus === 'stopped';
+    const isFinished =
+      threadStatus === 'completed' || threadStatus === 'failed' || threadStatus === 'stopped';
     if (messages.length > 0 && isFinished) {
       const last = messages[messages.length - 1];
-      const endLabel = threadStatus === 'completed' ? 'Completed' : threadStatus === 'failed' ? 'Failed' : 'Stopped';
+      const endLabel =
+        threadStatus === 'completed'
+          ? 'Completed'
+          : threadStatus === 'failed'
+            ? 'Failed'
+            : 'Stopped';
       result.push({
         id: 'timeline-end',
         content: endLabel,
@@ -335,15 +379,15 @@ export function PromptTimeline({ messages, activeMessageId, threadStatus, onScro
     <TooltipProvider delayDuration={200}>
       <div
         ref={containerRef}
-        className="thread-timeline flex flex-col h-full w-[200px] flex-shrink-0 overflow-y-auto"
+        className="thread-timeline flex h-full w-[200px] flex-shrink-0 flex-col overflow-y-auto"
       >
         {/* Timeline */}
         <div className="flex-1 px-3 py-3">
           {groups.map((group, gi) => (
-            <div key={gi}>
+            <div key={group.date}>
               {/* Date separator */}
               {group.date && (
-                <div className="text-[10px] font-medium text-muted-foreground/60 uppercase tracking-wider mb-2 mt-1">
+                <div className="mb-2 mt-1 text-[10px] font-medium uppercase tracking-wider text-muted-foreground/60">
                   {group.date}
                 </div>
               )}
@@ -402,26 +446,22 @@ function TimelineMilestone({
   const colors = MILESTONE_COLOR[milestone.type];
 
   return (
-    <div className="flex gap-2 group/milestone">
+    <div className="group/milestone flex gap-2">
       {/* Vertical line + dot/icon */}
-      <div className="flex flex-col items-center flex-shrink-0 w-4">
+      <div className="flex w-4 flex-shrink-0 flex-col items-center">
         {milestone.inProgress ? (
-          <Loader2 className="w-3.5 h-3.5 flex-shrink-0 mt-0.5 text-blue-400 animate-spin" />
+          <Loader2 className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 animate-spin text-blue-400" />
         ) : Icon ? (
           <Icon className={cn('w-3.5 h-3.5 flex-shrink-0 mt-0.5', colors.icon)} />
         ) : (
           <div
             className={cn(
               'w-2.5 h-2.5 rounded-full border flex-shrink-0 mt-0.5 transition-colors',
-              isActive
-                ? 'border-primary bg-primary'
-                : 'border-primary bg-transparent'
+              isActive ? 'border-primary bg-primary' : 'border-primary bg-transparent',
             )}
           />
         )}
-        {!isLast && (
-          <div className="w-px flex-1 bg-border min-h-[16px]" />
-        )}
+        {!isLast && <div className="min-h-[16px] w-px flex-1 bg-border" />}
       </div>
 
       {/* Content */}
@@ -438,34 +478,32 @@ function TimelineMilestone({
             }}
             className={cn(
               'flex-1 text-left pb-4 min-w-0 group/btn cursor-pointer',
-              'hover:opacity-100 transition-opacity'
+              'hover:opacity-100 transition-opacity',
             )}
           >
-            <div className={cn(
-              'text-[11px] leading-snug line-clamp-2 transition-colors',
-              milestone.inProgress
-                ? 'text-blue-400 font-medium'
-                : milestone.type !== 'prompt'
-                  ? colors.text
-                  : isActive
-                    ? 'text-foreground font-medium'
-                    : 'text-muted-foreground group-hover/btn:text-foreground',
-              milestone.completed && 'line-through opacity-60'
-            )}>
+            <div
+              className={cn(
+                'text-[11px] leading-snug line-clamp-2 transition-colors',
+                milestone.inProgress
+                  ? 'text-blue-400 font-medium'
+                  : milestone.type !== 'prompt'
+                    ? colors.text
+                    : isActive
+                      ? 'text-foreground font-medium'
+                      : 'text-muted-foreground group-hover/btn:text-foreground',
+                milestone.completed && 'line-through opacity-60',
+              )}
+            >
               {truncate(milestone.content, 80)}
             </div>
           </button>
         </TooltipTrigger>
-        <TooltipContent
-          side="left"
-          align="start"
-          className="max-w-[300px] p-3"
-        >
+        <TooltipContent side="left" align="start" className="max-w-[300px] p-3">
           <div className="space-y-1.5">
-            <div className="text-[10px] text-muted-foreground font-mono">
+            <div className="font-mono text-[10px] text-muted-foreground">
               {formatRelativeTime(milestone.timestamp)}
             </div>
-            <pre className="text-xs whitespace-pre-wrap font-mono leading-relaxed break-words max-h-[200px] overflow-y-auto">
+            <pre className="max-h-[200px] overflow-y-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
               {milestone.content.trim()}
             </pre>
           </div>

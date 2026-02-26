@@ -3,11 +3,16 @@
  * Each handler receives Zustand's get/set accessors plus the event payload.
  */
 
-import { toast } from 'sonner';
 import type { Thread, MessageRole, ThreadStatus } from '@funny/shared';
-import { bufferWSEvent, getNavigate } from './thread-store-internals';
-import { transitionThreadStatus, getThreadActor, wsEventToMachineEvent } from './thread-machine-bridge';
+import { toast } from 'sonner';
+
+import {
+  transitionThreadStatus,
+  getThreadActor,
+  wsEventToMachineEvent,
+} from './thread-machine-bridge';
 import type { AgentInitInfo, ThreadState } from './thread-store';
+import { bufferWSEvent, getNavigate } from './thread-store-internals';
 
 type Get = () => ThreadState;
 type Set = (partial: Partial<ThreadState> | ((state: ThreadState) => Partial<ThreadState>)) => void;
@@ -26,9 +31,10 @@ export function handleWSInit(get: Get, set: Set, threadId: string, data: AgentIn
 // ── Message ─────────────────────────────────────────────────────
 
 export function handleWSMessage(
-  get: Get, set: Set,
+  get: Get,
+  set: Set,
   threadId: string,
-  data: { messageId?: string; role: string; content: string; author?: string }
+  data: { messageId?: string; role: string; content: string; author?: string },
 ): void {
   const { activeThread, selectedThreadId } = get();
 
@@ -39,7 +45,11 @@ export function handleWSMessage(
       const existingIdx = activeThread.messages.findIndex((m) => m.id === messageId);
       if (existingIdx >= 0) {
         const updated = [...activeThread.messages];
-        updated[existingIdx] = { ...updated[existingIdx], content: data.content, ...(data.author ? { author: data.author } : {}) };
+        updated[existingIdx] = {
+          ...updated[existingIdx],
+          content: data.content,
+          ...(data.author ? { author: data.author } : {}),
+        };
         set({ activeThread: { ...activeThread, messages: updated } });
         return;
       }
@@ -69,17 +79,25 @@ export function handleWSMessage(
 // ── Tool Call ───────────────────────────────────────────────────
 
 export function handleWSToolCall(
-  get: Get, set: Set,
+  get: Get,
+  set: Set,
   threadId: string,
-  data: { toolCallId?: string; messageId?: string; name: string; input: unknown; author?: string }
+  data: { toolCallId?: string; messageId?: string; name: string; input: unknown; author?: string },
 ): void {
   const { activeThread, selectedThreadId } = get();
 
   if (activeThread?.id === threadId) {
     const toolCallId = data.toolCallId || crypto.randomUUID();
-    const tcEntry = { id: toolCallId, messageId: data.messageId || '', name: data.name, input: JSON.stringify(data.input), ...(data.author ? { author: data.author } : {}) };
+    const tcEntry = {
+      id: toolCallId,
+      messageId: data.messageId || '',
+      name: data.name,
+      input: JSON.stringify(data.input),
+      ...(data.author ? { author: data.author } : {}),
+    };
 
-    if (activeThread.messages.some(m => m.toolCalls?.some((tc: any) => tc.id === toolCallId))) return;
+    if (activeThread.messages.some((m) => m.toolCalls?.some((tc: any) => tc.id === toolCallId)))
+      return;
 
     if (data.messageId) {
       const msgIdx = activeThread.messages.findIndex((m) => m.id === data.messageId);
@@ -116,9 +134,10 @@ export function handleWSToolCall(
 // ── Tool Output ─────────────────────────────────────────────────
 
 export function handleWSToolOutput(
-  get: Get, set: Set,
+  get: Get,
+  set: Set,
   threadId: string,
-  data: { toolCallId: string; output: string }
+  data: { toolCallId: string; output: string },
 ): void {
   const { activeThread, selectedThreadId } = get();
   if (activeThread?.id !== threadId) {
@@ -146,9 +165,16 @@ export function handleWSToolOutput(
 // ── Status ──────────────────────────────────────────────────────
 
 export function handleWSStatus(
-  get: Get, set: Set,
+  get: Get,
+  set: Set,
   threadId: string,
-  data: { status: string; waitingReason?: string; permissionRequest?: { toolName: string }; stage?: string; permissionMode?: string }
+  data: {
+    status: string;
+    waitingReason?: string;
+    permissionRequest?: { toolName: string };
+    stage?: string;
+    permissionMode?: string;
+  },
 ): void {
   const { threadsByProject, activeThread, loadThreadsForProject, selectedThreadId } = get();
 
@@ -174,9 +200,18 @@ export function handleWSStatus(
       foundInSidebar = true;
       const t = threads[idx];
       const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, t.cost);
-      if (newStatus !== t.status || (data.stage && data.stage !== t.stage) || (data.permissionMode && data.permissionMode !== t.permissionMode)) {
+      if (
+        newStatus !== t.status ||
+        (data.stage && data.stage !== t.stage) ||
+        (data.permissionMode && data.permissionMode !== t.permissionMode)
+      ) {
         const copy = [...threads];
-        copy[idx] = { ...t, status: newStatus, ...(data.stage ? { stage: data.stage as any } : {}), ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}) };
+        copy[idx] = {
+          ...t,
+          status: newStatus,
+          ...(data.stage ? { stage: data.stage as any } : {}),
+          ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}),
+        };
         updatedProject = { pid, threads: copy };
       }
       break;
@@ -186,12 +221,24 @@ export function handleWSStatus(
   const stateUpdate: Partial<ThreadState> = {};
 
   if (updatedProject) {
-    stateUpdate.threadsByProject = { ...threadsByProject, [updatedProject.pid]: updatedProject.threads };
+    stateUpdate.threadsByProject = {
+      ...threadsByProject,
+      [updatedProject.pid]: updatedProject.threads,
+    };
   }
 
   if (activeThread?.id === threadId) {
-    const newStatus = transitionThreadStatus(threadId, machineEvent, activeThread.status, activeThread.cost);
-    if (newStatus !== activeThread.status || (data.stage && data.stage !== activeThread.stage) || (data.permissionMode && data.permissionMode !== activeThread.permissionMode)) {
+    const newStatus = transitionThreadStatus(
+      threadId,
+      machineEvent,
+      activeThread.status,
+      activeThread.cost,
+    );
+    if (
+      newStatus !== activeThread.status ||
+      (data.stage && data.stage !== activeThread.stage) ||
+      (data.permissionMode && data.permissionMode !== activeThread.permissionMode)
+    ) {
       // If transitioning to waiting, include waitingReason and permissionRequest
       if (newStatus === 'waiting') {
         stateUpdate.activeThread = {
@@ -208,7 +255,9 @@ export function handleWSStatus(
           status: newStatus,
           waitingReason: undefined,
           pendingPermission: undefined,
-          ...(newStatus === 'stopped' || newStatus === 'interrupted' ? { resultInfo: undefined } : {}),
+          ...(newStatus === 'stopped' || newStatus === 'interrupted'
+            ? { resultInfo: undefined }
+            : {}),
           ...(data.stage ? { stage: data.stage as any } : {}),
           ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}),
         };
@@ -235,11 +284,7 @@ export function handleWSStatus(
 
 // ── Result ──────────────────────────────────────────────────────
 
-export function handleWSResult(
-  get: Get, set: Set,
-  threadId: string,
-  data: any
-): void {
+export function handleWSResult(get: Get, set: Set, threadId: string, data: any): void {
   const { threadsByProject, activeThread, loadThreadsForProject, selectedThreadId } = get();
 
   // Buffer result events when thread is selected but not yet fully loaded
@@ -257,20 +302,28 @@ export function handleWSResult(
 
   const serverStatus: ThreadStatus = data.status ?? 'completed';
   let resultStatus: ThreadStatus = serverStatus;
-  let foundInSidebar = false;
   let updatedProject: { pid: string; threads: Thread[] } | null = null;
 
   for (const [pid, threads] of Object.entries(threadsByProject)) {
     const idx = threads.findIndex((t) => t.id === threadId);
     if (idx >= 0) {
-      foundInSidebar = true;
       const t = threads[idx];
-      const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, data.cost ?? t.cost);
+      const newStatus = transitionThreadStatus(
+        threadId,
+        machineEvent,
+        t.status,
+        data.cost ?? t.cost,
+      );
       // Use server status as authoritative if xstate transition didn't change state
       // (e.g., actor was in stale state that didn't accept the event)
       resultStatus = newStatus !== t.status ? newStatus : serverStatus;
       const copy = [...threads];
-      copy[idx] = { ...t, status: resultStatus, cost: data.cost ?? t.cost, ...(data.stage ? { stage: data.stage } : {}) };
+      copy[idx] = {
+        ...t,
+        status: resultStatus,
+        cost: data.cost ?? t.cost,
+        ...(data.stage ? { stage: data.stage } : {}),
+      };
       updatedProject = { pid, threads: copy };
       break;
     }
@@ -278,7 +331,10 @@ export function handleWSResult(
 
   const stateUpdate: Partial<ThreadState> = {};
   if (updatedProject) {
-    stateUpdate.threadsByProject = { ...threadsByProject, [updatedProject.pid]: updatedProject.threads };
+    stateUpdate.threadsByProject = {
+      ...threadsByProject,
+      [updatedProject.pid]: updatedProject.threads,
+    };
   }
 
   if (activeThread?.id === threadId) {
@@ -318,11 +374,12 @@ export function handleWSResult(
 
   if (resultStatus === 'waiting') return;
 
-  const projectIdForRefresh = activeThread?.id === threadId
-    ? activeThread.projectId
-    : Object.keys(threadsByProject).find((pid) =>
-        threadsByProject[pid]?.some((t) => t.id === threadId)
-      );
+  const projectIdForRefresh =
+    activeThread?.id === threadId
+      ? activeThread.projectId
+      : Object.keys(threadsByProject).find((pid) =>
+          threadsByProject[pid]?.some((t) => t.id === threadId),
+        );
 
   if (projectIdForRefresh) {
     setTimeout(() => loadThreadsForProject(projectIdForRefresh), 500);
@@ -341,7 +398,8 @@ export function handleWSResult(
 // ── Queue update ─────────────────────────────────────────────────
 
 export function handleWSQueueUpdate(
-  get: Get, set: Set,
+  get: Get,
+  set: Set,
   threadId: string,
   data: { threadId: string; queuedCount: number; nextMessage?: string },
 ): void {
@@ -371,7 +429,7 @@ function notifyThreadResult(
   resultStatus: ThreadStatus,
   updatedProject: { pid: string; threads: Thread[] } | null,
   get: Get,
-  errorReason?: string
+  errorReason?: string,
 ): void {
   let threadTitle = 'Thread';
   let projectId: string | null = null;
@@ -409,7 +467,9 @@ function notifyThreadResult(
   if (resultStatus === 'completed') {
     toast.success(`"${truncated}" completed`, toastOpts);
   } else if (resultStatus === 'failed') {
-    const reason = errorReason ? ERROR_REASON_MESSAGES[errorReason] ?? errorReason : 'Unknown error';
+    const reason = errorReason
+      ? (ERROR_REASON_MESSAGES[errorReason] ?? errorReason)
+      : 'Unknown error';
     toast.error(`"${truncated}" failed: ${reason}`, { ...toastOpts, duration: 8000 });
   }
 }

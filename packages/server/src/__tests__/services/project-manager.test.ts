@@ -1,5 +1,7 @@
-import { describe, test, expect, beforeEach, mock } from 'bun:test';
+import { describe, test, expect, beforeEach } from 'bun:test';
+
 import { eq } from 'drizzle-orm';
+
 import { createTestDb, seedProject } from '../helpers/test-db.js';
 
 // We test the project manager logic by reimplementing it against the test DB,
@@ -36,10 +38,7 @@ describe('ProjectManager', () => {
   }
 
   function deleteProject(id: string) {
-    testDb.db
-      .delete(testDb.schema.projects)
-      .where(eq(testDb.schema.projects.id, id))
-      .run();
+    testDb.db.delete(testDb.schema.projects).where(eq(testDb.schema.projects.id, id)).run();
   }
 
   test('listProjects returns empty array initially', () => {
@@ -101,17 +100,20 @@ describe('ProjectManager', () => {
 
   test('deleting project cascades to threads', () => {
     seedProject(testDb.db, { id: 'cascade-p' });
-    testDb.db.insert(testDb.schema.threads).values({
-      id: 'cascade-t',
-      projectId: 'cascade-p',
-      title: 'Thread',
-      mode: 'local',
-      permissionMode: 'autoEdit',
-      status: 'pending',
-      cost: 0,
-      archived: 0,
-      createdAt: new Date().toISOString(),
-    }).run();
+    testDb.db
+      .insert(testDb.schema.threads)
+      .values({
+        id: 'cascade-t',
+        projectId: 'cascade-p',
+        title: 'Thread',
+        mode: 'local',
+        permissionMode: 'autoEdit',
+        status: 'pending',
+        cost: 0,
+        archived: 0,
+        createdAt: new Date().toISOString(),
+      })
+      .run();
 
     const threadsBefore = testDb.db.select().from(testDb.schema.threads).all();
     expect(threadsBefore).toHaveLength(1);

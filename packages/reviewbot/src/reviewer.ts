@@ -6,10 +6,16 @@
  */
 
 import { getPRInfo, getPRDiff, postPRReview } from '@funny/core/git';
-import type { PRInfo, ReviewEvent } from '@funny/core/git';
-import type { CodeReviewFinding, CodeReviewResult, ReviewFindingSeverity, ReviewFindingCategory } from '@funny/shared';
-import { buildReviewSystemPrompt, buildReviewUserPrompt } from './prompts.js';
+import type { ReviewEvent } from '@funny/core/git';
+import type {
+  CodeReviewFinding,
+  CodeReviewResult,
+  ReviewFindingSeverity,
+  ReviewFindingCategory,
+} from '@funny/shared';
+
 import { formatReviewBody, decideReviewEvent } from './formatter.js';
+import { buildReviewSystemPrompt, buildReviewUserPrompt } from './prompts.js';
 import type { ReviewOptions, ParsedReviewOutput } from './types.js';
 
 // ── Defaults ───────────────────────────────────────────────────
@@ -43,7 +49,7 @@ async function callACP(
     throw new Error(`ACP API error ${response.status}: ${body.slice(0, 500)}`);
   }
 
-  const data = await response.json() as {
+  const data = (await response.json()) as {
     result?: { text?: string };
   };
 
@@ -53,16 +59,25 @@ async function callACP(
 // ── Parser ─────────────────────────────────────────────────────
 
 const VALID_SEVERITIES = new Set<ReviewFindingSeverity>([
-  'critical', 'high', 'medium', 'low', 'suggestion',
+  'critical',
+  'high',
+  'medium',
+  'low',
+  'suggestion',
 ]);
 const VALID_CATEGORIES = new Set<ReviewFindingCategory>([
-  'bug', 'security', 'performance', 'style', 'logic', 'maintainability',
+  'bug',
+  'security',
+  'performance',
+  'style',
+  'logic',
+  'maintainability',
 ]);
 
 function parseReviewOutput(text: string): ParsedReviewOutput {
   // Extract JSON from markdown code blocks or raw JSON
-  const jsonMatch = text.match(/```(?:json)?\s*([\s\S]*?)\s*```/)
-    ?? text.match(/(\{[\s\S]*"summary"[\s\S]*\})/);
+  const jsonMatch =
+    text.match(/```(?:json)?\s*([\s\S]*?)\s*```/) ?? text.match(/(\{[\s\S]*"summary"[\s\S]*\})/);
 
   if (!jsonMatch) {
     return { summary: 'Could not parse review output.', findings: [] };
@@ -71,9 +86,7 @@ function parseReviewOutput(text: string): ParsedReviewOutput {
   try {
     const parsed = JSON.parse(jsonMatch[1] ?? jsonMatch[0]);
 
-    const summary = typeof parsed.summary === 'string'
-      ? parsed.summary
-      : 'Review completed.';
+    const summary = typeof parsed.summary === 'string' ? parsed.summary : 'Review completed.';
 
     const findings = Array.isArray(parsed.findings)
       ? parsed.findings
@@ -123,12 +136,16 @@ export class PRReviewer {
 
     const prInfo = infoResult.match(
       (val) => val,
-      (err) => { throw new Error(`Failed to fetch PR info: ${err.message}`); },
+      (err) => {
+        throw new Error(`Failed to fetch PR info: ${err.message}`);
+      },
     );
 
     const diff = diffResult.match(
       (val) => val,
-      (err) => { throw new Error(`Failed to fetch PR diff: ${err.message}`); },
+      (err) => {
+        throw new Error(`Failed to fetch PR diff: ${err.message}`);
+      },
     );
 
     if (!diff.trim()) {
@@ -160,7 +177,9 @@ export class PRReviewer {
       const postResult = await postPRReview(cwd, prNumber, reviewBody, reviewEvent);
       postResult.match(
         () => {},
-        (err) => { throw new Error(`Failed to post review: ${err.message}`); },
+        (err) => {
+          throw new Error(`Failed to post review: ${err.message}`);
+        },
       );
     }
 

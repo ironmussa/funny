@@ -33,7 +33,6 @@ import type {
   PipelineEventType,
   WebhookResponse,
   WebhookErrorResponse,
-  CLIMessage,
 } from './types.js';
 
 export class FunnyClient {
@@ -238,11 +237,15 @@ export class FunnyClient {
     init: { session_id: string; tools?: string[]; cwd?: string; model?: string },
     options?: { threadId?: string },
   ): Promise<WebhookResponse> {
-    return this.cliMessage(requestId, {
-      type: 'system',
-      subtype: 'init',
-      ...init,
-    }, options);
+    return this.cliMessage(
+      requestId,
+      {
+        type: 'system',
+        subtype: 'init',
+        ...init,
+      },
+      options,
+    );
   }
 
   /**
@@ -254,13 +257,17 @@ export class FunnyClient {
     text: string,
     options?: { threadId?: string },
   ): Promise<WebhookResponse> {
-    return this.cliMessage(requestId, {
-      type: 'assistant',
-      message: {
-        id: messageId,
-        content: [{ type: 'text', text }],
+    return this.cliMessage(
+      requestId,
+      {
+        type: 'assistant',
+        message: {
+          id: messageId,
+          content: [{ type: 'text', text }],
+        },
       },
-    }, options);
+      options,
+    );
   }
 
   /**
@@ -272,13 +279,17 @@ export class FunnyClient {
     toolUse: { id: string; name: string; input: Record<string, unknown> },
     options?: { threadId?: string },
   ): Promise<WebhookResponse> {
-    return this.cliMessage(requestId, {
-      type: 'assistant',
-      message: {
-        id: messageId,
-        content: [{ type: 'tool_use', ...toolUse }],
+    return this.cliMessage(
+      requestId,
+      {
+        type: 'assistant',
+        message: {
+          id: messageId,
+          content: [{ type: 'tool_use', ...toolUse }],
+        },
       },
-    }, options);
+      options,
+    );
   }
 
   /**
@@ -290,13 +301,17 @@ export class FunnyClient {
     toolResult: { tool_use_id: string; content: string; is_error?: boolean },
     options?: { threadId?: string },
   ): Promise<WebhookResponse> {
-    return this.cliMessage(requestId, {
-      type: 'user',
-      message: {
-        id: messageId,
-        content: [{ type: 'tool_result', ...toolResult }],
+    return this.cliMessage(
+      requestId,
+      {
+        type: 'user',
+        message: {
+          id: messageId,
+          content: [{ type: 'tool_result', ...toolResult }],
+        },
       },
-    }, options);
+      options,
+    );
   }
 
   /**
@@ -307,10 +322,14 @@ export class FunnyClient {
     result: { result: string; cost_usd?: number; duration_ms?: number; session_id?: string },
     options?: { threadId?: string },
   ): Promise<WebhookResponse> {
-    return this.cliMessage(requestId, {
-      type: 'result',
-      ...result,
-    }, options);
+    return this.cliMessage(
+      requestId,
+      {
+        type: 'result',
+        ...result,
+      },
+      options,
+    );
   }
 
   // ── Generic event method ────────────────────────────────────

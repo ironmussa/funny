@@ -1,51 +1,5 @@
-import { useState, useEffect, useRef, useMemo, useCallback, memo, Suspense } from 'react';
+import type { FileDiffSummary } from '@funny/shared';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useTranslation } from 'react-i18next';
-import { useProjectStore } from '@/stores/project-store';
-import { useThreadStore } from '@/stores/thread-store';
-import { useUIStore } from '@/stores/ui-store';
-import { useAppStore } from '@/stores/app-store';
-import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
-import { api } from '@/lib/api';
-import { toast } from 'sonner';
-import { cn } from '@/lib/utils';
-import { ReactDiffViewer, DIFF_VIEWER_STYLES } from './tool-cards/utils';
-import { toEditorUri, openFileInEditor, getEditorLabel } from '@/lib/editor-utils';
-import { editorLabels } from '@/stores/settings-store';
-import { Button } from '@/components/ui/button';
-import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
-import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
-import { useGitStatusStore } from '@/stores/git-status-store';
-import { useDraftStore } from '@/stores/draft-store';
-import { getNavigate } from '@/stores/thread-store-internals';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import {
-  DropdownMenu,
-  DropdownMenuTrigger,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubTrigger,
-  DropdownMenuSubContent,
-} from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
 import {
   RefreshCw,
   FileCode,
@@ -77,7 +31,46 @@ import {
   PenLine,
   RotateCcw,
 } from 'lucide-react';
-import type { FileDiffSummary } from '@funny/shared';
+import { useState, useEffect, useRef, useMemo, useCallback, memo, Suspense } from 'react';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
+
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubTrigger,
+  DropdownMenuSubContent,
+} from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea, ScrollBar } from '@/components/ui/scroll-area';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
+import { api } from '@/lib/api';
+import { openFileInEditor, getEditorLabel } from '@/lib/editor-utils';
+import { cn } from '@/lib/utils';
+import { useDraftStore } from '@/stores/draft-store';
+import { useGitStatusStore } from '@/stores/git-status-store';
+import { useProjectStore } from '@/stores/project-store';
+import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
+import { editorLabels } from '@/stores/settings-store';
+import { useThreadStore } from '@/stores/thread-store';
+import { getNavigate } from '@/stores/thread-store-internals';
+import { useUIStore } from '@/stores/ui-store';
+
+import { ReactDiffViewer, DIFF_VIEWER_STYLES } from './tool-cards/utils';
 
 const fileStatusIcons: Record<string, typeof FileCode> = {
   added: FilePlus,
@@ -124,7 +117,13 @@ function parseDiffNew(unifiedDiff: string): string {
   return newLines.join('\n');
 }
 
-const MemoizedDiffView = memo(function MemoizedDiffView({ diff, splitView = false }: { diff: string; splitView?: boolean }) {
+const MemoizedDiffView = memo(function MemoizedDiffView({
+  diff,
+  splitView = false,
+}: {
+  diff: string;
+  splitView?: boolean;
+}) {
   const oldValue = useMemo(() => parseDiffOld(diff), [diff]);
   const newValue = useMemo(() => parseDiffNew(diff), [diff]);
 
@@ -145,29 +144,32 @@ const MemoizedDiffView = memo(function MemoizedDiffView({ diff, splitView = fals
 
 export function ReviewPane() {
   const { t } = useTranslation();
-  const setReviewPaneOpen = useUIStore(s => s.setReviewPaneOpen);
-  const reviewPaneOpen = useUIStore(s => s.reviewPaneOpen);
-  const selectedProjectId = useProjectStore(s => s.selectedProjectId);
+  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
+  const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
 
   // Derive effectiveThreadId from the active thread only.
   // Never fall back to the first thread in the project list — that can return
   // a worktree thread when the user selected a local (master) thread, causing
   // the review pane to show diff data from the wrong working directory.
-  const effectiveThreadId = useThreadStore(s => s.activeThread?.id);
+  const effectiveThreadId = useThreadStore((s) => s.activeThread?.id);
 
   // The base directory path for constructing absolute file paths (worktree path or project path)
-  const basePath = useThreadStore(s => {
+  const basePath = useThreadStore((s) => {
     const wt = s.activeThread?.worktreePath;
     if (wt) return wt;
     const pid = s.activeThread?.projectId ?? selectedProjectId;
     if (!pid) return '';
-    return useProjectStore.getState().projects.find(p => p.id === pid)?.path ?? '';
+    return useProjectStore.getState().projects.find((p) => p.id === pid)?.path ?? '';
   });
 
   const [summaries, setSummaries] = useState<FileDiffSummary[]>([]);
   const [diffCache, setDiffCache] = useState<Map<string, string>>(new Map());
   const [loadingDiff, setLoadingDiff] = useState<string | null>(null);
-  const [truncatedInfo, setTruncatedInfo] = useState<{ total: number; truncated: boolean }>({ total: 0, truncated: false });
+  const [truncatedInfo, setTruncatedInfo] = useState<{ total: number; truncated: boolean }>({
+    total: 0,
+    truncated: false,
+  });
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
@@ -178,53 +180,76 @@ export function ReviewPane() {
   const [commitBody, setCommitBodyRaw] = useState('');
 
   // Wrap setters to also persist to draft store
-  const setCommitTitle = useCallback((v: string | ((prev: string) => string)) => {
-    setCommitTitleRaw(prev => {
-      const next = typeof v === 'function' ? v(prev) : v;
-      if (effectiveThreadId) {
-        // Read current body from state for sync
-        setCommitBodyRaw(body => {
-          setCommitDraft(effectiveThreadId, next, body);
-          return body;
-        });
-      }
-      return next;
-    });
-  }, [effectiveThreadId, setCommitDraft]);
+  const setCommitTitle = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setCommitTitleRaw((prev) => {
+        const next = typeof v === 'function' ? v(prev) : v;
+        if (effectiveThreadId) {
+          // Read current body from state for sync
+          setCommitBodyRaw((body) => {
+            setCommitDraft(effectiveThreadId, next, body);
+            return body;
+          });
+        }
+        return next;
+      });
+    },
+    [effectiveThreadId, setCommitDraft],
+  );
 
-  const setCommitBody = useCallback((v: string | ((prev: string) => string)) => {
-    setCommitBodyRaw(prev => {
-      const next = typeof v === 'function' ? v(prev) : v;
-      if (effectiveThreadId) {
-        setCommitTitleRaw(title => {
-          setCommitDraft(effectiveThreadId, title, next);
-          return title;
-        });
-      }
-      return next;
-    });
-  }, [effectiveThreadId, setCommitDraft]);
+  const setCommitBody = useCallback(
+    (v: string | ((prev: string) => string)) => {
+      setCommitBodyRaw((prev) => {
+        const next = typeof v === 'function' ? v(prev) : v;
+        if (effectiveThreadId) {
+          setCommitTitleRaw((title) => {
+            setCommitDraft(effectiveThreadId, title, next);
+            return title;
+          });
+        }
+        return next;
+      });
+    },
+    [effectiveThreadId, setCommitDraft],
+  );
   const [generatingMsg, setGeneratingMsg] = useState(false);
-  const [selectedAction, setSelectedAction] = useState<'commit' | 'commit-push' | 'commit-pr' | 'commit-merge' | 'amend'>('commit');
+  const [selectedAction, setSelectedAction] = useState<
+    'commit' | 'commit-push' | 'commit-pr' | 'commit-merge' | 'amend'
+  >('commit');
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
 
   // New git operations state
-  const [logEntries, setLogEntries] = useState<Array<{ hash: string; shortHash: string; author: string; relativeDate: string; message: string }>>([]);
+  const [logEntries, setLogEntries] = useState<
+    Array<{
+      hash: string;
+      shortHash: string;
+      author: string;
+      relativeDate: string;
+      message: string;
+    }>
+  >([]);
   const [logOpen, setLogOpen] = useState(false);
   const [logLoading, setLogLoading] = useState(false);
   const [pullInProgress, setPullInProgress] = useState(false);
   const [stashInProgress, setStashInProgress] = useState(false);
-  const [stashEntries, setStashEntries] = useState<Array<{ index: string; message: string; relativeDate: string }>>([]);
+  const [stashEntries, setStashEntries] = useState<
+    Array<{ index: string; message: string; relativeDate: string }>
+  >([]);
   const [stashPopInProgress, setStashPopInProgress] = useState(false);
   const [resetInProgress, setResetInProgress] = useState(false);
-  const [confirmDialog, setConfirmDialog] = useState<{ type: 'revert' | 'reset'; path?: string } | null>(null);
+  const [confirmDialog, setConfirmDialog] = useState<{
+    type: 'revert' | 'reset';
+    path?: string;
+  } | null>(null);
 
-  const isWorktree = useThreadStore(s => s.activeThread?.mode === 'worktree');
-  const baseBranch = useThreadStore(s => s.activeThread?.baseBranch);
-  const threadBranch = useThreadStore(s => s.activeThread?.branch);
-  const hasWorktreePath = useThreadStore(s => !!s.activeThread?.worktreePath);
-  const isAgentRunning = useThreadStore(s => s.activeThread?.status === 'running');
-  const gitStatus = useGitStatusStore(s => effectiveThreadId ? s.statusByThread[effectiveThreadId] : undefined);
+  const isWorktree = useThreadStore((s) => s.activeThread?.mode === 'worktree');
+  const baseBranch = useThreadStore((s) => s.activeThread?.baseBranch);
+  const threadBranch = useThreadStore((s) => s.activeThread?.branch);
+  const hasWorktreePath = useThreadStore((s) => !!s.activeThread?.worktreePath);
+  const isAgentRunning = useThreadStore((s) => s.activeThread?.status === 'running');
+  const gitStatus = useGitStatusStore((s) =>
+    effectiveThreadId ? s.statusByThread[effectiveThreadId] : undefined,
+  );
   const [mergeInProgress, setMergeInProgress] = useState(false);
   const [pushInProgress, setPushInProgress] = useState(false);
   const [prInProgress, setPrInProgress] = useState(false);
@@ -233,29 +258,46 @@ export function ReviewPane() {
 
   // Show standalone merge button when worktree has no dirty files but has unmerged commits.
   // Also require the worktree to actually exist (has a path) and the branch to differ from baseBranch.
-  const showMergeOnly = isWorktree && hasWorktreePath && summaries.length === 0 && !loading && gitStatus && !gitStatus.isMergedIntoBase && !hasRebaseConflict && (!baseBranch || threadBranch !== baseBranch);
+  const showMergeOnly =
+    isWorktree &&
+    hasWorktreePath &&
+    summaries.length === 0 &&
+    !loading &&
+    gitStatus &&
+    !gitStatus.isMergedIntoBase &&
+    !hasRebaseConflict &&
+    (!baseBranch || threadBranch !== baseBranch);
 
   // Show standalone push button when no dirty files but there are unpushed commits
-  const showPushOnly = summaries.length === 0 && !loading && gitStatus && gitStatus.unpushedCommitCount > 0 && !hasRebaseConflict;
+  const showPushOnly =
+    summaries.length === 0 &&
+    !loading &&
+    gitStatus &&
+    gitStatus.unpushedCommitCount > 0 &&
+    !hasRebaseConflict;
 
-  const showMergeConflictToast = useCallback((errorMessage: string, _threadId: string) => {
-    const target = baseBranch || 'main';
-    const lower = errorMessage.toLowerCase();
-    const isConflict = lower.includes('conflict') ||
-                       lower.includes('rebase failed') ||
-                       lower.includes('merge failed') ||
-                       lower.includes('automatic merge failed') ||
-                       lower.includes('fix conflicts') ||
-                       lower.includes('could not apply');
+  const showMergeConflictToast = useCallback(
+    (errorMessage: string, _threadId: string) => {
+      const target = baseBranch || 'main';
+      const lower = errorMessage.toLowerCase();
+      const isConflict =
+        lower.includes('conflict') ||
+        lower.includes('rebase failed') ||
+        lower.includes('merge failed') ||
+        lower.includes('automatic merge failed') ||
+        lower.includes('fix conflicts') ||
+        lower.includes('could not apply');
 
-    if (!isConflict) {
-      toast.error(t('review.mergeFailed', { message: errorMessage }));
-      return;
-    }
+      if (!isConflict) {
+        toast.error(t('review.mergeFailed', { message: errorMessage }));
+        return;
+      }
 
-    toast.error(t('review.mergeConflict', { target }));
-    setHasRebaseConflict(true);
-  }, [t, baseBranch]);
+      toast.error(t('review.mergeConflict', { target }));
+      setHasRebaseConflict(true);
+    },
+    [t, baseBranch],
+  );
 
   const fileListRef = useRef<HTMLDivElement>(null);
 
@@ -269,9 +311,9 @@ export function ReviewPane() {
       setTruncatedInfo({ total: data.total, truncated: data.truncated });
       setDiffCache(new Map());
       // Check all files by default, preserving existing selections
-      setCheckedFiles(prev => {
+      setCheckedFiles((prev) => {
         const next = new Set(prev);
-        const currentPaths = new Set(data.files.map(d => d.path));
+        const currentPaths = new Set(data.files.map((d) => d.path));
         for (const f of data.files) {
           if (!prev.has(f.path) && prev.size === 0) {
             next.add(f.path);
@@ -282,7 +324,7 @@ export function ReviewPane() {
         for (const p of prev) {
           if (!currentPaths.has(p)) next.delete(p);
         }
-        return next.size === 0 ? new Set(data.files.map(d => d.path)) : next;
+        return next.size === 0 ? new Set(data.files.map((d) => d.path)) : next;
       });
       if (data.files.length > 0 && !selectedFile) {
         setSelectedFile(data.files[0].path);
@@ -290,14 +332,14 @@ export function ReviewPane() {
       // Re-load diff for the currently selected file after cache was cleared
       const fileToLoad = selectedFile ?? (data.files.length > 0 ? data.files[0].path : null);
       if (fileToLoad) {
-        const summary = data.files.find(s => s.path === fileToLoad);
+        const summary = data.files.find((s) => s.path === fileToLoad);
         if (summary) {
           setLoadingDiff(fileToLoad);
           const diffResult = await api.getFileDiff(effectiveThreadId, fileToLoad, summary.staged);
           if (diffResult.isOk()) {
-            setDiffCache(prev => new Map(prev).set(fileToLoad, diffResult.value.diff));
+            setDiffCache((prev) => new Map(prev).set(fileToLoad, diffResult.value.diff));
           }
-          setLoadingDiff(prev => prev === fileToLoad ? null : prev);
+          setLoadingDiff((prev) => (prev === fileToLoad ? null : prev));
         }
       }
     } else {
@@ -311,14 +353,14 @@ export function ReviewPane() {
   // Lazy load diff content for the selected file
   const loadDiffForFile = async (filePath: string) => {
     if (!effectiveThreadId || diffCache.has(filePath)) return;
-    const summary = summaries.find(s => s.path === filePath);
+    const summary = summaries.find((s) => s.path === filePath);
     if (!summary) return;
     setLoadingDiff(filePath);
     const result = await api.getFileDiff(effectiveThreadId, filePath, summary.staged);
     if (result.isOk()) {
-      setDiffCache(prev => new Map(prev).set(filePath, result.value.diff));
+      setDiffCache((prev) => new Map(prev).set(filePath, result.value.diff));
     }
-    setLoadingDiff(prev => prev === filePath ? null : prev);
+    setLoadingDiff((prev) => (prev === filePath ? null : prev));
   };
 
   // Load diff when selected file or expanded file changes
@@ -326,12 +368,14 @@ export function ReviewPane() {
     if (selectedFile && !diffCache.has(selectedFile)) {
       loadDiffForFile(selectedFile);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only trigger on file selection change; diffCache/loadDiffForFile change on every refresh and would cause loops
   }, [selectedFile]);
 
   useEffect(() => {
     if (expandedFile && !diffCache.has(expandedFile)) {
       loadDiffForFile(expandedFile);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only trigger on expanded file change; diffCache/loadDiffForFile change on every refresh and would cause loops
   }, [expandedFile]);
 
   // Track whether we need to refresh when the pane becomes visible
@@ -351,7 +395,9 @@ export function ReviewPane() {
     setSelectedAction('commit');
 
     // Restore commit title/body from draft store
-    const draft = effectiveThreadId ? useDraftStore.getState().drafts[effectiveThreadId] : undefined;
+    const draft = effectiveThreadId
+      ? useDraftStore.getState().drafts[effectiveThreadId]
+      : undefined;
     setCommitTitleRaw(draft?.commitTitle ?? '');
     setCommitBodyRaw(draft?.commitBody ?? '');
 
@@ -361,6 +407,7 @@ export function ReviewPane() {
     } else {
       needsRefreshRef.current = true;
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+refresh on thread change only; refresh/reviewPaneOpen are read but not deps (handled separately)
   }, [effectiveThreadId]);
 
   // Fire deferred refresh when the review pane becomes visible
@@ -369,6 +416,7 @@ export function ReviewPane() {
       needsRefreshRef.current = false;
       refresh();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refresh is a non-memoized function; only trigger on pane visibility change
   }, [reviewPaneOpen]);
 
   // Auto-refresh diffs when agent modifies files (debounced 2s)
@@ -377,7 +425,7 @@ export function ReviewPane() {
   const filteredDiffs = useMemo(() => {
     if (!fileSearch) return summaries;
     const query = fileSearch.toLowerCase();
-    return summaries.filter(d => d.path.toLowerCase().includes(query));
+    return summaries.filter((d) => d.path.toLowerCase().includes(query));
   }, [summaries, fileSearch]);
 
   const selectedDiffContent = selectedFile ? diffCache.get(selectedFile) : undefined;
@@ -393,7 +441,7 @@ export function ReviewPane() {
   });
 
   const toggleFile = (path: string) => {
-    setCheckedFiles(prev => {
+    setCheckedFiles((prev) => {
       const next = new Set(prev);
       if (next.has(path)) next.delete(path);
       else next.add(path);
@@ -405,7 +453,7 @@ export function ReviewPane() {
     if (checkedFiles.size === summaries.length) {
       setCheckedFiles(new Set());
     } else {
-      setCheckedFiles(new Set(summaries.map(d => d.path)));
+      setCheckedFiles(new Set(summaries.map((d) => d.path)));
     }
   };
 
@@ -431,8 +479,8 @@ export function ReviewPane() {
     // Only unstage files that are staged but NOT selected (avoid unstage→restage
     // cycle which breaks gitignored files that were previously force-staged)
     const toUnstage = summaries
-      .filter(f => f.staged && !checkedFiles.has(f.path))
-      .map(f => f.path);
+      .filter((f) => f.staged && !checkedFiles.has(f.path))
+      .map((f) => f.path);
     if (toUnstage.length > 0) {
       const unstageResult = await api.unstageFiles(effectiveThreadId, toUnstage);
       if (unstageResult.isErr()) {
@@ -442,8 +490,8 @@ export function ReviewPane() {
     }
 
     // Only stage files that are selected but NOT already staged
-    const toStage = Array.from(checkedFiles).filter(p => {
-      const s = summaries.find(f => f.path === p);
+    const toStage = Array.from(checkedFiles).filter((p) => {
+      const s = summaries.find((f) => f.path === p);
       return s && !s.staged;
     });
     if (toStage.length > 0) {
@@ -464,7 +512,8 @@ export function ReviewPane() {
   };
 
   const handleCommitAction = async () => {
-    if (!effectiveThreadId || !commitTitle.trim() || checkedFiles.size === 0 || actionInProgress) return;
+    if (!effectiveThreadId || !commitTitle.trim() || checkedFiles.size === 0 || actionInProgress)
+      return;
     setActionInProgress(selectedAction);
 
     const commitSuccess = await performCommit();
@@ -474,7 +523,11 @@ export function ReviewPane() {
     }
 
     if (selectedAction === 'commit' || selectedAction === 'amend') {
-      toast.success(selectedAction === 'amend' ? t('review.amendSuccess', 'Commit amended') : t('review.commitSuccess'));
+      toast.success(
+        selectedAction === 'amend'
+          ? t('review.amendSuccess', 'Commit amended')
+          : t('review.commitSuccess'),
+      );
     } else if (selectedAction === 'commit-push') {
       const pushResult = await api.push(effectiveThreadId);
       if (pushResult.isErr()) {
@@ -497,10 +550,15 @@ export function ReviewPane() {
         toast.success(
           <div>
             {t('review.prCreated')}
-            <a href={prResult.value.url} target="_blank" rel="noopener noreferrer" className="underline ml-2">
+            <a
+              href={prResult.value.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="ml-2 underline"
+            >
               View PR
             </a>
-          </div>
+          </div>,
         );
       } else {
         toast.success(t('review.prCreated'));
@@ -575,7 +633,13 @@ export function ReviewPane() {
     } else {
       const target = baseBranch || 'base';
       const branch = useThreadStore.getState().activeThread?.branch || '';
-      toast.success(t('review.mergeSuccess', { branch, target, defaultValue: `Merged "${branch}" into "${target}" successfully` }));
+      toast.success(
+        t('review.mergeSuccess', {
+          branch,
+          target,
+          defaultValue: `Merged "${branch}" into "${target}" successfully`,
+        }),
+      );
       // Refresh thread data so mode/branch/worktreePath reflect the cleanup
       await useThreadStore.getState().refreshActiveThread();
     }
@@ -595,17 +659,26 @@ export function ReviewPane() {
         return;
       }
     }
-    const prResult = await api.createPR(effectiveThreadId, prDialog.title.trim(), prDialog.body.trim());
+    const prResult = await api.createPR(
+      effectiveThreadId,
+      prDialog.title.trim(),
+      prDialog.body.trim(),
+    );
     if (prResult.isErr()) {
       toast.error(t('review.prFailed', { message: prResult.error.message }));
     } else if (prResult.value.url) {
       toast.success(
         <div>
           {t('review.prCreated')}
-          <a href={prResult.value.url} target="_blank" rel="noopener noreferrer" className="underline ml-2">
+          <a
+            href={prResult.value.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="ml-2 underline"
+          >
             View PR
           </a>
-        </div>
+        </div>,
       );
     } else {
       toast.success(t('review.prCreated'));
@@ -625,7 +698,7 @@ export function ReviewPane() {
     const prompt = t('review.agentResolvePrompt', { target });
     const title = t('review.agentResolveThreadTitle', { target });
     const { allowedTools, disallowedTools } = deriveToolLists(
-      useSettingsStore.getState().toolPermissions
+      useSettingsStore.getState().toolPermissions,
     );
 
     const result = await api.createThread({
@@ -695,7 +768,12 @@ export function ReviewPane() {
     if (result.isOk()) {
       setLogEntries(result.value.entries);
     } else {
-      toast.error(t('review.logFailed', { message: result.error.message, defaultValue: `Failed to load log: ${result.error.message}` }));
+      toast.error(
+        t('review.logFailed', {
+          message: result.error.message,
+          defaultValue: `Failed to load log: ${result.error.message}`,
+        }),
+      );
     }
     setLogLoading(false);
   };
@@ -705,7 +783,12 @@ export function ReviewPane() {
     setPullInProgress(true);
     const result = await api.pull(effectiveThreadId);
     if (result.isErr()) {
-      toast.error(t('review.pullFailed', { message: result.error.message, defaultValue: `Pull failed: ${result.error.message}` }));
+      toast.error(
+        t('review.pullFailed', {
+          message: result.error.message,
+          defaultValue: `Pull failed: ${result.error.message}`,
+        }),
+      );
     } else {
       toast.success(t('review.pullSuccess', 'Pulled successfully'));
     }
@@ -718,7 +801,12 @@ export function ReviewPane() {
     setStashInProgress(true);
     const result = await api.stash(effectiveThreadId);
     if (result.isErr()) {
-      toast.error(t('review.stashFailed', { message: result.error.message, defaultValue: `Stash failed: ${result.error.message}` }));
+      toast.error(
+        t('review.stashFailed', {
+          message: result.error.message,
+          defaultValue: `Stash failed: ${result.error.message}`,
+        }),
+      );
     } else {
       toast.success(t('review.stashSuccess', 'Changes stashed'));
     }
@@ -732,7 +820,12 @@ export function ReviewPane() {
     setStashPopInProgress(true);
     const result = await api.stashPop(effectiveThreadId);
     if (result.isErr()) {
-      toast.error(t('review.stashPopFailed', { message: result.error.message, defaultValue: `Stash pop failed: ${result.error.message}` }));
+      toast.error(
+        t('review.stashPopFailed', {
+          message: result.error.message,
+          defaultValue: `Stash pop failed: ${result.error.message}`,
+        }),
+      );
     } else {
       toast.success(t('review.stashPopSuccess', 'Stash applied'));
     }
@@ -758,7 +851,12 @@ export function ReviewPane() {
     setResetInProgress(true);
     const result = await api.resetSoft(effectiveThreadId);
     if (result.isErr()) {
-      toast.error(t('review.resetSoftFailed', { message: result.error.message, defaultValue: `Reset failed: ${result.error.message}` }));
+      toast.error(
+        t('review.resetSoftFailed', {
+          message: result.error.message,
+          defaultValue: `Reset failed: ${result.error.message}`,
+        }),
+      );
     } else {
       toast.success(t('review.resetSoftSuccess', 'Last commit undone'));
     }
@@ -771,16 +869,20 @@ export function ReviewPane() {
     if (reviewPaneOpen) {
       refreshStashList();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshStashList is a non-memoized function; only trigger on thread/visibility change
   }, [effectiveThreadId, reviewPaneOpen]);
 
-  const canCommit = checkedFiles.size > 0 && commitTitle.trim().length > 0 && !actionInProgress && !isAgentRunning;
+  const canCommit =
+    checkedFiles.size > 0 && commitTitle.trim().length > 0 && !actionInProgress && !isAgentRunning;
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex h-full flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 border-b border-sidebar-border">
+      <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-3">
         <div className="flex items-center gap-1">
-          <h3 className="text-xs font-semibold text-sidebar-foreground uppercase tracking-wider mr-1">{t('review.title')}</h3>
+          <h3 className="mr-1 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground">
+            {t('review.title')}
+          </h3>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -808,38 +910,44 @@ export function ReviewPane() {
             </TooltipTrigger>
             <TooltipContent side="top">{t('review.pull', 'Pull')}</TooltipContent>
           </Tooltip>
-          <Popover open={logOpen} onOpenChange={(open) => { setLogOpen(open); if (open) handleLoadLog(); }}>
+          <Popover
+            open={logOpen}
+            onOpenChange={(open) => {
+              setLogOpen(open);
+              if (open) handleLoadLog();
+            }}
+          >
             <Tooltip>
               <TooltipTrigger asChild>
                 <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="text-muted-foreground"
-                  >
+                  <Button variant="ghost" size="icon-xs" className="text-muted-foreground">
                     <History className="h-3.5 w-3.5" />
                   </Button>
                 </PopoverTrigger>
               </TooltipTrigger>
               <TooltipContent side="top">{t('review.log', 'Commit log')}</TooltipContent>
             </Tooltip>
-            <PopoverContent align="start" className="w-[400px] p-0 max-h-[360px] overflow-auto">
+            <PopoverContent align="start" className="max-h-[360px] w-[400px] overflow-auto p-0">
               {logLoading ? (
                 <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
                   <Loader2 className="h-3.5 w-3.5 animate-spin" />
                   {t('review.loadingLog', 'Loading commits\u2026')}
                 </div>
               ) : logEntries.length === 0 ? (
-                <p className="text-xs text-muted-foreground p-3">{t('review.noCommits', 'No commits yet')}</p>
+                <p className="p-3 text-xs text-muted-foreground">
+                  {t('review.noCommits', 'No commits yet')}
+                </p>
               ) : (
                 <div className="divide-y divide-border">
                   {logEntries.map((entry) => (
                     <div key={entry.hash} className="px-3 py-2 text-xs hover:bg-accent/50">
                       <div className="flex items-center gap-2">
-                        <code className="text-[10px] text-primary font-mono">{entry.shortHash}</code>
+                        <code className="font-mono text-[10px] text-primary">
+                          {entry.shortHash}
+                        </code>
                         <span className="text-muted-foreground">{entry.relativeDate}</span>
                       </div>
-                      <p className="mt-0.5 text-foreground truncate">{entry.message}</p>
+                      <p className="mt-0.5 truncate text-foreground">{entry.message}</p>
                       <p className="text-[10px] text-muted-foreground">{entry.author}</p>
                     </div>
                   ))}
@@ -860,7 +968,11 @@ export function ReviewPane() {
                   <Archive className={cn('h-3.5 w-3.5', stashInProgress && 'animate-pulse')} />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top">{isAgentRunning ? t('review.agentRunningTooltip') : t('review.stash', 'Stash changes')}</TooltipContent>
+              <TooltipContent side="top">
+                {isAgentRunning
+                  ? t('review.agentRunningTooltip')
+                  : t('review.stash', 'Stash changes')}
+              </TooltipContent>
             </Tooltip>
           )}
         </div>
@@ -880,10 +992,10 @@ export function ReviewPane() {
       </div>
 
       {/* Two-column layout: diff left, files right */}
-      <div className="flex-1 flex min-h-0">
+      <div className="flex min-h-0 flex-1">
         {/* Left: Diff viewer */}
-        <div className="flex-1 min-w-0 flex flex-col">
-          <ScrollArea className="flex-1 w-full">
+        <div className="flex min-w-0 flex-1 flex-col">
+          <ScrollArea className="w-full flex-1">
             {selectedFile ? (
               loadingDiff === selectedFile ? (
                 <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
@@ -898,32 +1010,36 @@ export function ReviewPane() {
                         variant="secondary"
                         size="icon-xs"
                         onClick={() => setExpandedFile(selectedFile)}
-                        className="sticky top-2 right-2 z-10 opacity-70 hover:opacity-100 shadow-md float-right mr-2 mt-2"
+                        className="sticky right-2 top-2 z-10 float-right mr-2 mt-2 opacity-70 shadow-md hover:opacity-100"
                       >
                         <Maximize2 className="h-3.5 w-3.5" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="left">{t('review.expand', 'Expand')}</TooltipContent>
                   </Tooltip>
-                  <Suspense fallback={<div className="p-2 text-xs text-muted-foreground">Loading diff\u2026</div>}>
+                  <Suspense
+                    fallback={
+                      <div className="p-2 text-xs text-muted-foreground">Loading diff\u2026</div>
+                    }
+                  >
                     <MemoizedDiffView diff={selectedDiffContent} />
                   </Suspense>
                 </div>
               ) : (
-                <p className="text-xs text-muted-foreground p-2">{t('review.binaryOrNoDiff')}</p>
+                <p className="p-2 text-xs text-muted-foreground">{t('review.binaryOrNoDiff')}</p>
               )
             ) : (
-              <p className="text-xs text-muted-foreground p-2">{t('review.selectFile')}</p>
+              <p className="p-2 text-xs text-muted-foreground">{t('review.selectFile')}</p>
             )}
             <ScrollBar orientation="horizontal" />
           </ScrollArea>
         </div>
 
         {/* Right: File list panel */}
-        <div className="w-[352px] flex-shrink-0 border-l border-sidebar-border flex flex-col">
+        <div className="flex w-[352px] flex-shrink-0 flex-col border-l border-sidebar-border">
           {/* Truncation warning */}
           {truncatedInfo.truncated && (
-            <div className="px-3 py-1.5 bg-yellow-500/10 border-b border-sidebar-border text-xs text-yellow-600 dark:text-yellow-400">
+            <div className="border-b border-sidebar-border bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-600 dark:text-yellow-400">
               {t('review.truncatedWarning', {
                 shown: summaries.length,
                 total: truncatedInfo.total,
@@ -934,9 +1050,9 @@ export function ReviewPane() {
 
           {/* File search */}
           {summaries.length > 0 && (
-            <div className="px-2 py-2 border-b border-sidebar-border">
+            <div className="border-b border-sidebar-border px-2 py-2">
               <div className="relative">
-                <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground pointer-events-none" />
+                <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
                 <Input
                   type="text"
                   placeholder={t('review.searchFiles', 'Filter files\u2026')}
@@ -962,10 +1078,16 @@ export function ReviewPane() {
 
           {/* Select all / count */}
           {summaries.length > 0 && (
-            <div className="flex items-center gap-1.5 px-4 py-1.5 border-b border-sidebar-border">
+            <div className="flex items-center gap-1.5 border-b border-sidebar-border px-4 py-1.5">
               <button
                 role="checkbox"
-                aria-checked={checkedFiles.size === summaries.length ? true : checkedFiles.size > 0 ? 'mixed' : false}
+                aria-checked={
+                  checkedFiles.size === summaries.length
+                    ? true
+                    : checkedFiles.size > 0
+                      ? 'mixed'
+                      : false
+                }
                 aria-label={t('review.selectAll', 'Select all files')}
                 onClick={toggleAll}
                 className={cn(
@@ -974,7 +1096,7 @@ export function ReviewPane() {
                     ? 'bg-primary border-primary text-primary-foreground'
                     : checkedFiles.size > 0
                       ? 'bg-primary/50 border-primary text-primary-foreground'
-                      : 'border-muted-foreground/40'
+                      : 'border-muted-foreground/40',
                 )}
               >
                 {checkedFiles.size > 0 && <Check className="h-2.5 w-2.5" />}
@@ -992,13 +1114,19 @@ export function ReviewPane() {
               {t('review.loading', 'Loading changes\u2026')}
             </div>
           ) : summaries.length === 0 ? (
-            <p className="text-xs text-muted-foreground p-3">{t('review.noChanges')}</p>
+            <p className="p-3 text-xs text-muted-foreground">{t('review.noChanges')}</p>
           ) : filteredDiffs.length === 0 ? (
-            <p className="text-xs text-muted-foreground p-3">{t('review.noMatchingFiles', 'No matching files')}</p>
+            <p className="p-3 text-xs text-muted-foreground">
+              {t('review.noMatchingFiles', 'No matching files')}
+            </p>
           ) : (
             <div ref={fileListRef} className="flex-1 overflow-auto">
               <div
-                style={{ height: `${virtualizer.getTotalSize()}px`, width: '100%', position: 'relative' }}
+                style={{
+                  height: `${virtualizer.getTotalSize()}px`,
+                  width: '100%',
+                  position: 'relative',
+                }}
               >
                 {virtualizer.getVirtualItems().map((virtualRow) => {
                   const f = filteredDiffs[virtualRow.index];
@@ -1018,33 +1146,37 @@ export function ReviewPane() {
                         'group flex items-center gap-1.5 px-4 text-xs cursor-pointer transition-colors',
                         selectedFile === f.path
                           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                          : 'hover:bg-sidebar-accent/50 text-muted-foreground'
+                          : 'hover:bg-sidebar-accent/50 text-muted-foreground',
                       )}
                       onClick={() => setSelectedFile(f.path)}
                     >
                       <button
                         role="checkbox"
                         aria-checked={isChecked}
-                        aria-label={t('review.selectFile', { file: f.path, defaultValue: `Select ${f.path}` })}
-                        onClick={(e) => { e.stopPropagation(); toggleFile(f.path); }}
+                        aria-label={t('review.selectFile', {
+                          file: f.path,
+                          defaultValue: `Select ${f.path}`,
+                        })}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFile(f.path);
+                        }}
                         className={cn(
                           'flex items-center justify-center h-3.5 w-3.5 rounded border transition-colors flex-shrink-0',
                           isChecked
                             ? 'bg-primary border-primary text-primary-foreground'
-                            : 'border-muted-foreground/40'
+                            : 'border-muted-foreground/40',
                         )}
                       >
                         {isChecked && <Check className="h-2.5 w-2.5" />}
                       </button>
-                      <span
-                        className="flex-1 truncate font-mono text-[11px]"
-                      >{f.path}</span>
+                      <span className="flex-1 truncate font-mono text-[11px]">{f.path}</span>
                       <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                           <button
                             onClick={(e) => e.stopPropagation()}
                             aria-label={t('review.moreActions', 'More actions')}
-                            className="flex items-center justify-center h-4 w-4 rounded text-muted-foreground hover:text-foreground transition-all flex-shrink-0 opacity-0 group-hover:opacity-100 data-[state=open]:opacity-100"
+                            className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
                           >
                             <MoreHorizontal className="h-3 w-3" />
                           </button>
@@ -1091,7 +1223,10 @@ export function ReviewPane() {
                                 </DropdownMenuSubTrigger>
                                 <DropdownMenuSubContent>
                                   {folders.map((folder) => (
-                                    <DropdownMenuItem key={folder} onClick={() => handleIgnore(folder)}>
+                                    <DropdownMenuItem
+                                      key={folder}
+                                      onClick={() => handleIgnore(folder)}
+                                    >
                                       {folder}
                                     </DropdownMenuItem>
                                   ))}
@@ -1120,14 +1255,22 @@ export function ReviewPane() {
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
-                      <span className={cn(
-                        'text-[10px] font-medium flex-shrink-0',
-                        f.status === 'added' && 'text-status-success',
-                        f.status === 'modified' && 'text-status-pending',
-                        f.status === 'deleted' && 'text-destructive',
-                        f.status === 'renamed' && 'text-status-info',
-                      )}>
-                        {f.status === 'added' ? 'A' : f.status === 'modified' ? 'M' : f.status === 'deleted' ? 'D' : 'R'}
+                      <span
+                        className={cn(
+                          'text-[10px] font-medium flex-shrink-0',
+                          f.status === 'added' && 'text-status-success',
+                          f.status === 'modified' && 'text-status-pending',
+                          f.status === 'deleted' && 'text-destructive',
+                          f.status === 'renamed' && 'text-status-info',
+                        )}
+                      >
+                        {f.status === 'added'
+                          ? 'A'
+                          : f.status === 'modified'
+                            ? 'M'
+                            : f.status === 'deleted'
+                              ? 'D'
+                              : 'R'}
                       </span>
                     </div>
                   );
@@ -1138,7 +1281,7 @@ export function ReviewPane() {
 
           {/* Commit controls */}
           {summaries.length > 0 && (
-            <div className="border-t border-sidebar-border p-2 space-y-1.5 flex-shrink-0">
+            <div className="flex-shrink-0 space-y-1.5 border-t border-sidebar-border p-2">
               <input
                 type="text"
                 placeholder={t('review.commitTitle')}
@@ -1150,7 +1293,7 @@ export function ReviewPane() {
               />
               <div className="rounded-md border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
                 <textarea
-                  className="w-full px-2 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none resize-none bg-transparent"
+                  className="w-full resize-none bg-transparent px-2 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none"
                   rows={7}
                   aria-label={t('review.commitBody', 'Commit body')}
                   placeholder={t('review.commitBody')}
@@ -1171,21 +1314,46 @@ export function ReviewPane() {
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="top">
-                      {generatingMsg ? t('review.generatingCommitMsg') : t('review.generateCommitMsg')}
+                      {generatingMsg
+                        ? t('review.generatingCommitMsg')
+                        : t('review.generateCommitMsg')}
                     </TooltipContent>
                   </Tooltip>
                 </div>
               </div>
-              <div className={cn('grid gap-1 mt-2', (isWorktree && hasWorktreePath) ? 'grid-cols-5' : 'grid-cols-3')}>
-                {([
-                  { value: 'commit' as const, icon: GitCommit, label: t('review.commit', 'Commit') },
+              <div
+                className={cn(
+                  'grid gap-1 mt-2',
+                  isWorktree && hasWorktreePath ? 'grid-cols-5' : 'grid-cols-3',
+                )}
+              >
+                {[
+                  {
+                    value: 'commit' as const,
+                    icon: GitCommit,
+                    label: t('review.commit', 'Commit'),
+                  },
                   { value: 'amend' as const, icon: PenLine, label: t('review.amend', 'Amend') },
-                  { value: 'commit-push' as const, icon: Upload, label: t('review.commitAndPush', 'Commit & Push') },
-                  ...((isWorktree && hasWorktreePath) ? [
-                    { value: 'commit-pr' as const, icon: GitPullRequest, label: t('review.commitAndCreatePR', 'Commit & Create PR') },
-                    { value: 'commit-merge' as const, icon: GitMerge, label: t('review.commitAndMerge', 'Commit & Merge') },
-                  ] : []),
-                ]).map(({ value, icon: ActionIcon, label }) => (
+                  {
+                    value: 'commit-push' as const,
+                    icon: Upload,
+                    label: t('review.commitAndPush', 'Commit & Push'),
+                  },
+                  ...(isWorktree && hasWorktreePath
+                    ? [
+                        {
+                          value: 'commit-pr' as const,
+                          icon: GitPullRequest,
+                          label: t('review.commitAndCreatePR', 'Commit & Create PR'),
+                        },
+                        {
+                          value: 'commit-merge' as const,
+                          icon: GitMerge,
+                          label: t('review.commitAndMerge', 'Commit & Merge'),
+                        },
+                      ]
+                    : []),
+                ].map(({ value, icon: ActionIcon, label }) => (
                   <Tooltip key={value}>
                     <TooltipTrigger asChild>
                       <button
@@ -1197,10 +1365,12 @@ export function ReviewPane() {
                           'hover:bg-accent/50 disabled:opacity-50 disabled:cursor-not-allowed',
                           selectedAction === value
                             ? 'border-primary bg-primary/5 text-foreground'
-                            : 'border-border text-muted-foreground'
+                            : 'border-border text-muted-foreground',
                         )}
                       >
-                        <ActionIcon className={cn('h-4 w-4', selectedAction === value && 'text-primary')} />
+                        <ActionIcon
+                          className={cn('h-4 w-4', selectedAction === value && 'text-primary')}
+                        />
                         <span className="text-[10px] font-medium leading-tight">{label}</span>
                       </button>
                     </TooltipTrigger>
@@ -1219,7 +1389,9 @@ export function ReviewPane() {
                       onClick={handleCommitAction}
                       disabled={!canCommit}
                     >
-                      {actionInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : null}
+                      {actionInProgress ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : null}
                       {t('review.continue', 'Continue')}
                     </Button>
                   </div>
@@ -1233,10 +1405,15 @@ export function ReviewPane() {
 
           {/* Standalone push button — shown when no dirty files but there are unpushed commits */}
           {showPushOnly && (
-            <div className="border-t border-sidebar-border p-3 flex-shrink-0 space-y-2">
+            <div className="flex-shrink-0 space-y-2 border-t border-sidebar-border p-3">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <Upload className="h-3.5 w-3.5" />
-                <span>{t('review.readyToPush', { count: gitStatus!.unpushedCommitCount, defaultValue: `${gitStatus!.unpushedCommitCount} commit(s) ready to push` })}</span>
+                <span>
+                  {t('review.readyToPush', {
+                    count: gitStatus!.unpushedCommitCount,
+                    defaultValue: `${gitStatus!.unpushedCommitCount} commit(s) ready to push`,
+                  })}
+                </span>
               </div>
               <div className="flex gap-1.5">
                 <Tooltip>
@@ -1248,7 +1425,11 @@ export function ReviewPane() {
                         onClick={handlePushOnly}
                         disabled={pushInProgress || !!isAgentRunning}
                       >
-                        {pushInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Upload className="h-3.5 w-3.5 mr-1.5" />}
+                        {pushInProgress ? (
+                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Upload className="mr-1.5 h-3.5 w-3.5" />
+                        )}
                         {t('review.pushToOrigin', 'Push to origin')}
                       </Button>
                     </span>
@@ -1265,10 +1446,18 @@ export function ReviewPane() {
                       onClick={handleResetSoft}
                       disabled={resetInProgress || !!isAgentRunning}
                     >
-                      {resetInProgress ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RotateCcw className="h-3.5 w-3.5" />}
+                      {resetInProgress ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <RotateCcw className="h-3.5 w-3.5" />
+                      )}
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent side="top">{isAgentRunning ? t('review.agentRunningTooltip') : t('review.undoLastCommit', 'Undo last commit')}</TooltipContent>
+                  <TooltipContent side="top">
+                    {isAgentRunning
+                      ? t('review.agentRunningTooltip')
+                      : t('review.undoLastCommit', 'Undo last commit')}
+                  </TooltipContent>
                 </Tooltip>
               </div>
             </div>
@@ -1276,23 +1465,32 @@ export function ReviewPane() {
 
           {/* Stash pop — shown when no dirty files but there are stashed changes */}
           {summaries.length === 0 && !loading && stashEntries.length > 0 && (
-            <div className="border-t border-sidebar-border p-3 flex-shrink-0 space-y-3">
+            <div className="flex-shrink-0 space-y-3 border-t border-sidebar-border p-3">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <ArchiveRestore className="h-3.5 w-3.5" />
-                <span>{t('review.stashedChanges', { count: stashEntries.length, defaultValue: `${stashEntries.length} stash(es) saved` })}</span>
+                <span>
+                  {t('review.stashedChanges', {
+                    count: stashEntries.length,
+                    defaultValue: `${stashEntries.length} stash(es) saved`,
+                  })}
+                </span>
               </div>
               <Tooltip>
                 <TooltipTrigger asChild>
-                    <Button
-                      className="w-full"
-                      size="sm"
-                      variant="outline"
-                      onClick={handleStashPop}
-                      disabled={stashPopInProgress || !!isAgentRunning}
-                    >
-                      {stashPopInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <ArchiveRestore className="h-3.5 w-3.5 mr-1.5" />}
-                      {t('review.popStash', 'Pop stash')}
-                    </Button>
+                  <Button
+                    className="w-full"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleStashPop}
+                    disabled={stashPopInProgress || !!isAgentRunning}
+                  >
+                    {stashPopInProgress ? (
+                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                    ) : (
+                      <ArchiveRestore className="mr-1.5 h-3.5 w-3.5" />
+                    )}
+                    {t('review.popStash', 'Pop stash')}
+                  </Button>
                 </TooltipTrigger>
                 {isAgentRunning && (
                   <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
@@ -1303,10 +1501,15 @@ export function ReviewPane() {
 
           {/* Standalone merge / create PR buttons — shown when no dirty files but worktree has unmerged commits */}
           {showMergeOnly && (
-            <div className="border-t border-sidebar-border p-3 flex-shrink-0 space-y-3">
+            <div className="flex-shrink-0 space-y-3 border-t border-sidebar-border p-3">
               <div className="flex items-center gap-2 text-xs text-muted-foreground">
                 <GitMerge className="h-3.5 w-3.5" />
-                <span>{t('review.readyToMerge', { target: baseBranch || 'base', defaultValue: `Ready to merge into ${baseBranch || 'base'}` })}</span>
+                <span>
+                  {t('review.readyToMerge', {
+                    target: baseBranch || 'base',
+                    defaultValue: `Ready to merge into ${baseBranch || 'base'}`,
+                  })}
+                </span>
               </div>
               <div className="flex gap-1.5">
                 <Tooltip>
@@ -1317,8 +1520,15 @@ export function ReviewPane() {
                       onClick={handleMergeOnly}
                       disabled={mergeInProgress || !!isAgentRunning}
                     >
-                      {mergeInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <GitMerge className="h-3.5 w-3.5 mr-1.5" />}
-                      {t('review.mergeIntoBranch', { target: baseBranch || 'base', defaultValue: `Merge into ${baseBranch || 'base'}` })}
+                      {mergeInProgress ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <GitMerge className="mr-1.5 h-3.5 w-3.5" />
+                      )}
+                      {t('review.mergeIntoBranch', {
+                        target: baseBranch || 'base',
+                        defaultValue: `Merge into ${baseBranch || 'base'}`,
+                      })}
                     </Button>
                   </TooltipTrigger>
                   {isAgentRunning && (
@@ -1339,7 +1549,10 @@ export function ReviewPane() {
                   <TooltipContent side="top">
                     {isAgentRunning
                       ? t('review.agentRunningTooltip')
-                      : t('review.createPRTooltip', { branch: threadBranch, target: baseBranch || 'base' })}
+                      : t('review.createPRTooltip', {
+                          branch: threadBranch,
+                          target: baseBranch || 'base',
+                        })}
                   </TooltipContent>
                 </Tooltip>
               </div>
@@ -1348,7 +1561,7 @@ export function ReviewPane() {
 
           {/* Rebase conflict resolution — shown when merge/rebase failed with conflicts */}
           {hasRebaseConflict && (
-            <div className="border-t border-sidebar-border p-3 flex-shrink-0 space-y-2">
+            <div className="flex-shrink-0 space-y-2 border-t border-sidebar-border p-3">
               <div className="flex items-center gap-2 text-xs text-destructive">
                 <AlertTriangle className="h-3.5 w-3.5" />
                 <span>{t('review.mergeConflict', { target: baseBranch || 'main' })}</span>
@@ -1360,16 +1573,14 @@ export function ReviewPane() {
                   variant="outline"
                   onClick={handleOpenInEditorConflict}
                 >
-                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                  {t('review.openInEditor', { editor: editorLabels[useSettingsStore.getState().defaultEditor] })}
+                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
+                  {t('review.openInEditor', {
+                    editor: editorLabels[useSettingsStore.getState().defaultEditor],
+                  })}
                 </Button>
               )}
-              <Button
-                className="w-full"
-                size="sm"
-                onClick={handleAskAgentResolve}
-              >
-                <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+              <Button className="w-full" size="sm" onClick={handleAskAgentResolve}>
+                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
                 {t('review.askAgentResolve')}
               </Button>
             </div>
@@ -1378,7 +1589,12 @@ export function ReviewPane() {
       </div>
 
       {/* Confirmation dialog for destructive actions */}
-      <Dialog open={!!confirmDialog} onOpenChange={(open) => { if (!open) setConfirmDialog(null); }}>
+      <Dialog
+        open={!!confirmDialog}
+        onOpenChange={(open) => {
+          if (!open) setConfirmDialog(null);
+        }}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>
@@ -1392,7 +1608,7 @@ export function ReviewPane() {
                 : t('review.resetSoftConfirm', 'Undo the last commit? Changes will be kept.')}
             </DialogDescription>
           </DialogHeader>
-          <div className="flex justify-end gap-2 mt-2">
+          <div className="mt-2 flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setConfirmDialog(null)}>
               {t('common.cancel', 'Cancel')}
             </Button>
@@ -1416,7 +1632,12 @@ export function ReviewPane() {
       </Dialog>
 
       {/* Create PR dialog */}
-      <Dialog open={!!prDialog} onOpenChange={(open) => { if (!open) setPrDialog(null); }}>
+      <Dialog
+        open={!!prDialog}
+        onOpenChange={(open) => {
+          if (!open) setPrDialog(null);
+        }}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{t('review.createPR')}</DialogTitle>
@@ -1429,17 +1650,21 @@ export function ReviewPane() {
               className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               placeholder={t('review.prTitle', 'PR title')}
               value={prDialog?.title ?? ''}
-              onChange={(e) => setPrDialog(prev => prev ? { ...prev, title: e.target.value } : prev)}
+              onChange={(e) =>
+                setPrDialog((prev) => (prev ? { ...prev, title: e.target.value } : prev))
+              }
             />
             <textarea
-              className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring resize-none"
+              className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               rows={4}
               placeholder={t('review.commitBody', 'Description (optional)')}
               value={prDialog?.body ?? ''}
-              onChange={(e) => setPrDialog(prev => prev ? { ...prev, body: e.target.value } : prev)}
+              onChange={(e) =>
+                setPrDialog((prev) => (prev ? { ...prev, body: e.target.value } : prev))
+              }
             />
           </div>
-          <div className="flex justify-end gap-2 mt-2">
+          <div className="mt-2 flex justify-end gap-2">
             <Button variant="outline" size="sm" onClick={() => setPrDialog(null)}>
               {t('common.cancel', 'Cancel')}
             </Button>
@@ -1448,7 +1673,11 @@ export function ReviewPane() {
               disabled={!prDialog?.title.trim() || prInProgress}
               onClick={handleCreatePROnly}
             >
-              {prInProgress ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <GitPullRequest className="h-3.5 w-3.5 mr-1.5" />}
+              {prInProgress ? (
+                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <GitPullRequest className="mr-1.5 h-3.5 w-3.5" />
+              )}
               {t('review.createPR')}
             </Button>
           </div>
@@ -1456,26 +1685,39 @@ export function ReviewPane() {
       </Dialog>
 
       {/* Expanded diff modal */}
-      <Dialog open={!!expandedFile} onOpenChange={(open) => { if (!open) setExpandedFile(null); }}>
-        <DialogContent className="max-w-[90vw] w-[90vw] h-[85vh] flex flex-col p-0 gap-0">
+      <Dialog
+        open={!!expandedFile}
+        onOpenChange={(open) => {
+          if (!open) setExpandedFile(null);
+        }}
+      >
+        <DialogContent className="flex h-[85vh] w-[90vw] max-w-[90vw] flex-col gap-0 p-0">
           {(() => {
             if (!expandedFile) return null;
-            const expandedSummary = summaries.find(s => s.path === expandedFile);
+            const expandedSummary = summaries.find((s) => s.path === expandedFile);
             if (!expandedSummary) return null;
             const expandedDiffContent = diffCache.get(expandedFile);
             const Icon = fileStatusIcons[expandedSummary.status] || FileCode;
             return (
               <>
-                <DialogHeader className="px-4 py-3 pr-10 border-b border-border flex-shrink-0 overflow-hidden">
-                  <div className="flex items-center gap-2 min-w-0 overflow-hidden">
+                <DialogHeader className="flex-shrink-0 overflow-hidden border-b border-border px-4 py-3 pr-10">
+                  <div className="flex min-w-0 items-center gap-2 overflow-hidden">
                     <Icon className="h-4 w-4 flex-shrink-0" />
-                    <DialogTitle className="font-mono text-sm min-w-0 overflow-hidden whitespace-nowrap text-ellipsis" style={{ direction: 'rtl', textAlign: 'left' }}>{expandedSummary.path}</DialogTitle>
+                    <DialogTitle
+                      className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-sm"
+                      style={{ direction: 'rtl', textAlign: 'left' }}
+                    >
+                      {expandedSummary.path}
+                    </DialogTitle>
                   </div>
                   <DialogDescription className="sr-only">
-                    {t('review.diffFor', { file: expandedSummary.path, defaultValue: `Diff for ${expandedSummary.path}` })}
+                    {t('review.diffFor', {
+                      file: expandedSummary.path,
+                      defaultValue: `Diff for ${expandedSummary.path}`,
+                    })}
                   </DialogDescription>
                 </DialogHeader>
-                <ScrollArea className="flex-1 min-h-0">
+                <ScrollArea className="min-h-0 flex-1">
                   {loadingDiff === expandedFile ? (
                     <div className="flex items-center gap-2 p-4 text-sm text-muted-foreground">
                       <Loader2 className="h-4 w-4 animate-spin" />
@@ -1483,12 +1725,20 @@ export function ReviewPane() {
                     </div>
                   ) : expandedDiffContent ? (
                     <div className="[&_.diff-container]:font-mono [&_table]:w-full [&_td]:overflow-hidden [&_td]:text-ellipsis">
-                      <Suspense fallback={<div className="p-4 text-sm text-muted-foreground">Loading diff\u2026</div>}>
+                      <Suspense
+                        fallback={
+                          <div className="p-4 text-sm text-muted-foreground">
+                            Loading diff\u2026
+                          </div>
+                        }
+                      >
                         <MemoizedDiffView diff={expandedDiffContent} splitView={true} />
                       </Suspense>
                     </div>
                   ) : (
-                    <p className="text-sm text-muted-foreground p-4">{t('review.binaryOrNoDiff')}</p>
+                    <p className="p-4 text-sm text-muted-foreground">
+                      {t('review.binaryOrNoDiff')}
+                    </p>
                   )}
                   <ScrollBar orientation="horizontal" />
                 </ScrollArea>

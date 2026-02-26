@@ -1,6 +1,13 @@
-import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { statusConfig, stageConfig, timeAgo, gitSyncStateConfig, getStatusLabels } from '@/lib/thread-utils';
 import type { ThreadStatus, GitSyncState, ThreadStage } from '@funny/shared';
+import { describe, test, expect, vi } from 'vitest';
+
+import {
+  statusConfig,
+  stageConfig,
+  timeAgo,
+  gitSyncStateConfig,
+  getStatusLabels,
+} from '@/lib/thread-utils';
 
 // A mock translation function that returns the key and any interpolation options
 const t = (key: string, opts?: any) => (opts ? `${key}:${JSON.stringify(opts)}` : key);
@@ -57,7 +64,14 @@ describe('statusConfig', () => {
 });
 
 describe('stageConfig', () => {
-  const allStages: ThreadStage[] = ['backlog', 'planning', 'in_progress', 'review', 'done', 'archived'];
+  const allStages: ThreadStage[] = [
+    'backlog',
+    'planning',
+    'in_progress',
+    'review',
+    'done',
+    'archived',
+  ];
 
   test('has an entry for every ThreadStage', () => {
     for (const stage of allStages) {

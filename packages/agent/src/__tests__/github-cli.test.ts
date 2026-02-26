@@ -16,9 +16,7 @@ import { describe, it, expect, mock, beforeEach } from 'bun:test';
 
 // ── Mock process execution ──────────────────────────────────────
 
-const mockExecute = mock(() =>
-  Promise.resolve({ exitCode: 0, stdout: '{}', stderr: '' })
-);
+const mockExecute = mock(() => Promise.resolve({ exitCode: 0, stdout: '{}', stderr: '' }));
 
 mock.module('../../../core/src/git/process.js', () => ({
   execute: mockExecute,
@@ -33,9 +31,8 @@ mock.module('../../../core/src/git/process.js', () => ({
   },
 }));
 
-const { fetchPRReviews, checkPRApprovalStatus, mergePR } = await import(
-  '../../../core/src/git/github.js'
-);
+const { fetchPRReviews, checkPRApprovalStatus, mergePR } =
+  await import('../../../core/src/git/github.js');
 
 // ── Tests ───────────────────────────────────────────────────────
 
@@ -102,7 +99,7 @@ describe('GitHub CLI wrappers (E2E)', () => {
       expect(data.reviewDecision).toBe('CHANGES_REQUESTED');
 
       // Verify correct gh command was called
-      const [cmd, args, opts] = mockExecute.mock.calls[0] as [string, string[], any];
+      const [cmd, args] = mockExecute.mock.calls[0] as [string, string[], any];
       expect(cmd).toBe('gh');
       expect(args).toContain('pr');
       expect(args).toContain('view');

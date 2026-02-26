@@ -6,12 +6,13 @@
 import { spawn, type ChildProcess } from 'child_process';
 import { join } from 'path';
 import { createInterface } from 'readline';
+
+import { log } from '../lib/logger.js';
 import { wsBroker } from './ws-broker.js';
-import { log } from '../lib/abbacchio.js';
 
 let helperProcess: ChildProcess | null = null;
 let helperStdin: any = null; // Type as any to avoid strict stream types mismatch
-const pendingSpawns = new Set<string>();
+const _pendingSpawns = new Set<string>();
 
 // Ensure helper is running
 function ensureHelper() {
@@ -51,7 +52,11 @@ function ensureHelper() {
         const msg = JSON.parse(line);
         handleHelperMessage(msg);
       } catch (err) {
-        log.error('Failed to parse PTY helper output', { namespace: 'pty-manager', line, error: err });
+        log.error('Failed to parse PTY helper output', {
+          namespace: 'pty-manager',
+          line,
+          error: err,
+        });
       }
     });
   }
@@ -71,14 +76,14 @@ function handleHelperMessage(msg: any) {
   switch (type) {
     case 'pty:data':
       if (data.ptyId) {
-        // If the PTY is associated with a specific user (we don't track user mapping easily here anymore 
+        // If the PTY is associated with a specific user (we don't track user mapping easily here anymore
         // without complex state, so we broadcast to all sessions for now or check if we can retrieve it).
-        // 
+        //
         // In the original code we had:
         // if (userId && userId !== '__local__') wsBroker.emitToUser(userId, event);
         // else wsBroker.emit(event);
         //
-        // To keep it simple and since we lost the direct userId context in this event stream 
+        // To keep it simple and since we lost the direct userId context in this event stream
         // (unless we store it in a map in this file), let's store it.
 
         const session = activeSessions.get(data.ptyId);
@@ -99,7 +104,11 @@ function handleHelperMessage(msg: any) {
     case 'pty:exit':
       if (data.ptyId) {
         const session = activeSessions.get(data.ptyId);
-        log.info('PTY exited', { namespace: 'pty-manager', ptyId: data.ptyId, exitCode: data.exitCode });
+        log.info('PTY exited', {
+          namespace: 'pty-manager',
+          ptyId: data.ptyId,
+          exitCode: data.exitCode,
+        });
 
         const event = {
           type: 'pty:exit' as const,
@@ -177,7 +186,9 @@ export function killAllPtys(): void {
         // Fallback: if taskkill fails, try the normal kill
         if (r.exitCode !== 0) helperProcess.kill();
       } catch {
-        try { helperProcess.kill(); } catch {}
+        try {
+          helperProcess.kill();
+        } catch {}
       }
     } else {
       helperProcess.kill();

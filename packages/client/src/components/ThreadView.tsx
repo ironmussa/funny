@@ -1,34 +1,59 @@
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo, memo, startTransition, lazy, Suspense } from 'react';
+import {
+  Loader2,
+  Clock,
+  Copy,
+  Check,
+  Send,
+  CheckCircle2,
+  XCircle,
+  ArrowDown,
+  ShieldQuestion,
+  FileText,
+  ChevronRight,
+  ChevronDown,
+} from 'lucide-react';
+import { motion, useReducedMotion } from 'motion/react';
+import {
+  useState,
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useMemo,
+  memo,
+  startTransition,
+  lazy,
+  Suspense,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
-import { useUIStore } from '@/stores/ui-store';
-import { cn } from '@/lib/utils';
-import { Input } from '@/components/ui/input';
-import { Loader2, Clock, Copy, Check, Send, CheckCircle2, XCircle, ArrowDown, ShieldQuestion, FileText, ChevronRight, ChevronDown } from 'lucide-react';
-import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { timeAgo, resolveModelLabel } from '@/lib/thread-utils';
-import { useMinuteTick } from '@/hooks/use-minute-tick';
-import { api } from '@/lib/api';
-import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
-import { useThreadStore } from '@/stores/thread-store';
-import { selectLastMessage, selectFirstMessage } from '@/stores/thread-selectors';
-import { useProjectStore } from '@/stores/project-store';
-import { PromptInput } from './PromptInput';
-import { ToolCallCard } from './ToolCallCard';
-import { ToolCallGroup } from './ToolCallGroup';
-import { ImageLightbox } from './ImageLightbox';
-import { Badge } from '@/components/ui/badge';
+
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Badge } from '@/components/ui/badge';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { ProjectHeader } from './thread/ProjectHeader';
-import { NewThreadInput } from './thread/NewThreadInput';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useTodoSnapshots } from '@/hooks/use-todo-panel';
+import { api } from '@/lib/api';
+import { parseReferencedFiles } from '@/lib/parse-referenced-files';
+import { timeAgo, resolveModelLabel } from '@/lib/thread-utils';
+import { cn } from '@/lib/utils';
+import { useProjectStore } from '@/stores/project-store';
+import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
+import { selectLastMessage, selectFirstMessage } from '@/stores/thread-selectors';
+import { useThreadStore } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
+
+import { ImageLightbox } from './ImageLightbox';
+import { PromptInput } from './PromptInput';
 import { AgentResultCard, AgentInterruptedCard, AgentStoppedCard } from './thread/AgentStatusCards';
 import { GitEventCard } from './thread/GitEventCard';
-import { TodoPanel } from './thread/TodoPanel';
+import { NewThreadInput } from './thread/NewThreadInput';
+import { ProjectHeader } from './thread/ProjectHeader';
 import { PromptTimeline } from './thread/PromptTimeline';
-import { parseReferencedFiles } from '@/lib/parse-referenced-files';
-import { useTodoSnapshots } from '@/hooks/use-todo-panel';
+import { ToolCallCard } from './ToolCallCard';
+import { ToolCallGroup } from './ToolCallGroup';
 
 const D4C_FRAMES = ['🐇', '🌀', '🐰', '⭐'];
 const D4C_INTERVAL = 600;
@@ -39,21 +64,20 @@ function D4CAnimation() {
     const id = setInterval(() => setFrame((f) => (f + 1) % D4C_FRAMES.length), D4C_INTERVAL);
     return () => clearInterval(id);
   }, []);
-  return <span className="inline-block text-base leading-none w-5 text-center">{D4C_FRAMES[frame]}</span>;
+  return (
+    <span className="inline-block w-5 text-center text-base leading-none">{D4C_FRAMES[frame]}</span>
+  );
 }
 
 // Regex to match file paths like /foo/bar.ts, C:\foo\bar.ts, or file_path:line_number patterns
-const FILE_PATH_RE = /(?:[A-Za-z]:[\\\/]|\/)[^\s:*?"<>|,()]+(?::\d+)?/g;
+const FILE_PATH_RE = /(?:[A-Za-z]:[\\/]|\/)[^\s:*?"<>|,()]+(?::\d+)?/g;
 
-import { toEditorUriWithLine, openFileInEditor, getEditorLabel } from '@/lib/editor-utils';
+import { toEditorUriWithLine, openFileInEditor } from '@/lib/editor-utils';
 import { editorLabels } from '@/stores/settings-store';
 
 // Prefetch react-markdown + remark-gfm immediately at module load time.
 // By the time ThreadView renders messages, the chunks are already downloaded.
-const _markdownImport = Promise.all([
-  import('react-markdown'),
-  import('remark-gfm'),
-]);
+const _markdownImport = Promise.all([import('react-markdown'), import('remark-gfm')]);
 
 const LazyMarkdownRenderer = lazy(() =>
   _markdownImport.then(([{ default: ReactMarkdown }, { default: remarkGfm }]) => {
@@ -69,7 +93,11 @@ const LazyMarkdownRenderer = lazy(() =>
           const label = editorLabels[editor];
           if (uri) {
             return (
-              <a href={uri} className="text-primary hover:underline" title={`Open in ${label}: ${text}`}>
+              <a
+                href={uri}
+                className="text-primary hover:underline"
+                title={`Open in ${label}: ${text}`}
+              >
                 {children}
               </a>
             );
@@ -77,22 +105,45 @@ const LazyMarkdownRenderer = lazy(() =>
           return (
             <button
               onClick={() => openFileInEditor(fileMatch[0], editor)}
-              className="text-primary hover:underline cursor-pointer inline"
+              className="inline cursor-pointer text-primary hover:underline"
               title={`Open in ${label}: ${text}`}
             >
               {children}
             </button>
           );
         }
-        return <a href={href} className="text-primary hover:underline" target="_blank" rel="noopener noreferrer">{children}</a>;
+        return (
+          <a
+            href={href}
+            className="text-primary hover:underline"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            {children}
+          </a>
+        );
       },
       code: ({ className, children, ...props }: any) => {
         const isBlock = className?.startsWith('language-');
-        return isBlock
-          ? <code className={cn('block bg-muted p-2 rounded text-xs font-mono overflow-x-auto', className)} {...props}>{children}</code>
-          : <code className="bg-muted px-1 py-0.5 rounded text-xs font-mono" {...props}>{children}</code>;
+        return isBlock ? (
+          <code
+            className={cn(
+              'block bg-muted p-2 rounded text-xs font-mono overflow-x-auto',
+              className,
+            )}
+            {...props}
+          >
+            {children}
+          </code>
+        ) : (
+          <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs" {...props}>
+            {children}
+          </code>
+        );
       },
-      pre: ({ children }: any) => <pre className="bg-muted rounded p-2 font-mono overflow-x-auto my-2">{children}</pre>,
+      pre: ({ children }: any) => (
+        <pre className="my-2 overflow-x-auto rounded bg-muted p-2 font-mono">{children}</pre>
+      ),
     };
 
     function MarkdownRenderer({ content }: { content: string }) {
@@ -103,13 +154,17 @@ const LazyMarkdownRenderer = lazy(() =>
       );
     }
     return { default: MarkdownRenderer };
-  })
+  }),
 );
 
 export const MessageContent = memo(function MessageContent({ content }: { content: string }) {
   return (
     <div className="prose prose-sm max-w-none">
-      <Suspense fallback={<div className="prose prose-sm max-w-none text-sm whitespace-pre-wrap">{content}</div>}>
+      <Suspense
+        fallback={
+          <div className="prose prose-sm max-w-none whitespace-pre-wrap text-sm">{content}</div>
+        }
+      >
         <LazyMarkdownRenderer content={content} />
       </Suspense>
     </div>
@@ -128,7 +183,7 @@ export function CopyButton({ content }: { content: string }) {
   return (
     <button
       onClick={handleCopy}
-      className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity p-1 rounded hover:bg-muted text-muted-foreground hover:text-foreground"
+      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
       aria-label="Copy message"
     >
       {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
@@ -153,8 +208,8 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
   };
 
   return (
-    <div className="rounded-lg border border-status-warning/20 bg-status-warning/5 p-3 space-y-2.5">
-      <div className="flex items-center gap-2 text-status-warning/80 text-xs">
+    <div className="space-y-2.5 rounded-lg border border-status-warning/20 bg-status-warning/5 p-3">
+      <div className="flex items-center gap-2 text-xs text-status-warning/80">
         <Clock className="h-3.5 w-3.5" />
         {t('thread.waitingForResponse')}
       </div>
@@ -162,14 +217,14 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
       <div className="flex gap-2">
         <button
           onClick={() => onSend('Continue')}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors"
+          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
           <CheckCircle2 className="h-3.5 w-3.5" />
           {t('thread.acceptContinue')}
         </button>
         <button
           onClick={() => onSend('No, do not proceed with that action.')}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-muted text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors"
+          className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
         >
           <XCircle className="h-3.5 w-3.5" />
           {t('thread.reject')}
@@ -189,7 +244,7 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
             }
           }}
           placeholder={t('thread.waitingInputPlaceholder')}
-          className="flex-1 h-auto py-1.5"
+          className="h-auto flex-1 py-1.5"
         />
         <button
           onClick={handleSubmitInput}
@@ -198,7 +253,7 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
             'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
             input.trim()
               ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-              : 'bg-muted text-muted-foreground cursor-not-allowed'
+              : 'bg-muted text-muted-foreground cursor-not-allowed',
           )}
         >
           <Send className="h-3 w-3" />
@@ -212,7 +267,7 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
 export function PermissionApprovalCard({
   toolName,
   onApprove,
-  onDeny
+  onDeny,
 }: {
   toolName: string;
   onApprove: () => void;
@@ -232,35 +287,41 @@ export function PermissionApprovalCard({
   };
 
   return (
-    <div className="rounded-lg border border-status-warning/20 bg-status-warning/5 p-3 space-y-2.5">
-      <div className="flex items-center gap-2 text-status-warning/80 text-xs">
+    <div className="space-y-2.5 rounded-lg border border-status-warning/20 bg-status-warning/5 p-3">
+      <div className="flex items-center gap-2 text-xs text-status-warning/80">
         <ShieldQuestion className="h-3.5 w-3.5" />
         {t('thread.permissionRequired')}
       </div>
-      <p className="text-xs text-foreground">
-        {t('thread.permissionMessage', { tool: toolName })}
-      </p>
+      <p className="text-xs text-foreground">{t('thread.permissionMessage', { tool: toolName })}</p>
       <div className="flex gap-2">
         <button
           onClick={handleApprove}
           disabled={!!loading}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors",
-            loading && "opacity-50 pointer-events-none"
+            'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground hover:bg-primary/90 transition-colors',
+            loading && 'opacity-50 pointer-events-none',
           )}
         >
-          {loading === 'approve' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+          {loading === 'approve' ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <CheckCircle2 className="h-3.5 w-3.5" />
+          )}
           {t('thread.approvePermission')}
         </button>
         <button
           onClick={handleDeny}
           disabled={!!loading}
           className={cn(
-            "flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-muted text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors",
-            loading && "opacity-50 pointer-events-none"
+            'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium border border-border bg-muted text-muted-foreground hover:bg-destructive/10 hover:text-destructive hover:border-destructive/30 transition-colors',
+            loading && 'opacity-50 pointer-events-none',
           )}
         >
-          {loading === 'deny' ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <XCircle className="h-3.5 w-3.5" />}
+          {loading === 'deny' ? (
+            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+          ) : (
+            <XCircle className="h-3.5 w-3.5" />
+          )}
           {t('thread.denyPermission')}
         </button>
       </div>
@@ -302,23 +363,23 @@ function InitInfoCard({ initInfo }: { initInfo: { tools: string[]; cwd: string; 
   const { builtIn, mcpGroups } = useMemo(() => groupTools(initInfo.tools), [initInfo.tools]);
 
   return (
-    <div className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground space-y-1">
+    <div className="space-y-1 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
       <div className="flex items-center gap-2">
         <span className="font-medium">{t('initInfo.model')}</span>
         <span className="font-mono">{resolveModelLabel(initInfo.model, t)}</span>
       </div>
       <div className="flex items-center gap-2">
         <span className="font-medium">{t('initInfo.cwd')}</span>
-        <span className="font-mono truncate">{initInfo.cwd}</span>
+        <span className="truncate font-mono">{initInfo.cwd}</span>
       </div>
       <div className="flex items-start gap-2">
-        <span className="font-medium shrink-0">{t('initInfo.tools')}</span>
-        <div className="font-mono flex flex-wrap gap-1 items-start">
+        <span className="shrink-0 font-medium">{t('initInfo.tools')}</span>
+        <div className="flex flex-wrap items-start gap-1 font-mono">
           {builtIn.length === 0 && mcpGroups.size === 0 && (
-            <span className="text-muted-foreground/60 italic">{t('initInfo.providerManaged')}</span>
+            <span className="italic text-muted-foreground/60">{t('initInfo.providerManaged')}</span>
           )}
           {builtIn.map((tool) => (
-            <span key={tool} className="bg-secondary px-1.5 py-0.5 rounded text-xs">
+            <span key={tool} className="rounded bg-secondary px-1.5 py-0.5 text-xs">
               {tool}
             </span>
           ))}
@@ -336,13 +397,13 @@ function McpToolGroup({ serverName, toolNames }: { serverName: string; toolNames
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <CollapsibleTrigger className="inline-flex items-center gap-0.5 bg-primary/10 px-1.5 py-0.5 rounded text-xs hover:bg-primary/20 cursor-pointer transition-colors">
+      <CollapsibleTrigger className="inline-flex cursor-pointer items-center gap-0.5 rounded bg-primary/10 px-1.5 py-0.5 text-xs transition-colors hover:bg-primary/20">
         <ChevronRight className={cn('h-3 w-3 transition-transform', open && 'rotate-90')} />
         {serverName} ({toolNames.length})
       </CollapsibleTrigger>
-      <CollapsibleContent className="flex flex-wrap gap-1 mt-1">
+      <CollapsibleContent className="mt-1 flex flex-wrap gap-1">
         {toolNames.map((name) => (
-          <span key={name} className="bg-secondary px-1.5 py-0.5 rounded text-xs">
+          <span key={name} className="rounded bg-secondary px-1.5 py-0.5 text-xs">
             {name}
           </span>
         ))}
@@ -359,12 +420,15 @@ function getItemTimestamp(item: RenderItem): string {
   if (item.type === 'toolcall-group') return item.calls[0]?.timestamp || '';
   if (item.type === 'toolcall-run') {
     const first = item.items[0];
-    return first.type === 'toolcall' ? (first.tc.timestamp || '') : (first.calls[0]?.timestamp || '');
+    return first.type === 'toolcall' ? first.tc.timestamp || '' : first.calls[0]?.timestamp || '';
   }
   return '';
 }
 
-function buildGroupedRenderItems(messages: any[], threadEvents?: import('@funny/shared').ThreadEvent[]): RenderItem[] {
+function buildGroupedRenderItems(
+  messages: any[],
+  threadEvents?: import('@funny/shared').ThreadEvent[],
+): RenderItem[] {
   // Flatten all messages into a single stream of items
   const flat: ({ type: 'message'; msg: any } | { type: 'toolcall'; tc: any })[] = [];
   // Collect Write tool calls that wrote plan files, so ExitPlanMode can use their content
@@ -386,12 +450,14 @@ function buildGroupedRenderItems(messages: any[], threadEvents?: import('@funny/
           if (/plan\.md$/i.test(fp) && typeof inp?.content === 'string') {
             lastWrittenPlanContent = inp.content;
           }
-        } catch { /* ignore parse errors */ }
+        } catch {
+          /* ignore parse errors */
+        }
       }
       // Attach plan text for ExitPlanMode: prefer the content written to plan.md,
       // then fall back to the parent assistant message content
       if (tc.name === 'ExitPlanMode') {
-        tc._planText = lastWrittenPlanContent || (msg.content?.trim() || undefined);
+        tc._planText = lastWrittenPlanContent || msg.content?.trim() || undefined;
       }
       flat.push({ type: 'toolcall', tc });
     }
@@ -405,13 +471,21 @@ function buildGroupedRenderItems(messages: any[], threadEvents?: import('@funny/
   for (const item of flat) {
     if (item.type === 'toolcall') {
       const last = grouped[grouped.length - 1];
-      if (!noGroup.has(item.tc.name) && last?.type === 'toolcall' && (last as any).tc.name === item.tc.name) {
+      if (
+        !noGroup.has(item.tc.name) &&
+        last?.type === 'toolcall' &&
+        (last as any).tc.name === item.tc.name
+      ) {
         grouped[grouped.length - 1] = {
           type: 'toolcall-group',
           name: item.tc.name,
           calls: [(last as any).tc, item.tc],
         };
-      } else if (!noGroup.has(item.tc.name) && last?.type === 'toolcall-group' && last.name === item.tc.name) {
+      } else if (
+        !noGroup.has(item.tc.name) &&
+        last?.type === 'toolcall-group' &&
+        last.name === item.tc.name
+      ) {
         last.calls.push(item.tc);
       } else {
         grouped.push(item);
@@ -426,8 +500,10 @@ function buildGroupedRenderItems(messages: any[], threadEvents?: import('@funny/
   let lastTodoIdx = -1;
   for (let i = grouped.length - 1; i >= 0; i--) {
     const g = grouped[i];
-    if ((g.type === 'toolcall' && g.tc.name === 'TodoWrite') ||
-      (g.type === 'toolcall-group' && g.name === 'TodoWrite')) {
+    if (
+      (g.type === 'toolcall' && g.tc.name === 'TodoWrite') ||
+      (g.type === 'toolcall-group' && g.name === 'TodoWrite')
+    ) {
       lastTodoIdx = i;
       break;
     }
@@ -435,7 +511,8 @@ function buildGroupedRenderItems(messages: any[], threadEvents?: import('@funny/
   const deduped: RenderItem[] = [];
   for (let i = 0; i < grouped.length; i++) {
     const g = grouped[i];
-    const isTodoItem = (g.type === 'toolcall' && g.tc.name === 'TodoWrite') ||
+    const isTodoItem =
+      (g.type === 'toolcall' && g.tc.name === 'TodoWrite') ||
       (g.type === 'toolcall-group' && g.name === 'TodoWrite');
     if (isTodoItem && i !== lastTodoIdx) continue; // skip earlier TodoWrites
     if (isTodoItem && g.type === 'toolcall-group') {
@@ -467,8 +544,8 @@ function buildGroupedRenderItems(messages: any[], threadEvents?: import('@funny/
   if (!threadEvents?.length) return final;
 
   const eventItems: RenderItem[] = threadEvents
-    .filter(e => e.type !== 'git:changed')
-    .map(e => ({ type: 'thread-event' as const, event: e }));
+    .filter((e) => e.type !== 'git:changed')
+    .map((e) => ({ type: 'thread-event' as const, event: e }));
 
   const merged = [...final, ...eventItems];
   merged.sort((a, b) => {
@@ -504,20 +581,20 @@ function UserMessageContent({ content }: { content: string }) {
         ref={preRef}
         className={cn(
           'whitespace-pre-wrap font-mono text-xs leading-relaxed break-words overflow-x-auto',
-          !expanded && isOverflowing && 'overflow-hidden'
+          !expanded && isOverflowing && 'overflow-hidden',
         )}
         style={!expanded && isOverflowing ? { maxHeight: COLLAPSED_MAX_H } : undefined}
       >
         {content}
       </pre>
       {isOverflowing && !expanded && (
-        <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-foreground to-transparent pointer-events-none" />
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-foreground to-transparent" />
       )}
       {isOverflowing && (
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="flex items-center gap-1 mt-1 text-[11px] text-background/60 hover:text-background/90 transition-colors"
+          className="mt-1 flex items-center gap-1 text-[11px] text-background/60 transition-colors hover:text-background/90"
         >
           {expanded ? (
             <>
@@ -554,8 +631,8 @@ const MemoizedMessageList = memo(function MemoizedMessageList({
   messages,
   threadEvents,
   threadId,
-  knownIds,
-  prefersReducedMotion,
+  knownIds: _knownIds,
+  prefersReducedMotion: _prefersReducedMotion,
   snapshotMap,
   onSend,
   onOpenLightbox,
@@ -571,61 +648,92 @@ const MemoizedMessageList = memo(function MemoizedMessageList({
 }) {
   const { t } = useTranslation();
 
-  const groupedItems = useMemo(() => buildGroupedRenderItems(messages, threadEvents), [messages, threadEvents]);
+  const groupedItems = useMemo(
+    () => buildGroupedRenderItems(messages, threadEvents),
+    [messages, threadEvents],
+  );
 
-  const renderToolItem = useCallback((ti: ToolItem) => {
-    if (ti.type === 'toolcall') {
-      const tc = ti.tc;
-      return (
-        <div
-          key={tc.id}
-          className={(tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode' || tc.name === 'TodoWrite' || tc.name === 'Edit') ? 'border border-border rounded-lg' : undefined}
-          data-tool-call-id={tc.id}
-          {...(snapshotMap.has(tc.id) ? { 'data-todo-snapshot': snapshotMap.get(tc.id) } : {})}
-        >
-          <ToolCallCard
-            name={tc.name}
-            input={tc.input}
-            output={tc.output}
-            planText={tc._planText}
-            onRespond={(tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode') ? (answer: string) => {
-              useThreadStore.getState().handleWSToolOutput(threadId, { toolCallId: tc.id, output: answer });
-              onSend(answer, { model: '', mode: '' });
-            } : undefined}
-          />
-        </div>
-      );
-    }
-    if (ti.type === 'toolcall-group') {
-      const groupSnapshotIdx = ti.name === 'TodoWrite'
-        ? Math.max(...ti.calls.map((c: any) => snapshotMap.get(c.id) ?? -1))
-        : -1;
-      return (
-        <div
-          key={ti.calls[0].id}
-          className={(ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode' || ti.name === 'TodoWrite' || ti.name === 'Edit') ? 'border border-border rounded-lg' : undefined}
-          data-tool-call-id={ti.calls[0].id}
-          {...(groupSnapshotIdx >= 0 ? { 'data-todo-snapshot': groupSnapshotIdx } : {})}
-        >
-          <ToolCallGroup
-            name={ti.name}
-            calls={ti.calls}
-            onRespond={(ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode')
-              ? (answer: string) => {
-                for (const call of ti.calls) {
-                  if (!call.output) {
-                    useThreadStore.getState().handleWSToolOutput(threadId, { toolCallId: call.id, output: answer });
-                  }
-                }
-                onSend(answer, { model: '', mode: '' });
+  const renderToolItem = useCallback(
+    (ti: ToolItem) => {
+      if (ti.type === 'toolcall') {
+        const tc = ti.tc;
+        return (
+          <div
+            key={tc.id}
+            className={
+              tc.name === 'AskUserQuestion' ||
+              tc.name === 'ExitPlanMode' ||
+              tc.name === 'TodoWrite' ||
+              tc.name === 'Edit'
+                ? 'rounded-lg border border-border'
+                : undefined
+            }
+            data-tool-call-id={tc.id}
+            {...(snapshotMap.has(tc.id) ? { 'data-todo-snapshot': snapshotMap.get(tc.id) } : {})}
+          >
+            <ToolCallCard
+              name={tc.name}
+              input={tc.input}
+              output={tc.output}
+              planText={tc._planText}
+              onRespond={
+                tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode'
+                  ? (answer: string) => {
+                      useThreadStore
+                        .getState()
+                        .handleWSToolOutput(threadId, { toolCallId: tc.id, output: answer });
+                      onSend(answer, { model: '', mode: '' });
+                    }
+                  : undefined
               }
-              : undefined}
-          />
-        </div>
-      );
-    }
-    return null;
-  }, [snapshotMap, threadId, onSend]);
+            />
+          </div>
+        );
+      }
+      if (ti.type === 'toolcall-group') {
+        const groupSnapshotIdx =
+          ti.name === 'TodoWrite'
+            ? Math.max(...ti.calls.map((c: any) => snapshotMap.get(c.id) ?? -1))
+            : -1;
+        return (
+          <div
+            key={ti.calls[0].id}
+            className={
+              ti.name === 'AskUserQuestion' ||
+              ti.name === 'ExitPlanMode' ||
+              ti.name === 'TodoWrite' ||
+              ti.name === 'Edit'
+                ? 'rounded-lg border border-border'
+                : undefined
+            }
+            data-tool-call-id={ti.calls[0].id}
+            {...(groupSnapshotIdx >= 0 ? { 'data-todo-snapshot': groupSnapshotIdx } : {})}
+          >
+            <ToolCallGroup
+              name={ti.name}
+              calls={ti.calls}
+              onRespond={
+                ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode'
+                  ? (answer: string) => {
+                      for (const call of ti.calls) {
+                        if (!call.output) {
+                          useThreadStore
+                            .getState()
+                            .handleWSToolOutput(threadId, { toolCallId: call.id, output: answer });
+                        }
+                      }
+                      onSend(answer, { model: '', mode: '' });
+                    }
+                  : undefined
+              }
+            />
+          </div>
+        );
+      }
+      return null;
+    },
+    [snapshotMap, threadId, onSend],
+  );
 
   return (
     <>
@@ -642,43 +750,45 @@ const MemoizedMessageList = memo(function MemoizedMessageList({
                 'relative group text-sm',
                 msg.role === 'user'
                   ? 'max-w-[80%] ml-auto rounded-lg px-3 py-2 bg-foreground text-background'
-                  : 'w-full text-foreground'
+                  : 'w-full text-foreground',
               )}
               {...(msg.role === 'user' ? { 'data-user-msg': msg.id } : {})}
             >
-              {msg.images && msg.images.length > 0 && (() => {
-                const allImages = msg.images!.map((i: any, j: number) => ({
-                  src: `data:${i.source.media_type};base64,${i.source.data}`,
-                  alt: `Attachment ${j + 1}`,
-                }));
-                return (
-                  <div className="flex flex-wrap gap-2 mb-2">
-                    {msg.images!.map((img: any, idx: number) => (
-                      <img
-                        key={idx}
-                        src={`data:${img.source.media_type};base64,${img.source.data}`}
-                        alt={`Attachment ${idx + 1}`}
-                        width={160}
-                        height={160}
-                        loading="lazy"
-                        className="max-h-40 rounded border border-border cursor-pointer hover:opacity-80 transition-opacity"
-                        onClick={() => onOpenLightbox(allImages, idx)}
-                      />
-                    ))}
-                  </div>
-                );
-              })()}
+              {msg.images &&
+                msg.images.length > 0 &&
+                (() => {
+                  const allImages = msg.images!.map((i: any, j: number) => ({
+                    src: `data:${i.source.media_type};base64,${i.source.data}`,
+                    alt: `Attachment ${j + 1}`,
+                  }));
+                  return (
+                    <div className="mb-2 flex flex-wrap gap-2">
+                      {msg.images!.map((img: any, idx: number) => (
+                        <img
+                          key={`attachment-${idx}`}
+                          src={`data:${img.source.media_type};base64,${img.source.data}`}
+                          alt={`Attachment ${idx + 1}`}
+                          width={160}
+                          height={160}
+                          loading="lazy"
+                          className="max-h-40 cursor-pointer rounded border border-border transition-opacity hover:opacity-80"
+                          onClick={() => onOpenLightbox(allImages, idx)}
+                        />
+                      ))}
+                    </div>
+                  );
+                })()}
               {msg.role === 'user' ? (
                 (() => {
                   const { files, cleanContent } = parseReferencedFiles(msg.content);
                   return (
                     <>
                       {files.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-1.5">
+                        <div className="mb-1.5 flex flex-wrap gap-1">
                           {files.map((file) => (
                             <span
                               key={file}
-                              className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-mono bg-background/20 rounded text-background/70"
+                              className="inline-flex items-center gap-1 rounded bg-background/20 px-1.5 py-0.5 font-mono text-xs text-background/70"
                               title={file}
                             >
                               <FileText className="h-3 w-3 shrink-0" />
@@ -689,14 +799,20 @@ const MemoizedMessageList = memo(function MemoizedMessageList({
                       )}
                       <UserMessageContent content={cleanContent.trim()} />
                       {(msg.model || msg.permissionMode) && (
-                        <div className="flex gap-1 mt-1.5">
+                        <div className="mt-1.5 flex gap-1">
                           {msg.model && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-medium bg-background/10 text-background/60 border-background/20">
+                            <Badge
+                              variant="outline"
+                              className="h-4 border-background/20 bg-background/10 px-1.5 py-0 text-[10px] font-medium text-background/60"
+                            >
                               {resolveModelLabel(msg.model, t)}
                             </Badge>
                           )}
                           {msg.permissionMode && (
-                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-medium bg-background/10 text-background/60 border-background/20">
+                            <Badge
+                              variant="outline"
+                              className="h-4 border-background/20 bg-background/10 px-1.5 py-0 text-[10px] font-medium text-background/60"
+                            >
                               {t(`prompt.${msg.permissionMode}`)}
                             </Badge>
                           )}
@@ -706,29 +822,27 @@ const MemoizedMessageList = memo(function MemoizedMessageList({
                   );
                 })()
               ) : (
-                <div className="text-sm leading-relaxed break-words overflow-x-auto">
+                <div className="overflow-x-auto break-words text-sm leading-relaxed">
                   <div className="flex items-start gap-2">
                     {msg.author && (
                       <Tooltip>
                         <TooltipTrigger asChild>
                           <Avatar className="mt-0.5">
-                            <AvatarFallback className="text-xs font-medium bg-primary/10 text-primary">
+                            <AvatarFallback className="bg-primary/10 text-xs font-medium text-primary">
                               {msg.author.slice(0, 2).toUpperCase()}
                             </AvatarFallback>
                           </Avatar>
                         </TooltipTrigger>
-                        <TooltipContent side="top">
-                          {msg.author}
-                        </TooltipContent>
+                        <TooltipContent side="top">{msg.author}</TooltipContent>
                       </Tooltip>
                     )}
-                    <div className="flex-1 min-w-0">
+                    <div className="min-w-0 flex-1">
                       <MessageContent content={msg.content.trim()} />
                     </div>
                     <CopyButton content={msg.content} />
                   </div>
                   <div className="mt-1">
-                    <span className="text-[10px] text-muted-foreground/60 select-none">
+                    <span className="select-none text-[10px] text-muted-foreground/60">
                       {timeAgo(msg.timestamp, t)}
                     </span>
                   </div>
@@ -749,9 +863,7 @@ const MemoizedMessageList = memo(function MemoizedMessageList({
         if (item.type === 'toolcall-run') {
           return (
             <div key={key} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' }}>
-              <div className="space-y-1">
-                {item.items.map(renderToolItem)}
-              </div>
+              <div className="space-y-1">{item.items.map(renderToolItem)}</div>
             </div>
           );
         }
@@ -773,12 +885,12 @@ const MemoizedMessageList = memo(function MemoizedMessageList({
 export function ThreadView() {
   const { t } = useTranslation();
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
-  const activeThread = useThreadStore(s => s.activeThread);
-  const selectedThreadId = useThreadStore(s => s.selectedThreadId);
-  const selectedProjectId = useProjectStore(s => s.selectedProjectId);
-  const newThreadProjectId = useUIStore(s => s.newThreadProjectId);
-  const hasProjects = useProjectStore(s => s.projects.length > 0);
-  const loadOlderMessages = useThreadStore(s => s.loadOlderMessages);
+  const activeThread = useThreadStore((s) => s.activeThread);
+  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
+  const hasProjects = useProjectStore((s) => s.projects.length > 0);
+  const loadOlderMessages = useThreadStore((s) => s.loadOlderMessages);
   const hasMore = activeThread?.hasMore ?? false;
   const loadingMore = activeThread?.loadingMore ?? false;
   const [sending, setSending] = useState(false);
@@ -787,7 +899,7 @@ export function ThreadView() {
   const smoothScrollPending = useRef(false);
   const prevOldestIdRef = useRef<string | null>(null);
   const prevScrollHeightRef = useRef(0);
-  const [showScrollDown, setShowScrollDown] = useState(false);
+  const [_showScrollDown, setShowScrollDown] = useState(false);
   const scrollDownRef = useRef<HTMLDivElement>(null);
   const todoThrottleRef = useRef(0);
   const [visibleMessageId, setVisibleMessageId] = useState<string | null>(null);
@@ -795,7 +907,7 @@ export function ThreadView() {
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<{ src: string; alt: string }[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
-  const [todoPanelDismissed, setTodoPanelDismissed] = useState(false);
+  const [_todoPanelDismissed, setTodoPanelDismissed] = useState(false);
   const [currentSnapshotIdx, setCurrentSnapshotIdx] = useState(-1);
   const prefersReducedMotion = useReducedMotion();
   // Track which message/tool-call IDs existed when the thread was loaded.
@@ -852,12 +964,14 @@ export function ThreadView() {
       viewport.scrollTop = viewport.scrollHeight;
     });
     return () => cancelAnimationFrame(rafId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only scroll on thread switch; activeThread is used for null check but changes on every message
   }, [activeThread?.id]);
 
   // Derive displayed snapshot — only when scroll handler has detected a position
-  const currentSnapshot = currentSnapshotIdx >= 0 && currentSnapshotIdx < snapshots.length
-    ? snapshots[currentSnapshotIdx]
-    : null;
+  const _currentSnapshot =
+    currentSnapshotIdx >= 0 && currentSnapshotIdx < snapshots.length
+      ? snapshots[currentSnapshotIdx]
+      : null;
 
   const openLightbox = useCallback((images: { src: string; alt: string }[], index: number) => {
     setLightboxImages(images);
@@ -929,7 +1043,7 @@ export function ThreadView() {
         scrollDownRef.current.style.display = shouldShow ? '' : 'none';
       }
       // Update React state only when the value actually changes (for PromptTimeline)
-      setShowScrollDown((prev) => prev !== shouldShow ? shouldShow : prev);
+      setShowScrollDown((prev) => (prev !== shouldShow ? shouldShow : prev));
 
       // Load older messages when scrolled near the top
       if (scrollTop < 200 && hasMore && !loadingMore) {
@@ -957,9 +1071,10 @@ export function ThreadView() {
             let found: string | null = null;
             for (let i = 0; i < userEls.length; i++) {
               const sectionTop = userEls[i].getBoundingClientRect().top;
-              const sectionBottom = i + 1 < userEls.length
-                ? userEls[i + 1].getBoundingClientRect().top
-                : viewport.scrollHeight + viewportRect.top; // end of content
+              const sectionBottom =
+                i + 1 < userEls.length
+                  ? userEls[i + 1].getBoundingClientRect().top
+                  : viewport.scrollHeight + viewportRect.top; // end of content
               if (sectionTop <= probe && probe < sectionBottom) {
                 found = userEls[i].dataset.userMsg!;
                 break;
@@ -999,9 +1114,9 @@ export function ThreadView() {
       // When at bottom, sync visibleMessageId to the last user message.
       // Setting scrollTop programmatically doesn't always fire a scroll event,
       // so the scroll handler may never update visibleMessageId.
-      const lastUserMsg = activeThread?.messages?.filter(
-        (m: any) => m.role === 'user' && m.content?.trim()
-      ).at(-1);
+      const lastUserMsg = activeThread?.messages
+        ?.filter((m: any) => m.role === 'user' && m.content?.trim())
+        .at(-1);
       if (lastUserMsg) {
         setVisibleMessageId(lastUserMsg.id);
       }
@@ -1011,19 +1126,16 @@ export function ThreadView() {
     if (!hasOverflow && scrollDownRef.current) {
       scrollDownRef.current.style.display = 'none';
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- activeThread.messages is already captured via scrollFingerprint; adding it directly would cause redundant scroll operations
   }, [scrollFingerprint]);
 
   // Preserve scroll position when older messages are prepended
+  const firstMessageId = selectFirstMessage(activeThread)?.id ?? null;
   useLayoutEffect(() => {
-    const oldestId = selectFirstMessage(activeThread)?.id ?? null;
+    const oldestId = firstMessageId;
     const viewport = scrollViewportRef.current;
 
-    if (
-      viewport &&
-      prevOldestIdRef.current &&
-      oldestId &&
-      prevOldestIdRef.current !== oldestId
-    ) {
+    if (viewport && prevOldestIdRef.current && oldestId && prevOldestIdRef.current !== oldestId) {
       const addedHeight = viewport.scrollHeight - prevScrollHeightRef.current;
       viewport.scrollTop += addedHeight;
     }
@@ -1032,7 +1144,7 @@ export function ThreadView() {
     if (viewport) {
       prevScrollHeightRef.current = viewport.scrollHeight;
     }
-  }, [selectFirstMessage(activeThread)?.id]);
+  }, [firstMessageId]);
 
   const scrollToBottom = useCallback(() => {
     const viewport = scrollViewportRef.current;
@@ -1051,45 +1163,71 @@ export function ThreadView() {
   const sendingRef = useRef(sending);
   sendingRef.current = sending;
 
-  const handleSend = useCallback(async (prompt: string, opts: { provider?: string; model: string; mode: string; fileReferences?: { path: string }[]; baseBranch?: string }, images?: any[]) => {
-    if (sendingRef.current) return;
-    const thread = activeThreadRef.current;
-    if (!thread) return;
-    setSending(true);
+  const handleSend = useCallback(
+    async (
+      prompt: string,
+      opts: {
+        provider?: string;
+        model: string;
+        mode: string;
+        fileReferences?: { path: string }[];
+        baseBranch?: string;
+      },
+      images?: any[],
+    ) => {
+      if (sendingRef.current) return;
+      const thread = activeThreadRef.current;
+      if (!thread) return;
+      setSending(true);
 
-    const threadIsRunning = thread.status === 'running';
-    const currentProject = useProjectStore.getState().projects.find(p => p.id === thread.projectId);
-    const threadIsQueueMode = currentProject?.followUpMode === 'queue';
+      const threadIsRunning = thread.status === 'running';
+      const currentProject = useProjectStore
+        .getState()
+        .projects.find((p) => p.id === thread.projectId);
+      const threadIsQueueMode = currentProject?.followUpMode === 'queue';
 
-    // Toast for interrupt mode when agent is running
-    if (threadIsRunning && !threadIsQueueMode) {
-      toast.info(t('thread.interruptingAgent'));
-    }
+      // Toast for interrupt mode when agent is running
+      if (threadIsRunning && !threadIsQueueMode) {
+        toast.info(t('thread.interruptingAgent'));
+      }
 
-    // Always scroll to bottom when the user sends a message (smooth)
-    userHasScrolledUp.current = false;
-    smoothScrollPending.current = true;
-    if (scrollDownRef.current) scrollDownRef.current.style.display = 'none';
+      // Always scroll to bottom when the user sends a message (smooth)
+      userHasScrolledUp.current = false;
+      smoothScrollPending.current = true;
+      if (scrollDownRef.current) scrollDownRef.current.style.display = 'none';
 
-    startTransition(() => {
-      useThreadStore.getState().appendOptimisticMessage(
+      startTransition(() => {
+        useThreadStore
+          .getState()
+          .appendOptimisticMessage(thread.id, prompt, images, opts.model as any, opts.mode as any);
+      });
+
+      const { allowedTools, disallowedTools } = deriveToolLists(
+        useSettingsStore.getState().toolPermissions,
+      );
+      const result = await api.sendMessage(
         thread.id,
         prompt,
+        {
+          provider: opts.provider || undefined,
+          model: opts.model || undefined,
+          permissionMode: opts.mode || undefined,
+          allowedTools,
+          disallowedTools,
+          fileReferences: opts.fileReferences,
+          baseBranch: opts.baseBranch,
+        },
         images,
-        opts.model as any,
-        opts.mode as any
       );
-    });
-
-    const { allowedTools, disallowedTools } = deriveToolLists(useSettingsStore.getState().toolPermissions);
-    const result = await api.sendMessage(thread.id, prompt, { provider: opts.provider || undefined, model: opts.model || undefined, permissionMode: opts.mode || undefined, allowedTools, disallowedTools, fileReferences: opts.fileReferences, baseBranch: opts.baseBranch }, images);
-    if (result.isErr()) {
-      console.error('Send failed:', result.error);
-    } else if (threadIsRunning && threadIsQueueMode) {
-      toast.success(t('thread.messageQueued'));
-    }
-    setSending(false);
-  }, [t]);
+      if (result.isErr()) {
+        console.error('Send failed:', result.error);
+      } else if (threadIsRunning && threadIsQueueMode) {
+        toast.success(t('thread.messageQueued'));
+      }
+      setSending(false);
+    },
+    [t],
+  );
 
   const handleStop = useCallback(async () => {
     const thread = activeThreadRef.current;
@@ -1103,12 +1241,22 @@ export function ThreadView() {
   const handlePermissionApproval = useCallback(async (toolName: string, approved: boolean) => {
     const thread = activeThreadRef.current;
     if (!thread) return;
-    useThreadStore.getState().appendOptimisticMessage(
-      thread.id,
-      approved ? `Approved: ${toolName}` : `Denied: ${toolName}`
+    useThreadStore
+      .getState()
+      .appendOptimisticMessage(
+        thread.id,
+        approved ? `Approved: ${toolName}` : `Denied: ${toolName}`,
+      );
+    const { allowedTools, disallowedTools } = deriveToolLists(
+      useSettingsStore.getState().toolPermissions,
     );
-    const { allowedTools, disallowedTools } = deriveToolLists(useSettingsStore.getState().toolPermissions);
-    const result = await api.approveTool(thread.id, toolName, approved, allowedTools, disallowedTools);
+    const result = await api.approveTool(
+      thread.id,
+      toolName,
+      approved,
+      allowedTools,
+      disallowedTools,
+    );
     if (result.isErr()) {
       console.error('Permission approval failed:', result.error);
     }
@@ -1117,7 +1265,7 @@ export function ThreadView() {
   // Show new thread input when a project's "+" was clicked
   if (newThreadProjectId && !selectedThreadId) {
     return (
-      <div className="flex-1 flex flex-col h-full min-w-0">
+      <div className="flex h-full min-w-0 flex-1 flex-col">
         <ProjectHeader />
         <NewThreadInput />
       </div>
@@ -1127,18 +1275,18 @@ export function ThreadView() {
   if (!selectedThreadId) {
     if (selectedProjectId && hasProjects) {
       return (
-        <div className="flex-1 flex flex-col h-full min-w-0">
+        <div className="flex h-full min-w-0 flex-1 flex-col">
           <ProjectHeader />
           <NewThreadInput />
         </div>
       );
     }
     return (
-      <div className="flex-1 flex flex-col h-full min-w-0">
-        <div className="flex-1 flex items-center justify-center text-muted-foreground px-6">
-          <div className="text-center max-w-3xl">
-            <p className="text-4xl mb-4">{hasProjects ? '🚀' : '📁'}</p>
-            <p className="text-2xl font-semibold text-foreground mb-1">
+      <div className="flex h-full min-w-0 flex-1 flex-col">
+        <div className="flex flex-1 items-center justify-center px-6 text-muted-foreground">
+          <div className="max-w-3xl text-center">
+            <p className="mb-4 text-4xl">{hasProjects ? '🚀' : '📁'}</p>
+            <p className="mb-1 text-2xl font-semibold text-foreground">
               {hasProjects ? t('thread.selectOrCreate') : t('thread.addProjectFirst')}
             </p>
             <p className="text-sm">
@@ -1152,9 +1300,9 @@ export function ThreadView() {
 
   if (!activeThread) {
     return (
-      <div className="flex-1 flex flex-col h-full min-w-0">
+      <div className="flex h-full min-w-0 flex-1 flex-col">
         {selectedProjectId && <ProjectHeader />}
-        <div className="flex-1 flex items-center justify-center text-muted-foreground">
+        <div className="flex flex-1 items-center justify-center text-muted-foreground">
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       </div>
@@ -1164,15 +1312,17 @@ export function ThreadView() {
   const isRunning = activeThread.status === 'running';
   const isExternal = activeThread.provider === 'external';
   const isIdle = activeThread.status === 'idle';
-  const currentProject = useProjectStore.getState().projects.find(p => p.id === activeThread.projectId);
+  const currentProject = useProjectStore
+    .getState()
+    .projects.find((p) => p.id === activeThread.projectId);
   const isQueueMode = currentProject?.followUpMode === 'queue';
 
   // Idle thread (backlog or not): show prompt input to start (pre-loaded with initialPrompt if available)
   if (isIdle) {
     return (
-      <div className="flex-1 flex flex-col h-full min-w-0">
+      <div className="flex h-full min-w-0 flex-1 flex-col">
         <ProjectHeader />
-        <div className="flex-1 flex items-center justify-center px-4">
+        <div className="flex flex-1 items-center justify-center px-4">
           <div className="w-full max-w-3xl">
             <PromptInput
               onSubmit={handleSend}
@@ -1188,7 +1338,7 @@ export function ThreadView() {
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full min-w-0 relative">
+    <div className="relative flex h-full min-w-0 flex-1 flex-col">
       <ProjectHeader />
 
       {/* Floating TODO Panel (currently disabled) */}
@@ -1203,181 +1353,214 @@ export function ThreadView() {
       </AnimatePresence> */}
 
       {/* Messages + Timeline */}
-      <div className="flex-1 flex min-h-0 thread-container">
+      <div className="thread-container flex min-h-0 flex-1">
         {/* Messages column + input */}
-        <div className="flex-1 flex flex-col min-h-0 min-w-0">
-          <div className="flex-1 min-h-0 min-w-0 overflow-y-auto flex flex-col" ref={scrollViewportRef} style={{ contain: 'layout style' }}>
-          {/* Spacer pushes content to the bottom without mt-auto, which caused CLS
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <div
+            className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
+            ref={scrollViewportRef}
+            style={{ contain: 'layout style' }}
+          >
+            {/* Spacer pushes content to the bottom without mt-auto, which caused CLS
               as the margin shrank when messages arrived. A flex-grow spacer is inert
               and doesn't trigger CLS because the spacer itself is not painted. */}
-          <div className="flex-grow" aria-hidden="true" />
-          <div className="w-full mx-auto max-w-3xl min-w-[320px] space-y-4 py-4 px-4">
-            {loadingMore && (
-              <div className="flex items-center justify-center py-3">
-                <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                <span className="ml-2 text-xs text-muted-foreground">
-                  {t('thread.loadingOlder', 'Loading older messages\u2026')}
-                </span>
-              </div>
-            )}
-            {!hasMore && !loadingMore && activeThread.messages.length > 0 && (
-              <div className="text-center py-2">
-                <span className="text-xs text-muted-foreground">
-                  {t('thread.beginningOfConversation', 'Beginning of conversation')}
-                  {activeThread.createdAt && (
-                    <> &middot; {timeAgo(activeThread.createdAt, t)}</>
-                  )}
-                </span>
-              </div>
-            )}
-            {activeThread.initInfo && (
-              <InitInfoCard initInfo={activeThread.initInfo} />
-            )}
-
-            <MemoizedMessageList
-              messages={activeThread.messages ?? []}
-              threadEvents={activeThread.threadEvents}
-              threadId={activeThread.id}
-              knownIds={knownIdsRef.current}
-              prefersReducedMotion={prefersReducedMotion}
-              snapshotMap={snapshotMap}
-              onSend={handleSend}
-              onOpenLightbox={openLightbox}
-            />
-
-            {isRunning && !isExternal && (
-              <motion.div
-                initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, ease: 'easeOut' }}
-                className="flex items-center gap-2.5 text-muted-foreground text-sm py-1"
-              >
-                <D4CAnimation />
-                <span className="text-xs">{t('thread.agentWorking')}</span>
-              </motion.div>
-            )}
-
-            {isRunning && isExternal && (
-              <motion.div
-                initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, ease: 'easeOut' }}
-                className="flex items-center gap-2.5 text-muted-foreground text-sm py-1"
-              >
-                <div className="flex items-center gap-1">
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-[thinking_1.4s_ease-in-out_infinite]" />
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-[thinking_1.4s_ease-in-out_0.2s_infinite]" />
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-[thinking_1.4s_ease-in-out_0.4s_infinite]" />
+            <div className="flex-grow" aria-hidden="true" />
+            <div className="mx-auto w-full min-w-[320px] max-w-3xl space-y-4 px-4 py-4">
+              {loadingMore && (
+                <div className="flex items-center justify-center py-3">
+                  <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                  <span className="ml-2 text-xs text-muted-foreground">
+                    {t('thread.loadingOlder', 'Loading older messages\u2026')}
+                  </span>
                 </div>
-                <span className="text-xs">{t('thread.runningExternally', 'Running externally\u2026')}</span>
-              </motion.div>
-            )}
+              )}
+              {!hasMore && !loadingMore && activeThread.messages.length > 0 && (
+                <div className="py-2 text-center">
+                  <span className="text-xs text-muted-foreground">
+                    {t('thread.beginningOfConversation', 'Beginning of conversation')}
+                    {activeThread.createdAt && <> &middot; {timeAgo(activeThread.createdAt, t)}</>}
+                  </span>
+                </div>
+              )}
+              {activeThread.initInfo && <InitInfoCard initInfo={activeThread.initInfo} />}
 
-            {activeThread.status === 'waiting' && activeThread.waitingReason === 'question' && (
-              <motion.div
-                initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, ease: 'easeOut' }}
-                className="flex items-center gap-2 text-status-warning/80 text-xs"
-              >
-                <ShieldQuestion className="h-3.5 w-3.5 animate-pulse" />
-                {t('thread.waitingForResponse')}
-              </motion.div>
-            )}
-
-            {activeThread.status === 'waiting' && activeThread.waitingReason === 'permission' && activeThread.pendingPermission && (
-              <motion.div
-                initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, ease: 'easeOut' }}
-              >
-                <PermissionApprovalCard
-                  toolName={activeThread.pendingPermission.toolName}
-                  onApprove={() => handlePermissionApproval(activeThread.pendingPermission!.toolName, true)}
-                  onDeny={() => handlePermissionApproval(activeThread.pendingPermission!.toolName, false)}
-                />
-              </motion.div>
-            )}
-
-            {activeThread.status === 'waiting' && !activeThread.waitingReason && (
-              <motion.div
-                initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.25, ease: 'easeOut' }}
-              >
-                <WaitingActions
-                  onSend={(text) => handleSend(text, { model: activeThread.model, mode: activeThread.permissionMode })}
-                />
-              </motion.div>
-            )}
-
-            {activeThread.resultInfo && !isRunning && activeThread.status !== 'stopped' && activeThread.status !== 'interrupted' && (
-              <motion.div
-                initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, ease: 'easeOut' }}
-              >
-                <AgentResultCard
-                  status={activeThread.resultInfo.status}
-                  cost={activeThread.resultInfo.cost}
-                  duration={activeThread.resultInfo.duration}
-                  error={activeThread.resultInfo.error}
-                  onContinue={activeThread.resultInfo.status === 'failed' ? () => handleSend('Continue', { model: activeThread.model, mode: activeThread.permissionMode }) : undefined}
-                />
-              </motion.div>
-            )}
-
-            {activeThread.status === 'interrupted' && (
-              <motion.div
-                initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, ease: 'easeOut' }}
-              >
-                <AgentInterruptedCard
-                  onContinue={() => handleSend('Continue', { model: activeThread.model, mode: activeThread.permissionMode })}
-                />
-              </motion.div>
-            )}
-
-            {activeThread.status === 'stopped' && (
-              <motion.div
-                initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: 0.3, ease: 'easeOut' }}
-              >
-                <AgentStoppedCard
-                  onContinue={() => handleSend('Continue', { model: activeThread.model, mode: activeThread.permissionMode })}
-                />
-              </motion.div>
-            )}
-
-          </div>
-
-          {/* Input — sticky at bottom */}
-          {!(activeThread.status === 'waiting' && activeThread.waitingReason === 'question') && (
-            <div className="sticky bottom-0 z-10 bg-background">
-              {/* Scroll to bottom button — visibility managed via DOM ref to avoid re-renders */}
-              <div ref={scrollDownRef} className="relative" style={{ display: 'none' }}>
-                <button
-                  onClick={scrollToBottom}
-                  aria-label={t('thread.scrollToBottom', 'Scroll to bottom')}
-                  className="absolute bottom-full mb-2 left-1/2 -translate-x-1/2 flex items-center gap-1 rounded-full bg-secondary border border-muted-foreground/40 px-3 py-1.5 text-xs text-muted-foreground shadow-md hover:bg-muted transition-colors"
-                >
-                  <ArrowDown className="h-3 w-3" />
-                  {t('thread.scrollToBottom', 'Scroll to bottom')}
-                </button>
-              </div>
-              <PromptInput
-                onSubmit={handleSend}
-                onStop={handleStop}
-                loading={sending}
-                running={isRunning && !isExternal}
-                isQueueMode={isQueueMode}
-                queuedCount={(activeThread as any).queuedCount ?? 0}
-                placeholder={t('thread.nextPrompt')}
+              <MemoizedMessageList
+                messages={activeThread.messages ?? []}
+                threadEvents={activeThread.threadEvents}
+                threadId={activeThread.id}
+                knownIds={knownIdsRef.current}
+                prefersReducedMotion={prefersReducedMotion}
+                snapshotMap={snapshotMap}
+                onSend={handleSend}
+                onOpenLightbox={openLightbox}
               />
+
+              {isRunning && !isExternal && (
+                <motion.div
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                  className="flex items-center gap-2.5 py-1 text-sm text-muted-foreground"
+                >
+                  <D4CAnimation />
+                  <span className="text-xs">{t('thread.agentWorking')}</span>
+                </motion.div>
+              )}
+
+              {isRunning && isExternal && (
+                <motion.div
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                  className="flex items-center gap-2.5 py-1 text-sm text-muted-foreground"
+                >
+                  <div className="flex items-center gap-1">
+                    <span className="inline-block h-1.5 w-1.5 animate-[thinking_1.4s_ease-in-out_infinite] rounded-full bg-muted-foreground/60" />
+                    <span className="inline-block h-1.5 w-1.5 animate-[thinking_1.4s_ease-in-out_0.2s_infinite] rounded-full bg-muted-foreground/60" />
+                    <span className="inline-block h-1.5 w-1.5 animate-[thinking_1.4s_ease-in-out_0.4s_infinite] rounded-full bg-muted-foreground/60" />
+                  </div>
+                  <span className="text-xs">
+                    {t('thread.runningExternally', 'Running externally\u2026')}
+                  </span>
+                </motion.div>
+              )}
+
+              {activeThread.status === 'waiting' && activeThread.waitingReason === 'question' && (
+                <motion.div
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                  className="flex items-center gap-2 text-xs text-status-warning/80"
+                >
+                  <ShieldQuestion className="h-3.5 w-3.5 animate-pulse" />
+                  {t('thread.waitingForResponse')}
+                </motion.div>
+              )}
+
+              {activeThread.status === 'waiting' &&
+                activeThread.waitingReason === 'permission' &&
+                activeThread.pendingPermission && (
+                  <motion.div
+                    initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.25, ease: 'easeOut' }}
+                  >
+                    <PermissionApprovalCard
+                      toolName={activeThread.pendingPermission.toolName}
+                      onApprove={() =>
+                        handlePermissionApproval(activeThread.pendingPermission!.toolName, true)
+                      }
+                      onDeny={() =>
+                        handlePermissionApproval(activeThread.pendingPermission!.toolName, false)
+                      }
+                    />
+                  </motion.div>
+                )}
+
+              {activeThread.status === 'waiting' && !activeThread.waitingReason && (
+                <motion.div
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.25, ease: 'easeOut' }}
+                >
+                  <WaitingActions
+                    onSend={(text) =>
+                      handleSend(text, {
+                        model: activeThread.model,
+                        mode: activeThread.permissionMode,
+                      })
+                    }
+                  />
+                </motion.div>
+              )}
+
+              {activeThread.resultInfo &&
+                !isRunning &&
+                activeThread.status !== 'stopped' &&
+                activeThread.status !== 'interrupted' && (
+                  <motion.div
+                    initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ duration: 0.3, ease: 'easeOut' }}
+                  >
+                    <AgentResultCard
+                      status={activeThread.resultInfo.status}
+                      cost={activeThread.resultInfo.cost}
+                      duration={activeThread.resultInfo.duration}
+                      error={activeThread.resultInfo.error}
+                      onContinue={
+                        activeThread.resultInfo.status === 'failed'
+                          ? () =>
+                              handleSend('Continue', {
+                                model: activeThread.model,
+                                mode: activeThread.permissionMode,
+                              })
+                          : undefined
+                      }
+                    />
+                  </motion.div>
+                )}
+
+              {activeThread.status === 'interrupted' && (
+                <motion.div
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                >
+                  <AgentInterruptedCard
+                    onContinue={() =>
+                      handleSend('Continue', {
+                        model: activeThread.model,
+                        mode: activeThread.permissionMode,
+                      })
+                    }
+                  />
+                </motion.div>
+              )}
+
+              {activeThread.status === 'stopped' && (
+                <motion.div
+                  initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.3, ease: 'easeOut' }}
+                >
+                  <AgentStoppedCard
+                    onContinue={() =>
+                      handleSend('Continue', {
+                        model: activeThread.model,
+                        mode: activeThread.permissionMode,
+                      })
+                    }
+                  />
+                </motion.div>
+              )}
             </div>
-          )}
+
+            {/* Input — sticky at bottom */}
+            {!(activeThread.status === 'waiting' && activeThread.waitingReason === 'question') && (
+              <div className="sticky bottom-0 z-10 bg-background">
+                {/* Scroll to bottom button — visibility managed via DOM ref to avoid re-renders */}
+                <div ref={scrollDownRef} className="relative" style={{ display: 'none' }}>
+                  <button
+                    onClick={scrollToBottom}
+                    aria-label={t('thread.scrollToBottom', 'Scroll to bottom')}
+                    className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-muted-foreground/40 bg-secondary px-3 py-1.5 text-xs text-muted-foreground shadow-md transition-colors hover:bg-muted"
+                  >
+                    <ArrowDown className="h-3 w-3" />
+                    {t('thread.scrollToBottom', 'Scroll to bottom')}
+                  </button>
+                </div>
+                <PromptInput
+                  onSubmit={handleSend}
+                  onStop={handleStop}
+                  loading={sending}
+                  running={isRunning && !isExternal}
+                  isQueueMode={isQueueMode}
+                  queuedCount={(activeThread as any).queuedCount ?? 0}
+                  placeholder={t('thread.nextPrompt')}
+                />
+              </div>
+            )}
           </div>
         </div>
 
@@ -1385,7 +1568,10 @@ export function ThreadView() {
         {activeThread.messages.length > 0 && (
           <PromptTimeline
             messages={activeThread.messages}
-            activeMessageId={visibleMessageId ?? activeThread.messages.filter(m => m.role === 'user' && m.content?.trim()).at(-1)?.id}
+            activeMessageId={
+              visibleMessageId ??
+              activeThread.messages.filter((m) => m.role === 'user' && m.content?.trim()).at(-1)?.id
+            }
             threadStatus={activeThread.status}
             messagesScrollRef={scrollViewportRef}
             onScrollToMessage={(msgId, toolCallId) => {

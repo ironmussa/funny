@@ -4,11 +4,20 @@
  * to thread-machine-bridge, and module-level coordination to thread-store-internals.
  */
 
+import type {
+  Thread,
+  MessageRole,
+  ThreadStage,
+  WaitingReason,
+  AgentModel,
+  PermissionMode,
+} from '@funny/shared';
 import { create } from 'zustand';
-import type { Thread, MessageRole, ThreadStatus, ThreadStage, WaitingReason, AgentModel, PermissionMode } from '@funny/shared';
+
 import { api } from '@/lib/api';
-import { useUIStore } from './ui-store';
+
 import { useProjectStore } from './project-store';
+import { transitionThreadStatus, cleanupThreadActor } from './thread-machine-bridge';
 import {
   nextSelectGeneration,
   getSelectGeneration,
@@ -17,8 +26,8 @@ import {
   getAndClearWSBuffer,
   clearWSBuffer,
 } from './thread-store-internals';
-import { transitionThreadStatus, cleanupThreadActor } from './thread-machine-bridge';
 import * as wsHandlers from './thread-ws-handlers';
+import { useUIStore } from './ui-store';
 
 // Re-export for external consumers
 export { invalidateSelectThread, setAppNavigate } from './thread-store-internals';
@@ -61,7 +70,13 @@ export interface ThreadState {
   pinThread: (threadId: string, projectId: string, pinned: boolean) => Promise<void>;
   updateThreadStage: (threadId: string, projectId: string, stage: ThreadStage) => Promise<void>;
   deleteThread: (threadId: string, projectId: string) => Promise<void>;
-  appendOptimisticMessage: (threadId: string, content: string, images?: any[], model?: AgentModel, permissionMode?: PermissionMode) => void;
+  appendOptimisticMessage: (
+    threadId: string,
+    content: string,
+    images?: any[],
+    model?: AgentModel,
+    permissionMode?: PermissionMode,
+  ) => void;
   loadOlderMessages: () => Promise<void>;
   refreshActiveThread: () => Promise<void>;
   refreshAllLoadedThreads: () => Promise<void>;
@@ -69,12 +84,21 @@ export interface ThreadState {
 
   // WebSocket event handlers
   handleWSInit: (threadId: string, data: AgentInitInfo) => void;
-  handleWSMessage: (threadId: string, data: { messageId?: string; role: string; content: string }) => void;
-  handleWSToolCall: (threadId: string, data: { toolCallId?: string; messageId?: string; name: string; input: unknown }) => void;
+  handleWSMessage: (
+    threadId: string,
+    data: { messageId?: string; role: string; content: string },
+  ) => void;
+  handleWSToolCall: (
+    threadId: string,
+    data: { toolCallId?: string; messageId?: string; name: string; input: unknown },
+  ) => void;
   handleWSToolOutput: (threadId: string, data: { toolCallId: string; output: string }) => void;
   handleWSStatus: (threadId: string, data: { status: string }) => void;
   handleWSResult: (threadId: string, data: any) => void;
-  handleWSQueueUpdate: (threadId: string, data: { threadId: string; queuedCount: number; nextMessage?: string }) => void;
+  handleWSQueueUpdate: (
+    threadId: string,
+    data: { threadId: string; queuedCount: number; nextMessage?: string },
+  ) => void;
 }
 
 // ── Buffer replay ────────────────────────────────────────────────
@@ -84,11 +108,21 @@ function flushWSBuffer(threadId: string, store: ThreadState) {
   if (!events) return;
   for (const event of events) {
     switch (event.type) {
-      case 'message': store.handleWSMessage(threadId, event.data); break;
-      case 'tool_call': store.handleWSToolCall(threadId, event.data); break;
-      case 'tool_output': store.handleWSToolOutput(threadId, event.data); break;
-      case 'status': store.handleWSStatus(threadId, event.data); break;
-      case 'result': store.handleWSResult(threadId, event.data); break;
+      case 'message':
+        store.handleWSMessage(threadId, event.data);
+        break;
+      case 'tool_call':
+        store.handleWSToolCall(threadId, event.data);
+        break;
+      case 'tool_output':
+        store.handleWSToolOutput(threadId, event.data);
+        break;
+      case 'status':
+        store.handleWSStatus(threadId, event.data);
+        break;
+      case 'result':
+        store.handleWSResult(threadId, event.data);
+        break;
     }
   }
 }
@@ -97,7 +131,13 @@ function flushWSBuffer(threadId: string, store: ThreadState) {
 // Parse the URL at module-load time. If we're on a thread route, start
 // fetching thread data immediately — in parallel with auth bootstrap and
 // project loading — instead of waiting for useRouteSync.
-const _prefetchCache = new Map<string, { threadPromise: ReturnType<typeof api.getThread>; eventsPromise: ReturnType<typeof api.getThreadEvents> }>();
+const _prefetchCache = new Map<
+  string,
+  {
+    threadPromise: ReturnType<typeof api.getThread>;
+    eventsPromise: ReturnType<typeof api.getThreadEvents>;
+  }
+>();
 {
   const m = window.location.pathname.match(/\/projects\/[^/]+\/threads\/([^/]+)/);
   if (m) {
@@ -148,7 +188,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const keepStale = threadId && prevActive && prevActive.id !== threadId;
     set({
       selectedThreadId: threadId,
-      activeThread: keepStale ? prevActive : (threadId ? prevActive : null),
+      activeThread: keepStale ? prevActive : threadId ? prevActive : null,
     });
     useUIStore.setState({ newThreadProjectId: null, allThreadsProjectId: null });
 
@@ -191,9 +231,15 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     }
 
     const buffered = getBufferedInitInfo(threadId);
-    const resultInfo = (thread.status === 'completed' || thread.status === 'failed')
-      ? { status: thread.status as 'completed' | 'failed', cost: thread.cost, duration: 0, error: (thread as any).error }
-      : undefined;
+    const resultInfo =
+      thread.status === 'completed' || thread.status === 'failed'
+        ? {
+            status: thread.status as 'completed' | 'failed',
+            cost: thread.cost,
+            duration: 0,
+            error: (thread as any).error,
+          }
+        : undefined;
 
     // Derive waitingReason and pendingPermission from the last tool call when reloading a waiting thread
     let waitingReason: WaitingReason | undefined;
@@ -207,7 +253,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
             waitingReason = 'question';
           } else if (lastTC.name === 'ExitPlanMode') {
             waitingReason = 'plan';
-          } else if (lastTC.output && /permission|hasn't been granted|not in the allowed tools/i.test(lastTC.output)) {
+          } else if (
+            lastTC.output &&
+            /permission|hasn't been granted|not in the allowed tools/i.test(lastTC.output)
+          ) {
             waitingReason = 'permission';
             pendingPermission = { toolName: lastTC.name };
           }
@@ -218,7 +267,17 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     const threadEvents = eventsResult.isOk() ? eventsResult.value.events : [];
 
-    set({ activeThread: { ...thread, hasMore: thread.hasMore ?? false, threadEvents, initInfo: thread.initInfo || buffered || undefined, resultInfo, waitingReason, pendingPermission } });
+    set({
+      activeThread: {
+        ...thread,
+        hasMore: thread.hasMore ?? false,
+        threadEvents,
+        initInfo: thread.initInfo || buffered || undefined,
+        resultInfo,
+        waitingReason,
+        pendingPermission,
+      },
+    });
     useProjectStore.setState({ selectedProjectId: projectId });
 
     // Replay any WS events that arrived while activeThread was loading
@@ -233,11 +292,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     set({
       threadsByProject: {
         ...threadsByProject,
-        [projectId]: projectThreads.map((t) =>
-          t.id === threadId ? { ...t, archived: true } : t
-        ),
+        [projectId]: projectThreads.map((t) => (t.id === threadId ? { ...t, archived: true } : t)),
       },
-      activeThread: activeThread?.id === threadId ? { ...activeThread, archived: true } : activeThread,
+      activeThread:
+        activeThread?.id === threadId ? { ...activeThread, archived: true } : activeThread,
     });
 
     // Make API call in background
@@ -250,12 +308,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         threadsByProject: {
           ...currentState.threadsByProject,
           [projectId]: currentProjectThreads.map((t) =>
-            t.id === threadId ? { ...t, archived: false } : t
+            t.id === threadId ? { ...t, archived: false } : t,
           ),
         },
-        activeThread: currentState.activeThread?.id === threadId
-          ? { ...currentState.activeThread, archived: false }
-          : currentState.activeThread,
+        activeThread:
+          currentState.activeThread?.id === threadId
+            ? { ...currentState.activeThread, archived: false }
+            : currentState.activeThread,
       });
       return;
     }
@@ -273,10 +332,11 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       threadsByProject: {
         ...threadsByProject,
         [projectId]: projectThreads.map((t) =>
-          t.id === threadId ? { ...t, archived: false, stage } : t
+          t.id === threadId ? { ...t, archived: false, stage } : t,
         ),
       },
-      activeThread: activeThread?.id === threadId ? { ...activeThread, archived: false, stage } : activeThread,
+      activeThread:
+        activeThread?.id === threadId ? { ...activeThread, archived: false, stage } : activeThread,
     });
 
     // Make API calls in background
@@ -289,12 +349,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         threadsByProject: {
           ...currentState.threadsByProject,
           [projectId]: currentProjectThreads.map((t) =>
-            t.id === threadId ? { ...t, archived: true, stage: oldStage } : t
+            t.id === threadId ? { ...t, archived: true, stage: oldStage } : t,
           ),
         },
-        activeThread: currentState.activeThread?.id === threadId
-          ? { ...currentState.activeThread, archived: true, stage: oldStage }
-          : currentState.activeThread,
+        activeThread:
+          currentState.activeThread?.id === threadId
+            ? { ...currentState.activeThread, archived: true, stage: oldStage }
+            : currentState.activeThread,
       });
       return;
     }
@@ -308,12 +369,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         threadsByProject: {
           ...currentState.threadsByProject,
           [projectId]: currentProjectThreads.map((t) =>
-            t.id === threadId ? { ...t, stage: oldStage } : t
+            t.id === threadId ? { ...t, stage: oldStage } : t,
           ),
         },
-        activeThread: currentState.activeThread?.id === threadId
-          ? { ...currentState.activeThread, stage: oldStage }
-          : currentState.activeThread,
+        activeThread:
+          currentState.activeThread?.id === threadId
+            ? { ...currentState.activeThread, stage: oldStage }
+            : currentState.activeThread,
       });
     }
   },
@@ -328,9 +390,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     set({
       threadsByProject: {
         ...threadsByProject,
-        [projectId]: projectThreads.map((t) =>
-          t.id === threadId ? { ...t, pinned } : t
-        ),
+        [projectId]: projectThreads.map((t) => (t.id === threadId ? { ...t, pinned } : t)),
       },
       activeThread: activeThread?.id === threadId ? { ...activeThread, pinned } : activeThread,
     });
@@ -345,12 +405,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         threadsByProject: {
           ...currentState.threadsByProject,
           [projectId]: currentProjectThreads.map((t) =>
-            t.id === threadId ? { ...t, pinned: oldPinned } : t
+            t.id === threadId ? { ...t, pinned: oldPinned } : t,
           ),
         },
-        activeThread: currentState.activeThread?.id === threadId
-          ? { ...currentState.activeThread, pinned: oldPinned }
-          : currentState.activeThread,
+        activeThread:
+          currentState.activeThread?.id === threadId
+            ? { ...currentState.activeThread, pinned: oldPinned }
+            : currentState.activeThread,
       });
     }
   },
@@ -365,9 +426,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     set({
       threadsByProject: {
         ...threadsByProject,
-        [projectId]: projectThreads.map((t) =>
-          t.id === threadId ? { ...t, stage } : t
-        ),
+        [projectId]: projectThreads.map((t) => (t.id === threadId ? { ...t, stage } : t)),
       },
       activeThread: activeThread?.id === threadId ? { ...activeThread, stage } : activeThread,
     });
@@ -382,12 +441,13 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         threadsByProject: {
           ...currentState.threadsByProject,
           [projectId]: currentProjectThreads.map((t) =>
-            t.id === threadId ? { ...t, stage: oldStage } : t
+            t.id === threadId ? { ...t, stage: oldStage } : t,
           ),
         },
-        activeThread: currentState.activeThread?.id === threadId
-          ? { ...currentState.activeThread, stage: oldStage }
-          : currentState.activeThread,
+        activeThread:
+          currentState.activeThread?.id === threadId
+            ? { ...currentState.activeThread, stage: oldStage }
+            : currentState.activeThread,
       });
     }
   },
@@ -417,15 +477,22 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       const projectThreads = threadsByProject[pid] ?? [];
 
       const machineEvent = { type: 'START' as const };
-      const newStatus = transitionThreadStatus(threadId, machineEvent, activeThread.status, activeThread.cost);
+      const newStatus = transitionThreadStatus(
+        threadId,
+        machineEvent,
+        activeThread.status,
+        activeThread.cost,
+      );
 
       // Pre-populate initInfo so the card renders immediately instead of
       // waiting for the agent:init WebSocket event from the server.
-      const initInfo = activeThread.initInfo ?? (() => {
-        const project = useProjectStore.getState().projects.find(p => p.id === pid);
-        const cwd = activeThread.worktreePath || project?.path || '';
-        return { model: model || activeThread.model, cwd, tools: [] as string[] };
-      })();
+      const initInfo =
+        activeThread.initInfo ??
+        (() => {
+          const project = useProjectStore.getState().projects.find((p) => p.id === pid);
+          const cwd = activeThread.worktreePath || project?.path || '';
+          return { model: model || activeThread.model, cwd, tools: [] as string[] };
+        })();
 
       const newMessage = {
         id: crypto.randomUUID(),
@@ -446,9 +513,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       const nextThreadsByProject = statusChanged
         ? {
             ...threadsByProject,
-            [pid]: projectThreads.map((t) =>
-              t.id === threadId ? { ...t, status: newStatus } : t
-            ),
+            [pid]: projectThreads.map((t) => (t.id === threadId ? { ...t, status: newStatus } : t)),
           }
         : threadsByProject;
 
@@ -491,8 +556,8 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const { messages: olderMessages, hasMore } = result.value;
 
     // Deduplicate in case of overlapping timestamps
-    const existingIds = new Set(current.messages.map(m => m.id));
-    const newMessages = olderMessages.filter(m => !existingIds.has(m.id));
+    const existingIds = new Set(current.messages.map((m) => m.id));
+    const newMessages = olderMessages.filter((m) => !existingIds.has(m.id));
 
     set({
       activeThread: {
@@ -513,11 +578,19 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     ]);
     if (result.isErr()) return; // silently ignore
     const thread = result.value;
-    const resultInfo = activeThread.resultInfo
-      ?? ((thread.status === 'completed' || thread.status === 'failed')
-        ? { status: thread.status as 'completed' | 'failed', cost: thread.cost, duration: 0, error: (thread as any).error }
+    const resultInfo =
+      activeThread.resultInfo ??
+      (thread.status === 'completed' || thread.status === 'failed'
+        ? {
+            status: thread.status as 'completed' | 'failed',
+            cost: thread.cost,
+            duration: 0,
+            error: (thread as any).error,
+          }
         : undefined);
-    const threadEvents = eventsResult.isOk() ? eventsResult.value.events : activeThread.threadEvents;
+    const threadEvents = eventsResult.isOk()
+      ? eventsResult.value.events
+      : activeThread.threadEvents;
     // Clear waitingReason/pendingPermission if server status is no longer waiting
     // (handles case where agent:result WS event was lost during disconnect)
     const isServerWaiting = thread.status === 'waiting';

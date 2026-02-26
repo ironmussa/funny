@@ -1,14 +1,27 @@
+import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
+import {
+  FolderPlus,
+  Columns3,
+  BarChart3,
+  PanelLeftClose,
+  Settings,
+  LayoutGrid,
+  Search,
+} from 'lucide-react';
 import { useState, useCallback, useEffect, useRef, useMemo, startTransition } from 'react';
-import { cn } from '@/lib/utils';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useProjectStore } from '@/stores/project-store';
-import { useThreadStore } from '@/stores/thread-store';
-import { useUIStore } from '@/stores/ui-store';
-import { useAuthStore } from '@/stores/auth-store';
-import { SettingsPanel } from './SettingsPanel';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import {
   Sidebar,
@@ -18,53 +31,46 @@ import {
   SidebarRail,
   useSidebar,
 } from '@/components/ui/sidebar';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import { FolderPlus, Columns3, BarChart3, PanelLeftClose, Settings, LayoutGrid } from 'lucide-react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { AutomationInboxButton } from './sidebar/AutomationInboxButton';
-import { ThreadList } from './sidebar/ThreadList';
-import { ProjectItem } from './sidebar/ProjectItem';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
+import { useAuthStore } from '@/stores/auth-store';
+import { useProjectStore } from '@/stores/project-store';
+import { useThreadStore } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
+
 import { GeneralSettingsDialog } from './GeneralSettingsDialog';
 import { IssuesDialog } from './IssuesDialog';
-import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
+import { SettingsPanel } from './SettingsPanel';
+import { AutomationInboxButton } from './sidebar/AutomationInboxButton';
+import { ProjectItem } from './sidebar/ProjectItem';
+import { ThreadList } from './sidebar/ThreadList';
 
 export function AppSidebar() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   // project-store
-  const projects = useProjectStore(s => s.projects);
-  const selectedProjectId = useProjectStore(s => s.selectedProjectId);
-  const expandedProjects = useProjectStore(s => s.expandedProjects);
-  const toggleProject = useProjectStore(s => s.toggleProject);
-  const loadProjects = useProjectStore(s => s.loadProjects);
-  const renameProject = useProjectStore(s => s.renameProject);
-  const deleteProject = useProjectStore(s => s.deleteProject);
-  const reorderProjects = useProjectStore(s => s.reorderProjects);
+  const projects = useProjectStore((s) => s.projects);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const expandedProjects = useProjectStore((s) => s.expandedProjects);
+  const toggleProject = useProjectStore((s) => s.toggleProject);
+  const _loadProjects = useProjectStore((s) => s.loadProjects);
+  const renameProject = useProjectStore((s) => s.renameProject);
+  const deleteProject = useProjectStore((s) => s.deleteProject);
+  const reorderProjects = useProjectStore((s) => s.reorderProjects);
   // thread-store
-  const threadsByProject = useThreadStore(s => s.threadsByProject);
-  const selectedThreadId = useThreadStore(s => s.selectedThreadId);
-  const archiveThread = useThreadStore(s => s.archiveThread);
-  const pinThread = useThreadStore(s => s.pinThread);
-  const deleteThread = useThreadStore(s => s.deleteThread);
+  const threadsByProject = useThreadStore((s) => s.threadsByProject);
+  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  const archiveThread = useThreadStore((s) => s.archiveThread);
+  const pinThread = useThreadStore((s) => s.pinThread);
+  const deleteThread = useThreadStore((s) => s.deleteThread);
   // ui-store
-  const settingsOpen = useUIStore(s => s.settingsOpen);
-  const startNewThread = useUIStore(s => s.startNewThread);
-  const setAddProjectOpen = useUIStore(s => s.setAddProjectOpen);
-  const showGlobalSearch = useUIStore(s => s.showGlobalSearch);
-  const authMode = useAuthStore(s => s.mode);
-  const authUser = useAuthStore(s => s.user);
-  const logout = useAuthStore(s => s.logout);
+  const settingsOpen = useUIStore((s) => s.settingsOpen);
+  const startNewThread = useUIStore((s) => s.startNewThread);
+  const setAddProjectOpen = useUIStore((s) => s.setAddProjectOpen);
+  const showGlobalSearch = useUIStore((s) => s.showGlobalSearch);
+  const authMode = useAuthStore((s) => s.mode);
+  const authUser = useAuthStore((s) => s.user);
+  const logout = useAuthStore((s) => s.logout);
   const { toggleSidebar } = useSidebar();
 
   const [archiveConfirm, setArchiveConfirm] = useState<{
@@ -99,9 +105,7 @@ export function AppSidebar() {
   // Auto-scroll projects list to selected project (e.g. after Ctrl+K)
   useEffect(() => {
     if (!selectedProjectId || !projectsScrollRef.current) return;
-    const el = projectsScrollRef.current.querySelector(
-      `[data-project-id="${selectedProjectId}"]`
-    );
+    const el = projectsScrollRef.current.querySelector(`[data-project-id="${selectedProjectId}"]`);
     if (el) {
       el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
     }
@@ -220,26 +224,32 @@ export function AppSidebar() {
   }, [deleteProjectConfirm, deleteProject, navigate, t]);
 
   // ── Stable callbacks for ProjectItem (avoids breaking memo) ──────────
-  const handleToggleProject = useCallback((projectId: string) => {
-    const wasExpanded = useProjectStore.getState().expandedProjects.has(projectId);
-    toggleProject(projectId);
-    startTransition(() => {
-      if (!wasExpanded) {
-        useProjectStore.getState().selectProject(projectId);
-        navigate(`/projects/${projectId}`);
-      } else if (useProjectStore.getState().selectedProjectId !== projectId) {
-        // Git status fetch is already deferred inside selectProject/toggleProject
-        navigate(`/projects/${projectId}`);
-      }
-    });
-  }, [toggleProject, navigate]);
+  const handleToggleProject = useCallback(
+    (projectId: string) => {
+      const wasExpanded = useProjectStore.getState().expandedProjects.has(projectId);
+      toggleProject(projectId);
+      startTransition(() => {
+        if (!wasExpanded) {
+          useProjectStore.getState().selectProject(projectId);
+          navigate(`/projects/${projectId}`);
+        } else if (useProjectStore.getState().selectedProjectId !== projectId) {
+          // Git status fetch is already deferred inside selectProject/toggleProject
+          navigate(`/projects/${projectId}`);
+        }
+      });
+    },
+    [toggleProject, navigate],
+  );
 
-  const handleNewThread = useCallback((projectId: string) => {
-    startTransition(() => {
-      startNewThread(projectId);
-      navigate(`/projects/${projectId}`);
-    });
-  }, [startNewThread, navigate]);
+  const handleNewThread = useCallback(
+    (projectId: string) => {
+      startTransition(() => {
+        startNewThread(projectId);
+        navigate(`/projects/${projectId}`);
+      });
+    },
+    [startNewThread, navigate],
+  );
 
   const handleRenameProject = useCallback((projectId: string, currentName: string) => {
     setRenameProjectState({ projectId, currentName, newName: currentName });
@@ -249,36 +259,58 @@ export function AppSidebar() {
     setDeleteProjectConfirm({ projectId, name });
   }, []);
 
-  const handleSelectThread = useCallback((projectId: string, threadId: string) => {
-    startTransition(() => {
-      const store = useThreadStore.getState();
-      if (store.selectedThreadId === threadId && (!store.activeThread || store.activeThread.id !== threadId)) {
-        store.selectThread(threadId);
-      }
-      navigate(`/projects/${projectId}/threads/${threadId}`);
-    });
-  }, [navigate]);
+  const handleSelectThread = useCallback(
+    (projectId: string, threadId: string) => {
+      startTransition(() => {
+        const store = useThreadStore.getState();
+        if (
+          store.selectedThreadId === threadId &&
+          (!store.activeThread || store.activeThread.id !== threadId)
+        ) {
+          store.selectThread(threadId);
+        }
+        navigate(`/projects/${projectId}/threads/${threadId}`);
+      });
+    },
+    [navigate],
+  );
 
   const handleArchiveThread = useCallback((projectId: string, threadId: string, title: string) => {
     const threads = useThreadStore.getState().threadsByProject[projectId] ?? [];
-    const th = threads.find(t => t.id === threadId);
-    setArchiveConfirm({ threadId, projectId, title, isWorktree: th?.mode === 'worktree' && !!th?.branch && th?.provider !== 'external' });
+    const th = threads.find((t) => t.id === threadId);
+    setArchiveConfirm({
+      threadId,
+      projectId,
+      title,
+      isWorktree: th?.mode === 'worktree' && !!th?.branch && th?.provider !== 'external',
+    });
   }, []);
 
-  const handlePinThread = useCallback((projectId: string, threadId: string, pinned: boolean) => {
-    pinThread(threadId, projectId, pinned);
-  }, [pinThread]);
+  const handlePinThread = useCallback(
+    (projectId: string, threadId: string, pinned: boolean) => {
+      pinThread(threadId, projectId, pinned);
+    },
+    [pinThread],
+  );
 
   const handleDeleteThread = useCallback((projectId: string, threadId: string, title: string) => {
     const threads = useThreadStore.getState().threadsByProject[projectId] ?? [];
-    const th = threads.find(t => t.id === threadId);
-    setDeleteThreadConfirm({ threadId, projectId, title, isWorktree: th?.mode === 'worktree' && !!th?.branch && th?.provider !== 'external' });
+    const th = threads.find((t) => t.id === threadId);
+    setDeleteThreadConfirm({
+      threadId,
+      projectId,
+      title,
+      isWorktree: th?.mode === 'worktree' && !!th?.branch && th?.provider !== 'external',
+    });
   }, []);
 
-  const handleShowAllThreads = useCallback((projectId: string) => {
-    showGlobalSearch();
-    navigate(`/search?project=${projectId}`);
-  }, [showGlobalSearch, navigate]);
+  const handleShowAllThreads = useCallback(
+    (projectId: string) => {
+      showGlobalSearch();
+      navigate(`/search?project=${projectId}`);
+    },
+    [showGlobalSearch, navigate],
+  );
 
   const handleShowIssues = useCallback((projectId: string) => {
     setIssuesProjectId(projectId);
@@ -288,12 +320,12 @@ export function AppSidebar() {
   // projects whose source threads array didn't change. This prevents
   // unrelated ProjectItem components from re-rendering when only one
   // project's threadsByProject entry was updated.
-  const prevSourceRef = useRef<Record<string, typeof threadsByProject[string]>>({});
-  const prevFilteredRef = useRef<Record<string, typeof threadsByProject[string]>>({});
+  const prevSourceRef = useRef<Record<string, (typeof threadsByProject)[string]>>({});
+  const prevFilteredRef = useRef<Record<string, (typeof threadsByProject)[string]>>({});
   const filteredThreadsByProject = useMemo(() => {
     const prevSrc = prevSourceRef.current;
     const prevFiltered = prevFilteredRef.current;
-    const result: Record<string, typeof threadsByProject[string]> = {};
+    const result: Record<string, (typeof threadsByProject)[string]> = {};
     for (const project of projects) {
       const src = threadsByProject[project.id];
       if (src === prevSrc[project.id] && prevFiltered[project.id]) {
@@ -315,36 +347,103 @@ export function AppSidebar() {
   return (
     <Sidebar collapsible="offcanvas" className="select-none">
       {/* Header with collapse toggle */}
-      <SidebarHeader className="px-3 py-2 flex-row items-center justify-between">
+      <SidebarHeader className="flex-row items-center justify-between px-3 py-2">
         <span className="text-sm font-semibold text-sidebar-foreground">funny</span>
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={toggleSidebar}
-              className="text-muted-foreground h-7 w-7"
-            >
-              <PanelLeftClose className="h-4 w-4" />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="right">{t('sidebar.collapse', 'Collapse sidebar')}</TooltipContent>
-        </Tooltip>
+        <div className="flex items-center gap-0.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => {
+                  showGlobalSearch();
+                  navigate('/search');
+                }}
+                className="text-muted-foreground"
+              >
+                <Search className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('sidebar.search', 'Search')}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => {
+                  localStorage.setItem('threadViewMode', 'board');
+                  showGlobalSearch();
+                  navigate('/search?view=board');
+                }}
+                className="text-muted-foreground"
+              >
+                <Columns3 className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Kanban</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => navigate('/grid')}
+                className="text-muted-foreground"
+              >
+                <LayoutGrid className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Grid</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => navigate('/analytics')}
+                className="text-muted-foreground"
+              >
+                <BarChart3 className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('sidebar.analytics')}</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={toggleSidebar}
+                className="h-7 w-7 text-muted-foreground"
+              >
+                <PanelLeftClose className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="right">
+              {t('sidebar.collapse', 'Collapse sidebar')}
+            </TooltipContent>
+          </Tooltip>
+        </div>
       </SidebarHeader>
 
       {/* Active threads section (own scroll) */}
-      <div className="flex flex-col max-h-[40%] min-h-[5rem] shrink-0 contain-paint">
+      <div className="flex max-h-[40%] min-h-[5rem] shrink-0 flex-col contain-paint">
         <div className="px-2">
           <AutomationInboxButton />
         </div>
-        <div className="flex items-center justify-between px-4 pt-4 pb-2">
-          <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('sidebar.threadsTitle')}</h2>
+        <div className="flex items-center justify-between px-4 pb-2 pt-4">
+          <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+            {t('sidebar.threadsTitle')}
+          </h2>
         </div>
-        <div ref={threadsScrollRef} className="relative overflow-y-auto min-h-0 px-2 pb-2">
-          <div className={cn(
-            "sticky top-0 left-0 right-0 h-4 -mb-4 bg-gradient-to-b from-sidebar to-transparent pointer-events-none z-10",
-            threadsScrolled ? "opacity-100" : "opacity-0"
-          )} />
+        <div ref={threadsScrollRef} className="relative min-h-0 overflow-y-auto px-2 pb-2">
+          <div
+            className={cn(
+              'sticky top-0 left-0 right-0 h-4 -mb-4 bg-gradient-to-b from-sidebar to-transparent pointer-events-none z-10',
+              threadsScrolled ? 'opacity-100' : 'opacity-0',
+            )}
+          />
           <ThreadList
             onArchiveThread={(threadId, projectId, title, isWorktree) => {
               setArchiveConfirm({ threadId, projectId, title, isWorktree });
@@ -357,80 +456,37 @@ export function AppSidebar() {
       </div>
 
       {/* Projects header (fixed, outside scroll) */}
-      <div className="group/projects-header flex items-center justify-between px-4 pt-4 pb-2 shrink-0">
-        <h2 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{t('sidebar.projects')}</h2>
-        <div className="flex items-center gap-0.5">
-          <div className="flex items-center gap-0.5 opacity-0 pointer-events-none group-hover/projects-header:opacity-100 group-hover/projects-header:pointer-events-auto transition-opacity">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => {
-                    localStorage.setItem('threadViewMode', 'board');
-                    showGlobalSearch();
-                    navigate('/search?view=board');
-                  }}
-                  className="text-muted-foreground"
-                >
-                  <Columns3 className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Kanban</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => navigate('/grid')}
-                  className="text-muted-foreground"
-                >
-                  <LayoutGrid className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">Grid</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={() => navigate('/analytics')}
-                  className="text-muted-foreground"
-                >
-                  <BarChart3 className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">{t('sidebar.analytics')}</TooltipContent>
-            </Tooltip>
-          </div>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => setAddProjectOpen(true)}
-                className="text-muted-foreground"
-              >
-                <FolderPlus className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">{t('sidebar.addProject')}</TooltipContent>
-          </Tooltip>
-        </div>
+      <div className="flex shrink-0 items-center justify-between px-4 pb-2 pt-4">
+        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+          {t('sidebar.projects')}
+        </h2>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={() => setAddProjectOpen(true)}
+              className="text-muted-foreground"
+            >
+              <FolderPlus className="h-3.5 w-3.5" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent side="top">{t('sidebar.addProject')}</TooltipContent>
+        </Tooltip>
       </div>
 
       {/* Projects list (fills remaining space, own scroll) */}
-      <SidebarContent ref={projectsScrollRef} className="px-2 pb-2 relative contain-paint">
-        <div className={cn(
-          "sticky top-0 left-0 right-0 h-4 -mb-4 bg-gradient-to-b from-sidebar to-transparent pointer-events-none z-10 shrink-0",
-          projectsScrolled ? "opacity-100" : "opacity-0"
-        )} />
+      <SidebarContent ref={projectsScrollRef} className="relative px-2 pb-2 contain-paint">
+        <div
+          className={cn(
+            'sticky top-0 left-0 right-0 h-4 -mb-4 bg-gradient-to-b from-sidebar to-transparent pointer-events-none z-10 shrink-0',
+            projectsScrolled ? 'opacity-100' : 'opacity-0',
+          )}
+        />
         {projects.length === 0 && (
           <button
             onClick={() => setAddProjectOpen(true)}
-            className="w-full text-left px-2 py-2 text-xs text-muted-foreground hover:text-foreground transition-colors cursor-pointer"
+            className="w-full cursor-pointer px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             {t('sidebar.noProjects')}
           </button>
@@ -462,13 +518,18 @@ export function AppSidebar() {
       <SidebarFooter>
         <div className="flex items-center justify-between px-1">
           {authMode === 'multi' && authUser ? (
-            <span className="text-sm text-sidebar-foreground truncate">{authUser.displayName}</span>
+            <span className="truncate text-sm text-sidebar-foreground">{authUser.displayName}</span>
           ) : (
             <div />
           )}
           <div className="flex items-center gap-1">
             {authMode === 'multi' && authUser && (
-              <Button variant="ghost" size="sm" onClick={logout} className="text-xs text-muted-foreground">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={logout}
+                className="text-xs text-muted-foreground"
+              >
                 {t('auth.logout')}
               </Button>
             )}
@@ -478,7 +539,7 @@ export function AppSidebar() {
                   variant="ghost"
                   size="icon-xs"
                   onClick={() => setGeneralSettingsOpen(true)}
-                  className="text-muted-foreground h-7 w-7"
+                  className="h-7 w-7 text-muted-foreground"
                 >
                   <Settings className="h-4 w-4" />
                 </Button>
@@ -495,24 +556,33 @@ export function AppSidebar() {
         <IssuesDialog
           projectId={issuesProjectId}
           open={!!issuesProjectId}
-          onOpenChange={(open) => { if (!open) setIssuesProjectId(null); }}
+          onOpenChange={(open) => {
+            if (!open) setIssuesProjectId(null);
+          }}
         />
       )}
 
       {/* Archive confirmation dialog */}
       <Dialog
         open={!!archiveConfirm}
-        onOpenChange={(open) => { if (!open) setArchiveConfirm(null); }}
+        onOpenChange={(open) => {
+          if (!open) setArchiveConfirm(null);
+        }}
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{t('dialog.archiveThread')}</DialogTitle>
             <DialogDescription className="break-all">
-              {t('dialog.archiveThreadDesc', { title: archiveConfirm?.title && archiveConfirm.title.length > 80 ? archiveConfirm.title.slice(0, 80) + '…' : archiveConfirm?.title })}
+              {t('dialog.archiveThreadDesc', {
+                title:
+                  archiveConfirm?.title && archiveConfirm.title.length > 80
+                    ? archiveConfirm.title.slice(0, 80) + '…'
+                    : archiveConfirm?.title,
+              })}
             </DialogDescription>
           </DialogHeader>
           {archiveConfirm?.isWorktree && (
-            <p className="text-xs text-status-warning/80 bg-status-warning/10 rounded-md px-3 py-2">
+            <p className="rounded-md bg-status-warning/10 px-3 py-2 text-xs text-status-warning/80">
               {t('dialog.worktreeWarning')}
             </p>
           )}
@@ -530,17 +600,24 @@ export function AppSidebar() {
       {/* Delete thread confirmation dialog */}
       <Dialog
         open={!!deleteThreadConfirm}
-        onOpenChange={(open) => { if (!open) setDeleteThreadConfirm(null); }}
+        onOpenChange={(open) => {
+          if (!open) setDeleteThreadConfirm(null);
+        }}
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{t('dialog.deleteThread')}</DialogTitle>
             <DialogDescription className="break-all">
-              {t('dialog.deleteThreadDesc', { title: deleteThreadConfirm?.title && deleteThreadConfirm.title.length > 80 ? deleteThreadConfirm.title.slice(0, 80) + '…' : deleteThreadConfirm?.title })}
+              {t('dialog.deleteThreadDesc', {
+                title:
+                  deleteThreadConfirm?.title && deleteThreadConfirm.title.length > 80
+                    ? deleteThreadConfirm.title.slice(0, 80) + '…'
+                    : deleteThreadConfirm?.title,
+              })}
             </DialogDescription>
           </DialogHeader>
           {deleteThreadConfirm?.isWorktree && (
-            <p className="text-xs text-status-warning/80 bg-status-warning/10 rounded-md px-3 py-2">
+            <p className="rounded-md bg-status-warning/10 px-3 py-2 text-xs text-status-warning/80">
               {t('dialog.worktreeWarning')}
             </p>
           )}
@@ -548,7 +625,12 @@ export function AppSidebar() {
             <Button variant="outline" size="sm" onClick={() => setDeleteThreadConfirm(null)}>
               {t('common.cancel')}
             </Button>
-            <Button variant="destructive" size="sm" onClick={handleDeleteThreadConfirm} loading={actionLoading}>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDeleteThreadConfirm}
+              loading={actionLoading}
+            >
               {t('common.delete')}
             </Button>
           </DialogFooter>
@@ -558,7 +640,9 @@ export function AppSidebar() {
       {/* Rename project dialog */}
       <Dialog
         open={!!renameProjectState}
-        onOpenChange={(open) => { if (!open) setRenameProjectState(null); }}
+        onOpenChange={(open) => {
+          if (!open) setRenameProjectState(null);
+        }}
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -598,7 +682,9 @@ export function AppSidebar() {
       {/* Delete project confirmation dialog */}
       <Dialog
         open={!!deleteProjectConfirm}
-        onOpenChange={(open) => { if (!open) setDeleteProjectConfirm(null); }}
+        onOpenChange={(open) => {
+          if (!open) setDeleteProjectConfirm(null);
+        }}
       >
         <DialogContent className="max-w-sm">
           <DialogHeader>
@@ -611,7 +697,12 @@ export function AppSidebar() {
             <Button variant="outline" size="sm" onClick={() => setDeleteProjectConfirm(null)}>
               {t('common.cancel')}
             </Button>
-            <Button variant="destructive" size="sm" onClick={handleDeleteProjectConfirm} loading={actionLoading}>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={handleDeleteProjectConfirm}
+              loading={actionLoading}
+            >
               {t('common.delete')}
             </Button>
           </DialogFooter>

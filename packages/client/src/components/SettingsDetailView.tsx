@@ -1,11 +1,12 @@
-import { useShallow } from 'zustand/react/shallow';
-import { useUIStore } from '@/stores/ui-store';
-import { useProjectStore } from '@/stores/project-store';
-import { useSettingsStore, ALL_STANDARD_TOOLS, TOOL_LABELS } from '@/stores/settings-store';
 import type { ToolPermission } from '@funny/shared';
-import { settingsItems, settingsLabelKeys, type SettingsItemId } from './SettingsPanel';
-import { cn } from '@/lib/utils';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import type { AgentProvider } from '@funny/shared';
+import { getDefaultModel } from '@funny/shared/models';
+import { Monitor, GitBranch, RotateCcw, Check, ChevronsUpDown } from 'lucide-react';
+import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
+import { useShallow } from 'zustand/react/shallow';
+
 import {
   Breadcrumb,
   BreadcrumbList,
@@ -14,24 +15,32 @@ import {
   BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
-import { Monitor, GitBranch, RotateCcw, Check, ChevronsUpDown } from 'lucide-react';
-import { useTranslation } from 'react-i18next';
-import { PROVIDERS, getModelOptions } from '@/lib/providers';
-import type { AgentProvider } from '@funny/shared';
-import { getDefaultModel } from '@funny/shared/models';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { Command, CommandInput, CommandList, CommandEmpty, CommandGroup, CommandItem } from '@/components/ui/command';
 import { Button } from '@/components/ui/button';
-import { useState, useCallback } from 'react';
-import { toast } from 'sonner';
-import { McpServerSettings } from './McpServerSettings';
-import { SkillsSettings } from './SkillsSettings';
-import { WorktreeSettings } from './WorktreeSettings';
-import { StartupCommandsSettings } from './StartupCommandsSettings';
-import { AutomationSettings } from './AutomationSettings';
+import {
+  Command,
+  CommandInput,
+  CommandList,
+  CommandEmpty,
+  CommandGroup,
+  CommandItem,
+} from '@/components/ui/command';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { PROVIDERS, getModelOptions } from '@/lib/providers';
+import { cn } from '@/lib/utils';
+import { useProjectStore } from '@/stores/project-store';
+import { useSettingsStore, ALL_STANDARD_TOOLS, TOOL_LABELS } from '@/stores/settings-store';
+import { useUIStore } from '@/stores/ui-store';
+
 import { ArchivedThreadsSettings } from './ArchivedThreadsSettings';
-import { UserManagement } from './settings/UserManagement';
+import { AutomationSettings } from './AutomationSettings';
+import { McpServerSettings } from './McpServerSettings';
 import { ProfileSettings } from './settings/ProfileSettings';
+import { UserManagement } from './settings/UserManagement';
+import { settingsLabelKeys, type SettingsItemId } from './SettingsPanel';
+import { SkillsSettings } from './SkillsSettings';
+import { StartupCommandsSettings } from './StartupCommandsSettings';
+import { WorktreeSettings } from './WorktreeSettings';
 
 /* ── Reusable setting row ── */
 function SettingRow({
@@ -44,10 +53,10 @@ function SettingRow({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex items-center justify-between gap-4 px-4 py-3.5 border-b border-border/50 last:border-b-0">
+    <div className="flex items-center justify-between gap-4 border-b border-border/50 px-4 py-3.5 last:border-b-0">
       <div className="min-w-0">
         <p className="text-sm font-medium text-foreground">{title}</p>
-        <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
       </div>
       <div className="flex-shrink-0">{children}</div>
     </div>
@@ -75,7 +84,7 @@ function SegmentedControl<T extends string>({
             'flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-sm transition-colors',
             value === opt.value
               ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
+              : 'text-muted-foreground hover:text-foreground',
           )}
         >
           {opt.icon}
@@ -110,7 +119,7 @@ function ModelCombobox({
           variant="outline"
           role="combobox"
           aria-expanded={open}
-          className="w-[160px] justify-between text-xs h-8"
+          className="h-8 w-[160px] justify-between text-xs"
         >
           <span className="truncate">{selected?.label ?? placeholder}</span>
           <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
@@ -135,7 +144,7 @@ function ModelCombobox({
                   <Check
                     className={cn(
                       'mr-2 h-3 w-3',
-                      value === opt.value ? 'opacity-100' : 'opacity-0'
+                      value === opt.value ? 'opacity-100' : 'opacity-0',
                     )}
                   />
                   {opt.label}
@@ -162,13 +171,20 @@ const PASTEL_COLORS = [
 ];
 
 /* ── Color picker area ── */
-function ProjectColorPicker({ projectId, currentColor, onSave }: { projectId: string; currentColor?: string; onSave: (projectId: string, data: { color: string | null }) => void }) {
-
+function ProjectColorPicker({
+  projectId,
+  currentColor,
+  onSave,
+}: {
+  projectId: string;
+  currentColor?: string;
+  onSave: (projectId: string, data: { color: string | null }) => void;
+}) {
   return (
-    <div className="flex flex-col gap-3 px-4 py-3.5 border-b border-border/50 last:border-b-0">
+    <div className="flex flex-col gap-3 border-b border-border/50 px-4 py-3.5 last:border-b-0">
       <div className="min-w-0">
         <p className="text-sm font-medium text-foreground">Project Color</p>
-        <p className="text-xs text-muted-foreground mt-0.5">Pick any color for this project</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">Pick any color for this project</p>
       </div>
       {/* Preset pastel colors */}
       <div className="flex items-center gap-1.5">
@@ -178,7 +194,7 @@ function ProjectColorPicker({ projectId, currentColor, onSave }: { projectId: st
             'h-7 w-7 rounded-md border-2 transition-all flex items-center justify-center',
             !currentColor
               ? 'border-primary shadow-sm'
-              : 'border-border hover:border-muted-foreground'
+              : 'border-border hover:border-muted-foreground',
           )}
           aria-label="No color"
           aria-pressed={!currentColor}
@@ -193,7 +209,7 @@ function ProjectColorPicker({ projectId, currentColor, onSave }: { projectId: st
               'h-7 w-7 rounded-md border-2 transition-all',
               currentColor === color
                 ? 'border-primary shadow-sm scale-110'
-                : 'border-transparent hover:border-muted-foreground'
+                : 'border-transparent hover:border-muted-foreground',
             )}
             style={{ backgroundColor: color }}
             aria-label={`Color ${color}`}
@@ -209,29 +225,25 @@ function ProjectColorPicker({ projectId, currentColor, onSave }: { projectId: st
             value={currentColor || '#7CB9E8'}
             onChange={(e) => onSave(projectId, { color: e.target.value })}
             aria-label="Custom color picker"
-            className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
           />
           <div
             className={cn(
               'h-8 w-8 rounded-lg border-2 shadow-sm cursor-pointer transition-all hover:scale-105',
-              currentColor ? 'border-primary/50' : 'border-border'
+              currentColor ? 'border-primary/50' : 'border-border',
             )}
             style={{ backgroundColor: currentColor || 'transparent' }}
           >
             {!currentColor && (
-              <div className="h-full w-full rounded-md bg-gradient-to-br from-muted-foreground/10 to-muted-foreground/30 flex items-center justify-center">
+              <div className="flex h-full w-full items-center justify-center rounded-md bg-gradient-to-br from-muted-foreground/10 to-muted-foreground/30">
                 <span className="text-xs text-muted-foreground">—</span>
               </div>
             )}
           </div>
         </div>
-        <span className="text-xs text-muted-foreground">
-          Custom color
-        </span>
+        <span className="text-xs text-muted-foreground">Custom color</span>
         {currentColor && (
-          <span className="text-xs font-mono text-muted-foreground">
-            {currentColor}
-          </span>
+          <span className="font-mono text-xs text-muted-foreground">{currentColor}</span>
         )}
       </div>
     </div>
@@ -240,11 +252,13 @@ function ProjectColorPicker({ projectId, currentColor, onSave }: { projectId: st
 
 /* ── General settings content ── */
 function GeneralSettings() {
-  const { toolPermissions, setToolPermission, resetToolPermissions } = useSettingsStore(useShallow(s => ({
-    toolPermissions: s.toolPermissions,
-    setToolPermission: s.setToolPermission,
-    resetToolPermissions: s.resetToolPermissions,
-  })));
+  const { toolPermissions, setToolPermission, resetToolPermissions } = useSettingsStore(
+    useShallow((s) => ({
+      toolPermissions: s.toolPermissions,
+      setToolPermission: s.setToolPermission,
+      resetToolPermissions: s.resetToolPermissions,
+    })),
+  );
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projects = useProjectStore((s) => s.projects);
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
@@ -256,7 +270,7 @@ function GeneralSettings() {
       await updateProject(projectId, data);
       toast.success(t('settings.projectSaved'), { id: 'project-settings-saved' });
     },
-    [updateProject, t]
+    [updateProject, t],
   );
 
   const saveToolPermission = useCallback(
@@ -264,7 +278,7 @@ function GeneralSettings() {
       setToolPermission(toolName, permission);
       toast.success(t('settings.saved'), { id: 'settings-saved' });
     },
-    [setToolPermission, t]
+    [setToolPermission, t],
   );
 
   const saveResetToolPermissions = useCallback(() => {
@@ -277,11 +291,15 @@ function GeneralSettings() {
       {/* Project section (only shown when a project is selected) */}
       {selectedProject && (
         <>
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2">
+          <h3 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Project
           </h3>
-          <div className="rounded-lg border border-border/50 overflow-hidden mb-6">
-            <ProjectColorPicker projectId={selectedProject.id} currentColor={selectedProject.color} onSave={saveProject} />
+          <div className="mb-6 overflow-hidden rounded-lg border border-border/50">
+            <ProjectColorPicker
+              projectId={selectedProject.id}
+              currentColor={selectedProject.color}
+              onSave={saveProject}
+            />
             <SettingRow
               title={t('settings.followUpMode')}
               description={t('settings.followUpModeDesc')}
@@ -297,7 +315,10 @@ function GeneralSettings() {
             </SettingRow>
             <SettingRow
               title={t('settings.projectDefaultModel', 'Default Model')}
-              description={t('settings.projectDefaultModelDesc', 'Provider and model for new threads in this project')}
+              description={t(
+                'settings.projectDefaultModelDesc',
+                'Provider and model for new threads in this project',
+              )}
             >
               <div className="flex items-center gap-2">
                 <ModelCombobox
@@ -314,7 +335,10 @@ function GeneralSettings() {
                   searchPlaceholder={t('settings.searchProvider')}
                 />
                 <ModelCombobox
-                  value={selectedProject.defaultModel || getDefaultModel((selectedProject.defaultProvider || 'claude') as AgentProvider)}
+                  value={
+                    selectedProject.defaultModel ||
+                    getDefaultModel((selectedProject.defaultProvider || 'claude') as AgentProvider)
+                  }
                   onChange={(v) => saveProject(selectedProject.id, { defaultModel: v })}
                   options={getModelOptions(selectedProject.defaultProvider || 'claude', t)}
                   placeholder={t('settings.selectModel')}
@@ -324,20 +348,34 @@ function GeneralSettings() {
             </SettingRow>
             <SettingRow
               title={t('settings.projectDefaultMode', 'Default Thread Mode')}
-              description={t('settings.projectDefaultModeDesc', 'Local or worktree for new threads')}
+              description={t(
+                'settings.projectDefaultModeDesc',
+                'Local or worktree for new threads',
+              )}
             >
               <SegmentedControl<string>
                 value={selectedProject.defaultMode || 'worktree'}
                 onChange={(v) => saveProject(selectedProject.id, { defaultMode: v })}
                 options={[
-                  { value: 'local', label: t('thread.mode.local'), icon: <Monitor className="h-3 w-3" /> },
-                  { value: 'worktree', label: t('thread.mode.worktree'), icon: <GitBranch className="h-3 w-3" /> },
+                  {
+                    value: 'local',
+                    label: t('thread.mode.local'),
+                    icon: <Monitor className="h-3 w-3" />,
+                  },
+                  {
+                    value: 'worktree',
+                    label: t('thread.mode.worktree'),
+                    icon: <GitBranch className="h-3 w-3" />,
+                  },
                 ]}
               />
             </SettingRow>
             <SettingRow
               title={t('settings.projectDefaultPermission', 'Default Permission Mode')}
-              description={t('settings.projectDefaultPermissionDesc', 'Permission mode for new threads')}
+              description={t(
+                'settings.projectDefaultPermissionDesc',
+                'Permission mode for new threads',
+              )}
             >
               <SegmentedControl<string>
                 value={selectedProject.defaultPermissionMode || 'autoEdit'}
@@ -354,21 +392,23 @@ function GeneralSettings() {
       )}
 
       {/* Permissions */}
-      <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2 mt-6">
+      <h3 className="mt-6 px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
         {t('settings.permissions')}
       </h3>
-      <div className="rounded-lg border border-border/50 overflow-hidden">
+      <div className="overflow-hidden rounded-lg border border-border/50">
         <div className="px-4 py-3.5">
           <p className="text-sm font-medium text-foreground">{t('settings.toolPermissions')}</p>
-          <p className="text-xs text-muted-foreground mt-0.5 mb-3">{t('settings.toolPermissionsDesc')}</p>
+          <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
+            {t('settings.toolPermissionsDesc')}
+          </p>
           <div className="space-y-1">
             {ALL_STANDARD_TOOLS.map((tool) => (
               <div
                 key={tool}
-                className="flex items-center justify-between gap-3 px-2 py-1.5 rounded-md hover:bg-muted/50 transition-colors"
+                className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 transition-colors hover:bg-muted/50"
               >
-                <div className="flex items-center gap-2 min-w-0">
-                  <span className="text-sm text-foreground font-mono">{tool}</span>
+                <div className="flex min-w-0 items-center gap-2">
+                  <span className="font-mono text-sm text-foreground">{tool}</span>
                   <span className="text-xs text-muted-foreground">
                     {t(TOOL_LABELS[tool] ?? tool)}
                   </span>
@@ -388,7 +428,7 @@ function GeneralSettings() {
           <div className="mt-3 flex justify-end">
             <button
               onClick={() => saveResetToolPermissions()}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+              className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <RotateCcw className="h-3 w-3" />
               {t('settings.resetDefaults')}
@@ -402,47 +442,45 @@ function GeneralSettings() {
 
 export function SettingsDetailView() {
   const { t } = useTranslation();
-  const activeSettingsPage = useUIStore(s => s.activeSettingsPage);
-  const selectedProjectId = useProjectStore(s => s.selectedProjectId);
-  const projects = useProjectStore(s => s.projects);
+  const activeSettingsPage = useUIStore((s) => s.activeSettingsPage);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const projects = useProjectStore((s) => s.projects);
   const page = activeSettingsPage as SettingsItemId | null;
   const label = page ? t(settingsLabelKeys[page] ?? page) : null;
   const selectedProject = projects.find((p) => p.id === selectedProjectId);
 
   if (!page) {
     return (
-      <div className="flex-1 flex items-center justify-center text-muted-foreground text-sm">
+      <div className="flex flex-1 items-center justify-center text-sm text-muted-foreground">
         {t('settings.selectSetting')}
       </div>
     );
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full min-h-0">
+    <div className="flex h-full min-h-0 flex-1 flex-col">
       {/* Page header */}
-      <div className="px-4 py-2 border-b border-border">
+      <div className="border-b border-border px-4 py-2">
         <Breadcrumb>
           <BreadcrumbList>
             {selectedProject && (
               <BreadcrumbItem>
-                <BreadcrumbLink className="text-sm truncate cursor-default">
+                <BreadcrumbLink className="cursor-default truncate text-sm">
                   {selectedProject.name}
                 </BreadcrumbLink>
               </BreadcrumbItem>
             )}
             {selectedProject && <BreadcrumbSeparator />}
             <BreadcrumbItem>
-              <BreadcrumbPage className="text-sm truncate">
-                {label}
-              </BreadcrumbPage>
+              <BreadcrumbPage className="truncate text-sm">{label}</BreadcrumbPage>
             </BreadcrumbItem>
           </BreadcrumbList>
         </Breadcrumb>
       </div>
 
       {/* Page content */}
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="px-8 py-8 max-w-4xl">
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="max-w-4xl px-8 py-8">
           {page === 'general' ? (
             <GeneralSettings />
           ) : page === 'mcp-server' ? (
@@ -462,9 +500,7 @@ export function SettingsDetailView() {
           ) : page === 'users' ? (
             <UserManagement />
           ) : (
-            <p className="text-sm text-muted-foreground">
-              {t('settings.comingSoon', { label })}
-            </p>
+            <p className="text-sm text-muted-foreground">{t('settings.comingSoon', { label })}</p>
           )}
         </div>
       </ScrollArea>

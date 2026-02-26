@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { PieChart, Pie, Cell, ResponsiveContainer, Legend, Tooltip } from 'recharts';
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
 interface Props {
   data: Record<string, number>;
@@ -47,9 +47,7 @@ export function StageDistributionChart({ data }: Props) {
 
   if (chartData.length === 0) {
     return (
-      <div className="text-center text-muted-foreground py-8 text-sm">
-        {t('analytics.noData')}
-      </div>
+      <div className="py-8 text-center text-sm text-muted-foreground">{t('analytics.noData')}</div>
     );
   }
 
@@ -70,10 +68,7 @@ export function StageDistributionChart({ data }: Props) {
             stroke="none"
           >
             {chartData.map((entry) => (
-              <Cell
-                key={entry.stage}
-                fill={COLORS[entry.stage] ?? '#6b7280'}
-              />
+              <Cell key={entry.stage} fill={COLORS[entry.stage] ?? '#6b7280'} />
             ))}
           </Pie>
           <Tooltip
@@ -88,15 +83,15 @@ export function StageDistributionChart({ data }: Props) {
         {chartData.map((entry) => (
           <div key={entry.stage} className="flex items-center gap-3">
             <div
-              className="h-3 w-3 rounded-full flex-shrink-0"
+              className="h-3 w-3 flex-shrink-0 rounded-full"
               style={{ backgroundColor: COLORS[entry.stage] }}
             />
-            <div className="flex-1 min-w-0">
+            <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between">
                 <span className="text-xs text-muted-foreground">{entry.name}</span>
-                <span className="text-sm font-medium ml-2">{entry.value}</span>
+                <span className="ml-2 text-sm font-medium">{entry.value}</span>
               </div>
-              <div className="mt-1 h-1.5 rounded-full bg-muted overflow-hidden">
+              <div className="mt-1 h-1.5 overflow-hidden rounded-full bg-muted">
                 <div
                   className="h-full rounded-full transition-all"
                   style={{

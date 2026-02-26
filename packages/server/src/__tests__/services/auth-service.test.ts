@@ -1,9 +1,9 @@
 import { describe, test, expect, beforeEach, mock, afterAll } from 'bun:test';
+import { mkdirSync, writeFileSync, rmSync, readFileSync } from 'fs';
 import { resolve } from 'path';
-import { mkdirSync, writeFileSync, rmSync, existsSync, readFileSync } from 'fs';
 
 const TEST_DIR = resolve(import.meta.dir, '..', '..', '..', '.test-tmp-auth-service');
-const TOKEN_PATH = resolve(TEST_DIR, 'auth-token');
+const _TOKEN_PATH = resolve(TEST_DIR, 'auth-token');
 
 // Mock the homedir to use our test dir
 mock.module('os', () => ({
@@ -29,7 +29,7 @@ describe('auth-service concepts', () => {
   });
 
   test('timing-safe comparison rejects wrong length tokens', () => {
-    const { timingSafeEqual } = require('crypto');
+    const { timingSafeEqual: _timingSafeEqual } = require('crypto');
     const expected = 'a'.repeat(64);
     const token = 'short';
     // timingSafeEqual throws if buffers are different lengths

@@ -1,22 +1,34 @@
+import type { ThreadStatus, GitSyncState } from '@funny/shared';
+import {
+  ChevronLeft,
+  Archive,
+  Search,
+  ArrowUp,
+  ArrowDown,
+  LayoutList,
+  Columns3,
+  ChevronDown,
+  Check,
+  X,
+} from 'lucide-react';
 import { useState, useMemo, useEffect, useRef, startTransition } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useUIStore } from '@/stores/ui-store';
-import { useThreadStore } from '@/stores/thread-store';
-import { useProjectStore } from '@/stores/project-store';
-import { useGitStatusStore } from '@/stores/git-status-store';
-import { cn } from '@/lib/utils';
-import { ChevronLeft, Archive, Search, ArrowUp, ArrowDown, LayoutList, Columns3, ChevronDown, Check, X } from 'lucide-react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
+
+import { KanbanView } from '@/components/KanbanView';
+import { ThreadListView } from '@/components/ThreadListView';
 import { Button } from '@/components/ui/button';
+import { normalize } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { ProjectChip } from '@/components/ui/project-chip';
-import { ThreadListView } from '@/components/ThreadListView';
-import { KanbanView } from '@/components/KanbanView';
-import { statusConfig, gitSyncStateConfig, getStatusLabels } from '@/lib/thread-utils';
-import { normalize } from '@/components/ui/highlight-text';
 import { api } from '@/lib/api';
-import type { Thread, ThreadStatus, GitSyncState } from '@funny/shared';
+import { gitSyncStateConfig, getStatusLabels } from '@/lib/thread-utils';
+import { cn } from '@/lib/utils';
+import { useGitStatusStore } from '@/stores/git-status-store';
+import { useProjectStore } from '@/stores/project-store';
+import { useThreadStore } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
 
 const ITEMS_PER_PAGE = 20;
 
@@ -37,11 +49,12 @@ function FilterDropdown({
   counts?: Record<string, number>;
 }) {
   const activeCount = selected.size;
-  const triggerLabel = activeCount === 0
-    ? label
-    : activeCount === 1
-      ? options.find(o => selected.has(o.value))?.label ?? label
-      : `${label} (${activeCount})`;
+  const triggerLabel =
+    activeCount === 0
+      ? label
+      : activeCount === 1
+        ? (options.find((o) => selected.has(o.value))?.label ?? label)
+        : `${label} (${activeCount})`;
 
   return (
     <Popover>
@@ -51,7 +64,7 @@ function FilterDropdown({
             'inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-colors whitespace-nowrap',
             activeCount > 0
               ? 'bg-accent text-accent-foreground border-accent-foreground/20'
-              : 'bg-transparent text-muted-foreground border-border hover:bg-accent/50 hover:text-foreground'
+              : 'bg-transparent text-muted-foreground border-border hover:bg-accent/50 hover:text-foreground',
           )}
         >
           {triggerLabel}
@@ -69,18 +82,22 @@ function FilterDropdown({
               className={cn(
                 'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
                 'hover:bg-accent hover:text-accent-foreground',
-                isActive && 'text-accent-foreground'
+                isActive && 'text-accent-foreground',
               )}
             >
-              <span className={cn(
-                'flex h-3.5 w-3.5 items-center justify-center rounded-sm border',
-                isActive ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/30'
-              )}>
+              <span
+                className={cn(
+                  'flex h-3.5 w-3.5 items-center justify-center rounded-sm border',
+                  isActive
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : 'border-muted-foreground/30',
+                )}
+              >
                 {isActive && <Check className="h-2.5 w-2.5" />}
               </span>
               <span className="flex-1">{opt.label}</span>
               {count != null && count > 0 && (
-                <span className="text-muted-foreground tabular-nums">{count}</span>
+                <span className="tabular-nums text-muted-foreground">{count}</span>
               )}
             </button>
           );
@@ -94,10 +111,10 @@ export function AllThreadsView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const allThreadsProjectId = useUIStore(s => s.allThreadsProjectId);
-  const threadsByProject = useThreadStore(s => s.threadsByProject);
-  const projects = useProjectStore(s => s.projects);
-  const statusByThread = useGitStatusStore(s => s.statusByThread);
+  const allThreadsProjectId = useUIStore((s) => s.allThreadsProjectId);
+  const threadsByProject = useThreadStore((s) => s.threadsByProject);
+  const projects = useProjectStore((s) => s.projects);
+  const statusByThread = useGitStatusStore((s) => s.statusByThread);
 
   // Project filter from URL query param ?project=<id>
   const [projectFilter, setProjectFilter] = useState<string | null>(() => {
@@ -111,7 +128,7 @@ export function AllThreadsView() {
     const param = searchParams.get('view');
     if (param === 'list' || param === 'board') return param;
     const saved = localStorage.getItem('threadViewMode');
-    return (saved === 'board' || saved === 'list') ? saved : 'list';
+    return saved === 'board' || saved === 'list' ? saved : 'list';
   });
 
   // Build search params from current filter state (preserves status param if present)
@@ -144,9 +161,10 @@ export function AllThreadsView() {
     } else if (paramView === 'list' || paramView === 'board') {
       if (paramView !== viewMode) setViewMode(paramView);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally syncs URL → state only when searchParams changes; adding viewMode/projectFilter would loop
   }, [searchParams]);
 
-  const filteredProject = projectFilter ? projects.find(p => p.id === projectFilter) : null;
+  const filteredProject = projectFilter ? projects.find((p) => p.id === projectFilter) : null;
 
   const handleProjectFilterChange = (projectId: string | null) => {
     setProjectFilter(projectId);
@@ -237,7 +255,7 @@ export function AllThreadsView() {
   const storeThreads = useMemo(() => {
     const all = Object.values(threadsByProject).flat();
     if (projectFilter) {
-      return all.filter(t => t.projectId === projectFilter);
+      return all.filter((t) => t.projectId === projectFilter);
     }
     return all;
   }, [threadsByProject, projectFilter]);
@@ -263,8 +281,10 @@ export function AllThreadsView() {
           normalize(t.title).includes(q) ||
           (t.branch && normalize(t.branch).includes(q)) ||
           normalize(t.status).includes(q) ||
-          (!projectFilter && projectNameById[t.projectId] && normalize(projectNameById[t.projectId]).includes(q)) ||
-          contentMatches.has(t.id)
+          (!projectFilter &&
+            projectNameById[t.projectId] &&
+            normalize(projectNameById[t.projectId]).includes(q)) ||
+          contentMatches.has(t.id),
       );
     }
 
@@ -288,23 +308,31 @@ export function AllThreadsView() {
 
     // Sort by selected field and direction
     result = [...result].sort((a, b) => {
-      const dateA = sortField === 'updated'
-        ? (a.completedAt ?? a.createdAt)
-        : a.createdAt;
-      const dateB = sortField === 'updated'
-        ? (b.completedAt ?? b.createdAt)
-        : b.createdAt;
+      const dateA = sortField === 'updated' ? (a.completedAt ?? a.createdAt) : a.createdAt;
+      const dateB = sortField === 'updated' ? (b.completedAt ?? b.createdAt) : b.createdAt;
       const diff = new Date(dateA).getTime() - new Date(dateB).getTime();
       return sortDir === 'desc' ? -diff : diff;
     });
 
     return result;
-  }, [allThreads, search, statusFilter, gitFilter, modeFilter, statusByThread, projectFilter, projectNameById, sortField, sortDir, contentMatches]);
+  }, [
+    allThreads,
+    search,
+    statusFilter,
+    gitFilter,
+    modeFilter,
+    statusByThread,
+    projectFilter,
+    projectNameById,
+    sortField,
+    sortDir,
+    contentMatches,
+  ]);
 
   const currentPage = Math.min(page, Math.max(1, Math.ceil(filtered.length / ITEMS_PER_PAGE)));
   const paginated = filtered.slice(
     (currentPage - 1) * ITEMS_PER_PAGE,
-    currentPage * ITEMS_PER_PAGE
+    currentPage * ITEMS_PER_PAGE,
   );
 
   const resetFilters = () => {
@@ -325,17 +353,23 @@ export function AllThreadsView() {
     setPage(1);
   };
 
-  const toggleFilter = (setter: React.Dispatch<React.SetStateAction<Set<string>>>) => (value: string) => {
-    setter(prev => {
-      const next = new Set(prev);
-      if (next.has(value)) next.delete(value);
-      else next.add(value);
-      return next;
-    });
-    setPage(1);
-  };
+  const toggleFilter =
+    (setter: React.Dispatch<React.SetStateAction<Set<string>>>) => (value: string) => {
+      setter((prev) => {
+        const next = new Set(prev);
+        if (next.has(value)) next.delete(value);
+        else next.add(value);
+        return next;
+      });
+      setPage(1);
+    };
 
-  const hasActiveFilters = statusFilter.size > 0 || gitFilter.size > 0 || modeFilter.size > 0 || showArchived || !!projectFilter;
+  const hasActiveFilters =
+    statusFilter.size > 0 ||
+    gitFilter.size > 0 ||
+    modeFilter.size > 0 ||
+    showArchived ||
+    !!projectFilter;
 
   if (!allThreadsProjectId) return null;
 
@@ -360,13 +394,21 @@ export function AllThreadsView() {
     return counts;
   }, [allThreads, statusByThread]);
 
-  const threadStatuses: ThreadStatus[] = ['running', 'waiting', 'completed', 'failed', 'stopped', 'pending', 'interrupted'];
+  const threadStatuses: ThreadStatus[] = [
+    'running',
+    'waiting',
+    'completed',
+    'failed',
+    'stopped',
+    'pending',
+    'interrupted',
+  ];
   const gitStates: GitSyncState[] = ['dirty', 'unpushed', 'pushed', 'merged', 'clean'];
 
   return (
-    <div className="flex-1 flex flex-col h-full min-w-0">
+    <div className="flex h-full min-w-0 flex-1 flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+      <div className="flex items-center gap-3 border-b border-border px-4 py-3">
         <Button
           variant="ghost"
           size="icon-xs"
@@ -381,24 +423,20 @@ export function AllThreadsView() {
         >
           {projectFilter ? <ChevronLeft className="h-4 w-4" /> : <Search className="h-4 w-4" />}
         </Button>
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 className="text-sm font-medium">
-            {projectFilter && filteredProject
-              ? t('allThreads.title')
-              : t('allThreads.globalTitle')
-            }
+            {projectFilter && filteredProject ? t('allThreads.title') : t('allThreads.globalTitle')}
           </h2>
           <p className="text-xs text-muted-foreground">
             {projectFilter && filteredProject
               ? `${filteredProject.name} · ${allThreads.length} ${t('allThreads.threads')}`
-              : `${projects.length} ${t('allThreads.projects')} · ${allThreads.length} ${t('allThreads.threads')}`
-            }
+              : `${projects.length} ${t('allThreads.projects')} · ${allThreads.length} ${t('allThreads.threads')}`}
           </p>
         </div>
 
         <div className="flex items-center gap-2">
           {/* View mode toggle */}
-          <div className="flex items-center gap-1 bg-secondary/50 rounded-md p-0.5">
+          <div className="flex items-center gap-1 rounded-md bg-secondary/50 p-0.5">
             <Button
               variant={viewMode === 'list' ? 'secondary' : 'ghost'}
               size="icon-xs"
@@ -422,28 +460,32 @@ export function AllThreadsView() {
       </div>
 
       {/* Filters */}
-      <div className="px-4 py-2 border-b border-border/50 flex items-center gap-2">
+      <div className="flex items-center gap-2 border-b border-border/50 px-4 py-2">
         {/* Search input (compact, inline) */}
         <div className="relative flex-shrink-0">
-          <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3 w-3 text-muted-foreground text-sm" />
+          <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-sm text-muted-foreground" />
           <Input
             type="text"
-            placeholder={projectFilter ? t('allThreads.searchPlaceholder') : t('allThreads.globalSearchPlaceholder')}
+            placeholder={
+              projectFilter
+                ? t('allThreads.searchPlaceholder')
+                : t('allThreads.globalSearchPlaceholder')
+            }
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
-            className="w-72 h-7 pl-6 pr-7 py-1 text-xs md:text-xs bg-transparent"
+            className="h-7 w-72 bg-transparent py-1 pl-6 pr-7 text-xs md:text-xs"
           />
           {search && (
             <button
               onClick={() => handleSearchChange('')}
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 p-0.5 rounded-sm text-muted-foreground hover:text-foreground hover:bg-accent transition-colors"
+              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <X className="h-3 w-3" />
             </button>
           )}
         </div>
 
-        <div className="w-px h-4 bg-border" />
+        <div className="h-4 w-px bg-border" />
 
         {/* Project filter (single-select) */}
         <Popover>
@@ -453,26 +495,35 @@ export function AllThreadsView() {
                 'inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-colors whitespace-nowrap',
                 projectFilter
                   ? 'bg-accent text-accent-foreground border-accent-foreground/20'
-                  : 'bg-transparent text-muted-foreground border-border hover:bg-accent/50 hover:text-foreground'
+                  : 'bg-transparent text-muted-foreground border-border hover:bg-accent/50 hover:text-foreground',
               )}
             >
-              {projectFilter && filteredProject ? filteredProject.name : t('allThreads.filterProject')}
+              {projectFilter && filteredProject
+                ? filteredProject.name
+                : t('allThreads.filterProject')}
               <ChevronDown className="h-3 w-3 opacity-50" />
             </button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-auto min-w-[180px] max-h-[300px] overflow-y-auto p-1">
+          <PopoverContent
+            align="start"
+            className="max-h-[300px] w-auto min-w-[180px] overflow-y-auto p-1"
+          >
             <button
               onClick={() => handleProjectFilterChange(null)}
               className={cn(
                 'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
                 'hover:bg-accent hover:text-accent-foreground',
-                !projectFilter && 'text-accent-foreground'
+                !projectFilter && 'text-accent-foreground',
               )}
             >
-              <span className={cn(
-                'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
-                !projectFilter ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/30'
-              )}>
+              <span
+                className={cn(
+                  'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
+                  !projectFilter
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : 'border-muted-foreground/30',
+                )}
+              >
                 {!projectFilter && <Check className="h-2.5 w-2.5" />}
               </span>
               <span className="flex-1">{t('allThreads.allProjects')}</span>
@@ -486,13 +537,17 @@ export function AllThreadsView() {
                   className={cn(
                     'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
                     'hover:bg-accent hover:text-accent-foreground',
-                    isActive && 'text-accent-foreground'
+                    isActive && 'text-accent-foreground',
                   )}
                 >
-                  <span className={cn(
-                    'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
-                    isActive ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/30'
-                  )}>
+                  <span
+                    className={cn(
+                      'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
+                      isActive
+                        ? 'bg-primary border-primary text-primary-foreground'
+                        : 'border-muted-foreground/30',
+                    )}
+                  >
                     {isActive && <Check className="h-2.5 w-2.5" />}
                   </span>
                   <span className="flex-1 truncate">{p.name}</span>
@@ -506,8 +561,8 @@ export function AllThreadsView() {
         <FilterDropdown
           label={t('allThreads.filterStatus')}
           options={threadStatuses
-            .filter(s => (statusCounts[s] || 0) > 0)
-            .map(s => ({ value: s, label: statusLabels[s] }))}
+            .filter((s) => (statusCounts[s] || 0) > 0)
+            .map((s) => ({ value: s, label: statusLabels[s] }))}
           selected={statusFilter}
           onToggle={toggleFilter(setStatusFilter)}
           counts={statusCounts}
@@ -517,8 +572,8 @@ export function AllThreadsView() {
         <FilterDropdown
           label="Git"
           options={gitStates
-            .filter(gs => (gitCounts[gs] || 0) > 0)
-            .map(gs => ({ value: gs, label: t(`gitStatus.${gs}`) }))}
+            .filter((gs) => (gitCounts[gs] || 0) > 0)
+            .map((gs) => ({ value: gs, label: t(`gitStatus.${gs}`) }))}
           selected={gitFilter}
           onToggle={toggleFilter(setGitFilter)}
           counts={gitCounts}
@@ -535,70 +590,100 @@ export function AllThreadsView() {
           onToggle={toggleFilter(setModeFilter)}
         />
 
-        <div className="w-px h-4 bg-border" />
+        <div className="h-4 w-px bg-border" />
 
         {/* Sort toggle */}
         <Popover>
           <PopoverTrigger asChild>
-            <button
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border bg-transparent text-muted-foreground border-border hover:bg-accent/50 hover:text-foreground transition-colors whitespace-nowrap"
-            >
-              {t('allThreads.sortLabel')}: {sortField === 'updated' ? t('allThreads.sortUpdated') : t('allThreads.sortCreated')}
-              {sortDir === 'desc' ? <ArrowDown className="h-3 w-3" /> : <ArrowUp className="h-3 w-3" />}
+            <button className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-border bg-transparent px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground">
+              {t('allThreads.sortLabel')}:{' '}
+              {sortField === 'updated' ? t('allThreads.sortUpdated') : t('allThreads.sortCreated')}
+              {sortDir === 'desc' ? (
+                <ArrowDown className="h-3 w-3" />
+              ) : (
+                <ArrowUp className="h-3 w-3" />
+              )}
             </button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-auto min-w-[140px] p-1">
             <button
-              onClick={() => { setSortField('updated'); setPage(1); }}
+              onClick={() => {
+                setSortField('updated');
+                setPage(1);
+              }}
               className={cn(
                 'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
                 'hover:bg-accent hover:text-accent-foreground',
               )}
             >
-              <span className={cn(
-                'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
-                sortField === 'updated' ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/30'
-              )}>
+              <span
+                className={cn(
+                  'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
+                  sortField === 'updated'
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : 'border-muted-foreground/30',
+                )}
+              >
                 {sortField === 'updated' && <Check className="h-2.5 w-2.5" />}
               </span>
               {t('allThreads.sortUpdated')}
             </button>
             <button
-              onClick={() => { setSortField('created'); setPage(1); }}
+              onClick={() => {
+                setSortField('created');
+                setPage(1);
+              }}
               className={cn(
                 'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
                 'hover:bg-accent hover:text-accent-foreground',
               )}
             >
-              <span className={cn(
-                'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
-                sortField === 'created' ? 'bg-primary border-primary text-primary-foreground' : 'border-muted-foreground/30'
-              )}>
+              <span
+                className={cn(
+                  'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
+                  sortField === 'created'
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : 'border-muted-foreground/30',
+                )}
+              >
                 {sortField === 'created' && <Check className="h-2.5 w-2.5" />}
               </span>
               {t('allThreads.sortCreated')}
             </button>
-            <div className="h-px bg-border my-1" />
+            <div className="my-1 h-px bg-border" />
             <button
-              onClick={() => { setSortDir(d => d === 'desc' ? 'asc' : 'desc'); setPage(1); }}
-              className="flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left hover:bg-accent hover:text-accent-foreground"
+              onClick={() => {
+                setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'));
+                setPage(1);
+              }}
+              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
             >
-              {sortDir === 'desc'
-                ? <><ArrowDown className="h-3 w-3" />{t('allThreads.sortDesc')}</>
-                : <><ArrowUp className="h-3 w-3" />{t('allThreads.sortAsc')}</>
-              }
+              {sortDir === 'desc' ? (
+                <>
+                  <ArrowDown className="h-3 w-3" />
+                  {t('allThreads.sortDesc')}
+                </>
+              ) : (
+                <>
+                  <ArrowUp className="h-3 w-3" />
+                  {t('allThreads.sortAsc')}
+                </>
+              )}
             </button>
           </PopoverContent>
         </Popover>
 
         {/* Archived toggle */}
         <button
-          onClick={() => { setShowArchived(!showArchived); setPage(1); }}
+          onClick={() => {
+            setShowArchived(!showArchived);
+            setPage(1);
+          }}
           className={cn(
             'inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-colors whitespace-nowrap',
             showArchived
               ? 'bg-status-warning/10 border-status-warning/20 text-status-warning/80'
-              : 'bg-transparent text-muted-foreground border-border hover:bg-accent/50 hover:text-foreground'
+              : 'bg-transparent text-muted-foreground border-border hover:bg-accent/50 hover:text-foreground',
           )}
         >
           <Archive className="h-3 w-3" />
@@ -609,22 +694,27 @@ export function AllThreadsView() {
         {hasActiveFilters && (
           <button
             onClick={resetFilters}
-            className="px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors whitespace-nowrap"
+            className="whitespace-nowrap px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             {t('allThreads.clearFilters')}
           </button>
         )}
-
       </div>
 
       {/* Thread content */}
-      <div className="flex-1 min-h-0 flex flex-col">
+      <div className="flex min-h-0 flex-1 flex-col">
         {viewMode === 'board' ? (
-          <div className="flex-1 min-h-0">
-            <KanbanView threads={filtered} projectId={projectFilter || undefined} search={search} contentSnippets={contentMatches} highlightThreadId={searchParams.get('highlight') || undefined} />
+          <div className="min-h-0 flex-1">
+            <KanbanView
+              threads={filtered}
+              projectId={projectFilter || undefined}
+              search={search}
+              contentSnippets={contentMatches}
+              highlightThreadId={searchParams.get('highlight') || undefined}
+            />
           </div>
         ) : (
-          <div className="px-4 py-3 h-full">
+          <div className="h-full px-4 py-3">
             <ThreadListView
               className="h-full"
               autoFocusSearch={false}
@@ -632,7 +722,11 @@ export function AllThreadsView() {
               totalCount={filtered.length}
               search={search}
               onSearchChange={handleSearchChange}
-              searchPlaceholder={projectFilter ? t('allThreads.searchPlaceholder') : t('allThreads.globalSearchPlaceholder')}
+              searchPlaceholder={
+                projectFilter
+                  ? t('allThreads.searchPlaceholder')
+                  : t('allThreads.globalSearchPlaceholder')
+              }
               page={currentPage}
               onPageChange={setPage}
               pageSize={ITEMS_PER_PAGE}
@@ -653,20 +747,28 @@ export function AllThreadsView() {
                 return (
                   <>
                     {!projectFilter && projectInfoById[thread.projectId] && (
-                      <ProjectChip name={projectInfoById[thread.projectId].name} color={projectInfoById[thread.projectId].color} />
+                      <ProjectChip
+                        name={projectInfoById[thread.projectId].name}
+                        color={projectInfoById[thread.projectId].color}
+                      />
                     )}
                     {!!thread.archived && (
-                      <span className="inline-flex items-center gap-0.5 text-xs text-status-warning/80 bg-status-warning/10 px-1.5 py-0.5 rounded">
+                      <span className="inline-flex items-center gap-0.5 rounded bg-status-warning/10 px-1.5 py-0.5 text-xs text-status-warning/80">
                         <Archive className="h-2.5 w-2.5" />
                         {t('allThreads.archived')}
                       </span>
                     )}
                     {gitConf && (
-                      <span className={cn('text-xs px-1.5 py-0.5 rounded bg-secondary', gitConf.className)}>
+                      <span
+                        className={cn(
+                          'text-xs px-1.5 py-0.5 rounded bg-secondary',
+                          gitConf.className,
+                        )}
+                      >
                         {t(gitConf.labelKey)}
                       </span>
                     )}
-                    <span className="text-xs text-muted-foreground bg-secondary px-1.5 py-0.5 rounded">
+                    <span className="rounded bg-secondary px-1.5 py-0.5 text-xs text-muted-foreground">
                       {t(`thread.mode.${thread.mode}`)}
                     </span>
                   </>

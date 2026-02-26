@@ -1,22 +1,25 @@
+import { PanelLeft } from 'lucide-react';
 import { lazy, Suspense, useEffect, useState, startTransition } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { cn } from '@/lib/utils';
-import { useWS } from '@/hooks/use-ws';
-import { useRouteSync } from '@/hooks/use-route-sync';
-import { useProjectStore } from '@/stores/project-store';
-import { useUIStore } from '@/stores/ui-store';
-import { setAppNavigate } from '@/stores/thread-store';
-import { useTerminalStore } from '@/stores/terminal-store';
-import { useInternalEditorStore } from '@/stores/internal-editor-store';
+
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
+import { useRouteSync } from '@/hooks/use-route-sync';
+import { useWS } from '@/hooks/use-ws';
+import { cn } from '@/lib/utils';
 import { TOAST_DURATION } from '@/lib/utils';
-import { PanelLeft } from 'lucide-react';
+import { useInternalEditorStore } from '@/stores/internal-editor-store';
+import { useProjectStore } from '@/stores/project-store';
+import { useTerminalStore } from '@/stores/terminal-store';
+import { setAppNavigate } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
 
-const AppSidebar = lazy(() => import('@/components/Sidebar').then(m => ({ default: m.AppSidebar })));
+const AppSidebar = lazy(() =>
+  import('@/components/Sidebar').then((m) => ({ default: m.AppSidebar })),
+);
 // Prefetch ThreadView immediately — it's the primary view users always see.
 // This fires the chunk download in parallel with auth bootstrap.
-const threadViewImport = import('@/components/ThreadView').then(m => ({ default: m.ThreadView }));
+const threadViewImport = import('@/components/ThreadView').then((m) => ({ default: m.ThreadView }));
 const ThreadView = lazy(() => threadViewImport);
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'sidebar_width';
@@ -25,8 +28,13 @@ const DEFAULT_SIDEBAR_WIDTH = 320;
 /** Placeholder matching the persisted sidebar width to avoid CLS during lazy load */
 function SidebarPlaceholder() {
   let w = DEFAULT_SIDEBAR_WIDTH;
-  try { const s = localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY); if (s) w = Number(s); } catch {}
-  return <div style={{ width: w }} className="flex-shrink-0 bg-sidebar border-r border-sidebar-border" />;
+  try {
+    const s = localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
+    if (s) w = Number(s);
+  } catch {}
+  return (
+    <div style={{ width: w }} className="flex-shrink-0 border-r border-sidebar-border bg-sidebar" />
+  );
 }
 
 /** Thin vertical strip visible when the sidebar is collapsed, click to reopen */
@@ -36,7 +44,7 @@ function CollapsedSidebarStrip() {
   return (
     <button
       onClick={toggleSidebar}
-      className="flex-shrink-0 w-10 h-full border-r border-border bg-sidebar flex items-start justify-center pt-3 hover:bg-sidebar-accent transition-colors cursor-pointer"
+      className="flex h-full w-10 flex-shrink-0 cursor-pointer items-start justify-center border-r border-border bg-sidebar pt-3 transition-colors hover:bg-sidebar-accent"
       title="Expand sidebar"
     >
       <PanelLeft className="h-4 w-4 text-muted-foreground" />
@@ -45,41 +53,69 @@ function CollapsedSidebarStrip() {
 }
 
 // Lazy-load conditional views (bundle-conditional / bundle-dynamic-imports)
-const AllThreadsView = lazy(() => import('@/components/AllThreadsView').then(m => ({ default: m.AllThreadsView })));
-const reviewPaneImport = () => import('@/components/ReviewPane').then(m => ({ default: m.ReviewPane }));
+const AllThreadsView = lazy(() =>
+  import('@/components/AllThreadsView').then((m) => ({ default: m.AllThreadsView })),
+);
+const reviewPaneImport = () =>
+  import('@/components/ReviewPane').then((m) => ({ default: m.ReviewPane }));
 const ReviewPane = lazy(reviewPaneImport);
-const TerminalPanel = lazy(() => import('@/components/TerminalPanel').then(m => ({ default: m.TerminalPanel })));
-const SettingsDetailView = lazy(() => import('@/components/SettingsDetailView').then(m => ({ default: m.SettingsDetailView })));
-const AutomationInboxView = lazy(() => import('@/components/AutomationInboxView').then(m => ({ default: m.AutomationInboxView })));
-const AddProjectView = lazy(() => import('@/components/AddProjectView').then(m => ({ default: m.AddProjectView })));
-const AnalyticsView = lazy(() => import('@/components/AnalyticsView').then(m => ({ default: m.AnalyticsView })));
-const LiveColumnsView = lazy(() => import('@/components/LiveColumnsView').then(m => ({ default: m.LiveColumnsView })));
-const commandPaletteImport = () => import('@/components/CommandPalette').then(m => ({ default: m.CommandPalette }));
+const TerminalPanel = lazy(() =>
+  import('@/components/TerminalPanel').then((m) => ({ default: m.TerminalPanel })),
+);
+const SettingsDetailView = lazy(() =>
+  import('@/components/SettingsDetailView').then((m) => ({ default: m.SettingsDetailView })),
+);
+const AutomationInboxView = lazy(() =>
+  import('@/components/AutomationInboxView').then((m) => ({ default: m.AutomationInboxView })),
+);
+const AddProjectView = lazy(() =>
+  import('@/components/AddProjectView').then((m) => ({ default: m.AddProjectView })),
+);
+const AnalyticsView = lazy(() =>
+  import('@/components/AnalyticsView').then((m) => ({ default: m.AnalyticsView })),
+);
+const LiveColumnsView = lazy(() =>
+  import('@/components/LiveColumnsView').then((m) => ({ default: m.LiveColumnsView })),
+);
+const commandPaletteImport = () =>
+  import('@/components/CommandPalette').then((m) => ({ default: m.CommandPalette }));
 const CommandPalette = lazy(commandPaletteImport);
 // Prefetch the CommandPalette and ReviewPane chunks on idle so they open instantly
 if (typeof requestIdleCallback === 'function') {
-  requestIdleCallback(() => { commandPaletteImport(); });
-  requestIdleCallback(() => { reviewPaneImport(); });
+  requestIdleCallback(() => {
+    commandPaletteImport();
+  });
+  requestIdleCallback(() => {
+    reviewPaneImport();
+  });
 } else {
-  setTimeout(() => { commandPaletteImport(); }, 2000);
-  setTimeout(() => { reviewPaneImport(); }, 3000);
+  setTimeout(() => {
+    commandPaletteImport();
+  }, 2000);
+  setTimeout(() => {
+    reviewPaneImport();
+  }, 3000);
 }
-const CircuitBreakerDialog = lazy(() => import('@/components/CircuitBreakerDialog').then(m => ({ default: m.CircuitBreakerDialog })));
-const MonacoEditorDialog = lazy(() => import('@/components/MonacoEditorDialog').then(m => ({ default: m.MonacoEditorDialog })));
+const CircuitBreakerDialog = lazy(() =>
+  import('@/components/CircuitBreakerDialog').then((m) => ({ default: m.CircuitBreakerDialog })),
+);
+const MonacoEditorDialog = lazy(() =>
+  import('@/components/MonacoEditorDialog').then((m) => ({ default: m.MonacoEditorDialog })),
+);
 
 export function App() {
-  const loadProjects = useProjectStore(s => s.loadProjects);
-  const reviewPaneOpen = useUIStore(s => s.reviewPaneOpen);
-  const setReviewPaneOpen = useUIStore(s => s.setReviewPaneOpen);
-  const settingsOpen = useUIStore(s => s.settingsOpen);
-  const allThreadsProjectId = useUIStore(s => s.allThreadsProjectId);
-  const automationInboxOpen = useUIStore(s => s.automationInboxOpen);
-  const addProjectOpen = useUIStore(s => s.addProjectOpen);
-  const analyticsOpen = useUIStore(s => s.analyticsOpen);
-  const liveColumnsOpen = useUIStore(s => s.liveColumnsOpen);
-  const internalEditorOpen = useInternalEditorStore(s => s.isOpen);
-  const internalEditorFilePath = useInternalEditorStore(s => s.filePath);
-  const internalEditorContent = useInternalEditorStore(s => s.initialContent);
+  const loadProjects = useProjectStore((s) => s.loadProjects);
+  const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
+  const _setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
+  const settingsOpen = useUIStore((s) => s.settingsOpen);
+  const allThreadsProjectId = useUIStore((s) => s.allThreadsProjectId);
+  const automationInboxOpen = useUIStore((s) => s.automationInboxOpen);
+  const addProjectOpen = useUIStore((s) => s.addProjectOpen);
+  const analyticsOpen = useUIStore((s) => s.analyticsOpen);
+  const liveColumnsOpen = useUIStore((s) => s.liveColumnsOpen);
+  const internalEditorOpen = useInternalEditorStore((s) => s.isOpen);
+  const internalEditorFilePath = useInternalEditorStore((s) => s.filePath);
+  const internalEditorContent = useInternalEditorStore((s) => s.initialContent);
   const navigate = useNavigate();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   // Eagerly mount ReviewPane (hidden) after initial load so first toggle is instant.
@@ -97,7 +133,9 @@ export function App() {
   }, []);
 
   // Register navigate so the store can trigger navigation (e.g. from toasts)
-  useEffect(() => { setAppNavigate(navigate); }, [navigate]);
+  useEffect(() => {
+    setAppNavigate(navigate);
+  }, [navigate]);
 
   // Connect WebSocket on mount
   useWS();
@@ -112,8 +150,7 @@ export function App() {
 
   // Global keyboard shortcuts
   useEffect(() => {
-    const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown })
-      .__TAURI_INTERNALS__;
+    const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
 
     const handler = (e: KeyboardEvent) => {
       // Ctrl+K for command palette (toggle)
@@ -121,7 +158,7 @@ export function App() {
         e.preventDefault();
         e.stopPropagation();
         startTransition(() => {
-          setCommandPaletteOpen(prev => !prev);
+          setCommandPaletteOpen((prev) => !prev);
         });
         return;
       }
@@ -141,13 +178,9 @@ export function App() {
         const store = useTerminalStore.getState();
         const { selectedProjectId, projects } = useProjectStore.getState();
         if (!selectedProjectId) return;
-        const projectTabs = store.tabs.filter(
-          (t) => t.projectId === selectedProjectId
-        );
+        const projectTabs = store.tabs.filter((t) => t.projectId === selectedProjectId);
         if (projectTabs.length === 0 && !store.panelVisible) {
-          const project = projects.find(
-            (p: any) => p.id === selectedProjectId
-          );
+          const project = projects.find((p: any) => p.id === selectedProjectId);
           const cwd = project?.path ?? 'C:\\';
           store.addTab({
             id: crypto.randomUUID(),
@@ -163,25 +196,40 @@ export function App() {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, []);
+  }, [navigate]);
 
   return (
-    <SidebarProvider
-      defaultOpen={true}
-      className="h-screen overflow-hidden"
-    >
-      <Suspense fallback={<SidebarPlaceholder />}><AppSidebar /></Suspense>
+    <SidebarProvider defaultOpen={true} className="h-screen overflow-hidden">
+      <Suspense fallback={<SidebarPlaceholder />}>
+        <AppSidebar />
+      </Suspense>
       <CollapsedSidebarStrip />
 
       <SidebarInset className="flex flex-col overflow-hidden">
         {/* Main content + terminal */}
-        <div className="flex-1 flex overflow-hidden min-h-0">
+        <div className="flex min-h-0 flex-1 overflow-hidden">
           <Suspense>
-            {settingsOpen ? <SettingsDetailView /> : analyticsOpen ? <AnalyticsView /> : liveColumnsOpen ? <LiveColumnsView /> : automationInboxOpen ? <AutomationInboxView /> : addProjectOpen ? <AddProjectView /> : allThreadsProjectId ? <AllThreadsView /> : <ThreadView />}
+            {settingsOpen ? (
+              <SettingsDetailView />
+            ) : analyticsOpen ? (
+              <AnalyticsView />
+            ) : liveColumnsOpen ? (
+              <LiveColumnsView />
+            ) : automationInboxOpen ? (
+              <AutomationInboxView />
+            ) : addProjectOpen ? (
+              <AddProjectView />
+            ) : allThreadsProjectId ? (
+              <AllThreadsView />
+            ) : (
+              <ThreadView />
+            )}
           </Suspense>
         </div>
 
-        <Suspense><TerminalPanel /></Suspense>
+        <Suspense>
+          <TerminalPanel />
+        </Suspense>
       </SidebarInset>
 
       {/* Right sidebar for review pane — CSS transition slide in/out.
@@ -192,19 +240,32 @@ export function App() {
           'h-full overflow-hidden flex-shrink-0 border-l border-border transition-[width,opacity] duration-200 ease-out',
           reviewPaneOpen && !settingsOpen && !allThreadsProjectId
             ? 'w-[50vw] opacity-100'
-            : 'w-0 opacity-0 border-l-0'
+            : 'w-0 opacity-0 border-l-0',
         )}
       >
         {(reviewPaneReady || reviewPaneOpen) && (
-          <div className="h-full w-[50vw]" style={!(reviewPaneOpen && !settingsOpen && !allThreadsProjectId) ? { visibility: 'hidden' } : undefined}>
-            <Suspense><ReviewPane /></Suspense>
+          <div
+            className="h-full w-[50vw]"
+            style={
+              !(reviewPaneOpen && !settingsOpen && !allThreadsProjectId)
+                ? { visibility: 'hidden' }
+                : undefined
+            }
+          >
+            <Suspense>
+              <ReviewPane />
+            </Suspense>
           </div>
         )}
       </div>
 
       <Toaster position="bottom-right" duration={TOAST_DURATION} />
-      <Suspense><CircuitBreakerDialog /></Suspense>
-      <Suspense><CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} /></Suspense>
+      <Suspense>
+        <CircuitBreakerDialog />
+      </Suspense>
+      <Suspense>
+        <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
+      </Suspense>
 
       {/* Internal Monaco Editor Dialog (global, lazy-loaded) */}
       {internalEditorOpen && (

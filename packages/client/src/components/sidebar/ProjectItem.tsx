@@ -1,13 +1,29 @@
-import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
-import { useTranslation } from 'react-i18next';
-import { cn } from '@/lib/utils';
-import { Button } from '@/components/ui/button';
 import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+  draggable,
+  dropTargetForElements,
+} from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
+import type { Project, Thread } from '@funny/shared';
+import {
+  Folder,
+  FolderOpen,
+  FolderOpenDot,
+  Search,
+  Trash2,
+  MoreHorizontal,
+  Terminal,
+  Settings,
+  Pencil,
+  Plus,
+  BarChart3,
+  CircleDot,
+  SquareTerminal,
+} from 'lucide-react';
+import { useState, useRef, useEffect, memo, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+
+import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -15,20 +31,15 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-import { Folder, FolderOpen, FolderOpenDot, Search, Trash2, MoreHorizontal, Terminal, Settings, Pencil, Plus, BarChart3, CircleDot, SquareTerminal } from 'lucide-react';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import type { Project, Thread } from '@funny/shared';
-import { useThreadStore } from '@/stores/thread-store';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { api } from '@/lib/api';
+import { openDirectoryInEditor } from '@/lib/editor-utils';
+import { cn } from '@/lib/utils';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useSettingsStore } from '@/stores/settings-store';
-import { openDirectoryInEditor, getEditorLabel } from '@/lib/editor-utils';
-import { api } from '@/lib/api';
+import { useThreadStore } from '@/stores/thread-store';
+
 import { ThreadItem } from './ThreadItem';
-import { draggable, dropTargetForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 
 interface ProjectItemProps {
   project: Project;
@@ -70,8 +81,8 @@ export const ProjectItem = memo(function ProjectItem({
   // The selector returns a fingerprint string so Zustand's Object.is check
   // skips re-renders when unrelated threads' git statuses change.
   const visibleWorktreeIds = useMemo(
-    () => threads.filter(t => t.mode === 'worktree').map(t => t.id),
-    [threads]
+    () => threads.filter((t) => t.mode === 'worktree').map((t) => t.id),
+    [threads],
   );
   const gitStatusFingerprint = useGitStatusStore(
     useCallback(
@@ -80,12 +91,13 @@ export const ProjectItem = memo(function ProjectItem({
         let fp = '';
         for (const id of visibleWorktreeIds) {
           const st = s.statusByThread[id];
-          if (st) fp += `${id}:${st.state}:${st.dirtyFileCount}:${st.unpushedCommitCount}:${st.linesAdded}:${st.linesDeleted},`;
+          if (st)
+            fp += `${id}:${st.state}:${st.dirtyFileCount}:${st.unpushedCommitCount}:${st.linesAdded}:${st.linesDeleted},`;
         }
         return fp;
       },
-      [visibleWorktreeIds]
-    )
+      [visibleWorktreeIds],
+    ),
   );
   // Derive the actual status objects only when the fingerprint changes
   const statusByThread = useGitStatusStore.getState().statusByThread;
@@ -100,13 +112,13 @@ export const ProjectItem = memo(function ProjectItem({
   // Read selectedThreadId from the store directly, scoped to this project's
   // thread IDs. This avoids passing selectedThreadId as a prop from the parent,
   // which caused *every* ProjectItem to re-render on any thread selection.
-  const threadIds = useMemo(() => threads.map(t => t.id), [threads]);
+  const threadIds = useMemo(() => threads.map((t) => t.id), [threads]);
   const selectedThreadId = useThreadStore(
     useCallback(
       (s: { selectedThreadId: string | null }) =>
         s.selectedThreadId && threadIds.includes(s.selectedThreadId) ? s.selectedThreadId : null,
-      [threadIds]
-    )
+      [threadIds],
+    ),
   );
   const defaultEditor = useSettingsStore((s) => s.defaultEditor);
 
@@ -139,13 +151,17 @@ export const ProjectItem = memo(function ProjectItem({
     const cleanupDrop = dropTargetForElements({
       element: el,
       getData: () => ({ type: 'sidebar-project', projectId: project.id }),
-      canDrop: ({ source }) => source.data.type === 'sidebar-project' && source.data.projectId !== project.id,
+      canDrop: ({ source }) =>
+        source.data.type === 'sidebar-project' && source.data.projectId !== project.id,
       onDragEnter: () => setIsDropTarget(true),
       onDragLeave: () => setIsDropTarget(false),
       onDrop: () => setIsDropTarget(false),
     });
 
-    return () => { cleanupDrag(); cleanupDrop(); };
+    return () => {
+      cleanupDrag();
+      cleanupDrop();
+    };
   }, [project.id]);
 
   return (
@@ -158,31 +174,35 @@ export const ProjectItem = memo(function ProjectItem({
       <div
         ref={dragRef}
         className={cn(
-          "group/project flex items-center rounded-md select-none",
-          !isSelected && "hover:bg-accent/50",
-          isDragging && "opacity-50",
-          isDropTarget && "ring-2 ring-ring"
+          'group/project flex items-center rounded-md select-none',
+          !isSelected && 'hover:bg-accent/50',
+          isDragging && 'opacity-50',
+          isDropTarget && 'ring-2 ring-ring',
         )}
       >
-        <CollapsibleTrigger className={cn(
-          "flex-1 flex items-center gap-1.5 px-2 py-1 text-xs text-left min-w-0",
-          isSelected ? "text-foreground" : "text-muted-foreground hover:text-foreground",
-          isDragging ? "cursor-grabbing" : "cursor-pointer"
-        )}>
+        <CollapsibleTrigger
+          className={cn(
+            'flex-1 flex items-center gap-1.5 px-2 py-1 text-xs text-left min-w-0',
+            isSelected ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+            isDragging ? 'cursor-grabbing' : 'cursor-pointer',
+          )}
+        >
           {isExpanded ? (
             <FolderOpen className="h-3.5 w-3.5 flex-shrink-0" />
           ) : (
             <Folder className="h-3.5 w-3.5 flex-shrink-0" />
           )}
-          <span className="truncate font-medium text-xs">{project.name}</span>
+          <span className="truncate text-xs font-medium">{project.name}</span>
         </CollapsibleTrigger>
-        <div className="flex items-center mr-2 gap-0.5">
-          <div className={cn(
-            'flex items-center gap-0.5',
-            openDropdown
-              ? 'opacity-100'
-              : 'opacity-0 pointer-events-none group-hover/project:opacity-100 group-hover/project:pointer-events-auto'
-          )}>
+        <div className="mr-2 flex items-center gap-0.5">
+          <div
+            className={cn(
+              'flex items-center gap-0.5',
+              openDropdown
+                ? 'opacity-100'
+                : 'opacity-0 pointer-events-none group-hover/project:opacity-100 group-hover/project:pointer-events-auto',
+            )}
+          >
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -197,9 +217,7 @@ export const ProjectItem = memo(function ProjectItem({
                   <Search className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {t('sidebar.searchThreads')}
-              </TooltipContent>
+              <TooltipContent side="bottom">{t('sidebar.searchThreads')}</TooltipContent>
             </Tooltip>
             <DropdownMenu onOpenChange={setOpenDropdown}>
               <DropdownMenuTrigger asChild>
@@ -309,20 +327,16 @@ export const ProjectItem = memo(function ProjectItem({
                   <Plus className="h-3.5 w-3.5" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {t('sidebar.newThread')}
-              </TooltipContent>
+              <TooltipContent side="bottom">{t('sidebar.newThread')}</TooltipContent>
             </Tooltip>
           </div>
         </div>
       </div>
 
       <CollapsibleContent className="data-[state=open]:animate-slide-down">
-        <div className="ml-3 pl-1 mt-0.5 min-w-0">
+        <div className="ml-3 mt-0.5 min-w-0 pl-1">
           {threads.length === 0 && (
-            <p className="text-xs text-muted-foreground px-2 py-2">
-              {t('sidebar.noThreads')}
-            </p>
+            <p className="px-2 py-2 text-xs text-muted-foreground">{t('sidebar.noThreads')}</p>
           )}
           {visibleThreads.map((th) => (
             <ThreadItem
@@ -331,16 +345,24 @@ export const ProjectItem = memo(function ProjectItem({
               projectPath={project.path}
               isSelected={selectedThreadId === th.id}
               onSelect={() => onSelectThread(project.id, th.id)}
-              onArchive={th.status === 'running' ? undefined : () => onArchiveThread(project.id, th.id, th.title)}
+              onArchive={
+                th.status === 'running'
+                  ? undefined
+                  : () => onArchiveThread(project.id, th.id, th.title)
+              }
               onPin={() => onPinThread(project.id, th.id, !th.pinned)}
-              onDelete={th.status === 'running' ? undefined : () => onDeleteThread(project.id, th.id, th.title)}
+              onDelete={
+                th.status === 'running'
+                  ? undefined
+                  : () => onDeleteThread(project.id, th.id, th.title)
+              }
               gitStatus={th.mode === 'worktree' ? gitStatusForThreads[th.id] : undefined}
             />
           ))}
           {threads.length > 5 && (
             <button
               onClick={() => onShowAllThreads(project.id)}
-              className="text-sm text-muted-foreground hover:text-foreground px-2 py-1.5 transition-colors"
+              className="px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >
               {t('sidebar.viewAll')}
             </button>

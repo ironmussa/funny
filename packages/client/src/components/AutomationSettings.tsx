@@ -1,9 +1,9 @@
+import type { Automation, AgentModel, PermissionMode, AutomationSchedule } from '@funny/shared';
+import { Plus, Pencil, Trash2, Play, Pause, Timer, History } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useAppStore } from '@/stores/app-store';
-import { useAutomationStore } from '@/stores/automation-store';
+
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import {
   Dialog,
   DialogContent,
@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -18,22 +19,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  Play,
-  Pause,
-  Timer,
-  History,
-} from 'lucide-react';
-import type { Automation, AutomationRun, AgentModel, PermissionMode, AutomationSchedule } from '@funny/shared';
+import { useAppStore } from '@/stores/app-store';
+import { useAutomationStore } from '@/stores/automation-store';
 
 const inputClass =
   'w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring';
@@ -51,7 +40,7 @@ const SCHEDULE_PRESETS: { value: string; label: string }[] = [
 
 /** Find a friendly label for a cron expression, or show the raw expression */
 function getScheduleLabel(cron: string): string {
-  const preset = SCHEDULE_PRESETS.find(p => p.value === cron);
+  const preset = SCHEDULE_PRESETS.find((p) => p.value === cron);
   return preset?.label ?? cron;
 }
 
@@ -80,7 +69,7 @@ function SegmentedControl<T extends string>({
             'flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-sm transition-colors',
             value === opt.value
               ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground'
+              : 'text-muted-foreground hover:text-foreground',
           )}
         >
           {opt.icon}
@@ -109,24 +98,24 @@ const defaultForm: FormState = {
 
 export function AutomationSettings() {
   const navigate = useNavigate();
-  const selectedProjectId = useAppStore(s => s.selectedProjectId);
-  const projects = useAppStore(s => s.projects);
-  const project = projects.find(p => p.id === selectedProjectId);
+  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
+  const projects = useAppStore((s) => s.projects);
+  const project = projects.find((p) => p.id === selectedProjectId);
 
-  const automationsByProject = useAutomationStore(s => s.automationsByProject);
-  const loadAutomations = useAutomationStore(s => s.loadAutomations);
-  const createAutomation = useAutomationStore(s => s.createAutomation);
-  const updateAutomation = useAutomationStore(s => s.updateAutomation);
-  const deleteAutomation = useAutomationStore(s => s.deleteAutomation);
-  const triggerAutomation = useAutomationStore(s => s.triggerAutomation);
-  const selectedAutomationRuns = useAutomationStore(s => s.selectedAutomationRuns);
-  const loadRuns = useAutomationStore(s => s.loadRuns);
+  const automationsByProject = useAutomationStore((s) => s.automationsByProject);
+  const loadAutomations = useAutomationStore((s) => s.loadAutomations);
+  const createAutomation = useAutomationStore((s) => s.createAutomation);
+  const updateAutomation = useAutomationStore((s) => s.updateAutomation);
+  const deleteAutomation = useAutomationStore((s) => s.deleteAutomation);
+  const triggerAutomation = useAutomationStore((s) => s.triggerAutomation);
+  const selectedAutomationRuns = useAutomationStore((s) => s.selectedAutomationRuns);
+  const loadRuns = useAutomationStore((s) => s.loadRuns);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [form, setForm] = useState<FormState>(defaultForm);
   const [runsAutomationId, setRunsAutomationId] = useState<string | null>(null);
-  const automations = selectedProjectId ? (automationsByProject[selectedProjectId] || []) : [];
+  const automations = selectedProjectId ? automationsByProject[selectedProjectId] || [] : [];
 
   useEffect(() => {
     if (selectedProjectId) {
@@ -224,7 +213,7 @@ export function AutomationSettings() {
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-xs gap-1.5"
+          className="h-7 gap-1.5 text-xs"
           onClick={openCreateDialog}
         >
           <Plus className="h-3.5 w-3.5" />
@@ -234,163 +223,168 @@ export function AutomationSettings() {
 
       {/* Automation list */}
       {automations.length === 0 ? (
-            <div className="text-center py-8">
-              <p className="text-sm text-muted-foreground mb-3">No automations yet.</p>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                onClick={openCreateDialog}
-              >
-                <Plus className="h-3.5 w-3.5" />
-                Create your first automation
-              </Button>
-            </div>
-          ) : (
-            automations.map((a) => (
-              <div key={a.id} className="space-y-1">
-                <div
-                  className="group flex items-center justify-between gap-3 px-3 py-2.5 rounded-lg border border-border/50 bg-card hover:bg-accent/30 transition-colors"
-                >
-                  <div className="min-w-0 flex-1">
-                    <div className="flex items-center gap-2">
-                      <span className={cn(
-                        'h-2 w-2 rounded-full flex-shrink-0',
-                        a.enabled ? 'bg-status-success/80' : 'bg-muted-foreground/30'
-                      )} />
-                      <span className="text-sm font-medium truncate">{a.name}</span>
-                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                        {getScheduleLabel(a.schedule)}
-                      </span>
-                      <span className="text-xs px-1.5 py-0.5 rounded-full bg-muted text-muted-foreground flex-shrink-0">
-                        {a.model}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground truncate mt-0.5 pl-4">{a.prompt}</p>
-                    {a.lastRunAt && (
-                      <p className="text-xs text-muted-foreground/70 mt-0.5 pl-4">
-                        Last run: {new Date(a.lastRunAt).toLocaleString()}
-                      </p>
+        <div className="py-8 text-center">
+          <p className="mb-3 text-sm text-muted-foreground">No automations yet.</p>
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
+            <Plus className="h-3.5 w-3.5" />
+            Create your first automation
+          </Button>
+        </div>
+      ) : (
+        automations.map((a) => (
+          <div key={a.id} className="space-y-1">
+            <div className="group flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-card px-3 py-2.5 transition-colors hover:bg-accent/30">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span
+                    className={cn(
+                      'h-2 w-2 rounded-full flex-shrink-0',
+                      a.enabled ? 'bg-status-success/80' : 'bg-muted-foreground/30',
                     )}
-                  </div>
-
-                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => handleTrigger(a)}
-                          className="text-status-success/80 hover:text-status-success"
-                        >
-                          <Play className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Run Now</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => handleToggleEnabled(a)}
-                          className="text-muted-foreground"
-                        >
-                          {a.enabled ? <Pause className="h-3.5 w-3.5" /> : <Play className="h-3.5 w-3.5" />}
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>{a.enabled ? 'Pause' : 'Enable'}</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => handleViewRuns(a.id)}
-                          className="text-muted-foreground"
-                        >
-                          <History className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Run History</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => openEditDialog(a)}
-                          className="text-muted-foreground"
-                        >
-                          <Pencil className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Edit</TooltipContent>
-                    </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => handleDelete(a)}
-                          className="text-muted-foreground hover:text-status-error"
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
-                      </TooltipTrigger>
-                      <TooltipContent>Delete</TooltipContent>
-                    </Tooltip>
-                  </div>
+                  />
+                  <span className="truncate text-sm font-medium">{a.name}</span>
+                  <span className="flex-shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                    {getScheduleLabel(a.schedule)}
+                  </span>
+                  <span className="flex-shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
+                    {a.model}
+                  </span>
                 </div>
-
-                {/* Inline run history */}
-                {runsAutomationId === a.id && (
-                  <div className="ml-4 space-y-1">
-                    {selectedAutomationRuns.length === 0 ? (
-                      <p className="text-xs text-muted-foreground py-2 pl-2">No runs yet.</p>
-                    ) : (
-                      selectedAutomationRuns.slice(0, 10).map((run) => (
-                        <div
-                          key={run.id}
-                          className="flex items-center justify-between gap-2 px-2 py-1.5 rounded border border-border/30 text-xs"
-                        >
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className={cn(
-                              'h-1.5 w-1.5 rounded-full flex-shrink-0',
-                              run.status === 'running' ? 'bg-status-info animate-pulse' :
-                              run.status === 'completed' ? 'bg-status-success/80' :
-                              run.status === 'failed' ? 'bg-status-error' : 'bg-muted-foreground/30'
-                            )} />
-                            <span className="text-muted-foreground truncate">
-                              {new Date(run.startedAt).toLocaleString()}
-                            </span>
-                            <span className="text-muted-foreground/70">{run.status}</span>
-                          </div>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-5 text-xs px-1.5"
-                            onClick={() => {
-                              navigate(`/projects/${selectedProjectId}/threads/${run.threadId}`);
-                            }}
-                          >
-                            View
-                          </Button>
-                        </div>
-                      ))
-                    )}
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-5 text-xs w-full"
-                      onClick={() => setRunsAutomationId(null)}
-                    >
-                      Close
-                    </Button>
-                  </div>
+                <p className="mt-0.5 truncate pl-4 text-xs text-muted-foreground">{a.prompt}</p>
+                {a.lastRunAt && (
+                  <p className="mt-0.5 pl-4 text-xs text-muted-foreground/70">
+                    Last run: {new Date(a.lastRunAt).toLocaleString()}
+                  </p>
                 )}
               </div>
-            ))
+
+              <div className="flex flex-shrink-0 items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => handleTrigger(a)}
+                      className="text-status-success/80 hover:text-status-success"
+                    >
+                      <Play className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Run Now</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => handleToggleEnabled(a)}
+                      className="text-muted-foreground"
+                    >
+                      {a.enabled ? (
+                        <Pause className="h-3.5 w-3.5" />
+                      ) : (
+                        <Play className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{a.enabled ? 'Pause' : 'Enable'}</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => handleViewRuns(a.id)}
+                      className="text-muted-foreground"
+                    >
+                      <History className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Run History</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => openEditDialog(a)}
+                      className="text-muted-foreground"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Edit</TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-sm"
+                      onClick={() => handleDelete(a)}
+                      className="text-muted-foreground hover:text-status-error"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Delete</TooltipContent>
+                </Tooltip>
+              </div>
+            </div>
+
+            {/* Inline run history */}
+            {runsAutomationId === a.id && (
+              <div className="ml-4 space-y-1">
+                {selectedAutomationRuns.length === 0 ? (
+                  <p className="py-2 pl-2 text-xs text-muted-foreground">No runs yet.</p>
+                ) : (
+                  selectedAutomationRuns.slice(0, 10).map((run) => (
+                    <div
+                      key={run.id}
+                      className="flex items-center justify-between gap-2 rounded border border-border/30 px-2 py-1.5 text-xs"
+                    >
+                      <div className="flex min-w-0 items-center gap-2">
+                        <span
+                          className={cn(
+                            'h-1.5 w-1.5 rounded-full flex-shrink-0',
+                            run.status === 'running'
+                              ? 'bg-status-info animate-pulse'
+                              : run.status === 'completed'
+                                ? 'bg-status-success/80'
+                                : run.status === 'failed'
+                                  ? 'bg-status-error'
+                                  : 'bg-muted-foreground/30',
+                          )}
+                        />
+                        <span className="truncate text-muted-foreground">
+                          {new Date(run.startedAt).toLocaleString()}
+                        </span>
+                        <span className="text-muted-foreground/70">{run.status}</span>
+                      </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-5 px-1.5 text-xs"
+                        onClick={() => {
+                          navigate(`/projects/${selectedProjectId}/threads/${run.threadId}`);
+                        }}
+                      >
+                        View
+                      </Button>
+                    </div>
+                  ))
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-5 w-full text-xs"
+                  onClick={() => setRunsAutomationId(null)}
+                >
+                  Close
+                </Button>
+              </div>
+            )}
+          </div>
+        ))
       )}
 
       {/* Create/Edit Dialog */}
@@ -401,61 +395,67 @@ export function AutomationSettings() {
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">Name</label>
+              <label className="mb-1 block text-xs text-muted-foreground">Name</label>
               <Input
                 className="h-auto py-1.5"
                 placeholder="e.g. Daily Issue Triage"
                 value={form.name}
-                onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
                 autoFocus
               />
             </div>
             <div>
-              <label className="text-xs text-muted-foreground block mb-1">Prompt</label>
+              <label className="mb-1 block text-xs text-muted-foreground">Prompt</label>
               <textarea
                 className={`${inputClass} min-h-[100px] resize-y`}
                 placeholder="What should the agent do?"
                 value={form.prompt}
-                onChange={(e) => setForm(f => ({ ...f, prompt: e.target.value }))}
+                onChange={(e) => setForm((f) => ({ ...f, prompt: e.target.value }))}
               />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Schedule</label>
+                <label className="mb-1 block text-xs text-muted-foreground">Schedule</label>
                 <Select
-                  value={SCHEDULE_PRESETS.some(p => p.value === form.schedule) ? form.schedule : '__custom__'}
+                  value={
+                    SCHEDULE_PRESETS.some((p) => p.value === form.schedule)
+                      ? form.schedule
+                      : '__custom__'
+                  }
                   onValueChange={(v) => {
-                    if (v !== '__custom__') setForm(f => ({ ...f, schedule: v }));
+                    if (v !== '__custom__') setForm((f) => ({ ...f, schedule: v }));
                   }}
                 >
                   <SelectTrigger className="w-full">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {SCHEDULE_PRESETS.map(opt => (
-                      <SelectItem key={opt.value} value={opt.value}>{opt.label}</SelectItem>
+                    {SCHEDULE_PRESETS.map((opt) => (
+                      <SelectItem key={opt.value} value={opt.value}>
+                        {opt.label}
+                      </SelectItem>
                     ))}
                     <SelectItem value="__custom__">Custom cron...</SelectItem>
                   </SelectContent>
                 </Select>
-                {!SCHEDULE_PRESETS.some(p => p.value === form.schedule) && (
+                {!SCHEDULE_PRESETS.some((p) => p.value === form.schedule) && (
                   <Input
-                    className="h-auto py-1.5 mt-1.5 font-mono text-xs"
+                    className="mt-1.5 h-auto py-1.5 font-mono text-xs"
                     placeholder="*/30 * * * *"
                     value={form.schedule}
-                    onChange={(e) => setForm(f => ({ ...f, schedule: e.target.value }))}
+                    onChange={(e) => setForm((f) => ({ ...f, schedule: e.target.value }))}
                   />
                 )}
-                <p className="text-xs text-muted-foreground mt-1">
+                <p className="mt-1 text-xs text-muted-foreground">
                   Cron: min hour day month weekday
                 </p>
               </div>
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">Model</label>
+                <label className="mb-1 block text-xs text-muted-foreground">Model</label>
                 <SegmentedControl
                   options={MODEL_OPTIONS}
                   value={form.model}
-                  onChange={(v) => setForm(f => ({ ...f, model: v }))}
+                  onChange={(v) => setForm((f) => ({ ...f, model: v }))}
                 />
               </div>
             </div>

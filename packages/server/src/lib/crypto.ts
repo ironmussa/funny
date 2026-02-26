@@ -1,13 +1,13 @@
-import { resolve } from 'path';
-import { homedir } from 'os';
-import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { randomBytes, createCipheriv, createDecipheriv } from 'crypto';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { homedir } from 'os';
+import { resolve } from 'path';
 
 const DATA_DIR = resolve(homedir(), '.funny');
 const KEY_PATH = resolve(DATA_DIR, 'encryption.key');
 const ALGORITHM = 'aes-256-gcm';
 const IV_LENGTH = 12;
-const AUTH_TAG_LENGTH = 16;
+const _AUTH_TAG_LENGTH = 16;
 
 let cachedKey: Buffer | null = null;
 

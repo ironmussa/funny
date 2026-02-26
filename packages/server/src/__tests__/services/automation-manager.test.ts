@@ -1,6 +1,8 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
+
+import { eq, and, desc } from 'drizzle-orm';
+
 import { createTestDb, seedProject, seedThread } from '../helpers/test-db.js';
-import { eq, and, or, desc } from 'drizzle-orm';
 
 /**
  * Tests for automation-manager.ts logic.
@@ -29,14 +31,18 @@ describe('AutomationManager', () => {
     }
 
     const condition = filters.length > 0 ? and(...filters) : undefined;
-    return testDb.db.select().from(testDb.schema.automations)
+    return testDb.db
+      .select()
+      .from(testDb.schema.automations)
       .where(condition)
       .orderBy(desc(testDb.schema.automations.createdAt))
       .all();
   }
 
   function getAutomation(id: string) {
-    return testDb.db.select().from(testDb.schema.automations)
+    return testDb.db
+      .select()
+      .from(testDb.schema.automations)
       .where(eq(testDb.schema.automations.id, id))
       .get();
   }
@@ -54,30 +60,36 @@ describe('AutomationManager', () => {
     const id = data.id ?? `auto-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const now = new Date().toISOString();
 
-    testDb.db.insert(testDb.schema.automations).values({
-      id,
-      projectId: data.projectId,
-      userId: data.userId || '__local__',
-      name: data.name,
-      prompt: data.prompt,
-      schedule: data.schedule,
-      model: data.model || 'sonnet',
-      mode: 'local',
-      permissionMode: data.permissionMode || 'autoEdit',
-      baseBranch: null,
-      enabled: 1,
-      maxRunHistory: 20,
-      createdAt: now,
-      updatedAt: now,
-    }).run();
+    testDb.db
+      .insert(testDb.schema.automations)
+      .values({
+        id,
+        projectId: data.projectId,
+        userId: data.userId || '__local__',
+        name: data.name,
+        prompt: data.prompt,
+        schedule: data.schedule,
+        model: data.model || 'sonnet',
+        mode: 'local',
+        permissionMode: data.permissionMode || 'autoEdit',
+        baseBranch: null,
+        enabled: 1,
+        maxRunHistory: 20,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .run();
 
     return getAutomation(id)!;
   }
 
   function updateAutomation(id: string, updates: Record<string, any>) {
     updates.updatedAt = new Date().toISOString();
-    testDb.db.update(testDb.schema.automations).set(updates)
-      .where(eq(testDb.schema.automations.id, id)).run();
+    testDb.db
+      .update(testDb.schema.automations)
+      .set(updates)
+      .where(eq(testDb.schema.automations.id, id))
+      .run();
   }
 
   function deleteAutomation(id: string) {
@@ -96,31 +108,42 @@ describe('AutomationManager', () => {
   }
 
   function updateRun(id: string, updates: Record<string, any>) {
-    testDb.db.update(testDb.schema.automationRuns).set(updates)
-      .where(eq(testDb.schema.automationRuns.id, id)).run();
+    testDb.db
+      .update(testDb.schema.automationRuns)
+      .set(updates)
+      .where(eq(testDb.schema.automationRuns.id, id))
+      .run();
   }
 
   function listRuns(automationId: string) {
-    return testDb.db.select().from(testDb.schema.automationRuns)
+    return testDb.db
+      .select()
+      .from(testDb.schema.automationRuns)
       .where(eq(testDb.schema.automationRuns.automationId, automationId))
       .orderBy(desc(testDb.schema.automationRuns.startedAt))
       .all();
   }
 
   function listRunningRuns() {
-    return testDb.db.select().from(testDb.schema.automationRuns)
+    return testDb.db
+      .select()
+      .from(testDb.schema.automationRuns)
       .where(eq(testDb.schema.automationRuns.status, 'running'))
       .all();
   }
 
   function getRunByThreadId(threadId: string) {
-    return testDb.db.select().from(testDb.schema.automationRuns)
+    return testDb.db
+      .select()
+      .from(testDb.schema.automationRuns)
       .where(eq(testDb.schema.automationRuns.threadId, threadId))
       .get();
   }
 
   function getRun(id: string) {
-    return testDb.db.select().from(testDb.schema.automationRuns)
+    return testDb.db
+      .select()
+      .from(testDb.schema.automationRuns)
       .where(eq(testDb.schema.automationRuns.id, id))
       .get();
   }
@@ -191,7 +214,13 @@ describe('AutomationManager', () => {
 
     test('getAutomation returns an automation by ID', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
 
       const auto = getAutomation('auto-1');
       expect(auto).toBeTruthy();
@@ -205,8 +234,20 @@ describe('AutomationManager', () => {
 
     test('listAutomations returns all automations', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'First', prompt: 'A', schedule: '* * * * *' });
-      createAutomation({ id: 'auto-2', projectId: 'p1', name: 'Second', prompt: 'B', schedule: '0 * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'First',
+        prompt: 'A',
+        schedule: '* * * * *',
+      });
+      createAutomation({
+        id: 'auto-2',
+        projectId: 'p1',
+        name: 'Second',
+        prompt: 'B',
+        schedule: '0 * * * *',
+      });
 
       const all = listAutomations();
       expect(all).toHaveLength(2);
@@ -215,8 +256,20 @@ describe('AutomationManager', () => {
     test('listAutomations filters by projectId', () => {
       seedProject(testDb.db, { id: 'p1' });
       seedProject(testDb.db, { id: 'p2' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'P1 Auto', prompt: 'A', schedule: '* * * * *' });
-      createAutomation({ id: 'auto-2', projectId: 'p2', name: 'P2 Auto', prompt: 'B', schedule: '0 * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'P1 Auto',
+        prompt: 'A',
+        schedule: '* * * * *',
+      });
+      createAutomation({
+        id: 'auto-2',
+        projectId: 'p2',
+        name: 'P2 Auto',
+        prompt: 'B',
+        schedule: '0 * * * *',
+      });
 
       const p1Autos = listAutomations('p1');
       expect(p1Autos).toHaveLength(1);
@@ -229,8 +282,22 @@ describe('AutomationManager', () => {
 
     test('listAutomations filters by userId in multi mode', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'User A auto', prompt: 'A', schedule: '* * * * *', userId: 'user-a' });
-      createAutomation({ id: 'auto-2', projectId: 'p1', name: 'User B auto', prompt: 'B', schedule: '0 * * * *', userId: 'user-b' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'User A auto',
+        prompt: 'A',
+        schedule: '* * * * *',
+        userId: 'user-a',
+      });
+      createAutomation({
+        id: 'auto-2',
+        projectId: 'p1',
+        name: 'User B auto',
+        prompt: 'B',
+        schedule: '0 * * * *',
+        userId: 'user-b',
+      });
 
       const userAAutos = listAutomations(undefined, 'user-a');
       expect(userAAutos).toHaveLength(1);
@@ -239,8 +306,22 @@ describe('AutomationManager', () => {
 
     test('listAutomations with __local__ userId returns all automations', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'A', prompt: 'A', schedule: '* * * * *', userId: 'user-a' });
-      createAutomation({ id: 'auto-2', projectId: 'p1', name: 'B', prompt: 'B', schedule: '0 * * * *', userId: 'user-b' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'A',
+        prompt: 'A',
+        schedule: '* * * * *',
+        userId: 'user-a',
+      });
+      createAutomation({
+        id: 'auto-2',
+        projectId: 'p1',
+        name: 'B',
+        prompt: 'B',
+        schedule: '0 * * * *',
+        userId: 'user-b',
+      });
 
       const all = listAutomations(undefined, '__local__');
       expect(all).toHaveLength(2);
@@ -250,25 +331,31 @@ describe('AutomationManager', () => {
       seedProject(testDb.db, { id: 'p1' });
 
       // Insert with explicit different timestamps
-      testDb.db.insert(testDb.schema.automations).values({
-        id: 'auto-old',
-        projectId: 'p1',
-        name: 'Old',
-        prompt: 'A',
-        schedule: '* * * * *',
-        createdAt: '2025-01-01T00:00:00.000Z',
-        updatedAt: '2025-01-01T00:00:00.000Z',
-      }).run();
+      testDb.db
+        .insert(testDb.schema.automations)
+        .values({
+          id: 'auto-old',
+          projectId: 'p1',
+          name: 'Old',
+          prompt: 'A',
+          schedule: '* * * * *',
+          createdAt: '2025-01-01T00:00:00.000Z',
+          updatedAt: '2025-01-01T00:00:00.000Z',
+        })
+        .run();
 
-      testDb.db.insert(testDb.schema.automations).values({
-        id: 'auto-new',
-        projectId: 'p1',
-        name: 'New',
-        prompt: 'B',
-        schedule: '0 * * * *',
-        createdAt: '2025-06-01T00:00:00.000Z',
-        updatedAt: '2025-06-01T00:00:00.000Z',
-      }).run();
+      testDb.db
+        .insert(testDb.schema.automations)
+        .values({
+          id: 'auto-new',
+          projectId: 'p1',
+          name: 'New',
+          prompt: 'B',
+          schedule: '0 * * * *',
+          createdAt: '2025-06-01T00:00:00.000Z',
+          updatedAt: '2025-06-01T00:00:00.000Z',
+        })
+        .run();
 
       const autos = listAutomations('p1');
       expect(autos[0].id).toBe('auto-new');
@@ -277,9 +364,19 @@ describe('AutomationManager', () => {
 
     test('updateAutomation changes fields', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Original', prompt: 'Old prompt', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Original',
+        prompt: 'Old prompt',
+        schedule: '* * * * *',
+      });
 
-      updateAutomation('auto-1', { name: 'Updated', prompt: 'New prompt', schedule: '0 9 * * 1-5' });
+      updateAutomation('auto-1', {
+        name: 'Updated',
+        prompt: 'New prompt',
+        schedule: '0 9 * * 1-5',
+      });
 
       const auto = getAutomation('auto-1');
       expect(auto!.name).toBe('Updated');
@@ -289,8 +386,14 @@ describe('AutomationManager', () => {
 
     test('updateAutomation sets updatedAt', () => {
       seedProject(testDb.db, { id: 'p1' });
-      const auto = createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
-      const originalUpdatedAt = auto.updatedAt;
+      const auto = createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
+      const _originalUpdatedAt = auto.updatedAt;
 
       updateAutomation('auto-1', { name: 'Changed' });
 
@@ -302,7 +405,13 @@ describe('AutomationManager', () => {
 
     test('updateAutomation can toggle enabled flag', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
 
       expect(getAutomation('auto-1')!.enabled).toBe(1);
 
@@ -315,7 +424,13 @@ describe('AutomationManager', () => {
 
     test('updateAutomation can set lastRunAt and nextRunAt', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
 
       const now = new Date().toISOString();
       const nextRun = new Date(Date.now() + 3600_000).toISOString();
@@ -328,7 +443,13 @@ describe('AutomationManager', () => {
 
     test('deleteAutomation removes the automation', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
 
       expect(getAutomation('auto-1')).toBeTruthy();
       deleteAutomation('auto-1');
@@ -337,7 +458,13 @@ describe('AutomationManager', () => {
 
     test('deleteAutomation cascades to runs', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
 
       createRun({
@@ -363,7 +490,13 @@ describe('AutomationManager', () => {
 
     test('deleting a project cascades to automations', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
 
       testDb.db.delete(testDb.schema.projects).where(eq(testDb.schema.projects.id, 'p1')).run();
 
@@ -377,7 +510,13 @@ describe('AutomationManager', () => {
   describe('Run CRUD', () => {
     test('createRun inserts a run', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
 
       const startedAt = new Date().toISOString();
@@ -405,7 +544,13 @@ describe('AutomationManager', () => {
 
     test('updateRun changes status and completedAt', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
 
       createRun({
@@ -434,7 +579,13 @@ describe('AutomationManager', () => {
 
     test('updateRun can change triageStatus', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
 
       createRun({
@@ -454,31 +605,84 @@ describe('AutomationManager', () => {
 
     test('listRuns returns runs for a specific automation', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
-      createAutomation({ id: 'auto-2', projectId: 'p1', name: 'Other', prompt: 'Other', schedule: '0 * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
+      createAutomation({
+        id: 'auto-2',
+        projectId: 'p1',
+        name: 'Other',
+        prompt: 'Other',
+        schedule: '0 * * * *',
+      });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
       seedThread(testDb.db, { id: 't2', projectId: 'p1' });
       seedThread(testDb.db, { id: 't3', projectId: 'p1' });
 
-      createRun({ id: 'run-1', automationId: 'auto-1', threadId: 't1', status: 'completed', triageStatus: 'pending', startedAt: '2025-01-01T00:00:00Z' });
-      createRun({ id: 'run-2', automationId: 'auto-1', threadId: 't2', status: 'running', triageStatus: 'pending', startedAt: '2025-01-02T00:00:00Z' });
-      createRun({ id: 'run-3', automationId: 'auto-2', threadId: 't3', status: 'completed', triageStatus: 'pending', startedAt: '2025-01-03T00:00:00Z' });
+      createRun({
+        id: 'run-1',
+        automationId: 'auto-1',
+        threadId: 't1',
+        status: 'completed',
+        triageStatus: 'pending',
+        startedAt: '2025-01-01T00:00:00Z',
+      });
+      createRun({
+        id: 'run-2',
+        automationId: 'auto-1',
+        threadId: 't2',
+        status: 'running',
+        triageStatus: 'pending',
+        startedAt: '2025-01-02T00:00:00Z',
+      });
+      createRun({
+        id: 'run-3',
+        automationId: 'auto-2',
+        threadId: 't3',
+        status: 'completed',
+        triageStatus: 'pending',
+        startedAt: '2025-01-03T00:00:00Z',
+      });
 
       const runs = listRuns('auto-1');
       expect(runs).toHaveLength(2);
-      expect(runs.map(r => r.id)).toContain('run-1');
-      expect(runs.map(r => r.id)).toContain('run-2');
-      expect(runs.map(r => r.id)).not.toContain('run-3');
+      expect(runs.map((r) => r.id)).toContain('run-1');
+      expect(runs.map((r) => r.id)).toContain('run-2');
+      expect(runs.map((r) => r.id)).not.toContain('run-3');
     });
 
     test('listRuns orders by startedAt descending', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
       seedThread(testDb.db, { id: 't2', projectId: 'p1' });
 
-      createRun({ id: 'run-old', automationId: 'auto-1', threadId: 't1', status: 'completed', triageStatus: 'pending', startedAt: '2025-01-01T00:00:00Z' });
-      createRun({ id: 'run-new', automationId: 'auto-1', threadId: 't2', status: 'completed', triageStatus: 'pending', startedAt: '2025-06-01T00:00:00Z' });
+      createRun({
+        id: 'run-old',
+        automationId: 'auto-1',
+        threadId: 't1',
+        status: 'completed',
+        triageStatus: 'pending',
+        startedAt: '2025-01-01T00:00:00Z',
+      });
+      createRun({
+        id: 'run-new',
+        automationId: 'auto-1',
+        threadId: 't2',
+        status: 'completed',
+        triageStatus: 'pending',
+        startedAt: '2025-06-01T00:00:00Z',
+      });
 
       const runs = listRuns('auto-1');
       expect(runs[0].id).toBe('run-new');
@@ -487,7 +691,13 @@ describe('AutomationManager', () => {
 
     test('listRuns returns empty array when no runs exist', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
 
       const runs = listRuns('auto-1');
       expect(runs).toEqual([]);
@@ -495,26 +705,66 @@ describe('AutomationManager', () => {
 
     test('listRunningRuns returns only running runs', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
       seedThread(testDb.db, { id: 't2', projectId: 'p1' });
       seedThread(testDb.db, { id: 't3', projectId: 'p1' });
 
-      createRun({ id: 'run-1', automationId: 'auto-1', threadId: 't1', status: 'running', triageStatus: 'pending', startedAt: new Date().toISOString() });
-      createRun({ id: 'run-2', automationId: 'auto-1', threadId: 't2', status: 'completed', triageStatus: 'pending', startedAt: new Date().toISOString() });
-      createRun({ id: 'run-3', automationId: 'auto-1', threadId: 't3', status: 'running', triageStatus: 'pending', startedAt: new Date().toISOString() });
+      createRun({
+        id: 'run-1',
+        automationId: 'auto-1',
+        threadId: 't1',
+        status: 'running',
+        triageStatus: 'pending',
+        startedAt: new Date().toISOString(),
+      });
+      createRun({
+        id: 'run-2',
+        automationId: 'auto-1',
+        threadId: 't2',
+        status: 'completed',
+        triageStatus: 'pending',
+        startedAt: new Date().toISOString(),
+      });
+      createRun({
+        id: 'run-3',
+        automationId: 'auto-1',
+        threadId: 't3',
+        status: 'running',
+        triageStatus: 'pending',
+        startedAt: new Date().toISOString(),
+      });
 
       const running = listRunningRuns();
       expect(running).toHaveLength(2);
-      expect(running.map(r => r.id).sort()).toEqual(['run-1', 'run-3']);
+      expect(running.map((r) => r.id).sort()).toEqual(['run-1', 'run-3']);
     });
 
     test('listRunningRuns returns empty array when none are running', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
 
-      createRun({ id: 'run-1', automationId: 'auto-1', threadId: 't1', status: 'completed', triageStatus: 'pending', startedAt: new Date().toISOString() });
+      createRun({
+        id: 'run-1',
+        automationId: 'auto-1',
+        threadId: 't1',
+        status: 'completed',
+        triageStatus: 'pending',
+        startedAt: new Date().toISOString(),
+      });
 
       const running = listRunningRuns();
       expect(running).toHaveLength(0);
@@ -522,10 +772,23 @@ describe('AutomationManager', () => {
 
     test('getRunByThreadId returns the run for a given thread', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
 
-      createRun({ id: 'run-1', automationId: 'auto-1', threadId: 't1', status: 'running', triageStatus: 'pending', startedAt: new Date().toISOString() });
+      createRun({
+        id: 'run-1',
+        automationId: 'auto-1',
+        threadId: 't1',
+        status: 'running',
+        triageStatus: 'pending',
+        startedAt: new Date().toISOString(),
+      });
 
       const run = getRunByThreadId('t1');
       expect(run).toBeTruthy();
@@ -546,10 +809,23 @@ describe('AutomationManager', () => {
   describe('Cascade and isolation', () => {
     test('deleting a thread that has a run also deletes the run', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
 
-      createRun({ id: 'run-1', automationId: 'auto-1', threadId: 't1', status: 'running', triageStatus: 'pending', startedAt: new Date().toISOString() });
+      createRun({
+        id: 'run-1',
+        automationId: 'auto-1',
+        threadId: 't1',
+        status: 'running',
+        triageStatus: 'pending',
+        startedAt: new Date().toISOString(),
+      });
 
       testDb.db.delete(testDb.schema.threads).where(eq(testDb.schema.threads.id, 't1')).run();
 
@@ -559,9 +835,22 @@ describe('AutomationManager', () => {
 
     test('deleting a project cascades to automations and runs', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
-      createRun({ id: 'run-1', automationId: 'auto-1', threadId: 't1', status: 'running', triageStatus: 'pending', startedAt: new Date().toISOString() });
+      createRun({
+        id: 'run-1',
+        automationId: 'auto-1',
+        threadId: 't1',
+        status: 'running',
+        triageStatus: 'pending',
+        startedAt: new Date().toISOString(),
+      });
 
       testDb.db.delete(testDb.schema.projects).where(eq(testDb.schema.projects.id, 'p1')).run();
 
@@ -572,13 +861,39 @@ describe('AutomationManager', () => {
 
     test('runs from different automations are isolated', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Auto 1', prompt: 'Test 1', schedule: '* * * * *' });
-      createAutomation({ id: 'auto-2', projectId: 'p1', name: 'Auto 2', prompt: 'Test 2', schedule: '0 * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Auto 1',
+        prompt: 'Test 1',
+        schedule: '* * * * *',
+      });
+      createAutomation({
+        id: 'auto-2',
+        projectId: 'p1',
+        name: 'Auto 2',
+        prompt: 'Test 2',
+        schedule: '0 * * * *',
+      });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
       seedThread(testDb.db, { id: 't2', projectId: 'p1' });
 
-      createRun({ id: 'run-1', automationId: 'auto-1', threadId: 't1', status: 'completed', triageStatus: 'pending', startedAt: new Date().toISOString() });
-      createRun({ id: 'run-2', automationId: 'auto-2', threadId: 't2', status: 'completed', triageStatus: 'pending', startedAt: new Date().toISOString() });
+      createRun({
+        id: 'run-1',
+        automationId: 'auto-1',
+        threadId: 't1',
+        status: 'completed',
+        triageStatus: 'pending',
+        startedAt: new Date().toISOString(),
+      });
+      createRun({
+        id: 'run-2',
+        automationId: 'auto-2',
+        threadId: 't2',
+        status: 'completed',
+        triageStatus: 'pending',
+        startedAt: new Date().toISOString(),
+      });
 
       expect(listRuns('auto-1')).toHaveLength(1);
       expect(listRuns('auto-1')[0].id).toBe('run-1');
@@ -589,8 +904,20 @@ describe('AutomationManager', () => {
     test('automations from different projects are isolated', () => {
       seedProject(testDb.db, { id: 'p1' });
       seedProject(testDb.db, { id: 'p2' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'P1 Auto', prompt: 'A', schedule: '* * * * *' });
-      createAutomation({ id: 'auto-2', projectId: 'p2', name: 'P2 Auto', prompt: 'B', schedule: '0 * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'P1 Auto',
+        prompt: 'A',
+        schedule: '* * * * *',
+      });
+      createAutomation({
+        id: 'auto-2',
+        projectId: 'p2',
+        name: 'P2 Auto',
+        prompt: 'B',
+        schedule: '0 * * * *',
+      });
 
       const p1Autos = listAutomations('p1');
       const p2Autos = listAutomations('p2');
@@ -607,23 +934,55 @@ describe('AutomationManager', () => {
   describe('Edge cases', () => {
     test('duplicate automation ID throws', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'dup-auto', projectId: 'p1', name: 'First', prompt: 'A', schedule: '* * * * *' });
+      createAutomation({
+        id: 'dup-auto',
+        projectId: 'p1',
+        name: 'First',
+        prompt: 'A',
+        schedule: '* * * * *',
+      });
 
       expect(() => {
-        createAutomation({ id: 'dup-auto', projectId: 'p1', name: 'Second', prompt: 'B', schedule: '0 * * * *' });
+        createAutomation({
+          id: 'dup-auto',
+          projectId: 'p1',
+          name: 'Second',
+          prompt: 'B',
+          schedule: '0 * * * *',
+        });
       }).toThrow();
     });
 
     test('duplicate run ID throws', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
       seedThread(testDb.db, { id: 't2', projectId: 'p1' });
 
-      createRun({ id: 'dup-run', automationId: 'auto-1', threadId: 't1', status: 'running', triageStatus: 'pending', startedAt: new Date().toISOString() });
+      createRun({
+        id: 'dup-run',
+        automationId: 'auto-1',
+        threadId: 't1',
+        status: 'running',
+        triageStatus: 'pending',
+        startedAt: new Date().toISOString(),
+      });
 
       expect(() => {
-        createRun({ id: 'dup-run', automationId: 'auto-1', threadId: 't2', status: 'running', triageStatus: 'pending', startedAt: new Date().toISOString() });
+        createRun({
+          id: 'dup-run',
+          automationId: 'auto-1',
+          threadId: 't2',
+          status: 'running',
+          triageStatus: 'pending',
+          startedAt: new Date().toISOString(),
+        });
       }).toThrow();
     });
 
@@ -645,7 +1004,13 @@ describe('AutomationManager', () => {
 
     test('foreign key prevents run with non-existent thread', () => {
       seedProject(testDb.db, { id: 'p1' });
-      createAutomation({ id: 'auto-1', projectId: 'p1', name: 'Test', prompt: 'Test', schedule: '* * * * *' });
+      createAutomation({
+        id: 'auto-1',
+        projectId: 'p1',
+        name: 'Test',
+        prompt: 'Test',
+        schedule: '* * * * *',
+      });
 
       expect(() => {
         createRun({

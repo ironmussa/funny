@@ -1,13 +1,20 @@
+import { listBranches, getDefaultBranch, getCurrentBranch } from '@funny/core/git';
 import { Hono } from 'hono';
-import type { HonoEnv } from '../types/hono-env.js';
+
+import { requireAdmin } from '../middleware/auth.js';
+import { startCommand, stopCommand, isCommandRunning } from '../services/command-runner.js';
 import * as pm from '../services/project-manager.js';
 import * as sc from '../services/startup-commands-service.js';
-import { listBranches, getDefaultBranch, getCurrentBranch } from '@funny/core/git';
-import { startCommand, stopCommand, isCommandRunning } from '../services/command-runner.js';
-import { createProjectSchema, renameProjectSchema, updateProjectSchema, reorderProjectsSchema, createCommandSchema, validate } from '../validation/schemas.js';
-import { requireProject } from '../utils/route-helpers.js';
+import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
-import { requireAdmin } from '../middleware/auth.js';
+import { requireProject } from '../utils/route-helpers.js';
+import {
+  createProjectSchema,
+  updateProjectSchema,
+  reorderProjectsSchema,
+  createCommandSchema,
+  validate,
+} from '../validation/schemas.js';
 
 export const projectRoutes = new Hono<HonoEnv>();
 
@@ -22,8 +29,9 @@ projectRoutes.get('/', (c) => {
 projectRoutes.post('/', async (c) => {
   const userId = c.get('userId') as string;
   const raw = await c.req.json();
-  const result = validate(createProjectSchema, raw)
-    .andThen(({ name, path }) => pm.createProject(name, path, userId));
+  const result = validate(createProjectSchema, raw).andThen(({ name, path }) =>
+    pm.createProject(name, path, userId),
+  );
   return resultToResponse(c, result, 201);
 });
 
@@ -35,8 +43,9 @@ projectRoutes.patch('/:id', async (c) => {
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const raw = await c.req.json();
-  const result = validate(updateProjectSchema, raw)
-    .andThen((fields) => pm.updateProject(id, fields));
+  const result = validate(updateProjectSchema, raw).andThen((fields) =>
+    pm.updateProject(id, fields),
+  );
   return resultToResponse(c, result);
 });
 
@@ -55,8 +64,9 @@ projectRoutes.delete('/:id', (c) => {
 projectRoutes.put('/reorder', async (c) => {
   const userId = c.get('userId') as string;
   const raw = await c.req.json();
-  const result = validate(reorderProjectsSchema, raw)
-    .andThen(({ projectIds }) => pm.reorderProjects(userId, projectIds));
+  const result = validate(reorderProjectsSchema, raw).andThen(({ projectIds }) =>
+    pm.reorderProjects(userId, projectIds),
+  );
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ ok: true });
 });

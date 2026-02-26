@@ -8,10 +8,12 @@
  * its own service-to-service authentication via X-Webhook-Secret.
  */
 
-import { Hono } from 'hono';
 import { timingSafeEqual } from 'crypto';
-import { handleIngestEvent, type IngestEvent, type IngestResult } from '../services/ingest-mapper.js';
-import { log } from '../lib/abbacchio.js';
+
+import { Hono } from 'hono';
+
+import { log } from '../lib/logger.js';
+import { handleIngestEvent, type IngestEvent } from '../services/ingest-mapper.js';
 
 const ingestRoutes = new Hono();
 
@@ -24,8 +26,10 @@ ingestRoutes.post('/webhook', async (c) => {
   }
 
   const provided = c.req.header('X-Webhook-Secret') ?? '';
-  if (provided.length !== WEBHOOK_SECRET.length ||
-      !timingSafeEqual(Buffer.from(provided), Buffer.from(WEBHOOK_SECRET))) {
+  if (
+    provided.length !== WEBHOOK_SECRET.length ||
+    !timingSafeEqual(Buffer.from(provided), Buffer.from(WEBHOOK_SECRET))
+  ) {
     return c.json({ error: 'Unauthorized' }, 401);
   }
 
@@ -33,10 +37,7 @@ ingestRoutes.post('/webhook', async (c) => {
 
   // Validate minimal event structure
   if (!body.event_type || !body.timestamp) {
-    return c.json(
-      { error: 'Invalid event: event_type and timestamp are required' },
-      400,
-    );
+    return c.json({ error: 'Invalid event: event_type and timestamp are required' }, 400);
   }
 
   // Allow events with empty request_id AND no thread_id (e.g. director.activated, director.cycle.completed)
@@ -51,9 +52,16 @@ ingestRoutes.post('/webhook', async (c) => {
 
   try {
     const result = handleIngestEvent(body);
-    return c.json({ status: 'ok', ...(result.threadId ? { thread_id: result.threadId } : {}) }, 200);
+    return c.json(
+      { status: 'ok', ...(result.threadId ? { thread_id: result.threadId } : {}) },
+      200,
+    );
   } catch (err: any) {
-    log.error('Error processing ingest event', { namespace: 'ingest', eventType: body.event_type, error: err.message });
+    log.error('Error processing ingest event', {
+      namespace: 'ingest',
+      eventType: body.event_type,
+      error: err.message,
+    });
     return c.json({ error: err.message }, 500);
   }
 });

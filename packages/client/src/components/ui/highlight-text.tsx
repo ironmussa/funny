@@ -1,7 +1,10 @@
 import { useMemo } from 'react';
 
 function normalize(str: string) {
-  return str.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  return str
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
 }
 
 interface HighlightTextProps {
@@ -44,12 +47,16 @@ export function HighlightText({ text, query, className }: HighlightTextProps) {
     <span className={className}>
       {parts.map((part, i) =>
         part.highlight ? (
-          <mark key={i} style={{ backgroundColor: '#FFE500', color: 'black' }} className="rounded-sm px-px font-semibold">
+          <mark
+            key={`hl-${i}`}
+            style={{ backgroundColor: '#FFE500', color: 'black' }}
+            className="rounded-sm px-px font-semibold"
+          >
             {part.text}
           </mark>
         ) : (
-          <span key={i}>{part.text}</span>
-        )
+          <span key={`hl-${i}`}>{part.text}</span>
+        ),
       )}
     </span>
   );

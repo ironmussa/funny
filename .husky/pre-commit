@@ -1,5 +1,11 @@
 #!/bin/sh
-# Husky pre-commit hook - Secret detection
+# Husky pre-commit hook
 
-# Only scan staged files (fast, not entire repo)
+# Secret detection
 git diff --cached --name-only --diff-filter=ACM | grep -v '^docker/' | xargs -r npx secretlint
+
+# Lint staged JS/TS files
+git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx)$' | xargs -r npx oxlint
+
+# Format check staged files
+git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx|css|json)$' | xargs -r npx oxfmt --check

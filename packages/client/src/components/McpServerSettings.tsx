@@ -1,17 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useProjectStore } from '@/stores/project-store';
-import { api } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { cn } from '@/lib/utils';
+import type { McpServer, McpServerType } from '@funny/shared';
 import {
   Trash2,
   Plus,
@@ -21,13 +8,26 @@ import {
   AlertCircle,
   Download,
   Server,
-  ChevronDown,
   ChevronUp,
   ShieldAlert,
   KeyRound,
   Check,
 } from 'lucide-react';
-import type { McpServer, McpServerType } from '@funny/shared';
+import { useEffect, useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { useProjectStore } from '@/stores/project-store';
 
 interface RecommendedServer {
   name: string;
@@ -47,14 +47,10 @@ function TypeBadge({ type }: { type: McpServerType }) {
           ? 'bg-status-info/10 text-status-info/80'
           : type === 'sse'
             ? 'bg-status-warning/10 text-status-warning/80'
-            : 'bg-status-success/10 text-status-success/80'
+            : 'bg-status-success/10 text-status-success/80',
       )}
     >
-      {type === 'stdio' ? (
-        <Terminal className="h-2.5 w-2.5" />
-      ) : (
-        <Globe className="h-2.5 w-2.5" />
-      )}
+      {type === 'stdio' ? <Terminal className="h-2.5 w-2.5" /> : <Globe className="h-2.5 w-2.5" />}
       {type}
     </span>
   );
@@ -82,25 +78,27 @@ function InstalledServerCard({
   const [tokenValue, setTokenValue] = useState('');
 
   return (
-    <div className={cn(
-      "flex flex-col gap-1.5 px-3 py-2.5 rounded-md border bg-card",
-      server.status === 'needs_auth' ? 'border-status-warning/40' : 'border-border/50'
-    )}>
+    <div
+      className={cn(
+        'flex flex-col gap-1.5 px-3 py-2.5 rounded-md border bg-card',
+        server.status === 'needs_auth' ? 'border-status-warning/40' : 'border-border/50',
+      )}
+    >
       <div className="flex items-center justify-between gap-3">
-        <div className="flex items-center gap-3 min-w-0">
-          <Server className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+        <div className="flex min-w-0 items-center gap-3">
+          <Server className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="text-sm font-medium truncate">{server.name}</span>
+              <span className="truncate text-sm font-medium">{server.name}</span>
               <TypeBadge type={server.type} />
               {server.status === 'needs_auth' && (
-                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-status-warning/10 text-status-warning/80">
+                <span className="inline-flex items-center gap-1 rounded bg-status-warning/10 px-1.5 py-0.5 text-xs font-medium text-status-warning/80">
                   <ShieldAlert className="h-2.5 w-2.5" />
                   {t('mcp.needsAuth')}
                 </span>
               )}
             </div>
-            <p className="text-xs text-muted-foreground truncate mt-0.5">
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">
               {server.url || [server.command, ...(server.args || [])].join(' ')}
             </p>
           </div>
@@ -110,7 +108,7 @@ function InstalledServerCard({
           size="icon-xs"
           onClick={onRemove}
           disabled={removing}
-          className="text-muted-foreground hover:text-destructive flex-shrink-0"
+          className="flex-shrink-0 text-muted-foreground hover:text-destructive"
         >
           {removing ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -120,19 +118,19 @@ function InstalledServerCard({
         </Button>
       </div>
       {server.status === 'needs_auth' && (
-        <div className="pl-7 space-y-2">
+        <div className="space-y-2 pl-7">
           <div className="flex items-center gap-2">
             <Button
               variant="outline"
               size="sm"
               onClick={onAuthenticate}
               disabled={authenticating || settingToken}
-              className="text-xs h-6 px-2 border-status-warning/30 text-status-warning/80 hover:bg-status-warning/10"
+              className="h-6 border-status-warning/30 px-2 text-xs text-status-warning/80 hover:bg-status-warning/10"
             >
               {authenticating ? (
-                <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
               ) : (
-                <ShieldAlert className="h-3 w-3 mr-1" />
+                <ShieldAlert className="mr-1 h-3 w-3" />
               )}
               {authenticating ? t('mcp.authenticating') : 'OAuth'}
             </Button>
@@ -141,9 +139,9 @@ function InstalledServerCard({
               size="sm"
               onClick={() => setShowTokenInput(!showTokenInput)}
               disabled={authenticating || settingToken}
-              className="text-xs h-6 px-2"
+              className="h-6 px-2 text-xs"
             >
-              <KeyRound className="h-3 w-3 mr-1" />
+              <KeyRound className="mr-1 h-3 w-3" />
               {t('mcp.manualToken')}
             </Button>
           </div>
@@ -154,7 +152,7 @@ function InstalledServerCard({
                 value={tokenValue}
                 onChange={(e) => setTokenValue(e.target.value)}
                 placeholder={t('mcp.tokenPlaceholder')}
-                className="flex-1 h-7 px-2 text-xs"
+                className="h-7 flex-1 px-2 text-xs"
               />
               <Button
                 variant="outline"
@@ -167,7 +165,7 @@ function InstalledServerCard({
                   }
                 }}
                 disabled={!tokenValue || settingToken}
-                className="text-xs h-7 px-2"
+                className="h-7 px-2 text-xs"
               >
                 {settingToken ? (
                   <Loader2 className="h-3 w-3 animate-spin" />
@@ -197,25 +195,25 @@ function RecommendedServerCard({
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-md border border-border/50 bg-card">
+    <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-card px-3 py-2.5">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{server.name}</span>
           <TypeBadge type={server.type} />
         </div>
-        <p className="text-xs text-muted-foreground mt-0.5">{server.description}</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{server.description}</p>
       </div>
       <Button
         variant={installed ? 'ghost' : 'outline'}
         size="sm"
         onClick={onInstall}
         disabled={installed || installing}
-        className="flex-shrink-0 text-xs h-7"
+        className="h-7 flex-shrink-0 text-xs"
       >
         {installing ? (
-          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
         ) : installed ? null : (
-          <Download className="h-3 w-3 mr-1" />
+          <Download className="mr-1 h-3 w-3" />
         )}
         {installed ? t('mcp.installed') : installing ? t('mcp.installing') : t('mcp.install')}
       </Button>
@@ -225,8 +223,8 @@ function RecommendedServerCard({
 
 export function McpServerSettings() {
   const { t } = useTranslation();
-  const projects = useProjectStore(s => s.projects);
-  const selectedProjectId = useProjectStore(s => s.selectedProjectId);
+  const projects = useProjectStore((s) => s.projects);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const [servers, setServers] = useState<McpServer[]>([]);
   const [recommended, setRecommended] = useState<RecommendedServer[]>([]);
   const [loading, setLoading] = useState(false);
@@ -433,7 +431,7 @@ export function McpServerSettings() {
 
       {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-destructive/10 text-destructive text-xs">
+        <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
           <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
           <span>{error}</span>
           <button onClick={() => setError(null)} className="ml-auto text-xs underline">
@@ -444,20 +442,20 @@ export function McpServerSettings() {
 
       {/* Installed servers */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('mcp.installedServers')}
           </h3>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setShowAddForm(!showAddForm)}
-            className="text-xs h-6 px-2"
+            className="h-6 px-2 text-xs"
           >
             {showAddForm ? (
-              <ChevronUp className="h-3 w-3 mr-1" />
+              <ChevronUp className="mr-1 h-3 w-3" />
             ) : (
-              <Plus className="h-3 w-3 mr-1" />
+              <Plus className="mr-1 h-3 w-3" />
             )}
             {showAddForm ? t('mcp.cancel') : t('mcp.addCustom')}
           </Button>
@@ -465,10 +463,10 @@ export function McpServerSettings() {
 
         {/* Add custom server form */}
         {showAddForm && (
-          <div className="rounded-lg border border-border/50 p-3 mb-3 space-y-3 bg-muted/30">
+          <div className="mb-3 space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">{t('mcp.name')}</label>
+                <label className="mb-1 block text-xs text-muted-foreground">{t('mcp.name')}</label>
                 <Input
                   type="text"
                   value={addName}
@@ -478,7 +476,7 @@ export function McpServerSettings() {
                 />
               </div>
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">{t('mcp.type')}</label>
+                <label className="mb-1 block text-xs text-muted-foreground">{t('mcp.type')}</label>
                 <Select value={addType} onValueChange={(v) => setAddType(v as McpServerType)}>
                   <SelectTrigger className="h-8">
                     <SelectValue />
@@ -494,7 +492,7 @@ export function McpServerSettings() {
 
             {addType === 'http' || addType === 'sse' ? (
               <div>
-                <label className="text-xs text-muted-foreground mb-1 block">{t('mcp.url')}</label>
+                <label className="mb-1 block text-xs text-muted-foreground">{t('mcp.url')}</label>
                 <Input
                   type="text"
                   value={addUrl}
@@ -506,7 +504,9 @@ export function McpServerSettings() {
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">{t('mcp.command')}</label>
+                  <label className="mb-1 block text-xs text-muted-foreground">
+                    {t('mcp.command')}
+                  </label>
                   <Input
                     type="text"
                     value={addCommand}
@@ -516,7 +516,9 @@ export function McpServerSettings() {
                   />
                 </div>
                 <div>
-                  <label className="text-xs text-muted-foreground mb-1 block">{t('mcp.arguments')}</label>
+                  <label className="mb-1 block text-xs text-muted-foreground">
+                    {t('mcp.arguments')}
+                  </label>
                   <Input
                     type="text"
                     value={addArgs}
@@ -533,12 +535,12 @@ export function McpServerSettings() {
                 size="sm"
                 onClick={handleAddCustom}
                 disabled={!addName || adding}
-                className="text-xs h-7"
+                className="h-7 text-xs"
               >
                 {adding ? (
-                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                 ) : (
-                  <Plus className="h-3 w-3 mr-1" />
+                  <Plus className="mr-1 h-3 w-3" />
                 )}
                 {t('mcp.addServer')}
               </Button>
@@ -547,14 +549,12 @@ export function McpServerSettings() {
         )}
 
         {loading ? (
-          <div className="flex items-center gap-2 py-6 justify-center text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             {t('mcp.loadingServers')}
           </div>
         ) : servers.length === 0 ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">
-            {t('mcp.noServers')}
-          </div>
+          <div className="py-6 text-center text-sm text-muted-foreground">{t('mcp.noServers')}</div>
         ) : (
           <div className="space-y-1.5">
             {servers.map((server) => (
@@ -576,7 +576,7 @@ export function McpServerSettings() {
       {/* Recommended servers */}
       {recommended.length > 0 && (
         <div>
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('mcp.recommendedServers')}
           </h3>
           <div className="space-y-1.5">

@@ -1,4 +1,5 @@
 import { describe, test, expect, beforeEach } from 'vitest';
+
 import {
   getSelectGeneration,
   nextSelectGeneration,
@@ -102,7 +103,7 @@ describe('navigation ref', () => {
   });
 
   test('setAppNavigate and getNavigate work together', () => {
-    const mockNavigate = (path: string) => {};
+    const mockNavigate = (_path: string) => {};
     setAppNavigate(mockNavigate);
     expect(getNavigate()).toBe(mockNavigate);
   });

@@ -1,7 +1,8 @@
-import { create } from 'zustand';
 import type { AuthMode, SafeUser } from '@funny/shared';
-import { authClient } from '@/lib/auth-client';
+import { create } from 'zustand';
+
 import { setAuthToken, setAuthMode } from '@/lib/api';
+import { authClient } from '@/lib/auth-client';
 
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
 const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
@@ -11,7 +12,9 @@ const BASE = isTauri ? `http://localhost:${serverPort}/api` : '/api';
 // so the response is likely already available when initialize() is called.
 // We parse JSON here (not in initialize) so the result can be consumed
 // multiple times — e.g. when React StrictMode double-fires the effect.
-const _bootstrapPromise: Promise<{ mode: AuthMode; token?: string } | null> = fetch(`${BASE}/bootstrap`)
+const _bootstrapPromise: Promise<{ mode: AuthMode; token?: string } | null> = fetch(
+  `${BASE}/bootstrap`,
+)
   .then((res) => (res.ok ? (res.json() as Promise<{ mode: AuthMode; token?: string }>) : null))
   .catch(() => null);
 
@@ -29,7 +32,7 @@ interface AuthState {
   logout: () => Promise<void>;
 }
 
-export const useAuthStore = create<AuthState>((set, get) => ({
+export const useAuthStore = create<AuthState>((set, _get) => ({
   mode: null,
   user: null,
   isAuthenticated: false,

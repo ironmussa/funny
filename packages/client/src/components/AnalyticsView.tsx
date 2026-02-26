@@ -1,10 +1,19 @@
+import {
+  ChevronLeft,
+  Plus,
+  CheckCircle2,
+  Eye,
+  LayoutList,
+  ClipboardList,
+  DollarSign,
+  Archive,
+} from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { useAppStore } from '@/stores/app-store';
-import { api } from '@/lib/api';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { useNavigate } from 'react-router-dom';
+
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -12,12 +21,14 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { api } from '@/lib/api';
+import { useAppStore } from '@/stores/app-store';
+
+import { GroupBySelector, type GroupBy } from './analytics/GroupBySelector';
+import { MetricCard } from './analytics/MetricCard';
 import { StageDistributionChart } from './analytics/StageDistributionChart';
 import { TimelineChart } from './analytics/TimelineChart';
-import { MetricCard } from './analytics/MetricCard';
 import { TimeRangeSelector, type TimeRange } from './analytics/TimeRangeSelector';
-import { GroupBySelector, type GroupBy } from './analytics/GroupBySelector';
-import { ChevronLeft, Plus, CheckCircle2, Eye, LayoutList, ClipboardList, DollarSign, Archive } from 'lucide-react';
 
 interface OverviewData {
   currentStageDistribution: Record<string, number>;
@@ -44,8 +55,8 @@ interface TimelineData {
 export function AnalyticsView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const projects = useAppStore(s => s.projects);
-  const selectedProjectId = useAppStore(s => s.selectedProjectId);
+  const projects = useAppStore((s) => s.projects);
+  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 
   const [projectId, setProjectId] = useState<string>(() => selectedProjectId || '__all__');
   const [timeRange, setTimeRange] = useState<TimeRange>('month');
@@ -54,9 +65,9 @@ export function AnalyticsView() {
   const [timeline, setTimeline] = useState<TimelineData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const selectedProject = useMemo(
-    () => projects.find(p => p.id === projectId),
-    [projects, projectId]
+  const _selectedProject = useMemo(
+    () => projects.find((p) => p.id === projectId),
+    [projects, projectId],
   );
 
   useEffect(() => {
@@ -77,9 +88,9 @@ export function AnalyticsView() {
   }, [projectId, timeRange, groupBy]);
 
   return (
-    <div className="flex-1 flex flex-col h-full min-w-0">
+    <div className="flex h-full min-w-0 flex-1 flex-col">
       {/* Header */}
-      <div className="flex items-center gap-3 px-4 py-3 border-b border-border">
+      <div className="flex items-center gap-3 border-b border-border px-4 py-3">
         <Button
           variant="ghost"
           size="icon-xs"
@@ -88,48 +99,48 @@ export function AnalyticsView() {
         >
           <ChevronLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1 min-w-0">
+        <div className="min-w-0 flex-1">
           <h2 className="text-sm font-medium">{t('analytics.title')}</h2>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="px-4 py-2 border-b border-border/50 flex items-center gap-2">
+      <div className="flex items-center gap-2 border-b border-border/50 px-4 py-2">
         <Select value={projectId} onValueChange={setProjectId}>
-          <SelectTrigger className="w-[180px] h-7 text-xs">
+          <SelectTrigger className="h-7 w-[180px] text-xs">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="__all__">{t('analytics.allProjects')}</SelectItem>
             {projects.map((p) => (
-              <SelectItem key={p.id} value={p.id}>{p.name}</SelectItem>
+              <SelectItem key={p.id} value={p.id}>
+                {p.name}
+              </SelectItem>
             ))}
           </SelectContent>
         </Select>
 
-        <div className="w-px h-4 bg-border" />
+        <div className="h-4 w-px bg-border" />
 
         <TimeRangeSelector value={timeRange} onChange={setTimeRange} />
       </div>
 
       {/* Content */}
-      <ScrollArea className="flex-1 min-h-0">
-        <div className="px-6 py-6 max-w-4xl mx-auto space-y-6">
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="mx-auto max-w-4xl space-y-6 px-6 py-6">
           {loading ? (
             <div className="flex items-center justify-center py-16">
-              <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-primary" />
-              <span className="ml-3 text-sm text-muted-foreground">
-                {t('analytics.loading')}
-              </span>
+              <div className="h-6 w-6 animate-spin rounded-full border-b-2 border-primary" />
+              <span className="ml-3 text-sm text-muted-foreground">{t('analytics.loading')}</span>
             </div>
           ) : !overview ? (
-            <div className="text-center text-muted-foreground py-16 text-sm">
+            <div className="py-16 text-center text-sm text-muted-foreground">
               {t('analytics.noData')}
             </div>
           ) : (
             <>
               {/* Metric Cards */}
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-3">
+              <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
                 <MetricCard
                   title={t('analytics.tasksCreated')}
                   value={overview.createdCount}
@@ -170,32 +181,28 @@ export function AnalyticsView() {
 
               {/* Cost card */}
               {overview.totalCost > 0 && (
-                <div className="border border-border rounded-lg p-4 flex items-center justify-between">
+                <div className="flex items-center justify-between rounded-lg border border-border p-4">
                   <div>
                     <p className="text-xs text-muted-foreground">{t('analytics.totalCost')}</p>
-                    <p className="text-xl font-bold mt-1">${overview.totalCost.toFixed(4)}</p>
+                    <p className="mt-1 text-xl font-bold">${overview.totalCost.toFixed(4)}</p>
                   </div>
-                  <div className="p-2 rounded-md bg-status-success/10 text-status-success/80">
+                  <div className="rounded-md bg-status-success/10 p-2 text-status-success/80">
                     <DollarSign className="h-4 w-4" />
                   </div>
                 </div>
               )}
 
               {/* Stage Distribution */}
-              <div className="border border-border rounded-lg p-5">
-                <h3 className="text-sm font-semibold mb-4">
-                  {t('analytics.currentDistribution')}
-                </h3>
+              <div className="rounded-lg border border-border p-5">
+                <h3 className="mb-4 text-sm font-semibold">{t('analytics.currentDistribution')}</h3>
                 <StageDistributionChart data={overview.currentStageDistribution} />
               </div>
 
               {/* Timeline */}
               {timeline && (
-                <div className="border border-border rounded-lg p-5">
-                  <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold">
-                      {t('analytics.timeline')}
-                    </h3>
+                <div className="rounded-lg border border-border p-5">
+                  <div className="mb-4 flex items-center justify-between">
+                    <h3 className="text-sm font-semibold">{t('analytics.timeline')}</h3>
                     <GroupBySelector value={groupBy} onChange={setGroupBy} />
                   </div>
                   <TimelineChart

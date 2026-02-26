@@ -1,30 +1,25 @@
-import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useShallow } from 'zustand/react/shallow';
-import { useTerminalStore } from '@/stores/terminal-store';
-import { useProjectStore } from '@/stores/project-store';
-import { api } from '@/lib/api';
-import { cn } from '@/lib/utils';
 import AnsiToHtml from 'ansi-to-html';
-import { getActiveWS } from '@/hooks/use-ws';
-import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
 import {
   Terminal as TerminalIcon,
   Plus,
   X,
   ChevronDown,
-  ChevronUp,
   Square,
   GripHorizontal,
 } from 'lucide-react';
+import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useShallow } from 'zustand/react/shallow';
 
-const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown })
-  .__TAURI_INTERNALS__;
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { getActiveWS } from '@/hooks/use-ws';
+import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { useProjectStore } from '@/stores/project-store';
+import { useTerminalStore } from '@/stores/terminal-store';
+
+const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
 
 /** Tauri PTY tab — uses xterm.js (lazy-loaded) */
 function TauriTerminalTabContent({
@@ -123,28 +118,15 @@ function TauriTerminalTabContent({
     };
   }, [id, cwd]);
 
-  return (
-    <div
-      ref={containerRef}
-      className={cn('w-full h-full', !active && 'hidden')}
-    />
-  );
+  return <div ref={containerRef} className={cn('w-full h-full', !active && 'hidden')} />;
 }
 
 /** Web PTY tab — uses xterm.js over WebSocket */
-function WebTerminalTabContent({
-  id,
-  cwd,
-  active,
-}: {
-  id: string;
-  cwd: string;
-  active: boolean;
-}) {
+function WebTerminalTabContent({ id, cwd, active }: { id: string; cwd: string; active: boolean }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<{ terminal: any; fitAddon: any } | null>(null);
-  const registerPtyCallback = useTerminalStore(s => s.registerPtyCallback);
-  const unregisterPtyCallback = useTerminalStore(s => s.unregisterPtyCallback);
+  const registerPtyCallback = useTerminalStore((s) => s.registerPtyCallback);
+  const unregisterPtyCallback = useTerminalStore((s) => s.unregisterPtyCallback);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -208,10 +190,12 @@ function WebTerminalTabContent({
       const dims = fitAddon.proposeDimensions();
       const ws = getActiveWS();
       if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(JSON.stringify({
-          type: 'pty:spawn',
-          data: { id, cwd, rows: dims?.rows ?? 24, cols: dims?.cols ?? 80 },
-        }));
+        ws.send(
+          JSON.stringify({
+            type: 'pty:spawn',
+            data: { id, cwd, rows: dims?.rows ?? 24, cols: dims?.cols ?? 80 },
+          }),
+        );
       }
 
       // Debounce resize to avoid rapid reflows that cause screen jumping
@@ -260,12 +244,7 @@ function WebTerminalTabContent({
     }
   }, [active]);
 
-  return (
-    <div
-      ref={containerRef}
-      className={cn('w-full h-full', !active && 'hidden')}
-    />
-  );
+  return <div ref={containerRef} className={cn('w-full h-full', !active && 'hidden')} />;
 }
 
 /** Server-managed command tab — uses a <pre> log view */
@@ -284,8 +263,14 @@ function CommandTabContent({
   const output = useTerminalStore((s) => s.commandOutput[commandId] ?? '');
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const ansiConverter = useMemo(() => new AnsiToHtml({ fg: '#fafafa', bg: '#09090b', newline: true, escapeXML: true }), []);
-  const htmlOutput = useMemo(() => ansiConverter.toHtml(output || 'Waiting for output...'), [ansiConverter, output]);
+  const ansiConverter = useMemo(
+    () => new AnsiToHtml({ fg: '#fafafa', bg: '#09090b', newline: true, escapeXML: true }),
+    [],
+  );
+  const htmlOutput = useMemo(
+    () => ansiConverter.toHtml(output || 'Waiting for output...'),
+    [ansiConverter, output],
+  );
 
   useEffect(() => {
     if (active && scrollRef.current) {
@@ -302,7 +287,7 @@ function CommandTabContent({
   return (
     <div className={cn('w-full h-full flex flex-col', !active && 'hidden')}>
       {alive && (
-        <div className="flex items-center justify-end px-2 py-0.5 flex-shrink-0">
+        <div className="flex flex-shrink-0 items-center justify-end px-2 py-0.5">
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -318,12 +303,9 @@ function CommandTabContent({
           </Tooltip>
         </div>
       )}
-      <div
-        ref={scrollRef}
-        className="flex-1 overflow-auto px-3 py-1"
-      >
+      <div ref={scrollRef} className="flex-1 overflow-auto px-3 py-1">
         <pre
-          className="text-xs font-mono text-[#fafafa] whitespace-pre-wrap break-words leading-relaxed"
+          className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-[#fafafa]"
           dangerouslySetInnerHTML={{ __html: htmlOutput }}
         />
       </div>
@@ -335,32 +317,27 @@ const PANEL_HEIGHT = 300;
 
 export function TerminalPanel() {
   const { t } = useTranslation();
-  const {
-    tabs,
-    activeTabId,
-    panelVisible,
-    addTab,
-    removeTab,
-    setActiveTab,
-    togglePanel,
-  } = useTerminalStore(useShallow(s => ({
-    tabs: s.tabs,
-    activeTabId: s.activeTabId,
-    panelVisible: s.panelVisible,
-    addTab: s.addTab,
-    removeTab: s.removeTab,
-    setActiveTab: s.setActiveTab,
-    togglePanel: s.togglePanel,
-  })));
-  const projects = useProjectStore(s => s.projects);
-  const selectedProjectId = useProjectStore(s => s.selectedProjectId);
+  const { tabs, activeTabId, panelVisible, addTab, removeTab, setActiveTab, togglePanel } =
+    useTerminalStore(
+      useShallow((s) => ({
+        tabs: s.tabs,
+        activeTabId: s.activeTabId,
+        panelVisible: s.panelVisible,
+        addTab: s.addTab,
+        removeTab: s.removeTab,
+        setActiveTab: s.setActiveTab,
+        togglePanel: s.togglePanel,
+      })),
+    );
+  const projects = useProjectStore((s) => s.projects);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
 
   const [dragging, setDragging] = useState(false);
   const [panelHeight, setPanelHeight] = useState(PANEL_HEIGHT);
 
   const visibleTabs = useMemo(
     () => tabs.filter((t) => t.projectId === selectedProjectId),
-    [tabs, selectedProjectId]
+    [tabs, selectedProjectId],
   );
 
   const effectiveActiveTabId = useMemo(() => {
@@ -391,7 +368,7 @@ export function TerminalPanel() {
       document.addEventListener('mousemove', onMouseMove);
       document.addEventListener('mouseup', onMouseUp);
     },
-    [panelHeight]
+    [panelHeight],
   );
 
   const handleNewTerminal = useCallback(() => {
@@ -414,14 +391,14 @@ export function TerminalPanel() {
     (id: string) => {
       removeTab(id);
     },
-    [removeTab]
+    [removeTab],
   );
 
   if (!panelVisible && !isTauri) return null;
 
   return (
     <div
-      className="flex flex-col border-t border-border bg-background flex-shrink-0 overflow-hidden"
+      className="flex flex-shrink-0 flex-col overflow-hidden border-t border-border bg-background"
       style={{
         height: panelVisible ? panelHeight : 0,
       }}
@@ -430,32 +407,30 @@ export function TerminalPanel() {
       <div
         className={cn(
           'flex items-center justify-center h-2 cursor-row-resize hover:bg-primary/20 transition-colors flex-shrink-0 group',
-          dragging && 'bg-primary/30'
+          dragging && 'bg-primary/30',
         )}
         onMouseDown={handleMouseDown}
       >
-        <GripHorizontal className="h-3 w-3 text-muted-foreground/40 group-hover:text-muted-foreground/70 transition-colors" />
+        <GripHorizontal className="h-3 w-3 text-muted-foreground/40 transition-colors group-hover:text-muted-foreground/70" />
       </div>
 
       {/* Tab bar */}
-      <div className="flex items-center gap-0.5 px-2 h-8 bg-secondary/50 border-b border-border flex-shrink-0">
+      <div className="flex h-8 flex-shrink-0 items-center gap-0.5 border-b border-border bg-secondary/50 px-2">
         <Tooltip>
           <TooltipTrigger asChild>
             <Button variant="ghost" size="icon-xs" onClick={togglePanel}>
               <ChevronDown className="h-3.5 w-3.5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent>
-            {t('terminal.hideTerminal')}
-          </TooltipContent>
+          <TooltipContent>{t('terminal.hideTerminal')}</TooltipContent>
         </Tooltip>
 
-        <TerminalIcon className="h-3.5 w-3.5 text-muted-foreground ml-1" />
-        <span className="text-xs text-muted-foreground font-medium ml-1">
+        <TerminalIcon className="ml-1 h-3.5 w-3.5 text-muted-foreground" />
+        <span className="ml-1 text-xs font-medium text-muted-foreground">
           {t('terminal.title')}
         </span>
 
-        <div className="flex-1 flex items-center gap-0.5 ml-2 overflow-x-auto">
+        <div className="ml-2 flex flex-1 items-center gap-0.5 overflow-x-auto">
           {visibleTabs.map((tab) => (
             <button
               key={tab.id}
@@ -467,7 +442,7 @@ export function TerminalPanel() {
                 'flex items-center gap-1 px-2 py-0.5 rounded text-xs transition-colors whitespace-nowrap',
                 effectiveActiveTabId === tab.id
                   ? 'bg-accent text-accent-foreground'
-                  : 'text-muted-foreground hover:bg-accent/50'
+                  : 'text-muted-foreground hover:bg-accent/50',
               )}
             >
               <span>{tab.label}</span>
@@ -475,7 +450,7 @@ export function TerminalPanel() {
                 <span className="text-xs text-status-pending">{t('terminal.exited')}</span>
               )}
               <X
-                className="h-3 w-3 ml-1 opacity-60 hover:opacity-100"
+                className="ml-1 h-3 w-3 opacity-60 hover:opacity-100"
                 onClick={(e) => {
                   e.stopPropagation();
                   handleCloseTab(tab.id);
@@ -487,11 +462,7 @@ export function TerminalPanel() {
 
         <Tooltip>
           <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={handleNewTerminal}
-            >
+            <Button variant="ghost" size="icon-xs" onClick={handleNewTerminal}>
               <Plus className="h-3.5 w-3.5" />
             </Button>
           </TooltipTrigger>
@@ -500,9 +471,9 @@ export function TerminalPanel() {
       </div>
 
       {/* Terminal content area */}
-      <div className="flex-1 bg-[#09090b] overflow-hidden min-h-0">
+      <div className="min-h-0 flex-1 overflow-hidden bg-[#09090b]">
         {visibleTabs.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-xs">
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
             {t('terminal.noProcesses')}
           </div>
         ) : (
@@ -529,7 +500,7 @@ export function TerminalPanel() {
                 cwd={tab.cwd}
                 active={tab.id === effectiveActiveTabId}
               />
-            ) : null
+            ) : null,
           )
         )}
       </div>

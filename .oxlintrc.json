@@ -1,0 +1,44 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "categories": {
+    "correctness": "error",
+    "suspicious": "warn",
+    "perf": "warn",
+    "pedantic": "off",
+    "style": "off",
+    "nursery": "off"
+  },
+  "plugins": ["typescript", "react", "import", "oxc"],
+  "rules": {
+    "react/react-in-jsx-scope": "off",
+    "no-unused-vars": "warn",
+    "no-shadow": "off",
+    "no-await-in-loop": "off",
+    "no-constant-condition": "warn",
+    "no-constant-binary-expression": "warn",
+    "react-hooks/exhaustive-deps": "warn",
+    "oxc/no-map-spread": "off",
+    "import/no-unassigned-import": "off",
+    "import/no-named-as-default": "off",
+    "import/no-named-as-default-member": "off",
+    "react/no-array-index-key": "off",
+    "no-new": "off",
+    "react/iframe-missing-sandbox": "off",
+    "no-unmodified-loop-condition": "off"
+  },
+  "overrides": [
+    {
+      "files": ["**/__tests__/**", "**/*.test.*", "**/*.spec.*"],
+      "rules": {
+        "no-constant-condition": "off",
+        "no-constant-binary-expression": "off"
+      }
+    }
+  ],
+  "ignorePatterns": ["dist/", "node_modules/", ".funny-worktrees/", "src-tauri/"],
+  "settings": {
+    "react": {
+      "version": "19"
+    }
+  }
+}

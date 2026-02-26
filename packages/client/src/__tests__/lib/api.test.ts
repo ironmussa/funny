@@ -1,4 +1,4 @@
-import { describe, test, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 // Mock fetch before importing api
 const mockFetch = vi.fn();
@@ -34,7 +34,7 @@ describe('API Client', () => {
       expect(result._unsafeUnwrap()).toEqual([{ id: 'p1', name: 'Test' }]);
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/projects'),
-        expect.objectContaining({ headers: { 'Content-Type': 'application/json' } })
+        expect.objectContaining({ headers: { 'Content-Type': 'application/json' } }),
       );
     });
 
@@ -46,7 +46,7 @@ describe('API Client', () => {
       expect(result._unsafeUnwrap()).toEqual({ id: 'new', name: 'New' });
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/projects'),
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -57,7 +57,7 @@ describe('API Client', () => {
       expect(result.isOk()).toBe(true);
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/projects/p1'),
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
 
@@ -77,7 +77,7 @@ describe('API Client', () => {
       await api.listThreads();
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/threads'),
-        expect.anything()
+        expect.anything(),
       );
     });
 
@@ -87,13 +87,13 @@ describe('API Client', () => {
       await api.listThreads('p1');
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/threads?projectId=p1'),
-        expect.anything()
+        expect.anything(),
       );
     });
 
     test('getThread calls GET /api/threads/:id', async () => {
       mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ id: 't1', title: 'Thread', messages: [] })
+        mockJsonResponse({ id: 't1', title: 'Thread', messages: [] }),
       );
 
       const result = await api.getThread('t1');
@@ -113,7 +113,7 @@ describe('API Client', () => {
 
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/threads'),
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -123,7 +123,7 @@ describe('API Client', () => {
       await api.sendMessage('t1', 'Hello');
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/threads/t1/message'),
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -133,7 +133,7 @@ describe('API Client', () => {
       await api.stopThread('t1');
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/threads/t1/stop'),
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -143,7 +143,7 @@ describe('API Client', () => {
       await api.deleteThread('t1');
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/threads/t1'),
-        expect.objectContaining({ method: 'DELETE' })
+        expect.objectContaining({ method: 'DELETE' }),
       );
     });
 
@@ -153,7 +153,7 @@ describe('API Client', () => {
       await api.archiveThread('t1', true);
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/threads/t1'),
-        expect.objectContaining({ method: 'PATCH' })
+        expect.objectContaining({ method: 'PATCH' }),
       );
     });
   });
@@ -165,7 +165,7 @@ describe('API Client', () => {
       await api.getDiff('t1');
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/git/t1/diff'),
-        expect.anything()
+        expect.anything(),
       );
     });
 
@@ -175,7 +175,7 @@ describe('API Client', () => {
       await api.stageFiles('t1', ['file.ts']);
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/git/t1/stage'),
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -185,7 +185,7 @@ describe('API Client', () => {
       await api.commit('t1', 'fix bug');
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/git/t1/commit'),
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
@@ -195,26 +195,26 @@ describe('API Client', () => {
       await api.push('t1');
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/git/t1/push'),
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
 
     test('createPR calls POST /api/git/:threadId/pr', async () => {
-      mockFetch.mockResolvedValueOnce(mockJsonResponse({ ok: true, url: 'https://github.com/...' }));
+      mockFetch.mockResolvedValueOnce(
+        mockJsonResponse({ ok: true, url: 'https://github.com/...' }),
+      );
 
       await api.createPR('t1', 'PR title', 'PR body');
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/git/t1/pr'),
-        expect.objectContaining({ method: 'POST' })
+        expect.objectContaining({ method: 'POST' }),
       );
     });
   });
 
   describe('Error handling', () => {
     test('returns err on non-OK response', async () => {
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ error: 'Not found' }, 404)
-      );
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ error: 'Not found' }, 404));
 
       const result = await api.getThread('nonexistent');
       expect(result.isErr()).toBe(true);
@@ -223,9 +223,7 @@ describe('API Client', () => {
     });
 
     test('returns err with generic message when response has no error field', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response('Server Error', { status: 500 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response('Server Error', { status: 500 }));
 
       const result = await api.listProjects();
       expect(result.isErr()).toBe(true);
@@ -241,9 +239,7 @@ describe('API Client', () => {
     });
 
     test('returns err on 401 Unauthorized', async () => {
-      mockFetch.mockResolvedValueOnce(
-        mockJsonResponse({ error: 'Unauthorized' }, 401)
-      );
+      mockFetch.mockResolvedValueOnce(mockJsonResponse({ error: 'Unauthorized' }, 401));
 
       const result = await api.listProjects();
       expect(result.isErr()).toBe(true);
@@ -251,9 +247,7 @@ describe('API Client', () => {
     });
 
     test('returns err on 503 Service Unavailable with empty body', async () => {
-      mockFetch.mockResolvedValueOnce(
-        new Response('', { status: 503 })
-      );
+      mockFetch.mockResolvedValueOnce(new Response('', { status: 503 }));
 
       const result = await api.listProjects();
       expect(result.isErr()).toBe(true);
@@ -265,7 +259,7 @@ describe('API Client', () => {
         new Response('<html>Error</html>', {
           status: 500,
           headers: { 'Content-Type': 'text/html' },
-        })
+        }),
       );
 
       const result = await api.listProjects();

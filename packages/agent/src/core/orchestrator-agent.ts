@@ -16,11 +16,12 @@
 
 import { AgentExecutor, ModelFactory } from '@funny/core/agents';
 import type { AgentRole, AgentContext } from '@funny/core/agents';
-import type { IssueDetail } from '../trackers/tracker.js';
-import type { ImplementationPlan } from './session.js';
+import { executeShell } from '@funny/core/git';
+
 import type { PipelineServiceConfig } from '../config/schema.js';
 import { logger } from '../infrastructure/logger.js';
-import { executeShell } from '@funny/core/git';
+import type { IssueDetail } from '../trackers/tracker.js';
+import type { ImplementationPlan } from './session.js';
 
 // ── Planner event types ─────────────────────────────────────────
 
@@ -34,9 +35,8 @@ export type PlannerEvent =
 // ── Planning prompt ──────────────────────────────────────────────
 
 function buildPlanningPrompt(issue: IssueDetail, projectPath: string): string {
-  const heading = issue.number === 0
-    ? `## Task: ${issue.title}`
-    : `## Issue #${issue.number}: ${issue.title}`;
+  const heading =
+    issue.number === 0 ? `## Task: ${issue.title}` : `## Issue #${issue.number}: ${issue.title}`;
 
   return `You are a senior software architect analyzing a task to create an implementation plan.
 
@@ -87,13 +87,9 @@ Note: estimated_complexity must be one of: "small", "medium", or "large".
 
 // ── Implementing prompt ─────────────────────────────────────────
 
-function buildImplementingPrompt(
-  issue: IssueDetail,
-  plan: ImplementationPlan,
-): string {
-  const heading = issue.number === 0
-    ? `## Task: ${issue.title}`
-    : `## Issue #${issue.number}: ${issue.title}`;
+function buildImplementingPrompt(issue: IssueDetail, plan: ImplementationPlan): string {
+  const heading =
+    issue.number === 0 ? `## Task: ${issue.title}` : `## Issue #${issue.number}: ${issue.title}`;
 
   return `You are a senior software engineer implementing a feature based on a pre-approved plan.
 
@@ -134,7 +130,10 @@ ${plan.risks.length > 0 ? `**Risks to watch for:**\n${plan.risks.map((r) => `- $
 export class OrchestratorAgent {
   private modelFactory: ModelFactory;
 
-  constructor(private config: PipelineServiceConfig, modelFactory?: ModelFactory) {
+  constructor(
+    private config: PipelineServiceConfig,
+    modelFactory?: ModelFactory,
+  ) {
     this.modelFactory = modelFactory ?? new ModelFactory();
   }
 
@@ -238,7 +237,6 @@ export class OrchestratorAgent {
 
     const { readFileSync, existsSync } = await import('fs');
     const { join } = await import('path');
-    const { execute } = await import('@funny/core/git');
 
     while (steps < maxTurns) {
       if (opts?.signal?.aborted) break;
@@ -264,12 +262,15 @@ export class OrchestratorAgent {
       if (!response.ok) {
         const errBody = await response.text().catch(() => 'Unknown');
         const errMsg = `LLM call failed (HTTP ${response.status}): ${errBody.slice(0, 300)}`;
-        logger.error({ status: response.status, body: errBody.slice(0, 300) }, 'Planner LLM call failed');
+        logger.error(
+          { status: response.status, body: errBody.slice(0, 300) },
+          'Planner LLM call failed',
+        );
         opts?.onEvent?.({ type: 'error', message: errMsg });
         throw new Error(errMsg);
       }
 
-      const data = await response.json() as any;
+      const data = (await response.json()) as any;
 
       if (data.status === 'failed') {
         const errMsg = `Planner run failed: ${data.error?.message ?? 'Unknown error'}`;
@@ -295,7 +296,13 @@ export class OrchestratorAgent {
       const toolResultParts: string[] = [];
       for (const tc of runToolCalls) {
         const args = JSON.parse(tc.function.arguments);
-        opts?.onEvent?.({ type: 'tool_call', name: tc.function.name, args, id: tc.id, step: steps });
+        opts?.onEvent?.({
+          type: 'tool_call',
+          name: tc.function.name,
+          args,
+          id: tc.id,
+          step: steps,
+        });
 
         let result: string;
         try {
@@ -306,7 +313,9 @@ export class OrchestratorAgent {
                 timeout: 30_000,
                 reject: false,
               });
-              result = [r.stdout, r.stderr ? `stderr: ${r.stderr}` : '', `exit: ${r.exitCode}`].filter(Boolean).join('\n');
+              result = [r.stdout, r.stderr ? `stderr: ${r.stderr}` : '', `exit: ${r.exitCode}`]
+                .filter(Boolean)
+                .join('\n');
               break;
             }
             case 'read_file': {
@@ -316,7 +325,10 @@ export class OrchestratorAgent {
               } else {
                 const content = readFileSync(fp, 'utf-8');
                 const lines = content.split('\n');
-                result = lines.slice(0, 200).map((l, i) => `${String(i + 1).padStart(6)}\t${l}`).join('\n');
+                result = lines
+                  .slice(0, 200)
+                  .map((l, i) => `${String(i + 1).padStart(6)}\t${l}`)
+                  .join('\n');
                 if (lines.length > 200) result += `\n... (${lines.length - 200} more lines)`;
               }
               break;
@@ -338,7 +350,11 @@ export class OrchestratorAgent {
               const includeFlag = args.file_glob ? ` --include='${args.file_glob}'` : '';
               const pat = args.pattern.replace(/'/g, "'\\''");
               const cmd = `rg '${pat}' '${target}' --line-number --no-heading --color=never --max-count=50${globFlag} 2>/dev/null || grep -r -n '${pat}' '${target}'${includeFlag} | head -50`;
-              const r = await executeShell(cmd, { cwd: projectPath, timeout: 15_000, reject: false });
+              const r = await executeShell(cmd, {
+                cwd: projectPath,
+                timeout: 15_000,
+                reject: false,
+              });
               result = r.stdout || 'No matches.';
               break;
             }
@@ -349,14 +365,22 @@ export class OrchestratorAgent {
           result = `Error: ${err.message}`;
         }
 
-        opts?.onEvent?.({ type: 'tool_result', id: tc.id, name: tc.function.name, result: result.slice(0, 2000), step: steps });
+        opts?.onEvent?.({
+          type: 'tool_result',
+          id: tc.id,
+          name: tc.function.name,
+          result: result.slice(0, 2000),
+          step: steps,
+        });
         toolResultParts.push(`Tool result (${tc.id} / ${tc.function.name}):\n${result}`);
       }
 
       // Append assistant text + tool results to conversation for next turn
       const assistantPart = text
         ? `Assistant: ${text}\n${runToolCalls.map((tc: any) => `[tool_call: ${tc.function.name}(${tc.function.arguments})]`).join('\n')}`
-        : runToolCalls.map((tc: any) => `[tool_call: ${tc.function.name}(${tc.function.arguments})]`).join('\n');
+        : runToolCalls
+            .map((tc: any) => `[tool_call: ${tc.function.name}(${tc.function.arguments})]`)
+            .join('\n');
       conversationParts.push(assistantPart);
       conversationParts.push(toolResultParts.join('\n\n'));
 
@@ -368,7 +392,11 @@ export class OrchestratorAgent {
     opts?.onEvent?.({ type: 'plan_ready', plan });
 
     logger.info(
-      { issueNumber: issue.number, complexity: plan.estimated_complexity, files: plan.files_to_modify.length },
+      {
+        issueNumber: issue.number,
+        complexity: plan.estimated_complexity,
+        files: plan.files_to_modify.length,
+      },
       'Issue plan created',
     );
 
@@ -443,7 +471,8 @@ export class OrchestratorAgent {
     });
 
     if (result.status === 'error') {
-      const errMsg = result.findings.map((f) => f.description).join('; ') || 'Unknown implementation error';
+      const errMsg =
+        result.findings.map((f) => f.description).join('; ') || 'Unknown implementation error';
       logger.error({ issueNumber: issue.number, error: errMsg }, 'Issue implementation failed');
       opts?.onEvent?.({ type: 'error', message: errMsg });
     } else {
@@ -458,7 +487,10 @@ export class OrchestratorAgent {
 
   // ── Plan extraction ───────────────────────────────────────────
 
-  private extractPlan(rawText: string, onEvent?: (event: PlannerEvent) => void): ImplementationPlan {
+  private extractPlan(
+    rawText: string,
+    onEvent?: (event: PlannerEvent) => void,
+  ): ImplementationPlan {
     const plan = this.parsePlanJson(rawText);
     if (plan) return plan;
 

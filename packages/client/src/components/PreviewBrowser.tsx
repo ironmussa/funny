@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
 import { X, RefreshCw, ExternalLink } from 'lucide-react';
+import { useEffect, useState } from 'react';
+
 import { cn } from '@/lib/utils';
 
 interface PreviewTab {
@@ -58,7 +59,7 @@ export function PreviewBrowser() {
       });
       unlisteners.push(u3);
 
-      const u4 = await listen<{ commandId: string }>('preview:refresh-tab', (e) => {
+      const u4 = await listen<{ commandId: string }>('preview:refresh-tab', (_e) => {
         // Refresh any matching tab (use setter to avoid stale closure)
         setIframeKey((k) => k + 1);
       });
@@ -102,10 +103,10 @@ export function PreviewBrowser() {
   };
 
   return (
-    <div className="flex flex-col h-screen bg-background text-foreground">
+    <div className="flex h-screen flex-col bg-background text-foreground">
       {/* Tab bar */}
-      <div className="flex items-center border-b border-border bg-muted/30 min-h-[36px]">
-        <div className="flex-1 flex items-center overflow-x-auto">
+      <div className="flex min-h-[36px] items-center border-b border-border bg-muted/30">
+        <div className="flex flex-1 items-center overflow-x-auto">
           {tabs.map((tab) => (
             <div
               key={tab.commandId}
@@ -113,18 +114,18 @@ export function PreviewBrowser() {
                 'flex items-center gap-1.5 px-3 py-1.5 text-xs cursor-pointer border-r border-border min-w-0 max-w-[200px] group',
                 tab.commandId === activeTabId
                   ? 'bg-background text-foreground'
-                  : 'text-muted-foreground hover:bg-accent/50'
+                  : 'text-muted-foreground hover:bg-accent/50',
               )}
               onClick={() => setActiveTabId(tab.commandId)}
             >
               <span className="truncate">{tab.label}</span>
-              <span className="text-xs text-muted-foreground/60 flex-shrink-0">:{tab.port}</span>
+              <span className="flex-shrink-0 text-xs text-muted-foreground/60">:{tab.port}</span>
               <button
                 onClick={(e) => {
                   e.stopPropagation();
                   handleCloseTab(tab.commandId);
                 }}
-                className="ml-auto flex-shrink-0 opacity-0 group-hover:opacity-100 hover:text-status-error transition-opacity"
+                className="ml-auto flex-shrink-0 opacity-0 transition-opacity hover:text-status-error group-hover:opacity-100"
               >
                 <X className="h-3 w-3" />
               </button>
@@ -134,20 +135,20 @@ export function PreviewBrowser() {
 
         {/* Actions */}
         {activeTab && (
-          <div className="flex items-center gap-1 px-2 flex-shrink-0">
-            <span className="text-xs text-muted-foreground font-mono mr-1">
+          <div className="flex flex-shrink-0 items-center gap-1 px-2">
+            <span className="mr-1 font-mono text-xs text-muted-foreground">
               localhost:{activeTab.port}
             </span>
             <button
               onClick={handleRefresh}
-              className="p-1 text-muted-foreground hover:text-foreground rounded"
+              className="rounded p-1 text-muted-foreground hover:text-foreground"
               title="Refresh"
             >
               <RefreshCw className="h-3.5 w-3.5" />
             </button>
             <button
               onClick={handleOpenExternal}
-              className="p-1 text-muted-foreground hover:text-foreground rounded"
+              className="rounded p-1 text-muted-foreground hover:text-foreground"
               title="Open in browser"
             >
               <ExternalLink className="h-3.5 w-3.5" />
@@ -157,16 +158,16 @@ export function PreviewBrowser() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 relative">
+      <div className="relative flex-1">
         {activeTab ? (
           <iframe
             key={`${activeTab.commandId}-${iframeKey}`}
             src={`http://localhost:${activeTab.port}`}
-            className="w-full h-full border-0"
+            className="h-full w-full border-0"
             title={`Preview: ${activeTab.label}`}
           />
         ) : (
-          <div className="flex items-center justify-center h-full text-sm text-muted-foreground">
+          <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
             No previews open. Start a command with a port to see it here.
           </div>
         )}

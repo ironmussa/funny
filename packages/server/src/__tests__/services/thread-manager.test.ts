@@ -1,6 +1,14 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
-import { createTestDb, seedProject, seedThread, seedMessage, seedToolCall } from '../helpers/test-db.js';
+
 import { eq, and, like, desc, asc, inArray, or, ne, count as drizzleCount, sql } from 'drizzle-orm';
+
+import {
+  createTestDb,
+  seedProject,
+  seedThread,
+  seedMessage,
+  seedToolCall,
+} from '../helpers/test-db.js';
 
 /**
  * Tests for thread-manager.ts logic.
@@ -56,13 +64,16 @@ describe('ThreadManager', () => {
     // Record initial stage in history
     const initialStage = data.stage ?? 'backlog';
     const id = `sh-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    testDb.db.insert(testDb.schema.stageHistory).values({
-      id,
-      threadId: data.id,
-      fromStage: null,
-      toStage: initialStage,
-      changedAt: new Date().toISOString(),
-    }).run();
+    testDb.db
+      .insert(testDb.schema.stageHistory)
+      .values({
+        id,
+        threadId: data.id,
+        fromStage: null,
+        toStage: initialStage,
+        changedAt: new Date().toISOString(),
+      })
+      .run();
   }
 
   function updateThread(id: string, updates: Partial<typeof testDb.schema.threads.$inferInsert>) {
@@ -86,16 +97,19 @@ describe('ThreadManager', () => {
     permissionMode?: string | null;
   }): string {
     const id = `msg-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    testDb.db.insert(testDb.schema.messages).values({
-      id,
-      threadId: data.threadId,
-      role: data.role,
-      content: data.content,
-      images: data.images ?? null,
-      model: data.model ?? null,
-      permissionMode: data.permissionMode ?? null,
-      timestamp: new Date().toISOString(),
-    }).run();
+    testDb.db
+      .insert(testDb.schema.messages)
+      .values({
+        id,
+        threadId: data.threadId,
+        role: data.role,
+        content: data.content,
+        images: data.images ?? null,
+        model: data.model ?? null,
+        permissionMode: data.permissionMode ?? null,
+        timestamp: new Date().toISOString(),
+      })
+      .run();
     return id;
   }
 
@@ -109,12 +123,15 @@ describe('ThreadManager', () => {
 
   function insertToolCall(data: { messageId: string; name: string; input: string }): string {
     const id = `tc-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    testDb.db.insert(testDb.schema.toolCalls).values({
-      id,
-      messageId: data.messageId,
-      name: data.name,
-      input: data.input,
-    }).run();
+    testDb.db
+      .insert(testDb.schema.toolCalls)
+      .values({
+        id,
+        messageId: data.messageId,
+        name: data.name,
+        input: data.input,
+      })
+      .run();
     return id;
   }
 
@@ -157,43 +174,52 @@ describe('ThreadManager', () => {
       .all();
   }
 
-  function insertComment(data: { threadId: string; userId: string; source: string; content: string }) {
+  function insertComment(data: {
+    threadId: string;
+    userId: string;
+    source: string;
+    content: string;
+  }) {
     const id = `cmt-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
     const createdAt = new Date().toISOString();
-    testDb.db.insert(testDb.schema.threadComments).values({
-      id,
-      threadId: data.threadId,
-      userId: data.userId,
-      source: data.source,
-      content: data.content,
-      createdAt,
-    }).run();
+    testDb.db
+      .insert(testDb.schema.threadComments)
+      .values({
+        id,
+        threadId: data.threadId,
+        userId: data.userId,
+        source: data.source,
+        content: data.content,
+        createdAt,
+      })
+      .run();
     return { id, ...data, createdAt };
   }
 
   function deleteComment(commentId: string) {
-    testDb.db.delete(testDb.schema.threadComments).where(eq(testDb.schema.threadComments.id, commentId)).run();
+    testDb.db
+      .delete(testDb.schema.threadComments)
+      .where(eq(testDb.schema.threadComments.id, commentId))
+      .run();
   }
 
   function getCommentCounts(threadIds: string[]): Map<string, number> {
     if (threadIds.length === 0) return new Map();
-    const rows = testDb.db.select({
-      threadId: testDb.schema.threadComments.threadId,
-      count: drizzleCount(),
-    })
+    const rows = testDb.db
+      .select({
+        threadId: testDb.schema.threadComments.threadId,
+        count: drizzleCount(),
+      })
       .from(testDb.schema.threadComments)
       .where(inArray(testDb.schema.threadComments.threadId, threadIds))
       .groupBy(testDb.schema.threadComments.threadId)
       .all();
-    return new Map(rows.map(r => [r.threadId, r.count]));
+    return new Map(rows.map((r) => [r.threadId, r.count]));
   }
 
   function markStaleThreadsInterrupted() {
     const staleCondition = and(
-      or(
-        eq(testDb.schema.threads.status, 'running'),
-        eq(testDb.schema.threads.status, 'waiting'),
-      ),
+      or(eq(testDb.schema.threads.status, 'running'), eq(testDb.schema.threads.status, 'waiting')),
       ne(testDb.schema.threads.provider, 'external'),
     );
 
@@ -231,9 +257,9 @@ describe('ThreadManager', () => {
 
       const threads = listThreads({ projectId: 'p1' });
       expect(threads).toHaveLength(2);
-      expect(threads.map(t => t.title)).toContain('Thread A');
-      expect(threads.map(t => t.title)).toContain('Thread B');
-      expect(threads.map(t => t.id)).not.toContain('t3');
+      expect(threads.map((t) => t.title)).toContain('Thread A');
+      expect(threads.map((t) => t.title)).toContain('Thread B');
+      expect(threads.map((t) => t.id)).not.toContain('t3');
     });
 
     test('listThreads excludes archived threads by default', () => {
@@ -521,7 +547,12 @@ describe('ThreadManager', () => {
 
     test('does not mark external provider threads as interrupted', () => {
       seedProject(testDb.db, { id: 'p1' });
-      seedThread(testDb.db, { id: 't-ext', projectId: 'p1', status: 'running', provider: 'external' });
+      seedThread(testDb.db, {
+        id: 't-ext',
+        projectId: 'p1',
+        status: 'running',
+        provider: 'external',
+      });
 
       const count = markStaleThreadsInterrupted();
       expect(count).toBe(0);
@@ -645,7 +676,7 @@ describe('ThreadManager', () => {
         .all();
 
       expect(msgs).toHaveLength(2);
-      expect(msgs.every(m => m.threadId === 't1')).toBe(true);
+      expect(msgs.every((m) => m.threadId === 't1')).toBe(true);
     });
 
     test('multiple messages per thread are stored independently', () => {
@@ -666,7 +697,7 @@ describe('ThreadManager', () => {
         .all();
 
       expect(msgs).toHaveLength(3);
-      expect(msgs.map(m => m.content).sort()).toEqual(['Bye', 'Hello', 'World']);
+      expect(msgs.map((m) => m.content).sort()).toEqual(['Bye', 'Hello', 'World']);
     });
 
     test('updateMessage changes content and updates timestamp', () => {
@@ -679,7 +710,7 @@ describe('ThreadManager', () => {
         .from(testDb.schema.messages)
         .where(eq(testDb.schema.messages.id, 'm1'))
         .get();
-      const originalTimestamp = originalMsg!.timestamp;
+      const _originalTimestamp = originalMsg!.timestamp;
 
       // Small delay so timestamps differ
       updateMessage('m1', 'Updated content');
@@ -800,9 +831,24 @@ describe('ThreadManager', () => {
       seedProject(testDb.db, { id: 'p1' });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
       seedMessage(testDb.db, { id: 'm1', threadId: 't1' });
-      seedToolCall(testDb.db, { id: 'tc1', messageId: 'm1', name: 'Read', input: '{"file":"a.ts"}' });
-      seedToolCall(testDb.db, { id: 'tc2', messageId: 'm1', name: 'Read', input: '{"file":"b.ts"}' });
-      seedToolCall(testDb.db, { id: 'tc3', messageId: 'm1', name: 'Write', input: '{"file":"a.ts"}' });
+      seedToolCall(testDb.db, {
+        id: 'tc1',
+        messageId: 'm1',
+        name: 'Read',
+        input: '{"file":"a.ts"}',
+      });
+      seedToolCall(testDb.db, {
+        id: 'tc2',
+        messageId: 'm1',
+        name: 'Read',
+        input: '{"file":"b.ts"}',
+      });
+      seedToolCall(testDb.db, {
+        id: 'tc3',
+        messageId: 'm1',
+        name: 'Write',
+        input: '{"file":"a.ts"}',
+      });
 
       const found = findToolCall('m1', 'Read', '{"file":"b.ts"}');
       expect(found).toBeTruthy();
@@ -829,7 +875,7 @@ describe('ThreadManager', () => {
         .all();
 
       expect(allTc).toHaveLength(3);
-      expect(allTc.map(tc => tc.name).sort()).toEqual(['Bash', 'Read', 'Write']);
+      expect(allTc.map((tc) => tc.name).sort()).toEqual(['Bash', 'Read', 'Write']);
     });
   });
 
@@ -883,8 +929,18 @@ describe('ThreadManager', () => {
       seedProject(testDb.db, { id: 'p1' });
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
 
-      const c1 = insertComment({ threadId: 't1', userId: 'u1', source: 'user', content: 'Keep me' });
-      const c2 = insertComment({ threadId: 't1', userId: 'u1', source: 'user', content: 'Delete me' });
+      const _c1 = insertComment({
+        threadId: 't1',
+        userId: 'u1',
+        source: 'user',
+        content: 'Keep me',
+      });
+      const c2 = insertComment({
+        threadId: 't1',
+        userId: 'u1',
+        source: 'user',
+        content: 'Delete me',
+      });
 
       deleteComment(c2.id);
 
@@ -1014,7 +1070,7 @@ describe('ThreadManager', () => {
         .orderBy(asc(testDb.schema.messages.timestamp))
         .all();
 
-      const messageIds = messages.map(m => m.id);
+      const messageIds = messages.map((m) => m.id);
       const toolCalls = testDb.db
         .select()
         .from(testDb.schema.toolCalls)
@@ -1022,10 +1078,10 @@ describe('ThreadManager', () => {
         .all();
 
       // Enrich
-      const enriched = messages.map(msg => ({
+      const enriched = messages.map((msg) => ({
         ...msg,
         images: msg.images ? JSON.parse(msg.images) : undefined,
-        toolCalls: toolCalls.filter(tc => tc.messageId === msg.id),
+        toolCalls: toolCalls.filter((tc) => tc.messageId === msg.id),
       }));
 
       expect(enriched).toHaveLength(2);
@@ -1041,14 +1097,17 @@ describe('ThreadManager', () => {
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
 
       const images = JSON.stringify([{ url: 'data:image/png;base64,xyz' }]);
-      testDb.db.insert(testDb.schema.messages).values({
-        id: 'img-msg',
-        threadId: 't1',
-        role: 'user',
-        content: 'With image',
-        images,
-        timestamp: new Date().toISOString(),
-      }).run();
+      testDb.db
+        .insert(testDb.schema.messages)
+        .values({
+          id: 'img-msg',
+          threadId: 't1',
+          role: 'user',
+          content: 'With image',
+          images,
+          timestamp: new Date().toISOString(),
+        })
+        .run();
 
       const msg = testDb.db
         .select()
@@ -1091,8 +1150,8 @@ describe('ThreadManager', () => {
           or(
             like(testDb.schema.threads.title, `%${safeSearch}%`),
             like(testDb.schema.threads.branch, `%${safeSearch}%`),
-            like(testDb.schema.threads.status, `%${safeSearch}%`)
-          ) as any
+            like(testDb.schema.threads.status, `%${safeSearch}%`),
+          ) as any,
         );
       }
 
@@ -1126,14 +1185,29 @@ describe('ThreadManager', () => {
       const result = listArchivedThreads({ page: 1, limit: 10, search: '', userId: '__local__' });
       expect(result.total).toBe(2);
       expect(result.threads).toHaveLength(2);
-      expect(result.threads.every(t => t.archived === 1)).toBe(true);
+      expect(result.threads.every((t) => t.archived === 1)).toBe(true);
     });
 
     test('pagination works correctly', () => {
       seedProject(testDb.db, { id: 'p1' });
-      seedThread(testDb.db, { id: 'a1', projectId: 'p1', archived: 1, createdAt: '2025-01-01T00:00:00Z' });
-      seedThread(testDb.db, { id: 'a2', projectId: 'p1', archived: 1, createdAt: '2025-01-02T00:00:00Z' });
-      seedThread(testDb.db, { id: 'a3', projectId: 'p1', archived: 1, createdAt: '2025-01-03T00:00:00Z' });
+      seedThread(testDb.db, {
+        id: 'a1',
+        projectId: 'p1',
+        archived: 1,
+        createdAt: '2025-01-01T00:00:00Z',
+      });
+      seedThread(testDb.db, {
+        id: 'a2',
+        projectId: 'p1',
+        archived: 1,
+        createdAt: '2025-01-02T00:00:00Z',
+      });
+      seedThread(testDb.db, {
+        id: 'a3',
+        projectId: 'p1',
+        archived: 1,
+        createdAt: '2025-01-03T00:00:00Z',
+      });
 
       const page1 = listArchivedThreads({ page: 1, limit: 2, search: '', userId: '__local__' });
       expect(page1.total).toBe(3);
@@ -1150,9 +1224,14 @@ describe('ThreadManager', () => {
       seedThread(testDb.db, { id: 'a2', projectId: 'p1', archived: 1, title: 'Add feature' });
       seedThread(testDb.db, { id: 'a3', projectId: 'p1', archived: 1, title: 'Fix logout bug' });
 
-      const result = listArchivedThreads({ page: 1, limit: 10, search: 'Fix', userId: '__local__' });
+      const result = listArchivedThreads({
+        page: 1,
+        limit: 10,
+        search: 'Fix',
+        userId: '__local__',
+      });
       expect(result.total).toBe(2);
-      expect(result.threads.every(t => t.title.includes('Fix'))).toBe(true);
+      expect(result.threads.every((t) => t.title.includes('Fix'))).toBe(true);
     });
 
     test('filters by search query on branch', () => {
@@ -1160,7 +1239,12 @@ describe('ThreadManager', () => {
       seedThread(testDb.db, { id: 'a1', projectId: 'p1', archived: 1, branch: 'feature/auth' });
       seedThread(testDb.db, { id: 'a2', projectId: 'p1', archived: 1, branch: 'fix/login' });
 
-      const result = listArchivedThreads({ page: 1, limit: 10, search: 'auth', userId: '__local__' });
+      const result = listArchivedThreads({
+        page: 1,
+        limit: 10,
+        search: 'auth',
+        userId: '__local__',
+      });
       expect(result.total).toBe(1);
       expect(result.threads[0].branch).toContain('auth');
     });
@@ -1173,7 +1257,7 @@ describe('ThreadManager', () => {
 
       const result = listArchivedThreads({ page: 1, limit: 10, search: '', userId: 'user-1' });
       expect(result.total).toBe(2);
-      expect(result.threads.every(t => t.userId === 'user-1')).toBe(true);
+      expect(result.threads.every((t) => t.userId === 'user-1')).toBe(true);
     });
 
     test('returns empty results when no archived threads', () => {
@@ -1190,7 +1274,12 @@ describe('ThreadManager', () => {
       seedThread(testDb.db, { id: 'a1', projectId: 'p1', archived: 1, title: 'Important BUG Fix' });
       seedThread(testDb.db, { id: 'a2', projectId: 'p1', archived: 1, title: 'Something else' });
 
-      const result = listArchivedThreads({ page: 1, limit: 10, search: 'bug', userId: '__local__' });
+      const result = listArchivedThreads({
+        page: 1,
+        limit: 10,
+        search: 'bug',
+        userId: '__local__',
+      });
       expect(result.total).toBe(1);
       expect(result.threads[0].title).toBe('Important BUG Fix');
     });
@@ -1203,7 +1292,11 @@ describe('ThreadManager', () => {
       return value.replace(/%/g, '\\%').replace(/_/g, '\\_');
     }
 
-    function searchViaLike(query: string, projectId: string | undefined, userId: string): Map<string, string> {
+    function searchViaLike(
+      query: string,
+      projectId: string | undefined,
+      userId: string,
+    ): Map<string, string> {
       const safeQuery = escapeLike(query.trim());
 
       const filters: ReturnType<typeof eq>[] = [
@@ -1218,9 +1311,15 @@ describe('ThreadManager', () => {
       }
 
       const rows = testDb.db
-        .select({ threadId: testDb.schema.messages.threadId, content: testDb.schema.messages.content })
+        .select({
+          threadId: testDb.schema.messages.threadId,
+          content: testDb.schema.messages.content,
+        })
         .from(testDb.schema.messages)
-        .innerJoin(testDb.schema.threads, eq(testDb.schema.messages.threadId, testDb.schema.threads.id))
+        .innerJoin(
+          testDb.schema.threads,
+          eq(testDb.schema.messages.threadId, testDb.schema.threads.id),
+        )
         .where(and(...filters))
         .all();
 

@@ -1,35 +1,53 @@
-import { Hono } from 'hono';
-import type { HonoEnv } from '../types/hono-env.js';
-import * as tm from '../services/thread-manager.js';
-import * as pm from '../services/project-manager.js';
-import * as mq from '../services/message-queue.js';
 import { createWorktree, removeWorktree, removeBranch, getCurrentBranch } from '@funny/core/git';
-import { log } from '../lib/abbacchio.js';
-import { startAgent, stopAgent, isAgentRunning, cleanupThreadState } from '../services/agent-runner.js';
-import { cleanupExternalThread } from '../services/ingest-mapper.js';
-import { wsBroker } from '../services/ws-broker.js';
-import { nanoid } from 'nanoid';
-import { createThreadSchema, createIdleThreadSchema, sendMessageSchema, updateThreadSchema, approveToolSchema, validate } from '../validation/schemas.js';
-import { requireThread, requireThreadWithMessages, requireProject } from '../utils/route-helpers.js';
-import { resultToResponse } from '../utils/result-response.js';
-import { notFound } from '@funny/shared/errors';
-import { augmentPromptWithFiles } from '../utils/file-mentions.js';
-import { threadEventBus } from '../services/thread-event-bus.js';
 import type { WSEvent } from '@funny/shared';
+import { Hono } from 'hono';
+import { nanoid } from 'nanoid';
+
+import { log } from '../lib/logger.js';
+import {
+  startAgent,
+  stopAgent,
+  isAgentRunning,
+  cleanupThreadState,
+} from '../services/agent-runner.js';
+import { cleanupExternalThread } from '../services/ingest-mapper.js';
+import * as mq from '../services/message-queue.js';
+import * as pm from '../services/project-manager.js';
+import { threadEventBus } from '../services/thread-event-bus.js';
 import { getThreadEvents } from '../services/thread-event-service.js';
+import * as tm from '../services/thread-manager.js';
+import { wsBroker } from '../services/ws-broker.js';
+import type { HonoEnv } from '../types/hono-env.js';
+import { augmentPromptWithFiles } from '../utils/file-mentions.js';
+import { resultToResponse } from '../utils/result-response.js';
+import {
+  requireThread,
+  requireThreadWithMessages,
+  requireProject,
+} from '../utils/route-helpers.js';
+import {
+  createThreadSchema,
+  createIdleThreadSchema,
+  sendMessageSchema,
+  updateThreadSchema,
+  approveToolSchema,
+  validate,
+} from '../validation/schemas.js';
 
 export const threadRoutes = new Hono<HonoEnv>();
 
 /** Create a URL-safe slug from a title for branch naming */
 function slugifyTitle(title: string, maxLength = 40): string {
-  return title
-    .toLowerCase()
-    .replace(/[^a-z0-9\s-]/g, '')
-    .trim()
-    .replace(/\s+/g, '-')
-    .replace(/-+/g, '-')
-    .slice(0, maxLength)
-    .replace(/-$/, '') || 'thread';
+  return (
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .slice(0, maxLength)
+      .replace(/-$/, '') || 'thread'
+  );
 }
 
 // GET /api/threads?projectId=xxx&includeArchived=true
@@ -58,7 +76,11 @@ threadRoutes.get('/search/content', (c) => {
   const q = c.req.query('q')?.trim() || '';
   const projectId = c.req.query('projectId');
   if (!q) return c.json({ threadIds: [], snippets: {} });
-  const matches = tm.searchThreadIdsByContent({ query: q, projectId: projectId || undefined, userId });
+  const matches = tm.searchThreadIdsByContent({
+    query: q,
+    projectId: projectId || undefined,
+    userId,
+  });
   return c.json({ threadIds: [...matches.keys()], snippets: Object.fromEntries(matches) });
 });
 
@@ -66,7 +88,9 @@ threadRoutes.get('/search/content', (c) => {
 threadRoutes.get('/:id', (c) => {
   const userId = c.get('userId') as string;
   const messageLimitParam = c.req.query('messageLimit');
-  const messageLimit = messageLimitParam ? Math.min(200, Math.max(1, parseInt(messageLimitParam, 10))) : undefined;
+  const _messageLimit = messageLimitParam
+    ? Math.min(200, Math.max(1, parseInt(messageLimitParam, 10)))
+    : undefined;
   const threadResult = requireThreadWithMessages(c.req.param('id'), userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   return c.json(threadResult.value);
@@ -158,9 +182,14 @@ threadRoutes.post('/idle', async (c) => {
   tm.createThread(thread);
 
   threadEventBus.emit('thread:created', {
-    threadId, projectId, userId, cwd: worktreePath ?? project.path,
+    threadId,
+    projectId,
+    userId,
+    cwd: worktreePath ?? project.path,
     worktreePath: worktreePath ?? null,
-    stage: 'backlog', status: 'idle', initialPrompt: prompt,
+    stage: 'backlog',
+    status: 'idle',
+    initialPrompt: prompt,
   });
 
   return c.json(thread, 201);
@@ -171,7 +200,23 @@ threadRoutes.post('/', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(createThreadSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { projectId, title, mode, provider, model, permissionMode, source, baseBranch, prompt, images, allowedTools, disallowedTools, fileReferences, worktreePath: requestWorktreePath, parentThreadId } = parsed.value;
+  const {
+    projectId,
+    title,
+    mode,
+    provider,
+    model,
+    permissionMode,
+    source,
+    baseBranch,
+    prompt,
+    images,
+    allowedTools,
+    disallowedTools,
+    fileReferences,
+    worktreePath: requestWorktreePath,
+    parentThreadId,
+  } = parsed.value;
 
   const projectResult = requireProject(projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
@@ -208,9 +253,12 @@ threadRoutes.post('/', async (c) => {
 
       // If a specific branch was requested in local mode, validate it matches the current branch
       if (resolvedBaseBranch && resolvedBaseBranch !== threadBranch) {
-        return c.json({
-          error: `Cannot create local thread on branch "${resolvedBaseBranch}". Current branch is "${threadBranch}". Enable "Create worktree" to work on a different branch.`
-        }, 400);
+        return c.json(
+          {
+            error: `Cannot create local thread on branch "${resolvedBaseBranch}". Current branch is "${threadBranch}". Enable "Create worktree" to work on a different branch.`,
+          },
+          400,
+        );
       }
     }
   }
@@ -245,9 +293,13 @@ threadRoutes.post('/', async (c) => {
   const cwd = worktreePath ?? project.path;
 
   threadEventBus.emit('thread:created', {
-    threadId, projectId, userId, cwd,
+    threadId,
+    projectId,
+    userId,
+    cwd,
     worktreePath: worktreePath ?? null,
-    stage: 'in_progress' as const, status: 'pending',
+    stage: 'in_progress' as const,
+    status: 'pending',
   });
 
   const pMode = resolvedPermissionMode;
@@ -257,28 +309,46 @@ threadRoutes.post('/', async (c) => {
 
   // Start agent and handle errors (especially Claude CLI not installed)
   try {
-    await startAgent(threadId, augmentedPrompt, cwd, resolvedModel, pMode, images, disallowedTools, allowedTools, resolvedProvider);
+    await startAgent(
+      threadId,
+      augmentedPrompt,
+      cwd,
+      resolvedModel,
+      pMode,
+      images,
+      disallowedTools,
+      allowedTools,
+      resolvedProvider,
+    );
   } catch (err: any) {
     // If startAgent throws (e.g. Claude CLI not found), return error to client
     log.error('Failed to start agent', { namespace: 'agent', threadId, error: err });
 
     // Check if it's a binary-not-found error
-    const isBinaryError = err.message?.includes('Could not find the claude CLI binary') ||
-                          err.message?.includes('CLAUDE_BINARY_PATH');
+    const isBinaryError =
+      err.message?.includes('Could not find the claude CLI binary') ||
+      err.message?.includes('CLAUDE_BINARY_PATH');
 
     if (isBinaryError) {
-      return c.json({
-        error: 'Claude CLI not installed',
-        message: 'The Claude Code CLI is not installed or not found in PATH. Please install it from https://docs.anthropic.com/en/docs/agents/overview',
-        details: err.message
-      }, 503); // 503 Service Unavailable
+      return c.json(
+        {
+          error: 'Claude CLI not installed',
+          message:
+            'The Claude Code CLI is not installed or not found in PATH. Please install it from https://docs.anthropic.com/en/docs/agents/overview',
+          details: err.message,
+        },
+        503,
+      ); // 503 Service Unavailable
     }
 
     // Other errors
-    return c.json({
-      error: 'Failed to start agent',
-      message: err.message || 'Unknown error occurred while starting the agent'
-    }, 500);
+    return c.json(
+      {
+        error: 'Failed to start agent',
+        message: err.message || 'Unknown error occurred while starting the agent',
+      },
+      500,
+    );
   }
 
   return c.json(thread, 201);
@@ -290,7 +360,17 @@ threadRoutes.post('/:id/message', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(sendMessageSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { content, provider, model, permissionMode, images, allowedTools, disallowedTools, fileReferences, baseBranch } = parsed.value;
+  const {
+    content,
+    provider,
+    model,
+    permissionMode,
+    images,
+    allowedTools,
+    disallowedTools,
+    fileReferences,
+    baseBranch,
+  } = parsed.value;
 
   const userId = c.get('userId') as string;
   const threadResult = requireThread(id, userId);
@@ -300,9 +380,13 @@ threadRoutes.post('/:id/message', async (c) => {
   const cwd = thread.worktreePath ?? pm.getProject(thread.projectId)?.path;
   if (!cwd) return c.json({ error: 'Project path not found' }, 404);
 
-  const effectiveProvider = (provider || thread.provider || 'claude') as import('@funny/shared').AgentProvider;
+  const effectiveProvider = (provider ||
+    thread.provider ||
+    'claude') as import('@funny/shared').AgentProvider;
   const effectiveModel = (model || thread.model || 'sonnet') as import('@funny/shared').AgentModel;
-  const effectivePermission = (permissionMode || thread.permissionMode || 'autoEdit') as import('@funny/shared').PermissionMode;
+  const effectivePermission = (permissionMode ||
+    thread.permissionMode ||
+    'autoEdit') as import('@funny/shared').PermissionMode;
 
   // Update thread's permission mode, model, and baseBranch if they changed
   const updates: Record<string, any> = {};
@@ -390,27 +474,45 @@ threadRoutes.post('/:id/message', async (c) => {
 
   // Default interrupt behavior — start agent (kills existing if running)
   try {
-    await startAgent(id, augmentedContent, cwd, effectiveModel, effectivePermission, images, disallowedTools, allowedTools, effectiveProvider);
+    await startAgent(
+      id,
+      augmentedContent,
+      cwd,
+      effectiveModel,
+      effectivePermission,
+      images,
+      disallowedTools,
+      allowedTools,
+      effectiveProvider,
+    );
   } catch (err: any) {
     log.error('Failed to start agent', { namespace: 'agent', threadId: id, error: err });
 
     // Check if it's a binary-not-found error
-    const isBinaryError = err.message?.includes('Could not find the claude CLI binary') ||
-                          err.message?.includes('CLAUDE_BINARY_PATH');
+    const isBinaryError =
+      err.message?.includes('Could not find the claude CLI binary') ||
+      err.message?.includes('CLAUDE_BINARY_PATH');
 
     if (isBinaryError) {
-      return c.json({
-        error: 'Claude CLI not installed',
-        message: 'The Claude Code CLI is not installed or not found in PATH. Please install it from https://docs.anthropic.com/en/docs/agents/overview',
-        details: err.message
-      }, 503);
+      return c.json(
+        {
+          error: 'Claude CLI not installed',
+          message:
+            'The Claude Code CLI is not installed or not found in PATH. Please install it from https://docs.anthropic.com/en/docs/agents/overview',
+          details: err.message,
+        },
+        503,
+      );
     }
 
     // Other errors
-    return c.json({
-      error: 'Failed to start agent',
-      message: err.message || 'Unknown error occurred while starting the agent'
-    }, 500);
+    return c.json(
+      {
+        error: 'Failed to start agent',
+        message: err.message || 'Unknown error occurred while starting the agent',
+      },
+      500,
+    );
   }
 
   return c.json({ ok: true });
@@ -438,7 +540,12 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
   const raw = await c.req.json();
   const parsed = validate(approveToolSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const { toolName, approved, allowedTools: clientAllowedTools, disallowedTools: clientDisallowedTools } = parsed.value;
+  const {
+    toolName,
+    approved,
+    allowedTools: clientAllowedTools,
+    disallowedTools: clientDisallowedTools,
+  } = parsed.value;
 
   const threadResult = requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
@@ -448,10 +555,21 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
   if (!cwd) return c.json({ error: 'Project path not found' }, 404);
 
   // Use client-provided tools list, or fall back to defaults
-  const tools = clientAllowedTools ? [...clientAllowedTools] : [
-    'Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep',
-    'WebSearch', 'WebFetch', 'Task', 'TodoWrite', 'NotebookEdit',
-  ];
+  const tools = clientAllowedTools
+    ? [...clientAllowedTools]
+    : [
+        'Read',
+        'Edit',
+        'Write',
+        'Bash',
+        'Glob',
+        'Grep',
+        'WebSearch',
+        'WebFetch',
+        'Task',
+        'TodoWrite',
+        'NotebookEdit',
+      ];
 
   try {
     const threadProvider = (thread.provider || 'claude') as import('@funny/shared').AgentProvider;
@@ -460,18 +578,18 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
       if (!tools.includes(toolName)) {
         tools.push(toolName);
       }
-      const disallowed = clientDisallowedTools?.filter(t => t !== toolName);
+      const disallowed = clientDisallowedTools?.filter((t) => t !== toolName);
       const message = `The user has approved the use of ${toolName}. Please proceed with using it.`;
       await startAgent(
         id,
         message,
         cwd,
-        thread.model as import('@funny/shared').AgentModel || 'sonnet',
-        thread.permissionMode as import('@funny/shared').PermissionMode || 'autoEdit',
+        (thread.model as import('@funny/shared').AgentModel) || 'sonnet',
+        (thread.permissionMode as import('@funny/shared').PermissionMode) || 'autoEdit',
         undefined,
         disallowed,
         tools,
-        threadProvider
+        threadProvider,
       );
     } else {
       // User denied permission
@@ -480,34 +598,42 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
         id,
         message,
         cwd,
-        thread.model as import('@funny/shared').AgentModel || 'sonnet',
-        thread.permissionMode as import('@funny/shared').PermissionMode || 'autoEdit',
+        (thread.model as import('@funny/shared').AgentModel) || 'sonnet',
+        (thread.permissionMode as import('@funny/shared').PermissionMode) || 'autoEdit',
         undefined,
         clientDisallowedTools,
         clientAllowedTools,
-        threadProvider
+        threadProvider,
       );
     }
   } catch (err: any) {
     log.error('Failed to start agent', { namespace: 'agent', threadId: id, error: err });
 
     // Check if it's a binary-not-found error
-    const isBinaryError = err.message?.includes('Could not find the claude CLI binary') ||
-                          err.message?.includes('CLAUDE_BINARY_PATH');
+    const isBinaryError =
+      err.message?.includes('Could not find the claude CLI binary') ||
+      err.message?.includes('CLAUDE_BINARY_PATH');
 
     if (isBinaryError) {
-      return c.json({
-        error: 'Claude CLI not installed',
-        message: 'The Claude Code CLI is not installed or not found in PATH. Please install it from https://docs.anthropic.com/en/docs/agents/overview',
-        details: err.message
-      }, 503);
+      return c.json(
+        {
+          error: 'Claude CLI not installed',
+          message:
+            'The Claude Code CLI is not installed or not found in PATH. Please install it from https://docs.anthropic.com/en/docs/agents/overview',
+          details: err.message,
+        },
+        503,
+      );
     }
 
     // Other errors
-    return c.json({
-      error: 'Failed to start agent',
-      message: err.message || 'Unknown error occurred while starting the agent'
-    }, 500);
+    return c.json(
+      {
+        error: 'Failed to start agent',
+        message: err.message || 'Unknown error occurred while starting the agent',
+      },
+      500,
+    );
   }
 
   return c.json({ ok: true });
@@ -539,7 +665,12 @@ threadRoutes.patch('/:id', async (c) => {
   const fromStage = thread.stage;
 
   // Cleanup worktree + branch when archiving (skip for external threads and local threads reusing a worktree)
-  if (parsed.value.archived && thread.worktreePath && thread.mode === 'worktree' && thread.provider !== 'external') {
+  if (
+    parsed.value.archived &&
+    thread.worktreePath &&
+    thread.mode === 'worktree' &&
+    thread.provider !== 'external'
+  ) {
     const project = pm.getProject(thread.projectId);
     if (project) {
       await removeWorktree(project.path, thread.worktreePath).catch((e) => {
@@ -565,14 +696,24 @@ threadRoutes.patch('/:id', async (c) => {
   // Emit stage-changed events
   const project = pm.getProject(thread.projectId);
   const eventCtx = {
-    threadId: id, projectId: thread.projectId, userId: thread.userId,
+    threadId: id,
+    projectId: thread.projectId,
+    userId: thread.userId,
     worktreePath: thread.worktreePath ?? null,
     cwd: thread.worktreePath ?? project?.path ?? '',
   };
   if (parsed.value.archived) {
-    threadEventBus.emit('thread:stage-changed', { ...eventCtx, fromStage: fromStage as any, toStage: 'archived' });
+    threadEventBus.emit('thread:stage-changed', {
+      ...eventCtx,
+      fromStage: fromStage as any,
+      toStage: 'archived',
+    });
   } else if (parsed.value.stage && parsed.value.stage !== fromStage) {
-    threadEventBus.emit('thread:stage-changed', { ...eventCtx, fromStage: fromStage as any, toStage: parsed.value.stage as any });
+    threadEventBus.emit('thread:stage-changed', {
+      ...eventCtx,
+      fromStage: fromStage as any,
+      toStage: parsed.value.stage as any,
+    });
   }
 
   // Auto-start agent when idle thread is moved to in_progress
@@ -589,9 +730,15 @@ threadRoutes.patch('/:id', async (c) => {
         undefined,
         undefined,
         undefined,
-        (thread.provider || project.defaultProvider || 'claude') as import('@funny/shared').AgentProvider
+        (thread.provider ||
+          project.defaultProvider ||
+          'claude') as import('@funny/shared').AgentProvider,
       ).catch((err) => {
-        log.error('Failed to auto-start agent for idle thread', { namespace: 'agent', threadId: id, error: err });
+        log.error('Failed to auto-start agent for idle thread', {
+          namespace: 'agent',
+          threadId: id,
+          error: err,
+        });
         tm.updateThread(id, { status: 'failed', completedAt: new Date().toISOString() });
         const failEvent = {
           type: 'agent:status' as const,
@@ -712,12 +859,16 @@ threadRoutes.delete('/:id', async (c) => {
 
   if (thread) {
     threadEventBus.emit('thread:deleted', {
-      threadId: id, projectId: thread.projectId,
-      userId: thread.userId, worktreePath: thread.worktreePath ?? null,
+      threadId: id,
+      projectId: thread.projectId,
+      userId: thread.userId,
+      worktreePath: thread.worktreePath ?? null,
     });
 
     if (isAgentRunning(id)) {
-      stopAgent(id).catch((err) => log.error('Failed to stop agent', { namespace: 'agent', threadId: id, error: err }));
+      stopAgent(id).catch((err) =>
+        log.error('Failed to stop agent', { namespace: 'agent', threadId: id, error: err }),
+      );
     }
 
     // Only remove worktree/branch for worktree-mode threads (skip local threads reusing a worktree and external threads)

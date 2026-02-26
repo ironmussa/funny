@@ -1,10 +1,12 @@
+import { screen, waitFor } from '@testing-library/react';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
-import { screen, fireEvent, waitFor } from '@testing-library/react';
-import { renderWithProviders } from '../helpers/render';
+
 import { ReviewPane } from '@/components/ReviewPane';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
+
+import { renderWithProviders } from '../helpers/render';
 
 // ── Mocks ───────────────────────────────────────────────────────
 
@@ -41,7 +43,15 @@ vi.mock('@/lib/api', async () => {
       addToGitignore: vi.fn().mockReturnValue(ok({})),
       sendMessage: vi.fn().mockReturnValue(ok({})),
       openInEditor: vi.fn().mockReturnValue(ok({})),
-      getGitStatus: vi.fn().mockReturnValue(ok({ ahead: 0, behind: 0, branch: 'feature/test', baseBranch: 'main', hasConflicts: false })),
+      getGitStatus: vi.fn().mockReturnValue(
+        ok({
+          ahead: 0,
+          behind: 0,
+          branch: 'feature/test',
+          baseBranch: 'main',
+          hasConflicts: false,
+        }),
+      ),
       getGitStatuses: vi.fn().mockReturnValue(ok({ statuses: [] })),
     },
   };
@@ -121,7 +131,9 @@ beforeEach(() => {
 describe('ReviewPane', () => {
   test('shows no changes message when diff is empty', async () => {
     const { okAsync: ok } = await import('neverthrow');
-    mockApi.getDiffSummary.mockReturnValueOnce(ok({ files: [], total: 0, truncated: false } as any) as any);
+    mockApi.getDiffSummary.mockReturnValueOnce(
+      ok({ files: [], total: 0, truncated: false } as any) as any,
+    );
     renderWithProviders(<ReviewPane />);
 
     await waitFor(() => {
@@ -131,14 +143,16 @@ describe('ReviewPane', () => {
 
   test('renders file list from diffs', async () => {
     const { okAsync: ok } = await import('neverthrow');
-    mockApi.getDiffSummary.mockReturnValueOnce(ok({
-      files: [
-        { path: 'src/index.ts', status: 'modified', staged: false },
-        { path: 'src/utils.ts', status: 'added', staged: false },
-      ],
-      total: 2,
-      truncated: false,
-    } as any) as any);
+    mockApi.getDiffSummary.mockReturnValueOnce(
+      ok({
+        files: [
+          { path: 'src/index.ts', status: 'modified', staged: false },
+          { path: 'src/utils.ts', status: 'added', staged: false },
+        ],
+        total: 2,
+        truncated: false,
+      } as any) as any,
+    );
 
     renderWithProviders(<ReviewPane />);
 
@@ -154,13 +168,13 @@ describe('ReviewPane', () => {
 
   test('shows commit controls when there are diffs', async () => {
     const { okAsync: ok } = await import('neverthrow');
-    mockApi.getDiffSummary.mockReturnValueOnce(ok({
-      files: [
-        { path: 'src/index.ts', status: 'modified', staged: false },
-      ],
-      total: 1,
-      truncated: false,
-    } as any) as any);
+    mockApi.getDiffSummary.mockReturnValueOnce(
+      ok({
+        files: [{ path: 'src/index.ts', status: 'modified', staged: false }],
+        total: 1,
+        truncated: false,
+      } as any) as any,
+    );
 
     renderWithProviders(<ReviewPane />);
 
@@ -180,7 +194,9 @@ describe('ReviewPane', () => {
 
   test('shows header with title and close button', async () => {
     const { okAsync: ok } = await import('neverthrow');
-    mockApi.getDiffSummary.mockReturnValueOnce(ok({ files: [], total: 0, truncated: false } as any) as any);
+    mockApi.getDiffSummary.mockReturnValueOnce(
+      ok({ files: [], total: 0, truncated: false } as any) as any,
+    );
     renderWithProviders(<ReviewPane />);
 
     await waitFor(() => {
@@ -192,13 +208,13 @@ describe('ReviewPane', () => {
     const { okAsync: ok } = await import('neverthrow');
     // When diffs exist, the first file gets auto-selected. With no diff content,
     // the diff viewer shows the file's diff content
-    mockApi.getDiffSummary.mockReturnValueOnce(ok({
-      files: [
-        { path: 'src/index.ts', status: 'modified', staged: false },
-      ],
-      total: 1,
-      truncated: false,
-    } as any) as any);
+    mockApi.getDiffSummary.mockReturnValueOnce(
+      ok({
+        files: [{ path: 'src/index.ts', status: 'modified', staged: false }],
+        total: 1,
+        truncated: false,
+      } as any) as any,
+    );
     mockApi.getFileDiff.mockReturnValueOnce(ok({ diff: '' } as any) as any);
 
     renderWithProviders(<ReviewPane />);
@@ -213,14 +229,16 @@ describe('ReviewPane', () => {
 
   test('shows file count selection', async () => {
     const { okAsync: ok } = await import('neverthrow');
-    mockApi.getDiffSummary.mockReturnValueOnce(ok({
-      files: [
-        { path: 'src/a.ts', status: 'modified', staged: false },
-        { path: 'src/b.ts', status: 'added', staged: false },
-      ],
-      total: 2,
-      truncated: false,
-    } as any) as any);
+    mockApi.getDiffSummary.mockReturnValueOnce(
+      ok({
+        files: [
+          { path: 'src/a.ts', status: 'modified', staged: false },
+          { path: 'src/b.ts', status: 'added', staged: false },
+        ],
+        total: 2,
+        truncated: false,
+      } as any) as any,
+    );
 
     renderWithProviders(<ReviewPane />);
 

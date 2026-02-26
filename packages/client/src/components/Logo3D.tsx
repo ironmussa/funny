@@ -40,7 +40,7 @@ export function Logo3D({ scale = 1, glow = 1 }: Logo3DProps) {
     >
       <div className="logo3d-container">
         {SBR_COLORS.map((c, i) => (
-          <div key={i} className={`logo3d-block logo3d-b${i + 1}`}>
+          <div key={c.base} className={`logo3d-block logo3d-b${i + 1}`}>
             <Cube base={c.base} glow={c.glow} />
           </div>
         ))}

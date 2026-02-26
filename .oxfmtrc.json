@@ -1,0 +1,17 @@
+{
+  "printWidth": 100,
+  "tabWidth": 2,
+  "useTabs": false,
+  "semi": true,
+  "singleQuote": true,
+  "trailingComma": "all",
+  "bracketSpacing": true,
+  "arrowParens": "always",
+  "endOfLine": "lf",
+  "sortImports": {
+    "groups": ["builtin", "external", ["internal", "subpath"], ["parent", "sibling", "index"]],
+    "newlinesBetween": true
+  },
+  "sortTailwindcss": {},
+  "ignorePatterns": ["dist/", "node_modules/", ".funny-worktrees/", "src-tauri/"]
+}

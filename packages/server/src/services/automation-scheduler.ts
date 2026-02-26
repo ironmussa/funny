@@ -1,12 +1,13 @@
+import type { AgentModel, AgentProvider, PermissionMode } from '@funny/shared';
 import { Cron } from 'croner';
 import { nanoid } from 'nanoid';
-import type { AgentModel, AgentProvider, PermissionMode } from '@funny/shared';
-import * as am from './automation-manager.js';
-import * as tm from './thread-manager.js';
-import * as pm from './project-manager.js';
+
+import { log } from '../lib/logger.js';
 import { startAgent } from './agent-runner.js';
+import * as am from './automation-manager.js';
+import * as pm from './project-manager.js';
+import * as tm from './thread-manager.js';
 import { wsBroker } from './ws-broker.js';
-import { log } from '../lib/abbacchio.js';
 
 // Tools that automations are NOT allowed to use (read-only execution)
 const AUTOMATION_DISALLOWED_TOOLS = ['Edit', 'Write', 'Bash', 'NotebookEdit'];
@@ -36,7 +37,11 @@ export async function triggerAutomationRun(automation: {
 }): Promise<void> {
   const project = pm.getProject(automation.projectId);
   if (!project) {
-    log.warn('Project not found for automation', { namespace: 'automation', projectId: automation.projectId, automationId: automation.id });
+    log.warn('Project not found for automation', {
+      namespace: 'automation',
+      projectId: automation.projectId,
+      automationId: automation.id,
+    });
     return;
   }
 
@@ -97,22 +102,35 @@ export async function triggerAutomationRun(automation: {
     undefined, // images
     AUTOMATION_DISALLOWED_TOOLS,
     undefined, // allowedTools
-    (automation as any).provider as AgentProvider || 'claude',
+    ((automation as any).provider as AgentProvider) || 'claude',
   ).catch((err) => {
-    log.error('Agent error for automation', { namespace: 'automation', automationId: automation.id, error: err });
+    log.error('Agent error for automation', {
+      namespace: 'automation',
+      automationId: automation.id,
+      error: err,
+    });
     am.updateRun(runId, {
       status: 'failed',
       completedAt: new Date().toISOString(),
     });
   });
 
-  log.info(`Triggered run for "${automation.name}"`, { namespace: 'automation', runId, automationId: automation.id });
+  log.info(`Triggered run for "${automation.name}"`, {
+    namespace: 'automation',
+    runId,
+    automationId: automation.id,
+  });
 }
 
 // ── Cron job management ──────────────────────────────────────────
 
 /** Schedule a cron job for one automation */
-function scheduleJob(automation: { id: string; schedule: string; enabled: number; name: string }): void {
+function scheduleJob(automation: {
+  id: string;
+  schedule: string;
+  enabled: number;
+  name: string;
+}): void {
   // Remove existing job if any
   unscheduleJob(automation.id);
 
@@ -132,9 +150,18 @@ function scheduleJob(automation: { id: string; schedule: string; enabled: number
     activeJobs.set(automation.id, job);
 
     const next = job.nextRun();
-    log.info(`Scheduled "${automation.name}"`, { namespace: 'automation', schedule: automation.schedule, nextRun: next?.toISOString() ?? 'never' });
+    log.info(`Scheduled "${automation.name}"`, {
+      namespace: 'automation',
+      schedule: automation.schedule,
+      nextRun: next?.toISOString() ?? 'never',
+    });
   } catch (e: any) {
-    log.error('Invalid cron expression', { namespace: 'automation', automationId: automation.id, schedule: automation.schedule, error: e.message });
+    log.error('Invalid cron expression', {
+      namespace: 'automation',
+      automationId: automation.id,
+      schedule: automation.schedule,
+      error: e.message,
+    });
   }
 }
 
@@ -156,11 +183,21 @@ export function getNextRun(automationId: string): Date | null {
 // ── Public API for dynamic updates ───────────────────────────────
 // Called by automation-manager when automations are created/updated/deleted
 
-export function onAutomationCreated(automation: { id: string; schedule: string; enabled: number; name: string }): void {
+export function onAutomationCreated(automation: {
+  id: string;
+  schedule: string;
+  enabled: number;
+  name: string;
+}): void {
   scheduleJob(automation);
 }
 
-export function onAutomationUpdated(automation: { id: string; schedule: string; enabled: number; name: string }): void {
+export function onAutomationUpdated(automation: {
+  id: string;
+  schedule: string;
+  enabled: number;
+  name: string;
+}): void {
   scheduleJob(automation);
 }
 
@@ -236,9 +273,7 @@ async function cleanupOldRuns(automationId: string): Promise<void> {
   if (!automation) return;
 
   const runs = am.listRuns(automationId);
-  const reviewedRuns = runs.filter(r =>
-    r.triageStatus !== 'pending' && r.status !== 'running'
-  );
+  const reviewedRuns = runs.filter((r) => r.triageStatus !== 'pending' && r.status !== 'running');
 
   if (reviewedRuns.length > automation.maxRunHistory) {
     const toRemove = reviewedRuns.slice(automation.maxRunHistory);
@@ -281,7 +316,10 @@ export function startScheduler(): void {
   checkCompletedRuns();
   completedRunsTimer = setInterval(checkCompletedRuns, COMPLETED_RUNS_POLL_MS);
 
-  log.info(`Scheduler started`, { namespace: 'automation', activeJobs: automations.filter(a => a.enabled).length });
+  log.info(`Scheduler started`, {
+    namespace: 'automation',
+    activeJobs: automations.filter((a) => a.enabled).length,
+  });
 }
 
 // ── Self-register with ShutdownManager ──────────────────────
@@ -290,7 +328,7 @@ shutdownManager.register('automation-scheduler', () => stopScheduler(), Shutdown
 
 export function stopScheduler(): void {
   // Stop all cron jobs
-  for (const [id, job] of activeJobs) {
+  for (const [_id, job] of activeJobs) {
     job.stop();
   }
   activeJobs.clear();

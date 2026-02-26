@@ -1,9 +1,27 @@
+import type { ImageAttachment, Skill } from '@funny/shared';
+import {
+  ArrowUp,
+  ArrowLeft,
+  Square,
+  Loader2,
+  Paperclip,
+  X,
+  Zap,
+  GitBranch,
+  Check,
+  Inbox,
+  FileText,
+  Globe,
+  Github,
+  FolderOpen,
+  Copy,
+} from 'lucide-react';
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { ArrowUp, ArrowLeft, Square, Loader2, Paperclip, X, Zap, GitBranch, Check, Inbox, FileText, Globe, Github, FolderOpen, Copy } from 'lucide-react';
-import { Switch } from '@/components/ui/switch';
+
 import { Button } from '@/components/ui/button';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import {
   Select,
   SelectContent,
@@ -11,26 +29,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from '@/components/ui/popover';
-import { cn } from '@/lib/utils';
+import { Switch } from '@/components/ui/switch';
 import { api } from '@/lib/api';
 import { getUnifiedModelOptions, parseUnifiedModel } from '@/lib/providers';
-import { useThreadStore } from '@/stores/thread-store';
-import { useProjectStore } from '@/stores/project-store';
+import { cn } from '@/lib/utils';
 import { useDraftStore } from '@/stores/draft-store';
-import { ImageLightbox } from './ImageLightbox';
-import type { ImageAttachment, Skill } from '@funny/shared';
+import { useProjectStore } from '@/stores/project-store';
+import { useThreadStore } from '@/stores/thread-store';
 
-interface WorktreeInfo {
-  path: string;
-  branch: string;
-  commit: string;
-  isMain: boolean;
-}
+import { ImageLightbox } from './ImageLightbox';
 
 interface SearchablePickerItem {
   key: string;
@@ -43,7 +50,7 @@ interface SearchablePickerItem {
 /** Parse a git remote URL into a friendly `owner/repo` display string. */
 function formatRemoteUrl(url: string): string {
   // Handle SSH: git@github.com:user/repo.git
-  const sshMatch = url.match(/[:\/]([^/]+\/[^/]+?)(?:\.git)?$/);
+  const sshMatch = url.match(/[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
   if (sshMatch) return sshMatch[1];
   // Handle HTTPS: https://github.com/user/repo.git
   try {
@@ -110,6 +117,7 @@ function SearchablePicker({
         });
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only scroll into view on open; filtered/search are read but should not trigger re-runs
   }, [open]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
@@ -150,10 +158,22 @@ function SearchablePicker({
   };
 
   return (
-    <Popover open={open} onOpenChange={(v) => { setOpen(v); if (!v) { setSearch(''); setHighlightIndex(-1); } }}>
+    <Popover
+      open={open}
+      onOpenChange={(v) => {
+        setOpen(v);
+        if (!v) {
+          setSearch('');
+          setHighlightIndex(-1);
+        }
+      }}
+    >
       <PopoverTrigger asChild>
         <button
-          className={triggerClassName ?? 'flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted truncate max-w-[300px]'}
+          className={
+            triggerClassName ??
+            'flex max-w-[300px] items-center gap-1 truncate rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+          }
           title={triggerTitle}
           tabIndex={-1}
         >
@@ -166,36 +186,45 @@ function SearchablePicker({
         align="start"
         className={cn(width, 'p-0 flex flex-col overflow-hidden')}
         style={{ maxHeight: 'min(70vh, 520px)' }}
-        onOpenAutoFocus={(e) => { e.preventDefault(); searchInputRef.current?.focus(); }}
+        onOpenAutoFocus={(e) => {
+          e.preventDefault();
+          searchInputRef.current?.focus();
+        }}
       >
-        <div className="px-3 py-2 border-b border-border bg-muted/30">
+        <div className="border-b border-border bg-muted/30 px-3 py-2">
           <p className="text-sm font-medium text-muted-foreground">{label}</p>
         </div>
         <div
-          className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-1"
+          className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1"
           ref={listRef}
           style={{ maxHeight: 'min(60vh, 440px)' }}
         >
           {loading && items.length === 0 && loadingText && (
-            <p className="text-sm text-muted-foreground text-center py-3">{loadingText}</p>
+            <p className="py-3 text-center text-sm text-muted-foreground">{loadingText}</p>
           )}
           {!loading && items.length === 0 && emptyText && (
-            <p className="text-sm text-muted-foreground text-center py-3">{emptyText}</p>
+            <p className="py-3 text-center text-sm text-muted-foreground">{emptyText}</p>
           )}
           {!loading && items.length > 0 && filtered.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-3">{noMatchText}</p>
+            <p className="py-3 text-center text-sm text-muted-foreground">{noMatchText}</p>
           )}
           {filtered.map((item, i) => (
-            <div
-              key={item.key}
-              className="group/item relative"
-            >
+            <div key={item.key} className="group/item relative">
               <button
-                ref={(el) => { itemRefs.current[i] = el; }}
-                onClick={() => { onSelect(item.key); setOpen(false); setSearch(''); }}
+                ref={(el) => {
+                  itemRefs.current[i] = el;
+                }}
+                onClick={() => {
+                  onSelect(item.key);
+                  setOpen(false);
+                  setSearch('');
+                }}
                 onKeyDown={(e) => handleItemKeyDown(e, i)}
                 onFocus={() => setHighlightIndex(i)}
-                onMouseEnter={() => { setHighlightIndex(i); itemRefs.current[i]?.focus(); }}
+                onMouseEnter={() => {
+                  setHighlightIndex(i);
+                  itemRefs.current[i]?.focus();
+                }}
                 className={cn(
                   'w-full flex items-center gap-2 rounded py-1.5 pl-2 text-left text-xs transition-colors outline-none',
                   onCopy ? 'pr-7' : 'pr-2',
@@ -203,31 +232,34 @@ function SearchablePicker({
                     ? 'bg-accent text-foreground'
                     : item.isSelected
                       ? 'bg-accent/50 text-foreground'
-                      : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                      : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                 )}
               >
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="font-medium font-mono truncate">{item.label}</span>
+                    <span className="truncate font-mono font-medium">{item.label}</span>
                     {item.badge && (
-                      <span className="text-[9px] px-1 py-0.5 rounded bg-muted text-muted-foreground leading-none">
+                      <span className="rounded bg-muted px-1 py-0.5 text-[9px] leading-none text-muted-foreground">
                         {item.badge}
                       </span>
                     )}
                   </div>
                   {item.detail && (
-                    <span className="text-xs text-muted-foreground/70 truncate block font-mono">
+                    <span className="block truncate font-mono text-xs text-muted-foreground/70">
                       {item.detail}
                     </span>
-                    )}
+                  )}
                 </div>
                 {item.isSelected && <Check className="h-3 w-3 shrink-0 text-status-info" />}
               </button>
               {onCopy && (
                 <button
                   type="button"
-                  className="absolute right-2 top-1/2 -translate-y-1/2 p-1 rounded text-muted-foreground hover:text-foreground opacity-0 group-hover/item:opacity-100 transition-opacity"
-                  onClick={(e) => { e.stopPropagation(); onCopy(item.label); }}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:text-foreground group-hover/item:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onCopy(item.label);
+                  }}
                   tabIndex={-1}
                 >
                   <Copy className="h-3 w-3" />
@@ -236,7 +268,7 @@ function SearchablePicker({
             </div>
           ))}
         </div>
-        <div className="px-2 py-1.5 border-t border-border">
+        <div className="border-t border-border px-2 py-1.5">
           <input
             ref={searchInputRef}
             type="text"
@@ -254,77 +286,6 @@ function SearchablePicker({
   );
 }
 
-function WorktreePicker({
-  projectId,
-  currentPath,
-  threadBranch,
-  onChange,
-}: {
-  projectId: string;
-  currentPath: string;
-  threadBranch?: string;
-  onChange: (path: string) => void;
-}) {
-  const { t } = useTranslation();
-  const [worktrees, setWorktrees] = useState<WorktreeInfo[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [fetchTrigger, setFetchTrigger] = useState(0);
-
-  // Load worktrees on mount so the branch label is available immediately
-  useEffect(() => {
-    (async () => {
-      const result = await api.listWorktrees(projectId);
-      if (result.isOk()) setWorktrees(result.value);
-      else setWorktrees([]);
-    })();
-  }, [projectId]);
-
-  // Refresh worktrees when user interacts with the picker
-  useEffect(() => {
-    if (!fetchTrigger) return;
-    setLoading(true);
-    (async () => {
-      const result = await api.listWorktrees(projectId);
-      if (result.isOk()) setWorktrees(result.value);
-      else setWorktrees([]);
-      setLoading(false);
-    })();
-  }, [fetchTrigger, projectId]);
-
-  const normalizedCurrent = currentPath.replace(/\\/g, '/').toLowerCase();
-  const currentWorktree = worktrees.find(
-    (wt) => wt.path.replace(/\\/g, '/').toLowerCase() === normalizedCurrent
-  );
-  const displayLabel = currentWorktree?.branch ?? threadBranch ?? '\u2026';
-
-  const items: SearchablePickerItem[] = useMemo(() => worktrees.map((wt) => ({
-    key: wt.path,
-    label: wt.branch,
-    isSelected: wt.path.replace(/\\/g, '/').toLowerCase() === normalizedCurrent,
-    detail: wt.commit?.slice(0, 8),
-    badge: wt.isMain ? 'main' : undefined,
-  })), [worktrees, normalizedCurrent]);
-
-  return (
-    <div onMouseDown={() => setFetchTrigger((n) => n + 1)}>
-      <SearchablePicker
-        items={items}
-        label={t('prompt.selectWorktree', 'Select worktree')}
-        displayValue={displayLabel}
-        searchPlaceholder={t('prompt.searchWorktrees', 'Search worktrees\u2026')}
-        noMatchText={t('prompt.noWorktreesMatch', 'No worktrees match')}
-        emptyText={t('prompt.noWorktrees', 'No worktrees available')}
-        loadingText={t('prompt.loadingWorktrees', 'Loading worktrees\u2026')}
-        loading={loading}
-        onSelect={(path) => onChange(path)}
-        onCopy={(branch) => { navigator.clipboard.writeText(branch); toast.success('Branch copied'); }}
-        triggerTitle={currentPath}
-        width="w-[30rem]"
-      />
-    </div>
-  );
-}
-
 function BranchPicker({
   branches,
   selected,
@@ -336,11 +297,15 @@ function BranchPicker({
 }) {
   const { t } = useTranslation();
 
-  const items: SearchablePickerItem[] = useMemo(() => branches.map((b) => ({
-    key: b,
-    label: b,
-    isSelected: b === selected,
-  })), [branches, selected]);
+  const items: SearchablePickerItem[] = useMemo(
+    () =>
+      branches.map((b) => ({
+        key: b,
+        label: b,
+        isSelected: b === selected,
+      })),
+    [branches, selected],
+  );
 
   return (
     <SearchablePicker
@@ -350,7 +315,10 @@ function BranchPicker({
       searchPlaceholder={t('newThread.searchBranches', 'Search branches\u2026')}
       noMatchText={t('newThread.noBranchesMatch', 'No branches match')}
       onSelect={(branch) => onChange(branch)}
-      onCopy={(branch) => { navigator.clipboard.writeText(branch); toast.success('Branch copied'); }}
+      onCopy={(branch) => {
+        navigator.clipboard.writeText(branch);
+        toast.success('Branch copied');
+      }}
       triggerClassName="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted truncate max-w-[200px]"
       width="w-[30rem]"
     />
@@ -358,7 +326,20 @@ function BranchPicker({
 }
 
 interface PromptInputProps {
-  onSubmit: (prompt: string, opts: { provider?: string; model: string; mode: string; threadMode?: string; baseBranch?: string; cwd?: string; sendToBacklog?: boolean; fileReferences?: { path: string }[] }, images?: ImageAttachment[]) => Promise<boolean | void> | boolean | void;
+  onSubmit: (
+    prompt: string,
+    opts: {
+      provider?: string;
+      model: string;
+      mode: string;
+      threadMode?: string;
+      baseBranch?: string;
+      cwd?: string;
+      sendToBacklog?: boolean;
+      fileReferences?: { path: string }[];
+    },
+    images?: ImageAttachment[],
+  ) => Promise<boolean | void> | boolean | void;
   onStop?: () => void;
   loading?: boolean;
   running?: boolean;
@@ -387,11 +368,12 @@ export const PromptInput = memo(function PromptInput({
   const { t } = useTranslation();
 
   // Resolve effective defaults from project settings (hardcoded fallbacks)
-  const projectsForDefaults = useProjectStore(s => s.projects);
-  const selectedProjectIdForDefaults = useProjectStore(s => s.selectedProjectId);
-  const effectiveProject = (propProjectId || selectedProjectIdForDefaults)
-    ? projectsForDefaults.find(p => p.id === (propProjectId || selectedProjectIdForDefaults))
-    : undefined;
+  const projectsForDefaults = useProjectStore((s) => s.projects);
+  const selectedProjectIdForDefaults = useProjectStore((s) => s.selectedProjectId);
+  const effectiveProject =
+    propProjectId || selectedProjectIdForDefaults
+      ? projectsForDefaults.find((p) => p.id === (propProjectId || selectedProjectIdForDefaults))
+      : undefined;
   const defaultProvider = effectiveProject?.defaultProvider ?? 'claude';
   const defaultModel = effectiveProject?.defaultModel ?? 'sonnet';
   const defaultPermissionMode = effectiveProject?.defaultPermissionMode ?? 'autoEdit';
@@ -405,33 +387,35 @@ export const PromptInput = memo(function PromptInput({
 
   const unifiedModelGroups = useMemo(() => getUnifiedModelOptions(t), [t]);
 
-  const modes = useMemo(() => [
-    { value: 'plan', label: t('prompt.plan') },
-    { value: 'autoEdit', label: t('prompt.autoEdit') },
-    { value: 'confirmEdit', label: t('prompt.askBeforeEdits') },
-  ], [t]);
+  const modes = useMemo(
+    () => [
+      { value: 'plan', label: t('prompt.plan') },
+      { value: 'autoEdit', label: t('prompt.autoEdit') },
+      { value: 'confirmEdit', label: t('prompt.askBeforeEdits') },
+    ],
+    [t],
+  );
 
   // Sync mode with active thread's permission mode — granular selectors to avoid
   // re-rendering when unrelated activeThread properties (e.g. messages) change.
-  const activeThreadPermissionMode = useThreadStore(s => s.activeThread?.permissionMode);
-  const activeThreadWorktreePath = useThreadStore(s => s.activeThread?.worktreePath);
-  const activeThreadProvider = useThreadStore(s => s.activeThread?.provider);
-  const activeThreadModel = useThreadStore(s => s.activeThread?.model);
-  const activeThreadMode = useThreadStore(s => s.activeThread?.mode);
-  const activeThreadBranch = useThreadStore(s => s.activeThread?.branch);
-  const activeThreadBaseBranch = useThreadStore(s => s.activeThread?.baseBranch);
+  const activeThreadPermissionMode = useThreadStore((s) => s.activeThread?.permissionMode);
+  const activeThreadWorktreePath = useThreadStore((s) => s.activeThread?.worktreePath);
+  const activeThreadProvider = useThreadStore((s) => s.activeThread?.provider);
+  const activeThreadModel = useThreadStore((s) => s.activeThread?.model);
+  const activeThreadMode = useThreadStore((s) => s.activeThread?.mode);
+  const activeThreadBranch = useThreadStore((s) => s.activeThread?.branch);
+  const activeThreadBaseBranch = useThreadStore((s) => s.activeThread?.baseBranch);
   const [newThreadBranches, setNewThreadBranches] = useState<string[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [images, setImages] = useState<ImageAttachment[]>([]);
   const [sendToBacklog, setSendToBacklog] = useState(false);
-  const [localCurrentBranch, setLocalCurrentBranch] = useState<string | null>(null);
+  const [_localCurrentBranch, setLocalCurrentBranch] = useState<string | null>(null);
   // Git remote origin URL
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
   // For existing threads in local mode: allow creating a worktree
-  const [createWorktreeForFollowUp, setCreateWorktreeForFollowUp] = useState(false);
+  const [createWorktreeForFollowUp, _setCreateWorktreeForFollowUp] = useState(false);
   const [followUpBranches, setFollowUpBranches] = useState<string[]>([]);
   const [followUpSelectedBranch, setFollowUpSelectedBranch] = useState<string>('');
-
 
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   const textareaCallbackRef = useCallback((node: HTMLTextAreaElement | null) => {
@@ -471,9 +455,9 @@ export const PromptInput = memo(function PromptInput({
   const mentionStartPosRef = useRef<number>(-1);
   const loadFilesTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
-  const projects = useProjectStore(s => s.projects);
-  const selectedProjectId = useProjectStore(s => s.selectedProjectId);
-  const selectedThreadId = useThreadStore(s => s.selectedThreadId);
+  const projects = useProjectStore((s) => s.projects);
+  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
 
   // Draft persistence across thread switches
   const { setPromptDraft, clearPromptDraft } = useDraftStore();
@@ -512,6 +496,7 @@ export const PromptInput = memo(function PromptInput({
       setImages([]);
       setSelectedFiles([]);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only save/restore drafts on thread switch; prompt/images/selectedFiles are read via refs to avoid re-runs on every keystroke
   }, [selectedThreadId]);
 
   // Save draft when the component unmounts (e.g. navigating to AllThreadsView)
@@ -527,12 +512,12 @@ export const PromptInput = memo(function PromptInput({
         setPromptDraft(threadId, currentPrompt, imagesRef.current, selectedFilesRef.current);
       }
     };
-  }, []);
+  }, [setPromptDraft]);
 
   // Derive project path and manage cwd override
   const projectPath = useMemo(
-    () => selectedProjectId ? projects.find((p) => p.id === selectedProjectId)?.path ?? '' : '',
-    [selectedProjectId, projects]
+    () => (selectedProjectId ? (projects.find((p) => p.id === selectedProjectId)?.path ?? '') : ''),
+    [selectedProjectId, projects],
   );
   const [cwdOverride, setCwdOverride] = useState<string | null>(null);
   const threadCwd = activeThreadWorktreePath || projectPath;
@@ -673,7 +658,7 @@ export const PromptInput = memo(function PromptInput({
 
   // Filtered skills based on what user typed after /
   const filteredSkills = skills.filter((s) =>
-    s.name.toLowerCase().includes(slashFilter.toLowerCase())
+    s.name.toLowerCase().includes(slashFilter.toLowerCase()),
   );
 
   // Detect slash command trigger from prompt text
@@ -704,49 +689,58 @@ export const PromptInput = memo(function PromptInput({
   }, []);
 
   // Load files for @ mention with debounce
-  const loadFiles = useCallback((query: string) => {
-    if (loadFilesTimeoutRef.current) clearTimeout(loadFilesTimeoutRef.current);
-    loadFilesTimeoutRef.current = setTimeout(async () => {
-      const path = cwdOverride || threadCwd;
-      if (!path) return;
-      setMentionLoading(true);
-      const result = await api.browseFiles(path, query || undefined);
-      if (result.isOk()) {
-        setMentionFiles(result.value.files);
-        setMentionTruncated(result.value.truncated);
-      }
-      setMentionLoading(false);
-    }, 150);
-  }, [cwdOverride, threadCwd]);
+  const loadFiles = useCallback(
+    (query: string) => {
+      if (loadFilesTimeoutRef.current) clearTimeout(loadFilesTimeoutRef.current);
+      loadFilesTimeoutRef.current = setTimeout(async () => {
+        const path = cwdOverride || threadCwd;
+        if (!path) return;
+        setMentionLoading(true);
+        const result = await api.browseFiles(path, query || undefined);
+        if (result.isOk()) {
+          setMentionFiles(result.value.files);
+          setMentionTruncated(result.value.truncated);
+        }
+        setMentionLoading(false);
+      }, 150);
+    },
+    [cwdOverride, threadCwd],
+  );
 
   // Handle @ mention trigger detection
-  const handleMentionDetection = useCallback((value: string, cursorPos: number) => {
-    const textBeforeCursor = value.slice(0, cursorPos);
-    const mentionMatch = textBeforeCursor.match(/@([^\s@]*)$/);
-    if (mentionMatch) {
-      const query = mentionMatch[1];
-      setMentionFilter(query);
-      setShowMentionMenu(true);
-      setMentionIndex(0);
-      mentionStartPosRef.current = cursorPos - mentionMatch[0].length;
-      loadFiles(query);
-    } else {
-      setShowMentionMenu(false);
-    }
-  }, [loadFiles]);
+  const handleMentionDetection = useCallback(
+    (value: string, cursorPos: number) => {
+      const textBeforeCursor = value.slice(0, cursorPos);
+      const mentionMatch = textBeforeCursor.match(/@([^\s@]*)$/);
+      if (mentionMatch) {
+        const query = mentionMatch[1];
+        setMentionFilter(query);
+        setShowMentionMenu(true);
+        setMentionIndex(0);
+        mentionStartPosRef.current = cursorPos - mentionMatch[0].length;
+        loadFiles(query);
+      } else {
+        setShowMentionMenu(false);
+      }
+    },
+    [loadFiles],
+  );
 
   // Select a file from the mention menu (rerender-functional-setstate)
-  const selectMentionFile = useCallback((filePath: string) => {
-    const startPos = mentionStartPosRef.current;
-    setPrompt(prev => {
-      const before = prev.slice(0, startPos);
-      const afterCursor = prev.slice(startPos + mentionFilter.length + 1); // +1 for @
-      return `${before}@${filePath} ${afterCursor}`;
-    });
-    setSelectedFiles(prev => prev.includes(filePath) ? prev : [...prev, filePath]);
-    setShowMentionMenu(false);
-    textareaRef.current?.focus();
-  }, [mentionFilter]);
+  const selectMentionFile = useCallback(
+    (filePath: string) => {
+      const startPos = mentionStartPosRef.current;
+      setPrompt((prev) => {
+        const before = prev.slice(0, startPos);
+        const afterCursor = prev.slice(startPos + mentionFilter.length + 1); // +1 for @
+        return `${before}@${filePath} ${afterCursor}`;
+      });
+      setSelectedFiles((prev) => (prev.includes(filePath) ? prev : [...prev, filePath]));
+      setShowMentionMenu(false);
+      textareaRef.current?.focus();
+    },
+    [mentionFilter],
+  );
 
   // Scroll mention menu selection into view
   useEffect(() => {
@@ -793,7 +787,8 @@ export const PromptInput = memo(function PromptInput({
     // Capture current values and clear immediately for responsive UX
     const submittedPrompt = prompt;
     const submittedImages = images.length > 0 ? images : undefined;
-    const submittedFiles = selectedFiles.length > 0 ? selectedFiles.map(p => ({ path: p })) : undefined;
+    const submittedFiles =
+      selectedFiles.length > 0 ? selectedFiles.map((p) => ({ path: p })) : undefined;
     setPrompt('');
     setImages([]);
     setSelectedFiles([]);
@@ -808,22 +803,25 @@ export const PromptInput = memo(function PromptInput({
         model,
         mode,
         ...(isNewThread
-          ? { threadMode: createWorktree ? 'worktree' : 'local', baseBranch: selectedBranch || undefined, sendToBacklog }
+          ? {
+              threadMode: createWorktree ? 'worktree' : 'local',
+              baseBranch: selectedBranch || undefined,
+              sendToBacklog,
+            }
           : createWorktreeForFollowUp
             ? { threadMode: 'worktree', baseBranch: followUpSelectedBranch || undefined }
-            : { baseBranch: followUpSelectedBranch || undefined }
-        ),
+            : { baseBranch: followUpSelectedBranch || undefined }),
         cwd: cwdOverride || undefined,
         fileReferences: submittedFiles,
       },
-      submittedImages
+      submittedImages,
     );
     if (result === false) {
       // Restore on failure
       hasSubmittedRef.current = false;
       setPrompt(submittedPrompt);
       setImages(submittedImages ?? []);
-      setSelectedFiles(submittedFiles?.map(f => f.path) ?? []);
+      setSelectedFiles(submittedFiles?.map((f) => f.path) ?? []);
     }
   };
 
@@ -954,9 +952,9 @@ export const PromptInput = memo(function PromptInput({
 
           // Add to selected files if not already added
           if (!selectedFiles.includes(filePath)) {
-            setSelectedFiles(prev => [...prev, filePath]);
+            setSelectedFiles((prev) => [...prev, filePath]);
             // Optionally add to prompt text as well
-            setPrompt(prev => prev ? `${prev} @${filePath}` : `@${filePath}`);
+            setPrompt((prev) => (prev ? `${prev} @${filePath}` : `@${filePath}`));
           }
         }
       }
@@ -984,14 +982,17 @@ export const PromptInput = memo(function PromptInput({
         const base64 = (reader.result as string).split(',')[1];
         const mediaType = file.type as ImageAttachment['source']['media_type'];
 
-        setImages(prev => [...prev, {
-          type: 'image',
-          source: {
-            type: 'base64',
-            media_type: mediaType,
-            data: base64,
+        setImages((prev) => [
+          ...prev,
+          {
+            type: 'image',
+            source: {
+              type: 'base64',
+              media_type: mediaType,
+              data: base64,
+            },
           },
-        }]);
+        ]);
         resolve();
       };
       reader.onerror = reject;
@@ -1000,29 +1001,32 @@ export const PromptInput = memo(function PromptInput({
   };
 
   const removeImage = (index: number) => {
-    setImages(prev => prev.filter((_, i) => i !== index));
+    setImages((prev) => prev.filter((_, i) => i !== index));
   };
 
   const defaultPlaceholder = placeholder ?? t('thread.describeTaskDefault');
 
   return (
-    <div className="py-3 border-border px-4">
-      <div className="w-full mx-auto max-w-3xl min-w-0">
+    <div className="border-border px-4 py-3">
+      <div className="mx-auto w-full min-w-0 max-w-3xl">
         {/* Image previews */}
         {images.length > 0 && (
-          <div className="flex flex-wrap gap-2 mb-2">
+          <div className="mb-2 flex flex-wrap gap-2">
             {images.map((img, idx) => (
-              <div key={idx} className="relative group">
+              <div key={`preview-${idx}`} className="group relative">
                 <img
                   src={`data:${img.source.media_type};base64,${img.source.data}`}
                   alt={`Attachment ${idx + 1}`}
-                  className="h-20 max-w-48 object-contain rounded border border-input cursor-pointer hover:opacity-80 transition-opacity"
-                  onClick={() => { setLightboxIndex(idx); setLightboxOpen(true); }}
+                  className="h-20 max-w-48 cursor-pointer rounded border border-input object-contain transition-opacity hover:opacity-80"
+                  onClick={() => {
+                    setLightboxIndex(idx);
+                    setLightboxOpen(true);
+                  }}
                 />
                 <button
                   onClick={() => removeImage(idx)}
                   aria-label={t('prompt.removeImage', 'Remove image')}
-                  className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  className="absolute -right-1 -top-1 rounded-full bg-destructive p-0.5 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
                   disabled={loading}
                 >
                   <X className="h-3 w-3" />
@@ -1046,10 +1050,10 @@ export const PromptInput = memo(function PromptInput({
         {/* Textarea + bottom toolbar */}
         <div
           className={cn(
-            "relative rounded-md border bg-background",
+            'relative rounded-md border bg-background',
             isDragging
-              ? "border-primary border-2 ring-2 ring-primary/20"
-              : "border-input focus-within:border-ring"
+              ? 'border-primary border-2 ring-2 ring-primary/20'
+              : 'border-input focus-within:border-ring',
           )}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -1059,7 +1063,7 @@ export const PromptInput = memo(function PromptInput({
           {showMentionMenu && (
             <div
               ref={mentionMenuRef}
-              className="absolute bottom-full left-0 mb-1 w-full max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md z-50"
+              className="absolute bottom-full left-0 z-50 mb-1 max-h-52 w-full overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md"
             >
               {mentionLoading && mentionFiles.length === 0 ? (
                 <div className="px-3 py-2 text-xs text-muted-foreground">
@@ -1077,7 +1081,7 @@ export const PromptInput = memo(function PromptInput({
                       className={cn(
                         'w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent transition-colors',
                         i === mentionIndex && 'bg-accent',
-                        selectedFiles.includes(file) && 'text-primary'
+                        selectedFiles.includes(file) && 'text-primary',
                       )}
                       onMouseDown={(e) => {
                         e.preventDefault();
@@ -1086,11 +1090,11 @@ export const PromptInput = memo(function PromptInput({
                       onMouseEnter={() => setMentionIndex(i)}
                     >
                       <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      <span className="font-mono text-xs truncate">{file}</span>
+                      <span className="truncate font-mono text-xs">{file}</span>
                     </button>
                   ))}
                   {mentionTruncated && (
-                    <div className="px-3 py-1.5 text-xs text-muted-foreground border-t border-border">
+                    <div className="border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
                       {t('prompt.moreFilesHint', 'Type to narrow results\u2026')}
                     </div>
                   )}
@@ -1102,7 +1106,7 @@ export const PromptInput = memo(function PromptInput({
           {showSlashMenu && (
             <div
               ref={slashMenuRef}
-              className="absolute bottom-full left-0 mb-1 w-full max-h-52 overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md z-50"
+              className="absolute bottom-full left-0 z-50 mb-1 max-h-52 w-full overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md"
             >
               {filteredSkills.length === 0 ? (
                 <div className="px-3 py-2 text-xs text-muted-foreground">
@@ -1114,7 +1118,7 @@ export const PromptInput = memo(function PromptInput({
                     key={skill.name}
                     className={cn(
                       'w-full flex items-start gap-2 px-3 py-2 text-left text-sm hover:bg-accent transition-colors',
-                      i === slashIndex && 'bg-accent'
+                      i === slashIndex && 'bg-accent',
                     )}
                     onMouseDown={(e) => {
                       e.preventDefault(); // prevent textarea blur
@@ -1122,11 +1126,13 @@ export const PromptInput = memo(function PromptInput({
                     }}
                     onMouseEnter={() => setSlashIndex(i)}
                   >
-                    <Zap className="h-4 w-4 mt-0.5 shrink-0 text-muted-foreground" />
+                    <Zap className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
                     <div className="min-w-0">
-                      <div className="font-medium font-mono text-xs">/{skill.name}</div>
+                      <div className="font-mono text-xs font-medium">/{skill.name}</div>
                       {skill.description && (
-                        <div className="text-xs text-muted-foreground truncate">{skill.description}</div>
+                        <div className="truncate text-xs text-muted-foreground">
+                          {skill.description}
+                        </div>
                       )}
                     </div>
                   </button>
@@ -1137,9 +1143,15 @@ export const PromptInput = memo(function PromptInput({
           <textarea
             ref={textareaCallbackRef}
             aria-label={t('prompt.messageLabel', 'Message')}
-            className="w-full px-3 py-2 text-sm bg-transparent text-foreground placeholder:text-muted-foreground focus:outline-none resize-none"
+            className="w-full resize-none bg-transparent px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
             style={{ minHeight: '4.5rem' }}
-            placeholder={running ? (isQueueMode ? t('thread.typeToQueue') : t('thread.typeToInterrupt')) : defaultPlaceholder}
+            placeholder={
+              running
+                ? isQueueMode
+                  ? t('thread.typeToQueue')
+                  : t('thread.typeToInterrupt')
+                : defaultPlaceholder
+            }
             value={prompt}
             onChange={(e) => {
               const value = e.target.value;
@@ -1154,19 +1166,19 @@ export const PromptInput = memo(function PromptInput({
           />
           {/* Selected file mention chips */}
           {selectedFiles.length > 0 && (
-            <div className="px-2 py-1 flex flex-wrap gap-1 border-t border-border/50">
+            <div className="flex flex-wrap gap-1 border-t border-border/50 px-2 py-1">
               {selectedFiles.map((file) => (
                 <span
                   key={file}
-                  className="inline-flex items-center gap-1 px-1.5 py-0.5 text-xs font-mono bg-muted rounded text-muted-foreground"
+                  className="inline-flex items-center gap-1 rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground"
                   title={file}
                 >
                   <FileText className="h-3 w-3 shrink-0" />
                   {file.split('/').pop()}
                   <button
-                    onClick={() => setSelectedFiles(prev => prev.filter(f => f !== file))}
+                    onClick={() => setSelectedFiles((prev) => prev.filter((f) => f !== file))}
                     aria-label={t('prompt.removeFile', 'Remove file')}
-                    className="hover:text-destructive ml-0.5"
+                    className="ml-0.5 hover:text-destructive"
                   >
                     <X className="h-3 w-3" />
                   </button>
@@ -1186,7 +1198,7 @@ export const PromptInput = memo(function PromptInput({
           />
           {/* Bottom toolbar — single row */}
           <div className="px-2 py-2.5">
-            <div className="flex items-center gap-1 overflow-x-auto no-scrollbar h-9">
+            <div className="no-scrollbar flex h-9 items-center gap-1 overflow-x-auto">
               <Button
                 onClick={() => fileInputRef.current?.click()}
                 variant="ghost"
@@ -1199,7 +1211,10 @@ export const PromptInput = memo(function PromptInput({
                 <Paperclip className="h-4 w-4" />
               </Button>
               <Select value={mode} onValueChange={setMode}>
-                <SelectTrigger tabIndex={-1} className="h-7 w-auto min-w-0 text-xs border-0 bg-transparent shadow-none text-muted-foreground hover:bg-accent hover:text-accent-foreground shrink-0">
+                <SelectTrigger
+                  tabIndex={-1}
+                  className="h-7 w-auto min-w-0 shrink-0 border-0 bg-transparent text-xs text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground"
+                >
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -1211,15 +1226,20 @@ export const PromptInput = memo(function PromptInput({
                 </SelectContent>
               </Select>
               {/* Model + send — always visible, pushed right */}
-              <div className="flex items-center gap-1 ml-auto shrink-0">
+              <div className="ml-auto flex shrink-0 items-center gap-1">
                 <Select value={unifiedModel} onValueChange={setUnifiedModel}>
-                  <SelectTrigger tabIndex={-1} className="h-7 w-auto min-w-0 text-xs border-0 bg-transparent shadow-none text-muted-foreground hover:bg-accent hover:text-accent-foreground shrink-0">
+                  <SelectTrigger
+                    tabIndex={-1}
+                    className="h-7 w-auto min-w-0 shrink-0 border-0 bg-transparent text-xs text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground"
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     {unifiedModelGroups.map((group) => (
                       <div key={group.provider}>
-                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">{group.providerLabel}</div>
+                        <div className="px-2 py-1.5 text-xs font-semibold text-muted-foreground">
+                          {group.providerLabel}
+                        </div>
                         {group.models.map((m) => (
                           <SelectItem key={m.value} value={m.value}>
                             {m.label}
@@ -1230,7 +1250,7 @@ export const PromptInput = memo(function PromptInput({
                   </SelectContent>
                 </Select>
                 {queuedCount > 0 && (
-                  <span className="inline-flex items-center px-1.5 py-0.5 text-xs font-medium rounded bg-muted text-muted-foreground">
+                  <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
                     {queuedCount} {t('prompt.queued')}
                   </span>
                 )}
@@ -1250,7 +1270,11 @@ export const PromptInput = memo(function PromptInput({
                     disabled={loading}
                     size="icon-sm"
                     tabIndex={-1}
-                    aria-label={running && isQueueMode ? t('prompt.queueMessage') : t('prompt.send', 'Send message')}
+                    aria-label={
+                      running && isQueueMode
+                        ? t('prompt.queueMessage')
+                        : t('prompt.send', 'Send message')
+                    }
                   >
                     {loading ? (
                       <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1265,9 +1289,9 @@ export const PromptInput = memo(function PromptInput({
           {/* Separator + Bottom bar — different content for new thread vs follow-up */}
           <div className="border-t border-border px-2 py-1.5">
             {isNewThread ? (
-              <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+              <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
                 {remoteUrl && (
-                  <span className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground truncate max-w-[200px] shrink-0">
+                  <span className="flex max-w-[200px] shrink-0 items-center gap-1 truncate px-2 py-1 text-xs text-muted-foreground">
                     {remoteUrl.includes('github.com') ? (
                       <Github className="h-3 w-3 shrink-0" />
                     ) : (
@@ -1283,7 +1307,7 @@ export const PromptInput = memo(function PromptInput({
                     onChange={setSelectedBranch}
                   />
                 )}
-                <label className="flex items-center gap-1.5 text-xs text-muted-foreground shrink-0 cursor-pointer">
+                <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
                   <Switch
                     checked={createWorktree}
                     onCheckedChange={setCreateWorktree}
@@ -1300,7 +1324,7 @@ export const PromptInput = memo(function PromptInput({
                       'flex items-center gap-1 px-2 py-1 text-xs rounded transition-colors shrink-0 ml-auto',
                       sendToBacklog
                         ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted'
+                        : 'text-muted-foreground hover:text-foreground hover:bg-muted',
                     )}
                     title={t('prompt.sendToBacklog')}
                   >
@@ -1312,14 +1336,17 @@ export const PromptInput = memo(function PromptInput({
             ) : (
               <div className="flex flex-col gap-1">
                 {effectiveCwd && (
-                  <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
-                    <span className="group/cwd flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground truncate max-w-[400px] shrink-0">
+                  <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
+                    <span className="group/cwd flex max-w-[400px] shrink-0 items-center gap-1 truncate px-2 py-1 text-xs text-muted-foreground">
                       <FolderOpen className="h-3 w-3 shrink-0" />
                       <span className="truncate font-mono">{effectiveCwd}</span>
                       <button
                         type="button"
-                        className="shrink-0 hover:text-foreground transition-colors opacity-0 group-hover/cwd:opacity-100"
-                        onClick={() => { navigator.clipboard.writeText(effectiveCwd); toast.success('Path copied'); }}
+                        className="shrink-0 opacity-0 transition-colors hover:text-foreground group-hover/cwd:opacity-100"
+                        onClick={() => {
+                          navigator.clipboard.writeText(effectiveCwd);
+                          toast.success('Path copied');
+                        }}
                       >
                         <Copy className="h-3 w-3" />
                       </button>
@@ -1327,7 +1354,7 @@ export const PromptInput = memo(function PromptInput({
                   </div>
                 )}
                 {(followUpBranches.length > 0 || activeThreadBranch) && (
-                  <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                  <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
                     {followUpBranches.length > 0 && (
                       <BranchPicker
                         branches={followUpBranches}
@@ -1336,16 +1363,21 @@ export const PromptInput = memo(function PromptInput({
                       />
                     )}
                     {activeThreadBranch && followUpBranches.length > 0 && (
-                      <ArrowLeft className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <ArrowLeft className="h-3 w-3 shrink-0 text-muted-foreground" />
                     )}
                     {activeThreadBranch && (
                       <button
                         type="button"
-                        className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground shrink-0 rounded hover:bg-muted transition-colors"
-                        onClick={() => { navigator.clipboard.writeText(activeThreadBranch); toast.success(t('prompt.branchCopied', 'Branch copied')); }}
+                        className="flex shrink-0 items-center gap-1 rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted"
+                        onClick={() => {
+                          navigator.clipboard.writeText(activeThreadBranch);
+                          toast.success(t('prompt.branchCopied', 'Branch copied'));
+                        }}
                       >
                         <GitBranch className="h-3 w-3 shrink-0" />
-                        <span className="font-mono font-medium text-foreground">{activeThreadBranch}</span>
+                        <span className="font-mono font-medium text-foreground">
+                          {activeThreadBranch}
+                        </span>
                       </button>
                     )}
                   </div>

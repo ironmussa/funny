@@ -1,13 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { FolderPicker } from './FolderPicker';
-import { api } from '@/lib/api';
-import { toast } from 'sonner';
-import { useAppStore } from '@/stores/app-store';
+import type { GitHubRepo } from '@funny/shared';
 import {
   Github,
   Copy,
@@ -21,24 +12,39 @@ import {
   Check,
   LogOut,
 } from 'lucide-react';
-import type { GitHubRepo } from '@funny/shared';
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
+
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { api } from '@/lib/api';
+import { useAppStore } from '@/stores/app-store';
+
+import { FolderPicker } from './FolderPicker';
 
 type ViewState = 'checking' | 'connect' | 'device-flow' | 'repos' | 'clone-config' | 'cloning';
 
 export function CloneRepoView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const loadProjects = useAppStore(s => s.loadProjects);
-  const setAddProjectOpen = useAppStore(s => s.setAddProjectOpen);
+  const loadProjects = useAppStore((s) => s.loadProjects);
+  const setAddProjectOpen = useAppStore((s) => s.setAddProjectOpen);
 
   const [view, setView] = useState<ViewState>('checking');
-  const [ghUser, setGhUser] = useState<{ login: string; avatar_url: string; name: string | null } | null>(null);
+  const [ghUser, setGhUser] = useState<{
+    login: string;
+    avatar_url: string;
+    name: string | null;
+  } | null>(null);
 
   // Device flow state
-  const [deviceCode, setDeviceCode] = useState('');
+  const [_deviceCode, setDeviceCode] = useState('');
   const [userCode, setUserCode] = useState('');
   const [verificationUri, setVerificationUri] = useState('');
-  const [pollInterval, setPollInterval] = useState(5);
+  const [_pollInterval, setPollInterval] = useState(5);
   const [codeCopied, setCodeCopied] = useState(false);
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -54,7 +60,7 @@ export function CloneRepoView() {
   const [destinationPath, setDestinationPath] = useState('');
   const [projectName, setProjectName] = useState('');
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
-  const [isCloning, setIsCloning] = useState(false);
+  const [_isCloning, setIsCloning] = useState(false);
 
   // Search debounce
   const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -89,7 +95,7 @@ export function CloneRepoView() {
       sort: 'updated',
     });
     if (result.isOk()) {
-      setRepos(prev => append ? [...prev, ...result.value.repos] : result.value.repos);
+      setRepos((prev) => (append ? [...prev, ...result.value.repos] : result.value.repos));
       setHasMore(result.value.hasMore);
     }
     setLoadingRepos(false);
@@ -110,7 +116,9 @@ export function CloneRepoView() {
       setPage(1);
       fetchRepos(search, 1);
     }, 300);
-    return () => { if (searchTimerRef.current) clearTimeout(searchTimerRef.current); };
+    return () => {
+      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
+    };
   }, [search, view, fetchRepos]);
 
   // Cleanup poll timer on unmount
@@ -143,26 +151,33 @@ export function CloneRepoView() {
   const startPolling = (code: string, interval: number) => {
     if (pollTimerRef.current) clearInterval(pollTimerRef.current);
 
-    pollTimerRef.current = setInterval(async () => {
-      const result = await api.githubPoll(code);
-      if (result.isErr()) return;
+    pollTimerRef.current = setInterval(
+      async () => {
+        const result = await api.githubPoll(code);
+        if (result.isErr()) return;
 
-      const data = result.value;
-      if (data.status === 'success') {
-        if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-        await loadGhUser();
-        setView('repos');
-        toast.success(t('github.connected', { login: '' }));
-      } else if (data.status === 'expired' || data.status === 'denied') {
-        if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-        toast.error(data.status === 'expired' ? t('github.deviceFlow.expired') : t('github.deviceFlow.denied'));
-        setView('connect');
-      } else if (data.interval) {
-        // slow_down: increase interval
-        if (pollTimerRef.current) clearInterval(pollTimerRef.current);
-        startPolling(code, data.interval);
-      }
-    }, (interval + 1) * 1000);
+        const data = result.value;
+        if (data.status === 'success') {
+          if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+          await loadGhUser();
+          setView('repos');
+          toast.success(t('github.connected', { login: '' }));
+        } else if (data.status === 'expired' || data.status === 'denied') {
+          if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+          toast.error(
+            data.status === 'expired'
+              ? t('github.deviceFlow.expired')
+              : t('github.deviceFlow.denied'),
+          );
+          setView('connect');
+        } else if (data.interval) {
+          // slow_down: increase interval
+          if (pollTimerRef.current) clearInterval(pollTimerRef.current);
+          startPolling(code, data.interval);
+        }
+      },
+      (interval + 1) * 1000,
+    );
   };
 
   // ── Copy user code ─────────────────────────────
@@ -240,17 +255,15 @@ export function CloneRepoView() {
   if (view === 'connect') {
     return (
       <div className="flex flex-col items-center gap-4 py-8">
-        <div className="w-12 h-12 rounded-full bg-muted flex items-center justify-center">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
           <Github className="h-6 w-6" />
         </div>
-        <div className="text-center space-y-1">
+        <div className="space-y-1 text-center">
           <h3 className="font-medium">{t('github.connectGithub')}</h3>
-          <p className="text-sm text-muted-foreground max-w-xs">
-            {t('github.connectDesc')}
-          </p>
+          <p className="max-w-xs text-sm text-muted-foreground">{t('github.connectDesc')}</p>
         </div>
         <Button onClick={startDeviceFlow}>
-          <Github className="h-4 w-4 mr-2" />
+          <Github className="mr-2 h-4 w-4" />
           {t('github.connectGithub')}
         </Button>
       </div>
@@ -261,16 +274,14 @@ export function CloneRepoView() {
   if (view === 'device-flow') {
     return (
       <div className="flex flex-col items-center gap-5 py-8">
-        <div className="text-center space-y-1">
+        <div className="space-y-1 text-center">
           <h3 className="font-medium">{t('github.deviceFlow.title')}</h3>
-          <p className="text-sm text-muted-foreground">
-            {t('github.deviceFlow.desc')}
-          </p>
+          <p className="text-sm text-muted-foreground">{t('github.deviceFlow.desc')}</p>
         </div>
 
         {/* User code display */}
         <div className="flex items-center gap-2">
-          <code className="text-2xl font-mono font-bold tracking-widest bg-muted px-4 py-2 rounded-md">
+          <code className="rounded-md bg-muted px-4 py-2 font-mono text-2xl font-bold tracking-widest">
             {userCode}
           </code>
           <Button variant="outline" size="sm" onClick={copyCode}>
@@ -279,11 +290,8 @@ export function CloneRepoView() {
         </div>
 
         <div className="flex gap-2">
-          <Button
-            variant="outline"
-            onClick={() => window.open(verificationUri, '_blank')}
-          >
-            <ExternalLink className="h-4 w-4 mr-2" />
+          <Button variant="outline" onClick={() => window.open(verificationUri, '_blank')}>
+            <ExternalLink className="mr-2 h-4 w-4" />
             {t('github.deviceFlow.openGithub')}
           </Button>
         </div>
@@ -311,15 +319,11 @@ export function CloneRepoView() {
   // Repo browser state
   if (view === 'repos') {
     return (
-      <div className="flex flex-col h-full">
+      <div className="flex h-full flex-col">
         {/* Header with user info */}
         {ghUser && (
-          <div className="flex items-center gap-2 mb-3">
-            <img
-              src={ghUser.avatar_url}
-              alt={ghUser.login}
-              className="h-6 w-6 rounded-full"
-            />
+          <div className="mb-3 flex items-center gap-2">
+            <img src={ghUser.avatar_url} alt={ghUser.login} className="h-6 w-6 rounded-full" />
             <span className="text-sm font-medium">{ghUser.login}</span>
             <Button
               variant="ghost"
@@ -327,7 +331,7 @@ export function CloneRepoView() {
               className="ml-auto h-7 text-xs text-muted-foreground"
               onClick={disconnect}
             >
-              <LogOut className="h-3 w-3 mr-1" />
+              <LogOut className="mr-1 h-3 w-3" />
               {t('github.disconnect')}
             </Button>
           </div>
@@ -335,9 +339,9 @@ export function CloneRepoView() {
 
         {/* Search */}
         <div className="relative mb-3">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
-            className="w-full h-auto pl-8 pr-3 py-1.5"
+            className="h-auto w-full py-1.5 pl-8 pr-3"
             placeholder={t('github.repos.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
@@ -345,23 +349,23 @@ export function CloneRepoView() {
         </div>
 
         {/* Repo list */}
-        <ScrollArea className="flex-1 -mx-1">
+        <ScrollArea className="-mx-1 flex-1">
           {repos.map((repo) => (
             <button
               key={repo.id}
               onClick={() => selectRepo(repo)}
-              className="w-full flex flex-col gap-0.5 rounded-md px-3 py-2 text-left hover:bg-accent transition-colors"
+              className="flex w-full flex-col gap-0.5 rounded-md px-3 py-2 text-left transition-colors hover:bg-accent"
             >
               <div className="flex items-center gap-2">
-                <span className="text-sm font-medium truncate">{repo.full_name}</span>
+                <span className="truncate text-sm font-medium">{repo.full_name}</span>
                 {repo.private ? (
-                  <Lock className="h-3 w-3 text-status-pending flex-shrink-0" />
+                  <Lock className="h-3 w-3 flex-shrink-0 text-status-pending" />
                 ) : (
-                  <Globe className="h-3 w-3 text-muted-foreground flex-shrink-0" />
+                  <Globe className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
                 )}
               </div>
               {repo.description && (
-                <p className="text-xs text-muted-foreground truncate">{repo.description}</p>
+                <p className="truncate text-xs text-muted-foreground">{repo.description}</p>
               )}
               <div className="flex items-center gap-3 text-xs text-muted-foreground">
                 {repo.language && <span>{repo.language}</span>}
@@ -377,7 +381,7 @@ export function CloneRepoView() {
           )}
 
           {!loadingRepos && repos.length === 0 && (
-            <p className="text-sm text-muted-foreground text-center py-8">
+            <p className="py-8 text-center text-sm text-muted-foreground">
               {t('github.repos.noRepos')}
             </p>
           )}
@@ -409,15 +413,15 @@ export function CloneRepoView() {
         <Button
           variant="ghost"
           size="sm"
-          className="text-muted-foreground -ml-2"
+          className="-ml-2 text-muted-foreground"
           onClick={() => setView('repos')}
         >
-          <ArrowLeft className="h-3.5 w-3.5 mr-1" />
+          <ArrowLeft className="mr-1 h-3.5 w-3.5" />
           {t('github.repos.title')}
         </Button>
 
         {/* Selected repo */}
-        <div className="rounded-md border border-border p-3 space-y-1">
+        <div className="space-y-1 rounded-md border border-border p-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">{selectedRepo.full_name}</span>
             {selectedRepo.private && <Lock className="h-3 w-3 text-status-pending" />}
@@ -429,7 +433,7 @@ export function CloneRepoView() {
 
         {/* Destination path */}
         <div>
-          <label className="text-sm font-medium mb-1.5 block">
+          <label className="mb-1.5 block text-sm font-medium">
             {t('github.clone.destination')}
           </label>
           <div className="flex gap-2">
@@ -439,11 +443,7 @@ export function CloneRepoView() {
               value={destinationPath}
               onChange={(e) => setDestinationPath(e.target.value)}
             />
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setFolderPickerOpen(true)}
-            >
+            <Button variant="outline" size="sm" onClick={() => setFolderPickerOpen(true)}>
               <FolderOpen className="h-4 w-4" />
             </Button>
           </div>
@@ -451,22 +451,15 @@ export function CloneRepoView() {
 
         {/* Project name */}
         <div>
-          <label className="text-sm font-medium mb-1.5 block">
+          <label className="mb-1.5 block text-sm font-medium">
             {t('github.clone.projectName')}
           </label>
-          <Input
-            value={projectName}
-            onChange={(e) => setProjectName(e.target.value)}
-          />
+          <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} />
         </div>
 
         {/* Actions */}
         <div className="flex gap-2 pt-2">
-          <Button
-            variant="outline"
-            className="flex-1"
-            onClick={() => setView('repos')}
-          >
+          <Button variant="outline" className="flex-1" onClick={() => setView('repos')}>
             {t('common.cancel')}
           </Button>
           <Button

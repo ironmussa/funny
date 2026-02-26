@@ -1,35 +1,25 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import type { Project } from '@funny/shared';
+import { ArrowLeft, Plus, Folder, Loader2, ShieldQuestion } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useAppStore } from '@/stores/app-store';
-import { selectLastMessage } from '@/stores/thread-selectors';
+import { toast } from 'sonner';
+
+import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Toaster } from '@/components/ui/sonner';
 import { useWS } from '@/hooks/use-ws';
 import { initAuth } from '@/lib/api';
 import { api } from '@/lib/api';
-import { cn, TOAST_DURATION } from '@/lib/utils';
 import { resolveModelLabel } from '@/lib/thread-utils';
-import { toast } from 'sonner';
-import { Toaster } from '@/components/ui/sonner';
-import {
-  ArrowLeft,
-  Plus,
-  Folder,
-  Loader2,
-  Clock,
-  Copy,
-  Check,
-  Send,
-  CheckCircle2,
-  XCircle,
-  ShieldQuestion,
-} from 'lucide-react';
+import { cn, TOAST_DURATION } from '@/lib/utils';
+import { useAppStore } from '@/stores/app-store';
+import { selectLastMessage } from '@/stores/thread-selectors';
+
 import { PromptInput } from './PromptInput';
-import { ToolCallCard } from './ToolCallCard';
 import { StatusBadge } from './StatusBadge';
-import { MessageContent, CopyButton, WaitingActions } from './ThreadView';
 import { AgentResultCard, AgentInterruptedCard } from './thread/AgentStatusCards';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { Badge } from '@/components/ui/badge';
-import type { Project, Thread } from '@funny/shared';
+import { MessageContent, CopyButton, WaitingActions } from './ThreadView';
+import { ToolCallCard } from './ToolCallCard';
 
 type MobileView =
   | { screen: 'projects' }
@@ -46,16 +36,18 @@ function D4CAnimation() {
     const id = setInterval(() => setFrame((f) => (f + 1) % D4C_FRAMES.length), D4C_INTERVAL);
     return () => clearInterval(id);
   }, []);
-  return <span className="inline-block text-base leading-none w-5 text-center">{D4C_FRAMES[frame]}</span>;
+  return (
+    <span className="inline-block w-5 text-center text-base leading-none">{D4C_FRAMES[frame]}</span>
+  );
 }
 
 export function MobilePage() {
-  const { t } = useTranslation();
+  const { t: _t } = useTranslation();
   const [view, setView] = useState<MobileView>({ screen: 'projects' });
   const [ready, setReady] = useState(false);
 
-  const loadProjects = useAppStore(s => s.loadProjects);
-  const projects = useAppStore(s => s.projects);
+  const loadProjects = useAppStore((s) => s.loadProjects);
+  const projects = useAppStore((s) => s.projects);
 
   // Connect WebSocket
   useWS();
@@ -69,7 +61,7 @@ export function MobilePage() {
 
   if (!ready) {
     return (
-      <div className="h-[100dvh] flex items-center justify-center bg-background text-foreground">
+      <div className="flex h-[100dvh] items-center justify-center bg-background text-foreground">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
@@ -77,7 +69,7 @@ export function MobilePage() {
 
   return (
     <>
-      <div className="h-[100dvh] flex flex-col bg-background text-foreground overflow-hidden">
+      <div className="flex h-[100dvh] flex-col overflow-hidden bg-background text-foreground">
         {view.screen === 'projects' && (
           <ProjectListView
             projects={projects}
@@ -91,9 +83,7 @@ export function MobilePage() {
             onSelectThread={(threadId) =>
               setView({ screen: 'chat', projectId: view.projectId, threadId })
             }
-            onNewThread={() =>
-              setView({ screen: 'newThread', projectId: view.projectId })
-            }
+            onNewThread={() => setView({ screen: 'newThread', projectId: view.projectId })}
           />
         )}
         {view.screen === 'newThread' && (
@@ -131,26 +121,26 @@ function ProjectListView({
 
   return (
     <>
-      <header className="flex items-center px-4 py-3 border-b border-border shrink-0">
+      <header className="flex shrink-0 items-center border-b border-border px-4 py-3">
         <h1 className="text-base font-semibold">funny</h1>
       </header>
       <div className="flex-1 overflow-y-auto">
         {projects.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm p-4">
+          <div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
             {t('sidebar.noProjects', 'No projects yet. Add one from the desktop app.')}
           </div>
         ) : (
-          <div className="p-2 space-y-1">
+          <div className="space-y-1 p-2">
             {projects.map((project) => (
               <button
                 key={project.id}
                 onClick={() => onSelect(project.id)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-accent active:bg-accent/80 transition-colors"
+                className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-accent active:bg-accent/80"
               >
-                <Folder className="h-5 w-5 text-muted-foreground shrink-0" />
+                <Folder className="h-5 w-5 shrink-0 text-muted-foreground" />
                 <div className="min-w-0">
-                  <div className="text-sm font-medium truncate">{project.name}</div>
-                  <div className="text-xs text-muted-foreground truncate">{project.path}</div>
+                  <div className="truncate text-sm font-medium">{project.name}</div>
+                  <div className="truncate text-xs text-muted-foreground">{project.path}</div>
                 </div>
               </button>
             ))}
@@ -175,11 +165,11 @@ function ThreadListView({
   onNewThread: () => void;
 }) {
   const { t } = useTranslation();
-  const projects = useAppStore(s => s.projects);
-  const threadsByProject = useAppStore(s => s.threadsByProject);
-  const loadThreadsForProject = useAppStore(s => s.loadThreadsForProject);
+  const projects = useAppStore((s) => s.projects);
+  const threadsByProject = useAppStore((s) => s.threadsByProject);
+  const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
 
-  const project = projects.find(p => p.id === projectId);
+  const project = projects.find((p) => p.id === projectId);
   const threads = threadsByProject[projectId] ?? [];
 
   useEffect(() => {
@@ -188,7 +178,7 @@ function ThreadListView({
 
   // Sort: running/waiting first, then by creation date descending
   const sortedThreads = [...threads]
-    .filter(t => !t.archived)
+    .filter((t) => !t.archived)
     .sort((a, b) => {
       const runningStatuses = ['running', 'waiting'];
       const aRunning = runningStatuses.includes(a.status) ? 0 : 1;
@@ -199,16 +189,18 @@ function ThreadListView({
 
   return (
     <>
-      <header className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
-        <button onClick={onBack} aria-label={t('common.back', 'Back')} className="p-1 -ml-1 rounded hover:bg-accent">
+      <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
+        <button
+          onClick={onBack}
+          aria-label={t('common.back', 'Back')}
+          className="-ml-1 rounded p-1 hover:bg-accent"
+        >
           <ArrowLeft className="h-5 w-5" />
         </button>
-        <h1 className="text-base font-semibold truncate flex-1">
-          {project?.name ?? 'Project'}
-        </h1>
+        <h1 className="flex-1 truncate text-base font-semibold">{project?.name ?? 'Project'}</h1>
         <button
           onClick={onNewThread}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-primary-foreground active:bg-primary/80"
+          className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground active:bg-primary/80"
         >
           <Plus className="h-3.5 w-3.5" />
           {t('sidebar.newThread', 'New')}
@@ -216,21 +208,23 @@ function ThreadListView({
       </header>
       <div className="flex-1 overflow-y-auto">
         {sortedThreads.length === 0 ? (
-          <div className="flex items-center justify-center h-full text-muted-foreground text-sm p-4">
+          <div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
             {t('sidebar.noThreads', 'No threads yet. Create one to start.')}
           </div>
         ) : (
-          <div className="p-2 space-y-1">
+          <div className="space-y-1 p-2">
             {sortedThreads.map((thread) => (
               <button
                 key={thread.id}
                 onClick={() => onSelectThread(thread.id)}
-                className="w-full flex items-center gap-3 px-4 py-3 rounded-lg text-left hover:bg-accent active:bg-accent/80 transition-colors"
+                className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-accent active:bg-accent/80"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="text-sm font-medium truncate">{thread.title}</div>
-                  <div className="text-xs text-muted-foreground mt-0.5">
-                    {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(new Date(thread.createdAt))}
+                  <div className="truncate text-sm font-medium">{thread.title}</div>
+                  <div className="mt-0.5 text-xs text-muted-foreground">
+                    {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
+                      new Date(thread.createdAt),
+                    )}
                   </div>
                 </div>
                 <StatusBadge status={thread.status} />
@@ -255,16 +249,16 @@ function NewThreadView({
   onCreated: (threadId: string) => void;
 }) {
   const { t } = useTranslation();
-  const loadThreadsForProject = useAppStore(s => s.loadThreadsForProject);
-  const projects = useAppStore(s => s.projects);
-  const project = projects.find(p => p.id === projectId);
+  const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
+  const projects = useAppStore((s) => s.projects);
+  const project = projects.find((p) => p.id === projectId);
   const defaultThreadMode = project?.defaultMode ?? 'worktree';
   const [creating, setCreating] = useState(false);
 
   const handleCreate = async (
     prompt: string,
     opts: { model: string; mode: string; threadMode?: string; baseBranch?: string },
-    images?: any[]
+    images?: any[],
   ): Promise<boolean> => {
     if (creating) return false;
     setCreating(true);
@@ -293,17 +287,21 @@ function NewThreadView({
 
   return (
     <>
-      <header className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
-        <button onClick={onBack} aria-label={t('common.back', 'Back')} className="p-1 -ml-1 rounded hover:bg-accent">
+      <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
+        <button
+          onClick={onBack}
+          aria-label={t('common.back', 'Back')}
+          className="-ml-1 rounded p-1 hover:bg-accent"
+        >
           <ArrowLeft className="h-5 w-5" />
         </button>
         <h1 className="text-base font-semibold">{t('thread.newThread', 'New Thread')}</h1>
       </header>
-      <div className="flex-1 flex items-center justify-center text-muted-foreground p-4">
+      <div className="flex flex-1 items-center justify-center p-4 text-muted-foreground">
         <div className="text-center">
-          <p className="text-4xl mb-4">✨</p>
+          <p className="mb-4 text-4xl">✨</p>
           <p className="text-2xl font-semibold text-foreground">{t('thread.whatShouldAgentDo')}</p>
-          <p className="text-sm mt-2">{t('thread.describeTask')}</p>
+          <p className="mt-2 text-sm">{t('thread.describeTask')}</p>
         </div>
       </div>
       <PromptInput
@@ -320,7 +318,7 @@ function NewThreadView({
 // ── Chat View ────────────────────────────────────────────────────
 
 function ChatView({
-  projectId,
+  projectId: _projectId,
   threadId,
   onBack,
 }: {
@@ -329,8 +327,8 @@ function ChatView({
   onBack: () => void;
 }) {
   const { t } = useTranslation();
-  const selectThread = useAppStore(s => s.selectThread);
-  const activeThread = useAppStore(s => s.activeThread);
+  const selectThread = useAppStore((s) => s.selectThread);
+  const activeThread = useAppStore((s) => s.activeThread);
   const [sending, setSending] = useState(false);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const userHasScrolledUp = useRef(false);
@@ -386,7 +384,12 @@ function ChatView({
     const observer = new MutationObserver(() => {
       requestAnimationFrame(scrollToBottom);
     });
-    observer.observe(viewport, { childList: true, subtree: true, attributes: true, characterData: true });
+    observer.observe(viewport, {
+      childList: true,
+      subtree: true,
+      attributes: true,
+      characterData: true,
+    });
 
     const timer = setTimeout(() => observer.disconnect(), 1500);
     return () => {
@@ -395,7 +398,11 @@ function ChatView({
     };
   }, [scrollFingerprint]);
 
-  const handleSend = async (prompt: string, opts: { provider?: string; model: string; mode: string }, images?: any[]) => {
+  const handleSend = async (
+    prompt: string,
+    opts: { provider?: string; model: string; mode: string },
+    images?: any[],
+  ) => {
     if (!activeThread || sending) return;
     setSending(true);
 
@@ -403,15 +410,26 @@ function ChatView({
     userHasScrolledUp.current = false;
     smoothScrollPending.current = true;
 
-    useAppStore.getState().appendOptimisticMessage(
+    useAppStore
+      .getState()
+      .appendOptimisticMessage(
+        activeThread.id,
+        prompt,
+        images,
+        opts.model as any,
+        opts.mode as any,
+      );
+
+    const result = await api.sendMessage(
       activeThread.id,
       prompt,
+      {
+        provider: opts.provider || undefined,
+        model: opts.model || undefined,
+        permissionMode: opts.mode || undefined,
+      },
       images,
-      opts.model as any,
-      opts.mode as any
     );
-
-    const result = await api.sendMessage(activeThread.id, prompt, { provider: opts.provider || undefined, model: opts.model || undefined, permissionMode: opts.mode || undefined }, images);
     if (result.isErr()) {
       console.error('Send failed:', result.error);
     }
@@ -430,12 +448,16 @@ function ChatView({
 
   return (
     <>
-      <header className="flex items-center gap-3 px-4 py-3 border-b border-border shrink-0">
-        <button onClick={onBack} aria-label={t('common.back', 'Back')} className="p-1 -ml-1 rounded hover:bg-accent">
+      <header className="flex shrink-0 items-center gap-3 border-b border-border px-4 py-3">
+        <button
+          onClick={onBack}
+          aria-label={t('common.back', 'Back')}
+          className="-ml-1 rounded p-1 hover:bg-accent"
+        >
           <ArrowLeft className="h-5 w-5" />
         </button>
         <div className="min-w-0 flex-1">
-          <h1 className="text-sm font-semibold truncate">
+          <h1 className="truncate text-sm font-semibold">
             {activeThread?.title ?? t('thread.loading', 'Loading...')}
           </h1>
         </div>
@@ -443,7 +465,7 @@ function ChatView({
       </header>
 
       {!activeThread ? (
-        <div className="flex-1 flex items-center justify-center">
+        <div className="flex flex-1 items-center justify-center">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
         </div>
       ) : (
@@ -451,10 +473,12 @@ function ChatView({
           <ScrollArea className="flex-1 p-3" viewportRef={scrollViewportRef}>
             <div className="space-y-3">
               {activeThread.initInfo && (
-                <div className="rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground space-y-1">
+                <div className="space-y-1 rounded-lg border border-border bg-muted/50 px-3 py-2 text-xs text-muted-foreground">
                   <div className="flex items-center gap-2">
                     <span className="font-medium">{t('initInfo.model')}</span>
-                    <span className="font-mono">{resolveModelLabel(activeThread.initInfo.model, t)}</span>
+                    <span className="font-mono">
+                      {resolveModelLabel(activeThread.initInfo.model, t)}
+                    </span>
                   </div>
                 </div>
               )}
@@ -467,22 +491,22 @@ function ChatView({
                       'relative group rounded-lg px-3 py-2 text-sm w-fit max-w-full',
                       msg.role === 'user'
                         ? 'ml-auto bg-primary text-primary-foreground'
-                        : 'bg-secondary text-secondary-foreground'
+                        : 'bg-secondary text-secondary-foreground',
                     )}
                   >
                     {msg.role !== 'user' && (
-                      <div className="flex items-start gap-2 mb-0.5">
-                        <span className="text-xs font-medium uppercase text-muted-foreground flex-1">
+                      <div className="mb-0.5 flex items-start gap-2">
+                        <span className="flex-1 text-xs font-medium uppercase text-muted-foreground">
                           {msg.role}
                         </span>
                         <CopyButton content={msg.content} />
                       </div>
                     )}
                     {msg.images && msg.images.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mb-2">
+                      <div className="mb-2 flex flex-wrap gap-2">
                         {msg.images.map((img: any, idx: number) => (
                           <img
-                            key={idx}
+                            key={`attachment-${idx}`}
                             src={`data:${img.source.media_type};base64,${img.source.data}`}
                             alt={`Attachment ${idx + 1}`}
                             width={128}
@@ -494,18 +518,24 @@ function ChatView({
                     )}
                     {msg.role === 'user' ? (
                       <>
-                        <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed break-words overflow-x-auto">
+                        <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
                           {msg.content.trim()}
                         </pre>
                         {(msg.model || msg.permissionMode) && (
-                          <div className="flex gap-1 mt-1.5">
+                          <div className="mt-1.5 flex gap-1">
                             {msg.model && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-medium bg-primary-foreground/10 text-primary-foreground/70 border-primary-foreground/20">
+                              <Badge
+                                variant="outline"
+                                className="h-4 border-primary-foreground/20 bg-primary-foreground/10 px-1.5 py-0 text-[10px] font-medium text-primary-foreground/70"
+                              >
                                 {resolveModelLabel(msg.model, t)}
                               </Badge>
                             )}
                             {msg.permissionMode && (
-                              <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 font-medium bg-primary-foreground/10 text-primary-foreground/70 border-primary-foreground/20">
+                              <Badge
+                                variant="outline"
+                                className="h-4 border-primary-foreground/20 bg-primary-foreground/10 px-1.5 py-0 text-[10px] font-medium text-primary-foreground/70"
+                              >
                                 {t(`prompt.${msg.permissionMode}`)}
                               </Badge>
                             )}
@@ -513,7 +543,7 @@ function ChatView({
                         )}
                       </>
                     ) : (
-                      <div className="text-xs leading-relaxed break-words overflow-x-auto">
+                      <div className="overflow-x-auto break-words text-xs leading-relaxed">
                         <MessageContent content={msg.content.trim()} />
                       </div>
                     )}
@@ -525,9 +555,13 @@ function ChatView({
                     name={tc.name}
                     input={tc.input}
                     output={tc.output}
-                    planText={tc.name === 'ExitPlanMode' && msg.content?.trim() ? msg.content.trim() : undefined}
+                    planText={
+                      tc.name === 'ExitPlanMode' && msg.content?.trim()
+                        ? msg.content.trim()
+                        : undefined
+                    }
                     onRespond={
-                      (tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode')
+                      tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode'
                         ? (answer: string) => handleSend(answer, { model: '', mode: '' })
                         : undefined
                     }
@@ -536,33 +570,40 @@ function ChatView({
               ])}
 
               {isRunning && (
-                <div className="flex items-center gap-2.5 text-muted-foreground text-sm py-1">
+                <div className="flex items-center gap-2.5 py-1 text-sm text-muted-foreground">
                   <D4CAnimation />
                   <span className="text-xs">{t('thread.agentWorking')}</span>
                 </div>
               )}
 
               {activeThread.status === 'waiting' && activeThread.waitingReason === 'question' && (
-                <div className="flex items-center gap-2 text-status-warning/80 text-xs">
+                <div className="flex items-center gap-2 text-xs text-status-warning/80">
                   <ShieldQuestion className="h-3.5 w-3.5 animate-pulse" />
                   {t('thread.waitingForResponse')}
                 </div>
               )}
 
-              {activeThread.status === 'waiting' && activeThread.waitingReason !== 'question' && activeThread.waitingReason !== 'plan' && (
-                <WaitingActions
-                  onSend={(text) => handleSend(text, { model: '', mode: '' })}
-                />
-              )}
+              {activeThread.status === 'waiting' &&
+                activeThread.waitingReason !== 'question' &&
+                activeThread.waitingReason !== 'plan' && (
+                  <WaitingActions onSend={(text) => handleSend(text, { model: '', mode: '' })} />
+                )}
 
-              {activeThread.resultInfo && !isRunning && activeThread.status !== 'stopped' && activeThread.status !== 'interrupted' && (
-                <AgentResultCard
-                  status={activeThread.resultInfo.status}
-                  cost={activeThread.resultInfo.cost}
-                  duration={activeThread.resultInfo.duration}
-                  onContinue={activeThread.resultInfo.status === 'failed' ? () => handleSend('Continue', { model: '', mode: '' }) : undefined}
-                />
-              )}
+              {activeThread.resultInfo &&
+                !isRunning &&
+                activeThread.status !== 'stopped' &&
+                activeThread.status !== 'interrupted' && (
+                  <AgentResultCard
+                    status={activeThread.resultInfo.status}
+                    cost={activeThread.resultInfo.cost}
+                    duration={activeThread.resultInfo.duration}
+                    onContinue={
+                      activeThread.resultInfo.status === 'failed'
+                        ? () => handleSend('Continue', { model: '', mode: '' })
+                        : undefined
+                    }
+                  />
+                )}
 
               {activeThread.status === 'interrupted' && (
                 <AgentInterruptedCard
@@ -578,7 +619,7 @@ function ChatView({
             loading={sending}
             running={isRunning}
             placeholder={t('thread.nextPrompt')}
-              />
+          />
         </>
       )}
     </>

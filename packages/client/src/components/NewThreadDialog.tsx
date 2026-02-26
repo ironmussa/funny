@@ -1,12 +1,8 @@
+import { GitBranch, Check, ChevronsUpDown, Search } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useUIStore } from '@/stores/ui-store';
-import { useThreadStore } from '@/stores/thread-store';
-import { useProjectStore } from '@/stores/project-store';
-import { api } from '@/lib/api';
 import { toast } from 'sonner';
-import { GitBranch, Check, ChevronsUpDown, Search } from 'lucide-react';
-import { cn } from '@/lib/utils';
+
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -15,11 +11,9 @@ import {
   DialogTitle,
   DialogFooter,
 } from '@/components/ui/dialog';
-import {
-  Popover,
-  PopoverTrigger,
-  PopoverContent,
-} from '@/components/ui/popover';
+import { Input } from '@/components/ui/input';
+import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -27,19 +21,24 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { api } from '@/lib/api';
 import { PROVIDERS, getModelOptions } from '@/lib/providers';
+import { cn } from '@/lib/utils';
+import { useProjectStore } from '@/stores/project-store';
+import { useThreadStore } from '@/stores/thread-store';
+import { useUIStore } from '@/stores/ui-store';
 
 export function NewThreadDialog() {
   const { t } = useTranslation();
-  const newThreadProjectId = useUIStore(s => s.newThreadProjectId);
-  const cancelNewThread = useUIStore(s => s.cancelNewThread);
-  const loadThreadsForProject = useThreadStore(s => s.loadThreadsForProject);
-  const selectThread = useThreadStore(s => s.selectThread);
+  const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
+  const cancelNewThread = useUIStore((s) => s.cancelNewThread);
+  const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
+  const selectThread = useThreadStore((s) => s.selectThread);
 
-  const projects = useProjectStore(s => s.projects);
-  const project = newThreadProjectId ? projects.find(p => p.id === newThreadProjectId) : undefined;
+  const projects = useProjectStore((s) => s.projects);
+  const project = newThreadProjectId
+    ? projects.find((p) => p.id === newThreadProjectId)
+    : undefined;
   const defaultThreadMode = project?.defaultMode ?? 'worktree';
   const defaultProvider = project?.defaultProvider ?? 'claude';
   const defaultModel = project?.defaultModel ?? 'sonnet';
@@ -58,9 +57,10 @@ export function NewThreadDialog() {
 
   // Reset model when provider changes and current model isn't valid for new provider
   useEffect(() => {
-    if (!models.some(m => m.value === model)) {
+    if (!models.some((m) => m.value === model)) {
       setModel(models[0].value);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only runs when provider changes to reset model; models is derived from provider
   }, [provider]);
 
   // Load branches and detect default branch when dialog opens
@@ -117,15 +117,19 @@ export function NewThreadDialog() {
 
         {/* Branch selector */}
         <div>
-          <label className="text-xs font-medium text-muted-foreground block mb-1">
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">
             {t('newThread.branch', 'Branch')}
           </label>
-          <Popover open={branchOpen} onOpenChange={(v) => { setBranchOpen(v); if (!v) setBranchSearch(''); }}>
+          <Popover
+            open={branchOpen}
+            onOpenChange={(v) => {
+              setBranchOpen(v);
+              if (!v) setBranchSearch('');
+            }}
+          >
             <PopoverTrigger asChild>
-              <button
-                className="w-full flex items-center justify-between rounded-md border border-input bg-background px-3 h-9 text-sm transition-[border-color,box-shadow] duration-150 hover:bg-accent/50 focus:outline-none focus:ring-1 focus:ring-ring"
-              >
-                <div className="flex items-center gap-2 min-w-0">
+              <button className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 text-sm transition-[border-color,box-shadow] duration-150 hover:bg-accent/50 focus:outline-none focus:ring-1 focus:ring-ring">
+                <div className="flex min-w-0 items-center gap-2">
                   <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <span className="truncate">{selectedBranch || t('newThread.selectBranch')}</span>
                 </div>
@@ -133,12 +137,15 @@ export function NewThreadDialog() {
               </button>
             </PopoverTrigger>
             <PopoverContent
-              className="w-[var(--radix-popover-trigger-width)] p-0 flex flex-col overflow-hidden"
+              className="flex w-[var(--radix-popover-trigger-width)] flex-col overflow-hidden p-0"
               style={{ maxHeight: '320px' }}
               align="start"
-              onOpenAutoFocus={(e) => { e.preventDefault(); branchSearchRef.current?.focus(); }}
+              onOpenAutoFocus={(e) => {
+                e.preventDefault();
+                branchSearchRef.current?.focus();
+              }}
             >
-              <div className="flex items-center gap-2 px-3 py-2 border-b border-border">
+              <div className="flex items-center gap-2 border-b border-border px-3 py-2">
                 <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <input
                   ref={branchSearchRef}
@@ -151,31 +158,41 @@ export function NewThreadDialog() {
                   className="w-full bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none"
                 />
               </div>
-              <ScrollArea className="flex-1 min-h-0" style={{ maxHeight: '260px' }} type="always">
+              <ScrollArea className="min-h-0 flex-1" style={{ maxHeight: '260px' }} type="always">
                 <div className="p-1">
                   {branches
-                    .filter((b) => !branchSearch || b.toLowerCase().includes(branchSearch.toLowerCase()))
+                    .filter(
+                      (b) => !branchSearch || b.toLowerCase().includes(branchSearch.toLowerCase()),
+                    )
                     .map((b) => {
                       const isSelected = b === selectedBranch;
                       return (
                         <button
                           key={b}
-                          onClick={() => { setSelectedBranch(b); setBranchOpen(false); setBranchSearch(''); }}
+                          onClick={() => {
+                            setSelectedBranch(b);
+                            setBranchOpen(false);
+                            setBranchSearch('');
+                          }}
                           className={cn(
                             'w-full flex items-center gap-2 rounded px-2 py-1.5 text-left text-sm transition-colors',
                             isSelected
                               ? 'bg-accent text-foreground'
-                              : 'text-muted-foreground hover:bg-accent hover:text-foreground'
+                              : 'text-muted-foreground hover:bg-accent hover:text-foreground',
                           )}
                         >
                           <GitBranch className="h-3.5 w-3.5 shrink-0 text-status-info" />
-                          <span className="font-mono truncate">{b}</span>
-                          {isSelected && <Check className="h-3.5 w-3.5 shrink-0 text-status-info ml-auto" />}
+                          <span className="truncate font-mono">{b}</span>
+                          {isSelected && (
+                            <Check className="ml-auto h-3.5 w-3.5 shrink-0 text-status-info" />
+                          )}
                         </button>
                       );
                     })}
-                  {branches.filter((b) => !branchSearch || b.toLowerCase().includes(branchSearch.toLowerCase())).length === 0 && (
-                    <p className="text-sm text-muted-foreground text-center py-3">
+                  {branches.filter(
+                    (b) => !branchSearch || b.toLowerCase().includes(branchSearch.toLowerCase()),
+                  ).length === 0 && (
+                    <p className="py-3 text-center text-sm text-muted-foreground">
                       {t('newThread.noBranchesMatch', 'No branches match')}
                     </p>
                   )}
@@ -186,7 +203,7 @@ export function NewThreadDialog() {
         </div>
 
         {/* Worktree toggle */}
-        <label className="flex items-center gap-2 cursor-pointer">
+        <label className="flex cursor-pointer items-center gap-2">
           <input
             type="checkbox"
             checked={createWorktree}
@@ -201,7 +218,7 @@ export function NewThreadDialog() {
 
         {/* Provider + Model selector */}
         <div>
-          <label className="text-xs font-medium text-muted-foreground block mb-1">
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">
             {t('newThread.model')}
           </label>
           <div className="flex gap-2">
@@ -234,7 +251,7 @@ export function NewThreadDialog() {
 
         {/* Title */}
         <div>
-          <label className="text-xs font-medium text-muted-foreground block mb-1">
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">
             {t('newThread.titleOptional')}
           </label>
           <Input
@@ -246,11 +263,11 @@ export function NewThreadDialog() {
 
         {/* Prompt */}
         <div>
-          <label className="text-xs font-medium text-muted-foreground block mb-1">
+          <label className="mb-1 block text-xs font-medium text-muted-foreground">
             {t('newThread.prompt')}
           </label>
           <textarea
-            className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground min-h-[120px] resize-y transition-[border-color,box-shadow] duration-150 focus:outline-none focus:ring-1 focus:ring-ring"
+            className="min-h-[120px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             placeholder={t('newThread.promptPlaceholder')}
             value={prompt}
             onChange={(e) => setPrompt(e.target.value)}
@@ -260,16 +277,10 @@ export function NewThreadDialog() {
 
         {/* Actions */}
         <DialogFooter>
-          <Button
-            variant="outline"
-            onClick={() => cancelNewThread()}
-          >
+          <Button variant="outline" onClick={() => cancelNewThread()}>
             {t('common.cancel')}
           </Button>
-          <Button
-            onClick={handleCreate}
-            disabled={!prompt.trim() || creating}
-          >
+          <Button onClick={handleCreate} disabled={!prompt.trim() || creating}>
             {creating ? t('newThread.creating') : t('newThread.create')}
           </Button>
         </DialogFooter>

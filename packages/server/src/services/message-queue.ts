@@ -1,9 +1,8 @@
 import { eq, asc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
-import { db, schema } from '../db/index.js';
-import { log } from '../lib/abbacchio.js';
 
-type QueueRow = typeof schema.messageQueue.$inferSelect;
+import { db, schema } from '../db/index.js';
+import { log } from '../lib/logger.js';
 
 export interface QueueEntry {
   id: string;
@@ -34,11 +33,12 @@ export function enqueue(
     fileReferences?: string;
   },
 ): QueueEntry {
-  const existing = db.select()
+  const existing = db
+    .select()
     .from(schema.messageQueue)
     .where(eq(schema.messageQueue.threadId, threadId))
     .all();
-  const maxOrder = existing.length > 0 ? Math.max(...existing.map(e => e.sortOrder)) : -1;
+  const maxOrder = existing.length > 0 ? Math.max(...existing.map((e) => e.sortOrder)) : -1;
 
   const row: QueueEntry = {
     id: nanoid(),
@@ -62,7 +62,8 @@ export function enqueue(
 
 /** Peek at the next message in the queue without removing it. */
 export function peek(threadId: string): QueueEntry | null {
-  const row = db.select()
+  const row = db
+    .select()
     .from(schema.messageQueue)
     .where(eq(schema.messageQueue.threadId, threadId))
     .orderBy(asc(schema.messageQueue.sortOrder))
@@ -82,7 +83,8 @@ export function dequeue(threadId: string): QueueEntry | null {
 
 /** Remove a specific queued message by ID. */
 export function cancel(messageId: string): boolean {
-  const row = db.select()
+  const row = db
+    .select()
     .from(schema.messageQueue)
     .where(eq(schema.messageQueue.id, messageId))
     .get();
@@ -94,7 +96,8 @@ export function cancel(messageId: string): boolean {
 
 /** List all queued messages for a thread. */
 export function listQueue(threadId: string): QueueEntry[] {
-  return db.select()
+  return db
+    .select()
     .from(schema.messageQueue)
     .where(eq(schema.messageQueue.threadId, threadId))
     .orderBy(asc(schema.messageQueue.sortOrder))
@@ -103,7 +106,8 @@ export function listQueue(threadId: string): QueueEntry[] {
 
 /** Count queued messages for a thread. */
 export function queueCount(threadId: string): number {
-  return db.select()
+  return db
+    .select()
     .from(schema.messageQueue)
     .where(eq(schema.messageQueue.threadId, threadId))
     .all().length;

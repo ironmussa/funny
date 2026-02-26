@@ -1,25 +1,3 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
-import { useAppStore } from '@/stores/app-store';
-import { api } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Trash2,
   Plus,
@@ -28,9 +6,31 @@ import {
   GitFork,
   GitBranch,
   FolderOpen,
-  ChevronDown,
   ChevronUp,
 } from 'lucide-react';
+import { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
+
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { api } from '@/lib/api';
+import { useAppStore } from '@/stores/app-store';
 
 interface WorktreeInfo {
   path: string;
@@ -49,21 +49,21 @@ function WorktreeCard({
   removing: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-md border border-border/50 bg-card">
-      <div className="flex items-center gap-3 min-w-0">
-        <GitFork className="h-4 w-4 text-status-info flex-shrink-0" />
+    <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-card px-3 py-2.5">
+      <div className="flex min-w-0 items-center gap-3">
+        <GitFork className="h-4 w-4 flex-shrink-0 text-status-info" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium truncate">{worktree.branch}</span>
+            <span className="truncate text-sm font-medium">{worktree.branch}</span>
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <FolderOpen className="h-3 w-3 text-muted-foreground/70 flex-shrink-0" />
-            <span className="text-xs text-muted-foreground/70 truncate font-mono">
+          <div className="mt-0.5 flex items-center gap-2">
+            <FolderOpen className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" />
+            <span className="truncate font-mono text-xs text-muted-foreground/70">
               {worktree.path}
             </span>
           </div>
           {worktree.commit && (
-            <span className="text-xs text-muted-foreground/70 font-mono">
+            <span className="font-mono text-xs text-muted-foreground/70">
               {worktree.commit.slice(0, 8)}
             </span>
           )}
@@ -75,7 +75,7 @@ function WorktreeCard({
           size="icon-xs"
           onClick={onRemove}
           disabled={removing}
-          className="text-muted-foreground hover:text-destructive flex-shrink-0"
+          className="flex-shrink-0 text-muted-foreground hover:text-destructive"
         >
           {removing ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -90,8 +90,8 @@ function WorktreeCard({
 
 export function WorktreeSettings() {
   const { t } = useTranslation();
-  const projects = useAppStore(s => s.projects);
-  const selectedProjectId = useAppStore(s => s.selectedProjectId);
+  const projects = useAppStore((s) => s.projects);
+  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
   const [worktrees, setWorktrees] = useState<WorktreeInfo[]>([]);
   const [branches, setBranches] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
@@ -118,6 +118,7 @@ export function WorktreeSettings() {
       setError(result.error.message);
     }
     setLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when project.id changes; project object is derived each render
   }, [project?.id]);
 
   const loadBranches = useCallback(async () => {
@@ -133,6 +134,7 @@ export function WorktreeSettings() {
       console.error('Failed to load branches:', result.error);
       setError(result.error.message || 'Failed to load branches');
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-run when project.id changes; project object is derived each render
   }, [project?.id]);
 
   useEffect(() => {
@@ -200,7 +202,7 @@ export function WorktreeSettings() {
 
       {/* Error banner */}
       {error && (
-        <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-destructive/10 text-destructive text-xs">
+        <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
           <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
           <span>{error}</span>
           <button onClick={() => setError(null)} className="ml-auto text-xs underline">
@@ -211,36 +213,36 @@ export function WorktreeSettings() {
 
       {/* Worktree list */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('worktreeSettings.worktrees')}
           </h3>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setShowCreate(!showCreate)}
-            className="text-xs h-6 px-2"
+            className="h-6 px-2 text-xs"
           >
             {showCreate ? (
-              <ChevronUp className="h-3 w-3 mr-1" />
+              <ChevronUp className="mr-1 h-3 w-3" />
             ) : (
-              <Plus className="h-3 w-3 mr-1" />
+              <Plus className="mr-1 h-3 w-3" />
             )}
             {showCreate ? t('worktreeSettings.cancel') : t('worktreeSettings.createWorktree')}
           </Button>
         </div>
 
         {/* Create form */}
-        {showCreate && (
-          branches.length === 0 ? (
-            <div className="flex items-center gap-2 px-3 py-2 mb-3 rounded-md bg-status-pending/10 text-status-pending/80 text-xs">
+        {showCreate &&
+          (branches.length === 0 ? (
+            <div className="mb-3 flex items-center gap-2 rounded-md bg-status-pending/10 px-3 py-2 text-xs text-status-pending/80">
               <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
               <span>No branches found. Make sure the project has at least one commit.</span>
             </div>
           ) : (
-            <div className="rounded-lg border border-border/50 p-3 mb-3 space-y-3 bg-muted/30">
+            <div className="mb-3 space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">
+                <label className="mb-1 block text-xs text-muted-foreground">
                   {t('worktreeSettings.branchName')}
                 </label>
                 <Input
@@ -254,11 +256,11 @@ export function WorktreeSettings() {
               </div>
 
               <div>
-                <label className="text-xs text-muted-foreground block mb-1">
+                <label className="mb-1 block text-xs text-muted-foreground">
                   {t('worktreeSettings.baseBranch')}
                 </label>
                 <Select value={baseBranch} onValueChange={setBaseBranch}>
-                  <SelectTrigger className="w-full h-8 text-xs">
+                  <SelectTrigger className="h-8 w-full text-xs">
                     <SelectValue placeholder="main (default)" />
                   </SelectTrigger>
                   <SelectContent>
@@ -278,21 +280,20 @@ export function WorktreeSettings() {
                 size="sm"
                 onClick={handleCreate}
                 disabled={!branchName.trim() || creating}
-                className="text-xs h-8 w-full"
+                className="h-8 w-full text-xs"
               >
                 {creating ? (
-                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                 ) : (
-                  <Plus className="h-3 w-3 mr-1" />
+                  <Plus className="mr-1 h-3 w-3" />
                 )}
                 {creating ? t('worktreeSettings.creating') : t('worktreeSettings.createWorktree')}
               </Button>
             </div>
-          )
-        )}
+          ))}
 
         {loading ? (
-          <div className="flex items-center gap-2 py-6 justify-center text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             {t('worktreeSettings.loadingWorktrees')}
           </div>
@@ -315,7 +316,12 @@ export function WorktreeSettings() {
       </div>
 
       {/* Confirm remove dialog */}
-      <Dialog open={!!confirmRemove} onOpenChange={(open) => { if (!open) setConfirmRemove(null); }}>
+      <Dialog
+        open={!!confirmRemove}
+        onOpenChange={(open) => {
+          if (!open) setConfirmRemove(null);
+        }}
+      >
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>{t('dialog.deleteWorktree')}</DialogTitle>

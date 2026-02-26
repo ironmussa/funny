@@ -1,8 +1,10 @@
-import { create } from 'zustand';
 import type { Project } from '@funny/shared';
+import { create } from 'zustand';
+
 import { api } from '@/lib/api';
-import { useThreadStore } from './thread-store';
+
 import { useGitStatusStore } from './git-status-store';
+import { useThreadStore } from './thread-store';
 
 interface ProjectState {
   projects: Project[];
@@ -14,7 +16,18 @@ interface ProjectState {
   toggleProject: (projectId: string) => void;
   selectProject: (projectId: string | null) => void;
   renameProject: (projectId: string, name: string) => Promise<void>;
-  updateProject: (projectId: string, data: { name?: string; color?: string | null; followUpMode?: string; defaultProvider?: string | null; defaultModel?: string | null; defaultMode?: string | null; defaultPermissionMode?: string | null }) => Promise<void>;
+  updateProject: (
+    projectId: string,
+    data: {
+      name?: string;
+      color?: string | null;
+      followUpMode?: string;
+      defaultProvider?: string | null;
+      defaultModel?: string | null;
+      defaultMode?: string | null;
+      defaultPermissionMode?: string | null;
+    },
+  ) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
   reorderProjects: (projectIds: string[]) => Promise<void>;
 }
@@ -44,29 +57,32 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         // in a single set() call to avoid N separate re-renders (one per project).
         // Only fetch git statuses for expanded projects to avoid spawning too many
         // git processes which can crash Bun.
-        const threadStore = useThreadStore.getState();
         Promise.all(
           projects.map(async (p) => {
             const result = await api.listThreads(p.id, true);
             return { projectId: p.id, threads: result.isOk() ? result.value : null };
-          })
-        ).then((results) => {
-          // Batch all thread data into a single store update
-          const threadsByProject: Record<string, any[]> = { ...useThreadStore.getState().threadsByProject };
-          for (const { projectId, threads } of results) {
-            if (threads) threadsByProject[projectId] = threads;
-          }
-          useThreadStore.setState({ threadsByProject });
-
-          // Defer git status fetch for expanded projects
-          const gitStore = useGitStatusStore.getState();
-          const { expandedProjects } = get();
-          for (const p of projects) {
-            if (expandedProjects.has(p.id)) {
-              gitStore.fetchForProject(p.id);
+          }),
+        )
+          .then((results) => {
+            // Batch all thread data into a single store update
+            const threadsByProject: Record<string, any[]> = {
+              ...useThreadStore.getState().threadsByProject,
+            };
+            for (const { projectId, threads } of results) {
+              if (threads) threadsByProject[projectId] = threads;
             }
-          }
-        }).catch(() => {});
+            useThreadStore.setState({ threadsByProject });
+
+            // Defer git status fetch for expanded projects
+            const gitStore = useGitStatusStore.getState();
+            const { expandedProjects } = get();
+            for (const p of projects) {
+              if (expandedProjects.has(p.id)) {
+                gitStore.fetchForProject(p.id);
+              }
+            }
+          })
+          .catch(() => {});
       } finally {
         _loadProjectsPromise = null;
       }
@@ -170,9 +186,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     const { projects } = get();
     // Optimistic update: reorder local array immediately
     const projectMap = new Map(projects.map((p) => [p.id, p]));
-    const reordered = projectIds
-      .map((id) => projectMap.get(id))
-      .filter((p): p is Project => !!p);
+    const reordered = projectIds.map((id) => projectMap.get(id)).filter((p): p is Project => !!p);
 
     set({ projects: reordered });
 

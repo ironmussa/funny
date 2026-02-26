@@ -1,7 +1,7 @@
 import { describe, test, expect } from 'vitest';
 import { createActor } from 'xstate';
+
 import { threadMachine, wsEventToMachineEvent } from '@/machines/thread-machine';
-import type { ThreadEvent } from '@/machines/thread-machine';
 
 /**
  * Helper to create a thread machine actor with default context and start it.
@@ -112,7 +112,7 @@ describe('threadMachine', () => {
   describe('running transitions', () => {
     test('running -> completed on COMPLETE', () => {
       const actor = createThreadActor('running');
-      actor.send({ type: 'COMPLETE', cost: 0.10, duration: 2000 });
+      actor.send({ type: 'COMPLETE', cost: 0.1, duration: 2000 });
       expect(actor.getSnapshot().value).toBe('completed');
       actor.stop();
     });
@@ -254,7 +254,7 @@ describe('threadMachine', () => {
 
     test('waiting -> completed on COMPLETE', () => {
       const actor = createThreadActor('waiting');
-      actor.send({ type: 'COMPLETE', cost: 0.10, duration: 5000 });
+      actor.send({ type: 'COMPLETE', cost: 0.1, duration: 5000 });
       expect(actor.getSnapshot().value).toBe('completed');
       actor.stop();
     });
@@ -439,7 +439,7 @@ describe('threadMachine', () => {
       actor.send({ type: 'START' });
       expect(actor.getSnapshot().value).toBe('running');
 
-      actor.send({ type: 'COMPLETE', cost: 0.10, duration: 2000 });
+      actor.send({ type: 'COMPLETE', cost: 0.1, duration: 2000 });
       expect(actor.getSnapshot().value).toBe('completed');
       expect(actor.getSnapshot().context.resultInfo?.status).toBe('completed');
 

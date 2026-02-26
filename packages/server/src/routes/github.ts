@@ -3,19 +3,21 @@
  * Mounted at /api/github.
  */
 
-import { Hono } from 'hono';
-import type { HonoEnv } from '../types/hono-env.js';
-import { resolve, isAbsolute, join } from 'path';
 import { existsSync } from 'fs';
-import { validate, cloneRepoSchema, githubPollSchema } from '../validation/schemas.js';
-import { resultToResponse } from '../utils/result-response.js';
+import { resolve, isAbsolute, join } from 'path';
+
 import { execute } from '@funny/core/git';
-import * as profileService from '../services/profile-service.js';
-import * as pm from '../services/project-manager.js';
-import { badRequest, internal } from '@funny/shared/errors';
-import { ok, err } from 'neverthrow';
 import { getRemoteUrl } from '@funny/core/git';
 import type { GitHubRepo, GitHubIssue } from '@funny/shared';
+import { badRequest, internal } from '@funny/shared/errors';
+import { Hono } from 'hono';
+import { err } from 'neverthrow';
+
+import * as profileService from '../services/profile-service.js';
+import * as pm from '../services/project-manager.js';
+import type { HonoEnv } from '../types/hono-env.js';
+import { resultToResponse } from '../utils/result-response.js';
+import { validate, cloneRepoSchema, githubPollSchema } from '../validation/schemas.js';
 
 const GITHUB_API = 'https://api.github.com';
 const DEVICE_CODE_URL = 'https://github.com/login/device/code';
@@ -65,7 +67,7 @@ githubRoutes.get('/status', async (c) => {
     if (!res.ok) {
       return c.json({ connected: false });
     }
-    const user = await res.json() as { login: string };
+    const user = (await res.json()) as { login: string };
     return c.json({ connected: true, login: user.login });
   } catch {
     return c.json({ connected: false });
@@ -98,7 +100,7 @@ githubRoutes.post('/oauth/device', async (c) => {
       return c.json({ error: `GitHub device code request failed: ${body}` }, 502);
     }
 
-    const data = await res.json() as {
+    const data = (await res.json()) as {
       device_code: string;
       user_code: string;
       verification_uri: string;
@@ -147,7 +149,7 @@ githubRoutes.post('/oauth/poll', async (c) => {
       }),
     });
 
-    const data = await res.json() as {
+    const data = (await res.json()) as {
       access_token?: string;
       token_type?: string;
       scope?: string;
@@ -206,7 +208,7 @@ githubRoutes.get('/user', async (c) => {
     return c.json({ error: 'Failed to fetch GitHub user' }, 502);
   }
 
-  const user = await res.json() as { login: string; avatar_url: string; name: string | null };
+  const user = (await res.json()) as { login: string; avatar_url: string; name: string | null };
   return c.json({ login: user.login, avatar_url: user.avatar_url, name: user.name });
 });
 
@@ -234,28 +236,28 @@ githubRoutes.get('/repos', async (c) => {
       if (!userRes.ok) {
         return c.json({ error: 'Failed to fetch GitHub user for search' }, 502);
       }
-      const user = await userRes.json() as { login: string };
+      const user = (await userRes.json()) as { login: string };
       const q = encodeURIComponent(`user:${user.login} ${search} fork:true`);
       const searchRes = await githubApiFetch(
         `/search/repositories?q=${q}&sort=${sort}&per_page=${perPage}&page=${page}`,
-        token
+        token,
       );
       if (!searchRes.ok) {
         return c.json({ error: 'GitHub search failed' }, 502);
       }
-      const data = await searchRes.json() as { items: GitHubRepo[]; total_count: number };
+      const data = (await searchRes.json()) as { items: GitHubRepo[]; total_count: number };
       repos = data.items;
       hasMore = data.total_count > page * perPage;
     } else {
       // List user repos directly
       const res = await githubApiFetch(
         `/user/repos?sort=${sort}&direction=desc&per_page=${perPage}&page=${page}&affiliation=owner,collaborator,organization_member`,
-        token
+        token,
       );
       if (!res.ok) {
         return c.json({ error: 'Failed to fetch repos' }, 502);
       }
-      repos = await res.json() as GitHubRepo[];
+      repos = (await res.json()) as GitHubRepo[];
       // GitHub uses Link header for pagination
       const linkHeader = res.headers.get('Link') || '';
       hasMore = linkHeader.includes('rel="next"');
@@ -284,11 +286,20 @@ githubRoutes.post('/clone', async (c) => {
 
   const parentDir = resolve(destinationPath);
   if (!existsSync(parentDir)) {
-    return resultToResponse(c, err(badRequest(`Destination directory does not exist: ${parentDir}`)));
+    return resultToResponse(
+      c,
+      err(badRequest(`Destination directory does not exist: ${parentDir}`)),
+    );
   }
 
   // Derive repo name from URL if not provided
-  const repoName = name || cloneUrl.split('/').pop()?.replace(/\.git$/, '') || 'repo';
+  const repoName =
+    name ||
+    cloneUrl
+      .split('/')
+      .pop()
+      ?.replace(/\.git$/, '') ||
+    'repo';
   const clonePath = join(parentDir, repoName);
 
   if (existsSync(clonePath)) {
@@ -301,7 +312,7 @@ githubRoutes.post('/clone', async (c) => {
   if (token && cloneUrl.startsWith('https://github.com/')) {
     authenticatedUrl = cloneUrl.replace(
       'https://github.com/',
-      `https://x-access-token:${token}@github.com/`
+      `https://x-access-token:${token}@github.com/`,
     );
   }
 
@@ -313,7 +324,7 @@ githubRoutes.post('/clone', async (c) => {
     // Sanitize error message — never leak the token
     const safeMsg = (error.message || String(error)).replace(
       /x-access-token:[^@]+@/g,
-      'x-access-token:***@'
+      'x-access-token:***@',
     );
     return resultToResponse(c, err(internal(`Clone failed: ${safeMsg}`)));
   }
@@ -374,11 +385,11 @@ githubRoutes.get('/issues', async (c) => {
     }
 
     if (!res.ok) {
-      const body = await res.text();
+      const _body = await res.text();
       return c.json({ error: `GitHub API error: ${res.status}` }, 502);
     }
 
-    const rawIssues = await res.json() as GitHubIssue[];
+    const rawIssues = (await res.json()) as GitHubIssue[];
     // Filter out pull requests (GitHub API returns PRs as issues too)
     const issues = rawIssues.filter((i) => !i.pull_request);
 

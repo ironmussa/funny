@@ -1,10 +1,12 @@
-import { resolve, dirname, basename, normalize } from 'path';
-import { mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
-import { ok, err, ResultAsync } from 'neverthrow';
+import { mkdir } from 'fs/promises';
+import { resolve, dirname, basename, normalize } from 'path';
+
+import { badRequest, internal, type DomainError } from '@funny/shared/errors';
+import { ResultAsync } from 'neverthrow';
+
 import { git } from './git.js';
 import { execute } from './process.js';
-import { badRequest, internal, type DomainError } from '@funny/shared/errors';
 
 const WORKTREE_DIR_NAME = '.funny-worktrees';
 
@@ -25,18 +27,21 @@ export interface WorktreeInfo {
 export function createWorktree(
   projectPath: string,
   branchName: string,
-  baseBranch?: string
+  baseBranch?: string,
 ): ResultAsync<string, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
       // Ensure the repo has at least one commit — git worktree requires it.
       // If the repo is brand new (no commits), create an empty initial commit
       // so worktree creation works transparently.
-      let wasEmpty = false;
-      const headResult = await execute('git', ['rev-parse', 'HEAD'], { cwd: projectPath, reject: false });
+      const headResult = await execute('git', ['rev-parse', 'HEAD'], {
+        cwd: projectPath,
+        reject: false,
+      });
       if (headResult.exitCode !== 0) {
         const commitResult = await execute(
-          'git', ['commit', '--allow-empty', '-m', 'Initial commit'],
+          'git',
+          ['commit', '--allow-empty', '-m', 'Initial commit'],
           { cwd: projectPath, reject: false },
         );
         if (commitResult.exitCode !== 0) {
@@ -44,7 +49,6 @@ export function createWorktree(
             `Cannot create worktree: the repository has no commits and the auto-commit failed: ${commitResult.stderr}`,
           );
         }
-        wasEmpty = true;
       }
 
       // Verify the requested baseBranch actually exists as a ref.
@@ -52,10 +56,10 @@ export function createWorktree(
       // (or vice versa). Fall back to HEAD when the ref is invalid.
       let effectiveBase = baseBranch;
       if (baseBranch) {
-        const branchCheck = await execute(
-          'git', ['rev-parse', '--verify', baseBranch],
-          { cwd: projectPath, reject: false },
-        );
+        const branchCheck = await execute('git', ['rev-parse', '--verify', baseBranch], {
+          cwd: projectPath,
+          reject: false,
+        });
         if (branchCheck.exitCode !== 0) {
           effectiveBase = undefined;
         }
@@ -77,7 +81,7 @@ export function createWorktree(
     (error) => {
       if ((error as DomainError).type) return error as DomainError;
       return internal(String(error));
-    }
+    },
   );
 }
 
@@ -109,7 +113,10 @@ export function listWorktrees(projectPath: string): ResultAsync<WorktreeInfo[], 
 }
 
 export async function removeWorktree(projectPath: string, worktreePath: string): Promise<void> {
-  await execute('git', ['worktree', 'remove', '-f', worktreePath], { cwd: projectPath, reject: false });
+  await execute('git', ['worktree', 'remove', '-f', worktreePath], {
+    cwd: projectPath,
+    reject: false,
+  });
 }
 
 export async function removeBranch(projectPath: string, branchName: string): Promise<void> {

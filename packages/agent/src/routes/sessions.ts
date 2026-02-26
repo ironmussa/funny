@@ -9,18 +9,19 @@
  * DELETE /:id          — Remove a session record
  */
 
-import { Hono } from 'hono';
-import { z } from 'zod';
 import { zValidator } from '@hono/zod-validator';
-import type { SessionStore } from '../core/session-store.js';
-import type { OrchestratorAgent } from '../core/orchestrator-agent.js';
-import type { Tracker } from '../trackers/tracker.js';
-import type { EventBus } from '../infrastructure/event-bus.js';
-import type { PipelineServiceConfig } from '../config/schema.js';
-import { Session } from '../core/session.js';
+import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
+import { z } from 'zod';
+
+import type { PipelineServiceConfig } from '../config/schema.js';
+import type { OrchestratorAgent } from '../core/orchestrator-agent.js';
+import type { SessionStore } from '../core/session-store.js';
+import { Session } from '../core/session.js';
 import type { IssueRef } from '../core/session.js';
+import type { EventBus } from '../infrastructure/event-bus.js';
 import { logger } from '../infrastructure/logger.js';
+import type { Tracker } from '../trackers/tracker.js';
 
 // ── Validation schemas ──────────────────────────────────────────
 
@@ -54,9 +55,7 @@ export function createSessionRoutes(
 
   app.get('/', (c) => {
     const status = c.req.query('status');
-    const sessions = status
-      ? sessionStore.byStatus(status as any)
-      : sessionStore.list();
+    const sessions = status ? sessionStore.byStatus(status as any) : sessionStore.list();
 
     return c.json({
       sessions: sessions.map((s) => s.toJSON()),
@@ -96,24 +95,35 @@ export function createSessionRoutes(
         const updatedAt = new Date(existing.updatedAt).getTime();
         const staleMs = 2 * 60 * 1000;
         if (Date.now() - updatedAt < staleMs) {
-          return c.json({
-            error: 'Issue already has an active session',
-            sessionId: existing.id,
-            status: existing.status,
-          }, 409);
+          return c.json(
+            {
+              error: 'Issue already has an active session',
+              sessionId: existing.id,
+              status: existing.status,
+            },
+            409,
+          );
         }
         // Stale session — cancel it and allow retry
-        await sessionStore.transition(existing.id, 'cancelled', { reason: 'Superseded by new session' });
-        logger.info({ oldSessionId: existing.id, issueNumber: body.issueNumber }, 'Cancelled stale session for retry');
+        await sessionStore.transition(existing.id, 'cancelled', {
+          reason: 'Superseded by new session',
+        });
+        logger.info(
+          { oldSessionId: existing.id, issueNumber: body.issueNumber },
+          'Cancelled stale session for retry',
+        );
       }
     }
 
     // Check parallel limit
     if (sessionStore.activeCount() >= config.tracker.max_parallel) {
-      return c.json({
-        error: `Max parallel sessions reached (${config.tracker.max_parallel})`,
-        active: sessionStore.activeCount(),
-      }, 429);
+      return c.json(
+        {
+          error: `Max parallel sessions reached (${config.tracker.max_parallel})`,
+          active: sessionStore.activeCount(),
+        },
+        429,
+      );
     }
 
     // Build issue ref: from tracker, inline data, or prompt
@@ -156,9 +166,12 @@ export function createSessionRoutes(
         labels: body.labels ?? [],
       };
     } else {
-      return c.json({
-        error: 'No tracker configured. Provide inline issue details (title, body) or a prompt.',
-      }, 503);
+      return c.json(
+        {
+          error: 'No tracker configured. Provide inline issue details (title, body) or a prompt.',
+        },
+        503,
+      );
     }
 
     const session = new Session(issueRef, body.projectPath, {
@@ -212,39 +225,50 @@ export function createSessionRoutes(
     const baseBranch = body.baseBranch;
 
     runIssuePipeline(
-      session, issueDetailForPlan, body.projectPath,
+      session,
+      issueDetailForPlan,
+      body.projectPath,
       baseBranch,
-      sessionStore, orchestratorAgent, eventBus, config,
+      sessionStore,
+      orchestratorAgent,
+      eventBus,
+      config,
     ).catch(async (err) => {
       const errorMsg = err.message ?? String(err);
       logger.error({ sessionId: session.id, err: errorMsg }, 'Issue pipeline failed');
       await emitError(eventBus, session.id, `Pipeline failed: ${errorMsg}`, {
-        sessionStore, fatal: true,
+        sessionStore,
+        fatal: true,
       });
     });
 
     // Comment on the issue to show it's being worked on (only for real issues)
     if (tracker && !isPromptOnly) {
-      tracker.addComment(
-        body.issueNumber!,
-        `🤖 **funny agent** is now working on this issue.\n\nSession: \`${session.id}\``,
-      ).catch((err) => {
-        logger.warn({ err: err.message }, 'Failed to comment on issue');
-      });
+      tracker
+        .addComment(
+          body.issueNumber!,
+          `🤖 **funny agent** is now working on this issue.\n\nSession: \`${session.id}\``,
+        )
+        .catch((err) => {
+          logger.warn({ err: err.message }, 'Failed to comment on issue');
+        });
     }
 
-    return c.json({
-      sessionId: session.id,
-      status: session.status,
-      issueNumber: issueRef.number,
-    }, 202);
+    return c.json(
+      {
+        sessionId: session.id,
+        status: session.status,
+        issueNumber: issueRef.number,
+      },
+      202,
+    );
   });
 
   // ── POST /:id/escalate — Manual escalation ────────────────────
 
   app.post('/:id/escalate', async (c) => {
     const id = c.req.param('id');
-    const body = await c.req.json<{ reason?: string }>().catch(() => ({} as { reason?: string }));
+    const body = await c.req.json<{ reason?: string }>().catch(() => ({}) as { reason?: string });
 
     const ok = await sessionStore.transition(id, 'escalated', {
       reason: body.reason ?? 'Manual escalation',
@@ -335,7 +359,7 @@ async function runIssuePipeline(
   sessionStore: SessionStore,
   orchestratorAgent: OrchestratorAgent,
   eventBus: EventBus,
-  config: PipelineServiceConfig,
+  _config: PipelineServiceConfig,
 ) {
   // Emit started so the UI transitions the thread from pending → running
   await eventBus.publish({
@@ -410,7 +434,8 @@ async function runIssuePipeline(
   if (wtResult.isErr()) {
     logger.error({ err: wtResult.error }, 'Failed to create worktree');
     await emitError(eventBus, session.id, `Worktree creation failed: ${wtResult.error}`, {
-      sessionStore, fatal: true,
+      sessionStore,
+      fatal: true,
     });
     return;
   }
@@ -425,55 +450,53 @@ async function runIssuePipeline(
   );
 
   // Step 3: Implement
-  const implResult = await orchestratorAgent.implementIssue(
-    issue, plan, worktreePath, branchName,
-    {
-      onEvent: async (event) => {
-        switch (event.type) {
-          case 'text':
-            await eventBus.publish({
-              event_type: 'session.message' as any,
-              request_id: session.id,
-              timestamp: new Date().toISOString(),
-              data: { role: 'assistant', content: event.content },
-            });
-            break;
-          case 'tool_call':
-            await eventBus.publish({
-              event_type: 'session.tool_call',
-              request_id: session.id,
-              timestamp: new Date().toISOString(),
-              data: {
-                tool_name: event.name,
-                tool_input: event.args,
-                tool_call_id: event.id,
-              },
-            });
-            break;
-          case 'tool_result':
-            await eventBus.publish({
-              event_type: 'session.tool_result',
-              request_id: session.id,
-              timestamp: new Date().toISOString(),
-              data: {
-                tool_call_id: event.id,
-                output: event.result,
-              },
-            });
-            break;
-          case 'error':
-            await emitError(eventBus, session.id, event.message);
-            break;
-        }
-      },
+  const implResult = await orchestratorAgent.implementIssue(issue, plan, worktreePath, branchName, {
+    onEvent: async (event) => {
+      switch (event.type) {
+        case 'text':
+          await eventBus.publish({
+            event_type: 'session.message' as any,
+            request_id: session.id,
+            timestamp: new Date().toISOString(),
+            data: { role: 'assistant', content: event.content },
+          });
+          break;
+        case 'tool_call':
+          await eventBus.publish({
+            event_type: 'session.tool_call',
+            request_id: session.id,
+            timestamp: new Date().toISOString(),
+            data: {
+              tool_name: event.name,
+              tool_input: event.args,
+              tool_call_id: event.id,
+            },
+          });
+          break;
+        case 'tool_result':
+          await eventBus.publish({
+            event_type: 'session.tool_result',
+            request_id: session.id,
+            timestamp: new Date().toISOString(),
+            data: {
+              tool_call_id: event.id,
+              output: event.result,
+            },
+          });
+          break;
+        case 'error':
+          await emitError(eventBus, session.id, event.message);
+          break;
+      }
     },
-  );
+  });
 
   // Check if implementation had errors
   if (implResult.status === 'error') {
-    const errorDetail = implResult.findings_count > 0
-      ? `Implementation failed with ${implResult.findings_count} finding(s)`
-      : 'Implementation failed';
+    const errorDetail =
+      implResult.findings_count > 0
+        ? `Implementation failed with ${implResult.findings_count} finding(s)`
+        : 'Implementation failed';
     logger.error({ sessionId: session.id, status: implResult.status }, errorDetail);
     await emitError(eventBus, session.id, errorDetail, { sessionStore, fatal: true });
     return;
@@ -489,10 +512,10 @@ async function runIssuePipeline(
   const { executeShell } = await import('@funny/core/git');
   const identity = process.env.GH_TOKEN ? { githubToken: process.env.GH_TOKEN } : undefined;
 
-  const statusResult = await gitExec(
-    'git', ['status', '--porcelain'],
-    { cwd: worktreePath, reject: false },
-  );
+  const statusResult = await gitExec('git', ['status', '--porcelain'], {
+    cwd: worktreePath,
+    reject: false,
+  });
   if (statusResult.stdout.trim().length > 0) {
     logger.info({ sessionId: session.id }, 'Committing implementation changes');
     const commitMsg = isPromptOnly
@@ -505,17 +528,23 @@ async function runIssuePipeline(
   }
 
   // Step 5: Push + create PR (only if there are commits ahead of base)
-  const countResult = await gitExec(
-    'git', ['rev-list', '--count', `${baseBranch}..HEAD`],
-    { cwd: worktreePath, reject: false },
-  );
+  const countResult = await gitExec('git', ['rev-list', '--count', `${baseBranch}..HEAD`], {
+    cwd: worktreePath,
+    reject: false,
+  });
   const commitsAhead = parseInt(countResult.stdout.trim(), 10) || 0;
 
   if (commitsAhead === 0) {
     logger.warn({ sessionId: session.id }, 'No commits on branch — skipping push/PR');
-    await emitError(eventBus, session.id, 'Implementation produced no commits. Nothing to push or create a PR for.', {
-      sessionStore, fatal: true,
-    });
+    await emitError(
+      eventBus,
+      session.id,
+      'Implementation produced no commits. Nothing to push or create a PR for.',
+      {
+        sessionStore,
+        fatal: true,
+      },
+    );
     return;
   }
 
@@ -523,7 +552,8 @@ async function runIssuePipeline(
   if (pushResult.isErr()) {
     logger.error({ err: pushResult.error }, 'Failed to push branch');
     await emitError(eventBus, session.id, `Push failed: ${pushResult.error}`, {
-      sessionStore, fatal: true,
+      sessionStore,
+      fatal: true,
     });
     return;
   }
@@ -542,13 +572,17 @@ async function runIssuePipeline(
     // Extract PR number from URL (e.g. https://github.com/org/repo/pull/42)
     const prNumber = parseInt(prUrl.split('/').pop() ?? '0', 10);
     sessionStore.update(session.id, (s) => s.setPR(prNumber, prUrl));
-    logger.info(
-      { sessionId: session.id, prNumber, prUrl },
-      'Pipeline: PR created',
-    );
+    logger.info({ sessionId: session.id, prNumber, prUrl }, 'Pipeline: PR created');
   } else {
-    logger.warn({ err: prResult.error }, 'PR creation failed — session still tracks the pushed branch');
-    await emitError(eventBus, session.id, `PR creation failed: ${prResult.error}. Branch was pushed but PR could not be created.`);
+    logger.warn(
+      { err: prResult.error },
+      'PR creation failed — session still tracks the pushed branch',
+    );
+    await emitError(
+      eventBus,
+      session.id,
+      `PR creation failed: ${prResult.error}. Branch was pushed but PR could not be created.`,
+    );
   }
 
   // Transition to waiting for CI

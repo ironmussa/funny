@@ -1,9 +1,11 @@
-import { describe, test, expect, beforeEach, afterEach } from 'vitest';
-import { resolve, dirname } from 'path';
 import { mkdirSync, rmSync, writeFileSync, existsSync } from 'fs';
 import { tmpdir } from 'os';
-import { createWorktree, listWorktrees, removeWorktree, removeBranch } from '../git/worktree.js';
+import { resolve } from 'path';
+
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
+
 import { executeSync } from '../git/process.js';
+import { createWorktree, listWorktrees, removeWorktree, removeBranch } from '../git/worktree.js';
 
 const TMP = resolve(tmpdir(), 'core-worktree-test-' + Date.now());
 
@@ -67,7 +69,9 @@ describe('worktree operations', () => {
 
     test('creates worktree from specific base branch', async () => {
       // Get current branch name
-      const branch = executeSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], { cwd: repoPath }).stdout.trim();
+      const branch = executeSync('git', ['rev-parse', '--abbrev-ref', 'HEAD'], {
+        cwd: repoPath,
+      }).stdout.trim();
       const result = await createWorktree(repoPath, 'from-base', branch);
       expect(result.isOk()).toBe(true);
     });
@@ -114,7 +118,7 @@ describe('worktree operations', () => {
   describe('removeWorktree', () => {
     test('removes a worktree', async () => {
       const createResult = await createWorktree(repoPath, 'to-remove');
-      if (createResult.isErr()) console.error("DEBUG ERROR:", createResult.error);
+      if (createResult.isErr()) console.error('DEBUG ERROR:', createResult.error);
       expect(createResult.isOk()).toBe(true);
 
       if (createResult.isOk()) {

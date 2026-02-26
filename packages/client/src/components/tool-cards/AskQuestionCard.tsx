@@ -1,7 +1,9 @@
+import { MessageCircleQuestion, Check, Send, PenLine, ChevronRight } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { MessageCircleQuestion, Check, Send, PenLine, ChevronRight } from 'lucide-react';
+
 import { cn } from '@/lib/utils';
+
 import { getQuestions, type Question } from './utils';
 
 // Special index to represent "Other" option
@@ -15,7 +17,10 @@ const OTHER_INDEX = -1;
  *   → Option Label — Option Description
  *   → Other — free text
  */
-function parseOutputToSelections(output: string, questions: Question[]): { selections: Map<number, Set<number>>; otherTexts: Map<number, string> } {
+function parseOutputToSelections(
+  output: string,
+  questions: Question[],
+): { selections: Map<number, Set<number>>; otherTexts: Map<number, string> } {
   const selections = new Map<number, Set<number>>();
   const otherTexts = new Map<number, string>();
 
@@ -63,7 +68,17 @@ function parseOutputToSelections(output: string, questions: Question[]): { selec
   return { selections, otherTexts };
 }
 
-export function AskQuestionCard({ parsed, onRespond, output, hideLabel }: { parsed: Record<string, unknown>; onRespond?: (answer: string) => void; output?: string; hideLabel?: boolean }) {
+export function AskQuestionCard({
+  parsed,
+  onRespond,
+  output,
+  hideLabel,
+}: {
+  parsed: Record<string, unknown>;
+  onRespond?: (answer: string) => void;
+  output?: string;
+  hideLabel?: boolean;
+}) {
   const { t } = useTranslation();
   const questions = getQuestions(parsed);
   if (!questions || questions.length === 0) return null;
@@ -76,9 +91,13 @@ export function AskQuestionCard({ parsed, onRespond, output, hideLabel }: { pars
   }, [alreadyAnswered, output, questions]);
 
   const [activeTab, setActiveTab] = useState(0);
-  const [selections, setSelections] = useState<Map<number, Set<number>>>(() => restoredState?.selections ?? new Map());
+  const [selections, setSelections] = useState<Map<number, Set<number>>>(
+    () => restoredState?.selections ?? new Map(),
+  );
   const [submitted, setSubmitted] = useState(alreadyAnswered);
-  const [otherTexts, setOtherTexts] = useState<Map<number, string>>(() => restoredState?.otherTexts ?? new Map());
+  const [otherTexts, setOtherTexts] = useState<Map<number, string>>(
+    () => restoredState?.otherTexts ?? new Map(),
+  );
   const otherInputRef = useRef<HTMLTextAreaElement>(null);
 
   const toggleOption = (qIndex: number, optIndex: number, multiSelect: boolean) => {
@@ -121,14 +140,16 @@ export function AskQuestionCard({ parsed, onRespond, output, hideLabel }: { pars
     questions.forEach((q, qi) => {
       const selected = selections.get(qi);
       if (selected && selected.size > 0) {
-        const answers = Array.from(selected).map((i) => {
-          if (i === OTHER_INDEX) {
-            const text = otherTexts.get(qi)?.trim();
-            return text ? `${t('tools.other')} — ${text}` : '';
-          }
-          const opt = q.options[i];
-          return opt ? `${opt.label} — ${opt.description}` : '';
-        }).filter(Boolean);
+        const answers = Array.from(selected)
+          .map((i) => {
+            if (i === OTHER_INDEX) {
+              const text = otherTexts.get(qi)?.trim();
+              return text ? `${t('tools.other')} — ${text}` : '';
+            }
+            const opt = q.options[i];
+            return opt ? `${opt.label} — ${opt.description}` : '';
+          })
+          .filter(Boolean);
         parts.push(`[${q.header}] ${q.question}\n→ ${answers.join('\n→ ')}`);
       }
     });
@@ -182,16 +203,19 @@ export function AskQuestionCard({ parsed, onRespond, output, hideLabel }: { pars
   const isLastTab = activeTab === questions.length - 1;
 
   return (
-    <div className="text-sm max-w-full overflow-hidden">
+    <div className="max-w-full overflow-hidden text-sm">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
-        {!hideLabel && <MessageCircleQuestion className="h-3 w-3 flex-shrink-0 text-muted-foreground" />}
+        {!hideLabel && (
+          <MessageCircleQuestion className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+        )}
         {!hideLabel && <span className="font-medium text-foreground">{t('tools.question')}</span>}
-        <span className="text-muted-foreground text-sm">
-          {questions.length} {questions.length > 1 ? t('tools.questionsPlural') : t('tools.questions')}
+        <span className="text-sm text-muted-foreground">
+          {questions.length}{' '}
+          {questions.length > 1 ? t('tools.questionsPlural') : t('tools.questions')}
         </span>
         {submitted && (
-          <span className="flex-shrink-0 text-xs px-1.5 py-0.5 rounded bg-status-success/10 text-status-success/80 font-medium ml-auto">
+          <span className="ml-auto flex-shrink-0 rounded bg-status-success/10 px-1.5 py-0.5 text-xs font-medium text-status-success/80">
             {t('tools.answered')}
           </span>
         )}
@@ -203,21 +227,21 @@ export function AskQuestionCard({ parsed, onRespond, output, hideLabel }: { pars
           <div className="flex gap-0 border-b border-border/40">
             {questions.map((q, i) => (
               <button
-                key={i}
+                key={q.header}
                 onClick={() => setActiveTab(i)}
                 className={cn(
                   'px-3 py-1.5 text-sm font-medium transition-colors relative',
                   i === activeTab
                     ? 'text-foreground'
-                    : 'text-muted-foreground hover:text-foreground/80'
+                    : 'text-muted-foreground hover:text-foreground/80',
                 )}
               >
                 {q.header}
                 {selections.get(i)?.size ? (
-                  <Check className="inline h-2.5 w-2.5 ml-1 text-status-success/80" />
+                  <Check className="ml-1 inline h-2.5 w-2.5 text-status-success/80" />
                 ) : null}
                 {i === activeTab && (
-                  <div className="absolute bottom-0 left-0 right-0 h-[2px] bg-primary rounded-full" />
+                  <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-primary" />
                 )}
               </button>
             ))}
@@ -225,19 +249,23 @@ export function AskQuestionCard({ parsed, onRespond, output, hideLabel }: { pars
         )}
 
         {/* Active question */}
-        <div className="px-3 py-2 space-y-2">
-          <p className="text-xs text-foreground leading-relaxed">{activeQ.question}</p>
+        <div className="space-y-2 px-3 py-2">
+          <p className="text-xs leading-relaxed text-foreground">{activeQ.question}</p>
 
           {/* Options — use min-height from the tallest question to prevent layout shift (only when interactive) */}
           <div
             className="space-y-1"
-            style={!submitted && maxContentHeight > 0 ? { minHeight: `${maxContentHeight}px` } : undefined}
+            style={
+              !submitted && maxContentHeight > 0
+                ? { minHeight: `${maxContentHeight}px` }
+                : undefined
+            }
           >
             {activeQ.options.map((opt, oi) => {
               const isSelected = activeSelections.has(oi);
               return (
                 <button
-                  key={oi}
+                  key={opt.label}
                   onClick={() => toggleOption(activeTab, oi, activeQ.multiSelect)}
                   disabled={submitted}
                   className={cn(
@@ -245,23 +273,21 @@ export function AskQuestionCard({ parsed, onRespond, output, hideLabel }: { pars
                     isSelected
                       ? 'border-primary/50 bg-primary/10'
                       : 'border-border/40 bg-background/50 hover:border-border hover:bg-accent/30',
-                    submitted && 'opacity-70 cursor-default'
+                    submitted && 'opacity-70 cursor-default',
                   )}
                 >
-                  <div className={cn(
-                    'mt-0.5 flex-shrink-0 h-3.5 w-3.5 rounded-full border-2 flex items-center justify-center',
-                    activeQ.multiSelect && 'rounded-sm',
-                    isSelected
-                      ? 'border-primary bg-primary'
-                      : 'border-muted-foreground/40'
-                  )}>
-                    {isSelected && (
-                      <Check className="h-2 w-2 text-primary-foreground" />
+                  <div
+                    className={cn(
+                      'mt-0.5 flex-shrink-0 h-3.5 w-3.5 rounded-full border-2 flex items-center justify-center',
+                      activeQ.multiSelect && 'rounded-sm',
+                      isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/40',
                     )}
+                  >
+                    {isSelected && <Check className="h-2 w-2 text-primary-foreground" />}
                   </div>
                   <div className="min-w-0">
                     <span className="text-xs font-medium text-foreground">{opt.label}</span>
-                    <p className="text-xs text-muted-foreground leading-snug">{opt.description}</p>
+                    <p className="text-xs leading-snug text-muted-foreground">{opt.description}</p>
                   </div>
                 </button>
               );
@@ -276,29 +302,33 @@ export function AskQuestionCard({ parsed, onRespond, output, hideLabel }: { pars
                 isOtherSelected
                   ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
                   : 'border-border/40 bg-background/50 hover:border-border hover:bg-accent/30',
-                submitted && 'opacity-70 cursor-default'
+                submitted && 'opacity-70 cursor-default',
               )}
             >
-              <div className={cn(
-                'mt-0.5 flex-shrink-0 h-3.5 w-3.5 rounded-full border-2 flex items-center justify-center',
-                activeQ.multiSelect && 'rounded-sm',
-                isOtherSelected
-                  ? 'border-primary bg-primary'
-                  : 'border-muted-foreground/40'
-              )}>
-                {isOtherSelected && (
-                  <Check className="h-2 w-2 text-primary-foreground" />
+              <div
+                className={cn(
+                  'mt-0.5 flex-shrink-0 h-3.5 w-3.5 rounded-full border-2 flex items-center justify-center',
+                  activeQ.multiSelect && 'rounded-sm',
+                  isOtherSelected ? 'border-primary bg-primary' : 'border-muted-foreground/40',
                 )}
+              >
+                {isOtherSelected && <Check className="h-2 w-2 text-primary-foreground" />}
               </div>
-              <div className="min-w-0 flex items-center gap-1.5">
-                <PenLine className={cn(
-                  'h-3 w-3 flex-shrink-0 transition-colors',
-                  isOtherSelected ? 'text-primary' : 'text-muted-foreground'
-                )} />
-                <span className={cn(
-                  'text-xs font-medium transition-colors',
-                  isOtherSelected ? 'text-foreground' : 'text-foreground'
-                )}>{t('tools.other')}</span>
+              <div className="flex min-w-0 items-center gap-1.5">
+                <PenLine
+                  className={cn(
+                    'h-3 w-3 flex-shrink-0 transition-colors',
+                    isOtherSelected ? 'text-primary' : 'text-muted-foreground',
+                  )}
+                />
+                <span
+                  className={cn(
+                    'text-xs font-medium transition-colors',
+                    isOtherSelected ? 'text-foreground' : 'text-foreground',
+                  )}
+                >
+                  {t('tools.other')}
+                </span>
               </div>
             </button>
 
@@ -307,13 +337,15 @@ export function AskQuestionCard({ parsed, onRespond, output, hideLabel }: { pars
               <textarea
                 ref={otherInputRef}
                 value={otherText}
-                onChange={(e) => setOtherTexts((prev) => {
-                  const next = new Map(prev);
-                  next.set(activeTab, e.target.value);
-                  return next;
-                })}
+                onChange={(e) =>
+                  setOtherTexts((prev) => {
+                    const next = new Map(prev);
+                    next.set(activeTab, e.target.value);
+                    return next;
+                  })
+                }
                 placeholder={t('tools.otherPlaceholder')}
-                className="w-full rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/20 resize-none min-h-[60px]"
+                className="min-h-[60px] w-full resize-none rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
                 rows={2}
               />
             )}
@@ -336,7 +368,7 @@ export function AskQuestionCard({ parsed, onRespond, output, hideLabel }: { pars
                     'flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
                     currentTabAnswered
                       ? 'bg-primary/15 text-primary hover:bg-primary/25'
-                      : 'bg-muted text-muted-foreground cursor-not-allowed'
+                      : 'bg-muted text-muted-foreground cursor-not-allowed',
                   )}
                 >
                   {t('tools.continue')}
@@ -352,7 +384,7 @@ export function AskQuestionCard({ parsed, onRespond, output, hideLabel }: { pars
                   'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ml-auto',
                   allAnswered
                     ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                    : 'bg-muted text-muted-foreground cursor-not-allowed'
+                    : 'bg-muted text-muted-foreground cursor-not-allowed',
                 )}
               >
                 <Send className="h-3 w-3" />

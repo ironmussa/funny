@@ -1,16 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
-import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
-import { useAppStore } from '@/stores/app-store';
-import { api } from '@/lib/api';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { cn } from '@/lib/utils';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import type { Skill, Plugin, PluginCommand } from '@funny/shared';
 import {
   Trash2,
   Plus,
@@ -20,10 +8,18 @@ import {
   ExternalLink,
   ChevronDown,
   ChevronUp,
-  FolderOpen,
   Puzzle,
 } from 'lucide-react';
-import type { Skill, Plugin, PluginCommand } from '@funny/shared';
+import { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
+
+import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Input } from '@/components/ui/input';
+import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { useAppStore } from '@/stores/app-store';
 
 interface RecommendedSkill {
   name: string;
@@ -41,28 +37,24 @@ function InstalledSkillCard({
   removing: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-md border border-border/50 bg-card">
-      <div className="flex items-center gap-3 min-w-0">
-        <Sparkles className="h-4 w-4 text-status-warning flex-shrink-0" />
+    <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-card px-3 py-2.5">
+      <div className="flex min-w-0 items-center gap-3">
+        <Sparkles className="h-4 w-4 flex-shrink-0 text-status-warning" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="text-sm font-medium truncate">{skill.name}</span>
+            <span className="truncate text-sm font-medium">{skill.name}</span>
           </div>
           {skill.description && (
-            <p className="text-xs text-muted-foreground truncate mt-0.5">
-              {skill.description}
-            </p>
+            <p className="mt-0.5 truncate text-xs text-muted-foreground">{skill.description}</p>
           )}
-          <div className="flex items-center gap-2 mt-1">
-            <span className="text-xs text-muted-foreground/70">
-              {skill.source}
-            </span>
+          <div className="mt-1 flex items-center gap-2">
+            <span className="text-xs text-muted-foreground/70">{skill.source}</span>
             {skill.sourceUrl && (
               <a
                 href={skill.sourceUrl}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs text-muted-foreground/70 hover:text-foreground inline-flex items-center gap-0.5"
+                className="inline-flex items-center gap-0.5 text-xs text-muted-foreground/70 hover:text-foreground"
               >
                 <ExternalLink className="h-2.5 w-2.5" />
               </a>
@@ -81,7 +73,7 @@ function InstalledSkillCard({
           size="icon-xs"
           onClick={onRemove}
           disabled={removing}
-          className="text-muted-foreground hover:text-destructive flex-shrink-0"
+          className="flex-shrink-0 text-muted-foreground hover:text-destructive"
         >
           {removing ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -108,29 +100,31 @@ function RecommendedSkillCard({
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center justify-between gap-3 px-3 py-2.5 rounded-md border border-border/50 bg-card">
+    <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-card px-3 py-2.5">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{skill.name}</span>
         </div>
-        <p className="text-xs text-muted-foreground mt-0.5">{skill.description}</p>
-        <p className="text-xs text-muted-foreground/70 mt-0.5 font-mono">
-          {skill.identifier}
-        </p>
+        <p className="mt-0.5 text-xs text-muted-foreground">{skill.description}</p>
+        <p className="mt-0.5 font-mono text-xs text-muted-foreground/70">{skill.identifier}</p>
       </div>
       <Button
         variant={installed ? 'ghost' : 'outline'}
         size="sm"
         onClick={onInstall}
         disabled={installed || installing}
-        className="flex-shrink-0 text-xs h-7"
+        className="h-7 flex-shrink-0 text-xs"
       >
         {installing ? (
-          <Loader2 className="h-3 w-3 animate-spin mr-1" />
+          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
         ) : installed ? null : (
-          <Download className="h-3 w-3 mr-1" />
+          <Download className="mr-1 h-3 w-3" />
         )}
-        {installed ? t('skills.installed') : installing ? t('skills.installing') : t('skills.install')}
+        {installed
+          ? t('skills.installed')
+          : installing
+            ? t('skills.installing')
+            : t('skills.install')}
       </Button>
     </div>
   );
@@ -141,9 +135,7 @@ function PluginCommandRow({ command }: { command: PluginCommand }) {
     <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
       <span className="font-mono text-foreground/80">/{command.name}</span>
       {command.description && (
-        <span className="text-muted-foreground/70 truncate">
-          {command.description}
-        </span>
+        <span className="truncate text-muted-foreground/70">{command.description}</span>
       )}
     </div>
   );
@@ -159,26 +151,27 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
       <div className="rounded-md border border-border/50 bg-card">
         <CollapsibleTrigger asChild>
           <button
-            className="flex items-center justify-between gap-3 px-3 py-2.5 w-full text-left hover:bg-muted/30 transition-colors rounded-md"
+            className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/30"
             disabled={!hasCommands}
           >
-            <div className="flex items-center gap-3 min-w-0">
-              <Puzzle className="h-4 w-4 text-purple-500 flex-shrink-0" />
+            <div className="flex min-w-0 items-center gap-3">
+              <Puzzle className="h-4 w-4 flex-shrink-0 text-purple-500" />
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
-                  <span className="text-sm font-medium truncate">{plugin.name}</span>
+                  <span className="truncate text-sm font-medium">{plugin.name}</span>
                   {hasCommands && (
-                    <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
-                      {plugin.commands.length} {plugin.commands.length === 1 ? t('plugins.command') : t('plugins.commands')}
+                    <span className="rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
+                      {plugin.commands.length}{' '}
+                      {plugin.commands.length === 1 ? t('plugins.command') : t('plugins.commands')}
                     </span>
                   )}
                 </div>
                 {plugin.description && (
-                  <p className="text-xs text-muted-foreground truncate mt-0.5">
+                  <p className="mt-0.5 truncate text-xs text-muted-foreground">
                     {plugin.description}
                   </p>
                 )}
-                <div className="flex items-center gap-2 mt-1">
+                <div className="mt-1 flex items-center gap-2">
                   {plugin.author && (
                     <span className="text-xs text-muted-foreground/70">
                       {t('plugins.by')} {plugin.author}
@@ -196,7 +189,7 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
               <ChevronDown
                 className={cn(
                   'h-3.5 w-3.5 text-muted-foreground transition-transform flex-shrink-0',
-                  open && 'rotate-180'
+                  open && 'rotate-180',
                 )}
               />
             )}
@@ -218,8 +211,8 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
 
 export function SkillsSettings() {
   const { t } = useTranslation();
-  const projects = useAppStore(s => s.projects);
-  const selectedProjectId = useAppStore(s => s.selectedProjectId);
+  const projects = useAppStore((s) => s.projects);
+  const selectedProjectId = useAppStore((s) => s.selectedProjectId);
   const [skills, setSkills] = useState<Skill[]>([]);
   const [plugins, setPlugins] = useState<Plugin[]>([]);
   const [recommended, setRecommended] = useState<RecommendedSkill[]>([]);
@@ -233,8 +226,8 @@ export function SkillsSettings() {
 
   // Derive project path synchronously to avoid race conditions
   const projectPath = selectedProjectId
-    ? projects.find((p) => p.id === selectedProjectId)?.path ?? null
-    : projects[0]?.path ?? null;
+    ? (projects.find((p) => p.id === selectedProjectId)?.path ?? null)
+    : (projects[0]?.path ?? null);
 
   const loadSkills = useCallback(async () => {
     setLoading(true);
@@ -339,7 +332,7 @@ export function SkillsSettings() {
       {/* Project skills */}
       {projectSkills.length > 0 && (
         <div>
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('skills.projectSkills')}
           </h3>
           <div className="space-y-1.5">
@@ -357,20 +350,20 @@ export function SkillsSettings() {
 
       {/* Global skills */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('skills.globalSkills')}
           </h3>
           <Button
             variant="ghost"
             size="sm"
             onClick={() => setShowCustom(!showCustom)}
-            className="text-xs h-6 px-2"
+            className="h-6 px-2 text-xs"
           >
             {showCustom ? (
-              <ChevronUp className="h-3 w-3 mr-1" />
+              <ChevronUp className="mr-1 h-3 w-3" />
             ) : (
-              <Plus className="h-3 w-3 mr-1" />
+              <Plus className="mr-1 h-3 w-3" />
             )}
             {showCustom ? t('skills.cancel') : t('skills.addCustom')}
           </Button>
@@ -378,9 +371,10 @@ export function SkillsSettings() {
 
         {/* Custom install form */}
         {showCustom && (
-          <div className="rounded-lg border border-border/50 p-3 mb-3 space-y-2 bg-muted/30">
-            <label className="text-xs text-muted-foreground block">
-              {t('skills.skillIdentifier')} (e.g. <code className="text-xs bg-muted px-1 py-0.5 rounded">owner/repo@skill-name</code>)
+          <div className="mb-3 space-y-2 rounded-lg border border-border/50 bg-muted/30 p-3">
+            <label className="block text-xs text-muted-foreground">
+              {t('skills.skillIdentifier')} (e.g.{' '}
+              <code className="rounded bg-muted px-1 py-0.5 text-xs">owner/repo@skill-name</code>)
             </label>
             <div className="flex gap-2">
               <Input
@@ -388,19 +382,19 @@ export function SkillsSettings() {
                 value={customId}
                 onChange={(e) => setCustomId(e.target.value)}
                 placeholder="vercel-labs/agent-skills@nextjs-best-practices"
-                className="flex-1 h-8 px-2 font-mono text-xs"
+                className="h-8 flex-1 px-2 font-mono text-xs"
                 onKeyDown={(e) => e.key === 'Enter' && handleAddCustom()}
               />
               <Button
                 size="sm"
                 onClick={handleAddCustom}
                 disabled={!customId.trim() || addingCustom}
-                className="text-xs h-8"
+                className="h-8 text-xs"
               >
                 {addingCustom ? (
-                  <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                 ) : (
-                  <Plus className="h-3 w-3 mr-1" />
+                  <Plus className="mr-1 h-3 w-3" />
                 )}
                 {t('skills.install')}
               </Button>
@@ -409,7 +403,7 @@ export function SkillsSettings() {
         )}
 
         {loading ? (
-          <div className="flex items-center gap-2 py-6 justify-center text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             {t('skills.loadingSkills')}
           </div>
@@ -433,8 +427,8 @@ export function SkillsSettings() {
 
       {/* Installed plugins */}
       <div>
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+        <div className="mb-2 flex items-center justify-between">
+          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('plugins.installedPlugins')}
           </h3>
           <span className="text-xs text-muted-foreground/60">
@@ -443,7 +437,7 @@ export function SkillsSettings() {
         </div>
 
         {loadingPlugins ? (
-          <div className="flex items-center gap-2 py-6 justify-center text-sm text-muted-foreground">
+          <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             {t('plugins.loadingPlugins')}
           </div>
@@ -463,7 +457,7 @@ export function SkillsSettings() {
       {/* Recommended skills */}
       {recommended.length > 0 && (
         <div>
-          <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('skills.recommendedSkills')}
           </h3>
           <div className="space-y-1.5">

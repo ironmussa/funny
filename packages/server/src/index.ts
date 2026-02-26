@@ -5,60 +5,71 @@ if (process.platform === 'win32') {
   await import('./kill-port.js');
 }
 
-import { log } from './lib/abbacchio.js';
+import { existsSync } from 'fs';
+import { join, resolve } from 'path';
+
+import { getStatusSummary, deriveGitSyncState } from '@funny/core/git';
 import { observability, observabilityShutdown } from '@funny/observability';
+import {
+  getProviderModels,
+  getProviderModelsWithLabels,
+  PROVIDER_LABELS,
+  getDefaultModel,
+} from '@funny/shared/models';
 import { Hono } from 'hono';
+import { serveStatic } from 'hono/bun';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
-import { serveStatic } from 'hono/bun';
-import { join, resolve } from 'path';
-import { existsSync } from 'fs';
-import { handleError } from './middleware/error-handler.js';
-import { authMiddleware } from './middleware/auth.js';
-import { rateLimit } from './middleware/rate-limit.js';
+
 import { autoMigrate } from './db/migrate.js';
-import './db/index.js'; // triggers self-registration with shutdownManager
-import { markStaleThreadsInterrupted, markStaleExternalThreadsStopped } from './services/thread-manager.js';
-import { startExternalThreadSweep } from './services/ingest-mapper.js';
-import { getAuthToken, validateToken } from './services/auth-service.js';
 import { getAuthMode } from './lib/auth-mode.js';
+import { log } from './lib/logger.js';
+import './db/index.js'; // triggers self-registration with shutdownManager
+import { authMiddleware } from './middleware/auth.js';
+import { handleError } from './middleware/error-handler.js';
+import { rateLimit } from './middleware/rate-limit.js';
+import { analyticsRoutes } from './routes/analytics.js';
 import { authRoutes } from './routes/auth.js';
-import { projectRoutes } from './routes/projects.js';
-import { threadRoutes } from './routes/threads.js';
-import { gitRoutes } from './routes/git.js';
+import { automationRoutes } from './routes/automations.js';
 import browseRoutes from './routes/browse.js';
 import filesRoutes from './routes/files.js';
-import mcpRoutes from './routes/mcp.js';
-import skillsRoutes from './routes/skills.js';
-import pluginRoutes from './routes/plugins.js';
-import { worktreeRoutes } from './routes/worktrees.js';
-import { automationRoutes } from './routes/automations.js';
-import { profileRoutes } from './routes/profile.js';
+import { gitRoutes } from './routes/git.js';
 import { githubRoutes } from './routes/github.js';
-import { analyticsRoutes } from './routes/analytics.js';
-import { logRoutes } from './routes/logs.js';
 import { ingestRoutes } from './routes/ingest.js';
+import { logRoutes } from './routes/logs.js';
+import mcpRoutes from './routes/mcp.js';
+import pluginRoutes from './routes/plugins.js';
+import { profileRoutes } from './routes/profile.js';
+import { projectRoutes } from './routes/projects.js';
 import { reviewWebhookRoutes } from './routes/review-webhook.js';
-import { wsBroker } from './services/ws-broker.js';
-import { startScheduler } from './services/automation-scheduler.js';
+import skillsRoutes from './routes/skills.js';
+import { threadRoutes } from './routes/threads.js';
+import { worktreeRoutes } from './routes/worktrees.js';
 import { startAgent } from './services/agent-runner.js';
-import * as ptyManager from './services/pty-manager.js';
-import { checkClaudeBinaryAvailability, resetBinaryCache, validateClaudeBinary } from './utils/claude-binary.js';
-import { getAvailableProviders, resetProviderCache, logProviderStatus } from './utils/provider-detection.js';
+import { getAuthToken, validateToken } from './services/auth-service.js';
+import { startScheduler } from './services/automation-scheduler.js';
 import { registerAllHandlers } from './services/handlers/handler-registry.js';
 import type { HandlerServiceContext } from './services/handlers/types.js';
-import * as tm from './services/thread-manager.js';
+import { startExternalThreadSweep } from './services/ingest-mapper.js';
 import * as pm from './services/project-manager.js';
-import { getStatusSummary, deriveGitSyncState } from '@funny/core/git';
+import * as ptyManager from './services/pty-manager.js';
 import { saveThreadEvent } from './services/thread-event-service.js';
-import { getProviderModels, getProviderModelsWithLabels, PROVIDER_LABELS, getDefaultModel } from '@funny/shared/models';
+import {
+  markStaleThreadsInterrupted,
+  markStaleExternalThreadsStopped,
+} from './services/thread-manager.js';
+import * as tm from './services/thread-manager.js';
+import { wsBroker } from './services/ws-broker.js';
+import { resetBinaryCache } from './utils/claude-binary.js';
+import {
+  getAvailableProviders,
+  resetProviderCache,
+  logProviderStatus,
+} from './utils/provider-detection.js';
 
 // Resolve client dist directory (works both in dev and when installed via npm)
-const clientDistDir = resolve(
-  import.meta.dir,
-  '..', '..', 'client', 'dist'
-);
+const clientDistDir = resolve(import.meta.dir, '..', '..', 'client', 'dist');
 
 const port = Number(process.env.PORT) || 3001;
 const host = process.env.HOST || '127.0.0.1';
@@ -91,7 +102,7 @@ app.use(
           return undefined;
         },
     credentials: true,
-  })
+  }),
 );
 app.use('/api/*', rateLimit({ windowMs: 60_000, max: 1000 }));
 app.use('*', observability());
@@ -203,7 +214,10 @@ if (existsSync(clientDistDir)) {
   });
   log.info('Serving static files', { namespace: 'server', dir: clientDistDir });
 } else {
-  log.info('Client build not found — static serving disabled', { namespace: 'server', dir: clientDistDir });
+  log.info('Client build not found — static serving disabled', {
+    namespace: 'server',
+    dir: clientDistDir,
+  });
 }
 
 // Auto-create tables on startup, then start server
@@ -317,8 +331,22 @@ const server = Bun.serve({
               return resolvedCwd.startsWith(projectPath);
             });
             if (!isAllowed) {
-              log.warn(`PTY spawn denied: cwd not in user's projects`, { namespace: 'ws', cwd: data.cwd, userId });
-              try { ws.send(JSON.stringify({ type: 'pty:error', data: { ptyId: data.id, error: 'Access denied: directory not in a registered project' } })); } catch {}
+              log.warn(`PTY spawn denied: cwd not in user's projects`, {
+                namespace: 'ws',
+                cwd: data.cwd,
+                userId,
+              });
+              try {
+                ws.send(
+                  JSON.stringify({
+                    type: 'pty:error',
+                    data: {
+                      ptyId: data.id,
+                      error: 'Access denied: directory not in a registered project',
+                    },
+                  }),
+                );
+              } catch {}
               break;
             }
             ptyManager.spawnPty(data.id, data.cwd, data.cols, data.rows, userId);
@@ -352,15 +380,27 @@ import { shutdownManager, ShutdownPhase } from './services/shutdown-manager.js';
 shutdownManager.register('http-server', () => server.stop(true), ShutdownPhase.SERVER);
 
 // Phase 1: flush telemetry (only on hard shutdown — no need on hot reload)
-shutdownManager.register('observability', () => observabilityShutdown(), ShutdownPhase.SERVICES, false);
+shutdownManager.register(
+  'observability',
+  () => observabilityShutdown(),
+  ShutdownPhase.SERVICES,
+  false,
+);
 
 // Phase 3: Windows tree kill + exit (only on hard shutdown)
-shutdownManager.register('process-exit', () => {
-  if (process.platform === 'win32') {
-    try { Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${process.pid}`]); } catch {}
-  }
-  process.exit(0);
-}, ShutdownPhase.FINAL, false);
+shutdownManager.register(
+  'process-exit',
+  () => {
+    if (process.platform === 'win32') {
+      try {
+        Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${process.pid}`]);
+      } catch {}
+    }
+    process.exit(0);
+  },
+  ShutdownPhase.FINAL,
+  false,
+);
 
 // Store for next --watch restart.
 (globalThis as any).__bunServer = server;
@@ -377,7 +417,9 @@ async function shutdown() {
   const forceExit = setTimeout(() => {
     log.warn('Force exit after timeout', { namespace: 'server' });
     if (process.platform === 'win32') {
-      try { Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${process.pid}`]); } catch {}
+      try {
+        Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${process.pid}`]);
+      } catch {}
     }
     process.exit(1);
   }, 5000);
@@ -389,4 +431,8 @@ async function shutdown() {
 process.on('SIGINT', shutdown);
 process.on('SIGTERM', shutdown);
 
-log.info(`Listening on http://localhost:${server.port}`, { namespace: 'server', port: server.port, host });
+log.info(`Listening on http://localhost:${server.port}`, {
+  namespace: 'server',
+  port: server.port,
+  host,
+});

@@ -1,6 +1,6 @@
+import type { ToolPermission } from '@funny/shared';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import type { ToolPermission, AgentProvider, AgentModel } from '@funny/shared';
 
 export type Theme = 'light' | 'dark' | 'system';
 export type Editor = 'cursor' | 'vscode' | 'windsurf' | 'zed' | 'sublime' | 'vim';
@@ -18,8 +18,17 @@ const editorLabels: Record<Editor, string> = {
 };
 
 export const ALL_STANDARD_TOOLS = [
-  'Read', 'Edit', 'Write', 'Bash', 'Glob', 'Grep',
-  'WebSearch', 'WebFetch', 'Task', 'TodoWrite', 'NotebookEdit',
+  'Read',
+  'Edit',
+  'Write',
+  'Bash',
+  'Glob',
+  'Grep',
+  'WebSearch',
+  'WebFetch',
+  'Task',
+  'TodoWrite',
+  'NotebookEdit',
 ] as const;
 
 export const TOOL_LABELS: Record<string, string> = {
@@ -37,7 +46,7 @@ export const TOOL_LABELS: Record<string, string> = {
 };
 
 const DEFAULT_TOOL_PERMISSIONS: Record<string, ToolPermission> = Object.fromEntries(
-  ALL_STANDARD_TOOLS.map(tool => [tool, 'allow' as ToolPermission])
+  ALL_STANDARD_TOOLS.map((tool) => [tool, 'allow' as ToolPermission]),
 );
 
 interface SettingsState {
@@ -93,9 +102,10 @@ export const useSettingsStore = create<SettingsState>()(
       },
       setDefaultEditor: (editor) => set({ defaultEditor: editor }),
       setUseInternalEditor: (use) => set({ useInternalEditor: use }),
-      setToolPermission: (toolName, permission) => set((state) => ({
-        toolPermissions: { ...state.toolPermissions, [toolName]: permission },
-      })),
+      setToolPermission: (toolName, permission) =>
+        set((state) => ({
+          toolPermissions: { ...state.toolPermissions, [toolName]: permission },
+        })),
       resetToolPermissions: () => set({ toolPermissions: { ...DEFAULT_TOOL_PERMISSIONS } }),
       completeSetup: () => set({ setupCompleted: true }),
     }),
@@ -150,8 +160,8 @@ export const useSettingsStore = create<SettingsState>()(
           applyTheme(state.theme);
         }
       },
-    }
-  )
+    },
+  ),
 );
 
 // Listen for system theme changes when in 'system' mode

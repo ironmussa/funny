@@ -1,5 +1,10 @@
+import type { GitHubIssue } from '@funny/shared';
+import { CircleDot, CircleCheck, MessageSquare, Loader2, ExternalLink } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import {
   Dialog,
   DialogContent,
@@ -7,13 +12,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
-import { CircleDot, CircleCheck, MessageSquare, Loader2, ExternalLink } from 'lucide-react';
-import type { GitHubIssue } from '@funny/shared';
 
 interface IssuesDialogProps {
   projectId: string;
@@ -31,22 +31,25 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
   const [hasMore, setHasMore] = useState(false);
   const [repoInfo, setRepoInfo] = useState<{ owner: string; repo: string } | null>(null);
 
-  const fetchIssues = useCallback(async (pageNum: number, append: boolean) => {
-    setLoading(true);
-    setError(null);
-    const result = await api.githubIssues(projectId, { state, page: pageNum, per_page: 30 });
-    result.match(
-      (data) => {
-        setIssues((prev) => append ? [...prev, ...data.issues] : data.issues);
-        setHasMore(data.hasMore);
-        setRepoInfo({ owner: data.owner, repo: data.repo });
-      },
-      (err) => {
-        setError(err.message);
-      }
-    );
-    setLoading(false);
-  }, [projectId, state]);
+  const fetchIssues = useCallback(
+    async (pageNum: number, append: boolean) => {
+      setLoading(true);
+      setError(null);
+      const result = await api.githubIssues(projectId, { state, page: pageNum, per_page: 30 });
+      result.match(
+        (data) => {
+          setIssues((prev) => (append ? [...prev, ...data.issues] : data.issues));
+          setHasMore(data.hasMore);
+          setRepoInfo({ owner: data.owner, repo: data.repo });
+        },
+        (err) => {
+          setError(err.message);
+        },
+      );
+      setLoading(false);
+    },
+    [projectId, state],
+  );
 
   useEffect(() => {
     if (open) {
@@ -77,15 +80,13 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[80vh] flex flex-col">
+      <DialogContent className="flex max-h-[80vh] max-w-lg flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <CircleDot className="h-4 w-4" />
             {t('issues.title')}
           </DialogTitle>
-          <DialogDescription className="sr-only">
-            {t('issues.title')}
-          </DialogDescription>
+          <DialogDescription className="sr-only">{t('issues.title')}</DialogDescription>
         </DialogHeader>
 
         {/* State filter */}
@@ -96,7 +97,7 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
             onClick={() => setState('open')}
             className="h-7 text-xs"
           >
-            <CircleDot className="h-3 w-3 mr-1 text-green-500" />
+            <CircleDot className="mr-1 h-3 w-3 text-green-500" />
             {t('issues.open')}
           </Button>
           <Button
@@ -105,24 +106,24 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
             onClick={() => setState('closed')}
             className="h-7 text-xs"
           >
-            <CircleCheck className="h-3 w-3 mr-1 text-purple-500" />
+            <CircleCheck className="mr-1 h-3 w-3 text-purple-500" />
             {t('issues.closed')}
           </Button>
         </div>
 
         {/* Content */}
-        <ScrollArea className="flex-1 min-h-0 -mx-6 px-6">
+        <ScrollArea className="-mx-6 min-h-0 flex-1 px-6">
           {loading && issues.length === 0 ? (
             <div className="flex items-center justify-center py-12">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           ) : error ? (
-            <div className="text-center py-12 text-muted-foreground text-sm">
+            <div className="py-12 text-center text-sm text-muted-foreground">
               <p>{t('issues.error')}</p>
               <p className="mt-1 text-xs">{error}</p>
             </div>
           ) : issues.length === 0 ? (
-            <div className="text-center py-12 text-muted-foreground text-sm">
+            <div className="py-12 text-center text-sm text-muted-foreground">
               {t('issues.noIssues')}
             </div>
           ) : (
@@ -133,28 +134,26 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
                   href={issue.html_url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-start gap-2 p-2 rounded-md hover:bg-accent/50 transition-colors group"
+                  className="group flex items-start gap-2 rounded-md p-2 transition-colors hover:bg-accent/50"
                 >
                   {issue.state === 'open' ? (
-                    <CircleDot className="h-4 w-4 mt-0.5 flex-shrink-0 text-green-500" />
+                    <CircleDot className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-500" />
                   ) : (
-                    <CircleCheck className="h-4 w-4 mt-0.5 flex-shrink-0 text-purple-500" />
+                    <CircleCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-purple-500" />
                   )}
-                  <div className="flex-1 min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-1.5">
-                      <span className="text-sm font-medium group-hover:text-primary transition-colors line-clamp-2">
+                      <span className="line-clamp-2 text-sm font-medium transition-colors group-hover:text-primary">
                         {issue.title}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-                      <span className="text-xs text-muted-foreground">
-                        #{issue.number}
-                      </span>
+                    <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                      <span className="text-xs text-muted-foreground">#{issue.number}</span>
                       {issue.labels.map((label) => (
                         <Badge
                           key={label.name}
                           variant="outline"
-                          className="text-[10px] h-4 px-1"
+                          className="h-4 px-1 text-[10px]"
                           style={{
                             borderColor: `#${label.color}`,
                             color: `#${label.color}`,
@@ -167,12 +166,10 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
                         {timeAgo(issue.created_at)}
                       </span>
                       {issue.user && (
-                        <span className="text-xs text-muted-foreground">
-                          {issue.user.login}
-                        </span>
+                        <span className="text-xs text-muted-foreground">{issue.user.login}</span>
                       )}
                       {issue.comments > 0 && (
-                        <span className="text-xs text-muted-foreground flex items-center gap-0.5">
+                        <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
                           <MessageSquare className="h-3 w-3" />
                           {issue.comments}
                         </span>
@@ -194,9 +191,7 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
                     disabled={loading}
                     className="text-xs"
                   >
-                    {loading ? (
-                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
-                    ) : null}
+                    {loading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
                     {t('issues.loadMore')}
                   </Button>
                 </div>
@@ -207,12 +202,12 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
 
         {/* Footer */}
         {repoInfo && (
-          <div className="flex justify-end pt-2 border-t">
+          <div className="flex justify-end border-t pt-2">
             <a
               href={`https://github.com/${repoInfo.owner}/${repoInfo.repo}/issues`}
               target="_blank"
               rel="noopener noreferrer"
-              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 transition-colors"
+              className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               {t('issues.viewOnGithub')}
               <ExternalLink className="h-3 w-3" />

@@ -1,15 +1,16 @@
 import { useEffect, startTransition } from 'react';
-import { useThreadStore } from '@/stores/thread-store';
-import { useTerminalStore } from '@/stores/terminal-store';
-import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
+
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
 import { getAuthToken, getAuthMode } from '@/lib/api';
+import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
+import { useTerminalStore } from '@/stores/terminal-store';
+import { useThreadStore } from '@/stores/thread-store';
 
 // Module-level singleton to prevent duplicate WebSocket connections
 // (React StrictMode double-mounts effects in development)
 let activeWS: WebSocket | null = null;
 let refCount = 0;
-let wasConnected = false;
+let _wasConnected = false;
 let stopped = false;
 let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
@@ -313,7 +314,7 @@ function setupWS(ws: WebSocket) {
     // while disconnected (e.g. agent:result emitted when 0 clients were connected)
     console.log('[ws] Syncing all loaded threads with server');
     useThreadStore.getState().refreshAllLoadedThreads();
-    wasConnected = true;
+    _wasConnected = true;
   };
 
   ws.onmessage = handleMessage;
@@ -353,7 +354,7 @@ function teardown() {
   pendingToolOutputs = [];
   activeWS?.close();
   activeWS = null;
-  wasConnected = false;
+  _wasConnected = false;
 }
 
 export function useWS() {

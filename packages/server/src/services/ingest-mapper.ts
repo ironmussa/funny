@@ -15,13 +15,14 @@
  * FALLBACK only — if cli_message already processed the result, these are skipped.
  */
 
-import { nanoid } from 'nanoid';
-import { wsBroker } from './ws-broker.js';
-import * as tm from './thread-manager.js';
-import * as pm from './project-manager.js';
 import type { WSEvent, WSWorkflowStepData, WSWorkflowStatusData } from '@funny/shared';
-import { log } from '../lib/abbacchio.js';
+import { nanoid } from 'nanoid';
+
+import { log } from '../lib/logger.js';
+import * as pm from './project-manager.js';
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
+import * as tm from './thread-manager.js';
+import { wsBroker } from './ws-broker.js';
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -123,9 +124,7 @@ function getCLIState(requestId: string): CLIMessageState {
  * in CLI output when the text was double-encoded.
  */
 function decodeUnicodeEscapes(str: string): string {
-  return str.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) =>
-    String.fromCharCode(parseInt(hex, 16))
-  );
+  return str.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
 /**
@@ -219,9 +218,7 @@ function getStateByThreadId(threadId: string): ExternalThreadState | null {
  * then falls back to request_id (externalRequestId lookup).
  */
 function resolveState(event: IngestEvent): ExternalThreadState | null {
-  const state = event.thread_id
-    ? getStateByThreadId(event.thread_id)
-    : getState(event.request_id);
+  const state = event.thread_id ? getStateByThreadId(event.thread_id) : getState(event.request_id);
   if (state) state.lastEventAt = Date.now();
   return state;
 }
@@ -246,7 +243,7 @@ function emitWS(state: ExternalThreadState, event: WSEvent): void {
 
 function onAccepted(event: IngestEvent): string | undefined {
   const { request_id, data, metadata, timestamp } = event;
-  const stateKey = resolveStateKey(event);
+  const _stateKey = resolveStateKey(event);
 
   // If thread_id is provided, link to an existing thread instead of creating one
   if (event.thread_id) {
@@ -260,10 +257,22 @@ function onAccepted(event: IngestEvent): string | undefined {
       const prompt = (data.prompt as string) ?? (metadata?.prompt as string);
       if (prompt) {
         tm.insertMessage({ threadId: existing.threadId, role: 'user', content: prompt });
-        emitWS(existing, { type: 'agent:message', threadId: existing.threadId, data: { messageId: '', role: 'user', content: prompt } });
+        emitWS(existing, {
+          type: 'agent:message',
+          threadId: existing.threadId,
+          data: { messageId: '', role: 'user', content: prompt },
+        });
       }
-      emitWS(existing, { type: 'agent:status', threadId: existing.threadId, data: { status: 'pending' } });
-      log.info('Linked to existing thread', { namespace: 'ingest', threadId: existing.threadId, requestId: request_id });
+      emitWS(existing, {
+        type: 'agent:status',
+        threadId: existing.threadId,
+        data: { status: 'pending' },
+      });
+      log.info('Linked to existing thread', {
+        namespace: 'ingest',
+        threadId: existing.threadId,
+        requestId: request_id,
+      });
       return existing.threadId;
     }
     throw new Error(`Thread not found: thread_id=${event.thread_id}`);
@@ -283,13 +292,15 @@ function onAccepted(event: IngestEvent): string | undefined {
   if (!projectId) {
     throw new Error(
       `Cannot resolve projectId for request_id=${request_id}. ` +
-      `Pass metadata.projectId or ensure worktree_path matches a known project.`,
+        `Pass metadata.projectId or ensure worktree_path matches a known project.`,
     );
   }
 
   const threadId = nanoid();
   const userId = (metadata?.userId as string) ?? '__local__';
-  const title = (data.title as string) ?? (data.branch ? `Pipeline: ${data.branch}` : `External: ${request_id.slice(0, 8)}`);
+  const title =
+    (data.title as string) ??
+    (data.branch ? `Pipeline: ${data.branch}` : `External: ${request_id.slice(0, 8)}`);
   const branch = (data.branch as string) ?? null;
   const baseBranch = (data.base_branch as string) ?? null;
   const worktreePath = (data.worktree_path as string) ?? null;
@@ -360,16 +371,27 @@ function onCompleted(event: IngestEvent): void {
   // insert it as a visible chat message before completing the thread.
   const errorMessage = event.data.error_message as string | undefined;
   if (errorMessage) {
-    const msgId = tm.insertMessage({ threadId: state.threadId, role: 'assistant', content: errorMessage });
-    emitWS(state, { type: 'agent:message', threadId: state.threadId, data: { messageId: msgId, role: 'assistant', content: errorMessage } });
+    const msgId = tm.insertMessage({
+      threadId: state.threadId,
+      role: 'assistant',
+      content: errorMessage,
+    });
+    emitWS(state, {
+      type: 'agent:message',
+      threadId: state.threadId,
+      data: { messageId: msgId, role: 'assistant', content: errorMessage },
+    });
   }
 
   const now = new Date().toISOString();
   const costUsd = (event.data.cost_usd as number) ?? (event.data.cost as number) ?? 0;
-  const durationMs = (event.data.duration_ms as number) ?? (event.data.duration as number) ?? undefined;
+  const durationMs =
+    (event.data.duration_ms as number) ?? (event.data.duration as number) ?? undefined;
 
   tm.updateThread(state.threadId, {
-    status: 'completed', stage: 'review', completedAt: now,
+    status: 'completed',
+    stage: 'review',
+    completedAt: now,
     ...(costUsd ? { cost: costUsd } : {}),
   });
 
@@ -404,19 +426,30 @@ function onFailed(event: IngestEvent): void {
   if (!state) return;
 
   // If the event carries an error_message, insert it as a visible chat message before failing.
-  const errorMessage = (event.data.error_message as string) ?? (event.data.error as string) ?? undefined;
+  const errorMessage =
+    (event.data.error_message as string) ?? (event.data.error as string) ?? undefined;
   if (errorMessage) {
-    const msgId = tm.insertMessage({ threadId: state.threadId, role: 'assistant', content: `Error: ${errorMessage}` });
-    emitWS(state, { type: 'agent:message', threadId: state.threadId, data: { messageId: msgId, role: 'assistant', content: `Error: ${errorMessage}` } });
+    const msgId = tm.insertMessage({
+      threadId: state.threadId,
+      role: 'assistant',
+      content: `Error: ${errorMessage}`,
+    });
+    emitWS(state, {
+      type: 'agent:message',
+      threadId: state.threadId,
+      data: { messageId: msgId, role: 'assistant', content: `Error: ${errorMessage}` },
+    });
   }
 
   const now = new Date().toISOString();
   const error = (event.data.error as string) ?? (event.data.message as string) ?? 'Failed';
   const costUsd = (event.data.cost_usd as number) ?? (event.data.cost as number) ?? 0;
-  const durationMs = (event.data.duration_ms as number) ?? (event.data.duration as number) ?? undefined;
+  const durationMs =
+    (event.data.duration_ms as number) ?? (event.data.duration as number) ?? undefined;
 
   tm.updateThread(state.threadId, {
-    status: 'failed', completedAt: now,
+    status: 'failed',
+    completedAt: now,
     ...(costUsd ? { cost: costUsd } : {}),
   });
 
@@ -525,7 +558,7 @@ function handleCLIAssistant(
     msg.message.content
       .filter((b: any) => b.type === 'text' && b.text)
       .map((b: any) => b.text)
-      .join('\n\n')
+      .join('\n\n'),
   );
 
   if (textContent) {
@@ -627,7 +660,7 @@ function handleCLIResult(
   threadState: ExternalThreadState,
   cliState: CLIMessageState,
   msg: any,
-  requestId: string,
+  _requestId: string,
 ): void {
   // Mark as handled so onCompleted/onFailed don't duplicate
   cliState.resultHandled = true;
@@ -665,11 +698,19 @@ function onMessage(event: IngestEvent): void {
   const state = resolveState(event);
   if (!state) return;
 
-  const content = (event.data.text as string) ?? (event.data.content as string) ?? (event.data.message as string) ?? JSON.stringify(event.data);
+  const content =
+    (event.data.text as string) ??
+    (event.data.content as string) ??
+    (event.data.message as string) ??
+    JSON.stringify(event.data);
   const role = (event.data.role as string) ?? 'assistant';
 
   const msgId = tm.insertMessage({ threadId: state.threadId, role, content });
-  emitWS(state, { type: 'agent:message', threadId: state.threadId, data: { messageId: msgId, role, content } });
+  emitWS(state, {
+    type: 'agent:message',
+    threadId: state.threadId,
+    data: { messageId: msgId, role, content },
+  });
 }
 
 // ── Workflow event handler ────────────────────────────────────
@@ -714,7 +755,8 @@ function onWorkflowEvent(event: IngestEvent): void {
         runId,
         workflowName,
         status: 'completed',
-        qualityScores: (data.quality_scores as Record<string, { status: string; details: string }>) ?? undefined,
+        qualityScores:
+          (data.quality_scores as Record<string, { status: string; details: string }>) ?? undefined,
       } satisfies WSWorkflowStatusData,
     };
     emitWS(state, wsEvent);
@@ -785,7 +827,11 @@ export function sweepStaleExternalThreads(): void {
     emitWS(state, { type: 'agent:status', threadId: state.threadId, data: { status: 'stopped' } });
     threadStates.delete(key);
     cliStates.delete(key);
-    log.info('Swept stale external thread', { namespace: 'ingest', threadId: state.threadId, staleSinceMs: now - state.lastEventAt });
+    log.info('Swept stale external thread', {
+      namespace: 'ingest',
+      threadId: state.threadId,
+      staleSinceMs: now - state.lastEventAt,
+    });
   }
 
   if (stale.length > 0) {
@@ -797,16 +843,23 @@ export function sweepStaleExternalThreads(): void {
 export function startExternalThreadSweep(): void {
   if (sweepTimer) return;
   sweepTimer = setInterval(sweepStaleExternalThreads, SWEEP_INTERVAL_MS);
-  log.info(`External thread sweep started (interval=${SWEEP_INTERVAL_MS}ms, ttl=${STALE_TTL_MS}ms)`, { namespace: 'ingest' });
+  log.info(
+    `External thread sweep started (interval=${SWEEP_INTERVAL_MS}ms, ttl=${STALE_TTL_MS}ms)`,
+    { namespace: 'ingest' },
+  );
 }
 
 // Register cleanup with shutdown manager
-shutdownManager.register('ingest-sweep', async () => {
-  if (sweepTimer) {
-    clearInterval(sweepTimer);
-    sweepTimer = null;
-  }
-}, ShutdownPhase.SERVICES);
+shutdownManager.register(
+  'ingest-sweep',
+  async () => {
+    if (sweepTimer) {
+      clearInterval(sweepTimer);
+      sweepTimer = null;
+    }
+  },
+  ShutdownPhase.SERVICES,
+);
 
 // ── Session tool call/result handlers ─────────────────────────
 
@@ -989,10 +1042,17 @@ export function handleIngestEvent(event: IngestEvent): IngestResult {
       // For truly unknown events from other sources, render as system message
       const state = resolveState(event);
       if (!state) return {};
-      const detail = (event.data.message as string) ?? (event.data.detail as string) ?? JSON.stringify(event.data);
+      const detail =
+        (event.data.message as string) ??
+        (event.data.detail as string) ??
+        JSON.stringify(event.data);
       const content = `[${event.event_type}] ${detail}`;
       const msgId = tm.insertMessage({ threadId: state.threadId, role: 'system', content });
-      emitWS(state, { type: 'agent:message', threadId: state.threadId, data: { messageId: msgId, role: 'system', content } });
+      emitWS(state, {
+        type: 'agent:message',
+        threadId: state.threadId,
+        data: { messageId: msgId, role: 'system', content },
+      });
       return {};
   }
 }

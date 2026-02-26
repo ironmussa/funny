@@ -1,9 +1,19 @@
-import { describe, test, expect, beforeEach, mock } from 'bun:test';
+import { describe, test, expect, beforeEach } from 'bun:test';
 import { EventEmitter } from 'events';
-import { AgentRunner } from '../../services/agent-runner.js';
-import type { IClaudeProcess, IClaudeProcessFactory, CLIMessage, CLIAssistantMessage, CLIResultMessage, CLISystemMessage, CLIUserMessage } from '@funny/core/agents';
-import type { IThreadManager, IWSBroker } from '../../services/server-interfaces.js';
+
+import type {
+  IClaudeProcess,
+  IClaudeProcessFactory,
+  CLIMessage,
+  CLIAssistantMessage,
+  CLIResultMessage,
+  CLISystemMessage,
+  CLIUserMessage,
+} from '@funny/core/agents';
 import type { WSEvent } from '@funny/shared';
+
+import { AgentRunner } from '../../services/agent-runner.js';
+import type { IThreadManager, IWSBroker } from '../../services/server-interfaces.js';
 
 // ── Mock helpers ────────────────────────────────────────────────
 
@@ -165,7 +175,7 @@ describe('AgentRunner class', () => {
       expect(lastProcess.started).toBe(true);
 
       // Should have a user message
-      const userMsgs = [...tmMock.messages.values()].filter(m => m.role === 'user');
+      const userMsgs = [...tmMock.messages.values()].filter((m) => m.role === 'user');
       expect(userMsgs).toHaveLength(1);
       expect(userMsgs[0].content).toBe('Fix the bug');
     });
@@ -175,7 +185,7 @@ describe('AgentRunner class', () => {
 
       await runner.startAgent('t1', 'test', '/tmp');
 
-      const statusEvents = wsMock.events.filter(e => e.type === 'agent:status');
+      const statusEvents = wsMock.events.filter((e) => e.type === 'agent:status');
       expect(statusEvents).toHaveLength(1);
       expect(statusEvents[0].data).toEqual({ status: 'running' });
     });
@@ -214,7 +224,7 @@ describe('AgentRunner class', () => {
 
       await runner.startAgent('t1', 'describe image', '/tmp', 'sonnet', 'autoEdit', images);
 
-      const userMsgs = [...tmMock.messages.values()].filter(m => m.role === 'user');
+      const userMsgs = [...tmMock.messages.values()].filter((m) => m.role === 'user');
       expect(userMsgs[0].images).toBe(JSON.stringify(images));
     });
   });
@@ -240,7 +250,7 @@ describe('AgentRunner class', () => {
 
       expect(tmMock.threads.get('t1')?.sessionId).toBe('sess-xyz');
 
-      const initEvents = wsMock.events.filter(e => e.type === 'agent:init');
+      const initEvents = wsMock.events.filter((e) => e.type === 'agent:init');
       expect(initEvents).toHaveLength(1);
       expect(initEvents[0].data).toEqual({
         tools: ['Read', 'Edit'],
@@ -275,7 +285,7 @@ describe('AgentRunner class', () => {
       expect(lastMsg.role).toBe('assistant');
       expect(lastMsg.content).toBe('Hello');
 
-      const wsMsg = wsMock.events.find(e => e.type === 'agent:message');
+      const wsMsg = wsMock.events.find((e) => e.type === 'agent:message');
       expect(wsMsg).toBeTruthy();
       expect(wsMsg!.data).toMatchObject({ role: 'assistant', content: 'Hello' });
     });
@@ -361,9 +371,7 @@ describe('AgentRunner class', () => {
         type: 'assistant',
         message: {
           id: 'cli-msg-1',
-          content: [
-            { type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'test.ts' } },
-          ],
+          content: [{ type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'test.ts' } }],
         },
       };
 
@@ -374,7 +382,7 @@ describe('AgentRunner class', () => {
       expect(tcs[0].name).toBe('Read');
       expect(JSON.parse(tcs[0].input)).toEqual({ file: 'test.ts' });
 
-      const tcEvent = wsMock.events.find(e => e.type === 'agent:tool_call');
+      const tcEvent = wsMock.events.find((e) => e.type === 'agent:tool_call');
       expect(tcEvent).toBeTruthy();
       expect(tcEvent!.data).toMatchObject({ name: 'Read' });
     });
@@ -411,9 +419,7 @@ describe('AgentRunner class', () => {
         type: 'assistant',
         message: {
           id: 'cli-msg-1',
-          content: [
-            { type: 'tool_use', id: 'tu-1', name: 'Glob', input: { pattern: '*.ts' } },
-          ],
+          content: [{ type: 'tool_use', id: 'tu-1', name: 'Glob', input: { pattern: '*.ts' } }],
         },
       };
 
@@ -446,7 +452,7 @@ describe('AgentRunner class', () => {
 
       const tcs = [...tmMock.toolCalls.values()];
       expect(tcs).toHaveLength(2);
-      expect(tcs.map(tc => tc.name)).toEqual(['Read', 'Edit']);
+      expect(tcs.map((tc) => tc.name)).toEqual(['Read', 'Edit']);
     });
 
     test('tracks AskUserQuestion as pending user input', async () => {
@@ -460,7 +466,12 @@ describe('AgentRunner class', () => {
           id: 'cli-msg-1',
           content: [
             { type: 'text', text: 'I have a question' },
-            { type: 'tool_use', id: 'tu-1', name: 'AskUserQuestion', input: { question: 'Which?' } },
+            {
+              type: 'tool_use',
+              id: 'tu-1',
+              name: 'AskUserQuestion',
+              input: { question: 'Which?' },
+            },
           ],
         },
       };
@@ -481,7 +492,7 @@ describe('AgentRunner class', () => {
       lastProcess.simulateMessage(resultMsg);
 
       expect(tmMock.threads.get('t1')?.status).toBe('waiting');
-      const resultEvent = wsMock.events.find(e => e.type === 'agent:result');
+      const resultEvent = wsMock.events.find((e) => e.type === 'agent:result');
       expect(resultEvent!.data).toMatchObject({ status: 'waiting', waitingReason: 'question' });
     });
 
@@ -494,9 +505,7 @@ describe('AgentRunner class', () => {
         type: 'assistant',
         message: {
           id: 'cli-msg-1',
-          content: [
-            { type: 'tool_use', id: 'tu-1', name: 'ExitPlanMode', input: {} },
-          ],
+          content: [{ type: 'tool_use', id: 'tu-1', name: 'ExitPlanMode', input: {} }],
         },
       };
 
@@ -515,7 +524,7 @@ describe('AgentRunner class', () => {
       lastProcess.simulateMessage(resultMsg);
 
       expect(tmMock.threads.get('t1')?.status).toBe('waiting');
-      const resultEvent = wsMock.events.find(e => e.type === 'agent:result');
+      const resultEvent = wsMock.events.find((e) => e.type === 'agent:result');
       expect(resultEvent!.data).toMatchObject({ waitingReason: 'plan' });
     });
   });
@@ -533,9 +542,7 @@ describe('AgentRunner class', () => {
         type: 'assistant',
         message: {
           id: 'cli-msg-1',
-          content: [
-            { type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'test.ts' } },
-          ],
+          content: [{ type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'test.ts' } }],
         },
       };
       lastProcess.simulateMessage(assistantMsg);
@@ -546,16 +553,14 @@ describe('AgentRunner class', () => {
       const userMsg: CLIUserMessage = {
         type: 'user',
         message: {
-          content: [
-            { type: 'tool_result', tool_use_id: 'tu-1', content: 'file contents here' },
-          ],
+          content: [{ type: 'tool_result', tool_use_id: 'tu-1', content: 'file contents here' }],
         },
       };
       lastProcess.simulateMessage(userMsg);
 
       expect(tmMock.toolCalls.get(tcId)?.output).toBe('file contents here');
 
-      const outputEvent = wsMock.events.find(e => e.type === 'agent:tool_output');
+      const outputEvent = wsMock.events.find((e) => e.type === 'agent:tool_output');
       expect(outputEvent).toBeTruthy();
       expect(outputEvent!.data).toMatchObject({ toolCallId: tcId, output: 'file contents here' });
     });
@@ -568,9 +573,7 @@ describe('AgentRunner class', () => {
         type: 'assistant',
         message: {
           id: 'cli-msg-1',
-          content: [
-            { type: 'tool_use', id: 'tu-1', name: 'Bash', input: { command: 'echo' } },
-          ],
+          content: [{ type: 'tool_use', id: 'tu-1', name: 'Bash', input: { command: 'echo' } }],
         },
       };
       lastProcess.simulateMessage(assistantMsg);
@@ -578,9 +581,7 @@ describe('AgentRunner class', () => {
       const userMsg: CLIUserMessage = {
         type: 'user',
         message: {
-          content: [
-            { type: 'tool_result', tool_use_id: 'tu-1', content: 'caf\\u00e9' },
-          ],
+          content: [{ type: 'tool_result', tool_use_id: 'tu-1', content: 'caf\\u00e9' }],
         },
       };
       lastProcess.simulateMessage(userMsg);
@@ -614,7 +615,7 @@ describe('AgentRunner class', () => {
       expect(tmMock.threads.get('t1')?.status).toBe('completed');
       expect(tmMock.threads.get('t1')?.cost).toBe(0.05);
 
-      const resultEvent = wsMock.events.find(e => e.type === 'agent:result');
+      const resultEvent = wsMock.events.find((e) => e.type === 'agent:result');
       expect(resultEvent!.data).toMatchObject({
         result: 'Done!',
         cost: 0.05,
@@ -660,7 +661,7 @@ describe('AgentRunner class', () => {
       lastProcess.simulateMessage(msg);
       lastProcess.simulateMessage(msg);
 
-      const resultEvents = wsMock.events.filter(e => e.type === 'agent:result');
+      const resultEvents = wsMock.events.filter((e) => e.type === 'agent:result');
       expect(resultEvents).toHaveLength(1);
     });
 
@@ -682,7 +683,7 @@ describe('AgentRunner class', () => {
 
       lastProcess.simulateMessage(msg);
 
-      const resultEvent = wsMock.events.find(e => e.type === 'agent:result');
+      const resultEvent = wsMock.events.find((e) => e.type === 'agent:result');
       expect(resultEvent!.data).toMatchObject({ result: 'café' });
     });
   });
@@ -699,7 +700,9 @@ describe('AgentRunner class', () => {
       expect(tmMock.threads.get('t1')?.status).toBe('stopped');
       expect(runner.isAgentRunning('t1')).toBe(false);
 
-      const stopEvents = wsMock.events.filter(e => e.type === 'agent:status' && (e.data as any).status === 'stopped');
+      const stopEvents = wsMock.events.filter(
+        (e) => e.type === 'agent:status' && (e.data as any).status === 'stopped',
+      );
       expect(stopEvents).toHaveLength(1);
     });
 
@@ -782,7 +785,7 @@ describe('AgentRunner class', () => {
       lastProcess.simulateExit(1);
 
       expect(tmMock.threads.get('t1')?.status).toBe('failed');
-      const errorEvents = wsMock.events.filter(e => e.type === 'agent:error');
+      const errorEvents = wsMock.events.filter((e) => e.type === 'agent:error');
       expect(errorEvents.length).toBeGreaterThan(0);
     });
 
@@ -847,9 +850,7 @@ describe('AgentRunner class', () => {
         type: 'assistant',
         message: {
           id: 'cli-1',
-          content: [
-            { type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'a.ts' } },
-          ],
+          content: [{ type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'a.ts' } }],
         },
       });
 
@@ -875,9 +876,7 @@ describe('AgentRunner class', () => {
         type: 'assistant',
         message: {
           id: 'cli-1',
-          content: [
-            { type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'a.ts' } },
-          ],
+          content: [{ type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'a.ts' } }],
         },
       });
 
@@ -918,9 +917,7 @@ describe('AgentRunner class', () => {
       lastProcess.simulateMessage({
         type: 'user',
         message: {
-          content: [
-            { type: 'tool_result', tool_use_id: 'tu-1', content: 'file contents...' },
-          ],
+          content: [{ type: 'tool_result', tool_use_id: 'tu-1', content: 'file contents...' }],
         },
       });
 
@@ -955,8 +952,8 @@ describe('AgentRunner class', () => {
       // Messages: user + assistant (text+tool) + assistant (final text) = 3
       // user message from startAgent + 2 assistant messages
       const msgs = [...tmMock.messages.values()];
-      expect(msgs.filter(m => m.role === 'user')).toHaveLength(1);
-      expect(msgs.filter(m => m.role === 'assistant')).toHaveLength(2);
+      expect(msgs.filter((m) => m.role === 'user')).toHaveLength(1);
+      expect(msgs.filter((m) => m.role === 'assistant')).toHaveLength(2);
 
       // Tool calls: 1
       expect(tmMock.toolCalls.size).toBe(1);

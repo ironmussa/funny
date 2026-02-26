@@ -16,6 +16,13 @@ import {
   gitCommitPersistenceHandler,
   gitPushPersistenceHandler,
   gitMergePersistenceHandler,
+  gitStagePersistenceHandler,
+  gitUnstagePersistenceHandler,
+  gitRevertPersistenceHandler,
+  gitPullPersistenceHandler,
+  gitStashPersistenceHandler,
+  gitStashPopPersistenceHandler,
+  gitResetSoftPersistenceHandler,
 } from './git-event-persistence-handler.js';
 import { gitStatusHandler } from './git-status-handler.js';
 import type { EventHandler, HandlerServiceContext } from './types.js';
@@ -28,6 +35,13 @@ const allHandlers: EventHandler<any>[] = [
   gitCommitPersistenceHandler,
   gitPushPersistenceHandler,
   gitMergePersistenceHandler,
+  gitStagePersistenceHandler,
+  gitUnstagePersistenceHandler,
+  gitRevertPersistenceHandler,
+  gitPullPersistenceHandler,
+  gitStashPersistenceHandler,
+  gitStashPopPersistenceHandler,
+  gitResetSoftPersistenceHandler,
   agentCompletedGitStatusHandler,
 ];
 

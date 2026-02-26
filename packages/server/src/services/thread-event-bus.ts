@@ -76,6 +76,62 @@ export interface GitMergedEvent {
   output: string;
 }
 
+export interface GitStagedEvent {
+  threadId: string;
+  userId: string;
+  projectId: string;
+  paths: string[];
+  cwd: string;
+}
+
+export interface GitUnstagedEvent {
+  threadId: string;
+  userId: string;
+  projectId: string;
+  paths: string[];
+  cwd: string;
+}
+
+export interface GitRevertedEvent {
+  threadId: string;
+  userId: string;
+  projectId: string;
+  paths: string[];
+  cwd: string;
+}
+
+export interface GitPulledEvent {
+  threadId: string;
+  userId: string;
+  projectId: string;
+  cwd: string;
+  output: string;
+}
+
+export interface GitStashedEvent {
+  threadId: string;
+  userId: string;
+  projectId: string;
+  cwd: string;
+  output: string;
+}
+
+export interface GitStashPoppedEvent {
+  threadId: string;
+  userId: string;
+  projectId: string;
+  cwd: string;
+  output: string;
+}
+
+export interface GitResetSoftEvent {
+  threadId: string;
+  userId: string;
+  projectId: string;
+  cwd: string;
+  output: string;
+}
+
 // ── Event map ─────────────────────────────────────────────────────
 
 export interface ThreadEventMap {
@@ -88,6 +144,13 @@ export interface ThreadEventMap {
   'git:committed': (event: GitCommittedEvent) => void;
   'git:pushed': (event: GitPushedEvent) => void;
   'git:merged': (event: GitMergedEvent) => void;
+  'git:staged': (event: GitStagedEvent) => void;
+  'git:unstaged': (event: GitUnstagedEvent) => void;
+  'git:reverted': (event: GitRevertedEvent) => void;
+  'git:pulled': (event: GitPulledEvent) => void;
+  'git:stashed': (event: GitStashedEvent) => void;
+  'git:stash-popped': (event: GitStashPoppedEvent) => void;
+  'git:reset-soft': (event: GitResetSoftEvent) => void;
 }
 
 // ── Typed EventEmitter ────────────────────────────────────────────

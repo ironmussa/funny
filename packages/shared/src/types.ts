@@ -697,7 +697,14 @@ export type ThreadEventType =
   | 'git:commit'
   | 'git:push'
   | 'git:merge'
-  | 'git:pr_created';
+  | 'git:pr_created'
+  | 'git:stage'
+  | 'git:unstage'
+  | 'git:revert'
+  | 'git:pull'
+  | 'git:stash'
+  | 'git:stash_pop'
+  | 'git:reset_soft';
 
 export interface ThreadEvent {
   id: string;

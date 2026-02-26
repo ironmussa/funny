@@ -242,8 +242,9 @@ gitRoutes.get('/:threadId/diff', async (c) => {
 
 // POST /api/git/:threadId/stage
 gitRoutes.post('/:threadId/stage', async (c) => {
+  const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = requireThreadCwd(c.req.param('threadId'), userId);
+  const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -256,14 +257,25 @@ gitRoutes.post('/:threadId/stage', async (c) => {
 
   const result = await stageFiles(cwd, parsed.value.paths);
   if (result.isErr()) return resultToResponse(c, result);
-  invalidateGitStatusCache(c.req.param('threadId'));
+
+  const thread = requireThread(threadId, userId);
+  threadEventBus.emit('git:staged', {
+    threadId,
+    userId,
+    projectId: thread.isOk() ? thread.value.projectId : '',
+    paths: parsed.value.paths,
+    cwd,
+  });
+
+  invalidateGitStatusCache(threadId);
   return c.json({ ok: true });
 });
 
 // POST /api/git/:threadId/unstage
 gitRoutes.post('/:threadId/unstage', async (c) => {
+  const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = requireThreadCwd(c.req.param('threadId'), userId);
+  const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -276,14 +288,25 @@ gitRoutes.post('/:threadId/unstage', async (c) => {
 
   const result = await unstageFiles(cwd, parsed.value.paths);
   if (result.isErr()) return resultToResponse(c, result);
-  invalidateGitStatusCache(c.req.param('threadId'));
+
+  const thread = requireThread(threadId, userId);
+  threadEventBus.emit('git:unstaged', {
+    threadId,
+    userId,
+    projectId: thread.isOk() ? thread.value.projectId : '',
+    paths: parsed.value.paths,
+    cwd,
+  });
+
+  invalidateGitStatusCache(threadId);
   return c.json({ ok: true });
 });
 
 // POST /api/git/:threadId/revert
 gitRoutes.post('/:threadId/revert', async (c) => {
+  const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = requireThreadCwd(c.req.param('threadId'), userId);
+  const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -296,7 +319,17 @@ gitRoutes.post('/:threadId/revert', async (c) => {
 
   const result = await revertFiles(cwd, parsed.value.paths);
   if (result.isErr()) return resultToResponse(c, result);
-  invalidateGitStatusCache(c.req.param('threadId'));
+
+  const thread = requireThread(threadId, userId);
+  threadEventBus.emit('git:reverted', {
+    threadId,
+    userId,
+    projectId: thread.isOk() ? thread.value.projectId : '',
+    paths: parsed.value.paths,
+    cwd,
+  });
+
+  invalidateGitStatusCache(threadId);
   return c.json({ ok: true });
 });
 
@@ -637,38 +670,71 @@ gitRoutes.get('/:threadId/log', async (c) => {
 
 // POST /api/git/:threadId/pull — pull from remote (ff-only)
 gitRoutes.post('/:threadId/pull', async (c) => {
+  const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = requireThreadCwd(c.req.param('threadId'), userId);
+  const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const identity = resolveIdentity(userId);
   const result = await pull(cwdResult.value, identity);
   if (result.isErr()) return resultToResponse(c, result);
-  invalidateGitStatusCache(c.req.param('threadId'));
+
+  const thread = requireThread(threadId, userId);
+  threadEventBus.emit('git:pulled', {
+    threadId,
+    userId,
+    projectId: thread.isOk() ? thread.value.projectId : '',
+    cwd: cwdResult.value,
+    output: result.value,
+  });
+
+  invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });
 });
 
 // POST /api/git/:threadId/stash — stash current changes
 gitRoutes.post('/:threadId/stash', async (c) => {
+  const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = requireThreadCwd(c.req.param('threadId'), userId);
+  const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const result = await stash(cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
-  invalidateGitStatusCache(c.req.param('threadId'));
+
+  const thread = requireThread(threadId, userId);
+  threadEventBus.emit('git:stashed', {
+    threadId,
+    userId,
+    projectId: thread.isOk() ? thread.value.projectId : '',
+    cwd: cwdResult.value,
+    output: result.value,
+  });
+
+  invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });
 });
 
 // POST /api/git/:threadId/stash/pop — pop most recent stash
 gitRoutes.post('/:threadId/stash/pop', async (c) => {
+  const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = requireThreadCwd(c.req.param('threadId'), userId);
+  const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const result = await stashPop(cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
-  invalidateGitStatusCache(c.req.param('threadId'));
+
+  const thread = requireThread(threadId, userId);
+  threadEventBus.emit('git:stash-popped', {
+    threadId,
+    userId,
+    projectId: thread.isOk() ? thread.value.projectId : '',
+    cwd: cwdResult.value,
+    output: result.value,
+  });
+
+  invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });
 });
 
@@ -685,13 +751,24 @@ gitRoutes.get('/:threadId/stash/list', async (c) => {
 
 // POST /api/git/:threadId/reset-soft — undo last commit keeping changes
 gitRoutes.post('/:threadId/reset-soft', async (c) => {
+  const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = requireThreadCwd(c.req.param('threadId'), userId);
+  const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const result = await resetSoft(cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
-  invalidateGitStatusCache(c.req.param('threadId'));
+
+  const thread = requireThread(threadId, userId);
+  threadEventBus.emit('git:reset-soft', {
+    threadId,
+    userId,
+    projectId: thread.isOk() ? thread.value.projectId : '',
+    cwd: cwdResult.value,
+    output: result.value,
+  });
+
+  invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });
 });
 

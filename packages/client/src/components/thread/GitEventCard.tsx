@@ -4,7 +4,19 @@
  */
 
 import type { ThreadEvent } from '@funny/shared';
-import { GitCommit, Upload, GitMerge, GitPullRequest } from 'lucide-react';
+import {
+  GitCommit,
+  Upload,
+  GitMerge,
+  GitPullRequest,
+  Plus,
+  Minus,
+  Undo2,
+  Download,
+  Archive,
+  ArchiveRestore,
+  RotateCcw,
+} from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -35,6 +47,21 @@ const eventConfig: Record<string, { icon: typeof GitCommit; label: string; color
     label: 'PR Created',
     color: 'border-orange-500/20 bg-orange-500/5',
   },
+  'git:stage': { icon: Plus, label: 'Staged', color: 'border-emerald-500/20 bg-emerald-500/5' },
+  'git:unstage': { icon: Minus, label: 'Unstaged', color: 'border-yellow-500/20 bg-yellow-500/5' },
+  'git:revert': { icon: Undo2, label: 'Reverted', color: 'border-red-500/20 bg-red-500/5' },
+  'git:pull': { icon: Download, label: 'Pulled', color: 'border-blue-500/20 bg-blue-500/5' },
+  'git:stash': { icon: Archive, label: 'Stashed', color: 'border-amber-500/20 bg-amber-500/5' },
+  'git:stash_pop': {
+    icon: ArchiveRestore,
+    label: 'Stash Popped',
+    color: 'border-amber-500/20 bg-amber-500/5',
+  },
+  'git:reset_soft': {
+    icon: RotateCcw,
+    label: 'Undo Commit',
+    color: 'border-red-500/20 bg-red-500/5',
+  },
 };
 
 const iconColor: Record<string, string> = {
@@ -42,6 +69,13 @@ const iconColor: Record<string, string> = {
   'git:push': 'text-blue-600',
   'git:merge': 'text-purple-600',
   'git:pr_created': 'text-orange-600',
+  'git:stage': 'text-emerald-600',
+  'git:unstage': 'text-yellow-600',
+  'git:revert': 'text-red-600',
+  'git:pull': 'text-blue-600',
+  'git:stash': 'text-amber-600',
+  'git:stash_pop': 'text-amber-600',
+  'git:reset_soft': 'text-red-600',
 };
 
 export const GitEventCard = memo(function GitEventCard({ event }: { event: ThreadEvent }) {
@@ -74,6 +108,16 @@ export const GitEventCard = memo(function GitEventCard({ event }: { event: Threa
       {metadata.sourceBranch && metadata.targetBranch && (
         <span className="font-mono text-[10px] text-muted-foreground">
           {metadata.sourceBranch} → {metadata.targetBranch}
+        </span>
+      )}
+      {metadata.paths && Array.isArray(metadata.paths) && (
+        <span className="truncate text-muted-foreground">
+          {metadata.paths.length === 1 ? metadata.paths[0] : `${metadata.paths.length} files`}
+        </span>
+      )}
+      {metadata.output && !metadata.paths && !metadata.message && !metadata.title && (
+        <span className="truncate text-muted-foreground">
+          {metadata.output.split('\n')[0].slice(0, 80)}
         </span>
       )}
       {event.createdAt && (

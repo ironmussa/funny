@@ -6,7 +6,18 @@
  * Decouples route handlers from direct thread-event-service calls.
  */
 
-import type { GitCommittedEvent, GitPushedEvent, GitMergedEvent } from '../thread-event-bus.js';
+import type {
+  GitCommittedEvent,
+  GitPushedEvent,
+  GitMergedEvent,
+  GitStagedEvent,
+  GitUnstagedEvent,
+  GitRevertedEvent,
+  GitPulledEvent,
+  GitStashedEvent,
+  GitStashPoppedEvent,
+  GitResetSoftEvent,
+} from '../thread-event-bus.js';
 import type { EventHandler } from './types.js';
 import type { HandlerServiceContext } from './types.js';
 
@@ -70,6 +81,111 @@ export const gitMergePersistenceHandler: EventHandler<'git:merged'> = {
     broadcastThreadEvent(ctx, event.userId, event.threadId, 'git:merge', {
       sourceBranch: event.sourceBranch,
       targetBranch: event.targetBranch,
+    });
+  },
+};
+
+export const gitStagePersistenceHandler: EventHandler<'git:staged'> = {
+  name: 'persist-git-stage',
+  event: 'git:staged',
+
+  async action(event: GitStagedEvent, ctx) {
+    await ctx.saveThreadEvent(event.threadId, 'git:stage', {
+      paths: event.paths,
+      cwd: event.cwd,
+    });
+    broadcastThreadEvent(ctx, event.userId, event.threadId, 'git:stage', {
+      paths: event.paths,
+    });
+  },
+};
+
+export const gitUnstagePersistenceHandler: EventHandler<'git:unstaged'> = {
+  name: 'persist-git-unstage',
+  event: 'git:unstaged',
+
+  async action(event: GitUnstagedEvent, ctx) {
+    await ctx.saveThreadEvent(event.threadId, 'git:unstage', {
+      paths: event.paths,
+      cwd: event.cwd,
+    });
+    broadcastThreadEvent(ctx, event.userId, event.threadId, 'git:unstage', {
+      paths: event.paths,
+    });
+  },
+};
+
+export const gitRevertPersistenceHandler: EventHandler<'git:reverted'> = {
+  name: 'persist-git-revert',
+  event: 'git:reverted',
+
+  async action(event: GitRevertedEvent, ctx) {
+    await ctx.saveThreadEvent(event.threadId, 'git:revert', {
+      paths: event.paths,
+      cwd: event.cwd,
+    });
+    broadcastThreadEvent(ctx, event.userId, event.threadId, 'git:revert', {
+      paths: event.paths,
+    });
+  },
+};
+
+export const gitPullPersistenceHandler: EventHandler<'git:pulled'> = {
+  name: 'persist-git-pull',
+  event: 'git:pulled',
+
+  async action(event: GitPulledEvent, ctx) {
+    await ctx.saveThreadEvent(event.threadId, 'git:pull', {
+      output: event.output,
+      cwd: event.cwd,
+    });
+    broadcastThreadEvent(ctx, event.userId, event.threadId, 'git:pull', {
+      output: event.output,
+    });
+  },
+};
+
+export const gitStashPersistenceHandler: EventHandler<'git:stashed'> = {
+  name: 'persist-git-stash',
+  event: 'git:stashed',
+
+  async action(event: GitStashedEvent, ctx) {
+    await ctx.saveThreadEvent(event.threadId, 'git:stash', {
+      output: event.output,
+      cwd: event.cwd,
+    });
+    broadcastThreadEvent(ctx, event.userId, event.threadId, 'git:stash', {
+      output: event.output,
+    });
+  },
+};
+
+export const gitStashPopPersistenceHandler: EventHandler<'git:stash-popped'> = {
+  name: 'persist-git-stash-pop',
+  event: 'git:stash-popped',
+
+  async action(event: GitStashPoppedEvent, ctx) {
+    await ctx.saveThreadEvent(event.threadId, 'git:stash_pop', {
+      output: event.output,
+      cwd: event.cwd,
+    });
+    broadcastThreadEvent(ctx, event.userId, event.threadId, 'git:stash_pop', {
+      output: event.output,
+    });
+  },
+};
+
+export const gitResetSoftPersistenceHandler: EventHandler<'git:reset-soft'> = {
+  name: 'persist-git-reset-soft',
+  event: 'git:reset-soft',
+
+  async action(event: GitResetSoftEvent, ctx) {
+    await ctx.saveThreadEvent(event.threadId, 'git:reset_soft', {
+      output: event.output,
+      cwd: event.cwd,
+    });
+    broadcastThreadEvent(ctx, event.userId, event.threadId, 'git:reset_soft', {
+      output: event.output,
     });
   },
 };

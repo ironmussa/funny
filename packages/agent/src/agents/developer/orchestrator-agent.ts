@@ -18,10 +18,10 @@ import { AgentExecutor, ModelFactory } from '@funny/core/agents';
 import type { AgentRole, AgentContext } from '@funny/core/agents';
 import { executeShell } from '@funny/core/git';
 
-import type { PipelineServiceConfig } from '../config/schema.js';
-import { logger } from '../infrastructure/logger.js';
-import type { IssueDetail } from '../trackers/tracker.js';
-import type { ImplementationPlan } from './session.js';
+import type { PipelineServiceConfig } from '../../config/schema.js';
+import type { ImplementationPlan } from '../../core/session.js';
+import { logger } from '../../infrastructure/logger.js';
+import type { IssueDetail } from '../../trackers/tracker.js';
 
 // ── Planner event types ─────────────────────────────────────────
 

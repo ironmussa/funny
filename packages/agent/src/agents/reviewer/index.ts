@@ -1,5 +1,5 @@
 /**
- * @funny/reviewbot — Automated code review for GitHub PRs.
+ * Reviewer agent — automated code review for GitHub PRs.
  *
  * V1: Single-pass analysis. Fetch PR diff → LLM review → post findings.
  */

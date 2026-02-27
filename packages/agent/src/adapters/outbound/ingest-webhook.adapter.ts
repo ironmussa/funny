@@ -15,9 +15,9 @@
 
 import { FunnyClient, FunnyClientError } from '@funny/funny-client';
 
-import type { PipelineEvent } from '../core/types.js';
-import type { EventBus } from './event-bus.js';
-import { logger } from './logger.js';
+import type { PipelineEvent } from '../../core/types.js';
+import type { EventBus } from '../../infrastructure/event-bus.js';
+import { logger } from '../../infrastructure/logger.js';
 
 const DEFAULT_BASE_URL = 'http://localhost:3001';
 

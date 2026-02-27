@@ -11,17 +11,16 @@
 
 import { zValidator } from '@hono/zod-validator';
 import { Hono } from 'hono';
-import { nanoid } from 'nanoid';
 import { z } from 'zod';
 
 import type { PipelineServiceConfig } from '../config/schema.js';
-import type { OrchestratorAgent } from '../core/orchestrator-agent.js';
 import type { SessionStore } from '../core/session-store.js';
 import { Session } from '../core/session.js';
 import type { IssueRef } from '../core/session.js';
 import type { EventBus } from '../infrastructure/event-bus.js';
 import { logger } from '../infrastructure/logger.js';
 import type { Tracker } from '../trackers/tracker.js';
+import type { IssuePipelineWorkflow } from '../workflows/issue-pipeline.workflow.js';
 
 // ── Validation schemas ──────────────────────────────────────────
 
@@ -44,7 +43,7 @@ const StartSessionSchema = z.object({
 
 export function createSessionRoutes(
   sessionStore: SessionStore,
-  orchestratorAgent: OrchestratorAgent,
+  issuePipeline: IssuePipelineWorkflow,
   tracker: Tracker | null,
   eventBus: EventBus,
   config: PipelineServiceConfig,
@@ -200,7 +199,7 @@ export function createSessionRoutes(
       },
     });
 
-    // Run inline: plan → implement → PR
+    // Run the pipeline: plan → implement → PR
     await sessionStore.transition(session.id, 'planning');
 
     const fullContext = isPromptOnly
@@ -222,25 +221,30 @@ export function createSessionRoutes(
       fullContext,
     };
 
-    const baseBranch = body.baseBranch;
-
-    runIssuePipeline(
-      session,
-      issueDetailForPlan,
-      body.projectPath,
-      baseBranch,
-      sessionStore,
-      orchestratorAgent,
-      eventBus,
-      config,
-    ).catch(async (err) => {
-      const errorMsg = err.message ?? String(err);
-      logger.error({ sessionId: session.id, err: errorMsg }, 'Issue pipeline failed');
-      await emitError(eventBus, session.id, `Pipeline failed: ${errorMsg}`, {
-        sessionStore,
-        fatal: true,
+    issuePipeline
+      .run({
+        session,
+        issue: issueDetailForPlan,
+        projectPath: body.projectPath,
+        baseBranch: body.baseBranch,
+      })
+      .catch(async (err) => {
+        const errorMsg = err.message ?? String(err);
+        logger.error({ sessionId: session.id, err: errorMsg }, 'Issue pipeline failed');
+        await eventBus.publish({
+          event_type: 'session.message' as any,
+          request_id: session.id,
+          timestamp: new Date().toISOString(),
+          data: { role: 'assistant', content: `Error: Pipeline failed: ${errorMsg}` },
+        });
+        await sessionStore.transition(session.id, 'failed', { error: errorMsg });
+        await eventBus.publish({
+          event_type: 'session.failed' as any,
+          request_id: session.id,
+          timestamp: new Date().toISOString(),
+          data: { error: errorMsg, error_message: `Error: Pipeline failed: ${errorMsg}` },
+        });
       });
-    });
 
     // Comment on the issue to show it's being worked on (only for real issues)
     if (tracker && !isPromptOnly) {
@@ -313,299 +317,6 @@ export function createSessionRoutes(
   });
 
   return app;
-}
-
-// ── Error reporting helper ───────────────────────────────────────
-
-/**
- * Publish an error message to the UI (visible in the thread chat)
- * and optionally transition the session to 'failed'.
- */
-async function emitError(
-  eventBus: EventBus,
-  sessionId: string,
-  message: string,
-  opts?: { sessionStore?: SessionStore; fatal?: boolean },
-) {
-  await eventBus.publish({
-    event_type: 'session.message' as any,
-    request_id: sessionId,
-    timestamp: new Date().toISOString(),
-    data: { role: 'assistant', content: `Error: ${message}` },
-  });
-
-  if (opts?.fatal && opts.sessionStore) {
-    await opts.sessionStore.transition(sessionId, 'failed', { error: message });
-    await eventBus.publish({
-      event_type: 'session.failed' as any,
-      request_id: sessionId,
-      timestamp: new Date().toISOString(),
-      data: { error: message, error_message: `Error: ${message}` },
-    });
-  }
-}
-
-// ── Issue pipeline ──────────────────────────────────────────────
-
-/**
- * Runs the full issue-to-PR pipeline.
- * Steps: plan → create worktree → implement → push → create PR
- */
-async function runIssuePipeline(
-  session: Session,
-  issue: import('../trackers/tracker.js').IssueDetail,
-  projectPath: string,
-  baseBranch: string,
-  sessionStore: SessionStore,
-  orchestratorAgent: OrchestratorAgent,
-  eventBus: EventBus,
-  _config: PipelineServiceConfig,
-) {
-  // Emit started so the UI transitions the thread from pending → running
-  await eventBus.publish({
-    event_type: 'session.started' as any,
-    request_id: session.id,
-    timestamp: new Date().toISOString(),
-    data: {},
-  });
-
-  // Step 1: Plan
-  logger.info({ sessionId: session.id }, 'Pipeline: planning');
-  const plan = await orchestratorAgent.planIssue(issue, projectPath, {
-    onEvent: async (event) => {
-      switch (event.type) {
-        case 'text':
-          await eventBus.publish({
-            event_type: 'session.plan_ready' as any,
-            request_id: session.id,
-            timestamp: new Date().toISOString(),
-            data: { role: 'assistant', content: event.content },
-          });
-          break;
-        case 'tool_call':
-          await eventBus.publish({
-            event_type: 'session.tool_call',
-            request_id: session.id,
-            timestamp: new Date().toISOString(),
-            data: {
-              tool_name: event.name,
-              tool_input: event.args,
-              tool_call_id: event.id,
-            },
-          });
-          break;
-        case 'tool_result':
-          await eventBus.publish({
-            event_type: 'session.tool_result',
-            request_id: session.id,
-            timestamp: new Date().toISOString(),
-            data: {
-              tool_call_id: event.id,
-              output: event.result,
-            },
-          });
-          break;
-        case 'error':
-          await emitError(eventBus, session.id, event.message);
-          break;
-      }
-    },
-  });
-  sessionStore.update(session.id, (s) => s.setPlan(plan));
-  await eventBus.publish({
-    event_type: 'session.plan_ready',
-    request_id: session.id,
-    timestamp: new Date().toISOString(),
-    data: { sessionId: session.id, plan },
-  });
-
-  logger.info(
-    { sessionId: session.id, summary: plan.summary, complexity: plan.estimated_complexity },
-    'Pipeline: plan ready',
-  );
-
-  // Step 2: Create worktree + branch
-  const isPromptOnly = issue.number === 0;
-  const branchPrefix = isPromptOnly ? 'prompt' : `issue/${issue.number}`;
-  const branchName = `${branchPrefix}/${slugify(issue.title)}-${nanoid(5)}`;
-  const { createWorktree } = await import('@funny/core/git');
-
-  const wtResult = await createWorktree(projectPath, branchName, baseBranch);
-  if (wtResult.isErr()) {
-    logger.error({ err: wtResult.error }, 'Failed to create worktree');
-    await emitError(eventBus, session.id, `Worktree creation failed: ${wtResult.error}`, {
-      sessionStore,
-      fatal: true,
-    });
-    return;
-  }
-
-  const worktreePath = wtResult.value;
-  sessionStore.update(session.id, (s) => s.setBranch(branchName, worktreePath));
-  await sessionStore.transition(session.id, 'implementing');
-
-  logger.info(
-    { sessionId: session.id, branch: branchName, worktreePath },
-    'Pipeline: implementing',
-  );
-
-  // Step 3: Implement
-  const implResult = await orchestratorAgent.implementIssue(issue, plan, worktreePath, branchName, {
-    onEvent: async (event) => {
-      switch (event.type) {
-        case 'text':
-          await eventBus.publish({
-            event_type: 'session.message' as any,
-            request_id: session.id,
-            timestamp: new Date().toISOString(),
-            data: { role: 'assistant', content: event.content },
-          });
-          break;
-        case 'tool_call':
-          await eventBus.publish({
-            event_type: 'session.tool_call',
-            request_id: session.id,
-            timestamp: new Date().toISOString(),
-            data: {
-              tool_name: event.name,
-              tool_input: event.args,
-              tool_call_id: event.id,
-            },
-          });
-          break;
-        case 'tool_result':
-          await eventBus.publish({
-            event_type: 'session.tool_result',
-            request_id: session.id,
-            timestamp: new Date().toISOString(),
-            data: {
-              tool_call_id: event.id,
-              output: event.result,
-            },
-          });
-          break;
-        case 'error':
-          await emitError(eventBus, session.id, event.message);
-          break;
-      }
-    },
-  });
-
-  // Check if implementation had errors
-  if (implResult.status === 'error') {
-    const errorDetail =
-      implResult.findings_count > 0
-        ? `Implementation failed with ${implResult.findings_count} finding(s)`
-        : 'Implementation failed';
-    logger.error({ sessionId: session.id, status: implResult.status }, errorDetail);
-    await emitError(eventBus, session.id, errorDetail, { sessionStore, fatal: true });
-    return;
-  }
-
-  logger.info(
-    { sessionId: session.id, status: implResult.status, findings: implResult.findings_count },
-    'Pipeline: implementation complete',
-  );
-
-  // Step 4: Commit changes — the pipeline always handles committing, not the LLM
-  const { push, createPR, execute: gitExec } = await import('@funny/core/git');
-  const { executeShell } = await import('@funny/core/git');
-  const identity = process.env.GH_TOKEN ? { githubToken: process.env.GH_TOKEN } : undefined;
-
-  const statusResult = await gitExec('git', ['status', '--porcelain'], {
-    cwd: worktreePath,
-    reject: false,
-  });
-  if (statusResult.stdout.trim().length > 0) {
-    logger.info({ sessionId: session.id }, 'Committing implementation changes');
-    const commitMsg = isPromptOnly
-      ? `feat: ${issue.title}`
-      : `fix: ${issue.title} (Closes #${issue.number})`;
-    await executeShell(`git add -A && git commit -m "${commitMsg.replace(/"/g, '\\"')}"`, {
-      cwd: worktreePath,
-      reject: false,
-    });
-  }
-
-  // Step 5: Push + create PR (only if there are commits ahead of base)
-  const countResult = await gitExec('git', ['rev-list', '--count', `${baseBranch}..HEAD`], {
-    cwd: worktreePath,
-    reject: false,
-  });
-  const commitsAhead = parseInt(countResult.stdout.trim(), 10) || 0;
-
-  if (commitsAhead === 0) {
-    logger.warn({ sessionId: session.id }, 'No commits on branch — skipping push/PR');
-    await emitError(
-      eventBus,
-      session.id,
-      'Implementation produced no commits. Nothing to push or create a PR for.',
-      {
-        sessionStore,
-        fatal: true,
-      },
-    );
-    return;
-  }
-
-  const pushResult = await push(worktreePath, identity);
-  if (pushResult.isErr()) {
-    logger.error({ err: pushResult.error }, 'Failed to push branch');
-    await emitError(eventBus, session.id, `Push failed: ${pushResult.error}`, {
-      sessionStore,
-      fatal: true,
-    });
-    return;
-  }
-
-  await sessionStore.transition(session.id, 'pr_created');
-
-  const prTitle = isPromptOnly
-    ? `feat: ${issue.title}`
-    : `fix: ${issue.title} (Closes #${issue.number})`;
-  const prBody = `## Summary\n\n${plan.summary}\n\n## Approach\n\n${plan.approach}\n\n---\n\nAutomated by funny agent session \`${session.id}\``;
-
-  const prResult = await createPR(worktreePath, prTitle, prBody, baseBranch, identity);
-
-  if (prResult.isOk()) {
-    const prUrl = prResult.value;
-    // Extract PR number from URL (e.g. https://github.com/org/repo/pull/42)
-    const prNumber = parseInt(prUrl.split('/').pop() ?? '0', 10);
-    sessionStore.update(session.id, (s) => s.setPR(prNumber, prUrl));
-    logger.info({ sessionId: session.id, prNumber, prUrl }, 'Pipeline: PR created');
-  } else {
-    logger.warn(
-      { err: prResult.error },
-      'PR creation failed — session still tracks the pushed branch',
-    );
-    await emitError(
-      eventBus,
-      session.id,
-      `PR creation failed: ${prResult.error}. Branch was pushed but PR could not be created.`,
-    );
-  }
-
-  // Transition to waiting for CI
-  await sessionStore.transition(session.id, 'ci_running');
-
-  // Emit completed so the UI transitions the thread to completed/review
-  const issueLabel = isPromptOnly ? issue.title : `#${issue.number}: ${issue.title}`;
-  const completionData: Record<string, string> = {
-    result: prResult.isOk()
-      ? `PR created for ${issueLabel}`
-      : `Branch pushed for ${issueLabel} (PR creation failed)`,
-  };
-  if (prResult.isErr()) {
-    completionData.error_message = `Error: PR creation failed: ${prResult.error}. Branch was pushed but PR could not be created.`;
-  }
-  await eventBus.publish({
-    event_type: 'session.completed' as any,
-    request_id: session.id,
-    timestamp: new Date().toISOString(),
-    data: completionData,
-  });
-
-  logger.info({ sessionId: session.id }, 'Pipeline: complete, waiting for CI/review');
 }
 
 /** Convert issue title to a git-branch-friendly slug */

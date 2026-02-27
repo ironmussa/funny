@@ -1,7 +1,9 @@
 /**
- * @funny/agent — Agent Service HTTP app.
+ * @funny/orchestrator — Orchestrator Service HTTP app.
  *
- * Minimal wiring: sessions, reactions, orchestrator, webhooks.
+ * 3-layer architecture:
+ *   Adapters (inbound/outbound I/O) → Workflows (orchestration) → Agents (atomic executors)
+ *
  * Flow: Issue → Plan → Implement → PR → CI/Review reactions.
  */
 
@@ -10,18 +12,22 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
 
+import { IngestWebhookAdapter } from './adapters/outbound/ingest-webhook.adapter.js';
+import { ReviewEventAdapter } from './adapters/outbound/review-event.adapter.js';
+import { OrchestratorAgent } from './agents/developer/index.js';
 import { loadConfig } from './config/loader.js';
 import type { PipelineServiceConfig } from './config/schema.js';
-import { OrchestratorAgent } from './core/orchestrator-agent.js';
 import { SessionStore } from './core/session-store.js';
-import { Watchdog } from './core/watchdog.js';
 import { EventBus } from './infrastructure/event-bus.js';
-import { IngestWebhookAdapter } from './infrastructure/ingest-webhook-adapter.js';
 import { logger } from './infrastructure/logger.js';
 import { createSessionRoutes } from './routes/sessions.js';
 import { createWebhookRoutes } from './routes/webhooks.js';
 import { GitHubTracker } from './trackers/github-tracker.js';
 import type { Tracker } from './trackers/tracker.js';
+import { CIRetryWorkflow } from './workflows/ci-retry.workflow.js';
+import { IssuePipelineWorkflow } from './workflows/issue-pipeline.workflow.js';
+import { MergeWorkflow } from './workflows/merge.workflow.js';
+import { ReviewWorkflow } from './workflows/review.workflow.js';
 
 // ── Bootstrap ────────────────────────────────────────────────────
 
@@ -70,63 +76,98 @@ try {
   );
 }
 
-// Initialize Watchdog
-const watchdog = new Watchdog(eventBus, sessionStore, config, {
-  respawnAgent: async (sessionId, prompt) => {
-    const session = sessionStore.get(sessionId);
-    if (!session || !session.worktreePath || !session.branch) return;
+// ── Shared handler functions ─────────────────────────────────────
 
-    // Re-run the implementing agent with the new prompt
-    orchestratorAgent
-      .implementIssue(
-        {
-          number: session.issue.number,
-          title: session.issue.title,
-          state: 'open',
-          body: session.issue.body ?? null,
-          url: session.issue.url,
-          labels: session.issue.labels.map((l) => ({ name: l, color: '' })),
-          assignee: null,
-          commentsCount: 0,
-          createdAt: '',
-          updatedAt: '',
-          comments: [],
-          fullContext: `${session.issue.body ?? ''}\n\n---\n\n**Agent instructions:** ${prompt}`,
-        },
-        session.plan!,
-        session.worktreePath,
-        session.branch,
-      )
-      .catch((err) => {
-        logger.error({ sessionId, err: err.message }, 'Respawned agent failed');
-      });
-  },
-  notify: async (sessionId, message) => {
-    logger.info({ sessionId, message }, 'Session notification');
-    await eventBus.publish({
-      event_type: 'reaction.triggered',
-      request_id: sessionId,
-      timestamp: new Date().toISOString(),
-      data: { sessionId, message, type: 'notification' },
+const respawnAgent = async (sessionId: string, prompt: string) => {
+  const session = sessionStore.get(sessionId);
+  if (!session || !session.worktreePath || !session.branch) return;
+
+  orchestratorAgent
+    .implementIssue(
+      {
+        number: session.issue.number,
+        title: session.issue.title,
+        state: 'open',
+        body: session.issue.body ?? null,
+        url: session.issue.url,
+        labels: session.issue.labels.map((l) => ({ name: l, color: '' })),
+        assignee: null,
+        commentsCount: 0,
+        createdAt: '',
+        updatedAt: '',
+        comments: [],
+        fullContext: `${session.issue.body ?? ''}\n\n---\n\n**Agent instructions:** ${prompt}`,
+      },
+      session.plan!,
+      session.worktreePath,
+      session.branch,
+    )
+    .catch((err) => {
+      logger.error({ sessionId, err: err.message }, 'Respawned agent failed');
     });
-  },
-  autoMerge: async (sessionId) => {
-    const session = sessionStore.get(sessionId);
-    if (!session?.prNumber) return;
-    const { execute } = await import('@funny/core/git');
-    const ghEnv = process.env.GH_TOKEN ? { GH_TOKEN: process.env.GH_TOKEN } : undefined;
-    await execute('gh', ['pr', 'merge', String(session.prNumber), '--squash', '--delete-branch'], {
-      cwd: session.projectPath,
-      env: ghEnv,
-    });
-    await sessionStore.transition(sessionId, 'merged', { autoMerged: true });
-    logger.info({ sessionId, prNumber: session.prNumber }, 'PR auto-merged');
-  },
+};
+
+const notify = async (sessionId: string, message: string) => {
+  logger.info({ sessionId, message }, 'Session notification');
+  await eventBus.publish({
+    event_type: 'reaction.triggered',
+    request_id: sessionId,
+    timestamp: new Date().toISOString(),
+    data: { sessionId, message, type: 'notification' },
+  });
+};
+
+const autoMerge = async (sessionId: string) => {
+  const session = sessionStore.get(sessionId);
+  if (!session?.prNumber) return;
+  const { execute } = await import('@funny/core/git');
+  const ghEnv = process.env.GH_TOKEN ? { GH_TOKEN: process.env.GH_TOKEN } : undefined;
+  await execute('gh', ['pr', 'merge', String(session.prNumber), '--squash', '--delete-branch'], {
+    cwd: session.projectPath,
+    env: ghEnv,
+  });
+  await sessionStore.transition(sessionId, 'merged', { autoMerged: true });
+  logger.info({ sessionId, prNumber: session.prNumber }, 'PR auto-merged');
+};
+
+// ── Workflows ───────────────────────────────────────────────────
+
+const issuePipeline = new IssuePipelineWorkflow({
+  eventBus,
+  sessionStore,
+  orchestratorAgent,
+  config,
 });
 
-watchdog.start();
+const ciRetryWorkflow = new CIRetryWorkflow({
+  eventBus,
+  sessionStore,
+  config,
+  handlers: { respawnAgent, notify },
+});
+ciRetryWorkflow.start();
 
-// ── Ingest webhook adapter (forwards events to the Funny UI server) ──
+const reviewWorkflow = new ReviewWorkflow({
+  eventBus,
+  sessionStore,
+  config,
+  handlers: { respawnAgent, notify },
+});
+reviewWorkflow.start();
+
+const mergeWorkflow = new MergeWorkflow({
+  eventBus,
+  sessionStore,
+  config,
+  handlers: { autoMerge, notify },
+});
+mergeWorkflow.start();
+
+// ── Adapters ────────────────────────────────────────────────────
+
+const reviewAdapter = new ReviewEventAdapter(eventBus, { projectPath });
+reviewAdapter.start();
+
 const ingestAdapter = new IngestWebhookAdapter(eventBus);
 ingestAdapter.start();
 
@@ -141,14 +182,39 @@ app.use('*', honoLogger());
 app.get('/health', (c) => c.json({ status: 'ok', service: 'agent' }));
 
 // Mount route groups
-app.route('/webhooks', createWebhookRoutes(eventBus, config));
-app.route(
-  '/sessions',
-  createSessionRoutes(sessionStore, orchestratorAgent, tracker, eventBus, config),
-);
+app.route('/webhooks', createWebhookRoutes(eventBus, config, projectPath));
+app.route('/sessions', createSessionRoutes(sessionStore, issuePipeline, tracker, eventBus, config));
 
 // ── Exports ─────────────────────────────────────────────────────
 
-export { app, eventBus, config, sessionStore, orchestratorAgent, watchdog, tracker, ingestAdapter };
+export {
+  app,
+  eventBus,
+  config,
+  sessionStore,
+  orchestratorAgent,
+  tracker,
+  // Adapters
+  ingestAdapter,
+  reviewAdapter,
+  // Workflows
+  issuePipeline,
+  ciRetryWorkflow,
+  reviewWorkflow,
+  mergeWorkflow,
+};
 export type { PipelineEvent, PipelineEventType } from './core/types.js';
 export type { PipelineServiceConfig } from './config/schema.js';
+export {
+  PRReviewer,
+  buildReviewSystemPrompt,
+  buildReviewUserPrompt,
+  formatReviewBody,
+  decideReviewEvent,
+} from './agents/reviewer/index.js';
+export type {
+  ReviewOptions,
+  PRReviewerConfig,
+  ParsedReviewOutput,
+  ParsedFinding,
+} from './agents/reviewer/index.js';

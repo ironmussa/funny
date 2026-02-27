@@ -1,5 +1,5 @@
 /**
- * Internal types for the ReviewBot package.
+ * Internal types for the review module.
  */
 
 import type { IAgentProcessFactory } from '@funny/core/agents';

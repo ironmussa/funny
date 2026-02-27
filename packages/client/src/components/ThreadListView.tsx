@@ -4,7 +4,7 @@ import { type ReactNode, useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
-import { HighlightText } from '@/components/ui/highlight-text';
+import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { statusConfig, timeAgo, getStatusLabels } from '@/lib/thread-utils';
@@ -31,6 +31,7 @@ interface ThreadListViewProps {
   className?: string;
   autoFocusSearch?: boolean;
   hideSearch?: boolean;
+  contentSnippets?: Map<string, string>;
 }
 
 export function ThreadListView({
@@ -54,6 +55,7 @@ export function ThreadListView({
   className,
   autoFocusSearch,
   hideSearch = false,
+  contentSnippets,
 }: ThreadListViewProps) {
   const { t } = useTranslation();
   useMinuteTick();
@@ -206,6 +208,13 @@ export function ThreadListView({
                     query={search}
                     className="block truncate text-xs font-medium"
                   />
+                  {contentSnippets?.get(thread.id) && search && !normalize(thread.title).includes(normalize(search)) && (
+                    <HighlightText
+                      text={contentSnippets.get(thread.id)!}
+                      query={search}
+                      className="block truncate text-[11px] italic text-muted-foreground"
+                    />
+                  )}
                   <div className="mt-0.5 flex items-center gap-2">
                     {renderExtraBadges?.(thread)}
                     {(thread.branch || thread.baseBranch) && (

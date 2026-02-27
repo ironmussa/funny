@@ -736,6 +736,7 @@ export function AllThreadsView() {
                 `${total} ${t('allThreads.threads')}${search || hasActiveFilters ? ` ${t('allThreads.found')}` : ''}`
               }
               hideSearch={true}
+              contentSnippets={contentMatches}
               renderExtraBadges={(thread) => {
                 const gs = statusByThread[thread.id];
                 const gitConf = gs ? gitSyncStateConfig[gs.state] : null;

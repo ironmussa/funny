@@ -1035,12 +1035,13 @@ function createToolbar(): HTMLDivElement {
       </svg>
     </button>
     <div class="toolbar-separator"></div>
+    <span class="toolbar-project" title="Selected project"></span>
     <button class="toolbar-btn toolbar-btn-send" data-action="send" title="Send to Funny">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="22" y1="2" x2="11" y2="13"></line>
         <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
       </svg>
-      <span class="toolbar-send-label">Send to Funny</span>
+      <span class="toolbar-send-label">Send</span>
       <span class="toolbar-count" style="display:none">0</span>
     </button>
     <button class="toolbar-btn" data-action="close" title="Close annotator">
@@ -1100,7 +1101,30 @@ function updateToolbarCount() {
     label.textContent = `Send (${annotations.length})`;
   } else {
     count.style.display = 'none';
-    label.textContent = 'Send to Funny';
+    label.textContent = 'Send';
+  }
+}
+
+function loadToolbarProjectName() {
+  safeSendMessage({ type: 'GET_FULL_CONFIG' }, (data: any) => {
+    if (!data?.success) return;
+    const config = data.config || {};
+    const projects: Array<{ id: string; name: string }> = data.projects || [];
+    const project = config.projectId ? projects.find((p) => p.id === config.projectId) : null;
+    updateToolbarProjectName(project?.name || '');
+  });
+}
+
+function updateToolbarProjectName(name: string) {
+  const el = toolbarEl.querySelector('.toolbar-project') as HTMLSpanElement;
+  if (!el) return;
+  if (name) {
+    el.textContent = name;
+    el.style.display = 'inline';
+    el.title = `Project: ${name}`;
+  } else {
+    el.textContent = '';
+    el.style.display = 'none';
   }
 }
 
@@ -1534,6 +1558,11 @@ function saveSettings() {
     config[input.dataset.key!] = input.value;
   });
   safeSendMessage({ type: 'SAVE_CONFIG', config });
+
+  // Update the project name in the toolbar
+  const projectId = config.projectId;
+  const project = projectId ? settingsProjectsData.find((p) => p.id === projectId) : null;
+  updateToolbarProjectName(project?.name || '');
 }
 
 async function testSettingsConnection() {
@@ -2007,6 +2036,7 @@ async function activate() {
 
   renderAnnotations();
   updateToolbarCount();
+  loadToolbarProjectName();
 }
 
 function deactivate() {

@@ -1,5 +1,5 @@
 import type { Thread } from '@funny/shared';
-import { Loader2, Columns3, Grid2x2, Plus, Search, GitBranch } from 'lucide-react';
+import { Loader2, Columns3, Grid2x2, Plus, Search, GitBranch, FileText } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import {
   useState,
@@ -24,6 +24,7 @@ import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
+import { parseReferencedFiles } from '@/lib/parse-referenced-files';
 import { statusConfig } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
@@ -470,9 +471,30 @@ const ThreadColumn = memo(function ThreadColumn({ threadId }: { threadId: string
                   )}
                 >
                   {msg.role === 'user' ? (
-                    <pre className="max-h-80 overflow-x-auto overflow-y-auto whitespace-pre-wrap break-words font-mono text-xs">
-                      {msg.content.trim()}
-                    </pre>
+                    (() => {
+                      const { files, cleanContent } = parseReferencedFiles(msg.content);
+                      return (
+                        <>
+                          {files.length > 0 && (
+                            <div className="mb-1.5 flex flex-wrap gap-1">
+                              {files.map((file) => (
+                                <span
+                                  key={file}
+                                  className="inline-flex items-center gap-1 rounded bg-background/20 px-1.5 py-0.5 font-mono text-xs text-background/70"
+                                  title={file}
+                                >
+                                  <FileText className="h-3 w-3 shrink-0" />
+                                  {file.split('/').pop()}
+                                </span>
+                              ))}
+                            </div>
+                          )}
+                          <pre className="max-h-80 overflow-x-auto overflow-y-auto whitespace-pre-wrap break-words font-mono text-xs">
+                            {cleanContent.trim()}
+                          </pre>
+                        </>
+                      );
+                    })()
                   ) : (
                     <div className="prose prose-sm max-w-none overflow-x-auto break-words">
                       <ReactMarkdown remarkPlugins={remarkPlugins} components={markdownComponents}>

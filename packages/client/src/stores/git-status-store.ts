@@ -3,26 +3,35 @@ import { create } from 'zustand';
 
 import { api } from '@/lib/api';
 
+/** Git status for a project root (no threadId) */
+export type ProjectGitStatus = Omit<GitStatusInfo, 'threadId'>;
+
 interface GitStatusState {
   statusByThread: Record<string, GitStatusInfo>;
+  statusByProject: Record<string, ProjectGitStatus>;
   loadingProjects: Set<string>;
   _loadingThreads: Set<string>;
+  _loadingProjectStatus: Set<string>;
 
   fetchForProject: (projectId: string) => Promise<void>;
   fetchForThread: (threadId: string) => Promise<void>;
+  fetchProjectStatus: (projectId: string) => Promise<void>;
   updateFromWS: (statuses: GitStatusInfo[]) => void;
   clearForThread: (threadId: string) => void;
 }
 
 const FETCH_COOLDOWN_MS = 5_000;
 const THREAD_FETCH_COOLDOWN_MS = 2_000;
+const PROJECT_STATUS_COOLDOWN_MS = 2_000;
 const _lastFetchByProject = new Map<string, number>();
 const _lastFetchByThread = new Map<string, number>();
+const _lastFetchByProjectStatus = new Map<string, number>();
 
 /** @internal Clear cooldown map — only for tests */
 export function _resetCooldowns() {
   _lastFetchByProject.clear();
   _lastFetchByThread.clear();
+  _lastFetchByProjectStatus.clear();
 }
 
 /** Compare two GitStatusInfo objects for equality on the fields that affect rendering */
@@ -57,8 +66,10 @@ function mergeStatuses(
 
 export const useGitStatusStore = create<GitStatusState>((set, get) => ({
   statusByThread: {},
+  statusByProject: {},
   loadingProjects: new Set(),
   _loadingThreads: new Set(),
+  _loadingProjectStatus: new Set(),
 
   fetchForProject: async (projectId) => {
     if (get().loadingProjects.has(projectId)) return;
@@ -103,6 +114,27 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
         const next = new Set(s._loadingThreads);
         next.delete(threadId);
         return { _loadingThreads: next };
+      });
+    }
+  },
+
+  fetchProjectStatus: async (projectId) => {
+    if (get()._loadingProjectStatus.has(projectId)) return;
+    const now = Date.now();
+    const lastFetch = _lastFetchByProjectStatus.get(projectId) ?? 0;
+    if (now - lastFetch < PROJECT_STATUS_COOLDOWN_MS) return;
+    _lastFetchByProjectStatus.set(projectId, now);
+    set((s) => ({ _loadingProjectStatus: new Set([...s._loadingProjectStatus, projectId]) }));
+    try {
+      const result = await api.projectGitStatus(projectId);
+      if (result.isOk()) {
+        set((s) => ({ statusByProject: { ...s.statusByProject, [projectId]: result.value } }));
+      }
+    } finally {
+      set((s) => {
+        const next = new Set(s._loadingProjectStatus);
+        next.delete(projectId);
+        return { _loadingProjectStatus: next };
       });
     }
   },

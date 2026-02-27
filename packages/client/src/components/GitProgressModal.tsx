@@ -139,7 +139,7 @@ export function GitProgressModal({ open, onOpenChange, steps, title }: GitProgre
             {t('review.progress.description', 'Git operation progress')}
           </DialogDescription>
         </DialogHeader>
-        <div className="max-h-[60vh] space-y-2 overflow-auto">
+        <div className="space-y-2">
           {steps.map((step) => {
             const stepElapsed = getStepElapsed(step.id);
             return (

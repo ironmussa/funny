@@ -5,7 +5,7 @@
 git diff --cached --name-only --diff-filter=ACM | grep -v '^docker/' | xargs -r npx secretlint
 
 # Format staged files (auto-fix and re-stage) — run BEFORE lint so format issues never block
-STAGED_FMT=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx|css|json)$')
+STAGED_FMT=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx|css|json)$' | grep -v '^\.claude/')
 if [ -n "$STAGED_FMT" ]; then
   echo "$STAGED_FMT" | xargs npx oxfmt --write
   echo "$STAGED_FMT" | xargs git add

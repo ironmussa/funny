@@ -409,6 +409,85 @@ export const api = {
   resetSoft: (threadId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/reset-soft`, { method: 'POST' }),
 
+  // Project-based git (no thread needed — operates on the project's main directory)
+  projectGitStatus: (projectId: string) =>
+    request<Omit<import('@funny/shared').GitStatusInfo, 'threadId'>>(
+      `/git/project/${projectId}/status`,
+    ),
+  projectDiffSummary: (projectId: string, excludePatterns?: string[], maxFiles?: number) => {
+    const params = new URLSearchParams();
+    if (excludePatterns?.length) params.set('exclude', excludePatterns.join(','));
+    if (maxFiles) params.set('maxFiles', String(maxFiles));
+    const qs = params.toString();
+    return request<import('@funny/shared').DiffSummaryResponse>(
+      `/git/project/${projectId}/diff/summary${qs ? `?${qs}` : ''}`,
+    );
+  },
+  projectFileDiff: (projectId: string, filePath: string, staged: boolean) =>
+    request<{ diff: string }>(
+      `/git/project/${projectId}/diff/file?path=${encodeURIComponent(filePath)}&staged=${staged}`,
+    ),
+  projectStageFiles: (projectId: string, paths: string[]) =>
+    request<{ ok: boolean }>(`/git/project/${projectId}/stage`, {
+      method: 'POST',
+      body: JSON.stringify({ paths }),
+    }),
+  projectUnstageFiles: (projectId: string, paths: string[]) =>
+    request<{ ok: boolean }>(`/git/project/${projectId}/unstage`, {
+      method: 'POST',
+      body: JSON.stringify({ paths }),
+    }),
+  projectRevertFiles: (projectId: string, paths: string[]) =>
+    request<{ ok: boolean }>(`/git/project/${projectId}/revert`, {
+      method: 'POST',
+      body: JSON.stringify({ paths }),
+    }),
+  projectCommit: (projectId: string, message: string, amend?: boolean) =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/commit`, {
+      method: 'POST',
+      body: JSON.stringify({ message, amend }),
+    }),
+  projectPush: (projectId: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/push`, { method: 'POST' }),
+  projectPull: (projectId: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/pull`, { method: 'POST' }),
+  projectStash: (projectId: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/stash`, {
+      method: 'POST',
+    }),
+  projectStashPop: (projectId: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/stash/pop`, {
+      method: 'POST',
+    }),
+  projectStashList: (projectId: string) =>
+    request<{ entries: Array<{ index: string; message: string; relativeDate: string }> }>(
+      `/git/project/${projectId}/stash/list`,
+    ),
+  projectResetSoft: (projectId: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/reset-soft`, {
+      method: 'POST',
+    }),
+  projectGitLog: (projectId: string, limit = 20) =>
+    request<{
+      entries: Array<{
+        hash: string;
+        shortHash: string;
+        author: string;
+        relativeDate: string;
+        message: string;
+      }>;
+    }>(`/git/project/${projectId}/log?limit=${limit}`),
+  projectGenerateCommitMessage: (projectId: string, includeUnstaged?: boolean) =>
+    request<{ title: string; body: string }>(`/git/project/${projectId}/generate-commit-message`, {
+      method: 'POST',
+      body: JSON.stringify({ includeUnstaged: includeUnstaged ?? false }),
+    }),
+  projectAddToGitignore: (projectId: string, pattern: string) =>
+    request<{ ok: boolean }>(`/git/project/${projectId}/gitignore`, {
+      method: 'POST',
+      body: JSON.stringify({ pattern }),
+    }),
+
   // Startup Commands
   listCommands: (projectId: string) => request<StartupCommand[]>(`/projects/${projectId}/commands`),
   addCommand: (projectId: string, label: string, command: string) =>

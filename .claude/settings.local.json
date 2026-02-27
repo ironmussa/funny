@@ -14,14 +14,11 @@
       "Bash(nvm:*)",
       "Bash(fnm:*)",
       "mcp__chrome-devtools__new_page",
-      "mcp__chrome-devtools__performance_start_trace"
+      "mcp__chrome-devtools__performance_start_trace",
+      "mcp__plugin_claude-mem_mcp-search__search"
     ]
   },
-  "enabledMcpjsonServers": [
-    "chrome-devtools"
-  ],
-  "disabledMcpjsonServers": [
-    "supabase"
-  ],
-  "enableAllProjectMcpServers": true
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": ["chrome-devtools"],
+  "disabledMcpjsonServers": ["supabase"]
 }

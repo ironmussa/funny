@@ -29,7 +29,7 @@ import {
 } from '@funny/core/git';
 import { badRequest, internal } from '@funny/shared/errors';
 import { Hono } from 'hono';
-import { err } from 'neverthrow';
+import { err, ok } from 'neverthrow';
 
 import { getAuthMode } from '../lib/auth-mode.js';
 import { log } from '../lib/logger.js';
@@ -147,6 +147,376 @@ gitRoutes.get('/status', async (c) => {
   const response = { statuses };
   _gitStatusCache.set(projectId, { data: response, ts: Date.now() });
   return c.json(response);
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Project-based git routes — operate on a project's main directory directly,
+// without requiring a thread. Used by the ReviewPane when no thread is active.
+// IMPORTANT: These must be registered BEFORE /:threadId routes so that
+// "/project/:projectId/..." is not captured by "/:threadId/...".
+// ═══════════════════════════════════════════════════════════════════════════
+
+/** Resolve project path from projectId and verify ownership. */
+function requireProjectCwd(
+  projectId: string,
+  userId?: string,
+): import('neverthrow').Result<string, import('@funny/shared/errors').DomainError> {
+  const projectResult = requireProject(projectId, userId);
+  if (projectResult.isErr()) return projectResult.map(() => '');
+  return ok(projectResult.value.path);
+}
+
+// GET /api/git/project/:projectId/status — git status for the project root directory
+gitRoutes.get('/project/:projectId/status', async (c) => {
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(c.req.param('projectId'), userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  if (!existsSync(cwd)) {
+    return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
+  }
+  const summaryResult = await getStatusSummary(cwd);
+  if (summaryResult.isErr()) return resultToResponse(c, summaryResult);
+  const summary = summaryResult.value;
+  return c.json({
+    state: deriveGitSyncState(summary),
+    ...summary,
+  });
+});
+
+// GET /api/git/project/:projectId/diff/summary
+gitRoutes.get('/project/:projectId/diff/summary', async (c) => {
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(c.req.param('projectId'), userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  if (!existsSync(cwd)) {
+    return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
+  }
+  const excludeRaw = c.req.query('exclude');
+  const excludePatterns = excludeRaw
+    ? excludeRaw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : undefined;
+  const maxFilesRaw = c.req.query('maxFiles');
+  const maxFiles = maxFilesRaw ? parseInt(maxFilesRaw, 10) : undefined;
+  const result = await getDiffSummary(cwd, { excludePatterns, maxFiles });
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json(result.value);
+});
+
+// GET /api/git/project/:projectId/diff/file
+gitRoutes.get('/project/:projectId/diff/file', async (c) => {
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(c.req.param('projectId'), userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  const filePath = c.req.query('path');
+  if (!filePath) {
+    return resultToResponse(c, err(badRequest('Missing required query parameter: path')));
+  }
+  const staged = c.req.query('staged') === 'true';
+  const result = await getSingleFileDiff(cwd, filePath, staged);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ diff: result.value });
+});
+
+// GET /api/git/project/:projectId/log
+gitRoutes.get('/project/:projectId/log', async (c) => {
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(c.req.param('projectId'), userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const limitRaw = c.req.query('limit');
+  const limit = limitRaw ? Math.min(parseInt(limitRaw, 10) || 20, 100) : 20;
+  const result = await getLog(cwdResult.value, limit);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ entries: result.value });
+});
+
+// GET /api/git/project/:projectId/stash/list
+gitRoutes.get('/project/:projectId/stash/list', async (c) => {
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(c.req.param('projectId'), userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const result = await stashList(cwdResult.value);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ entries: result.value });
+});
+
+// POST /api/git/project/:projectId/stage
+gitRoutes.post('/project/:projectId/stage', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(projectId, userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(stageFilesSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const pathError = validateFilePaths(cwd, parsed.value.paths);
+  if (pathError) return c.json({ error: pathError }, 400);
+  const result = await stageFiles(cwd, parsed.value.paths);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true });
+});
+
+// POST /api/git/project/:projectId/unstage
+gitRoutes.post('/project/:projectId/unstage', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(projectId, userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(stageFilesSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const pathError = validateFilePaths(cwd, parsed.value.paths);
+  if (pathError) return c.json({ error: pathError }, 400);
+  const result = await unstageFiles(cwd, parsed.value.paths);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true });
+});
+
+// POST /api/git/project/:projectId/revert
+gitRoutes.post('/project/:projectId/revert', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(projectId, userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(stageFilesSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const pathError = validateFilePaths(cwd, parsed.value.paths);
+  if (pathError) return c.json({ error: pathError }, 400);
+  const result = await revertFiles(cwd, parsed.value.paths);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true });
+});
+
+// POST /api/git/project/:projectId/commit
+gitRoutes.post('/project/:projectId/commit', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(projectId, userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(commitSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const identity = resolveIdentity(userId);
+  const result = await commit(cwd, parsed.value.message, identity, parsed.value.amend);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/project/:projectId/push
+gitRoutes.post('/project/:projectId/push', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(projectId, userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const identity = resolveIdentity(userId);
+  const result = await push(cwdResult.value, identity);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/project/:projectId/pull
+gitRoutes.post('/project/:projectId/pull', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(projectId, userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const identity = resolveIdentity(userId);
+  const result = await pull(cwdResult.value, identity);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/project/:projectId/stash
+gitRoutes.post('/project/:projectId/stash', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(projectId, userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const result = await stash(cwdResult.value);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/project/:projectId/stash/pop
+gitRoutes.post('/project/:projectId/stash/pop', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(projectId, userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const result = await stashPop(cwdResult.value);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/project/:projectId/reset-soft
+gitRoutes.post('/project/:projectId/reset-soft', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(projectId, userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const result = await resetSoft(cwdResult.value);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/project/:projectId/generate-commit-message
+gitRoutes.post('/project/:projectId/generate-commit-message', async (c) => {
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(c.req.param('projectId'), userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+
+  const body = await c.req.json().catch(() => ({}));
+  const includeUnstaged = body?.includeUnstaged === true;
+
+  const diffResult = await getDiff(cwd);
+  if (diffResult.isErr()) return resultToResponse(c, diffResult);
+  const diffs = diffResult.value;
+  const relevantDiffs = includeUnstaged ? diffs : diffs.filter((d) => d.staged);
+
+  if (relevantDiffs.length === 0) {
+    return resultToResponse(c, err(badRequest('No files to generate a commit message for')));
+  }
+
+  let diffSummary = relevantDiffs
+    .map((d) => `--- ${d.status}: ${d.path} ---\n${d.diff || '(no diff)'}`)
+    .join('\n\n');
+
+  const MAX_DIFF_LEN = 20_000;
+  if (diffSummary.length > MAX_DIFF_LEN) {
+    diffSummary = diffSummary.slice(0, MAX_DIFF_LEN) + '\n\n... (diff truncated for length)';
+  }
+
+  const prompt = `You are a commit message generator. Based on the following git diff, generate a commit title and a commit body.
+
+Rules:
+- The title must use conventional commits style (e.g. "feat: ...", "fix: ...", "refactor: ..."), be concise (max 72 chars), and summarize the change.
+- The body must be a short paragraph (2-4 sentences) explaining what changed and why.
+- Output EXACTLY in this format, with the separator line:
+TITLE: <the title>
+BODY: <the body>
+
+No quotes, no markdown, no extra explanation.
+
+${diffSummary}`;
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 60_000);
+
+  const output = await (async (): Promise<{ text: string } | { error: string }> => {
+    try {
+      let resultText = '';
+
+      const gen = query({
+        prompt,
+        options: {
+          cwd,
+          maxTurns: 1,
+          permissionMode: 'plan',
+          abortController: controller,
+          systemPrompt: { type: 'preset', preset: 'claude_code' },
+          tools: { type: 'preset', preset: 'claude_code' },
+        },
+      });
+
+      for await (const msg of gen) {
+        if (msg.type === 'assistant') {
+          const content = (msg as any).message?.content;
+          if (!content) continue;
+          const text = content
+            .filter((b: any) => b.type === 'text' && b.text)
+            .map((b: any) => b.text)
+            .join('\n');
+          if (text) resultText = text;
+        }
+        if (msg.type === 'result') {
+          const r = (msg as any).result || resultText;
+          return r ? { text: r } : { error: 'No output received' };
+        }
+      }
+
+      return resultText ? { text: resultText } : { error: 'No output received' };
+    } catch (e: any) {
+      log.error('SDK query error generating commit message', {
+        namespace: 'git',
+        error: e.message,
+      });
+      return { error: e.message || 'Unknown error' };
+    } finally {
+      clearTimeout(timeout);
+    }
+  })();
+
+  if ('error' in output) {
+    return resultToResponse(c, err(internal(output.error)));
+  }
+
+  const trimmed = output.text.trim();
+  const errorPatterns = [
+    /invalid api key/i,
+    /authentication.*error/i,
+    /fix external api key/i,
+    /unauthorized/i,
+    /api key.*invalid/i,
+  ];
+  if (errorPatterns.some((p) => p.test(trimmed))) {
+    log.error('SDK auth error generating commit message', {
+      namespace: 'git',
+      output: trimmed.slice(0, 200),
+    });
+    return resultToResponse(c, err(internal(trimmed.split('\n')[0])));
+  }
+
+  const titleMatch = trimmed.match(/^TITLE:\s*(.+)/m);
+  const bodyMatch = trimmed.match(/^BODY:\s*([\s\S]+)/m);
+
+  if (!titleMatch) {
+    log.error('Unexpected output from commit message generation', {
+      namespace: 'git',
+      output: trimmed.slice(0, 500),
+    });
+    return resultToResponse(c, err(internal('Failed to generate commit message')));
+  }
+
+  const title = titleMatch[1].trim();
+  const commitBody = bodyMatch?.[1]?.trim() || '';
+
+  return c.json({ title, body: commitBody });
+});
+
+// POST /api/git/project/:projectId/gitignore
+gitRoutes.post('/project/:projectId/gitignore', async (c) => {
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(c.req.param('projectId'), userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  const raw = await c.req.json().catch(() => ({}));
+  const pattern = raw?.pattern;
+  if (!pattern || typeof pattern !== 'string') {
+    return c.json({ error: 'pattern is required' }, 400);
+  }
+  const result = addToGitignore(cwd, pattern);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ ok: true });
 });
 
 // GET /api/git/:threadId/status — single thread git status

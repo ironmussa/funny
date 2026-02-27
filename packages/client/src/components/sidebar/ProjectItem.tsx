@@ -7,6 +7,7 @@ import {
   Folder,
   FolderOpen,
   FolderOpenDot,
+  GitBranch,
   Search,
   Trash2,
   MoreHorizontal,
@@ -36,6 +37,7 @@ import { api } from '@/lib/api';
 import { openDirectoryInEditor } from '@/lib/editor-utils';
 import { cn } from '@/lib/utils';
 import { useGitStatusStore } from '@/stores/git-status-store';
+import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -121,6 +123,7 @@ export const ProjectItem = memo(function ProjectItem({
     ),
   );
   const defaultEditor = useSettingsStore((s) => s.defaultEditor);
+  const branch = useProjectStore(useCallback((s) => s.branchByProject[project.id], [project.id]));
 
   // Memoize sorted & sliced threads to avoid O(n log n) sort on every render
   const visibleThreads = useMemo(() => {
@@ -193,6 +196,12 @@ export const ProjectItem = memo(function ProjectItem({
             <Folder className="h-3.5 w-3.5 flex-shrink-0" />
           )}
           <span className="truncate text-xs font-medium">{project.name}</span>
+          {branch && (
+            <span className="inline-flex items-center gap-0.5 truncate text-[11px] font-normal text-muted-foreground">
+              <GitBranch className="h-3 w-3 flex-shrink-0" />
+              {branch}
+            </span>
+          )}
         </CollapsibleTrigger>
         <div className="mr-2 flex items-center gap-0.5">
           <div

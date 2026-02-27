@@ -154,6 +154,11 @@ export function ReviewPane() {
   // the review pane to show diff data from the wrong working directory.
   const effectiveThreadId = useThreadStore((s) => s.activeThread?.id);
 
+  // When no thread is active but a project is selected, use project-based git endpoints
+  const projectModeId = !effectiveThreadId ? selectedProjectId : null;
+  // Either we have a thread or a project — at least one must be set for git operations
+  const hasGitContext = !!(effectiveThreadId || projectModeId);
+
   // The base directory path for constructing absolute file paths (worktree path or project path)
   const basePath = useThreadStore((s) => {
     const wt = s.activeThread?.worktreePath;
@@ -180,37 +185,38 @@ export function ReviewPane() {
   const [commitBody, setCommitBodyRaw] = useState('');
 
   // Wrap setters to also persist to draft store
+  const draftId = effectiveThreadId || projectModeId;
   const setCommitTitle = useCallback(
     (v: string | ((prev: string) => string)) => {
       setCommitTitleRaw((prev) => {
         const next = typeof v === 'function' ? v(prev) : v;
-        if (effectiveThreadId) {
+        if (draftId) {
           // Read current body from state for sync
           setCommitBodyRaw((body) => {
-            setCommitDraft(effectiveThreadId, next, body);
+            setCommitDraft(draftId, next, body);
             return body;
           });
         }
         return next;
       });
     },
-    [effectiveThreadId, setCommitDraft],
+    [draftId, setCommitDraft],
   );
 
   const setCommitBody = useCallback(
     (v: string | ((prev: string) => string)) => {
       setCommitBodyRaw((prev) => {
         const next = typeof v === 'function' ? v(prev) : v;
-        if (effectiveThreadId) {
+        if (draftId) {
           setCommitTitleRaw((title) => {
-            setCommitDraft(effectiveThreadId, title, next);
+            setCommitDraft(draftId, title, next);
             return title;
           });
         }
         return next;
       });
     },
-    [effectiveThreadId, setCommitDraft],
+    [draftId, setCommitDraft],
   );
   const [generatingMsg, setGeneratingMsg] = useState(false);
   const [selectedAction, setSelectedAction] = useState<
@@ -288,9 +294,11 @@ export function ReviewPane() {
   const fileListRef = useRef<HTMLDivElement>(null);
 
   const refresh = async () => {
-    if (!effectiveThreadId) return;
+    if (!hasGitContext) return;
     setLoading(true);
-    const result = await api.getDiffSummary(effectiveThreadId);
+    const result = effectiveThreadId
+      ? await api.getDiffSummary(effectiveThreadId)
+      : await api.projectDiffSummary(projectModeId!);
     if (result.isOk()) {
       const data = result.value;
       setSummaries(data.files);
@@ -321,7 +329,9 @@ export function ReviewPane() {
         const summary = data.files.find((s) => s.path === fileToLoad);
         if (summary) {
           setLoadingDiff(fileToLoad);
-          const diffResult = await api.getFileDiff(effectiveThreadId, fileToLoad, summary.staged);
+          const diffResult = effectiveThreadId
+            ? await api.getFileDiff(effectiveThreadId, fileToLoad, summary.staged)
+            : await api.projectFileDiff(projectModeId!, fileToLoad, summary.staged);
           if (diffResult.isOk()) {
             setDiffCache((prev) => new Map(prev).set(fileToLoad, diffResult.value.diff));
           }
@@ -334,15 +344,18 @@ export function ReviewPane() {
     setLoading(false);
     // Also refresh git status so we know if there are unmerged commits
     if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId);
+    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId);
   };
 
   // Lazy load diff content for the selected file
   const loadDiffForFile = async (filePath: string) => {
-    if (!effectiveThreadId || diffCache.has(filePath)) return;
+    if (!hasGitContext || diffCache.has(filePath)) return;
     const summary = summaries.find((s) => s.path === filePath);
     if (!summary) return;
     setLoadingDiff(filePath);
-    const result = await api.getFileDiff(effectiveThreadId, filePath, summary.staged);
+    const result = effectiveThreadId
+      ? await api.getFileDiff(effectiveThreadId, filePath, summary.staged)
+      : await api.projectFileDiff(projectModeId!, filePath, summary.staged);
     if (result.isOk()) {
       setDiffCache((prev) => new Map(prev).set(filePath, result.value.diff));
     }
@@ -367,10 +380,11 @@ export function ReviewPane() {
   // Track whether we need to refresh when the pane becomes visible
   const needsRefreshRef = useRef(false);
 
-  // Reset state and refresh when the active thread changes.
+  // Reset state and refresh when the active thread or project-mode changes.
   // Using effectiveThreadId (not just gitContextKey) ensures we refresh even
   // when switching between two local threads of the same project that share
   // the same git working directory.
+  const gitContextKey = effectiveThreadId || projectModeId;
   useEffect(() => {
     setSummaries([]);
     setDiffCache(new Map());
@@ -381,9 +395,8 @@ export function ReviewPane() {
     setSelectedAction('commit');
 
     // Restore commit title/body from draft store
-    const draft = effectiveThreadId
-      ? useDraftStore.getState().drafts[effectiveThreadId]
-      : undefined;
+    const draftKey = effectiveThreadId || projectModeId;
+    const draft = draftKey ? useDraftStore.getState().drafts[draftKey] : undefined;
     setCommitTitleRaw(draft?.commitTitle ?? '');
     setCommitBodyRaw(draft?.commitBody ?? '');
 
@@ -393,8 +406,8 @@ export function ReviewPane() {
     } else {
       needsRefreshRef.current = true;
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+refresh on thread change only; refresh/reviewPaneOpen are read but not deps (handled separately)
-  }, [effectiveThreadId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+refresh on context change only; refresh/reviewPaneOpen are read but not deps (handled separately)
+  }, [gitContextKey]);
 
   // Fire deferred refresh when the review pane becomes visible
   useEffect(() => {
@@ -444,9 +457,11 @@ export function ReviewPane() {
   };
 
   const handleGenerateCommitMsg = async () => {
-    if (!effectiveThreadId || generatingMsg) return;
+    if (!hasGitContext || generatingMsg) return;
     setGeneratingMsg(true);
-    const result = await api.generateCommitMessage(effectiveThreadId, true);
+    const result = effectiveThreadId
+      ? await api.generateCommitMessage(effectiveThreadId, true)
+      : await api.projectGenerateCommitMessage(projectModeId!, true);
     if (result.isOk()) {
       setCommitTitle(result.value.title);
       setCommitBody(result.value.body);
@@ -458,7 +473,7 @@ export function ReviewPane() {
 
   const commitLockRef = useRef(false);
   const handleCommitAction = async () => {
-    if (!effectiveThreadId || !commitTitle.trim() || checkedFiles.size === 0 || actionInProgress)
+    if (!hasGitContext || !commitTitle.trim() || checkedFiles.size === 0 || actionInProgress)
       return;
     // Guard against double-clicks before React state update takes effect
     if (commitLockRef.current) return;
@@ -522,7 +537,9 @@ export function ReviewPane() {
       // Unstage
       if (toUnstage.length > 0) {
         setStep('unstage', { status: 'running' });
-        const unstageResult = await api.unstageFiles(effectiveThreadId, toUnstage);
+        const unstageResult = effectiveThreadId
+          ? await api.unstageFiles(effectiveThreadId, toUnstage)
+          : await api.projectUnstageFiles(projectModeId!, toUnstage);
         if (unstageResult.isErr()) {
           setStep('unstage', { status: 'failed', error: unstageResult.error.message });
           setActionInProgress(null);
@@ -534,7 +551,9 @@ export function ReviewPane() {
       // Stage
       if (toStage.length > 0) {
         setStep('stage', { status: 'running' });
-        const stageResult = await api.stageFiles(effectiveThreadId, toStage);
+        const stageResult = effectiveThreadId
+          ? await api.stageFiles(effectiveThreadId, toStage)
+          : await api.projectStageFiles(projectModeId!, toStage);
         if (stageResult.isErr()) {
           setStep('stage', { status: 'failed', error: stageResult.error.message });
           setActionInProgress(null);
@@ -549,7 +568,9 @@ export function ReviewPane() {
       const commitMsg = commitBody.trim()
         ? `${commitTitle.trim()}\n\n${commitBody.trim()}`
         : commitTitle.trim();
-      const commitResult = await api.commit(effectiveThreadId, commitMsg, isAmend);
+      const commitResult = effectiveThreadId
+        ? await api.commit(effectiveThreadId, commitMsg, isAmend)
+        : await api.projectCommit(projectModeId!, commitMsg, isAmend);
       if (commitResult.isErr()) {
         // If the error mentions hooks, mark hooks as failed; otherwise hooks passed but commit failed
         const errMsg = commitResult.error.message.toLowerCase();
@@ -577,7 +598,9 @@ export function ReviewPane() {
       // Push (for commit-push and commit-pr)
       if (selectedAction === 'commit-push' || selectedAction === 'commit-pr') {
         setStep('push', { status: 'running' });
-        const pushResult = await api.push(effectiveThreadId);
+        const pushResult = effectiveThreadId
+          ? await api.push(effectiveThreadId)
+          : await api.projectPush(projectModeId!);
         if (pushResult.isErr()) {
           setStep('push', { status: 'failed', error: pushResult.error.message });
           setActionInProgress(null);
@@ -591,7 +614,7 @@ export function ReviewPane() {
       if (selectedAction === 'commit-pr') {
         setStep('pr', { status: 'running' });
         const prResult = await api.createPR(
-          effectiveThreadId,
+          effectiveThreadId!,
           commitTitle.trim(),
           commitBody.trim(),
         );
@@ -606,7 +629,7 @@ export function ReviewPane() {
       // Merge (for commit-merge)
       if (selectedAction === 'commit-merge') {
         setStep('merge', { status: 'running' });
-        const mergeResult = await api.merge(effectiveThreadId, { cleanup: true });
+        const mergeResult = await api.merge(effectiveThreadId!, { cleanup: true });
         if (mergeResult.isErr()) {
           const lower = mergeResult.error.message.toLowerCase();
           const isConflict =
@@ -621,12 +644,12 @@ export function ReviewPane() {
         }
         setStep('merge', { status: 'completed' });
         await useThreadStore.getState().refreshActiveThread();
-        useGitStatusStore.getState().fetchForThread(effectiveThreadId);
+        useGitStatusStore.getState().fetchForThread(effectiveThreadId!);
       }
 
       setCommitTitleRaw('');
       setCommitBodyRaw('');
-      if (effectiveThreadId) clearCommitDraft(effectiveThreadId);
+      if (draftId) clearCommitDraft(draftId);
       setActionInProgress(null);
       await refresh();
     } finally {
@@ -639,8 +662,10 @@ export function ReviewPane() {
   };
 
   const executeRevert = async (path: string) => {
-    if (!effectiveThreadId) return;
-    const result = await api.revertFiles(effectiveThreadId, [path]);
+    if (!hasGitContext) return;
+    const result = effectiveThreadId
+      ? await api.revertFiles(effectiveThreadId, [path])
+      : await api.projectRevertFiles(projectModeId!, [path]);
     if (result.isErr()) {
       toast.error(t('review.revertFailed', { message: result.error.message }));
     } else {
@@ -649,8 +674,10 @@ export function ReviewPane() {
   };
 
   const handleIgnore = async (pattern: string) => {
-    if (!effectiveThreadId) return;
-    const result = await api.addToGitignore(effectiveThreadId, pattern);
+    if (!hasGitContext) return;
+    const result = effectiveThreadId
+      ? await api.addToGitignore(effectiveThreadId, pattern)
+      : await api.projectAddToGitignore(projectModeId!, pattern);
     if (result.isErr()) {
       toast.error(t('review.ignoreFailed', { message: result.error.message }));
     } else {
@@ -660,7 +687,7 @@ export function ReviewPane() {
   };
 
   const handlePushOnly = async () => {
-    if (!effectiveThreadId || pushInProgress) return;
+    if (!hasGitContext || pushInProgress) return;
     setPushInProgress(true);
 
     const steps: GitProgressStep[] = [
@@ -670,18 +697,21 @@ export function ReviewPane() {
     setProgressSteps(steps);
     setProgressOpen(true);
 
-    const pushResult = await api.push(effectiveThreadId);
+    const pushResult = effectiveThreadId
+      ? await api.push(effectiveThreadId)
+      : await api.projectPush(projectModeId!);
     if (pushResult.isErr()) {
       updateStep('push', { status: 'failed', error: pushResult.error.message });
     } else {
       updateStep('push', { status: 'completed' });
     }
     setPushInProgress(false);
-    useGitStatusStore.getState().fetchForThread(effectiveThreadId);
+    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId);
+    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId);
   };
 
   const handleMergeOnly = async () => {
-    if (!effectiveThreadId || mergeInProgress) return;
+    if (!hasGitContext || mergeInProgress) return;
     setMergeInProgress(true);
 
     const target = baseBranch || 'base';
@@ -692,7 +722,7 @@ export function ReviewPane() {
     setProgressSteps(steps);
     setProgressOpen(true);
 
-    const mergeResult = await api.merge(effectiveThreadId, { cleanup: true });
+    const mergeResult = await api.merge(effectiveThreadId!, { cleanup: true });
     if (mergeResult.isErr()) {
       updateStep('merge', { status: 'failed', error: mergeResult.error.message });
       const lower = mergeResult.error.message.toLowerCase();
@@ -709,11 +739,12 @@ export function ReviewPane() {
       await useThreadStore.getState().refreshActiveThread();
     }
     setMergeInProgress(false);
-    useGitStatusStore.getState().fetchForThread(effectiveThreadId);
+    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId);
+    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId);
   };
 
   const handleCreatePROnly = async () => {
-    if (!effectiveThreadId || prInProgress || !prDialog) return;
+    if (!hasGitContext || prInProgress || !prDialog) return;
     setPrInProgress(true);
 
     const steps: GitProgressStep[] = [];
@@ -730,7 +761,9 @@ export function ReviewPane() {
     // Push first if there are unpushed commits
     if (needsPush) {
       updateStep('push', { status: 'running' });
-      const pushResult = await api.push(effectiveThreadId);
+      const pushResult = effectiveThreadId
+        ? await api.push(effectiveThreadId)
+        : await api.projectPush(projectModeId!);
       if (pushResult.isErr()) {
         updateStep('push', { status: 'failed', error: pushResult.error.message });
         setPrInProgress(false);
@@ -741,7 +774,7 @@ export function ReviewPane() {
 
     updateStep('pr', { status: 'running' });
     const prResult = await api.createPR(
-      effectiveThreadId,
+      effectiveThreadId!,
       prDialog.title.trim(),
       prDialog.body.trim(),
     );
@@ -752,10 +785,12 @@ export function ReviewPane() {
     }
     setPrInProgress(false);
     setPrDialog(null);
-    useGitStatusStore.getState().fetchForThread(effectiveThreadId);
+    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId);
+    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId);
   };
 
   const handleAskAgentResolve = async () => {
+    // Agent resolve only works with threads, not in project-only mode
     if (!effectiveThreadId) return;
 
     const target = baseBranch || 'main';
@@ -809,9 +844,11 @@ export function ReviewPane() {
   // ── New git operation handlers ──
 
   const handleLoadLog = async () => {
-    if (!effectiveThreadId || logLoading) return;
+    if (!hasGitContext || logLoading) return;
     setLogLoading(true);
-    const result = await api.getGitLog(effectiveThreadId, 20);
+    const result = effectiveThreadId
+      ? await api.getGitLog(effectiveThreadId, 20)
+      : await api.projectGitLog(projectModeId!, 20);
     if (result.isOk()) {
       setLogEntries(result.value.entries);
     } else {
@@ -826,9 +863,11 @@ export function ReviewPane() {
   };
 
   const handlePull = async () => {
-    if (!effectiveThreadId || pullInProgress) return;
+    if (!hasGitContext || pullInProgress) return;
     setPullInProgress(true);
-    const result = await api.pull(effectiveThreadId);
+    const result = effectiveThreadId
+      ? await api.pull(effectiveThreadId)
+      : await api.projectPull(projectModeId!);
     if (result.isErr()) {
       toast.error(
         t('review.pullFailed', {
@@ -844,9 +883,11 @@ export function ReviewPane() {
   };
 
   const handleStash = async () => {
-    if (!effectiveThreadId || stashInProgress) return;
+    if (!hasGitContext || stashInProgress) return;
     setStashInProgress(true);
-    const result = await api.stash(effectiveThreadId);
+    const result = effectiveThreadId
+      ? await api.stash(effectiveThreadId)
+      : await api.projectStash(projectModeId!);
     if (result.isErr()) {
       toast.error(
         t('review.stashFailed', {
@@ -863,9 +904,11 @@ export function ReviewPane() {
   };
 
   const handleStashPop = async () => {
-    if (!effectiveThreadId || stashPopInProgress) return;
+    if (!hasGitContext || stashPopInProgress) return;
     setStashPopInProgress(true);
-    const result = await api.stashPop(effectiveThreadId);
+    const result = effectiveThreadId
+      ? await api.stashPop(effectiveThreadId)
+      : await api.projectStashPop(projectModeId!);
     if (result.isErr()) {
       toast.error(
         t('review.stashPopFailed', {
@@ -882,8 +925,10 @@ export function ReviewPane() {
   };
 
   const refreshStashList = async () => {
-    if (!effectiveThreadId) return;
-    const result = await api.stashList(effectiveThreadId);
+    if (!hasGitContext) return;
+    const result = effectiveThreadId
+      ? await api.stashList(effectiveThreadId)
+      : await api.projectStashList(projectModeId!);
     if (result.isOk()) {
       setStashEntries(result.value.entries);
     }
@@ -894,9 +939,11 @@ export function ReviewPane() {
   };
 
   const executeResetSoft = async () => {
-    if (!effectiveThreadId || resetInProgress) return;
+    if (!hasGitContext || resetInProgress) return;
     setResetInProgress(true);
-    const result = await api.resetSoft(effectiveThreadId);
+    const result = effectiveThreadId
+      ? await api.resetSoft(effectiveThreadId)
+      : await api.projectResetSoft(projectModeId!);
     if (result.isErr()) {
       toast.error(
         t('review.resetSoftFailed', {
@@ -916,8 +963,8 @@ export function ReviewPane() {
     if (reviewPaneOpen) {
       refreshStashList();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshStashList is a non-memoized function; only trigger on thread/visibility change
-  }, [effectiveThreadId, reviewPaneOpen]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshStashList is a non-memoized function; only trigger on context/visibility change
+  }, [gitContextKey, reviewPaneOpen]);
 
   const canCommit =
     checkedFiles.size > 0 && commitTitle.trim().length > 0 && !actionInProgress && !isAgentRunning;

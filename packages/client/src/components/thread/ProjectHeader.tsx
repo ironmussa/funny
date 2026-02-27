@@ -1,5 +1,6 @@
-import type { StartupCommand, Message, ToolCall } from '@funny/shared';
+import type { StartupCommand, Message, ToolCall, ThreadStage } from '@funny/shared';
 import {
+  GitBranch,
   GitCompare,
   Globe,
   Terminal,
@@ -12,12 +13,12 @@ import {
   Loader2,
   Columns3,
   ArrowLeft,
-  FolderOpen,
   Copy,
   ClipboardList,
   Check,
   EllipsisVertical,
   Trash2,
+  FolderOpen,
 } from 'lucide-react';
 import { memo, useState, useEffect, useCallback, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -49,6 +50,13 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
 import { api } from '@/lib/api';
@@ -100,7 +108,6 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
   const hasMessages = useThreadStore((s) => (s.activeThread?.messages?.length ?? 0) > 0);
   const pinThread = useThreadStore((s) => s.pinThread);
   const deleteThread = useThreadStore((s) => s.deleteThread);
-  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const [copiedText, setCopiedText] = useState(false);
   const [copiedTools, setCopiedTools] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -183,16 +190,6 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
                     {t('sidebar.pin', 'Pin')}
                   </>
                 )}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={() => {
-                  setReviewPaneOpen(false);
-                  navigate(`/kanban?project=${threadProjectId}&highlight=${threadId}`);
-                }}
-                className="cursor-pointer"
-              >
-                <Columns3 className="mr-2 h-4 w-4" />
-                {t('kanban.viewOnBoard', 'View on Board')}
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -357,6 +354,41 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
   );
 }
 
+const VISIBLE_STAGES: ThreadStage[] = ['backlog', 'planning', 'in_progress', 'review', 'done'];
+
+const StageSelectorBadge = memo(function StageSelectorBadge({
+  threadId,
+  projectId,
+  stage,
+}: {
+  threadId: string;
+  projectId: string;
+  stage: ThreadStage;
+}) {
+  const { t } = useTranslation();
+  const updateThreadStage = useThreadStore((s) => s.updateThreadStage);
+
+  return (
+    <Select
+      value={stage}
+      onValueChange={(value: string) =>
+        updateThreadStage(threadId, projectId, value as ThreadStage)
+      }
+    >
+      <SelectTrigger className="h-6 w-auto min-w-0 shrink-0 border-0 bg-transparent px-1.5 py-0 text-xs text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground">
+        <SelectValue>{t(stageConfig[stage].labelKey)}</SelectValue>
+      </SelectTrigger>
+      <SelectContent>
+        {VISIBLE_STAGES.map((s) => (
+          <SelectItem key={s} value={s}>
+            {t(stageConfig[s].labelKey)}
+          </SelectItem>
+        ))}
+      </SelectContent>
+    </Select>
+  );
+});
+
 export const ProjectHeader = memo(function ProjectHeader() {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -379,22 +411,32 @@ export const ProjectHeader = memo(function ProjectHeader() {
   const gitStatus = useGitStatusStore((s) =>
     activeThreadId ? s.statusByThread[activeThreadId] : undefined,
   );
+  const projectGitStatus = useGitStatusStore((s) =>
+    !activeThreadId && selectedProjectId ? s.statusByProject[selectedProjectId] : undefined,
+  );
   const fetchForThread = useGitStatusStore((s) => s.fetchForThread);
+  const fetchProjectStatus = useGitStatusStore((s) => s.fetchProjectStatus);
 
   const projectId = activeThreadProjectId ?? selectedProjectId;
+  const branch = useProjectStore((s) => (projectId ? s.branchByProject[projectId] : undefined));
   const project = projects.find((p) => p.id === projectId);
   const tabs = useTerminalStore((s) => s.tabs);
   const runningWithPort = tabs.filter(
     (tab) => tab.projectId === projectId && tab.commandId && tab.alive && tab.port,
   );
-  const showGitStats = gitStatus && (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0);
+  const effectiveGitStatus = gitStatus ?? projectGitStatus;
+  const showGitStats =
+    effectiveGitStatus &&
+    (effectiveGitStatus.linesAdded > 0 || effectiveGitStatus.linesDeleted > 0);
 
   // Fetch git status when activeThread changes
   useEffect(() => {
     if (activeThreadId) {
       fetchForThread(activeThreadId);
+    } else if (selectedProjectId) {
+      fetchProjectStatus(selectedProjectId);
     }
-  }, [activeThreadId, fetchForThread]);
+  }, [activeThreadId, selectedProjectId, fetchForThread, fetchProjectStatus]);
 
   if (!selectedProjectId) return null;
 
@@ -472,26 +514,45 @@ export const ProjectHeader = memo(function ProjectHeader() {
                   </BreadcrumbLink>
                 </BreadcrumbItem>
               )}
+              {project && !activeThreadId && branch && (
+                <>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem className="flex-shrink-0">
+                    <BreadcrumbPage className="flex items-center gap-1 text-xs text-muted-foreground">
+                      <GitBranch className="h-3 w-3" />
+                      {branch}
+                    </BreadcrumbPage>
+                  </BreadcrumbItem>
+                </>
+              )}
               {project && activeThreadId && <BreadcrumbSeparator />}
               {activeThreadId && (
-                <BreadcrumbItem className="flex min-w-0 flex-1 items-center gap-2 overflow-hidden">
-                  <BreadcrumbPage className="block truncate text-sm">
-                    {activeThreadTitle}
-                  </BreadcrumbPage>
-                  {activeThreadStage &&
-                    activeThreadStage !== 'archived' &&
-                    (() => {
-                      const cfg = stageConfig[activeThreadStage];
-                      const StageIcon = cfg.icon;
-                      return (
-                        <span
-                          className={`inline-flex flex-shrink-0 items-center gap-1 rounded-full border px-2 py-0.5 text-xs ${cfg.className}`}
-                        >
-                          <StageIcon className="h-3 w-3" />
-                          {t(cfg.labelKey)}
-                        </span>
-                      );
-                    })()}
+                <BreadcrumbItem className="flex min-w-0 flex-1 items-center gap-2">
+                  <span className="block min-w-0 truncate text-sm">{activeThreadTitle}</span>
+                  {activeThreadStage && activeThreadStage !== 'archived' && (
+                    <StageSelectorBadge
+                      threadId={activeThreadId!}
+                      projectId={activeThreadProjectId!}
+                      stage={activeThreadStage}
+                    />
+                  )}
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReviewPaneOpen(false);
+                          navigate(
+                            `/kanban?project=${activeThreadProjectId}&highlight=${activeThreadId}`,
+                          );
+                        }}
+                        className="inline-flex flex-shrink-0 items-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+                      >
+                        <Columns3 className="h-3.5 w-3.5" />
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('kanban.viewOnBoard', 'View on Board')}</TooltipContent>
+                  </Tooltip>
                 </BreadcrumbItem>
               )}
             </BreadcrumbList>
@@ -587,8 +648,8 @@ export const ProjectHeader = memo(function ProjectHeader() {
               >
                 {showGitStats ? (
                   <div className="flex items-center gap-2 font-mono text-xs font-semibold">
-                    <span className="text-diff-added">+{gitStatus.linesAdded}</span>
-                    <span className="text-diff-removed">-{gitStatus.linesDeleted}</span>
+                    <span className="text-diff-added">+{effectiveGitStatus.linesAdded}</span>
+                    <span className="text-diff-removed">-{effectiveGitStatus.linesDeleted}</span>
                   </div>
                 ) : (
                   <GitCompare className="h-4 w-4" />

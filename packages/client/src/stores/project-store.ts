@@ -11,10 +11,12 @@ interface ProjectState {
   expandedProjects: Set<string>;
   selectedProjectId: string | null;
   initialized: boolean;
+  branchByProject: Record<string, string>;
 
   loadProjects: () => Promise<void>;
   toggleProject: (projectId: string) => void;
   selectProject: (projectId: string | null) => void;
+  fetchBranch: (projectId: string) => Promise<void>;
   renameProject: (projectId: string, name: string) => Promise<void>;
   updateProject: (
     projectId: string,
@@ -39,6 +41,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   expandedProjects: new Set(),
   selectedProjectId: null,
   initialized: false,
+  branchByProject: {},
 
   loadProjects: async () => {
     // Deduplicate concurrent calls (StrictMode, cascading re-renders, etc.)
@@ -73,12 +76,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
             }
             useThreadStore.setState({ threadsByProject });
 
-            // Defer git status fetch for expanded projects
+            // Defer git status and branch fetch for expanded projects
             const gitStore = useGitStatusStore.getState();
-            const { expandedProjects } = get();
+            const { expandedProjects, fetchBranch } = get();
             for (const p of projects) {
               if (expandedProjects.has(p.id)) {
                 gitStore.fetchForProject(p.id);
+                fetchBranch(p.id);
               }
             }
           })
@@ -103,6 +107,8 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       if (!threadStore.threadsByProject[projectId]) {
         threadStore.loadThreadsForProject(projectId);
       }
+      // Fetch branch name for the expanded project
+      get().fetchBranch(projectId);
       // Defer git status fetch to avoid blocking the interaction (INP).
       // The collapsible animation and thread list render first, then git
       // status icons fill in once the browser is idle.
@@ -139,12 +145,29 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     if (!threadStore.threadsByProject[projectId]) {
       threadStore.loadThreadsForProject(projectId);
     }
+    // Fetch branch name for the selected project
+    get().fetchBranch(projectId);
+    // Auto-open the review pane so the user sees git info for the project
+    // (only when no thread is active — otherwise the pane is thread-driven).
+    // Lazy import to avoid circular dependency (ui-store imports project-store).
+    if (!useThreadStore.getState().activeThread) {
+      import('./ui-store').then(({ useUIStore }) => useUIStore.getState().setReviewPaneOpen(true));
+    }
     // Defer git status fetch to avoid blocking the interaction (INP)
     const fetchGitStatus = () => useGitStatusStore.getState().fetchForProject(projectId);
     if (typeof requestIdleCallback === 'function') {
       requestIdleCallback(fetchGitStatus);
     } else {
       setTimeout(fetchGitStatus, 100);
+    }
+  },
+
+  fetchBranch: async (projectId) => {
+    const result = await api.listBranches(projectId);
+    if (result.isErr()) return;
+    const { currentBranch } = result.value;
+    if (currentBranch) {
+      set({ branchByProject: { ...get().branchByProject, [projectId]: currentBranch } });
     }
   },
 

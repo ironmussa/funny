@@ -77,7 +77,7 @@ const CLAUDE_PERMISSION_MAP: Record<PermissionMode, string> = {
   plan: 'plan',
   autoEdit: 'bypassPermissions',
   confirmEdit: 'default',
-  ask: 'bypassPermissions',
+  ask: 'default',
 };
 
 // ── Ask-mode tools (read-only) ───────────────────────────────

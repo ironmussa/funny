@@ -5,7 +5,13 @@
  * via GET /api/setup/status — nothing is hardcoded.
  */
 
-import type { ProviderInfo } from '@funny/funny-client';
+interface ProviderInfo {
+  available: boolean;
+  label?: string;
+  defaultModel?: string;
+  models?: string[];
+  modelsWithLabels?: Array<{ value: string; label: string }>;
+}
 
 const $ = (sel: string) => document.querySelector(sel) as HTMLElement | null;
 

@@ -71,15 +71,54 @@
   pointer-events: auto;
 }
 
+.popover-close-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: none;
+  border: none;
+  color: #666;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+}
+.popover-close-btn:hover {
+  color: #e5e5e5;
+  background: #333;
+}
+
 .popover-header {
   margin-bottom: 10px;
 }
 
+.popover-element-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+}
+
 .popover-element-name {
   color: #22c55e;
-  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-family: inherit;
   font-size: 13px;
   font-weight: 600;
+}
+
+.popover-element-toggle:hover .popover-element-name {
+  text-decoration: underline;
+}
+
+.popover-element-toggle .popover-details-arrow {
+  color: #666;
 }
 
 .popover-textarea {
@@ -111,24 +150,6 @@
 }
 
 /* Element info accordion */
-.popover-details {
-  margin-top: 8px;
-}
-.popover-details-toggle {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  background: none;
-  border: none;
-  color: #888;
-  font-size: 11px;
-  cursor: pointer;
-  padding: 4px 0;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-}
-.popover-details-toggle:hover {
-  color: #ccc;
-}
 .popover-details-arrow {
   transition: transform 0.15s ease;
   flex-shrink: 0;
@@ -261,6 +282,57 @@
 }
 .popover-add:hover {
   background: #16a34a;
+}
+
+.popover-project {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  margin-bottom: 8px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #2a2a2a;
+}
+
+.popover-project svg {
+  flex-shrink: 0;
+  color: #666;
+}
+
+.popover-project-name {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #999;
+  font-weight: 500;
+}
+
+.popover-project-empty {
+  color: #555;
+  font-style: italic;
+  font-weight: 400;
+}
+
+.popover-send-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  background: #3b82f6;
+  border: none;
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 12px;
+  border-radius: 6px;
+  white-space: nowrap;
+}
+.popover-send-btn:hover {
+  background: #2563eb;
+}
+.popover-send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* Toolbar */

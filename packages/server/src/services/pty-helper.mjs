@@ -55,9 +55,11 @@ function resolveShell(shellId) {
 
   switch (shellId) {
     case 'git-bash': {
-      // Try common Git Bash locations
+      // Try common Git Bash locations.
+      // Do NOT pass -i: the PTY already provides an interactive session,
+      // and the double-interactive flag causes duplicate echo on Windows.
       const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
-      return { exe: `${programFiles}\\Git\\bin\\bash.exe`, args: ['--login', '-i'] };
+      return { exe: `${programFiles}\\Git\\bin\\bash.exe`, args: ['--login'] };
     }
     case 'powershell':
       return { exe: 'powershell.exe', args: [] };

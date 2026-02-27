@@ -112,6 +112,8 @@ let popoverElementName: HTMLSpanElement;
 let popoverElementList: HTMLDivElement;
 let popoverAddBtn: HTMLButtonElement;
 let popoverDeleteBtn: HTMLButtonElement;
+let popoverProjectName: HTMLSpanElement;
+let popoverSendBtn: HTMLButtonElement;
 
 // Drag listener refs (for cleanup)
 let dragMoveHandler: ((e: MouseEvent) => void) | null = null;
@@ -548,22 +550,57 @@ function onScrollOrResize() {
 // ---------------------------------------------------------------------------
 // Popover (annotation form)
 // ---------------------------------------------------------------------------
+
+function resetDetailsCollapsed() {
+  const body = popover.querySelector('.popover-details-body') as HTMLDivElement;
+  const arrow = popover.querySelector('.popover-details-arrow') as SVGElement;
+  if (body) body.style.display = 'none';
+  if (arrow) arrow.classList.remove('popover-details-arrow-open');
+}
+
+function loadPopoverProjectName() {
+  safeSendMessage({ type: 'GET_CONFIG' }, (config: any) => {
+    if (!config?.projectId) {
+      popoverProjectName.textContent = 'No project';
+      popoverProjectName.classList.add('popover-project-empty');
+      return;
+    }
+    // Fetch projects to get the name
+    safeSendMessage({ type: 'FETCH_PROJECTS' }, (result: any) => {
+      if (result?.success && result.projects) {
+        const project = result.projects.find((p: any) => p.id === config.projectId);
+        popoverProjectName.textContent = project?.name || 'No project';
+        popoverProjectName.classList.toggle('popover-project-empty', !project);
+      } else {
+        popoverProjectName.textContent = 'No project';
+        popoverProjectName.classList.add('popover-project-empty');
+      }
+    });
+  });
+}
+
 function createPopover(): HTMLDivElement {
   const pop = createElement('div', 'popover');
   pop.style.display = 'none';
   pop.innerHTML = `
-    <div class="popover-header">
-      <span class="popover-element-name"></span>
+    <button class="popover-close-btn" title="Close">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <line x1="18" y1="6" x2="6" y2="18"></line>
+        <line x1="6" y1="6" x2="18" y2="18"></line>
+      </svg>
+    </button>
+    <div class="popover-project">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+      </svg>
+      <span class="popover-project-name">Loading...</span>
     </div>
-    <div class="popover-element-list" style="display:none"></div>
-    <textarea class="popover-textarea" placeholder="What should be done with this element?" rows="3"></textarea>
-    <div class="popover-error" style="display:none">Please describe the action needed.</div>
-    <div class="popover-details">
-      <button class="popover-details-toggle">
+    <div class="popover-header">
+      <button class="popover-element-toggle">
+        <span class="popover-element-name"></span>
         <svg class="popover-details-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <polyline points="9 18 15 12 9 6"></polyline>
         </svg>
-        Element info
       </button>
       <div class="popover-details-body" style="display:none">
         <div class="popover-detail-row"><span class="popover-detail-label">Selector</span><code class="popover-detail-value popover-detail-selector"></code></div>
@@ -576,11 +613,21 @@ function createPopover(): HTMLDivElement {
         <div class="popover-detail-row popover-detail-a11y-row" style="display:none"><span class="popover-detail-label">Accessibility</span><span class="popover-detail-value popover-detail-a11y"></span></div>
       </div>
     </div>
+    <div class="popover-element-list" style="display:none"></div>
+    <textarea class="popover-textarea" placeholder="What should be done with this element?" rows="3"></textarea>
+    <div class="popover-error" style="display:none">Please describe the action needed.</div>
     <div class="popover-actions">
       <button class="popover-delete" style="display:none">Delete</button>
       <div class="popover-actions-right">
-        <button class="popover-cancel">Cancel</button>
         <button class="popover-add">Add</button>
+        <button class="popover-send-btn">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="22" y1="2" x2="11" y2="13"></line>
+            <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+          </svg>
+          Send
+        </button>
+        <button class="popover-cancel">Cancel</button>
       </div>
     </div>
   `;
@@ -592,12 +639,23 @@ function createPopover(): HTMLDivElement {
   popoverElementList = pop.querySelector('.popover-element-list') as HTMLDivElement;
   popoverAddBtn = pop.querySelector('.popover-add') as HTMLButtonElement;
   popoverDeleteBtn = pop.querySelector('.popover-delete') as HTMLButtonElement;
+  popoverProjectName = pop.querySelector('.popover-project-name') as HTMLSpanElement;
+  popoverSendBtn = pop.querySelector('.popover-send-btn') as HTMLButtonElement;
 
-  // Accordion toggle
-  const detailsToggle = pop.querySelector('.popover-details-toggle') as HTMLButtonElement;
+  // Send to Funny from popover
+  popoverSendBtn.addEventListener('click', () => {
+    // First add the current annotation, then send all
+    addAnnotationFromPopover();
+    if (annotations.length > 0) {
+      sendToFunny();
+    }
+  });
+
+  // Element name toggles details
+  const elementToggle = pop.querySelector('.popover-element-toggle') as HTMLButtonElement;
   const detailsBody = pop.querySelector('.popover-details-body') as HTMLDivElement;
   const detailsArrow = pop.querySelector('.popover-details-arrow') as SVGElement;
-  detailsToggle.addEventListener('click', () => {
+  elementToggle.addEventListener('click', () => {
     const open = detailsBody.style.display !== 'none';
     detailsBody.style.display = open ? 'none' : 'block';
     detailsArrow.classList.toggle('popover-details-arrow-open', !open);
@@ -605,6 +663,7 @@ function createPopover(): HTMLDivElement {
 
   // Events
   pop.querySelector('.popover-cancel')!.addEventListener('click', () => hidePopover());
+  pop.querySelector('.popover-close-btn')!.addEventListener('click', () => hidePopover());
   popoverAddBtn.addEventListener('click', () => addAnnotationFromPopover());
   popoverDeleteBtn.addEventListener('click', () => deleteAnnotationFromPopover());
 
@@ -726,10 +785,12 @@ function showPopoverForElement(el: Element, clickX: number, clickY: number) {
   popoverError.style.display = 'none';
   popoverAddBtn.textContent = 'Add';
   popoverDeleteBtn.style.display = 'none';
-  const details = popover.querySelector('.popover-details') as HTMLDivElement;
-  if (details) details.style.display = '';
+  resetDetailsCollapsed();
+  const header = popover.querySelector('.popover-header') as HTMLDivElement;
+  if (header) header.style.display = '';
   populateElementDetails(el);
 
+  loadPopoverProjectName();
   positionPopoverAtPoint(clickX, clickY);
   popover.style.display = 'block';
   popoverTextarea.focus();
@@ -759,8 +820,8 @@ function showPopoverForEdit(ann: Annotation, index: number, clickX: number, clic
       chip.appendChild(nameSpan);
       popoverElementList.appendChild(chip);
     });
-    const details = popover.querySelector('.popover-details') as HTMLDivElement;
-    if (details) details.style.display = 'none';
+    const header = popover.querySelector('.popover-header') as HTMLDivElement;
+    if (header) header.style.display = 'none';
   } else {
     // Single-element annotation
     const elemData = ann.elements[0];
@@ -770,11 +831,13 @@ function showPopoverForEdit(ann: Annotation, index: number, clickX: number, clic
     popoverTextarea.placeholder = 'What should be done with this element?';
     popoverElementList.style.display = 'none';
     popoverElementList.innerHTML = '';
-    const details = popover.querySelector('.popover-details') as HTMLDivElement;
-    if (details) details.style.display = '';
+    resetDetailsCollapsed();
+    const header = popover.querySelector('.popover-header') as HTMLDivElement;
+    if (header) header.style.display = '';
     populateElementDetails(elemData._element);
   }
 
+  loadPopoverProjectName();
   positionPopoverAtPoint(clickX, clickY);
   popover.style.display = 'block';
   popoverTextarea.focus();
@@ -816,10 +879,11 @@ function showPopoverForMultiSelect(clickX: number, clickY: number) {
   popoverAddBtn.textContent = 'Add';
   popoverDeleteBtn.style.display = 'none';
 
-  // Hide element details accordion (not useful for multi-select)
-  const details = popover.querySelector('.popover-details') as HTMLDivElement;
-  if (details) details.style.display = 'none';
+  // Hide element header (not useful for multi-select, chips are shown instead)
+  const header = popover.querySelector('.popover-header') as HTMLDivElement;
+  if (header) header.style.display = 'none';
 
+  loadPopoverProjectName();
   positionPopoverAtPoint(clickX, clickY);
   popover.style.display = 'block';
   popoverTextarea.focus();
@@ -1035,7 +1099,6 @@ function createToolbar(): HTMLDivElement {
       </svg>
     </button>
     <div class="toolbar-separator"></div>
-    <span class="toolbar-project" title="Selected project"></span>
     <button class="toolbar-btn toolbar-btn-send" data-action="send" title="Send to Funny">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
         <line x1="22" y1="2" x2="11" y2="13"></line>
@@ -2093,6 +2156,15 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
         elements: ann.elements.map(({ _element, ...rest }) => rest),
       })),
     });
+  } else if (msg.type === 'GET_MARKDOWN') {
+    sendResponse({ markdown: generateMarkdown() });
+  } else if (msg.type === 'CLEAR_ANNOTATIONS') {
+    annotations = [];
+    _annotationCounter = 0;
+    clearMultiSelect();
+    renderAnnotations();
+    updateToolbarCount();
+    sendResponse({ success: true });
   } else if (msg.type === 'ACTIVATE') {
     activate();
     sendResponse({ active: true });

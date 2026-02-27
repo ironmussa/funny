@@ -22,7 +22,7 @@ import type {
   QueuedMessage,
 } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
-import { internal } from '@funny/shared/errors';
+import { internal, processError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
@@ -132,16 +132,18 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
             : rawError
               ? JSON.stringify(rawError)
               : `HTTP ${res.status}`;
+        // If the server returned stderr/exitCode, this was a process error
+        if (body.stderr || body.exitCode != null) {
+          throw processError(message, body.exitCode, body.stderr);
+        }
+
+        const STATUS_TYPE: Record<number, DomainError['type']> = {
+          404: 'NOT_FOUND',
+          403: 'FORBIDDEN',
+          409: 'CONFLICT',
+        };
         const type: DomainError['type'] =
-          res.status === 404
-            ? 'NOT_FOUND'
-            : res.status === 403
-              ? 'FORBIDDEN'
-              : res.status === 409
-                ? 'CONFLICT'
-                : res.status >= 500
-                  ? 'INTERNAL'
-                  : 'BAD_REQUEST';
+          STATUS_TYPE[res.status] ?? (res.status >= 500 ? 'INTERNAL' : 'BAD_REQUEST');
         throw { type, message } as DomainError;
       }
 

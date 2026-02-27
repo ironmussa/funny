@@ -20,6 +20,13 @@ export function resultToResponse<T>(
 ) {
   return result.match(
     (value) => c.json(value as any, successStatus as any),
-    (error) => c.json({ error: error.message }, STATUS_MAP[error.type] as any),
+    (error) => {
+      const body: Record<string, unknown> = { error: error.message };
+      if (error.type === 'PROCESS_ERROR') {
+        if (error.stderr) body.stderr = error.stderr;
+        if (error.exitCode != null) body.exitCode = error.exitCode;
+      }
+      return c.json(body, STATUS_MAP[error.type] as any);
+    },
   );
 }

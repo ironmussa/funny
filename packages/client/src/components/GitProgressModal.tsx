@@ -128,7 +128,7 @@ export function GitProgressModal({ open, onOpenChange, steps, title }: GitProgre
   return (
     <Dialog open={open} onOpenChange={isFinished ? onOpenChange : undefined}>
       <DialogContent
-        className="max-w-sm"
+        className={cn('max-w-sm', hasFailed && 'max-w-lg')}
         onPointerDownOutside={(e) => {
           if (!isFinished) e.preventDefault();
         }}
@@ -174,7 +174,7 @@ export function GitProgressModal({ open, onOpenChange, steps, title }: GitProgre
                     )}
                   </div>
                   {step.error && (
-                    <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap break-words font-sans text-[11px] text-destructive/80">
+                    <pre className="mt-0.5 max-h-60 overflow-auto whitespace-pre-wrap break-words rounded bg-destructive/5 p-1.5 font-mono text-[11px] text-destructive/80">
                       {step.error}
                     </pre>
                   )}

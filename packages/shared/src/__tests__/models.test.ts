@@ -134,6 +134,10 @@ describe('resolvePermissionMode', () => {
     test('maps confirmEdit to default', () => {
       expect(resolvePermissionMode('claude', 'confirmEdit')).toBe('default');
     });
+
+    test('maps ask to default', () => {
+      expect(resolvePermissionMode('claude', 'ask')).toBe('default');
+    });
   });
 
   describe('codex provider', () => {

@@ -11,7 +11,7 @@ export interface ObservabilityConfig {
 
 export function loadConfig(overrides?: Partial<ObservabilityConfig>): ObservabilityConfig {
   return {
-    enabled: overrides?.enabled ?? process.env.OTEL_ENABLED !== 'false',
+    enabled: overrides?.enabled ?? process.env.OTEL_ENABLED === 'true',
     endpoint:
       overrides?.endpoint ?? process.env.OTEL_EXPORTER_OTLP_ENDPOINT ?? 'http://localhost:4318',
     serviceName: overrides?.serviceName ?? process.env.OTEL_SERVICE_NAME ?? 'funny-server',

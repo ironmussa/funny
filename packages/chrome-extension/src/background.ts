@@ -2,14 +2,12 @@
  * Funny UI Annotator - Background Service Worker
  *
  * Handles:
- * - Authentication with Funny server (bearer token)
- * - Creating threads via FunnyClient
- * - Fetching providers/models from FunnyClient
+ * - Authentication with Funny server (bearer token via /api/bootstrap)
+ * - Creating threads via POST /api/threads
+ * - Fetching providers/models via GET /api/setup/status
+ * - Fetching projects via GET /api/projects
  * - Capturing screenshots via chrome.tabs API
  */
-
-import { FunnyClient } from '@funny/funny-client';
-import type { SetupStatus, Project } from '@funny/funny-client';
 
 // ---------------------------------------------------------------------------
 // Config types & defaults
@@ -47,17 +45,6 @@ async function saveConfig(config: Partial<ExtensionConfig>): Promise<void> {
 }
 
 // ---------------------------------------------------------------------------
-// FunnyClient factory
-// ---------------------------------------------------------------------------
-
-async function getClient(): Promise<FunnyClient> {
-  const config = await getConfig();
-  const token = await getAuthToken(config.serverUrl);
-  const client = new FunnyClient({ baseUrl: config.serverUrl, token });
-  return client;
-}
-
-// ---------------------------------------------------------------------------
 // Auth token
 // ---------------------------------------------------------------------------
 
@@ -65,13 +52,41 @@ async function getAuthToken(serverUrl: string): Promise<string> {
   const cached = await chrome.storage.local.get('funnyToken');
   if (cached.funnyToken) return cached.funnyToken;
 
-  const client = new FunnyClient({ baseUrl: serverUrl });
-  const data = await client.bootstrap();
+  const res = await fetch(`${serverUrl}/api/bootstrap`);
+  if (!res.ok) throw new Error(`Bootstrap failed: ${res.status}`);
+  const data = await res.json();
   const token = data.token ?? '';
   if (token) {
     await chrome.storage.local.set({ funnyToken: token });
   }
   return token;
+}
+
+// ---------------------------------------------------------------------------
+// Authenticated fetch helper
+// ---------------------------------------------------------------------------
+
+async function apiFetch(path: string, options: RequestInit = {}): Promise<any> {
+  const config = await getConfig();
+  const token = await getAuthToken(config.serverUrl);
+  const url = `${config.serverUrl}${path}`;
+
+  const headers: Record<string, string> = {
+    ...((options.headers as Record<string, string>) || {}),
+  };
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  if (options.body && typeof options.body === 'string') {
+    headers['Content-Type'] = 'application/json';
+  }
+
+  const res = await fetch(url, { ...options, headers });
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`API ${options.method || 'GET'} ${path} failed (${res.status}): ${text}`);
+  }
+  return res.json();
 }
 
 // ---------------------------------------------------------------------------
@@ -87,14 +102,10 @@ interface AnnotationData {
 }
 
 // ---------------------------------------------------------------------------
-// Create thread via FunnyClient
+// Create thread via API
 // ---------------------------------------------------------------------------
 
-async function createThreadFromAnnotations(
-  config: ExtensionConfig,
-  client: FunnyClient,
-  data: AnnotationData,
-) {
+async function createThreadFromAnnotations(config: ExtensionConfig, data: AnnotationData) {
   if (!config.projectId) {
     throw new Error('No project selected. Open settings in the toolbar and select a project.');
   }
@@ -119,16 +130,19 @@ async function createThreadFromAnnotations(
     ? `${firstPrompt.slice(0, 70)} — ${pageTitle}`.slice(0, 100)
     : `UI Review: ${pageTitle}`.slice(0, 100);
 
-  return client.createThread({
-    projectId: config.projectId,
-    prompt,
-    title: threadTitle,
-    mode: config.mode as 'local' | 'worktree',
-    provider: config.provider || undefined,
-    model: config.model || undefined,
-    permissionMode: config.permissionMode as any,
-    source: 'chrome_extension',
-    images: images as any,
+  return apiFetch('/api/threads', {
+    method: 'POST',
+    body: JSON.stringify({
+      projectId: config.projectId,
+      prompt,
+      title: threadTitle,
+      mode: config.mode,
+      provider: config.provider || undefined,
+      model: config.model || undefined,
+      permissionMode: config.permissionMode,
+      source: 'chrome_extension',
+      images: images.length > 0 ? images : undefined,
+    }),
   });
 }
 
@@ -214,19 +228,16 @@ chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
 
 async function handleSendToFunny(data: AnnotationData) {
   const config = await getConfig();
-  const client = await getClient();
-  return createThreadFromAnnotations(config, client, data);
+  return createThreadFromAnnotations(config, data);
 }
 
-async function handleFetchProjects(): Promise<Project[]> {
-  const client = await getClient();
-  const result = await client.getProjects();
-  return (result as any).projects || result;
+async function handleFetchProjects(): Promise<any[]> {
+  const data = await apiFetch('/api/projects');
+  return data.projects || data;
 }
 
-async function handleFetchSetupStatus(): Promise<SetupStatus> {
-  const client = await getClient();
-  return client.getSetupStatus();
+async function handleFetchSetupStatus(): Promise<any> {
+  return apiFetch('/api/setup/status');
 }
 
 async function handleTestConnection(serverUrl?: string) {
@@ -245,12 +256,11 @@ async function handleGetFullConfig() {
   const result: any = { success: true, config };
 
   try {
-    const client = await getClient();
     const [projectsData, setupData] = await Promise.all([
-      client.getProjects().catch(() => []),
-      client.getSetupStatus().catch(() => ({ providers: {} }) as any),
+      apiFetch('/api/projects').catch(() => ({ projects: [] })),
+      apiFetch('/api/setup/status').catch(() => ({ providers: {} })),
     ]);
-    result.projects = (projectsData as any).projects || projectsData;
+    result.projects = projectsData.projects || projectsData;
     result.providers = setupData.providers || {};
     result.connected = true;
   } catch {

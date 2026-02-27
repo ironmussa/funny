@@ -574,14 +574,17 @@ export function ReviewPane() {
         : await api.projectCommit(projectModeId!, commitMsg, isAmend);
       if (commitResult.isErr()) {
         // If the error mentions hooks, mark hooks as failed; otherwise hooks passed but commit failed
-        const errMsg = commitResult.error.message.toLowerCase();
+        const err = commitResult.error;
+        const stderr = (err as any).stderr as string | undefined;
+        const errMsg = (stderr || err.message).toLowerCase();
         const isHookFailure =
           errMsg.includes('hook') ||
           errMsg.includes('husky') ||
           errMsg.includes('lint-staged') ||
           errMsg.includes('pre-commit');
+        // Show stderr (full hook output) when available, otherwise the short message
         const displayError =
-          commitResult.error.message || t('review.commitFailedGeneric', 'Commit failed');
+          stderr || err.message || t('review.commitFailedGeneric', 'Commit failed');
         if (isHookFailure) {
           setStep('hooks', { status: 'failed', error: displayError });
         } else {
@@ -589,7 +592,7 @@ export function ReviewPane() {
           setStep('commit', { status: 'running' });
           setStep('commit', { status: 'failed', error: displayError });
         }
-        toast.error(displayError);
+        toast.error(err.message || t('review.commitFailedGeneric', 'Commit failed'));
         setActionInProgress(null);
         return;
       }

@@ -18,14 +18,21 @@ function ensureInitialized(overrides?: Partial<ObservabilityConfig>): void {
     return;
   }
 
-  const resource = createResource(config);
-  const traceExporter = createTraceExporter(config);
-  const metricExporter = createMetricExporter(config);
-  const logExporter = createLogExporter(config);
+  try {
+    const resource = createResource(config);
+    const traceExporter = createTraceExporter(config);
+    const metricExporter = createMetricExporter(config);
+    const logExporter = createLogExporter(config);
 
-  initTracer(resource, traceExporter);
-  initMetrics(resource, metricExporter, config.exportIntervalMs);
-  initLogger(resource, logExporter);
+    initTracer(resource, traceExporter);
+    initMetrics(resource, metricExporter, config.exportIntervalMs);
+    initLogger(resource, logExporter);
+  } catch (err) {
+    console.warn(
+      '[observability] Failed to initialize OpenTelemetry, continuing without telemetry:',
+      err,
+    );
+  }
 
   initialized = true;
 }

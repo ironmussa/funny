@@ -1,4 +1,5 @@
 import { existsSync } from 'fs';
+import { join } from 'path';
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import {

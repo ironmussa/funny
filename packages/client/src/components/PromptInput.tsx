@@ -30,8 +30,9 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
-import { getUnifiedModelOptions, parseUnifiedModel } from '@/lib/providers';
+import { getContextWindow, getUnifiedModelOptions, parseUnifiedModel } from '@/lib/providers';
 import { cn } from '@/lib/utils';
 import { useDraftStore } from '@/stores/draft-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -407,6 +408,7 @@ export const PromptInput = memo(function PromptInput({
   const activeThreadMode = useThreadStore((s) => s.activeThread?.mode);
   const activeThreadBranch = useThreadStore((s) => s.activeThread?.branch);
   const activeThreadBaseBranch = useThreadStore((s) => s.activeThread?.baseBranch);
+  const contextUsage = useThreadStore((s) => s.activeThread?.contextUsage);
   const [newThreadBranches, setNewThreadBranches] = useState<string[]>([]);
   const [newThreadBranchesLoading, setNewThreadBranchesLoading] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<string>('');
@@ -1270,6 +1272,24 @@ export const PromptInput = memo(function PromptInput({
                     ))}
                   </SelectContent>
                 </Select>
+                {contextUsage && contextUsage.cumulativeInputTokens > 0 && (() => {
+                  const maxTokens = getContextWindow(activeThreadProvider ?? 'claude', activeThreadModel ?? 'sonnet');
+                  const pct = Math.min(100, (contextUsage.cumulativeInputTokens / maxTokens) * 100);
+                  const tokenK = Math.round(contextUsage.cumulativeInputTokens / 1000);
+                  const colorClass = pct > 80 ? 'text-red-500' : pct > 60 ? 'text-amber-500' : 'text-muted-foreground';
+                  return (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span className={cn('cursor-default text-xs tabular-nums', colorClass)}>
+                          {tokenK}K
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Context: {tokenK}K / {Math.round(maxTokens / 1000)}K tokens ({pct.toFixed(0)}%)
+                      </TooltipContent>
+                    </Tooltip>
+                  );
+                })()}
                 {queuedCount > 0 && (
                   <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
                     {queuedCount} {t('prompt.queued')}

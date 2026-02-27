@@ -53,7 +53,6 @@ import { ImageLightbox } from './ImageLightbox';
 import { PromptInput } from './PromptInput';
 import { AgentResultCard, AgentInterruptedCard, AgentStoppedCard } from './thread/AgentStatusCards';
 import { CompactionEventCard } from './thread/CompactionEventCard';
-import { ContextUsageBar } from './thread/ContextUsageBar';
 import { GitEventCard } from './thread/GitEventCard';
 import { NewThreadInput } from './thread/NewThreadInput';
 import { ProjectHeader } from './thread/ProjectHeader';
@@ -1508,9 +1507,6 @@ export function ThreadView() {
   return (
     <div className="relative flex h-full min-w-0 flex-1 flex-col">
       <ProjectHeader />
-      {isRunning && activeThread.contextUsage && (
-        <ContextUsageBar cumulativeInputTokens={activeThread.contextUsage.cumulativeInputTokens} />
-      )}
 
       {/* Messages + Timeline */}
       <div className="thread-container flex min-h-0 flex-1">

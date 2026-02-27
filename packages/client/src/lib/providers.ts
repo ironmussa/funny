@@ -18,6 +18,8 @@ export interface ModelConfig {
   i18nKey: string;
   /** Fallback label if i18n is not available */
   fallback: string;
+  /** Context window size in tokens */
+  contextWindow: number;
 }
 
 // ── Providers ──────────────────────────────────────────────────
@@ -32,22 +34,22 @@ export const PROVIDERS: ProviderConfig[] = [
 
 export const PROVIDER_MODELS: Record<string, ModelConfig[]> = {
   claude: [
-    { value: 'haiku', i18nKey: 'haiku', fallback: 'Haiku 4.5' },
-    { value: 'sonnet', i18nKey: 'sonnet', fallback: 'Sonnet 4.5' },
-    { value: 'sonnet-4.6', i18nKey: 'sonnet46', fallback: 'Sonnet 4.6' },
-    { value: 'opus', i18nKey: 'opus', fallback: 'Opus 4.6' },
+    { value: 'haiku', i18nKey: 'haiku', fallback: 'Haiku 4.5', contextWindow: 200_000 },
+    { value: 'sonnet', i18nKey: 'sonnet', fallback: 'Sonnet 4.5', contextWindow: 200_000 },
+    { value: 'sonnet-4.6', i18nKey: 'sonnet46', fallback: 'Sonnet 4.6', contextWindow: 200_000 },
+    { value: 'opus', i18nKey: 'opus', fallback: 'Opus 4.6', contextWindow: 200_000 },
   ],
   codex: [
-    { value: 'o3', i18nKey: 'o3', fallback: 'o3' },
-    { value: 'o4-mini', i18nKey: 'o4mini', fallback: 'o4-mini' },
-    { value: 'codex-mini', i18nKey: 'codexMini', fallback: 'Codex Mini' },
+    { value: 'o3', i18nKey: 'o3', fallback: 'o3', contextWindow: 200_000 },
+    { value: 'o4-mini', i18nKey: 'o4mini', fallback: 'o4-mini', contextWindow: 200_000 },
+    { value: 'codex-mini', i18nKey: 'codexMini', fallback: 'Codex Mini', contextWindow: 200_000 },
   ],
   gemini: [
-    { value: 'gemini-3-flash-preview', i18nKey: 'gemini3flash', fallback: 'Gemini 3 Flash' },
-    { value: 'gemini-3-pro-preview', i18nKey: 'gemini3pro', fallback: 'Gemini 3 Pro' },
-    { value: 'gemini-2.5-flash', i18nKey: 'gemini25flash', fallback: 'Gemini 2.5 Flash' },
-    { value: 'gemini-2.5-pro', i18nKey: 'gemini25pro', fallback: 'Gemini 2.5 Pro' },
-    { value: 'gemini-2.0-flash', i18nKey: 'gemini20flash', fallback: 'Gemini 2.0 Flash' },
+    { value: 'gemini-3-flash-preview', i18nKey: 'gemini3flash', fallback: 'Gemini 3 Flash', contextWindow: 1_000_000 },
+    { value: 'gemini-3-pro-preview', i18nKey: 'gemini3pro', fallback: 'Gemini 3 Pro', contextWindow: 1_000_000 },
+    { value: 'gemini-2.5-flash', i18nKey: 'gemini25flash', fallback: 'Gemini 2.5 Flash', contextWindow: 1_048_576 },
+    { value: 'gemini-2.5-pro', i18nKey: 'gemini25pro', fallback: 'Gemini 2.5 Pro', contextWindow: 1_048_576 },
+    { value: 'gemini-2.0-flash', i18nKey: 'gemini20flash', fallback: 'Gemini 2.0 Flash', contextWindow: 1_048_576 },
   ],
 };
 
@@ -116,6 +118,15 @@ export function getUnifiedModelOptions(
       }),
     };
   });
+}
+
+const DEFAULT_CONTEXT_WINDOW = 200_000;
+
+/** Get the context window size (in tokens) for a given provider + model. */
+export function getContextWindow(provider: string, model: string): number {
+  const models = PROVIDER_MODELS[provider];
+  const found = models?.find((m) => m.value === model);
+  return found?.contextWindow ?? DEFAULT_CONTEXT_WINDOW;
 }
 
 /** Parse a `provider:model` combined key back into its parts. */

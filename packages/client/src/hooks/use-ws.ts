@@ -245,11 +245,14 @@ function handleMessage(e: MessageEvent) {
         startTransition(() => {
           const active = useThreadStore.getState().activeThread;
           if (active && active.id === threadId) {
+            const existing = active.threadEvents ?? [];
+            // Deduplicate by event ID to prevent double-rendering
+            if (data.event?.id && existing.some((e: any) => e.id === data.event.id)) return;
             useThreadStore.setState({
               activeThread: {
                 ...active,
                 messages: active.messages,
-                threadEvents: [...(active.threadEvents ?? []), data.event],
+                threadEvents: [...existing, data.event],
               },
             });
           }

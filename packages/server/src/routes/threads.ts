@@ -112,13 +112,13 @@ threadRoutes.get('/:id/messages', (c) => {
 });
 
 // GET /api/threads/:id/events — get all events for a thread
-threadRoutes.get('/:id/events', (c) => {
+threadRoutes.get('/:id/events', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
   const threadResult = requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
-  const events = getThreadEvents(id);
+  const events = await getThreadEvents(id);
   return c.json({ events });
 });
 

@@ -17,6 +17,7 @@ import { getActiveWS } from '@/hooks/use-ws';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 
 const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
@@ -188,12 +189,19 @@ function WebTerminalTabContent({ id, cwd, active }: { id: string; cwd: string; a
       });
 
       const dims = fitAddon.proposeDimensions();
+      const shell = useSettingsStore.getState().terminalShell;
       const ws = getActiveWS();
       if (ws && ws.readyState === WebSocket.OPEN) {
         ws.send(
           JSON.stringify({
             type: 'pty:spawn',
-            data: { id, cwd, rows: dims?.rows ?? 24, cols: dims?.cols ?? 80 },
+            data: {
+              id,
+              cwd,
+              rows: dims?.rows ?? 24,
+              cols: dims?.cols ?? 80,
+              ...(shell !== 'default' && { shell }),
+            },
           }),
         );
       }

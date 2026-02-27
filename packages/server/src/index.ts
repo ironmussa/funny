@@ -346,7 +346,7 @@ const server = Bun.serve({
               } catch {}
               break;
             }
-            ptyManager.spawnPty(data.id, data.cwd, data.cols, data.rows, userId);
+            ptyManager.spawnPty(data.id, data.cwd, data.cols, data.rows, userId, data.shell);
             break;
           }
           case 'pty:write':

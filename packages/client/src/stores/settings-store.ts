@@ -6,6 +6,7 @@ export type Editor = 'cursor' | 'vscode' | 'windsurf' | 'zed' | 'sublime' | 'vim
 export type ThreadMode = 'local' | 'worktree';
 export type ClaudeModel = 'haiku' | 'sonnet' | 'opus';
 export type PermissionMode = 'plan' | 'autoEdit' | 'confirmEdit' | 'ask';
+export type TerminalShell = 'default' | 'git-bash' | 'powershell' | 'cmd' | 'wsl';
 
 const editorLabels: Record<Editor, string> = {
   cursor: 'Cursor',
@@ -14,6 +15,14 @@ const editorLabels: Record<Editor, string> = {
   zed: 'Zed',
   sublime: 'Sublime Text',
   vim: 'Vim',
+};
+
+const shellLabels: Record<TerminalShell, string> = {
+  default: 'settings.shellDefault',
+  'git-bash': 'Git Bash',
+  powershell: 'PowerShell',
+  cmd: 'CMD',
+  wsl: 'WSL',
 };
 
 export const ALL_STANDARD_TOOLS = [
@@ -51,10 +60,12 @@ const DEFAULT_TOOL_PERMISSIONS: Record<string, ToolPermission> = Object.fromEntr
 interface SettingsState {
   defaultEditor: Editor;
   useInternalEditor: boolean;
+  terminalShell: TerminalShell;
   toolPermissions: Record<string, ToolPermission>;
   setupCompleted: boolean;
   setDefaultEditor: (editor: Editor) => void;
   setUseInternalEditor: (use: boolean) => void;
+  setTerminalShell: (shell: TerminalShell) => void;
   setToolPermission: (toolName: string, permission: ToolPermission) => void;
   resetToolPermissions: () => void;
   completeSetup: () => void;
@@ -80,10 +91,12 @@ export const useSettingsStore = create<SettingsState>()(
     (set) => ({
       defaultEditor: 'cursor',
       useInternalEditor: false,
+      terminalShell: 'git-bash' as TerminalShell,
       toolPermissions: { ...DEFAULT_TOOL_PERMISSIONS },
       setupCompleted: false,
       setDefaultEditor: (editor) => set({ defaultEditor: editor }),
       setUseInternalEditor: (use) => set({ useInternalEditor: use }),
+      setTerminalShell: (shell) => set({ terminalShell: shell }),
       setToolPermission: (toolName, permission) =>
         set((state) => ({
           toolPermissions: { ...state.toolPermissions, [toolName]: permission },
@@ -93,7 +106,7 @@ export const useSettingsStore = create<SettingsState>()(
     }),
     {
       name: 'funny-settings',
-      version: 7,
+      version: 8,
       migrate: (persisted: any, version: number) => {
         if (version < 2) {
           // Old format had allowedTools: string[]
@@ -139,7 +152,15 @@ export const useSettingsStore = create<SettingsState>()(
         if (version < 7) {
           // Theme moved to next-themes — remove from persisted state
           const { theme: _removed, setTheme: _removed2, ...rest } = persisted;
-          return rest;
+          persisted = rest;
+          version = 7;
+        }
+        if (version < 8) {
+          persisted = {
+            ...persisted,
+            terminalShell: persisted.terminalShell ?? 'git-bash',
+          };
+          version = 8;
         }
         return persisted as any;
       },
@@ -147,4 +168,4 @@ export const useSettingsStore = create<SettingsState>()(
   ),
 );
 
-export { editorLabels };
+export { editorLabels, shellLabels };

@@ -25,7 +25,13 @@ import {
 } from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { useSettingsStore, editorLabels, type Editor } from '@/stores/settings-store';
+import {
+  useSettingsStore,
+  editorLabels,
+  shellLabels,
+  type Editor,
+  type TerminalShell,
+} from '@/stores/settings-store';
 
 function getLanguageName(code: string): string {
   try {
@@ -147,21 +153,30 @@ export function GeneralSettingsDialog({
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
-  const { defaultEditor, useInternalEditor, setDefaultEditor, setUseInternalEditor } =
-    useSettingsStore(
-      useShallow((s) => ({
-        defaultEditor: s.defaultEditor,
-        useInternalEditor: s.useInternalEditor,
-        setDefaultEditor: s.setDefaultEditor,
-        setUseInternalEditor: s.setUseInternalEditor,
-      })),
-    );
+  const {
+    defaultEditor,
+    useInternalEditor,
+    terminalShell,
+    setDefaultEditor,
+    setUseInternalEditor,
+    setTerminalShell,
+  } = useSettingsStore(
+    useShallow((s) => ({
+      defaultEditor: s.defaultEditor,
+      useInternalEditor: s.useInternalEditor,
+      terminalShell: s.terminalShell,
+      setDefaultEditor: s.setDefaultEditor,
+      setUseInternalEditor: s.setUseInternalEditor,
+      setTerminalShell: s.setTerminalShell,
+    })),
+  );
   const { theme, setTheme } = useTheme();
   const { t, i18n } = useTranslation();
 
   // Local draft state — only committed to the store on Save
   const [draftEditor, setDraftEditor] = useState<Editor>(defaultEditor);
   const [draftUseInternalEditor, setDraftUseInternalEditor] = useState(useInternalEditor);
+  const [draftShell, setDraftShell] = useState<TerminalShell>(terminalShell);
   const [draftTheme, setDraftTheme] = useState(theme ?? 'one-dark');
   const [draftLanguage, setDraftLanguage] = useState(i18n.language);
 
@@ -175,6 +190,7 @@ export function GeneralSettingsDialog({
     if (open) {
       setDraftEditor(defaultEditor);
       setDraftUseInternalEditor(useInternalEditor);
+      setDraftShell(terminalShell);
       setDraftTheme(theme ?? 'one-dark');
       setDraftLanguage(i18n.language);
       // Load profile to check token status
@@ -185,11 +201,12 @@ export function GeneralSettingsDialog({
       });
       setGithubToken('');
     }
-  }, [open, defaultEditor, useInternalEditor, theme, i18n.language]);
+  }, [open, defaultEditor, useInternalEditor, terminalShell, theme, i18n.language]);
 
   const handleSave = useCallback(async () => {
     setDefaultEditor(draftEditor);
     setUseInternalEditor(draftUseInternalEditor);
+    setTerminalShell(draftShell);
     setTheme(draftTheme);
     i18n.changeLanguage(draftLanguage);
     // Save GitHub token if user typed one
@@ -206,11 +223,13 @@ export function GeneralSettingsDialog({
   }, [
     draftEditor,
     draftUseInternalEditor,
+    draftShell,
     draftTheme,
     draftLanguage,
     githubToken,
     setDefaultEditor,
     setUseInternalEditor,
+    setTerminalShell,
     setTheme,
     i18n,
     t,
@@ -285,6 +304,26 @@ export function GeneralSettingsDialog({
                         {getLanguageName(code)}
                       </SelectItem>
                     ))}
+                  </SelectContent>
+                </Select>
+              </SettingRow>
+
+              <SettingRow
+                title={t('settings.terminalShell')}
+                description={t('settings.terminalShellDesc')}
+              >
+                <Select value={draftShell} onValueChange={(v) => setDraftShell(v as TerminalShell)}>
+                  <SelectTrigger className="w-[140px]">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(Object.entries(shellLabels) as [TerminalShell, string][]).map(
+                      ([value, label]) => (
+                        <SelectItem key={value} value={value}>
+                          {label.startsWith('settings.') ? t(label) : label}
+                        </SelectItem>
+                      ),
+                    )}
                   </SelectContent>
                 </Select>
               </SettingRow>

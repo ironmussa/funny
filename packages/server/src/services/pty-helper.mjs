@@ -31,7 +31,7 @@ function handleMessage(msg) {
 
   switch (type) {
     case 'spawn':
-      spawnPty(args.id, args.cwd, args.cols, args.rows, args.env);
+      spawnPty(args.id, args.cwd, args.cols, args.rows, args.env, args.shell);
       break;
     case 'write':
       writePty(args.id, args.data);
@@ -47,16 +47,39 @@ function handleMessage(msg) {
   }
 }
 
-function spawnPty(id, cwd, cols, rows, env) {
+/** Resolve the shell identifier to an executable path and args. */
+function resolveShell(shellId) {
+  if (!shellId) {
+    return { exe: isWindows ? 'powershell.exe' : process.env.SHELL || 'bash', args: [] };
+  }
+
+  switch (shellId) {
+    case 'git-bash': {
+      // Try common Git Bash locations
+      const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+      return { exe: `${programFiles}\\Git\\bin\\bash.exe`, args: ['--login', '-i'] };
+    }
+    case 'powershell':
+      return { exe: 'powershell.exe', args: [] };
+    case 'cmd':
+      return { exe: 'cmd.exe', args: [] };
+    case 'wsl':
+      return { exe: 'wsl.exe', args: [] };
+    default:
+      return { exe: isWindows ? 'powershell.exe' : process.env.SHELL || 'bash', args: [] };
+  }
+}
+
+function spawnPty(id, cwd, cols, rows, env, shellId) {
   if (activePtys.has(id)) return;
 
   try {
-    const shell = isWindows ? 'powershell.exe' : process.env.SHELL || 'bash';
+    const { exe: shell, args: shellArgs } = resolveShell(shellId);
 
     // Merge provided env with process.env
     const ptyEnv = { ...process.env, ...env };
 
-    const ptyProcess = pty.spawn(shell, [], {
+    const ptyProcess = pty.spawn(shell, shellArgs, {
       name: 'xterm-256color',
       cols: cols || 80,
       rows: rows || 24,

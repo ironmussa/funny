@@ -148,13 +148,14 @@ export function spawnPty(
   cols: number,
   rows: number,
   userId: string,
+  shell?: string,
 ): void {
   if (activeSessions.has(id)) return;
 
-  log.info('Requesting spawn PTY', { namespace: 'pty-manager', ptyId: id });
+  log.info('Requesting spawn PTY', { namespace: 'pty-manager', ptyId: id, shell });
   activeSessions.set(id, { userId, cwd });
 
-  sendToHelper('spawn', { id, cwd, cols, rows, env: process.env });
+  sendToHelper('spawn', { id, cwd, cols, rows, env: process.env, shell });
 }
 
 export function writePty(id: string, data: string): void {

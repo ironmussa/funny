@@ -305,6 +305,9 @@
     "followUpModeDesc": "How to handle messages sent while an agent is running",
     "followUpInterrupt": "Interrupt",
     "followUpQueue": "Queue",
+    "terminalShell": "Terminal shell",
+    "terminalShellDesc": "Shell used for the integrated terminal",
+    "shellDefault": "Default (system)",
     "saved": "Settings saved",
     "projectSaved": "Project settings saved"
   },

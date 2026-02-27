@@ -205,6 +205,7 @@
     "progress": {
       "description": "Git operation progress",
       "done": "Done",
+      "accept": "Accept",
       "unstaging": "Unstaging unchecked files",
       "staging": "Staging selected files",
       "runningHooks": "Running pre-commit hooks",

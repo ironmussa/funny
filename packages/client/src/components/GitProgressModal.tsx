@@ -174,7 +174,7 @@ export function GitProgressModal({ open, onOpenChange, steps, title }: GitProgre
                     )}
                   </div>
                   {step.error && (
-                    <pre className="mt-0.5 max-h-40 overflow-auto break-words whitespace-pre-wrap text-[11px] text-destructive/80 font-sans">
+                    <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap break-words font-sans text-[11px] text-destructive/80">
                       {step.error}
                     </pre>
                   )}
@@ -204,7 +204,9 @@ export function GitProgressModal({ open, onOpenChange, steps, title }: GitProgre
               variant={hasFailed ? 'outline' : 'default'}
               onClick={() => onOpenChange(false)}
             >
-              {hasFailed ? t('common.cancel', 'Close') : t('review.progress.done', 'Done')}
+              {hasFailed
+                ? t('review.progress.accept', 'Accept')
+                : t('review.progress.done', 'Done')}
             </Button>
           )}
         </div>

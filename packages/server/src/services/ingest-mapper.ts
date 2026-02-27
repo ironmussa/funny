@@ -15,6 +15,7 @@
  * FALLBACK only — if cli_message already processed the result, these are skipped.
  */
 
+import { getRemoteUrl } from '@funny/core/git';
 import type { WSEvent, WSWorkflowStepData, WSWorkflowStatusData } from '@funny/shared';
 import { nanoid } from 'nanoid';
 
@@ -164,6 +165,34 @@ function resolveProjectId(workingPath: string): string | null {
   return null;
 }
 
+/** Extract owner/repo from a GitHub remote URL. */
+function parseOwnerRepo(remoteUrl: string): string | null {
+  const httpsMatch = remoteUrl.match(/github\.com[/:]([^/]+\/[^/.]+?)(?:\.git)?$/);
+  if (httpsMatch) return httpsMatch[1];
+  const sshMatch = remoteUrl.match(/git@github\.com:([^/]+\/[^/.]+?)(?:\.git)?$/);
+  if (sshMatch) return sshMatch[1];
+  return null;
+}
+
+/**
+ * Resolve a project by GitHub owner/repo (e.g. "acme/backend").
+ * Scans all projects' git remotes asynchronously.
+ */
+async function resolveProjectByRepo(repoFullName: string): Promise<string | null> {
+  const target = repoFullName.toLowerCase();
+  const projects = pm.listProjects('__local__');
+
+  for (const project of projects) {
+    const result = await getRemoteUrl(project.path);
+    if (result.isErr() || !result.value) continue;
+    const ownerRepo = parseOwnerRepo(result.value);
+    if (ownerRepo && ownerRepo.toLowerCase() === target) {
+      return project.id;
+    }
+  }
+  return null;
+}
+
 /**
  * Look up or restore the in-memory state for a request_id.
  * Falls back to a DB lookup so the mapper survives server restarts.
@@ -241,7 +270,7 @@ function emitWS(state: ExternalThreadState, event: WSEvent): void {
 
 // ── Event handlers ───────────────────────────────────────────
 
-function onAccepted(event: IngestEvent): string | undefined {
+async function onAccepted(event: IngestEvent): Promise<string | undefined> {
   const { request_id, data, metadata, timestamp } = event;
   const _stateKey = resolveStateKey(event);
 
@@ -283,16 +312,21 @@ function onAccepted(event: IngestEvent): string | undefined {
     return;
   }
 
-  // Resolve project — prefer top-level data.projectId, then metadata, then auto-detect
-  const projectId =
+  // Resolve project — prefer top-level data.projectId, then metadata, then auto-detect by path or repo
+  let projectId =
     (data.projectId as string) ??
     (metadata?.projectId as string) ??
     (data.worktree_path ? resolveProjectId(data.worktree_path as string) : null);
 
+  // Fallback: resolve by GitHub owner/repo (e.g. from standalone reviewbot)
+  if (!projectId && data.repo_full_name) {
+    projectId = await resolveProjectByRepo(data.repo_full_name as string);
+  }
+
   if (!projectId) {
     throw new Error(
       `Cannot resolve projectId for request_id=${request_id}. ` +
-        `Pass metadata.projectId or ensure worktree_path matches a known project.`,
+        `Pass metadata.projectId, data.repo_full_name, or ensure worktree_path matches a known project.`,
     );
   }
 
@@ -996,7 +1030,7 @@ export interface IngestResult {
   threadId?: string;
 }
 
-export function handleIngestEvent(event: IngestEvent): IngestResult {
+export async function handleIngestEvent(event: IngestEvent): Promise<IngestResult> {
   // Route workflow events to dedicated handler before suffix-based routing
   if (event.event_type.startsWith('workflow.')) {
     onWorkflowEvent(event);
@@ -1007,7 +1041,7 @@ export function handleIngestEvent(event: IngestEvent): IngestResult {
 
   switch (suffix) {
     case 'accepted':
-      return { threadId: onAccepted(event) };
+      return { threadId: await onAccepted(event) };
     case 'started':
       onStarted(event);
       return {};

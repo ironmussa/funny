@@ -51,7 +51,7 @@ ingestRoutes.post('/webhook', async (c) => {
   }
 
   try {
-    const result = handleIngestEvent(body);
+    const result = await handleIngestEvent(body);
     return c.json(
       { status: 'ok', ...(result.threadId ? { thread_id: result.threadId } : {}) },
       200,

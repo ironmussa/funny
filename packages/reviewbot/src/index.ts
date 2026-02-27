@@ -7,6 +7,8 @@
 export { PRReviewer } from './reviewer.js';
 export { buildReviewSystemPrompt, buildReviewUserPrompt } from './prompts.js';
 export { formatReviewBody, decideReviewEvent } from './formatter.js';
+export { handlePRWebhook, parseRepoMappings } from './webhook-handler.js';
+export type { PRWebhookPayload, RepoMapping, WebhookHandlerOptions } from './webhook-handler.js';
 export type {
   ReviewOptions,
   PRReviewerConfig,

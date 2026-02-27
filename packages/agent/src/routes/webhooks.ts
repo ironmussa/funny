@@ -5,8 +5,8 @@
 
 import { Hono } from 'hono';
 
-import type { PipelineServiceConfig } from '../config/schema.js';
 import { GitHubWebhookAdapter } from '../adapters/inbound/github-webhook.adapter.js';
+import type { PipelineServiceConfig } from '../config/schema.js';
 import type { EventBus } from '../infrastructure/event-bus.js';
 
 // ── HMAC signature validation ────────────────────────────────────

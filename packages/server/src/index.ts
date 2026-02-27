@@ -42,7 +42,6 @@ import mcpRoutes from './routes/mcp.js';
 import pluginRoutes from './routes/plugins.js';
 import { profileRoutes } from './routes/profile.js';
 import { projectRoutes } from './routes/projects.js';
-
 import skillsRoutes from './routes/skills.js';
 import { threadRoutes } from './routes/threads.js';
 import { worktreeRoutes } from './routes/worktrees.js';
@@ -109,7 +108,6 @@ app.use('*', observability());
 
 // Ingest webhook — mounted BEFORE authMiddleware (uses its own secret-based auth)
 app.route('/api/ingest', ingestRoutes);
-
 
 app.use('/api/*', authMiddleware);
 

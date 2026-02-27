@@ -7,4 +7,9 @@
 export { PRReviewer } from './reviewer.js';
 export { buildReviewSystemPrompt, buildReviewUserPrompt } from './prompts.js';
 export { formatReviewBody, decideReviewEvent } from './formatter.js';
-export type { ReviewOptions, PRReviewerConfig, ParsedReviewOutput, ParsedFinding } from './types.js';
+export type {
+  ReviewOptions,
+  PRReviewerConfig,
+  ParsedReviewOutput,
+  ParsedFinding,
+} from './types.js';

@@ -10,8 +10,8 @@ import type { SessionStore } from '../core/session-store.js';
 import type { PipelineEvent } from '../core/types.js';
 import type { EventBus } from '../infrastructure/event-bus.js';
 import { logger } from '../infrastructure/logger.js';
-import { WorkflowEventEmitter } from './workflow-event-emitter.js';
 import type { IWorkflow } from './types.js';
+import { WorkflowEventEmitter } from './workflow-event-emitter.js';
 
 export interface MergeWorkflowDeps {
   eventBus: EventBus;
@@ -53,12 +53,9 @@ export class MergeWorkflow implements IWorkflow {
 
     // Stuck detection — start timer on implementing/pr_created
     this.unsubscribers.push(
-      this.eventBus.onEventTypes(
-        ['session.implementing', 'session.pr_created'],
-        (event) => {
-          this.startStuckTimer(event.data.sessionId as string);
-        },
-      ),
+      this.eventBus.onEventTypes(['session.implementing', 'session.pr_created'], (event) => {
+        this.startStuckTimer(event.data.sessionId as string);
+      }),
     );
 
     // Clear stuck timer on terminal events
@@ -121,10 +118,7 @@ export class MergeWorkflow implements IWorkflow {
           `Escalated: ${this.interpolate(reaction.message, session)}`,
         );
       } else {
-        await this.handlers.notify(
-          sessionId,
-          this.interpolate(reaction.message, session),
-        );
+        await this.handlers.notify(sessionId, this.interpolate(reaction.message, session));
       }
     }, afterMin * 60_000);
 

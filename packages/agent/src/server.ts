@@ -2,7 +2,14 @@
  * Bun server bootstrap for the Agent Service.
  */
 
-import { app, ciRetryWorkflow, reviewWorkflow, mergeWorkflow, reviewAdapter, ingestAdapter } from './index.js';
+import {
+  app,
+  ciRetryWorkflow,
+  reviewWorkflow,
+  mergeWorkflow,
+  reviewAdapter,
+  ingestAdapter,
+} from './index.js';
 
 const port = parseInt(process.env.PORT ?? '3002', 10);
 

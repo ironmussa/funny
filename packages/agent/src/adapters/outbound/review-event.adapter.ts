@@ -10,9 +10,9 @@
  * because it's an adapter (EventBus → Agent), not an agent itself.
  */
 
+import { PRReviewer } from '../../agents/reviewer/index.js';
 import type { EventBus } from '../../infrastructure/event-bus.js';
 import { logger } from '../../infrastructure/logger.js';
-import { PRReviewer } from '../../agents/reviewer/index.js';
 
 export interface ReviewEventAdapterConfig {
   /** Default project path (used when event data doesn't include one) */

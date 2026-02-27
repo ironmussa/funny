@@ -8,8 +8,8 @@ import { describe, it, expect, mock, beforeEach, afterEach } from 'bun:test';
 import { mkdirSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 
-import type { PipelineEvent } from '../core/types.js';
 import { ReviewEventAdapter } from '../adapters/outbound/review-event.adapter.js';
+import type { PipelineEvent } from '../core/types.js';
 import { EventBus } from '../infrastructure/event-bus.js';
 
 const TEST_DIR = join(import.meta.dir, '..', '..', '.test-tmp-review-handler');
@@ -148,10 +148,6 @@ describe('ReviewEventAdapter', () => {
     await eventBus.publish(event);
     await new Promise((resolve) => setTimeout(resolve, 50));
 
-    expect(mockReview).toHaveBeenCalledWith(
-      '/custom/repo/path',
-      99,
-      expect.anything(),
-    );
+    expect(mockReview).toHaveBeenCalledWith('/custom/repo/path', 99, expect.anything());
   });
 });

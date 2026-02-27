@@ -1,7 +1,8 @@
 import { describe, expect, it, beforeEach, mock } from 'bun:test';
-import { WorkflowEventEmitter } from '../workflows/workflow-event-emitter.js';
-import type { EventBus } from '../infrastructure/event-bus.js';
+
 import type { PipelineEvent } from '../core/types.js';
+import type { EventBus } from '../infrastructure/event-bus.js';
+import { WorkflowEventEmitter } from '../workflows/workflow-event-emitter.js';
 
 function createMockEventBus() {
   const published: PipelineEvent[] = [];
@@ -21,7 +22,9 @@ describe('WorkflowEventEmitter', () => {
   });
 
   it('publishes event with correct shape', async () => {
-    await emitter.emit('session.created', 'sess-1', { issueUrl: 'https://github.com/org/repo/issues/1' });
+    await emitter.emit('session.created', 'sess-1', {
+      issueUrl: 'https://github.com/org/repo/issues/1',
+    });
 
     expect(mockBus.publish).toHaveBeenCalledTimes(1);
     const event = mockBus.published[0];

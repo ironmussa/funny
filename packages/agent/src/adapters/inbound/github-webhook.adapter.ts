@@ -65,7 +65,12 @@ export class GitHubWebhookAdapter {
         },
       });
 
-      return { status: 'processed', action: 'review_triggered', branch: headRef, pr_number: prNumber };
+      return {
+        status: 'processed',
+        action: 'review_triggered',
+        branch: headRef,
+        pr_number: prNumber,
+      };
     }
 
     if (payload.action === 'closed' && pr?.merged) {
@@ -105,10 +110,7 @@ export class GitHubWebhookAdapter {
     const issueNumber = this.extractIssueNumber(headRef);
 
     if (reviewState === 'approved') {
-      logger.info(
-        { headRef, prNumber, reviewer: review?.user?.login },
-        'PR approved via webhook',
-      );
+      logger.info({ headRef, prNumber, reviewer: review?.user?.login }, 'PR approved via webhook');
 
       await this.eventBus.publish({
         event_type: 'session.review_requested',
@@ -121,10 +123,7 @@ export class GitHubWebhookAdapter {
     }
 
     if (reviewState === 'changes_requested') {
-      logger.info(
-        { headRef, prNumber, reviewer: review?.user?.login },
-        'Changes requested on PR',
-      );
+      logger.info({ headRef, prNumber, reviewer: review?.user?.login }, 'Changes requested on PR');
 
       await this.eventBus.publish({
         event_type: 'session.changes_requested',

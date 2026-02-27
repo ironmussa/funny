@@ -1,9 +1,10 @@
 import { describe, expect, it, beforeEach, mock } from 'bun:test';
-import { MergeWorkflow } from '../workflows/merge.workflow.js';
-import type { EventBus } from '../infrastructure/event-bus.js';
-import type { PipelineEvent } from '../core/types.js';
-import type { SessionStore } from '../core/session-store.js';
+
 import type { PipelineServiceConfig } from '../config/schema.js';
+import type { SessionStore } from '../core/session-store.js';
+import type { PipelineEvent } from '../core/types.js';
+import type { EventBus } from '../infrastructure/event-bus.js';
+import { MergeWorkflow } from '../workflows/merge.workflow.js';
 
 function createMockEventBus() {
   const published: PipelineEvent[] = [];
@@ -18,7 +19,10 @@ function createMockEventBus() {
       listeners.get(type)!.push(handler);
       return () => {
         const handlers = listeners.get(type) ?? [];
-        listeners.set(type, handlers.filter((h) => h !== handler));
+        listeners.set(
+          type,
+          handlers.filter((h) => h !== handler),
+        );
       };
     }),
     onEventTypes: mock((types: string[], handler: (event: PipelineEvent) => void) => {
@@ -29,7 +33,10 @@ function createMockEventBus() {
       return () => {
         for (const type of types) {
           const handlers = listeners.get(type) ?? [];
-          listeners.set(type, handlers.filter((h) => h !== handler));
+          listeners.set(
+            type,
+            handlers.filter((h) => h !== handler),
+          );
         }
       };
     }),

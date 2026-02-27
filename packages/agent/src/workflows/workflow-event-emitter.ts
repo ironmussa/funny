@@ -1,5 +1,5 @@
-import type { EventBus } from '../infrastructure/event-bus.js';
 import type { PipelineEventType } from '../core/types.js';
+import type { EventBus } from '../infrastructure/event-bus.js';
 
 /**
  * Helper that encapsulates the repeated event publishing pattern.

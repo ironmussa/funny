@@ -10,8 +10,8 @@ import type { SessionStore } from '../core/session-store.js';
 import type { PipelineEvent } from '../core/types.js';
 import type { EventBus } from '../infrastructure/event-bus.js';
 import { logger } from '../infrastructure/logger.js';
-import { WorkflowEventEmitter } from './workflow-event-emitter.js';
 import type { IWorkflow } from './types.js';
+import { WorkflowEventEmitter } from './workflow-event-emitter.js';
 
 export interface CIRetryWorkflowDeps {
   eventBus: EventBus;

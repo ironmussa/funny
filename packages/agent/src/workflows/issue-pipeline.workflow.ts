@@ -8,14 +8,14 @@
 
 import { nanoid } from 'nanoid';
 
-import type { PipelineServiceConfig } from '../config/schema.js';
 import type { OrchestratorAgent } from '../agents/developer/orchestrator-agent.js';
+import type { PipelineServiceConfig } from '../config/schema.js';
 import type { SessionStore } from '../core/session-store.js';
 import type { Session, ImplementationPlan } from '../core/session.js';
 import { logger } from '../infrastructure/logger.js';
-import { WorkflowEventEmitter } from './workflow-event-emitter.js';
-import type { IWorkflow, WorkflowDeps } from './types.js';
 import type { IssueDetail } from '../trackers/tracker.js';
+import type { IWorkflow, WorkflowDeps } from './types.js';
+import { WorkflowEventEmitter } from './workflow-event-emitter.js';
 
 // ── Types ──────────────────────────────────────────────────────
 

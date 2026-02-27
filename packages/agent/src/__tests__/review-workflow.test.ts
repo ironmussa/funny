@@ -1,9 +1,10 @@
 import { describe, expect, it, beforeEach, mock } from 'bun:test';
-import { ReviewWorkflow } from '../workflows/review.workflow.js';
-import type { EventBus } from '../infrastructure/event-bus.js';
-import type { PipelineEvent } from '../core/types.js';
-import type { SessionStore } from '../core/session-store.js';
+
 import type { PipelineServiceConfig } from '../config/schema.js';
+import type { SessionStore } from '../core/session-store.js';
+import type { PipelineEvent } from '../core/types.js';
+import type { EventBus } from '../infrastructure/event-bus.js';
+import { ReviewWorkflow } from '../workflows/review.workflow.js';
 
 function createMockEventBus() {
   const published: PipelineEvent[] = [];
@@ -18,7 +19,10 @@ function createMockEventBus() {
       listeners.get(type)!.push(handler);
       return () => {
         const handlers = listeners.get(type) ?? [];
-        listeners.set(type, handlers.filter((h) => h !== handler));
+        listeners.set(
+          type,
+          handlers.filter((h) => h !== handler),
+        );
       };
     }),
     published,
@@ -86,7 +90,10 @@ describe('ReviewWorkflow', () => {
 
   it('subscribes to session.changes_requested on start', () => {
     workflow.start();
-    expect(eventBus.onEventType).toHaveBeenCalledWith('session.changes_requested', expect.any(Function));
+    expect(eventBus.onEventType).toHaveBeenCalledWith(
+      'session.changes_requested',
+      expect.any(Function),
+    );
   });
 
   it('respawns agent on changes requested within retry budget', async () => {
@@ -126,7 +133,7 @@ describe('ReviewWorkflow', () => {
     await new Promise((r) => setTimeout(r, 20));
 
     expect(mockRespawn).not.toHaveBeenCalled();
-    expect((sessionStore.transition as any)).toHaveBeenCalledWith(
+    expect(sessionStore.transition as any).toHaveBeenCalledWith(
       'sess-1',
       'escalated',
       expect.objectContaining({ reason: expect.stringContaining('exceeded retry budget') }),

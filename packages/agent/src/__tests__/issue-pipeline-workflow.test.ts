@@ -1,13 +1,12 @@
 import { describe, expect, it, beforeEach, mock } from 'bun:test';
-import { IssuePipelineWorkflow } from '../workflows/issue-pipeline.workflow.js';
-import type { IssuePipelineDeps, PipelineInput } from '../workflows/issue-pipeline.workflow.js';
-import type { EventBus } from '../infrastructure/event-bus.js';
-import type { PipelineEvent } from '../core/types.js';
-import type { Session } from '../core/session.js';
-import type { SessionStore } from '../core/session-store.js';
+
 import type { OrchestratorAgent } from '../agents/developer/orchestrator-agent.js';
 import type { PipelineServiceConfig } from '../config/schema.js';
-import type { IssueDetail } from '../trackers/tracker.js';
+import type { SessionStore } from '../core/session-store.js';
+import type { Session } from '../core/session.js';
+import type { PipelineEvent } from '../core/types.js';
+import type { EventBus } from '../infrastructure/event-bus.js';
+import { IssuePipelineWorkflow } from '../workflows/issue-pipeline.workflow.js';
 
 // ── Mock factories ──────────────────────────────────────────────
 
@@ -50,21 +49,6 @@ const mockSession = {
   setPR: mock(() => {}),
 } as unknown as Session;
 
-const mockIssue: IssueDetail = {
-  number: 42,
-  title: 'Test issue',
-  state: 'open',
-  body: 'Fix the thing',
-  url: 'https://github.com/org/repo/issues/42',
-  labels: [],
-  assignee: null,
-  commentsCount: 0,
-  createdAt: new Date().toISOString(),
-  updatedAt: new Date().toISOString(),
-  comments: [],
-  fullContext: '#42: Test issue\n\nFix the thing',
-};
-
 // ── Tests ──────────────────────────────────────────────────────
 
 describe('IssuePipelineWorkflow', () => {
@@ -85,12 +69,14 @@ describe('IssuePipelineWorkflow', () => {
         }
         return mockPlan;
       }),
-      implementIssue: mock(async (_issue: any, _plan: any, _wt: string, _branch: string, opts: any) => {
-        if (opts?.onEvent) {
-          await opts.onEvent({ type: 'text', content: 'Implementing...', step: 1 });
-        }
-        return { status: 'success', findings_count: 0 };
-      }),
+      implementIssue: mock(
+        async (_issue: any, _plan: any, _wt: string, _branch: string, opts: any) => {
+          if (opts?.onEvent) {
+            await opts.onEvent({ type: 'text', content: 'Implementing...', step: 1 });
+          }
+          return { status: 'success', findings_count: 0 };
+        },
+      ),
     } as unknown as OrchestratorAgent;
 
     const config = {

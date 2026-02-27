@@ -183,10 +183,7 @@ app.get('/health', (c) => c.json({ status: 'ok', service: 'agent' }));
 
 // Mount route groups
 app.route('/webhooks', createWebhookRoutes(eventBus, config, projectPath));
-app.route(
-  '/sessions',
-  createSessionRoutes(sessionStore, issuePipeline, tracker, eventBus, config),
-);
+app.route('/sessions', createSessionRoutes(sessionStore, issuePipeline, tracker, eventBus, config));
 
 // ── Exports ─────────────────────────────────────────────────────
 
@@ -208,5 +205,16 @@ export {
 };
 export type { PipelineEvent, PipelineEventType } from './core/types.js';
 export type { PipelineServiceConfig } from './config/schema.js';
-export { PRReviewer, buildReviewSystemPrompt, buildReviewUserPrompt, formatReviewBody, decideReviewEvent } from './agents/reviewer/index.js';
-export type { ReviewOptions, PRReviewerConfig, ParsedReviewOutput, ParsedFinding } from './agents/reviewer/index.js';
+export {
+  PRReviewer,
+  buildReviewSystemPrompt,
+  buildReviewUserPrompt,
+  formatReviewBody,
+  decideReviewEvent,
+} from './agents/reviewer/index.js';
+export type {
+  ReviewOptions,
+  PRReviewerConfig,
+  ParsedReviewOutput,
+  ParsedFinding,
+} from './agents/reviewer/index.js';

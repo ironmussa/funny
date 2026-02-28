@@ -66,7 +66,7 @@ export const ThreadItem = memo(function ThreadItem({
   const displayTime = timeValue ?? timeAgo(thread.createdAt, t);
 
   // Git status config (only for worktree threads that have git info)
-  const showGitIcon = thread.mode === 'worktree' && gitStatus;
+  const showGitIcon = thread.mode === 'worktree' && gitStatus && gitStatus.state !== 'clean';
   const gitCfg = showGitIcon ? gitSyncStateConfig[gitStatus.state] : null;
   const GitIcon = gitCfg?.icon ?? null;
 
@@ -142,8 +142,20 @@ export const ThreadItem = memo(function ThreadItem({
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-1">
           <span className="truncate text-sm leading-tight">{thread.title}</span>
-          {/* Git status icon (worktree threads only) */}
-          {showGitIcon && GitIcon && (
+          {/* Git status (worktree threads only) */}
+          {showGitIcon &&
+          gitStatus.state === 'dirty' &&
+          (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0) ? (
+            <span className="flex-shrink-0 font-mono text-xs">
+              {gitStatus.linesAdded > 0 && (
+                <span className="text-emerald-400">+{gitStatus.linesAdded}</span>
+              )}
+              {gitStatus.linesAdded > 0 && gitStatus.linesDeleted > 0 && ' '}
+              {gitStatus.linesDeleted > 0 && (
+                <span className="text-red-400">-{gitStatus.linesDeleted}</span>
+              )}
+            </span>
+          ) : showGitIcon && GitIcon ? (
             <Tooltip>
               <TooltipTrigger asChild>
                 <GitIcon className={cn('h-3 w-3 flex-shrink-0', gitCfg!.className)} />
@@ -152,7 +164,7 @@ export const ThreadItem = memo(function ThreadItem({
                 {gitTooltip}
               </TooltipContent>
             </Tooltip>
-          )}
+          ) : null}
           {subtitle && (
             <ProjectChip name={subtitle} color={projectColor} className="flex-shrink-0" />
           )}

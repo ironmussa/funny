@@ -20,7 +20,7 @@ import {
 export const statusConfig: Record<ThreadStatus, { icon: typeof Clock; className: string }> = {
   idle: { icon: CircleDot, className: 'text-gray-400' },
   pending: { icon: Clock, className: 'text-yellow-400' },
-  running: { icon: Loader2, className: 'text-blue-400 animate-spin' },
+  running: { icon: Loader2, className: 'text-muted-foreground animate-spin' },
   waiting: { icon: Clock, className: 'text-amber-400' },
   completed: { icon: CheckCircle2, className: 'text-green-400' },
   failed: { icon: XCircle, className: 'text-red-400' },

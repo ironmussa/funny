@@ -27,7 +27,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { ProjectChip } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
-import { stageConfig, statusConfig, gitSyncStateConfig, timeAgo } from '@/lib/thread-utils';
+import { stageConfig, statusConfig, timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
@@ -109,8 +109,6 @@ const KanbanCard = memo(function KanbanCard({
   const StatusIcon = statusConfig[thread.status].icon;
   const statusClassName = statusConfig[thread.status].className;
 
-  const gitConf = gitStatusProp ? gitSyncStateConfig[gitStatusProp.state] : null;
-  const GitIcon = gitConf?.icon;
   const displayBranch = thread.branch || thread.baseBranch;
 
   return (
@@ -173,21 +171,20 @@ const KanbanCard = memo(function KanbanCard({
 
       {displayBranch && (
         <div className="mb-1.5 flex min-w-0 items-center gap-1" aria-label="Branch information">
-          {gitConf && GitIcon ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <GitIcon className={cn('h-3 w-3 shrink-0', gitConf.className)} />
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                {t(gitConf.labelKey)}
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
-          )}
+          <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="truncate text-xs text-muted-foreground" title={displayBranch}>
             {displayBranch}
           </span>
+          {gitStatusProp && (gitStatusProp.linesAdded > 0 || gitStatusProp.linesDeleted > 0) && (
+            <span className="ml-auto flex shrink-0 items-center gap-1 font-mono text-[10px]">
+              {gitStatusProp.linesAdded > 0 && (
+                <span className="text-green-500">+{gitStatusProp.linesAdded}</span>
+              )}
+              {gitStatusProp.linesDeleted > 0 && (
+                <span className="text-red-400">-{gitStatusProp.linesDeleted}</span>
+              )}
+            </span>
+          )}
         </div>
       )}
 
@@ -390,9 +387,6 @@ const KanbanColumn = memo(function KanbanColumn({
     }
   }, [highlightThreadId, threads, visibleCount]);
 
-  const StageIcon = stageConfig[stage].icon;
-  const stageClassName = stageConfig[stage].className;
-
   const visibleThreads = threads.slice(0, visibleCount);
   const hasMore = threads.length > visibleCount;
 
@@ -405,7 +399,6 @@ const KanbanColumn = memo(function KanbanColumn({
       )}
     >
       <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
-        <StageIcon className={cn('h-4 w-4', stageClassName)} />
         <span className="text-sm font-medium">{t(stageConfig[stage].labelKey)}</span>
         <span className="text-xs text-muted-foreground">({threads.length})</span>
         {projects.length > 0 && stage !== 'review' && stage !== 'done' && stage !== 'archived' && (

@@ -469,7 +469,10 @@ export function TerminalPanel() {
 
   return (
     <div
-      className="flex-shrink-0 overflow-hidden"
+      className={cn(
+        'flex-shrink-0 overflow-hidden',
+        !dragging && 'transition-[height] duration-200 ease-in-out',
+      )}
       style={{
         height: panelVisible ? panelHeight : 0,
       }}

@@ -349,63 +349,65 @@ export function AppSidebar() {
       {/* Header with collapse toggle */}
       <SidebarHeader className="group/header flex-row items-center justify-between px-3 py-2">
         <span className="text-sm font-semibold text-sidebar-foreground">funny</span>
-        <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/header:opacity-100">
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => {
-                  navigate('/list');
-                }}
-                className="text-muted-foreground"
-              >
-                <Search className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">{t('sidebar.search', 'Search')}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => {
-                  navigate('/kanban');
-                }}
-                className="text-muted-foreground"
-              >
-                <Columns3 className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Kanban</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => navigate('/grid')}
-                className="text-muted-foreground"
-              >
-                <LayoutGrid className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">Grid</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => navigate('/analytics')}
-                className="text-muted-foreground"
-              >
-                <BarChart3 className="h-3.5 w-3.5" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">{t('sidebar.analytics')}</TooltipContent>
-          </Tooltip>
+        <div className="flex items-center gap-0.5">
+          <div className="flex items-center gap-0.5 opacity-0 transition-opacity group-hover/header:opacity-100">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => {
+                    navigate('/list');
+                  }}
+                  className="text-muted-foreground"
+                >
+                  <Search className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t('sidebar.search', 'Search')}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => {
+                    navigate('/kanban');
+                  }}
+                  className="text-muted-foreground"
+                >
+                  <Columns3 className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Kanban</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => navigate('/grid')}
+                  className="text-muted-foreground"
+                >
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">Grid</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={() => navigate('/analytics')}
+                  className="text-muted-foreground"
+                >
+                  <BarChart3 className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">{t('sidebar.analytics')}</TooltipContent>
+            </Tooltip>
+          </div>
           <Tooltip>
             <TooltipTrigger asChild>
               <Button

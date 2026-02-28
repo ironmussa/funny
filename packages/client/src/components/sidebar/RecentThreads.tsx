@@ -96,7 +96,7 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
         <span className="truncate font-medium">{t('sidebar.recentThreads')}</span>
       </CollapsibleTrigger>
       <CollapsibleContent className="data-[state=open]:animate-slide-down">
-        <div className="ml-3 mt-0.5 min-w-0 space-y-0.5 pl-1">
+        <div className="mt-0.5 min-w-0 space-y-0.5">
           {recentThreads.map((thread) => (
             <ThreadItem
               key={thread.id}

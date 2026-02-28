@@ -93,25 +93,26 @@ function useStepTimers(steps: GitProgressStep[], open: boolean) {
   };
 }
 
-/** Tracks total elapsed time (in ms) while the modal is open and running. */
-function useTotalTimer(open: boolean, isFinished: boolean) {
-  const startRef = useRef<number | null>(null);
-  const [elapsed, setElapsed] = useState(0);
+/** Computes total elapsed as the sum of all individual step times. */
+function useTotalFromSteps(
+  steps: GitProgressStep[],
+  getStepElapsed: (id: string) => number | null,
+) {
+  const [, tick] = useState(0);
+  const hasRunning = steps.some((s) => s.status === 'running');
 
   useEffect(() => {
-    if (open && !isFinished) {
-      startRef.current = Date.now();
-      setElapsed(0);
-      const interval = setInterval(() => {
-        if (startRef.current) {
-          setElapsed(Date.now() - startRef.current);
-        }
-      }, 100);
-      return () => clearInterval(interval);
-    }
-  }, [open, isFinished]);
+    if (!hasRunning) return;
+    const interval = setInterval(() => tick((n) => n + 1), 100);
+    return () => clearInterval(interval);
+  }, [hasRunning]);
 
-  return elapsed;
+  let total = 0;
+  for (const step of steps) {
+    const elapsed = getStepElapsed(step.id);
+    if (elapsed != null) total += elapsed;
+  }
+  return total;
 }
 
 export function GitProgressModal({
@@ -131,7 +132,7 @@ export function GitProgressModal({
     (steps.every((s) => s.status === 'completed' || s.status === 'failed') || hasFailed);
 
   const getStepElapsed = useStepTimers(steps, open);
-  const totalElapsed = useTotalTimer(open, isFinished);
+  const totalElapsed = useTotalFromSteps(steps, getStepElapsed);
 
   // When autoClose is set, hide Done button on success (parent handles closing).
   // Failures always show Accept so the user can see the error.

@@ -343,7 +343,7 @@ export const ProjectItem = memo(function ProjectItem({
       </div>
 
       <CollapsibleContent className="data-[state=open]:animate-slide-down">
-        <div className="ml-3 mt-0.5 min-w-0 pl-1">
+        <div className="mt-0.5 min-w-0">
           {threads.length === 0 && (
             <p className="px-2 py-2 text-xs text-muted-foreground">{t('sidebar.noThreads')}</p>
           )}

@@ -96,21 +96,38 @@ export const ThreadItem = memo(function ThreadItem({
         onClick={onSelect}
         className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden py-1 pl-2 text-left"
       >
-        {/* Thread status icon */}
+        {/* Thread status / pin icon */}
         <div className="relative h-3.5 w-3.5 flex-shrink-0">
-          <span
-            className={cn('absolute inset-0', onPin && !isRunning && 'group-hover/thread:hidden')}
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <StatusIcon className={cn('h-3.5 w-3.5', threadStatusCfg.className)} />
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                {t(`thread.status.${thread.status}`)}
-              </TooltipContent>
-            </Tooltip>
-          </span>
-          {/* Pin toggle – shown on hover */}
+          {/* Default state: show pin icon if pinned, otherwise status icon */}
+          {thread.pinned ? (
+            <span
+              className={cn(
+                'absolute inset-0 flex items-center justify-center text-muted-foreground',
+                onPin && !isRunning && 'group-hover/thread:hidden',
+              )}
+            >
+              <Pin className="h-3.5 w-3.5" />
+            </span>
+          ) : (
+            thread.status !== 'completed' && (
+              <span
+                className={cn(
+                  'absolute inset-0',
+                  onPin && !isRunning && 'group-hover/thread:hidden',
+                )}
+              >
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <StatusIcon className={cn('h-3.5 w-3.5', threadStatusCfg.className)} />
+                  </TooltipTrigger>
+                  <TooltipContent side="top" className="text-xs">
+                    {t(`thread.status.${thread.status}`)}
+                  </TooltipContent>
+                </Tooltip>
+              </span>
+            )
+          )}
+          {/* Hover: pin/unpin toggle */}
           {onPin && !isRunning && (
             <span
               className="absolute inset-0 hidden cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground group-hover/thread:flex"
@@ -119,7 +136,7 @@ export const ThreadItem = memo(function ThreadItem({
                 onPin();
               }}
             >
-              {thread.pinned ? <PinOff className="h-3 w-3" /> : <Pin className="h-3 w-3" />}
+              {thread.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
             </span>
           )}
         </div>

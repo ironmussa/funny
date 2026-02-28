@@ -1,5 +1,5 @@
 import AnsiToHtml from 'ansi-to-html';
-import { Plus, X, ChevronDown, Square } from 'lucide-react';
+import { Plus, X, ChevronDown, Square, Loader2 } from 'lucide-react';
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
@@ -140,6 +140,7 @@ function WebTerminalTabContent({
   const termRef = useRef<{ terminal: any; fitAddon: any } | null>(null);
   const registerPtyCallback = useTerminalStore((s) => s.registerPtyCallback);
   const unregisterPtyCallback = useTerminalStore((s) => s.unregisterPtyCallback);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -183,6 +184,7 @@ function WebTerminalTabContent({
       });
 
       registerPtyCallback(id, (data: string) => {
+        if (!cancelled) setLoading(false);
         terminal.write(data);
       });
 
@@ -265,7 +267,21 @@ function WebTerminalTabContent({
     }
   }, [active, panelVisible]);
 
-  return <div ref={containerRef} className={cn('w-full h-full', !active && 'hidden')} />;
+  const { t } = useTranslation();
+
+  return (
+    <div className={cn('relative w-full h-full', !active && 'hidden')}>
+      <div ref={containerRef} className="h-full w-full" />
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-[#09090b]">
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" />
+            <span>{t('terminal.loading')}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 /** Server-managed command tab — uses a <pre> log view */

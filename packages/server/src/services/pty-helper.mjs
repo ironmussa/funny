@@ -142,11 +142,21 @@ function resizePty(id, cols, rows) {
 function killPty(id) {
   const ptyProcess = activePtys.get(id);
   if (ptyProcess) {
+    activePtys.delete(id);
     try {
+      // On Windows, node-pty's kill() spawns conpty_console_list_agent.js which
+      // can throw "AttachConsole failed" if the shell already exited. Kill the
+      // underlying process directly first to avoid the noisy error.
+      if (isWindows && ptyProcess.pid) {
+        try {
+          process.kill(ptyProcess.pid);
+        } catch {
+          // process may already be gone
+        }
+      }
       ptyProcess.kill();
     } catch {
       // ignore
     }
-    activePtys.delete(id);
   }
 }

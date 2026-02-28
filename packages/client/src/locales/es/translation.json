@@ -490,7 +490,8 @@
     "noProcesses": "No hay procesos en ejecución",
     "exited": "(finalizado)",
     "processExited": "[Proceso finalizado]",
-    "stop": "Detener"
+    "stop": "Detener",
+    "loading": "Iniciando terminal..."
   },
   "worktreeSettings": {
     "noProject": "No hay proyecto seleccionado. Agrega un proyecto primero para gestionar worktrees.",

@@ -122,12 +122,13 @@ function SearchablePicker({
   }, [open]);
 
   const handleSearchKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
+    if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (filtered.length > 0) {
-        setHighlightIndex(0);
-        itemRefs.current[0]?.focus();
-        itemRefs.current[0]?.scrollIntoView({ block: 'nearest' });
+        const last = filtered.length - 1;
+        setHighlightIndex(last);
+        itemRefs.current[last]?.focus();
+        itemRefs.current[last]?.scrollIntoView({ block: 'nearest' });
       }
     }
   };
@@ -139,6 +140,9 @@ function SearchablePicker({
         setHighlightIndex(i + 1);
         itemRefs.current[i + 1]?.focus();
         itemRefs.current[i + 1]?.scrollIntoView({ block: 'nearest' });
+      } else {
+        setHighlightIndex(-1);
+        searchInputRef.current?.focus();
       }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
@@ -146,9 +150,6 @@ function SearchablePicker({
         setHighlightIndex(i - 1);
         itemRefs.current[i - 1]?.focus();
         itemRefs.current[i - 1]?.scrollIntoView({ block: 'nearest' });
-      } else {
-        setHighlightIndex(-1);
-        searchInputRef.current?.focus();
       }
     } else if (e.key === 'Enter') {
       e.preventDefault();
@@ -173,7 +174,7 @@ function SearchablePicker({
         <button
           className={
             triggerClassName ??
-            'flex max-w-[300px] items-center gap-1 truncate rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground'
+            'flex max-w-[300px] items-center gap-1 truncate rounded px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus:outline-none'
           }
           title={triggerTitle}
           tabIndex={-1}
@@ -224,7 +225,6 @@ function SearchablePicker({
                 onFocus={() => setHighlightIndex(i)}
                 onMouseEnter={() => {
                   setHighlightIndex(i);
-                  itemRefs.current[i]?.focus();
                 }}
                 className={cn(
                   'w-full flex items-center gap-2 rounded py-1.5 pl-2 text-left text-xs transition-colors outline-none',
@@ -320,7 +320,7 @@ function BranchPicker({
         navigator.clipboard.writeText(branch);
         toast.success('Branch copied');
       }}
-      triggerClassName="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted truncate max-w-[200px]"
+      triggerClassName="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground hover:text-foreground transition-colors rounded hover:bg-muted truncate max-w-[200px] focus:outline-none"
       width="w-[30rem]"
     />
   );

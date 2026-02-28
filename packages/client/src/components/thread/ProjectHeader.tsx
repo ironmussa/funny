@@ -375,7 +375,7 @@ const StageSelectorBadge = memo(function StageSelectorBadge({
         updateThreadStage(threadId, projectId, value as ThreadStage)
       }
     >
-      <SelectTrigger className="h-6 w-auto min-w-0 shrink-0 border-0 bg-transparent px-1.5 py-0 text-xs text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground">
+      <SelectTrigger className="h-7 w-auto min-w-0 shrink-0 border-0 bg-transparent px-2 py-0 text-sm text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground">
         <SelectValue>{t(stageConfig[stage].labelKey)}</SelectValue>
       </SelectTrigger>
       <SelectContent>
@@ -471,7 +471,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
   return (
     <div className="border-b border-border px-4 py-2">
       <div className="flex items-center justify-between">
-        <div className="flex min-w-0 max-w-[50%] items-center gap-2">
+        <div className="flex min-w-0 flex-1 items-center gap-2">
           {kanbanContext && activeThreadId && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -527,38 +527,41 @@ export const ProjectHeader = memo(function ProjectHeader() {
               )}
               {project && activeThreadId && <BreadcrumbSeparator />}
               {activeThreadId && (
-                <BreadcrumbItem className="flex min-w-0 flex-1 items-center gap-2">
+                <BreadcrumbItem className="min-w-0 flex-1">
                   <span className="block min-w-0 truncate text-sm">{activeThreadTitle}</span>
-                  {activeThreadStage && activeThreadStage !== 'archived' && (
-                    <StageSelectorBadge
-                      threadId={activeThreadId!}
-                      projectId={activeThreadProjectId!}
-                      stage={activeThreadStage}
-                    />
-                  )}
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setReviewPaneOpen(false);
-                          navigate(
-                            `/kanban?project=${activeThreadProjectId}&highlight=${activeThreadId}`,
-                          );
-                        }}
-                        className="inline-flex flex-shrink-0 items-center rounded-md p-1 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-                      >
-                        <Columns3 className="h-3.5 w-3.5" />
-                      </button>
-                    </TooltipTrigger>
-                    <TooltipContent>{t('kanban.viewOnBoard', 'View on Board')}</TooltipContent>
-                  </Tooltip>
                 </BreadcrumbItem>
               )}
             </BreadcrumbList>
           </Breadcrumb>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-shrink-0 items-center gap-2">
+          {activeThreadId && activeThreadStage && activeThreadStage !== 'archived' && (
+            <StageSelectorBadge
+              threadId={activeThreadId!}
+              projectId={activeThreadProjectId!}
+              stage={activeThreadStage}
+            />
+          )}
+          {activeThreadId && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    setReviewPaneOpen(false);
+                    navigate(
+                      `/kanban?project=${activeThreadProjectId}&highlight=${activeThreadId}`,
+                    );
+                  }}
+                  className="h-7 w-7 text-muted-foreground"
+                >
+                  <Columns3 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('kanban.viewOnBoard', 'View on Board')}</TooltipContent>
+            </Tooltip>
+          )}
           <StartupCommandsPopover projectId={projectId!} />
           {runningWithPort.length > 0 && (
             <Tooltip>

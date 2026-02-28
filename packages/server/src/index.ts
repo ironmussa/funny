@@ -8,7 +8,12 @@ if (process.platform === 'win32') {
 import { existsSync } from 'fs';
 import { basename, dirname, join, resolve } from 'path';
 
-import { getStatusSummary, deriveGitSyncState, WORKTREE_DIR_NAME } from '@funny/core/git';
+import {
+  getStatusSummary,
+  deriveGitSyncState,
+  getNativeGit,
+  WORKTREE_DIR_NAME,
+} from '@funny/core/git';
 import { observability, observabilityShutdown } from '@funny/observability';
 import {
   getProviderModels,
@@ -451,6 +456,9 @@ process.on('unhandledRejection', (reason) => {
     stack: reason instanceof Error ? reason.stack : undefined,
   });
 });
+
+// Eagerly load native git module so the log message appears at startup
+getNativeGit();
 
 log.info(`Listening on http://localhost:${server.port}`, {
   namespace: 'server',

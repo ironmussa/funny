@@ -105,9 +105,11 @@ export function getNativeGit(): PooledNativeGitModule | null {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     _native = require('@funny/native-git') as NativeGitModule;
     _pooled = createPooledModule(_native);
+    console.log('[git] Native module loaded (Rust/gitoxide)');
   } catch {
     _native = null;
     _pooled = null;
+    console.log('[git] Native module not available, using CLI fallback');
   }
   return _pooled;
 }

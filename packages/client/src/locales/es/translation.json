@@ -240,7 +240,8 @@
     "creating": "Creando...",
     "cancel": "Cancelar",
     "searchBranches": "Buscar ramas...",
-    "noBranchesMatch": "No hay ramas que coincidan"
+    "noBranchesMatch": "No hay ramas que coincidan",
+    "settingUpWorktree": "Configurando worktree"
   },
   "git": {
     "staged": "Preparados",

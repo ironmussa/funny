@@ -35,6 +35,7 @@ interface RunningCommand {
   proc: ReturnType<typeof Bun.spawn>;
   commandId: string;
   projectId: string;
+  cwd: string;
   label: string;
   exited: boolean;
 }
@@ -82,6 +83,7 @@ export async function startCommand(
     proc,
     commandId,
     projectId,
+    cwd,
     label,
     exited: false,
   };
@@ -214,6 +216,18 @@ export function isCommandRunning(commandId: string): boolean {
 /** Kill all running commands. Called during shutdown. */
 export async function stopAllCommands(): Promise<void> {
   const ids = [...activeCommands.keys()];
+  if (ids.length === 0) return;
+  await Promise.allSettled(ids.map((id) => stopCommand(id)));
+}
+
+/** Kill all running commands whose cwd starts with the given path. */
+export async function stopCommandsByCwd(cwdPrefix: string): Promise<void> {
+  const ids: string[] = [];
+  for (const [id, entry] of activeCommands) {
+    if (entry.cwd === cwdPrefix || entry.cwd.startsWith(cwdPrefix)) {
+      ids.push(id);
+    }
+  }
   if (ids.length === 0) return;
   await Promise.allSettled(ids.map((id) => stopCommand(id)));
 }

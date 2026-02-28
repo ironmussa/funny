@@ -616,7 +616,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                   const projectTabs = tabs.filter((t) => t.projectId === selectedProjectId);
 
                   if (projectTabs.length === 0 && !terminalPanelVisible) {
-                    const cwd = project?.path ?? 'C:\\';
+                    const cwd = activeThreadWorktreePath || project?.path || 'C:\\';
                     const id = crypto.randomUUID();
                     const label = 'Terminal 1';
                     addTab({

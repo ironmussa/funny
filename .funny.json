@@ -1,0 +1,16 @@
+{
+  "envFiles": ["packages/server/.env", "packages/client/.env"],
+  "portGroups": [
+    {
+      "name": "server",
+      "basePort": 3001,
+      "envVars": ["PORT", "VITE_SERVER_PORT"]
+    },
+    {
+      "name": "client",
+      "basePort": 5173,
+      "envVars": ["VITE_PORT", "CLIENT_PORT"]
+    }
+  ],
+  "postCreate": ["bun install"]
+}

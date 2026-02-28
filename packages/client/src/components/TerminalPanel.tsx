@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
 import { type TerminalShell, shellLabels, useSettingsStore } from '@/stores/settings-store';
 import { useTerminalStore } from '@/stores/terminal-store';
+import { useThreadStore } from '@/stores/thread-store';
 
 const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
 
@@ -351,6 +352,7 @@ export function TerminalPanel() {
     );
   const projects = useProjectStore((s) => s.projects);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const activeThreadWorktreePath = useThreadStore((s) => s.activeThread?.worktreePath);
 
   const [dragging, setDragging] = useState(false);
   const [panelHeight, setPanelHeight] = useState(PANEL_HEIGHT);
@@ -395,7 +397,7 @@ export function TerminalPanel() {
     (shell: TerminalShell) => {
       if (!selectedProjectId) return;
       const project = projects.find((p) => p.id === selectedProjectId);
-      const cwd = project?.path ?? 'C:\\';
+      const cwd = activeThreadWorktreePath || project?.path || 'C:\\';
       const id = crypto.randomUUID();
       const shellName = shell === 'default' ? 'Terminal' : shellLabels[shell];
       const sameShellCount = visibleTabs.filter((t) => (t.shell ?? 'default') === shell).length;
@@ -410,7 +412,7 @@ export function TerminalPanel() {
         shell,
       });
     },
-    [projects, selectedProjectId, visibleTabs, addTab],
+    [projects, selectedProjectId, visibleTabs, addTab, activeThreadWorktreePath],
   );
 
   const handleCloseTab = useCallback(

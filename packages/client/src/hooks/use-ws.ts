@@ -278,6 +278,11 @@ function handleMessage(e: MessageEvent) {
       useThreadStore.getState().handleWSQueueUpdate(threadId, data);
       break;
     }
+    case 'worktree:setup': {
+      // Dispatch a custom DOM event for components listening for setup progress
+      window.dispatchEvent(new CustomEvent('worktree:setup', { detail: { threadId, ...data } }));
+      break;
+    }
   }
 }
 

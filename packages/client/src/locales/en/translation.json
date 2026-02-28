@@ -240,7 +240,8 @@
     "creating": "Creating...",
     "cancel": "Cancel",
     "searchBranches": "Search branches...",
-    "noBranchesMatch": "No branches match"
+    "noBranchesMatch": "No branches match",
+    "settingUpWorktree": "Setting up worktree"
   },
   "git": {
     "staged": "Staged",

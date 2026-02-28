@@ -1,5 +1,5 @@
 import { createWorktree, removeWorktree, removeBranch, getCurrentBranch } from '@funny/core/git';
-import { allocateWorktreePorts } from '@funny/core/ports';
+import { setupWorktree, type SetupProgressFn } from '@funny/core/ports';
 import type { WSEvent } from '@funny/shared';
 import { Hono } from 'hono';
 import { nanoid } from 'nanoid';
@@ -11,6 +11,7 @@ import {
   isAgentRunning,
   cleanupThreadState,
 } from '../services/agent-runner.js';
+import { stopCommandsByCwd } from '../services/command-runner.js';
 import { cleanupExternalThread } from '../services/ingest-mapper.js';
 import * as mq from '../services/message-queue.js';
 import * as pm from '../services/project-manager.js';
@@ -134,27 +135,42 @@ threadRoutes.post('/idle', async (c) => {
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
 
+  const userId = c.get('userId') as string;
   const threadId = nanoid();
   let worktreePath: string | undefined;
   let threadBranch: string | undefined;
 
+  const emitSetupProgress: SetupProgressFn = (step, label, status, error) => {
+    wsBroker.emitToUser(userId, {
+      type: 'worktree:setup',
+      threadId,
+      data: { step, label, status, error },
+    });
+  };
+
   // Create worktree if needed
   const resolvedBaseBranch = baseBranch?.trim() || undefined;
   if (mode === 'worktree') {
+    emitSetupProgress('worktree', 'Creating worktree', 'running');
     const slug = slugifyTitle(title);
     const projectSlug = slugifyTitle(project.name);
     const branchName = `${projectSlug}/${slug}-${threadId.slice(0, 6)}`;
     const wtResult = await createWorktree(project.path, branchName, resolvedBaseBranch);
     if (wtResult.isErr()) {
+      emitSetupProgress('worktree', 'Creating worktree', 'failed', wtResult.error.message);
       return c.json({ error: `Failed to create worktree: ${wtResult.error.message}` }, 500);
     }
     worktreePath = wtResult.value;
     threadBranch = branchName;
+    emitSetupProgress('worktree', 'Creating worktree', 'completed');
 
     try {
-      await allocateWorktreePorts(project.path, worktreePath);
+      const setup = await setupWorktree(project.path, worktreePath, emitSetupProgress);
+      if (setup.postCreateErrors.length) {
+        log.warn('Worktree postCreate errors', { threadId, errors: setup.postCreateErrors });
+      }
     } catch (err) {
-      log.warn('Failed to allocate worktree ports', { threadId, error: String(err) });
+      log.warn('Failed to setup worktree', { threadId, error: String(err) });
     }
   } else {
     // Local mode: detect the current branch of the project
@@ -163,8 +179,6 @@ threadRoutes.post('/idle', async (c) => {
       threadBranch = branchResult.value;
     }
   }
-
-  const userId = c.get('userId') as string;
   const thread = {
     id: threadId,
     projectId,
@@ -239,27 +253,42 @@ threadRoutes.post('/', async (c) => {
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
 
+  const userId = c.get('userId') as string;
   const threadId = nanoid();
   let worktreePath: string | undefined;
   let threadBranch: string | undefined;
 
+  const emitSetupProgress: SetupProgressFn = (step, label, status, error) => {
+    wsBroker.emitToUser(userId, {
+      type: 'worktree:setup',
+      threadId,
+      data: { step, label, status, error },
+    });
+  };
+
   // Create worktree if needed
   const resolvedBaseBranch = baseBranch?.trim() || undefined;
   if (mode === 'worktree') {
+    emitSetupProgress('worktree', 'Creating worktree', 'running');
     const slug = slugifyTitle(title || prompt);
     const projectSlug = slugifyTitle(project.name);
     const branchName = `${projectSlug}/${slug}-${threadId.slice(0, 6)}`;
     const wtResult = await createWorktree(project.path, branchName, resolvedBaseBranch);
     if (wtResult.isErr()) {
+      emitSetupProgress('worktree', 'Creating worktree', 'failed', wtResult.error.message);
       return c.json({ error: `Failed to create worktree: ${wtResult.error.message}` }, 500);
     }
     worktreePath = wtResult.value;
     threadBranch = branchName;
+    emitSetupProgress('worktree', 'Creating worktree', 'completed');
 
     try {
-      await allocateWorktreePorts(project.path, worktreePath);
+      const setup = await setupWorktree(project.path, worktreePath, emitSetupProgress);
+      if (setup.postCreateErrors.length) {
+        log.warn('Worktree postCreate errors', { threadId, errors: setup.postCreateErrors });
+      }
     } catch (err) {
-      log.warn('Failed to allocate worktree ports', { threadId, error: String(err) });
+      log.warn('Failed to setup worktree', { threadId, error: String(err) });
     }
   } else if (requestWorktreePath) {
     // Local mode reusing an existing worktree directory (e.g. conflict resolution)
@@ -285,8 +314,6 @@ threadRoutes.post('/', async (c) => {
       }
     }
   }
-
-  const userId = c.get('userId') as string;
   // Resolve defaults: explicit value > project default > hardcoded fallback
   const resolvedProvider = provider || project.defaultProvider || 'claude';
   const resolvedModel = model || project.defaultModel || 'sonnet';
@@ -718,6 +745,9 @@ threadRoutes.patch('/:id', async (c) => {
   ) {
     const project = pm.getProject(thread.projectId);
     if (project) {
+      // Kill any running commands (startup commands, dev servers) in this worktree
+      await stopCommandsByCwd(thread.worktreePath).catch(() => {});
+
       await removeWorktree(project.path, thread.worktreePath).catch((e) => {
         log.warn('Failed to remove worktree', { namespace: 'cleanup', error: String(e) });
       });
@@ -926,6 +956,9 @@ threadRoutes.delete('/:id', async (c) => {
 
     // Only remove worktree/branch for worktree-mode threads (skip local threads reusing a worktree and external threads)
     if (thread.worktreePath && thread.mode === 'worktree' && thread.provider !== 'external') {
+      // Kill any running commands (startup commands, dev servers) in this worktree
+      await stopCommandsByCwd(thread.worktreePath).catch(() => {});
+
       const project = pm.getProject(thread.projectId);
       if (project) {
         await removeWorktree(project.path, thread.worktreePath).catch((e) => {

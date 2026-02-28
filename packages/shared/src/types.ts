@@ -380,6 +380,13 @@ export interface WSThreadEventData {
   event: ThreadEvent;
 }
 
+export interface WSWorktreeSetupData {
+  step: string;
+  label: string;
+  status: 'running' | 'completed' | 'failed';
+  error?: string;
+}
+
 export type WSEvent =
   | { type: 'agent:init'; threadId: string; data: WSInitData }
   | { type: 'agent:message'; threadId: string; data: WSMessageData }
@@ -404,7 +411,8 @@ export type WSEvent =
   | { type: 'thread:queue_update'; threadId: string; data: WSQueueUpdateData }
   | { type: 'workflow:step'; threadId: string; data: WSWorkflowStepData }
   | { type: 'workflow:status'; threadId: string; data: WSWorkflowStatusData }
-  | { type: 'thread:event'; threadId: string; data: WSThreadEventData };
+  | { type: 'thread:event'; threadId: string; data: WSThreadEventData }
+  | { type: 'worktree:setup'; threadId: string; data: WSWorktreeSetupData };
 
 export type WSEventType = WSEvent['type'];
 
@@ -750,7 +758,7 @@ export interface TriggerReviewRequest {
   provider?: string;
 }
 
-// ─── Project Port Configuration (.funny.json) ───────────
+// ─── Project Worktree Configuration (.funny.json) ───────
 
 export interface FunnyPortGroup {
   name: string;
@@ -763,4 +771,6 @@ export interface FunnyProjectConfig {
   envFiles?: string[];
   /** Port groups — each group gets one unique port shared across its envVars */
   portGroups?: FunnyPortGroup[];
+  /** Shell commands to run in the worktree after creation (e.g. ["bun install"]) */
+  postCreate?: string[];
 }

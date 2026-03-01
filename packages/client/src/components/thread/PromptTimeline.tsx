@@ -379,7 +379,7 @@ export function PromptTimeline({
     <TooltipProvider delayDuration={200}>
       <div
         ref={containerRef}
-        className="thread-timeline flex h-full w-[200px] flex-shrink-0 flex-col overflow-y-auto"
+        className="thread-timeline no-scrollbar flex h-full w-[200px] flex-shrink-0 flex-col overflow-y-auto"
       >
         {/* Timeline */}
         <div className="flex-1 px-3 py-3">

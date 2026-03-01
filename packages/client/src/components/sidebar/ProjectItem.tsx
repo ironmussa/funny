@@ -7,7 +7,6 @@ import {
   Folder,
   FolderOpen,
   FolderOpenDot,
-  GitBranch,
   Search,
   Trash2,
   MoreHorizontal,
@@ -37,11 +36,11 @@ import { api } from '@/lib/api';
 import { openDirectoryInEditor } from '@/lib/editor-utils';
 import { cn } from '@/lib/utils';
 import { useGitStatusStore } from '@/stores/git-status-store';
-import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { ThreadItem } from './ThreadItem';
+import { ViewAllButton } from './ViewAllButton';
 
 interface ProjectItemProps {
   project: Project;
@@ -49,6 +48,7 @@ interface ProjectItemProps {
   isExpanded: boolean;
   isSelected: boolean;
   onToggle: (projectId: string) => void;
+  onSelectProject: (projectId: string) => void;
   onNewThread: (projectId: string) => void;
   onRenameProject: (projectId: string, currentName: string) => void;
   onDeleteProject: (projectId: string, name: string) => void;
@@ -66,6 +66,7 @@ export const ProjectItem = memo(function ProjectItem({
   isExpanded,
   isSelected,
   onToggle,
+  onSelectProject,
   onNewThread,
   onRenameProject,
   onDeleteProject,
@@ -82,35 +83,32 @@ export const ProjectItem = memo(function ProjectItem({
   // Select only the git statuses for threads visible in *this* project.
   // The selector returns a fingerprint string so Zustand's Object.is check
   // skips re-renders when unrelated threads' git statuses change.
-  const visibleWorktreeIds = useMemo(
-    () => threads.filter((t) => t.mode === 'worktree').map((t) => t.id),
-    [threads],
-  );
+  const visibleThreadIds = useMemo(() => threads.map((t) => t.id), [threads]);
   const gitStatusFingerprint = useGitStatusStore(
     useCallback(
       (s: { statusByThread: Record<string, import('@funny/shared').GitStatusInfo> }) => {
         // Build a stable fingerprint from only the relevant threads
         let fp = '';
-        for (const id of visibleWorktreeIds) {
+        for (const id of visibleThreadIds) {
           const st = s.statusByThread[id];
           if (st)
             fp += `${id}:${st.state}:${st.dirtyFileCount}:${st.unpushedCommitCount}:${st.linesAdded}:${st.linesDeleted},`;
         }
         return fp;
       },
-      [visibleWorktreeIds],
+      [visibleThreadIds],
     ),
   );
   // Derive the actual status objects only when the fingerprint changes
   const statusByThread = useGitStatusStore.getState().statusByThread;
   const gitStatusForThreads = useMemo(() => {
     const result: Record<string, import('@funny/shared').GitStatusInfo> = {};
-    for (const id of visibleWorktreeIds) {
+    for (const id of visibleThreadIds) {
       if (statusByThread[id]) result[id] = statusByThread[id];
     }
     return result;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [visibleWorktreeIds, gitStatusFingerprint]);
+  }, [visibleThreadIds, gitStatusFingerprint]);
   // Read selectedThreadId from the store directly, scoped to this project's
   // thread IDs. This avoids passing selectedThreadId as a prop from the parent,
   // which caused *every* ProjectItem to re-render on any thread selection.
@@ -123,7 +121,6 @@ export const ProjectItem = memo(function ProjectItem({
     ),
   );
   const defaultEditor = useSettingsStore((s) => s.defaultEditor);
-  const branch = useProjectStore(useCallback((s) => s.branchByProject[project.id], [project.id]));
 
   // Memoize sorted & sliced threads to avoid O(n log n) sort on every render
   const visibleThreads = useMemo(() => {
@@ -183,27 +180,37 @@ export const ProjectItem = memo(function ProjectItem({
           isDropTarget && 'ring-2 ring-ring',
         )}
       >
-        <CollapsibleTrigger
+        <div
           data-testid={`project-item-${project.id}`}
           className={cn(
-            'flex-1 flex items-center gap-1.5 px-2 py-1 text-xs text-left min-w-0',
+            'flex-1 flex items-center gap-0 px-2 py-1 text-xs text-left min-w-0',
             isSelected ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
             isDragging ? 'cursor-grabbing' : 'cursor-pointer',
           )}
         >
-          {isExpanded ? (
-            <FolderOpen className="h-3.5 w-3.5 flex-shrink-0" />
-          ) : (
-            <Folder className="h-3.5 w-3.5 flex-shrink-0" />
-          )}
-          <span className="truncate text-xs font-medium">{project.name}</span>
-          {branch && (
-            <span className="inline-flex items-center gap-0.5 truncate text-[11px] font-normal text-muted-foreground">
-              <GitBranch className="h-3 w-3 flex-shrink-0" />
-              {branch}
-            </span>
-          )}
-        </CollapsibleTrigger>
+          <CollapsibleTrigger
+            data-testid={`project-toggle-${project.id}`}
+            className="-ml-0.5 flex-shrink-0 rounded p-0.5 hover:bg-accent/50"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {isExpanded ? (
+              <FolderOpen className="h-3.5 w-3.5" />
+            ) : (
+              <Folder className="h-3.5 w-3.5" />
+            )}
+          </CollapsibleTrigger>
+          <button
+            type="button"
+            data-testid={`project-name-${project.id}`}
+            className="ml-1.5 flex min-w-0 items-center gap-1.5"
+            onClick={(e) => {
+              e.stopPropagation();
+              onSelectProject(project.id);
+            }}
+          >
+            <span className="truncate text-sm font-medium">{project.name}</span>
+          </button>
+        </div>
         <div className="mr-2 flex items-center gap-0.5">
           <div
             className={cn(
@@ -377,17 +384,14 @@ export const ProjectItem = memo(function ProjectItem({
                   ? undefined
                   : () => onDeleteThread(project.id, th.id, th.title)
               }
-              gitStatus={th.mode === 'worktree' ? gitStatusForThreads[th.id] : undefined}
+              gitStatus={gitStatusForThreads[th.id]}
             />
           ))}
           {threads.length > 5 && (
-            <button
+            <ViewAllButton
               data-testid={`project-view-all-${project.id}`}
               onClick={() => onShowAllThreads(project.id)}
-              className="px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {t('sidebar.viewAll')}
-            </button>
+            />
           )}
         </div>
       </CollapsibleContent>

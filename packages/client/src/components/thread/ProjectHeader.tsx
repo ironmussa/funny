@@ -1,6 +1,5 @@
 import type { StartupCommand, Message, ToolCall, ThreadStage } from '@funny/shared';
 import {
-  GitBranch,
   GitCompare,
   Globe,
   Terminal,
@@ -25,12 +24,12 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import { DiffStats } from '@/components/DiffStats';
 import {
   Breadcrumb,
   BreadcrumbList,
   BreadcrumbItem,
   BreadcrumbLink,
-  BreadcrumbPage,
   BreadcrumbSeparator,
 } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
@@ -144,7 +143,12 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
         <Tooltip>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon-sm" className="text-muted-foreground">
+              <Button
+                data-testid="header-more-actions"
+                variant="ghost"
+                size="icon-sm"
+                className="text-muted-foreground"
+              >
                 <EllipsisVertical className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -153,6 +157,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
         </Tooltip>
         <DropdownMenuContent align="end">
           <DropdownMenuItem
+            data-testid="header-menu-copy-text"
             onClick={() => handleCopy(false)}
             disabled={!hasMessages}
             className="cursor-pointer"
@@ -161,6 +166,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
             {t('thread.copyText', 'Copy text only')}
           </DropdownMenuItem>
           <DropdownMenuItem
+            data-testid="header-menu-copy-all"
             onClick={() => handleCopy(true)}
             disabled={!hasMessages}
             className="cursor-pointer"
@@ -176,6 +182,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
+                data-testid="header-menu-pin"
                 onClick={() => pinThread(threadId, threadProjectId!, !threadPinned)}
                 className="cursor-pointer"
               >
@@ -193,6 +200,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
+                data-testid="header-menu-delete"
                 onClick={() => setDeleteOpen(true)}
                 className="cursor-pointer text-status-error focus:text-status-error"
               >
@@ -227,10 +235,16 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
             </p>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDeleteOpen(false)}>
+            <Button
+              data-testid="header-delete-cancel"
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteOpen(false)}
+            >
               {t('common.cancel')}
             </Button>
             <Button
+              data-testid="header-delete-confirm"
               variant="destructive"
               size="sm"
               onClick={handleDeleteConfirm}
@@ -290,6 +304,7 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
             <Button
+              data-testid="header-startup-commands"
               variant="ghost"
               size="icon-sm"
               className={anyRunning ? 'text-status-success' : 'text-muted-foreground'}
@@ -375,7 +390,10 @@ const StageSelectorBadge = memo(function StageSelectorBadge({
         updateThreadStage(threadId, projectId, value as ThreadStage)
       }
     >
-      <SelectTrigger className="h-7 w-auto min-w-0 shrink-0 border-0 bg-transparent px-2 py-0 text-sm text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground">
+      <SelectTrigger
+        data-testid="header-stage-select"
+        className="h-7 w-auto min-w-0 shrink-0 border-0 bg-transparent px-2 py-0 text-sm text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground"
+      >
         <SelectValue>{t(stageConfig[stage].labelKey)}</SelectValue>
       </SelectTrigger>
       <SelectContent>
@@ -396,6 +414,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
   const activeThreadProjectId = useThreadStore((s) => s.activeThread?.projectId);
   const activeThreadTitle = useThreadStore((s) => s.activeThread?.title);
   const activeThreadStage = useThreadStore((s) => s.activeThread?.stage);
+  const activeThreadStatus = useThreadStore((s) => s.activeThread?.status);
   const activeThreadWorktreePath = useThreadStore((s) => s.activeThread?.worktreePath);
   const activeThreadParentId = useThreadStore((s) => s.activeThread?.parentThreadId);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
@@ -418,7 +437,6 @@ export const ProjectHeader = memo(function ProjectHeader() {
   const fetchProjectStatus = useGitStatusStore((s) => s.fetchProjectStatus);
 
   const projectId = activeThreadProjectId ?? selectedProjectId;
-  const branch = useProjectStore((s) => (projectId ? s.branchByProject[projectId] : undefined));
   const project = projects.find((p) => p.id === projectId);
   const tabs = useTerminalStore((s) => s.tabs);
   const runningWithPort = tabs.filter(
@@ -476,6 +494,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
+                  data-testid="header-back-kanban"
                   variant="ghost"
                   size="icon-sm"
                   onClick={handleBackToKanban}
@@ -491,6 +510,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
+                  data-testid="header-back-parent"
                   variant="ghost"
                   size="icon-sm"
                   onClick={() =>
@@ -514,17 +534,6 @@ export const ProjectHeader = memo(function ProjectHeader() {
                   </BreadcrumbLink>
                 </BreadcrumbItem>
               )}
-              {project && !activeThreadId && branch && (
-                <>
-                  <BreadcrumbSeparator />
-                  <BreadcrumbItem className="flex-shrink-0">
-                    <BreadcrumbPage className="flex items-center gap-1 text-xs text-muted-foreground">
-                      <GitBranch className="h-3 w-3" />
-                      {branch}
-                    </BreadcrumbPage>
-                  </BreadcrumbItem>
-                </>
-              )}
               {project && activeThreadId && <BreadcrumbSeparator />}
               {activeThreadId && (
                 <BreadcrumbItem className="min-w-0 flex-1">
@@ -534,135 +543,148 @@ export const ProjectHeader = memo(function ProjectHeader() {
             </BreadcrumbList>
           </Breadcrumb>
         </div>
-        <div className="flex flex-shrink-0 items-center gap-2">
-          {activeThreadId && activeThreadStage && activeThreadStage !== 'archived' && (
-            <StageSelectorBadge
-              threadId={activeThreadId!}
-              projectId={activeThreadProjectId!}
-              stage={activeThreadStage}
-            />
-          )}
-          {activeThreadId && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    setReviewPaneOpen(false);
-                    navigate(
-                      `/kanban?project=${activeThreadProjectId}&highlight=${activeThreadId}`,
-                    );
-                  }}
-                  className="h-7 w-7 text-muted-foreground"
-                >
-                  <Columns3 className="h-4 w-4" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t('kanban.viewOnBoard', 'View on Board')}</TooltipContent>
-            </Tooltip>
-          )}
-          <StartupCommandsPopover projectId={projectId!} />
-          {runningWithPort.length > 0 && (
+        {activeThreadStatus !== 'setting_up' && (
+          <div className="flex flex-shrink-0 items-center gap-2">
+            {activeThreadId && activeThreadStage && activeThreadStage !== 'archived' && (
+              <StageSelectorBadge
+                threadId={activeThreadId!}
+                projectId={activeThreadProjectId!}
+                stage={activeThreadStage}
+              />
+            )}
+            {activeThreadId && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    data-testid="header-view-board"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => {
+                      setReviewPaneOpen(false);
+                      navigate(
+                        `/kanban?project=${activeThreadProjectId}&highlight=${activeThreadId}`,
+                      );
+                    }}
+                    className="h-7 w-7 text-muted-foreground"
+                  >
+                    <Columns3 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('kanban.viewOnBoard', 'View on Board')}</TooltipContent>
+              </Tooltip>
+            )}
+            <StartupCommandsPopover projectId={projectId!} />
+            {runningWithPort.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    data-testid="header-preview"
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => {
+                      const cmd = runningWithPort[0];
+                      openPreview({
+                        commandId: cmd.commandId!,
+                        projectId: cmd.projectId,
+                        port: cmd.port!,
+                        commandLabel: cmd.label,
+                      });
+                    }}
+                    className="text-status-info hover:text-status-info/80"
+                  >
+                    <Globe className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('preview.openPreview')}</TooltipContent>
+              </Tooltip>
+            )}
+            <DropdownMenu>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      data-testid="header-open-editor"
+                      variant="ghost"
+                      size="icon-sm"
+                      className="text-muted-foreground"
+                    >
+                      <ExternalLink className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>{t('sidebar.openInEditor', 'Open in Editor')}</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end">
+                {(Object.keys(editorLabels) as Editor[]).map((editor) => (
+                  <DropdownMenuItem
+                    key={editor}
+                    onClick={() => handleOpenInEditor(editor)}
+                    className="cursor-pointer"
+                  >
+                    {editorLabels[editor]}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon-sm"
                   onClick={() => {
-                    const cmd = runningWithPort[0];
-                    openPreview({
-                      commandId: cmd.commandId!,
-                      projectId: cmd.projectId,
-                      port: cmd.port!,
-                      commandLabel: cmd.label,
-                    });
+                    if (!selectedProjectId) return;
+                    const projectTabs = tabs.filter((t) => t.projectId === selectedProjectId);
+
+                    if (projectTabs.length === 0 && !terminalPanelVisible) {
+                      const cwd = activeThreadWorktreePath || project?.path || 'C:\\';
+                      const id = crypto.randomUUID();
+                      const label = 'Terminal 1';
+                      addTab({
+                        id,
+                        label,
+                        cwd,
+                        alive: true,
+                        projectId: selectedProjectId,
+                        type: isTauri ? undefined : 'pty',
+                      });
+                      setPanelVisible(true);
+                    } else {
+                      toggleTerminalPanel();
+                    }
                   }}
-                  className="text-status-info hover:text-status-info/80"
+                  data-testid="header-toggle-terminal"
+                  className={terminalPanelVisible ? 'text-primary' : 'text-muted-foreground'}
                 >
-                  <Globe className="h-4 w-4" />
+                  <Terminal className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent>{t('preview.openPreview')}</TooltipContent>
+              <TooltipContent>{t('terminal.toggle', 'Toggle Terminal')}</TooltipContent>
             </Tooltip>
-          )}
-          <DropdownMenu>
             <Tooltip>
               <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon-sm" className="text-muted-foreground">
-                    <ExternalLink className="h-4 w-4" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent>{t('sidebar.openInEditor', 'Open in Editor')}</TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent align="end">
-              {(Object.keys(editorLabels) as Editor[]).map((editor) => (
-                <DropdownMenuItem
-                  key={editor}
-                  onClick={() => handleOpenInEditor(editor)}
-                  className="cursor-pointer"
+                <Button
+                  variant="ghost"
+                  onClick={() => startTransition(() => setReviewPaneOpen(!reviewPaneOpen))}
+                  data-testid="header-toggle-review"
+                  className={`${showGitStats ? 'h-8 px-2' : 'h-8 w-8'} ${reviewPaneOpen ? 'text-primary' : 'text-muted-foreground'}`}
                 >
-                  {editorLabels[editor]}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => {
-                  if (!selectedProjectId) return;
-                  const projectTabs = tabs.filter((t) => t.projectId === selectedProjectId);
-
-                  if (projectTabs.length === 0 && !terminalPanelVisible) {
-                    const cwd = activeThreadWorktreePath || project?.path || 'C:\\';
-                    const id = crypto.randomUUID();
-                    const label = 'Terminal 1';
-                    addTab({
-                      id,
-                      label,
-                      cwd,
-                      alive: true,
-                      projectId: selectedProjectId,
-                      type: isTauri ? undefined : 'pty',
-                    });
-                    setPanelVisible(true);
-                  } else {
-                    toggleTerminalPanel();
-                  }
-                }}
-                className={terminalPanelVisible ? 'text-primary' : 'text-muted-foreground'}
-              >
-                <Terminal className="h-4 w-4" />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('terminal.toggle', 'Toggle Terminal')}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                onClick={() => startTransition(() => setReviewPaneOpen(!reviewPaneOpen))}
-                className={`${showGitStats ? 'h-8 px-2' : 'h-8 w-8'} ${reviewPaneOpen ? 'text-primary' : 'text-muted-foreground'}`}
-              >
-                {showGitStats ? (
-                  <div className="flex items-center gap-2 font-mono text-xs font-semibold">
-                    <span className="text-diff-added">+{effectiveGitStatus.linesAdded}</span>
-                    <span className="text-diff-removed">-{effectiveGitStatus.linesDeleted}</span>
-                  </div>
-                ) : (
-                  <GitCompare className="h-4 w-4" />
-                )}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{t('review.title')}</TooltipContent>
-          </Tooltip>
-          <MoreActionsMenu />
-        </div>
+                  {showGitStats ? (
+                    <DiffStats
+                      linesAdded={effectiveGitStatus.linesAdded}
+                      linesDeleted={effectiveGitStatus.linesDeleted}
+                      tooltips={false}
+                      className="font-semibold"
+                    />
+                  ) : (
+                    <GitCompare className="h-4 w-4" />
+                  )}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('review.title')}</TooltipContent>
+            </Tooltip>
+            <MoreActionsMenu />
+          </div>
+        )}
       </div>
     </div>
   );

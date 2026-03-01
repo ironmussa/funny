@@ -59,22 +59,36 @@ function AuthGate() {
   }, [initialize]);
 
   // Fetch profile from server once authenticated (or in local mode)
-  // This loads setup status, settings, and theme in a single request
+  // This loads setup status, settings, and theme in a single request.
+  // Retries on failure so a slow server start doesn't force the user
+  // back through the setup wizard.
   const canCheckSetup = !isLoading && (mode === 'local' || isAuthenticated);
   useEffect(() => {
     if (!canCheckSetup) return;
-    api.getProfile().then((res) => {
-      if (res.isOk()) {
-        const profile = res.value;
-        setSetupCompleted(profile.setupCompleted ?? false);
-        initializeFromProfile(profile);
-        if (profile.theme) {
-          setTheme(profile.theme);
+
+    let retries = 0;
+    const maxRetries = 3;
+
+    const fetchProfile = () => {
+      api.getProfile().then((res) => {
+        if (res.isOk()) {
+          const profile = res.value;
+          setSetupCompleted(profile.setupCompleted ?? false);
+          initializeFromProfile(profile);
+          if (profile.theme) {
+            setTheme(profile.theme);
+          }
+        } else if (retries < maxRetries) {
+          // Server might still be starting — retry with backoff
+          retries++;
+          setTimeout(fetchProfile, retries * 1000);
+        } else {
+          setSetupCompleted(false);
         }
-      } else {
-        setSetupCompleted(false);
-      }
-    });
+      });
+    };
+
+    fetchProfile();
   }, [canCheckSetup, initializeFromProfile, setTheme]);
 
   if (isLoading || setupCompleted === null) {

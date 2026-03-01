@@ -1166,6 +1166,7 @@ export const PromptInput = memo(function PromptInput({
           )}
           <textarea
             ref={textareaCallbackRef}
+            data-testid="prompt-textarea"
             aria-label={t('prompt.messageLabel', 'Message')}
             className="w-full resize-none bg-transparent px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
             style={{ minHeight: '4.5rem' }}
@@ -1213,6 +1214,7 @@ export const PromptInput = memo(function PromptInput({
           {/* Bottom toolbar */}
           <input
             ref={fileInputRef}
+            data-testid="prompt-file-input"
             type="file"
             accept="image/*"
             multiple
@@ -1224,6 +1226,7 @@ export const PromptInput = memo(function PromptInput({
           <div className="px-2 py-2.5">
             <div className="no-scrollbar flex h-9 items-center gap-1 overflow-x-auto">
               <Button
+                data-testid="prompt-attach"
                 onClick={() => fileInputRef.current?.click()}
                 variant="ghost"
                 size="icon-sm"
@@ -1236,6 +1239,7 @@ export const PromptInput = memo(function PromptInput({
               </Button>
               <Select value={mode} onValueChange={setMode}>
                 <SelectTrigger
+                  data-testid="prompt-mode-select"
                   tabIndex={-1}
                   className="h-7 w-auto min-w-0 shrink-0 border-0 bg-transparent text-xs text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground"
                 >
@@ -1282,6 +1286,7 @@ export const PromptInput = memo(function PromptInput({
                   })()}
                 <Select value={unifiedModel} onValueChange={setUnifiedModel}>
                   <SelectTrigger
+                    data-testid="prompt-model-select"
                     tabIndex={-1}
                     className="h-7 w-auto min-w-0 shrink-0 border-0 bg-transparent text-xs text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground"
                   >
@@ -1309,6 +1314,7 @@ export const PromptInput = memo(function PromptInput({
                 )}
                 {running && !prompt.trim() ? (
                   <Button
+                    data-testid="prompt-stop"
                     onClick={onStop}
                     variant="destructive"
                     size="icon-sm"
@@ -1319,6 +1325,7 @@ export const PromptInput = memo(function PromptInput({
                   </Button>
                 ) : (
                   <Button
+                    data-testid="prompt-send"
                     onClick={handleSubmit}
                     disabled={loading}
                     size="icon-sm"
@@ -1369,6 +1376,7 @@ export const PromptInput = memo(function PromptInput({
                 )}
                 <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
                   <Switch
+                    data-testid="prompt-worktree-switch"
                     checked={createWorktree}
                     onCheckedChange={setCreateWorktree}
                     tabIndex={-1}
@@ -1378,6 +1386,7 @@ export const PromptInput = memo(function PromptInput({
                 </label>
                 {showBacklog && (
                   <button
+                    data-testid="prompt-backlog-toggle"
                     onClick={() => setSendToBacklog((v) => !v)}
                     tabIndex={-1}
                     className={cn(

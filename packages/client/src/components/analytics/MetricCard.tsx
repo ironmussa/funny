@@ -18,7 +18,7 @@ const colorClasses: Record<string, string> = {
 
 export function MetricCard({ title, value, icon, color }: Props) {
   return (
-    <div className="rounded-lg border border-border p-4">
+    <div className="rounded-lg border border-border p-4" data-testid={`analytics-metric-${color}`}>
       <div className="mb-2 flex items-center justify-between">
         <span className="text-xs text-muted-foreground">{title}</span>
         <div className={cn('p-1.5 rounded-md', colorClasses[color])}>{icon}</div>

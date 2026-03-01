@@ -14,6 +14,7 @@ import { useState, memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { DiffStats } from '@/components/DiffStats';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -67,8 +68,8 @@ export const ThreadItem = memo(function ThreadItem({
   const isBusy = isRunning || isSettingUp;
   const displayTime = timeValue ?? timeAgo(thread.createdAt, t);
 
-  // Git status config (only for worktree threads that have git info)
-  const showGitIcon = thread.mode === 'worktree' && gitStatus && gitStatus.state !== 'clean';
+  // Git status config
+  const showGitIcon = !!gitStatus && gitStatus.state !== 'clean';
   const gitCfg = showGitIcon ? gitSyncStateConfig[gitStatus.state] : null;
   const GitIcon = gitCfg?.icon ?? null;
 
@@ -95,6 +96,7 @@ export const ThreadItem = memo(function ThreadItem({
       )}
     >
       <button
+        data-testid={`thread-item-${thread.id}`}
         onClick={onSelect}
         className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden py-1 pl-2 text-left"
       >
@@ -142,51 +144,15 @@ export const ThreadItem = memo(function ThreadItem({
         <div className="flex min-w-0 flex-1 items-center gap-1">
           <span className="truncate text-sm leading-tight">{thread.title}</span>
           {/* Git status (worktree threads only) */}
-          {showGitIcon && (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0) ? (
-            <span className="flex flex-shrink-0 items-center font-mono text-xs">
-              {gitStatus.linesAdded > 0 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="text-emerald-400">+{gitStatus.linesAdded}</span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    {t('gitStats.linesAdded', { count: gitStatus.linesAdded })}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {gitStatus.linesAdded > 0 && gitStatus.linesDeleted > 0 && ' '}
-              {gitStatus.linesDeleted > 0 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="text-red-400">-{gitStatus.linesDeleted}</span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    {t('gitStats.linesDeleted', { count: gitStatus.linesDeleted })}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {gitStatus.dirtyFileCount > 0 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="text-muted-foreground"> · {gitStatus.dirtyFileCount}</span>
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    {t('gitStats.dirtyFiles', { count: gitStatus.dirtyFileCount })}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-            </span>
-          ) : showGitIcon && gitStatus.dirtyFileCount > 0 ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="flex-shrink-0 font-mono text-xs text-muted-foreground">
-                  {gitStatus.dirtyFileCount} {gitStatus.dirtyFileCount === 1 ? 'file' : 'files'}
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                {t('gitStats.dirtyFiles', { count: gitStatus.dirtyFileCount })}
-              </TooltipContent>
-            </Tooltip>
+          {showGitIcon &&
+          (gitStatus.linesAdded > 0 ||
+            gitStatus.linesDeleted > 0 ||
+            gitStatus.dirtyFileCount > 0) ? (
+            <DiffStats
+              linesAdded={gitStatus.linesAdded}
+              linesDeleted={gitStatus.linesDeleted}
+              dirtyFileCount={gitStatus.dirtyFileCount}
+            />
           ) : showGitIcon && GitIcon ? (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -233,6 +199,7 @@ export const ThreadItem = memo(function ThreadItem({
               <Button
                 variant="ghost"
                 size="icon-xs"
+                data-testid={`thread-item-more-${thread.id}`}
                 onClick={(e) => e.stopPropagation()}
                 className="text-muted-foreground hover:text-foreground"
               >

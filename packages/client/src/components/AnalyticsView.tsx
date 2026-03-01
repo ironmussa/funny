@@ -108,7 +108,7 @@ export function AnalyticsView() {
       {/* Filters */}
       <div className="flex items-center gap-2 border-b border-border/50 px-4 py-2">
         <Select value={projectId} onValueChange={setProjectId}>
-          <SelectTrigger className="h-7 w-[180px] text-xs">
+          <SelectTrigger className="h-7 w-[180px] text-xs" data-testid="analytics-project-filter">
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
@@ -128,20 +128,29 @@ export function AnalyticsView() {
 
       {/* Content */}
       {loading ? (
-        <div className="flex flex-1 items-center justify-center text-muted-foreground">
+        <div
+          className="flex flex-1 items-center justify-center text-muted-foreground"
+          data-testid="analytics-loading"
+        >
           <Loader2 className="h-5 w-5 animate-spin" />
         </div>
       ) : (
         <ScrollArea className="min-h-0 flex-1">
           <div className="mx-auto max-w-4xl space-y-6 px-6 py-6">
             {!overview ? (
-              <div className="py-16 text-center text-sm text-muted-foreground">
+              <div
+                className="py-16 text-center text-sm text-muted-foreground"
+                data-testid="analytics-no-data"
+              >
                 {t('analytics.noData')}
               </div>
             ) : (
               <>
                 {/* Metric Cards */}
-                <div className="grid grid-cols-2 gap-3 lg:grid-cols-3">
+                <div
+                  className="grid grid-cols-2 gap-3 lg:grid-cols-3"
+                  data-testid="analytics-metric-cards"
+                >
                   <MetricCard
                     title={t('analytics.tasksCreated')}
                     value={overview.createdCount}
@@ -182,7 +191,10 @@ export function AnalyticsView() {
 
                 {/* Cost card */}
                 {overview.totalCost > 0 && (
-                  <div className="flex items-center justify-between rounded-lg border border-border p-4">
+                  <div
+                    className="flex items-center justify-between rounded-lg border border-border p-4"
+                    data-testid="analytics-cost-card"
+                  >
                     <div>
                       <p className="text-xs text-muted-foreground">{t('analytics.totalCost')}</p>
                       <p className="mt-1 text-xl font-bold">${overview.totalCost.toFixed(4)}</p>
@@ -194,7 +206,10 @@ export function AnalyticsView() {
                 )}
 
                 {/* Stage Distribution */}
-                <div className="rounded-lg border border-border p-5">
+                <div
+                  className="rounded-lg border border-border p-5"
+                  data-testid="analytics-stage-chart"
+                >
                   <h3 className="mb-4 text-sm font-semibold">
                     {t('analytics.currentDistribution')}
                   </h3>
@@ -203,7 +218,10 @@ export function AnalyticsView() {
 
                 {/* Timeline */}
                 {timeline && (
-                  <div className="rounded-lg border border-border p-5">
+                  <div
+                    className="rounded-lg border border-border p-5"
+                    data-testid="analytics-timeline-chart"
+                  >
                     <div className="mb-4 flex items-center justify-between">
                       <h3 className="text-sm font-semibold">{t('analytics.timeline')}</h3>
                       <GroupBySelector value={groupBy} onChange={setGroupBy} />

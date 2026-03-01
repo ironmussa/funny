@@ -1,4 +1,5 @@
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
+import type { Thread } from '@funny/shared';
 import {
   FolderPlus,
   Columns3,
@@ -44,6 +45,8 @@ import { SettingsPanel } from './SettingsPanel';
 import { AutomationInboxButton } from './sidebar/AutomationInboxButton';
 import { ProjectItem } from './sidebar/ProjectItem';
 import { ThreadList } from './sidebar/ThreadList';
+
+const EMPTY_THREADS: Thread[] = [];
 
 export function AppSidebar() {
   const navigate = useNavigate();
@@ -214,11 +217,9 @@ export function AppSidebar() {
 
   const handleDeleteProjectConfirm = useCallback(async () => {
     if (!deleteProjectConfirm) return;
-    setActionLoading(true);
     const { projectId, name } = deleteProjectConfirm;
-    await deleteProject(projectId);
-    setActionLoading(false);
     setDeleteProjectConfirm(null);
+    await deleteProject(projectId);
     toast.success(t('toast.projectDeleted', { name }));
     navigate('/');
   }, [deleteProjectConfirm, deleteProject, navigate, t]);
@@ -226,19 +227,19 @@ export function AppSidebar() {
   // ── Stable callbacks for ProjectItem (avoids breaking memo) ──────────
   const handleToggleProject = useCallback(
     (projectId: string) => {
-      const wasExpanded = useProjectStore.getState().expandedProjects.has(projectId);
       toggleProject(projectId);
+    },
+    [toggleProject],
+  );
+
+  const handleSelectProject = useCallback(
+    (projectId: string) => {
       startTransition(() => {
-        if (!wasExpanded) {
-          useProjectStore.getState().selectProject(projectId);
-          navigate(`/projects/${projectId}`);
-        } else if (useProjectStore.getState().selectedProjectId !== projectId) {
-          // Git status fetch is already deferred inside selectProject/toggleProject
-          navigate(`/projects/${projectId}`);
-        }
+        useProjectStore.getState().selectProject(projectId);
+        navigate(`/projects/${projectId}`);
       });
     },
-    [toggleProject, navigate],
+    [navigate],
   );
 
   const handleNewThread = useCallback(
@@ -304,6 +305,21 @@ export function AppSidebar() {
     });
   }, []);
 
+  // Stable callbacks for the global ThreadList (different param order than ProjectItem handlers)
+  const handleArchiveThreadFromList = useCallback(
+    (threadId: string, projectId: string, title: string, isWorktree: boolean) => {
+      setArchiveConfirm({ threadId, projectId, title, isWorktree });
+    },
+    [],
+  );
+
+  const handleDeleteThreadFromList = useCallback(
+    (threadId: string, projectId: string, title: string, isWorktree: boolean) => {
+      setDeleteThreadConfirm({ threadId, projectId, title, isWorktree });
+    },
+    [],
+  );
+
   const handleShowAllThreads = useCallback(
     (projectId: string) => {
       showGlobalSearch();
@@ -332,7 +348,14 @@ export function AppSidebar() {
         // Source array unchanged — reuse previous filtered result
         result[project.id] = prevFiltered[project.id];
       } else {
-        result[project.id] = (src ?? []).filter((t) => !t.archived);
+        const filtered = (src ?? []).filter((t) => !t.archived);
+        const prev = prevFiltered[project.id];
+        // Reuse previous reference if filtered result has the same thread refs
+        if (prev && prev.length === filtered.length && prev.every((t, i) => t === filtered[i])) {
+          result[project.id] = prev;
+        } else {
+          result[project.id] = filtered;
+        }
       }
     }
     prevSourceRef.current = threadsByProject;
@@ -432,9 +455,6 @@ export function AppSidebar() {
 
       {/* Active threads section (own scroll) */}
       <div className="flex max-h-[40%] min-h-[5rem] shrink-0 flex-col contain-paint">
-        <div className="px-2">
-          <AutomationInboxButton />
-        </div>
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
           <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             {t('sidebar.threadsTitle')}
@@ -448,12 +468,8 @@ export function AppSidebar() {
             )}
           />
           <ThreadList
-            onArchiveThread={(threadId, projectId, title, isWorktree) => {
-              setArchiveConfirm({ threadId, projectId, title, isWorktree });
-            }}
-            onDeleteThread={(threadId, projectId, title, isWorktree) => {
-              setDeleteThreadConfirm({ threadId, projectId, title, isWorktree });
-            }}
+            onArchiveThread={handleArchiveThreadFromList}
+            onDeleteThread={handleDeleteThreadFromList}
           />
         </div>
       </div>
@@ -501,10 +517,11 @@ export function AppSidebar() {
             <ProjectItem
               key={project.id}
               project={project}
-              threads={filteredThreadsByProject[project.id] ?? []}
+              threads={filteredThreadsByProject[project.id] ?? EMPTY_THREADS}
               isExpanded={expandedProjects.has(project.id)}
               isSelected={selectedProjectId === project.id}
               onToggle={handleToggleProject}
+              onSelectProject={handleSelectProject}
               onNewThread={handleNewThread}
               onRenameProject={handleRenameProject}
               onDeleteProject={handleDeleteProject}
@@ -519,8 +536,11 @@ export function AppSidebar() {
         </div>
       </SidebarContent>
 
-      {/* Footer with settings gear + user section */}
+      {/* Footer with automation inbox + settings */}
       <SidebarFooter>
+        <div className="px-1">
+          <AutomationInboxButton />
+        </div>
         <div className="flex items-center justify-between px-1">
           {authMode === 'multi' && authUser ? (
             <span className="truncate text-sm text-sidebar-foreground">{authUser.displayName}</span>

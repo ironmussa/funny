@@ -11,6 +11,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import { DiffStats } from '@/components/DiffStats';
 import { SlideUpPrompt } from '@/components/SlideUpPrompt';
 import { Button } from '@/components/ui/button';
 import {
@@ -114,6 +115,7 @@ const KanbanCard = memo(function KanbanCard({
   return (
     <div
       ref={ref}
+      data-testid={`kanban-card-${thread.id}`}
       className={cn(
         'group/card relative rounded-md border bg-card p-2.5 cursor-pointer transition-[opacity,box-shadow] duration-300',
         isDragging && 'opacity-40',
@@ -133,6 +135,7 @@ const KanbanCard = memo(function KanbanCard({
         {thread.pinned ? (
           <button
             className="rounded p-1 text-primary transition-opacity hover:bg-primary/10"
+            data-testid={`kanban-card-pin-${thread.id}`}
             onClick={async (e) => {
               e.stopPropagation();
               await pinThread(thread.id, thread.projectId, false);
@@ -144,6 +147,7 @@ const KanbanCard = memo(function KanbanCard({
         ) : (
           <button
             className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-primary/10 hover:text-primary group-hover/card:opacity-100"
+            data-testid={`kanban-card-pin-${thread.id}`}
             onClick={async (e) => {
               e.stopPropagation();
               await pinThread(thread.id, thread.projectId, true);
@@ -155,6 +159,7 @@ const KanbanCard = memo(function KanbanCard({
         )}
         <button
           className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover/card:opacity-100"
+          data-testid={`kanban-card-delete-${thread.id}`}
           onClick={(e) => {
             e.stopPropagation();
             onDelete(thread);
@@ -176,14 +181,12 @@ const KanbanCard = memo(function KanbanCard({
             {displayBranch}
           </span>
           {gitStatusProp && (gitStatusProp.linesAdded > 0 || gitStatusProp.linesDeleted > 0) && (
-            <span className="ml-auto flex shrink-0 items-center gap-1 font-mono text-[10px]">
-              {gitStatusProp.linesAdded > 0 && (
-                <span className="text-green-500">+{gitStatusProp.linesAdded}</span>
-              )}
-              {gitStatusProp.linesDeleted > 0 && (
-                <span className="text-red-400">-{gitStatusProp.linesDeleted}</span>
-              )}
-            </span>
+            <DiffStats
+              linesAdded={gitStatusProp.linesAdded}
+              linesDeleted={gitStatusProp.linesDeleted}
+              size="xs"
+              className="ml-auto"
+            />
           )}
         </div>
       )}
@@ -257,6 +260,7 @@ function AddThreadButton({
   if (projectId) {
     return (
       <button
+        data-testid="kanban-add-thread"
         className="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
         onClick={() => onSelect(projectId)}
         title={t('kanban.addThread')}
@@ -280,6 +284,7 @@ function AddThreadButton({
     >
       <PopoverTrigger asChild>
         <button
+          data-testid="kanban-add-thread"
           className="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           title={t('kanban.addThread')}
         >
@@ -440,6 +445,7 @@ const KanbanColumn = memo(function KanbanColumn({
             ))}
             {hasMore && (
               <button
+                data-testid={`kanban-load-more-${stage}`}
                 onClick={() => setVisibleCount((prev) => prev + 20)}
                 className="w-full rounded-md py-2 text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
               >
@@ -766,12 +772,18 @@ export function KanbanView({
             </p>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDeleteConfirm(null)}>
+            <Button
+              variant="outline"
+              size="sm"
+              data-testid="kanban-delete-cancel"
+              onClick={() => setDeleteConfirm(null)}
+            >
               {t('common.cancel')}
             </Button>
             <Button
               variant="destructive"
               size="sm"
+              data-testid="kanban-delete-confirm"
               onClick={handleDeleteConfirm}
               loading={deleteLoading}
             >

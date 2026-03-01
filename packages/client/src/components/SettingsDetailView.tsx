@@ -69,7 +69,7 @@ function SegmentedControl<T extends string>({
   value,
   onChange,
 }: {
-  options: { value: T; label: string; icon?: React.ReactNode }[];
+  options: { value: T; label: string; icon?: React.ReactNode; testId?: string }[];
   value: T;
   onChange: (value: T) => void;
 }) {
@@ -80,6 +80,7 @@ function SegmentedControl<T extends string>({
           key={opt.value}
           onClick={() => onChange(opt.value)}
           aria-pressed={value === opt.value}
+          data-testid={opt.testId}
           className={cn(
             'flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-sm transition-colors',
             value === opt.value
@@ -198,6 +199,7 @@ function ProjectColorPicker({
           )}
           aria-label="No color"
           aria-pressed={!currentColor}
+          data-testid="project-color-none"
         >
           <div className="h-4 w-4 rounded-sm bg-gradient-to-br from-muted-foreground/20 to-muted-foreground/40" />
         </button>
@@ -321,6 +323,7 @@ function ProjectUrlPatterns({
           size="sm"
           className="h-7 text-xs"
           onClick={() => setUrls([...urls, ''])}
+          data-testid="settings-url-pattern-add"
         >
           <Plus className="mr-1.5 h-3 w-3" />
           {t('settings.addUrl', 'Add URL')}
@@ -388,8 +391,16 @@ function GeneralSettings() {
                 value={selectedProject.followUpMode || 'interrupt'}
                 onChange={(v) => saveProject(selectedProject.id, { followUpMode: v })}
                 options={[
-                  { value: 'interrupt', label: t('settings.followUpInterrupt') },
-                  { value: 'queue', label: t('settings.followUpQueue') },
+                  {
+                    value: 'interrupt',
+                    label: t('settings.followUpInterrupt'),
+                    testId: 'settings-followup-interrupt',
+                  },
+                  {
+                    value: 'queue',
+                    label: t('settings.followUpQueue'),
+                    testId: 'settings-followup-queue',
+                  },
                 ]}
               />
             </SettingRow>
@@ -441,11 +452,13 @@ function GeneralSettings() {
                     value: 'local',
                     label: t('thread.mode.local'),
                     icon: <Monitor className="h-3 w-3" />,
+                    testId: 'settings-thread-mode-local',
                   },
                   {
                     value: 'worktree',
                     label: t('thread.mode.worktree'),
                     icon: <GitBranch className="h-3 w-3" />,
+                    testId: 'settings-thread-mode-worktree',
                   },
                 ]}
               />
@@ -514,6 +527,7 @@ function GeneralSettings() {
           <div className="mt-3 flex justify-end">
             <button
               onClick={() => saveResetToolPermissions()}
+              data-testid="settings-reset-defaults"
               className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
               <RotateCcw className="h-3 w-3" />

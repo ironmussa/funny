@@ -121,6 +121,7 @@ function ThemeCard({
   return (
     <button
       onClick={onClick}
+      data-testid={`settings-dialog-theme-${option.value}`}
       className={cn(
         'relative flex flex-col overflow-hidden rounded-lg border-2 transition-colors',
         selected ? 'border-primary' : 'border-border/50 hover:border-border',
@@ -272,7 +273,7 @@ export function GeneralSettingsDialog({
                 description={t('settings.defaultEditorDesc')}
               >
                 <Select value={draftEditor} onValueChange={(v) => setDraftEditor(v as Editor)}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-[140px]" data-testid="settings-dialog-editor-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -292,12 +293,16 @@ export function GeneralSettingsDialog({
                 <Checkbox
                   checked={draftUseInternalEditor}
                   onCheckedChange={(checked) => setDraftUseInternalEditor(!!checked)}
+                  data-testid="settings-dialog-internal-editor"
                 />
               </SettingRow>
 
               <SettingRow title={t('settings.language')} description={t('settings.languageDesc')}>
                 <Select value={draftLanguage} onValueChange={setDraftLanguage}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger
+                    className="w-[140px]"
+                    data-testid="settings-dialog-language-select"
+                  >
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -315,7 +320,7 @@ export function GeneralSettingsDialog({
                 description={t('settings.terminalShellDesc')}
               >
                 <Select value={draftShell} onValueChange={(v) => setDraftShell(v as TerminalShell)}>
-                  <SelectTrigger className="w-[140px]">
+                  <SelectTrigger className="w-[140px]" data-testid="settings-dialog-shell-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -369,6 +374,7 @@ export function GeneralSettingsDialog({
                     type="password"
                     value={githubToken}
                     onChange={(e) => setGithubToken(e.target.value)}
+                    data-testid="settings-dialog-github-token"
                     placeholder={
                       hasGithubToken ? t('profile.tokenSaved') : t('profile.tokenPlaceholder')
                     }
@@ -381,6 +387,7 @@ export function GeneralSettingsDialog({
                       className="shrink-0 text-xs text-destructive hover:text-destructive"
                       onClick={handleClearToken}
                       disabled={tokenSaving}
+                      data-testid="settings-dialog-clear-token"
                     >
                       {t('profile.clearToken')}
                     </Button>
@@ -392,10 +399,12 @@ export function GeneralSettingsDialog({
         </div>
 
         <DialogFooter className="flex-shrink-0 border-t border-border/50 px-6 py-4">
-          <Button variant="outline" onClick={handleCancel}>
+          <Button variant="outline" onClick={handleCancel} data-testid="settings-dialog-cancel">
             {t('common.cancel')}
           </Button>
-          <Button onClick={handleSave}>{t('common.save')}</Button>
+          <Button onClick={handleSave} data-testid="settings-dialog-save">
+            {t('common.save')}
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

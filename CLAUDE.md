@@ -237,6 +237,22 @@ Always use the `cn()` helper from `@/lib/utils` to compose Tailwind classes. Nev
 
 Do not install other component libraries (Material UI, Ant Design, Chakra UI, Mantine, etc.). All UI must be built with shadcn/ui + Tailwind CSS + Radix UI primitives.
 
+### Always add `data-testid` attributes
+
+Every interactive element (buttons, inputs, selects, checkboxes, toggles, clickable areas) MUST include a `data-testid` attribute for Playwright E2E testing. Use kebab-case with an area prefix:
+
+```tsx
+// Static IDs
+<Button data-testid="sidebar-add-project" />
+<Input data-testid="new-thread-prompt" />
+
+// Dynamic IDs (per-entity)
+<div data-testid={`project-item-${project.id}`} />
+<button data-testid={`thread-item-${thread.id}`} />
+```
+
+Naming convention: `{area}-{element}-{qualifier}`. Examples: `sidebar-search`, `review-commit-title`, `kanban-card-{id}`.
+
 ### Import from `@/components/ui/`
 
 All base component imports must come from `@/components/ui/`. Example:

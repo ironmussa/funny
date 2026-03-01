@@ -1,5 +1,4 @@
 import { existsSync } from 'fs';
-import { join } from 'path';
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import {
@@ -115,22 +114,33 @@ gitRoutes.get('/status', async (c) => {
   );
   // Threads whose worktrees were cleaned up after merge
   const mergedThreads = threads.filter((t) => !t.worktreePath && !t.branch && t.baseBranch);
+  // Local threads (no worktree) — share the project directory
+  const localThreads = threads.filter((t) => !t.worktreePath && !(!t.branch && t.baseBranch));
 
-  const results = await Promise.allSettled(
-    worktreeThreads.map(async (thread) => {
-      const summaryResult = await getStatusSummary(
-        thread.worktreePath!,
-        thread.baseBranch ?? undefined,
-        project.path,
-      );
-      if (summaryResult.isErr()) return null;
-      const summary = summaryResult.value;
-      return Object.assign({ threadId: thread.id, state: deriveGitSyncState(summary) }, summary);
-    }),
-  );
+  // Compute project-level status once for all local threads
+  const localStatusPromise =
+    localThreads.length > 0
+      ? getStatusSummary(project.path).then((r) => (r.isOk() ? r.value : null))
+      : Promise.resolve(null);
+
+  const [worktreeResults, localSummary] = await Promise.all([
+    Promise.allSettled(
+      worktreeThreads.map(async (thread) => {
+        const summaryResult = await getStatusSummary(
+          thread.worktreePath!,
+          thread.baseBranch ?? undefined,
+          project.path,
+        );
+        if (summaryResult.isErr()) return null;
+        const summary = summaryResult.value;
+        return Object.assign({ threadId: thread.id, state: deriveGitSyncState(summary) }, summary);
+      }),
+    ),
+    localStatusPromise,
+  ]);
 
   const statuses = [
-    ...results
+    ...worktreeResults
       .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
       .map((r) => r.value)
       .filter(Boolean),
@@ -144,6 +154,13 @@ gitRoutes.get('/status', async (c) => {
       linesAdded: 0,
       linesDeleted: 0,
     })),
+    ...(localSummary
+      ? localThreads.map((t) => ({
+          threadId: t.id,
+          state: deriveGitSyncState(localSummary),
+          ...localSummary,
+        }))
+      : []),
   ];
 
   const response = { statuses };

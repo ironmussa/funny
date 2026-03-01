@@ -83,6 +83,7 @@ export function SettingsPanel() {
               navigate(selectedProjectId ? `/projects/${selectedProjectId}` : '/');
             }}
             className="text-muted-foreground hover:text-foreground"
+            data-testid="settings-back"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
           </Button>
@@ -100,6 +101,7 @@ export function SettingsPanel() {
                 <SidebarMenuButton
                   isActive={activeSettingsPage === item.id}
                   onClick={() => navigate(settingsPath(item.id))}
+                  data-testid={`settings-nav-${item.id}`}
                 >
                   <Icon className="h-4 w-4" />
                   <span>{t(settingsLabelKeys[item.id] ?? item.label)}</span>

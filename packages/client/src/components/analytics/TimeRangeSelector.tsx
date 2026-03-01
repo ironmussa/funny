@@ -20,10 +20,14 @@ export function TimeRangeSelector({ value, onChange }: Props) {
   ];
 
   return (
-    <div className="flex rounded-md border border-border bg-muted/30 p-0.5">
+    <div
+      className="flex rounded-md border border-border bg-muted/30 p-0.5"
+      data-testid="analytics-time-range"
+    >
       {options.map((opt) => (
         <button
           key={opt.value}
+          data-testid={`analytics-time-range-${opt.value}`}
           onClick={() => onChange(opt.value)}
           className={cn(
             'px-3 py-1.5 text-xs rounded-sm transition-colors whitespace-nowrap',

@@ -111,6 +111,7 @@ export function AutomationInboxView() {
           variant="ghost"
           size="sm"
           className="h-7 gap-1.5 text-xs text-muted-foreground"
+          data-testid="inbox-manage-automations"
           onClick={handleGoToSettings}
         >
           <Settings className="h-3.5 w-3.5" />
@@ -130,6 +131,7 @@ export function AutomationInboxView() {
           return (
             <button
               key={status}
+              data-testid={`inbox-tab-${status}`}
               onClick={() => setTriageStatusFilter(status)}
               className={cn(
                 'px-4 py-2 text-xs font-medium transition-colors relative border-b-2',
@@ -160,6 +162,7 @@ export function AutomationInboxView() {
           <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="text"
+            data-testid="inbox-search"
             placeholder="Search by automation name, thread title, or summary..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
@@ -177,6 +180,7 @@ export function AutomationInboxView() {
                 variant="outline"
                 role="combobox"
                 aria-expanded={filterOpen}
+                data-testid="inbox-project-filter"
                 className="h-7 w-[200px] justify-between text-xs font-normal"
               >
                 {filterProjectId

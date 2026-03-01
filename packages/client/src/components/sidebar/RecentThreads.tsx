@@ -13,6 +13,7 @@ import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { ThreadItem } from './ThreadItem';
+import { ViewAllButton } from './ViewAllButton';
 
 const FINISHED_STATUSES: ThreadStatus[] = ['completed', 'failed', 'stopped', 'interrupted'];
 
@@ -106,7 +107,7 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
               subtitle={thread.projectName}
               projectColor={thread.projectColor}
               timeValue={timeAgo(thread.completedAt ?? thread.createdAt, t)}
-              gitStatus={thread.mode === 'worktree' ? gitStatusByThread[thread.id] : undefined}
+              gitStatus={gitStatusByThread[thread.id]}
               onSelect={() => {
                 const store = useThreadStore.getState();
                 if (
@@ -136,12 +137,9 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
             />
           ))}
           {totalCount > 5 && (
-            <button
+            <ViewAllButton
               onClick={() => navigate('/list?status=completed,failed,stopped,interrupted')}
-              className="px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-            >
-              {t('sidebar.viewAll')}
-            </button>
+            />
           )}
         </div>
       </CollapsibleContent>

@@ -82,7 +82,7 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
       setStatus({
         available: false,
         path: null,
-        error: 'Could not reach the server',
+        error: 'server_unreachable',
         version: null,
       });
     }
@@ -121,6 +121,16 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
               <div className="truncate font-mono text-xs text-muted-foreground">{status.path}</div>
             )}
           </>
+        ) : status?.error === 'server_unreachable' ? (
+          <>
+            <div className="flex items-center gap-2">
+              <XCircle className="h-5 w-5 text-status-error" />
+              <span className="text-sm font-medium text-foreground">Server not reachable</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Could not connect to the funny server. Make sure the server is running and try again.
+            </p>
+          </>
         ) : (
           <>
             <div className="flex items-center gap-2">
@@ -150,7 +160,11 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
             Check Again
           </Button>
         )}
-        <Button className="flex-1" disabled={checking || !status?.available} onClick={onNext}>
+        <Button
+          className="flex-1"
+          disabled={checking || (!status?.available && status?.error !== 'server_unreachable')}
+          onClick={onNext}
+        >
           Continue
           <ArrowRight className="ml-1 h-4 w-4" />
         </Button>
@@ -181,8 +195,12 @@ function DoneSlide({ onFinish }: { onFinish: () => void }) {
 export function SetupWizard({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(0);
 
-  const handleFinish = () => {
-    api.completeSetup();
+  const handleFinish = async () => {
+    const res = await api.completeSetup();
+    if (res.isErr()) {
+      // Retry once after a short delay
+      setTimeout(() => api.completeSetup(), 2000);
+    }
     onComplete();
   };
 

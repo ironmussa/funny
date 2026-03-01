@@ -1,5 +1,5 @@
 import type { Thread, ThreadStatus, GitStatusInfo } from '@funny/shared';
-import { useEffect, useMemo, useCallback, memo, startTransition } from 'react';
+import { useEffect, useMemo, useCallback, useRef, memo, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -10,6 +10,7 @@ import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { ThreadItem } from './ThreadItem';
+import { ViewAllButton } from './ViewAllButton';
 
 const RUNNING_STATUSES = new Set<ThreadStatus>(['running', 'waiting', 'pending']);
 const FINISHED_STATUSES = new Set<ThreadStatus>(['completed', 'failed', 'stopped', 'interrupted']);
@@ -31,6 +32,17 @@ interface ThreadListProps {
   onDeleteThread: (threadId: string, projectId: string, title: string, isWorktree: boolean) => void;
 }
 
+/** Shallow-compare two objects (same keys, same values by ===). */
+function shallowEqual(a: object, b: object): boolean {
+  const keysA = Object.keys(a);
+  const keysB = Object.keys(b);
+  if (keysA.length !== keysB.length) return false;
+  for (const key of keysA) {
+    if ((a as never)[key] !== (b as never)[key]) return false;
+  }
+  return true;
+}
+
 export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps) {
   const { t } = useTranslation();
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
@@ -38,6 +50,11 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
   const threadsByProject = useThreadStore((s) => s.threadsByProject);
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const projects = useProjectStore((s) => s.projects);
+
+  // Cache enriched threads to maintain stable references across renders.
+  // Without this, every useMemo run creates new objects via spread even
+  // when the underlying thread data hasn't changed, defeating memo().
+  const enrichedCacheRef = useRef<Map<string, EnrichedThread>>(new Map());
 
   const { threads, totalCount } = useMemo(() => {
     const result: EnrichedThread[] = [];
@@ -49,12 +66,16 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
       for (const thread of projectThreads) {
         if (VISIBLE_STATUSES.has(thread.status) && !thread.archived) {
           const project = projectMap.get(projectId);
-          result.push({
+          const enriched: EnrichedThread = {
             ...thread,
             projectName: project?.name ?? projectId,
             projectPath: project?.path ?? '',
             projectColor: project?.color,
-          });
+          };
+
+          // Reuse previous reference if data is identical
+          const cached = enrichedCacheRef.current.get(thread.id);
+          result.push(cached && shallowEqual(cached, enriched) ? cached : enriched);
         }
       }
     }
@@ -70,7 +91,16 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
     });
 
     // Always show at most 5 threads total, prioritizing running ones
-    return { threads: result.slice(0, 5), totalCount: result.length };
+    const visible = result.slice(0, 5);
+
+    // Update cache with current visible threads
+    const nextCache = new Map<string, EnrichedThread>();
+    for (const th of visible) {
+      nextCache.set(th.id, th);
+    }
+    enrichedCacheRef.current = nextCache;
+
+    return { threads: visible, totalCount: result.length };
   }, [threadsByProject, projects]);
 
   // Read the full statusByThread and pick only visible entries via useMemo.
@@ -152,7 +182,7 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
             thread={thread}
             isSelected={selectedThreadId === thread.id}
             isRunning={isRunning}
-            gitStatus={thread.mode === 'worktree' ? gitStatusByThread[thread.id] : undefined}
+            gitStatus={gitStatusByThread[thread.id]}
             onSelect={handleSelect}
             onArchive={thread.status === 'running' ? undefined : handleArchive}
             onDelete={thread.status === 'running' ? undefined : handleDelete}
@@ -161,12 +191,9 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
         );
       })}
       {totalCount > 5 && (
-        <button
+        <ViewAllButton
           onClick={() => navigate('/list?status=completed,failed,stopped,interrupted')}
-          className="px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
-        >
-          {t('sidebar.viewAll')}
-        </button>
+        />
       )}
     </div>
   );

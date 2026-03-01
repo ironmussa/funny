@@ -41,12 +41,14 @@ function FilterDropdown({
   selected,
   onToggle,
   counts,
+  testId,
 }: {
   label: string;
   options: { value: string; label: string }[];
   selected: Set<string>;
   onToggle: (value: string) => void;
   counts?: Record<string, number>;
+  testId?: string;
 }) {
   const activeCount = selected.size;
   const triggerLabel =
@@ -60,6 +62,7 @@ function FilterDropdown({
     <Popover>
       <PopoverTrigger asChild>
         <button
+          data-testid={testId}
           className={cn(
             'inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-colors whitespace-nowrap',
             activeCount > 0
@@ -438,6 +441,7 @@ export function AllThreadsView() {
               onClick={() => handleViewModeChange('list')}
               className="h-6 w-6"
               title={t('kanban.listView')}
+              data-testid="all-threads-list-view"
             >
               <LayoutList className="h-3.5 w-3.5" />
             </Button>
@@ -447,6 +451,7 @@ export function AllThreadsView() {
               onClick={() => handleViewModeChange('board')}
               className="h-6 w-6"
               title={t('kanban.boardView')}
+              data-testid="all-threads-board-view"
             >
               <Columns3 className="h-3.5 w-3.5" />
             </Button>
@@ -469,10 +474,12 @@ export function AllThreadsView() {
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
             className="h-7 w-72 bg-transparent py-1 pl-6 pr-7 text-xs md:text-xs"
+            data-testid="all-threads-search"
           />
           {search && (
             <button
               onClick={() => handleSearchChange('')}
+              data-testid="all-threads-clear-search"
               className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
               <X className="h-3 w-3" />
@@ -486,6 +493,7 @@ export function AllThreadsView() {
         <Popover>
           <PopoverTrigger asChild>
             <button
+              data-testid="all-threads-project-filter"
               className={cn(
                 'inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-colors whitespace-nowrap',
                 projectFilter
@@ -554,6 +562,7 @@ export function AllThreadsView() {
 
         {/* Status dropdown */}
         <FilterDropdown
+          testId="all-threads-status-filter"
           label={t('allThreads.filterStatus')}
           options={threadStatuses
             .filter((s) => (statusCounts[s] || 0) > 0)
@@ -565,6 +574,7 @@ export function AllThreadsView() {
 
         {/* Git dropdown */}
         <FilterDropdown
+          testId="all-threads-git-filter"
           label="Git"
           options={gitStates
             .filter((gs) => (gitCounts[gs] || 0) > 0)
@@ -590,7 +600,10 @@ export function AllThreadsView() {
         {/* Sort toggle */}
         <Popover>
           <PopoverTrigger asChild>
-            <button className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-border bg-transparent px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground">
+            <button
+              data-testid="all-threads-sort"
+              className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-border bg-transparent px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+            >
               {t('allThreads.sortLabel')}:{' '}
               {sortField === 'updated' ? t('allThreads.sortUpdated') : t('allThreads.sortCreated')}
               {sortDir === 'desc' ? (
@@ -647,6 +660,7 @@ export function AllThreadsView() {
             </button>
             <div className="my-1 h-px bg-border" />
             <button
+              data-testid="all-threads-sort-direction"
               onClick={() => {
                 setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'));
                 setPage(1);
@@ -670,6 +684,7 @@ export function AllThreadsView() {
 
         {/* Archived toggle */}
         <button
+          data-testid="all-threads-show-archived"
           onClick={() => {
             setShowArchived(!showArchived);
             setPage(1);
@@ -688,6 +703,7 @@ export function AllThreadsView() {
         {/* Clear filters */}
         {hasActiveFilters && (
           <button
+            data-testid="all-threads-clear-filters"
             onClick={resetFilters}
             className="whitespace-nowrap px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
           >

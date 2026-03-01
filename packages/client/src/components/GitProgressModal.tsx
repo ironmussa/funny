@@ -197,6 +197,7 @@ export function GitProgressModal({
                       target="_blank"
                       rel="noopener noreferrer"
                       className="mt-0.5 flex items-center gap-1 text-[11px] text-primary hover:underline"
+                      data-testid="git-progress-pr-link"
                     >
                       <ExternalLink className="h-3 w-3" />
                       {step.url}
@@ -216,6 +217,7 @@ export function GitProgressModal({
               size="sm"
               variant={hasFailed ? 'outline' : 'default'}
               onClick={() => onOpenChange(false)}
+              data-testid="git-progress-done"
             >
               {hasFailed
                 ? t('review.progress.accept', 'Accept')

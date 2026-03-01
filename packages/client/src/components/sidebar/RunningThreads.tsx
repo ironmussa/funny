@@ -85,7 +85,7 @@ export function RunningThreads() {
               isSelected={selectedThreadId === thread.id}
               subtitle={thread.projectName}
               projectColor={thread.projectColor}
-              gitStatus={thread.mode === 'worktree' ? gitStatusByThread[thread.id] : undefined}
+              gitStatus={gitStatusByThread[thread.id]}
               onSelect={() => {
                 const store = useThreadStore.getState();
                 if (

@@ -12,7 +12,7 @@ import {
   ChevronRight,
   ChevronDown,
 } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import {
   useState,
   useRef,
@@ -44,7 +44,6 @@ import { parseReferencedFiles } from '@/lib/parse-referenced-files';
 import {
   buildGroupedRenderItems,
   getItemKey,
-  getItemTimestamp,
   type ToolItem,
   type RenderItem,
 } from '@/lib/render-items';
@@ -164,6 +163,7 @@ export function CopyButton({ content }: { content: string }) {
       onClick={handleCopy}
       className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
       aria-label="Copy message"
+      data-testid="message-copy"
     >
       {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
     </button>
@@ -195,6 +195,7 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
 
       <div className="flex gap-2">
         <button
+          data-testid="waiting-accept"
           onClick={() => onSend('Continue')}
           className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
@@ -202,6 +203,7 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
           {t('thread.acceptContinue')}
         </button>
         <button
+          data-testid="waiting-reject"
           onClick={() => onSend('No, do not proceed with that action.')}
           className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
         >
@@ -213,6 +215,7 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
       <div className="flex gap-2">
         <Input
           ref={inputRef}
+          data-testid="waiting-response-input"
           type="text"
           value={input}
           onChange={(e) => setInput(e.target.value)}
@@ -226,6 +229,7 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
           className="h-auto flex-1 py-1.5"
         />
         <button
+          data-testid="waiting-send"
           onClick={handleSubmitInput}
           disabled={!input.trim()}
           className={cn(
@@ -274,6 +278,7 @@ export function PermissionApprovalCard({
       <p className="text-xs text-foreground">{t('thread.permissionMessage', { tool: toolName })}</p>
       <div className="flex gap-2">
         <button
+          data-testid="permission-approve"
           onClick={handleApprove}
           disabled={!!loading}
           className={cn(
@@ -289,6 +294,7 @@ export function PermissionApprovalCard({
           {t('thread.approvePermission')}
         </button>
         <button
+          data-testid="permission-deny"
           onClick={handleDeny}
           disabled={!!loading}
           className={cn(
@@ -1534,6 +1540,7 @@ export function ThreadView() {
                 <div ref={scrollDownRef} className="relative" style={{ display: 'none' }}>
                   <button
                     onClick={scrollToBottom}
+                    data-testid="scroll-to-bottom"
                     aria-label={t('thread.scrollToBottom', 'Scroll to bottom')}
                     className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-muted-foreground/40 bg-secondary px-3 py-1.5 text-xs text-muted-foreground shadow-md transition-colors hover:bg-muted"
                   >

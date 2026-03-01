@@ -1034,6 +1034,7 @@ export function ReviewPane() {
                 size="icon-xs"
                 onClick={refresh}
                 className="text-muted-foreground"
+                data-testid="review-refresh"
               >
                 <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
               </Button>
@@ -1048,6 +1049,7 @@ export function ReviewPane() {
                 onClick={handlePull}
                 disabled={pullInProgress}
                 className="text-muted-foreground"
+                data-testid="review-pull"
               >
                 <Download className={cn('h-3.5 w-3.5', pullInProgress && 'animate-pulse')} />
               </Button>
@@ -1064,7 +1066,12 @@ export function ReviewPane() {
             <Tooltip>
               <TooltipTrigger asChild>
                 <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon-xs" className="text-muted-foreground">
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    className="text-muted-foreground"
+                    data-testid="review-commit-log"
+                  >
                     <History className="h-3.5 w-3.5" />
                   </Button>
                 </PopoverTrigger>
@@ -1108,6 +1115,7 @@ export function ReviewPane() {
                   onClick={handleStash}
                   disabled={stashInProgress || !!isAgentRunning}
                   className="text-muted-foreground"
+                  data-testid="review-stash"
                 >
                   <Archive className={cn('h-3.5 w-3.5', stashInProgress && 'animate-pulse')} />
                 </Button>
@@ -1128,6 +1136,7 @@ export function ReviewPane() {
                   onClick={handleDiscardAll}
                   disabled={!!actionInProgress || !!isAgentRunning}
                   className="text-muted-foreground"
+                  data-testid="review-discard-all"
                 >
                   <Undo2 className="h-3.5 w-3.5" />
                 </Button>
@@ -1145,6 +1154,7 @@ export function ReviewPane() {
               size="icon-xs"
               onClick={() => setReviewPaneOpen(false)}
               className="text-muted-foreground"
+              data-testid="review-close"
             >
               <PanelRightClose className="h-3.5 w-3.5" />
             </Button>
@@ -1174,6 +1184,7 @@ export function ReviewPane() {
                       size="icon-xs"
                       onClick={() => setExpandedFile(selectedFile)}
                       className="flex-shrink-0 text-muted-foreground hover:text-foreground"
+                      data-testid="review-expand-diff"
                     >
                       <Maximize2 className="h-3.5 w-3.5" />
                     </Button>
@@ -1232,6 +1243,7 @@ export function ReviewPane() {
                   type="text"
                   placeholder={t('review.searchFiles', 'Filter files\u2026')}
                   aria-label={t('review.searchFiles', 'Filter files')}
+                  data-testid="review-file-filter"
                   value={fileSearch}
                   onChange={(e) => setFileSearch(e.target.value)}
                   className="h-7 pl-7 pr-7 text-xs md:text-xs"
@@ -1242,6 +1254,7 @@ export function ReviewPane() {
                     size="icon-xs"
                     onClick={() => setFileSearch('')}
                     aria-label={t('review.clearSearch', 'Clear search')}
+                    data-testid="review-file-filter-clear"
                     className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
                   >
                     <X className="h-3 w-3" />
@@ -1264,6 +1277,7 @@ export function ReviewPane() {
                       : false
                 }
                 aria-label={t('review.selectAll', 'Select all files')}
+                data-testid="review-select-all"
                 onClick={toggleAll}
                 className={cn(
                   'flex items-center justify-center h-3.5 w-3.5 rounded border transition-colors flex-shrink-0',
@@ -1495,6 +1509,7 @@ export function ReviewPane() {
                 type="text"
                 placeholder={t('review.commitTitle')}
                 aria-label={t('review.commitTitle', 'Commit title')}
+                data-testid="review-commit-title"
                 value={commitTitle}
                 onChange={(e) => setCommitTitle(e.target.value)}
                 disabled={!!actionInProgress || generatingMsg}
@@ -1505,6 +1520,7 @@ export function ReviewPane() {
                   className="w-full resize-none bg-transparent px-2 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none"
                   rows={7}
                   aria-label={t('review.commitBody', 'Commit body')}
+                  data-testid="review-commit-body"
                   placeholder={t('review.commitBody')}
                   value={commitBody}
                   onChange={(e) => setCommitBody(e.target.value)}
@@ -1518,6 +1534,7 @@ export function ReviewPane() {
                         size="icon-xs"
                         onClick={handleGenerateCommitMsg}
                         disabled={summaries.length === 0 || generatingMsg || !!actionInProgress}
+                        data-testid="review-generate-commit-msg"
                       >
                         <Sparkles className={cn('h-2.5 w-2.5', generatingMsg && 'animate-pulse')} />
                       </Button>
@@ -1541,12 +1558,19 @@ export function ReviewPane() {
                     value: 'commit' as const,
                     icon: GitCommit,
                     label: t('review.commit', 'Commit'),
+                    testId: 'review-action-commit',
                   },
-                  { value: 'amend' as const, icon: PenLine, label: t('review.amend', 'Amend') },
+                  {
+                    value: 'amend' as const,
+                    icon: PenLine,
+                    label: t('review.amend', 'Amend'),
+                    testId: 'review-action-amend',
+                  },
                   {
                     value: 'commit-push' as const,
                     icon: Upload,
                     label: t('review.commitAndPush', 'Commit & Push'),
+                    testId: 'review-action-commit-push',
                   },
                   ...(isWorktree && hasWorktreePath
                     ? [
@@ -1554,21 +1578,24 @@ export function ReviewPane() {
                           value: 'commit-pr' as const,
                           icon: GitPullRequest,
                           label: t('review.commitAndCreatePR', 'Commit & Create PR'),
+                          testId: 'review-action-commit-pr',
                         },
                         {
                           value: 'commit-merge' as const,
                           icon: GitMerge,
                           label: t('review.commitAndMerge', 'Commit & Merge'),
+                          testId: 'review-action-commit-merge',
                         },
                       ]
                     : []),
-                ].map(({ value, icon: ActionIcon, label }) => (
+                ].map(({ value, icon: ActionIcon, label, testId }) => (
                   <Tooltip key={value}>
                     <TooltipTrigger asChild>
                       <button
                         type="button"
                         onClick={() => setSelectedAction(value)}
                         disabled={!!actionInProgress || !!isAgentRunning}
+                        data-testid={testId}
                         className={cn(
                           'flex flex-col items-center gap-1 rounded-md border p-2 text-center transition-all',
                           'hover:bg-accent/50 disabled:opacity-50 disabled:cursor-not-allowed',
@@ -1598,6 +1625,7 @@ export function ReviewPane() {
                         size="sm"
                         onClick={handleCommitAction}
                         disabled={!canCommit}
+                        data-testid="review-commit-execute"
                       >
                         {actionInProgress ? (
                           <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1635,6 +1663,7 @@ export function ReviewPane() {
                         size="sm"
                         onClick={handlePushOnly}
                         disabled={pushInProgress || !!isAgentRunning}
+                        data-testid="review-push"
                       >
                         {pushInProgress ? (
                           <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1656,6 +1685,7 @@ export function ReviewPane() {
                       variant="outline"
                       onClick={handleResetSoft}
                       disabled={resetInProgress || !!isAgentRunning}
+                      data-testid="review-undo-commit"
                     >
                       {resetInProgress ? (
                         <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -1694,6 +1724,7 @@ export function ReviewPane() {
                     variant="outline"
                     onClick={handleStashPop}
                     disabled={stashPopInProgress || !!isAgentRunning}
+                    data-testid="review-pop-stash"
                   >
                     {stashPopInProgress ? (
                       <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1730,6 +1761,7 @@ export function ReviewPane() {
                       size="sm"
                       onClick={handleMergeOnly}
                       disabled={mergeInProgress || !!isAgentRunning}
+                      data-testid="review-merge"
                     >
                       {mergeInProgress ? (
                         <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
@@ -1753,6 +1785,7 @@ export function ReviewPane() {
                       variant="outline"
                       onClick={() => setPrDialog({ title: threadBranch || '', body: '' })}
                       disabled={!!isAgentRunning}
+                      data-testid="review-create-pr"
                     >
                       <GitPullRequest className="h-3.5 w-3.5" />
                     </Button>
@@ -1867,6 +1900,7 @@ export function ReviewPane() {
             <input
               className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               placeholder={t('review.prTitle', 'PR title')}
+              data-testid="review-pr-title"
               value={prDialog?.title ?? ''}
               onChange={(e) =>
                 setPrDialog((prev) => (prev ? { ...prev, title: e.target.value } : prev))
@@ -1876,6 +1910,7 @@ export function ReviewPane() {
               className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
               rows={4}
               placeholder={t('review.commitBody', 'Description (optional)')}
+              data-testid="review-pr-body"
               value={prDialog?.body ?? ''}
               onChange={(e) =>
                 setPrDialog((prev) => (prev ? { ...prev, body: e.target.value } : prev))
@@ -1883,13 +1918,19 @@ export function ReviewPane() {
             />
           </div>
           <div className="mt-2 flex justify-end gap-2">
-            <Button variant="outline" size="sm" onClick={() => setPrDialog(null)}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPrDialog(null)}
+              data-testid="review-pr-cancel"
+            >
               {t('common.cancel', 'Cancel')}
             </Button>
             <Button
               size="sm"
               disabled={!prDialog?.title.trim() || prInProgress}
               onClick={handleCreatePROnly}
+              data-testid="review-pr-create"
             >
               {prInProgress ? (
                 <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />

@@ -1,7 +1,7 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, waitForSidebar } from './fixtures';
 
-test('app loads and shows sidebar', async ({ page }) => {
-  await page.goto('/');
-  // Wait for the app to render
-  await expect(page.locator('body')).toBeVisible();
+test('app loads and shows sidebar', async ({ authedPage: page }) => {
+  await waitForSidebar(page);
+  await expect(page.getByTestId('sidebar-settings')).toBeVisible();
+  await expect(page.getByTestId('sidebar-add-project')).toBeVisible();
 });

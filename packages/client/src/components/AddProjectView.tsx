@@ -92,6 +92,7 @@ export function AddProjectView() {
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
+            data-testid="add-project-tab-local"
             onClick={() => setMode('local')}
           >
             <FolderOpen className="h-3.5 w-3.5" />
@@ -103,6 +104,7 @@ export function AddProjectView() {
                 ? 'bg-background text-foreground shadow-sm'
                 : 'text-muted-foreground hover:text-foreground'
             }`}
+            data-testid="add-project-tab-clone"
             onClick={() => setMode('github')}
           >
             <Github className="h-3.5 w-3.5" />
@@ -120,6 +122,7 @@ export function AddProjectView() {
             <div>
               <label className="mb-1.5 block text-sm font-medium">{t('sidebar.projectName')}</label>
               <Input
+                data-testid="add-project-name"
                 placeholder={t('sidebar.projectName')}
                 value={newProjectName}
                 onChange={(e) => setNewProjectName(e.target.value)}
@@ -132,12 +135,14 @@ export function AddProjectView() {
               </label>
               <div className="flex gap-2">
                 <Input
+                  data-testid="add-project-path"
                   className="flex-1"
                   placeholder={t('sidebar.absolutePath')}
                   value={newProjectPath}
                   onChange={(e) => setNewProjectPath(e.target.value)}
                 />
                 <Button
+                  data-testid="add-project-browse"
                   variant="outline"
                   size="sm"
                   onClick={() => setFolderPickerOpen(true)}
@@ -148,10 +153,16 @@ export function AddProjectView() {
               </div>
             </div>
             <div className="flex gap-2 pt-2">
-              <Button variant="outline" className="flex-1" onClick={() => navigate('/')}>
+              <Button
+                data-testid="add-project-cancel"
+                variant="outline"
+                className="flex-1"
+                onClick={() => navigate('/')}
+              >
                 {t('common.cancel', { defaultValue: 'Cancel' })}
               </Button>
               <Button
+                data-testid="add-project-submit"
                 className="flex-1"
                 onClick={handleAddProject}
                 disabled={isCreating || !newProjectName || !newProjectPath}
@@ -202,10 +213,14 @@ export function AddProjectView() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setGitInitDialogOpen(false)}>
+            <Button
+              data-testid="git-init-cancel"
+              variant="outline"
+              onClick={() => setGitInitDialogOpen(false)}
+            >
               {t('common.cancel', { defaultValue: 'Cancel' })}
             </Button>
-            <Button onClick={handleGitInit}>
+            <Button data-testid="git-init-confirm" onClick={handleGitInit}>
               {t('confirm.gitInitAction', { defaultValue: 'Initialize' })}
             </Button>
           </DialogFooter>

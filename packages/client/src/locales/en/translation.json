@@ -70,7 +70,7 @@
     "placeholder": "Type your message...",
     "noMessages": "No messages yet",
     "whatShouldAgentDo": "What should the agent do?",
-    "describeTask": "Describe the task and press Enter to start",
+    "describeTask": "Describe the task, @ to add a file, / to use a skill",
     "selectOrCreate": "Ready to go",
     "threadsRunParallel": "Select a project from the sidebar to start working",
     "addProjectFirst": "Add a project",

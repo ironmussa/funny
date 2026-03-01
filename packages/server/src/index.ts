@@ -108,7 +108,7 @@ app.use(
     credentials: true,
   }),
 );
-app.use('/api/*', rateLimit({ windowMs: 60_000, max: 1000 }));
+app.use('/api/*', rateLimit({ windowMs: 60_000, max: 5000 }));
 app.use('*', observability());
 
 // Ingest webhook — mounted BEFORE authMiddleware (uses its own secret-based auth)

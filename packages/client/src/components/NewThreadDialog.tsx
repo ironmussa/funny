@@ -131,7 +131,10 @@ export function NewThreadDialog() {
             }}
           >
             <PopoverTrigger asChild>
-              <button className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 text-sm transition-[border-color,box-shadow] duration-150 hover:bg-accent/50 focus:outline-none focus:ring-1 focus:ring-ring">
+              <button
+                data-testid="new-thread-branch-trigger"
+                className="flex h-9 w-full items-center justify-between rounded-md border border-input bg-background px-3 text-sm transition-[border-color,box-shadow] duration-150 hover:bg-accent/50 focus:outline-none focus:ring-1 focus:ring-ring"
+              >
                 <div className="flex min-w-0 items-center gap-2">
                   <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                   <span className="truncate">{selectedBranch || t('newThread.selectBranch')}</span>
@@ -152,6 +155,7 @@ export function NewThreadDialog() {
                 <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
                 <input
                   ref={branchSearchRef}
+                  data-testid="new-thread-branch-search"
                   type="text"
                   value={branchSearch}
                   onChange={(e) => setBranchSearch(e.target.value)}
@@ -209,6 +213,7 @@ export function NewThreadDialog() {
         <label className="flex cursor-pointer items-center gap-2">
           <input
             type="checkbox"
+            data-testid="new-thread-worktree-checkbox"
             checked={createWorktree}
             onChange={(e) => setCreateWorktree(e.target.checked)}
             className="h-4 w-4 rounded border-input text-primary focus:ring-1 focus:ring-ring"
@@ -226,7 +231,7 @@ export function NewThreadDialog() {
           </label>
           <div className="flex gap-2">
             <Select value={provider} onValueChange={setProvider}>
-              <SelectTrigger className="w-[120px]">
+              <SelectTrigger data-testid="new-thread-provider-select" className="w-[120px]">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -238,7 +243,7 @@ export function NewThreadDialog() {
               </SelectContent>
             </Select>
             <Select value={model} onValueChange={setModel}>
-              <SelectTrigger className="flex-1">
+              <SelectTrigger data-testid="new-thread-model-select" className="flex-1">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -258,6 +263,7 @@ export function NewThreadDialog() {
             {t('newThread.titleOptional')}
           </label>
           <Input
+            data-testid="new-thread-title-input"
             placeholder={t('newThread.autoFromPrompt')}
             value={title}
             onChange={(e) => setTitle(e.target.value)}
@@ -270,6 +276,7 @@ export function NewThreadDialog() {
             {t('newThread.prompt')}
           </label>
           <textarea
+            data-testid="new-thread-prompt"
             className="min-h-[120px] w-full resize-y rounded-md border border-input bg-background px-3 py-2 text-sm text-foreground transition-[border-color,box-shadow] duration-150 placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
             placeholder={t('newThread.promptPlaceholder')}
             value={prompt}
@@ -280,10 +287,18 @@ export function NewThreadDialog() {
 
         {/* Actions */}
         <DialogFooter>
-          <Button variant="outline" onClick={() => cancelNewThread()}>
+          <Button
+            data-testid="new-thread-cancel"
+            variant="outline"
+            onClick={() => cancelNewThread()}
+          >
             {t('common.cancel')}
           </Button>
-          <Button onClick={handleCreate} disabled={!prompt.trim() || creating}>
+          <Button
+            data-testid="new-thread-create"
+            onClick={handleCreate}
+            disabled={!prompt.trim() || creating}
+          >
             {creating ? t('newThread.creating') : t('newThread.create')}
           </Button>
         </DialogFooter>

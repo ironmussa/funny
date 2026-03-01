@@ -268,7 +268,10 @@ const ThreadColumn = memo(function ThreadColumn({ threadId }: { threadId: string
   const isRunning = status === 'running';
 
   return (
-    <div className="flex min-w-0 flex-col overflow-hidden rounded-sm border border-border">
+    <div
+      className="flex min-w-0 flex-col overflow-hidden rounded-sm border border-border"
+      data-testid={`grid-column-${threadId}`}
+    >
       {/* Column header */}
       <div className="flex-shrink-0 border-b border-border bg-sidebar/50 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
@@ -556,7 +559,7 @@ export function LiveColumnsView() {
 
   if (activeThreads.length === 0) {
     return (
-      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+      <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden" data-testid="grid-view">
         <div className="flex flex-shrink-0 items-center gap-2 border-b border-border px-4 py-2">
           <Columns3 className="h-4 w-4 text-muted-foreground" />
           <span className="text-sm font-medium">{t('live.title', 'Grid')}</span>
@@ -568,7 +571,11 @@ export function LiveColumnsView() {
             }}
           >
             <PopoverTrigger asChild>
-              <Button variant="ghost" className="h-6 min-w-0 gap-1.5 px-2 text-[10px]">
+              <Button
+                variant="ghost"
+                className="h-6 min-w-0 gap-1.5 px-2 text-[10px]"
+                data-testid="grid-add-thread"
+              >
                 <Plus className="h-3.5 w-3.5" />
               </Button>
             </PopoverTrigger>
@@ -611,7 +618,10 @@ export function LiveColumnsView() {
             </PopoverContent>
           </Popover>
         </div>
-        <div className="flex flex-1 items-center justify-center text-muted-foreground">
+        <div
+          className="flex flex-1 items-center justify-center text-muted-foreground"
+          data-testid="grid-empty-state"
+        >
           <div className="space-y-2 text-center">
             <Columns3 className="mx-auto h-10 w-10 text-muted-foreground/40" />
             <p className="text-sm font-medium">{t('live.noActiveThreads', 'No active threads')}</p>
@@ -635,12 +645,16 @@ export function LiveColumnsView() {
   }
 
   return (
-    <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+    <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden" data-testid="grid-view">
       {/* Header */}
       <div className="flex flex-shrink-0 items-center gap-2 border-b border-border px-4 py-2">
         <Columns3 className="h-4 w-4 text-muted-foreground" />
         <span className="text-sm font-medium">{t('live.title', 'Grid')}</span>
-        <Badge variant="outline" className="h-4 px-1.5 py-0 text-[10px]">
+        <Badge
+          variant="outline"
+          className="h-4 px-1.5 py-0 text-[10px]"
+          data-testid="grid-active-count"
+        >
           {activeThreads.filter((t) => ACTIVE_STATUSES.has(t.status)).length}{' '}
           {t('live.active', 'active')}
           {activeThreads.some((t) => FINISHED_STATUSES.has(t.status)) && (
@@ -720,6 +734,7 @@ export function LiveColumnsView() {
 
       {/* Grid */}
       <div
+        data-testid="grid-container"
         className="min-h-0 flex-1 gap-2 overflow-auto p-2"
         style={{
           display: 'grid',

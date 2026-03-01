@@ -1074,17 +1074,27 @@ export interface GitLogEntry {
 
 /**
  * Get recent commit log entries.
+ * When baseBranch is provided, only shows commits in HEAD that are not in baseBranch
+ * (i.e. `git log baseBranch..HEAD`), which is useful for worktree branches.
  */
-export function getLog(cwd: string, limit = 20): ResultAsync<GitLogEntry[], DomainError> {
+export function getLog(
+  cwd: string,
+  limit = 20,
+  baseBranch?: string | null,
+): ResultAsync<GitLogEntry[], DomainError> {
   const native = getNativeGit();
-  if (native) {
+  if (native && !baseBranch) {
     return ResultAsync.fromPromise(native.getLog(cwd, limit), (error) =>
       processError(String(error), 1, ''),
     );
   }
   const SEP = '@@SEP@@';
   const format = `%H${SEP}%h${SEP}%an${SEP}%ar${SEP}%s`;
-  return git(['log', `--format=${format}`, `-n`, String(limit)], cwd).map((output) => {
+  const args = ['log', `--format=${format}`, `-n`, String(limit)];
+  if (baseBranch) {
+    args.push(`${baseBranch}..HEAD`);
+  }
+  return git(args, cwd).map((output) => {
     if (!output.trim()) return [];
     return output
       .trim()

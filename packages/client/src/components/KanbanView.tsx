@@ -180,14 +180,18 @@ const KanbanCard = memo(function KanbanCard({
           <span className="truncate text-xs text-muted-foreground" title={displayBranch}>
             {displayBranch}
           </span>
-          {gitStatusProp && (gitStatusProp.linesAdded > 0 || gitStatusProp.linesDeleted > 0) && (
-            <DiffStats
-              linesAdded={gitStatusProp.linesAdded}
-              linesDeleted={gitStatusProp.linesDeleted}
-              size="xs"
-              className="ml-auto"
-            />
-          )}
+          {gitStatusProp &&
+            (gitStatusProp.linesAdded > 0 ||
+              gitStatusProp.linesDeleted > 0 ||
+              gitStatusProp.dirtyFileCount > 0) && (
+              <DiffStats
+                linesAdded={gitStatusProp.linesAdded}
+                linesDeleted={gitStatusProp.linesDeleted}
+                dirtyFileCount={gitStatusProp.dirtyFileCount}
+                size="xs"
+                className="ml-auto"
+              />
+            )}
         </div>
       )}
 

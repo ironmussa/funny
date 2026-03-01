@@ -9,11 +9,10 @@ import {
   FolderOpenDot,
   Search,
   Trash2,
-  MoreHorizontal,
+  MoreVertical,
   Terminal,
   Settings,
   Pencil,
-  Plus,
   BarChart3,
   CircleDot,
   SquareTerminal,
@@ -165,12 +164,7 @@ export const ProjectItem = memo(function ProjectItem({
   }, [project.id]);
 
   return (
-    <Collapsible
-      open={isExpanded}
-      onOpenChange={() => onToggle(project.id)}
-      className="min-w-0"
-      data-project-id={project.id}
-    >
+    <Collapsible open={isExpanded} className="min-w-0" data-project-id={project.id}>
       <div
         ref={dragRef}
         className={cn(
@@ -191,7 +185,10 @@ export const ProjectItem = memo(function ProjectItem({
           <CollapsibleTrigger
             data-testid={`project-toggle-${project.id}`}
             className="-ml-0.5 flex-shrink-0 rounded p-0.5 hover:bg-accent/50"
-            onClick={(e) => e.stopPropagation()}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggle(project.id);
+            }}
           >
             {isExpanded ? (
               <FolderOpen className="h-3.5 w-3.5" />
@@ -246,7 +243,7 @@ export const ProjectItem = memo(function ProjectItem({
                   onClick={(e) => e.stopPropagation()}
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
+                  <MoreVertical className="h-3.5 w-3.5" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="bottom">
@@ -340,23 +337,6 @@ export const ProjectItem = memo(function ProjectItem({
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  data-testid={`project-new-thread-${project.id}`}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onNewThread(project.id);
-                  }}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <Plus className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">{t('sidebar.newThread')}</TooltipContent>
-            </Tooltip>
           </div>
         </div>
       </div>

@@ -1,9 +1,9 @@
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { Thread } from '@funny/shared';
 import {
-  FolderPlus,
   Columns3,
   BarChart3,
+  FolderPlus,
   PanelLeftClose,
   Settings,
   LayoutGrid,
@@ -237,6 +237,10 @@ export function AppSidebar() {
       startTransition(() => {
         useProjectStore.getState().selectProject(projectId);
         navigate(`/projects/${projectId}`);
+      });
+      requestAnimationFrame(() => {
+        const ta = document.querySelector<HTMLTextAreaElement>('[data-testid="prompt-textarea"]');
+        ta?.focus();
       });
     },
     [navigate],
@@ -483,15 +487,15 @@ export function AppSidebar() {
           <TooltipTrigger asChild>
             <Button
               variant="ghost"
-              size="icon-xs"
               data-testid="sidebar-add-project"
+              size="icon"
+              className="h-5 w-5"
               onClick={() => navigate('/new')}
-              className="text-muted-foreground"
             >
               <FolderPlus className="h-3.5 w-3.5" />
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="top">{t('sidebar.addProject')}</TooltipContent>
+          <TooltipContent side="right">{t('sidebar.addProject')}</TooltipContent>
         </Tooltip>
       </div>
 

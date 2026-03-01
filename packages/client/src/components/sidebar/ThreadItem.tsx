@@ -163,9 +163,6 @@ export const ThreadItem = memo(function ThreadItem({
               </TooltipContent>
             </Tooltip>
           ) : null}
-          {subtitle && (
-            <ProjectChip name={subtitle} color={projectColor} className="flex-shrink-0" />
-          )}
           {/* External creator icon */}
           {thread.createdBy && thread.createdBy !== 'user' && thread.createdBy !== '__local__' && (
             <Tooltip>
@@ -179,106 +176,109 @@ export const ThreadItem = memo(function ThreadItem({
           )}
         </div>
       </button>
-      <div className="grid min-w-[2.5rem] flex-shrink-0 place-items-center justify-items-center py-1 pl-2 pr-1.5">
-        <span
-          className={cn(
-            'col-start-1 row-start-1 text-xs text-muted-foreground leading-4 h-4 group-hover/thread:opacity-0 group-hover/thread:pointer-events-none',
-            openDropdown && 'opacity-0 pointer-events-none',
-          )}
-        >
-          {displayTime}
-        </span>
-        <div
-          className={cn(
-            'col-start-1 row-start-1 flex items-center opacity-0 group-hover/thread:opacity-100',
-            openDropdown && '!opacity-100',
-          )}
-        >
-          <DropdownMenu onOpenChange={handleDropdownChange}>
-            <DropdownMenuTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                data-testid={`thread-item-more-${thread.id}`}
-                onClick={(e) => e.stopPropagation()}
-                className="text-muted-foreground hover:text-foreground"
-              >
-                <MoreHorizontal className="h-3.5 w-3.5" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" side="bottom">
-              <DropdownMenuItem
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  const folderPath = thread.worktreePath || projectPath;
-                  const result = await api.openDirectory(folderPath);
-                  if (result.isErr()) {
-                    toast.error(result.error.message || 'Failed to open directory');
-                  }
-                }}
-              >
-                <FolderOpenDot className="h-3.5 w-3.5" />
-                {t('sidebar.openDirectory')}
-              </DropdownMenuItem>
-              <DropdownMenuItem
-                onClick={async (e) => {
-                  e.stopPropagation();
-                  const folderPath = thread.worktreePath || projectPath;
-                  const result = await api.openTerminal(folderPath);
-                  if (result.isErr()) {
-                    toast.error(result.error.message || 'Failed to open terminal');
-                  }
-                }}
-              >
-                <Terminal className="h-3.5 w-3.5" />
-                {t('sidebar.openTerminal')}
-              </DropdownMenuItem>
-              {isRunning && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem
-                    onClick={async (e) => {
-                      e.stopPropagation();
-                      const result = await api.stopThread(thread.id);
-                      if (result.isErr()) {
-                        console.error('Failed to stop thread:', result.error);
-                      }
-                    }}
-                    className="text-status-error focus:text-status-error"
-                  >
-                    <Square className="h-3.5 w-3.5" />
-                    {t('common.stop')}
-                  </DropdownMenuItem>
-                </>
-              )}
-              {onArchive && !isBusy && (
+      <div className="flex flex-shrink-0 items-center gap-1.5 py-1 pl-2 pr-1.5">
+        {subtitle && <ProjectChip name={subtitle} color={projectColor} className="flex-shrink-0" />}
+        <div className="grid min-w-[2.5rem] place-items-center justify-items-center">
+          <span
+            className={cn(
+              'col-start-1 row-start-1 text-xs text-muted-foreground leading-4 h-4 group-hover/thread:opacity-0 group-hover/thread:pointer-events-none',
+              openDropdown && 'opacity-0 pointer-events-none',
+            )}
+          >
+            {displayTime}
+          </span>
+          <div
+            className={cn(
+              'col-start-1 row-start-1 flex items-center opacity-0 group-hover/thread:opacity-100',
+              openDropdown && '!opacity-100',
+            )}
+          >
+            <DropdownMenu onOpenChange={handleDropdownChange}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  data-testid={`thread-item-more-${thread.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <MoreHorizontal className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" side="bottom">
                 <DropdownMenuItem
-                  onClick={(e) => {
+                  onClick={async (e) => {
                     e.stopPropagation();
-                    onArchive();
+                    const folderPath = thread.worktreePath || projectPath;
+                    const result = await api.openDirectory(folderPath);
+                    if (result.isErr()) {
+                      toast.error(result.error.message || 'Failed to open directory');
+                    }
                   }}
                 >
-                  <Archive className="h-3.5 w-3.5" />
-                  {t('sidebar.archive')}
+                  <FolderOpenDot className="h-3.5 w-3.5" />
+                  {t('sidebar.openDirectory')}
                 </DropdownMenuItem>
-              )}
-              {onDelete && !isBusy && (
-                <>
-                  <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const folderPath = thread.worktreePath || projectPath;
+                    const result = await api.openTerminal(folderPath);
+                    if (result.isErr()) {
+                      toast.error(result.error.message || 'Failed to open terminal');
+                    }
+                  }}
+                >
+                  <Terminal className="h-3.5 w-3.5" />
+                  {t('sidebar.openTerminal')}
+                </DropdownMenuItem>
+                {isRunning && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const result = await api.stopThread(thread.id);
+                        if (result.isErr()) {
+                          console.error('Failed to stop thread:', result.error);
+                        }
+                      }}
+                      className="text-status-error focus:text-status-error"
+                    >
+                      <Square className="h-3.5 w-3.5" />
+                      {t('common.stop')}
+                    </DropdownMenuItem>
+                  </>
+                )}
+                {onArchive && !isBusy && (
                   <DropdownMenuItem
                     onClick={(e) => {
                       e.stopPropagation();
-                      onDelete();
+                      onArchive();
                     }}
-                    className="text-status-error focus:text-status-error"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
-                    {t('common.delete')}
+                    <Archive className="h-3.5 w-3.5" />
+                    {t('sidebar.archive')}
                   </DropdownMenuItem>
-                </>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
+                )}
+                {onDelete && !isBusy && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onDelete();
+                      }}
+                      className="text-status-error focus:text-status-error"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                      {t('common.delete')}
+                    </DropdownMenuItem>
+                  </>
+                )}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
     </div>

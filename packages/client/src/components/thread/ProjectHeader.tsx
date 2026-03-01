@@ -445,7 +445,9 @@ export const ProjectHeader = memo(function ProjectHeader() {
   const effectiveGitStatus = gitStatus ?? projectGitStatus;
   const showGitStats =
     effectiveGitStatus &&
-    (effectiveGitStatus.linesAdded > 0 || effectiveGitStatus.linesDeleted > 0);
+    (effectiveGitStatus.linesAdded > 0 ||
+      effectiveGitStatus.linesDeleted > 0 ||
+      effectiveGitStatus.dirtyFileCount > 0);
 
   // Fetch git status when activeThread changes
   useEffect(() => {
@@ -672,6 +674,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                     <DiffStats
                       linesAdded={effectiveGitStatus.linesAdded}
                       linesDeleted={effectiveGitStatus.linesDeleted}
+                      dirtyFileCount={effectiveGitStatus.dirtyFileCount}
                       tooltips={false}
                       className="font-semibold"
                     />

@@ -1052,13 +1052,18 @@ gitRoutes.post('/:threadId/merge', async (c) => {
 // GET /api/git/:threadId/log — recent commit log
 gitRoutes.get('/:threadId/log', async (c) => {
   const userId = c.get('userId') as string;
-  const cwdResult = requireThreadCwd(c.req.param('threadId'), userId);
+  const threadId = c.req.param('threadId');
+  const threadResult = requireThread(threadId, userId);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+  const thread = threadResult.value;
+
+  const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const limitRaw = c.req.query('limit');
   const limit = limitRaw ? Math.min(parseInt(limitRaw, 10) || 20, 100) : 20;
 
-  const result = await getLog(cwdResult.value, limit);
+  const result = await getLog(cwdResult.value, limit, thread.baseBranch);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ entries: result.value });
 });

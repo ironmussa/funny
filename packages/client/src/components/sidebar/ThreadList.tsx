@@ -110,19 +110,19 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
   const gitStatusByThread = useMemo(() => {
     const result: Record<string, GitStatusInfo> = {};
     for (const t of threads) {
-      if (t.mode === 'worktree' && statusByThread[t.id]) {
+      if (statusByThread[t.id]) {
         result[t.id] = statusByThread[t.id];
       }
     }
     return result;
   }, [threads, statusByThread]);
 
-  // Eagerly fetch git status for visible worktree threads that don't have it yet.
-  // This ensures icons show up in the global thread list without requiring a click.
+  // Eagerly fetch git status for visible threads that don't have it yet.
+  // This ensures icons and diff stats show up in the global thread list without requiring a click.
   useEffect(() => {
     const { fetchForThread, statusByThread } = useGitStatusStore.getState();
     for (const thread of threads) {
-      if (thread.mode === 'worktree' && !statusByThread[thread.id]) {
+      if (!statusByThread[thread.id]) {
         fetchForThread(thread.id);
       }
     }

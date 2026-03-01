@@ -208,10 +208,12 @@ export function GeneralSettingsDialog({
     setUseInternalEditor(draftUseInternalEditor);
     setTerminalShell(draftShell);
     setTheme(draftTheme);
+    // Persist theme to server (settings store handles the rest via syncToServer)
+    api.updateProfile({ theme: draftTheme });
     i18n.changeLanguage(draftLanguage);
     // Save GitHub token if user typed one
     if (githubToken) {
-      const result = await api.updateProfile({ githubToken } as any);
+      const result = await api.updateProfile({ githubToken });
       if (result.isOk()) {
         setHasGithubToken(result.value.hasGithubToken);
         setGithubToken('');
@@ -238,7 +240,7 @@ export function GeneralSettingsDialog({
 
   const handleClearToken = useCallback(async () => {
     setTokenSaving(true);
-    const result = await api.updateProfile({ githubToken: null } as any);
+    const result = await api.updateProfile({ githubToken: null });
     if (result.isOk()) {
       setHasGithubToken(false);
       setGithubToken('');

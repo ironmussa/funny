@@ -1,10 +1,11 @@
-import { ThemeProvider } from 'next-themes';
-import React, { lazy, Suspense, useEffect, useSyncExternalStore } from 'react';
+import { ThemeProvider, useTheme } from 'next-themes';
+import React, { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react';
 import ReactDOM from 'react-dom/client';
 import { BrowserRouter } from 'react-router-dom';
 
 import { AppShellSkeleton } from './components/AppShellSkeleton';
 import { TooltipProvider } from './components/ui/tooltip';
+import { api } from './lib/api';
 import { useAuthStore } from './stores/auth-store';
 import { useSettingsStore } from './stores/settings-store';
 import '@fontsource/geist-sans/latin.css';
@@ -48,13 +49,34 @@ function AuthGate() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const isLoading = useAuthStore((s) => s.isLoading);
   const initialize = useAuthStore((s) => s.initialize);
-  const setupCompleted = useSettingsStore((s) => s.setupCompleted);
+  const initializeFromProfile = useSettingsStore((s) => s.initializeFromProfile);
+  const { setTheme } = useTheme();
+  const [setupCompleted, setSetupCompleted] = useState<boolean | null>(null);
 
   useEffect(() => {
     initialize();
   }, [initialize]);
 
-  if (isLoading) {
+  // Fetch profile from server once authenticated (or in local mode)
+  // This loads setup status, settings, and theme in a single request
+  const canCheckSetup = !isLoading && (mode === 'local' || isAuthenticated);
+  useEffect(() => {
+    if (!canCheckSetup) return;
+    api.getProfile().then((res) => {
+      if (res.isOk()) {
+        const profile = res.value;
+        setSetupCompleted(profile.setupCompleted ?? false);
+        initializeFromProfile(profile);
+        if (profile.theme) {
+          setTheme(profile.theme);
+        }
+      } else {
+        setSetupCompleted(false);
+      }
+    });
+  }, [canCheckSetup, initializeFromProfile, setTheme]);
+
+  if (isLoading || setupCompleted === null) {
     return <AppShellSkeleton />;
   }
 
@@ -77,7 +99,7 @@ function AuthGate() {
           </div>
         }
       >
-        <SetupWizard />
+        <SetupWizard onComplete={() => setSetupCompleted(true)} />
       </Suspense>
     );
   }

@@ -1,6 +1,7 @@
-import type { ToolPermission } from '@funny/shared';
+import type { ToolPermission, UserProfile } from '@funny/shared';
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
+
+import { api } from '@/lib/api';
 
 export type Editor = 'cursor' | 'vscode' | 'windsurf' | 'zed' | 'sublime' | 'vim';
 export type ThreadMode = 'local' | 'worktree';
@@ -62,13 +63,20 @@ interface SettingsState {
   useInternalEditor: boolean;
   terminalShell: TerminalShell;
   toolPermissions: Record<string, ToolPermission>;
-  setupCompleted: boolean;
+  _initialized: boolean;
+  initializeFromProfile: (profile: UserProfile) => void;
   setDefaultEditor: (editor: Editor) => void;
   setUseInternalEditor: (use: boolean) => void;
   setTerminalShell: (shell: TerminalShell) => void;
   setToolPermission: (toolName: string, permission: ToolPermission) => void;
   resetToolPermissions: () => void;
-  completeSetup: () => void;
+}
+
+/** Save a partial settings update to the server (fire-and-forget). */
+function syncToServer(data: Record<string, any>) {
+  api.updateProfile(data).catch(() => {
+    // Silent — settings will re-sync on next page load
+  });
 }
 
 /** Derive allowedTools and disallowedTools arrays from the permissions record. */
@@ -86,86 +94,48 @@ export function deriveToolLists(permissions: Record<string, ToolPermission>): {
   return { allowedTools, disallowedTools };
 }
 
-export const useSettingsStore = create<SettingsState>()(
-  persist(
-    (set) => ({
-      defaultEditor: 'cursor',
-      useInternalEditor: false,
-      terminalShell: 'git-bash' as TerminalShell,
-      toolPermissions: { ...DEFAULT_TOOL_PERMISSIONS },
-      setupCompleted: false,
-      setDefaultEditor: (editor) => set({ defaultEditor: editor }),
-      setUseInternalEditor: (use) => set({ useInternalEditor: use }),
-      setTerminalShell: (shell) => set({ terminalShell: shell }),
-      setToolPermission: (toolName, permission) =>
-        set((state) => ({
-          toolPermissions: { ...state.toolPermissions, [toolName]: permission },
-        })),
-      resetToolPermissions: () => set({ toolPermissions: { ...DEFAULT_TOOL_PERMISSIONS } }),
-      completeSetup: () => set({ setupCompleted: true }),
-    }),
-    {
-      name: 'funny-settings',
-      version: 8,
-      migrate: (persisted: any, version: number) => {
-        if (version < 2) {
-          // Old format had allowedTools: string[]
-          const oldAllowed: string[] = persisted.allowedTools ?? [...ALL_STANDARD_TOOLS];
-          const toolPermissions: Record<string, ToolPermission> = {};
-          for (const tool of ALL_STANDARD_TOOLS) {
-            toolPermissions[tool] = oldAllowed.includes(tool) ? 'allow' : 'ask';
-          }
-          const { allowedTools: _removed, ...rest } = persisted;
-          persisted = { ...rest, toolPermissions };
-          version = 2;
-        }
-        if (version < 3) {
-          persisted = { ...persisted, setupCompleted: true };
-          version = 3;
-        }
-        if (version < 4) {
-          persisted = {
-            ...persisted,
-            defaultModel: persisted.defaultModel ?? 'opus',
-            defaultPermissionMode: persisted.defaultPermissionMode ?? 'autoEdit',
-          };
-          version = 4;
-        }
-        if (version < 5) {
-          // Add default provider for existing users
-          persisted = {
-            ...persisted,
-            defaultProvider: persisted.defaultProvider ?? 'claude',
-          };
-          version = 5;
-        }
-        if (version < 6) {
-          // Migrate from 'internal' editor to useInternalEditor flag
-          const wasInternal = persisted.defaultEditor === 'internal';
-          persisted = {
-            ...persisted,
-            defaultEditor: wasInternal ? 'cursor' : persisted.defaultEditor,
-            useInternalEditor: wasInternal ? true : (persisted.useInternalEditor ?? false),
-          };
-          version = 6;
-        }
-        if (version < 7) {
-          // Theme moved to next-themes — remove from persisted state
-          const { theme: _removed, setTheme: _removed2, ...rest } = persisted;
-          persisted = rest;
-          version = 7;
-        }
-        if (version < 8) {
-          persisted = {
-            ...persisted,
-            terminalShell: persisted.terminalShell ?? 'git-bash',
-          };
-          version = 8;
-        }
-        return persisted as any;
+export const useSettingsStore = create<SettingsState>()((set) => ({
+  defaultEditor: 'cursor',
+  useInternalEditor: false,
+  terminalShell: 'git-bash' as TerminalShell,
+  toolPermissions: { ...DEFAULT_TOOL_PERMISSIONS },
+  _initialized: false,
+
+  initializeFromProfile: (profile) => {
+    set({
+      defaultEditor: (profile.defaultEditor as Editor) ?? 'cursor',
+      useInternalEditor: profile.useInternalEditor ?? false,
+      terminalShell: (profile.terminalShell as TerminalShell) ?? 'git-bash',
+      toolPermissions: (profile.toolPermissions as Record<string, ToolPermission>) ?? {
+        ...DEFAULT_TOOL_PERMISSIONS,
       },
-    },
-  ),
-);
+      _initialized: true,
+    });
+  },
+
+  setDefaultEditor: (editor) => {
+    set({ defaultEditor: editor });
+    syncToServer({ defaultEditor: editor });
+  },
+  setUseInternalEditor: (use) => {
+    set({ useInternalEditor: use });
+    syncToServer({ useInternalEditor: use });
+  },
+  setTerminalShell: (shell) => {
+    set({ terminalShell: shell });
+    syncToServer({ terminalShell: shell });
+  },
+  setToolPermission: (toolName, permission) =>
+    set((state) => {
+      const toolPermissions = { ...state.toolPermissions, [toolName]: permission };
+      syncToServer({ toolPermissions });
+      return { toolPermissions };
+    }),
+  resetToolPermissions: () => {
+    const toolPermissions = { ...DEFAULT_TOOL_PERMISSIONS };
+    set({ toolPermissions });
+    syncToServer({ toolPermissions });
+  },
+}));
 
 export { editorLabels, shellLabels };

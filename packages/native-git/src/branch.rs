@@ -76,15 +76,18 @@ pub async fn get_default_branch(cwd: String) -> napi::Result<Option<String>> {
   let repo = gix::open(&cwd)
     .map_err(|e| napi::Error::from_reason(format!("Failed to open repo: {e}")))?;
 
-  // Try refs/remotes/origin/HEAD
+  // Try refs/remotes/origin/HEAD — it's a symbolic ref pointing to e.g. refs/remotes/origin/master
   if let Ok(origin_head) = repo.find_reference("refs/remotes/origin/HEAD") {
-    let name = origin_head.name().shorten().to_string();
-    let branch = if let Some(stripped) = name.strip_prefix("origin/") {
-      stripped.to_string()
-    } else {
-      name
-    };
-    return Ok(Some(branch));
+    // Follow the symbolic ref to get the actual target branch
+    if let gix::refs::TargetRef::Symbolic(target_name) = origin_head.target() {
+      let name = target_name.shorten().to_string();
+      let branch = if let Some(stripped) = name.strip_prefix("origin/") {
+        stripped.to_string()
+      } else {
+        name
+      };
+      return Ok(Some(branch));
+    }
   }
 
   // Fall back to checking common branch names

@@ -1,6 +1,13 @@
 import type { ToolPermission } from '@funny/shared';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
+// Mock the api module so syncToServer calls don't fail
+vi.mock('@/lib/api', () => ({
+  api: {
+    updateProfile: vi.fn(() => Promise.resolve({ isOk: () => true, value: {} })),
+  },
+}));
+
 import {
   deriveToolLists,
   ALL_STANDARD_TOOLS,
@@ -17,7 +24,6 @@ describe('SettingsStore', () => {
       toolPermissions: Object.fromEntries(
         ALL_STANDARD_TOOLS.map((tool) => [tool, 'allow' as ToolPermission]),
       ),
-      setupCompleted: false,
     });
     vi.clearAllMocks();
   });
@@ -124,7 +130,6 @@ describe('SettingsStore', () => {
       const state = useSettingsStore.getState();
 
       expect(state.defaultEditor).toBe('cursor');
-      expect(state.setupCompleted).toBe(false);
 
       // All tool permissions default to 'allow'
       for (const tool of ALL_STANDARD_TOOLS) {
@@ -168,16 +173,6 @@ describe('SettingsStore', () => {
       for (const tool of ALL_STANDARD_TOOLS) {
         expect(state.toolPermissions[tool]).toBe('allow');
       }
-    });
-  });
-
-  describe('completeSetup', () => {
-    test('sets setupCompleted to true', () => {
-      expect(useSettingsStore.getState().setupCompleted).toBe(false);
-
-      useSettingsStore.getState().completeSetup();
-
-      expect(useSettingsStore.getState().setupCompleted).toBe(true);
     });
   });
 });

@@ -491,6 +491,24 @@ const migrations: Migration[] = [
       addColumn('projects', 'urls', 'TEXT');
     },
   },
+
+  {
+    name: '026_setup_completed',
+    up() {
+      addColumn('user_profiles', 'setup_completed', 'INTEGER NOT NULL', '0');
+    },
+  },
+
+  {
+    name: '027_user_settings',
+    up() {
+      addColumn('user_profiles', 'default_editor', 'TEXT');
+      addColumn('user_profiles', 'use_internal_editor', 'INTEGER');
+      addColumn('user_profiles', 'terminal_shell', 'TEXT');
+      addColumn('user_profiles', 'tool_permissions', 'TEXT');
+      addColumn('user_profiles', 'theme', 'TEXT');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

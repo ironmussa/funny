@@ -713,6 +713,23 @@ export const api = {
       };
     }>('/setup/status'),
 
+  // Profile
+  getProfile: () => request<import('@funny/shared').UserProfile>('/profile'),
+
+  updateProfile: (data: import('@funny/shared').UpdateProfileRequest) =>
+    request<import('@funny/shared').UserProfile>('/profile', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+
+  isSetupCompleted: () => request<{ setupCompleted: boolean }>('/profile/setup-completed'),
+
+  completeSetup: () =>
+    request<import('@funny/shared').UserProfile>('/profile', {
+      method: 'PUT',
+      body: JSON.stringify({ setupCompleted: true }),
+    }),
+
   // Files (internal editor)
   readFile: (path: string) =>
     request<{ content: string }>(`/files/read?path=${encodeURIComponent(path)}`),

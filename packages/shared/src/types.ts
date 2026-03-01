@@ -34,6 +34,12 @@ export interface UserProfile {
   gitName: string | null;
   gitEmail: string | null;
   hasGithubToken: boolean;
+  setupCompleted: boolean;
+  defaultEditor: string | null;
+  useInternalEditor: boolean | null;
+  terminalShell: string | null;
+  toolPermissions: Record<string, string> | null;
+  theme: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -42,6 +48,12 @@ export interface UpdateProfileRequest {
   gitName?: string;
   gitEmail?: string;
   githubToken?: string | null;
+  setupCompleted?: boolean;
+  defaultEditor?: string;
+  useInternalEditor?: boolean;
+  terminalShell?: string;
+  toolPermissions?: Record<string, string>;
+  theme?: string;
 }
 
 // ─── GitHub ──────────────────────────────────────────────

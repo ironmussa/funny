@@ -4,7 +4,6 @@ import { useState, useEffect, useCallback } from 'react';
 import { Button } from '@/components/ui/button';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
-import { useSettingsStore } from '@/stores/settings-store';
 
 type CliStatus = {
   available: boolean;
@@ -179,12 +178,12 @@ function DoneSlide({ onFinish }: { onFinish: () => void }) {
   );
 }
 
-export function SetupWizard() {
+export function SetupWizard({ onComplete }: { onComplete: () => void }) {
   const [step, setStep] = useState(0);
-  const completeSetup = useSettingsStore((s) => s.completeSetup);
 
   const handleFinish = () => {
-    completeSetup();
+    api.completeSetup();
+    onComplete();
   };
 
   return (

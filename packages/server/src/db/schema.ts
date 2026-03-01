@@ -129,6 +129,12 @@ export const userProfiles = sqliteTable('user_profiles', {
   gitName: text('git_name'),
   gitEmail: text('git_email'),
   githubToken: text('github_token'),
+  setupCompleted: integer('setup_completed').notNull().default(0),
+  defaultEditor: text('default_editor'),
+  useInternalEditor: integer('use_internal_editor'),
+  terminalShell: text('terminal_shell'),
+  toolPermissions: text('tool_permissions'), // JSON-encoded Record<string, ToolPermission>
+  theme: text('theme'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

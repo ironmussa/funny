@@ -160,7 +160,7 @@ export const ThreadItem = memo(function ThreadItem({
           ) : showGitIcon && GitIcon ? (
             <Tooltip>
               <TooltipTrigger asChild>
-                <GitIcon className={cn('h-3 w-3 flex-shrink-0', gitCfg!.className)} />
+                <GitIcon className={cn('h-3.5 w-3.5 flex-shrink-0', gitCfg!.className)} />
               </TooltipTrigger>
               <TooltipContent side="top" className="text-xs">
                 {gitTooltip}

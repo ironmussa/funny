@@ -7,7 +7,7 @@ import {
   XCircle,
   AlertTriangle,
   CircleDot,
-  ArrowUpCircle,
+  GitCommitVertical,
   GitPullRequestArrow,
   GitMerge,
   LayoutList,
@@ -59,7 +59,7 @@ export const gitSyncStateConfig: Record<
 > = {
   dirty: { icon: CircleDot, className: 'text-muted-foreground', labelKey: 'gitStatus.dirty' },
   unpushed: {
-    icon: ArrowUpCircle,
+    icon: GitCommitVertical,
     className: 'text-muted-foreground',
     labelKey: 'gitStatus.unpushed',
   },

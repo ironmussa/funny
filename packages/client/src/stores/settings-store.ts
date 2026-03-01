@@ -74,9 +74,10 @@ interface SettingsState {
 
 /** Save a partial settings update to the server (fire-and-forget). */
 function syncToServer(data: Record<string, any>) {
-  api.updateProfile(data).catch(() => {
-    // Silent — settings will re-sync on next page load
-  });
+  api.updateProfile(data).match(
+    () => {},
+    () => {},
+  );
 }
 
 /** Derive allowedTools and disallowedTools arrays from the permissions record. */

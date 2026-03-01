@@ -34,7 +34,7 @@ export function DiffStats({
 
   if (!hasLines && !hasFiles) return null;
 
-  const textSize = size === 'xs' ? 'text-[10px]' : 'text-xs';
+  const textSize = size === 'xs' ? 'text-xs' : 'text-sm';
 
   // Only file count, no line stats
   if (!hasLines && hasFiles) {

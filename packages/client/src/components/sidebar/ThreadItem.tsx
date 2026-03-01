@@ -142,6 +142,9 @@ export const ThreadItem = memo(function ThreadItem({
           )}
         </div>
         <div className="flex min-w-0 flex-1 items-center gap-1">
+          {subtitle && (
+            <ProjectChip name={subtitle} color={projectColor} className="flex-shrink-0" />
+          )}
           <span className="truncate text-sm leading-tight">{thread.title}</span>
           {/* Git status (worktree threads only) */}
           {showGitIcon &&
@@ -152,6 +155,7 @@ export const ThreadItem = memo(function ThreadItem({
               linesAdded={gitStatus.linesAdded}
               linesDeleted={gitStatus.linesDeleted}
               dirtyFileCount={gitStatus.dirtyFileCount}
+              size="sm"
             />
           ) : showGitIcon && GitIcon ? (
             <Tooltip>
@@ -177,7 +181,6 @@ export const ThreadItem = memo(function ThreadItem({
         </div>
       </button>
       <div className="flex flex-shrink-0 items-center gap-1.5 py-1 pl-2 pr-1.5">
-        {subtitle && <ProjectChip name={subtitle} color={projectColor} className="flex-shrink-0" />}
         <div className="grid min-w-[2.5rem] place-items-center justify-items-center">
           <span
             className={cn(

@@ -673,6 +673,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                       linesAdded={effectiveGitStatus.linesAdded}
                       linesDeleted={effectiveGitStatus.linesDeleted}
                       dirtyFileCount={effectiveGitStatus.dirtyFileCount}
+                      size="sm"
                       tooltips={false}
                       className="font-semibold"
                     />

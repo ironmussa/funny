@@ -184,6 +184,7 @@ export const ProjectItem = memo(function ProjectItem({
         )}
       >
         <CollapsibleTrigger
+          data-testid={`project-item-${project.id}`}
           className={cn(
             'flex-1 flex items-center gap-1.5 px-2 py-1 text-xs text-left min-w-0',
             isSelected ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
@@ -217,6 +218,7 @@ export const ProjectItem = memo(function ProjectItem({
                 <Button
                   variant="ghost"
                   size="icon-xs"
+                  data-testid={`project-search-threads-${project.id}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onShowAllThreads(project.id);
@@ -233,6 +235,7 @@ export const ProjectItem = memo(function ProjectItem({
                 <Button
                   variant="ghost"
                   size="icon-xs"
+                  data-testid={`project-more-actions-${project.id}`}
                   onClick={(e) => e.stopPropagation()}
                   className="text-muted-foreground hover:text-foreground"
                 >
@@ -241,6 +244,7 @@ export const ProjectItem = memo(function ProjectItem({
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="bottom">
                 <DropdownMenuItem
+                  data-testid="project-menu-open-directory"
                   onClick={async (e) => {
                     e.stopPropagation();
                     const result = await api.openDirectory(project.path);
@@ -253,6 +257,7 @@ export const ProjectItem = memo(function ProjectItem({
                   {t('sidebar.openDirectory')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  data-testid="project-menu-open-terminal"
                   onClick={async (e) => {
                     e.stopPropagation();
                     const result = await api.openTerminal(project.path);
@@ -265,6 +270,7 @@ export const ProjectItem = memo(function ProjectItem({
                   {t('sidebar.openTerminal')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  data-testid="project-menu-open-editor"
                   onClick={(e) => {
                     e.stopPropagation();
                     openDirectoryInEditor(project.path, defaultEditor);
@@ -274,6 +280,7 @@ export const ProjectItem = memo(function ProjectItem({
                   {t('sidebar.openInEditor')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  data-testid="project-menu-settings"
                   onClick={(e) => {
                     e.stopPropagation();
                     navigate(`/projects/${project.id}/settings/general`);
@@ -283,6 +290,7 @@ export const ProjectItem = memo(function ProjectItem({
                   {t('sidebar.settings')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  data-testid="project-menu-analytics"
                   onClick={(e) => {
                     e.stopPropagation();
                     navigate(`/projects/${project.id}/analytics`);
@@ -292,6 +300,7 @@ export const ProjectItem = memo(function ProjectItem({
                   {t('sidebar.analytics')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  data-testid="project-menu-github-issues"
                   onClick={(e) => {
                     e.stopPropagation();
                     onShowIssues(project.id);
@@ -302,6 +311,7 @@ export const ProjectItem = memo(function ProjectItem({
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
+                  data-testid="project-menu-rename"
                   onClick={(e) => {
                     e.stopPropagation();
                     onRenameProject(project.id, project.name);
@@ -311,6 +321,7 @@ export const ProjectItem = memo(function ProjectItem({
                   {t('sidebar.renameProject')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
+                  data-testid="project-menu-delete"
                   onClick={(e) => {
                     e.stopPropagation();
                     onDeleteProject(project.id, project.name);
@@ -327,6 +338,7 @@ export const ProjectItem = memo(function ProjectItem({
                 <Button
                   variant="ghost"
                   size="icon-xs"
+                  data-testid={`project-new-thread-${project.id}`}
                   onClick={(e) => {
                     e.stopPropagation();
                     onNewThread(project.id);
@@ -370,6 +382,7 @@ export const ProjectItem = memo(function ProjectItem({
           ))}
           {threads.length > 5 && (
             <button
+              data-testid={`project-view-all-${project.id}`}
               onClick={() => onShowAllThreads(project.id)}
               className="px-2 py-1.5 text-sm text-muted-foreground transition-colors hover:text-foreground"
             >

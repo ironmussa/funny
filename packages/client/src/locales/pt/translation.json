@@ -43,6 +43,7 @@
       "stopped": "Parado",
       "interrupted": "Interrompido",
       "idle": "Inativo",
+      "settingUp": "Configurando",
       "error": "Erro"
     },
     "mode": {

@@ -43,6 +43,7 @@
       "stopped": "Detenido",
       "interrupted": "Interrumpido",
       "idle": "Inactivo",
+      "settingUp": "Configurando",
       "error": "Error"
     },
     "mode": {

@@ -63,6 +63,8 @@ export const ThreadItem = memo(function ThreadItem({
   const threadStatusCfg = statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending;
   const StatusIcon = threadStatusCfg.icon;
   const isRunning = thread.status === 'running';
+  const isSettingUp = thread.status === 'setting_up';
+  const isBusy = isRunning || isSettingUp;
   const displayTime = timeValue ?? timeAgo(thread.createdAt, t);
 
   // Git status config (only for worktree threads that have git info)
@@ -103,7 +105,7 @@ export const ThreadItem = memo(function ThreadItem({
             <span
               className={cn(
                 'absolute inset-0 flex items-center justify-center text-muted-foreground',
-                onPin && !isRunning && 'group-hover/thread:hidden',
+                onPin && !isBusy && 'group-hover/thread:hidden',
               )}
             >
               <Pin className="h-3.5 w-3.5" />
@@ -111,10 +113,7 @@ export const ThreadItem = memo(function ThreadItem({
           ) : (
             thread.status !== 'completed' && (
               <span
-                className={cn(
-                  'absolute inset-0',
-                  onPin && !isRunning && 'group-hover/thread:hidden',
-                )}
+                className={cn('absolute inset-0', onPin && !isBusy && 'group-hover/thread:hidden')}
               >
                 <Tooltip>
                   <TooltipTrigger asChild>
@@ -128,7 +127,7 @@ export const ThreadItem = memo(function ThreadItem({
             )
           )}
           {/* Hover: pin/unpin toggle */}
-          {onPin && !isRunning && (
+          {onPin && !isBusy && (
             <span
               className="absolute inset-0 hidden cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground group-hover/thread:flex"
               onClick={(e) => {
@@ -285,7 +284,7 @@ export const ThreadItem = memo(function ThreadItem({
                   </DropdownMenuItem>
                 </>
               )}
-              {onArchive && (
+              {onArchive && !isBusy && (
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
@@ -296,7 +295,7 @@ export const ThreadItem = memo(function ThreadItem({
                   {t('sidebar.archive')}
                 </DropdownMenuItem>
               )}
-              {onDelete && (
+              {onDelete && !isBusy && (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem

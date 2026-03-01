@@ -355,6 +355,7 @@ export function AppSidebar() {
                 <Button
                   variant="ghost"
                   size="icon-xs"
+                  data-testid="sidebar-search"
                   onClick={() => {
                     navigate('/list');
                   }}
@@ -370,6 +371,7 @@ export function AppSidebar() {
                 <Button
                   variant="ghost"
                   size="icon-xs"
+                  data-testid="sidebar-kanban"
                   onClick={() => {
                     navigate('/kanban');
                   }}
@@ -385,6 +387,7 @@ export function AppSidebar() {
                 <Button
                   variant="ghost"
                   size="icon-xs"
+                  data-testid="sidebar-grid"
                   onClick={() => navigate('/grid')}
                   className="text-muted-foreground"
                 >
@@ -398,6 +401,7 @@ export function AppSidebar() {
                 <Button
                   variant="ghost"
                   size="icon-xs"
+                  data-testid="sidebar-analytics"
                   onClick={() => navigate('/analytics')}
                   className="text-muted-foreground"
                 >
@@ -412,6 +416,7 @@ export function AppSidebar() {
               <Button
                 variant="ghost"
                 size="icon-xs"
+                data-testid="sidebar-collapse"
                 onClick={toggleSidebar}
                 className="h-7 w-7 text-muted-foreground"
               >
@@ -463,6 +468,7 @@ export function AppSidebar() {
             <Button
               variant="ghost"
               size="icon-xs"
+              data-testid="sidebar-add-project"
               onClick={() => navigate('/new')}
               className="text-muted-foreground"
             >
@@ -483,6 +489,7 @@ export function AppSidebar() {
         />
         {projects.length === 0 && (
           <button
+            data-testid="sidebar-no-projects-cta"
             onClick={() => navigate('/new')}
             className="w-full cursor-pointer px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
@@ -525,6 +532,7 @@ export function AppSidebar() {
               <Button
                 variant="ghost"
                 size="sm"
+                data-testid="sidebar-logout"
                 onClick={logout}
                 className="text-xs text-muted-foreground"
               >
@@ -536,6 +544,7 @@ export function AppSidebar() {
                 <Button
                   variant="ghost"
                   size="icon-xs"
+                  data-testid="sidebar-settings"
                   onClick={() => setGeneralSettingsOpen(true)}
                   className="h-7 w-7 text-muted-foreground"
                 >
@@ -585,10 +594,20 @@ export function AppSidebar() {
             </p>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setArchiveConfirm(null)}>
+            <Button
+              data-testid="archive-thread-cancel"
+              variant="outline"
+              size="sm"
+              onClick={() => setArchiveConfirm(null)}
+            >
               {t('common.cancel')}
             </Button>
-            <Button size="sm" onClick={handleArchiveConfirm} loading={actionLoading}>
+            <Button
+              data-testid="archive-thread-confirm"
+              size="sm"
+              onClick={handleArchiveConfirm}
+              loading={actionLoading}
+            >
               {t('sidebar.archive')}
             </Button>
           </DialogFooter>
@@ -620,10 +639,16 @@ export function AppSidebar() {
             </p>
           )}
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDeleteThreadConfirm(null)}>
+            <Button
+              data-testid="delete-thread-cancel"
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteThreadConfirm(null)}
+            >
               {t('common.cancel')}
             </Button>
             <Button
+              data-testid="delete-thread-confirm"
               variant="destructive"
               size="sm"
               onClick={handleDeleteThreadConfirm}
@@ -651,6 +676,7 @@ export function AppSidebar() {
           </DialogHeader>
           <div className="py-2">
             <Input
+              data-testid="rename-project-input"
               value={renameProjectState?.newName || ''}
               onChange={(e) => {
                 if (renameProjectState) {
@@ -667,10 +693,20 @@ export function AppSidebar() {
             />
           </div>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setRenameProjectState(null)}>
+            <Button
+              data-testid="rename-project-cancel"
+              variant="outline"
+              size="sm"
+              onClick={() => setRenameProjectState(null)}
+            >
               {t('common.cancel')}
             </Button>
-            <Button size="sm" onClick={handleRenameProjectConfirm} loading={actionLoading}>
+            <Button
+              data-testid="rename-project-confirm"
+              size="sm"
+              onClick={handleRenameProjectConfirm}
+              loading={actionLoading}
+            >
               {t('common.save')}
             </Button>
           </DialogFooter>
@@ -692,10 +728,16 @@ export function AppSidebar() {
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>
-            <Button variant="outline" size="sm" onClick={() => setDeleteProjectConfirm(null)}>
+            <Button
+              data-testid="delete-project-cancel"
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteProjectConfirm(null)}
+            >
               {t('common.cancel')}
             </Button>
             <Button
+              data-testid="delete-project-confirm"
               variant="destructive"
               size="sm"
               onClick={handleDeleteProjectConfirm}

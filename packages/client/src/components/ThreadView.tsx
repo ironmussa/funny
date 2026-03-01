@@ -58,6 +58,7 @@ import { useUIStore } from '@/stores/ui-store';
 
 import { D4CAnimation } from './D4CAnimation';
 import { ImageLightbox } from './ImageLightbox';
+import { InlineProgressSteps } from './InlineProgressSteps';
 import { PromptInput } from './PromptInput';
 import { AgentResultCard, AgentInterruptedCard, AgentStoppedCard } from './thread/AgentStatusCards';
 import { CompactionEventCard } from './thread/CompactionEventCard';
@@ -1284,6 +1285,23 @@ export function ThreadView() {
     .getState()
     .projects.find((p) => p.id === activeThread.projectId);
   const isQueueMode = currentProject?.followUpMode === 'queue';
+
+  // Setting up: worktree is being created in the background
+  if (activeThread.status === 'setting_up') {
+    return (
+      <div className="flex h-full min-w-0 flex-1 flex-col">
+        <ProjectHeader />
+        <div className="flex flex-1 items-center justify-center px-4">
+          <div className="w-full max-w-md space-y-4">
+            <h3 className="text-sm font-medium text-foreground">
+              {t('thread.settingUpWorktree', 'Setting up worktree...')}
+            </h3>
+            <InlineProgressSteps steps={activeThread.setupProgress ?? []} />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Idle thread (backlog or not): show prompt input to start (pre-loaded with initialPrompt if available)
   if (isIdle) {

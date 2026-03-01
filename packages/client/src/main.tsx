@@ -1,3 +1,4 @@
+import './wdyr'; // must be first — tracks unnecessary re-renders in dev
 import { ThemeProvider, useTheme } from 'next-themes';
 import React, { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react';
 import ReactDOM from 'react-dom/client';

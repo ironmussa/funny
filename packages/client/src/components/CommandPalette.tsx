@@ -43,7 +43,10 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
 
   return (
     <CommandDialog open={open} onOpenChange={onOpenChange}>
-      <CommandInput placeholder={t('commandPalette.searchPlaceholder')} />
+      <CommandInput
+        data-testid="command-palette-search"
+        placeholder={t('commandPalette.searchPlaceholder')}
+      />
       <CommandList>
         <CommandEmpty>{t('commandPalette.noResults')}</CommandEmpty>
         <CommandGroup heading={t('commandPalette.projects')}>
@@ -55,6 +58,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             projects.map((project) => (
               <CommandItem
                 key={project.id}
+                data-testid={`command-palette-project-${project.id}`}
                 value={`${project.name} ${project.path}`}
                 onSelect={() => handleProjectSelect(project.id)}
               >
@@ -74,6 +78,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
             return (
               <CommandItem
                 key={item.id}
+                data-testid={`command-palette-settings-${item.id}`}
                 value={item.label}
                 onSelect={() => handleSettingsSelect(item.id)}
               >

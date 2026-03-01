@@ -80,6 +80,8 @@ export interface ThreadState {
   threadsByProject: Record<string, Thread[]>;
   selectedThreadId: string | null;
   activeThread: ThreadWithMessages | null;
+  /** Setup progress keyed by threadId — survives thread switches */
+  setupProgressByThread: Record<string, import('@/components/GitProgressModal').GitProgressStep[]>;
 
   loadThreadsForProject: (projectId: string) => Promise<void>;
   selectThread: (threadId: string | null) => Promise<void>;
@@ -198,6 +200,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   threadsByProject: {},
   selectedThreadId: null,
   activeThread: null,
+  setupProgressByThread: {},
 
   loadThreadsForProject: async (projectId: string) => {
     // Deduplicate concurrent loads for the same project
@@ -308,6 +311,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     const threadEvents = eventsResult.isOk() ? eventsResult.value.events : [];
 
+    // Merge stored setup progress for setting_up threads
+    const storedSetupProgress =
+      thread.status === 'setting_up' ? get().setupProgressByThread[threadId] : undefined;
+
     set({
       activeThread: {
         ...thread,
@@ -317,6 +324,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         resultInfo,
         waitingReason,
         pendingPermission,
+        setupProgress: storedSetupProgress,
       },
     });
     useProjectStore.setState({ selectedProjectId: projectId });
@@ -720,39 +728,47 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   handleWSWorktreeSetup: (threadId, data) => {
-    const { activeThread } = get();
+    const { activeThread, setupProgressByThread } = get();
+    const step = { id: data.step, label: data.label, status: data.status, error: data.error };
+
+    // Always persist to the map so it survives thread switches
+    const prev = setupProgressByThread[threadId] ?? [];
+    const idx = prev.findIndex((s) => s.id === data.step);
+    const next =
+      idx >= 0 ? prev.map((s, i) => (i === idx ? { ...s, ...step } : s)) : [...prev, step];
+    const updates: Partial<ThreadState> = {
+      setupProgressByThread: { ...setupProgressByThread, [threadId]: next },
+    };
+
+    // Also update activeThread if it matches
     if (activeThread?.id === threadId && activeThread.status === 'setting_up') {
-      const prev = activeThread.setupProgress ?? [];
-      const idx = prev.findIndex((s) => s.id === data.step);
-      const step = { id: data.step, label: data.label, status: data.status, error: data.error };
-      const next =
-        idx >= 0 ? prev.map((s, i) => (i === idx ? { ...s, ...step } : s)) : [...prev, step];
-      set({ activeThread: { ...activeThread, setupProgress: next } });
+      updates.activeThread = { ...activeThread, setupProgress: next };
     }
-    // Also update threadsByProject for sidebar display
-    const { threadsByProject } = get();
-    for (const [_pid, threads] of Object.entries(threadsByProject)) {
-      const idx = threads.findIndex((t) => t.id === threadId);
-      if (idx >= 0 && threads[idx].status === 'setting_up') {
-        // Thread found in sidebar — no visual update needed beyond the status icon
-        break;
-      }
-    }
+
+    set(updates as any);
   },
 
   handleWSWorktreeSetupComplete: (threadId, data) => {
-    const { activeThread, loadThreadsForProject } = get();
+    const { activeThread, loadThreadsForProject, setupProgressByThread } = get();
+
+    // Clean up the setup progress map
+    const { [threadId]: _, ...restProgress } = setupProgressByThread;
+    const updates: Partial<ThreadState> = {
+      setupProgressByThread: restProgress,
+    };
+
     if (activeThread?.id === threadId) {
-      set({
-        activeThread: {
-          ...activeThread,
-          status: activeThread.status === 'setting_up' ? 'pending' : activeThread.status,
-          branch: data.branch,
-          worktreePath: data.worktreePath,
-          setupProgress: undefined,
-        },
-      });
+      updates.activeThread = {
+        ...activeThread,
+        status: activeThread.status === 'setting_up' ? 'pending' : activeThread.status,
+        branch: data.branch,
+        worktreePath: data.worktreePath,
+        setupProgress: undefined,
+      };
     }
+
+    set(updates as any);
+
     // Refresh thread list so sidebar picks up the new status
     if (activeThread?.projectId) {
       loadThreadsForProject(activeThread.projectId);

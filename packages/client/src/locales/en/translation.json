@@ -43,6 +43,7 @@
       "stopped": "Stopped",
       "interrupted": "Interrupted",
       "idle": "Idle",
+      "settingUp": "Setting up",
       "error": "Error"
     },
     "mode": {

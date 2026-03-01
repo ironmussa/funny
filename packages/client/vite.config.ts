@@ -10,7 +10,12 @@ export default defineConfig(({ mode }) => {
   const serverPort = Number(env.VITE_SERVER_PORT) || 3001;
 
   return {
-    plugins: [react()],
+    plugins: [
+      react({
+        jsxImportSource:
+          mode === 'development' ? '@welldone-software/why-did-you-render' : undefined,
+      }),
+    ],
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),

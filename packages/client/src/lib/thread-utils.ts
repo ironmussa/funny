@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 
 export const statusConfig: Record<ThreadStatus, { icon: typeof Clock; className: string }> = {
+  setting_up: { icon: Loader2, className: 'text-blue-400 animate-spin' },
   idle: { icon: CircleDot, className: 'text-gray-400' },
   pending: { icon: Clock, className: 'text-yellow-400' },
   running: { icon: Loader2, className: 'text-muted-foreground animate-spin' },
@@ -94,6 +95,7 @@ export function resolveModelLabel(modelId: string, t: (key: string, opts?: any) 
 
 export function getStatusLabels(t: (key: string) => string): Record<ThreadStatus, string> {
   return {
+    setting_up: t('thread.status.settingUp'),
     idle: t('thread.status.idle'),
     pending: t('thread.status.pending'),
     running: t('thread.status.running'),

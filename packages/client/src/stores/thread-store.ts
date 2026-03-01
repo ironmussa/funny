@@ -72,6 +72,8 @@ export interface ThreadWithMessages extends Thread {
   loadingMore?: boolean;
   contextUsage?: ContextUsage;
   compactionEvents?: CompactionEvent[];
+  /** Setup progress steps for threads in setting_up status */
+  setupProgress?: import('@/components/GitProgressModal').GitProgressStep[];
 }
 
 export interface ThreadState {
@@ -122,6 +124,21 @@ export interface ThreadState {
   handleWSContextUsage: (
     threadId: string,
     data: { inputTokens: number; outputTokens: number; cumulativeInputTokens: number },
+  ) => void;
+
+  // Worktree setup progress handlers
+  handleWSWorktreeSetup: (
+    threadId: string,
+    data: {
+      step: string;
+      label: string;
+      status: 'running' | 'completed' | 'failed';
+      error?: string;
+    },
+  ) => void;
+  handleWSWorktreeSetupComplete: (
+    threadId: string,
+    data: { branch: string; worktreePath: string },
   ) => void;
 }
 
@@ -700,5 +717,45 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
   handleWSContextUsage: (threadId, data) => {
     wsHandlers.handleWSContextUsage(get, set, threadId, data);
+  },
+
+  handleWSWorktreeSetup: (threadId, data) => {
+    const { activeThread } = get();
+    if (activeThread?.id === threadId && activeThread.status === 'setting_up') {
+      const prev = activeThread.setupProgress ?? [];
+      const idx = prev.findIndex((s) => s.id === data.step);
+      const step = { id: data.step, label: data.label, status: data.status, error: data.error };
+      const next =
+        idx >= 0 ? prev.map((s, i) => (i === idx ? { ...s, ...step } : s)) : [...prev, step];
+      set({ activeThread: { ...activeThread, setupProgress: next } });
+    }
+    // Also update threadsByProject for sidebar display
+    const { threadsByProject } = get();
+    for (const [_pid, threads] of Object.entries(threadsByProject)) {
+      const idx = threads.findIndex((t) => t.id === threadId);
+      if (idx >= 0 && threads[idx].status === 'setting_up') {
+        // Thread found in sidebar — no visual update needed beyond the status icon
+        break;
+      }
+    }
+  },
+
+  handleWSWorktreeSetupComplete: (threadId, data) => {
+    const { activeThread, loadThreadsForProject } = get();
+    if (activeThread?.id === threadId) {
+      set({
+        activeThread: {
+          ...activeThread,
+          status: activeThread.status === 'setting_up' ? 'pending' : activeThread.status,
+          branch: data.branch,
+          worktreePath: data.worktreePath,
+          setupProgress: undefined,
+        },
+      });
+    }
+    // Refresh thread list so sidebar picks up the new status
+    if (activeThread?.projectId) {
+      loadThreadsForProject(activeThread.projectId);
+    }
   },
 }));

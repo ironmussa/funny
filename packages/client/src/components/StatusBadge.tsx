@@ -5,6 +5,7 @@ import { getStatusLabels } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
 const badgeStyles: Record<ThreadStatus, string> = {
+  setting_up: 'bg-status-info/10 text-status-info/80',
   idle: 'bg-status-neutral/10 text-status-neutral/80',
   pending: 'bg-status-pending/10 text-status-pending/80',
   running: 'bg-status-info/10 text-status-info/80',
@@ -24,7 +25,7 @@ export function StatusBadge({ status }: { status: ThreadStatus }) {
     <span
       className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', style)}
     >
-      {status === 'running' && (
+      {(status === 'running' || status === 'setting_up') && (
         <span className="mr-1 h-1.5 w-1.5 animate-pulse rounded-full bg-status-info" />
       )}
       {status === 'waiting' && (

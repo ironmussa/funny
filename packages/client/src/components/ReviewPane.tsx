@@ -61,6 +61,7 @@ import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
 import { api } from '@/lib/api';
 import { openFileInEditor, getEditorLabel } from '@/lib/editor-utils';
 import { cn } from '@/lib/utils';
+import { useCommitProgressStore } from '@/stores/commit-progress-store';
 import { useDraftStore } from '@/stores/draft-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -69,7 +70,8 @@ import { editorLabels } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
-import { GitProgressModal, type GitProgressStep } from './GitProgressModal';
+import { type GitProgressStep } from './GitProgressModal';
+import { InlineProgressSteps } from './InlineProgressSteps';
 import { ReactDiffViewer, DIFF_VIEWER_STYLES } from './tool-cards/utils';
 
 const fileStatusIcons: Record<string, typeof FileCode> = {
@@ -263,14 +265,10 @@ export function ReviewPane() {
   const [prDialog, setPrDialog] = useState<{ title: string; body: string } | null>(null);
   const [hasRebaseConflict, setHasRebaseConflict] = useState(false);
 
-  // Progress modal state
-  const [progressSteps, setProgressSteps] = useState<GitProgressStep[]>([]);
-  const [progressOpen, setProgressOpen] = useState(false);
-  const [progressTitle, setProgressTitle] = useState('');
-
-  const updateStep = useCallback((id: string, update: Partial<GitProgressStep>) => {
-    setProgressSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...update } : s)));
-  }, []);
+  // Commit progress (per-thread, persists across thread switches)
+  const commitProgressId = effectiveThreadId || projectModeId || '';
+  const commitEntry = useCommitProgressStore((s) => s.activeCommits[commitProgressId]);
+  const commitInProgress = !!commitEntry;
 
   // Show standalone merge button when worktree has no dirty files but has unmerged commits.
   // Also require the worktree to actually exist (has a path) and the branch to differ from baseBranch.
@@ -526,12 +524,21 @@ export function ReviewPane() {
       'commit-pr': t('review.progress.commitPRTitle'),
       'commit-merge': t('review.progress.commitMergeTitle'),
     };
-    setProgressTitle(titleMap[selectedAction] || t('review.progress.commitTitle'));
-    setProgressSteps(steps);
-    setProgressOpen(true);
+    const progressId = effectiveThreadId || projectModeId || '';
+    const {
+      startCommit,
+      updateStep: storeUpdateStep,
+      finishCommit,
+    } = useCommitProgressStore.getState();
+    startCommit(
+      progressId,
+      titleMap[selectedAction] || t('review.progress.commitTitle'),
+      steps,
+      selectedAction,
+    );
 
     const setStep = (id: string, update: Partial<GitProgressStep>) => {
-      setProgressSteps((prev) => prev.map((s) => (s.id === id ? { ...s, ...update } : s)));
+      storeUpdateStep(progressId, id, update);
     };
 
     try {
@@ -657,8 +664,14 @@ export function ReviewPane() {
       setCommitTitleRaw('');
       setCommitBodyRaw('');
       if (draftId) clearCommitDraft(draftId);
+      finishCommit(progressId);
       setActionInProgress(null);
-      await refresh();
+      toast.success(t('review.commitSuccess', 'Changes committed successfully'));
+      // Only refresh if still on the same thread
+      const currentTid = useThreadStore.getState().activeThread?.id;
+      if (currentTid === effectiveThreadId || !effectiveThreadId) {
+        await refresh();
+      }
     } finally {
       commitLockRef.current = false;
     }
@@ -721,20 +734,22 @@ export function ReviewPane() {
     if (!hasGitContext || pushInProgress) return;
     setPushInProgress(true);
 
+    const pid = effectiveThreadId || projectModeId || '';
     const steps: GitProgressStep[] = [
       { id: 'push', label: t('review.progress.pushing'), status: 'running' },
     ];
-    setProgressTitle(t('review.progress.pushTitle'));
-    setProgressSteps(steps);
-    setProgressOpen(true);
+    const { startCommit, updateStep: su, finishCommit } = useCommitProgressStore.getState();
+    startCommit(pid, t('review.progress.pushTitle'), steps, 'push');
 
     const pushResult = effectiveThreadId
       ? await api.push(effectiveThreadId)
       : await api.projectPush(projectModeId!);
     if (pushResult.isErr()) {
-      updateStep('push', { status: 'failed', error: pushResult.error.message });
+      su(pid, 'push', { status: 'failed', error: pushResult.error.message });
     } else {
-      updateStep('push', { status: 'completed' });
+      su(pid, 'push', { status: 'completed' });
+      finishCommit(pid);
+      toast.success(t('review.pushSuccess', 'Pushed successfully'));
     }
     setPushInProgress(false);
     if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId);
@@ -745,17 +760,17 @@ export function ReviewPane() {
     if (!hasGitContext || mergeInProgress) return;
     setMergeInProgress(true);
 
+    const pid = effectiveThreadId || projectModeId || '';
     const target = baseBranch || 'base';
     const steps: GitProgressStep[] = [
       { id: 'merge', label: t('review.progress.merging'), status: 'running' },
     ];
-    setProgressTitle(t('review.progress.mergeTitle', { target }));
-    setProgressSteps(steps);
-    setProgressOpen(true);
+    const { startCommit, updateStep: su, finishCommit } = useCommitProgressStore.getState();
+    startCommit(pid, t('review.progress.mergeTitle', { target }), steps, 'merge');
 
     const mergeResult = await api.merge(effectiveThreadId!, { cleanup: true });
     if (mergeResult.isErr()) {
-      updateStep('merge', { status: 'failed', error: mergeResult.error.message });
+      su(pid, 'merge', { status: 'failed', error: mergeResult.error.message });
       const lower = mergeResult.error.message.toLowerCase();
       const isConflict =
         lower.includes('conflict') ||
@@ -766,7 +781,9 @@ export function ReviewPane() {
         lower.includes('could not apply');
       if (isConflict) setHasRebaseConflict(true);
     } else {
-      updateStep('merge', { status: 'completed' });
+      su(pid, 'merge', { status: 'completed' });
+      finishCommit(pid);
+      toast.success(t('review.mergeSuccess', 'Merged successfully'));
       await useThreadStore.getState().refreshActiveThread();
     }
     setMergeInProgress(false);
@@ -778,6 +795,7 @@ export function ReviewPane() {
     if (!hasGitContext || prInProgress || !prDialog) return;
     setPrInProgress(true);
 
+    const pid = effectiveThreadId || projectModeId || '';
     const steps: GitProgressStep[] = [];
     const needsPush = gitStatus && gitStatus.unpushedCommitCount > 0;
     if (needsPush) {
@@ -785,34 +803,35 @@ export function ReviewPane() {
     }
     steps.push({ id: 'pr', label: t('review.progress.creatingPR'), status: 'pending' });
 
-    setProgressTitle(t('review.progress.createPRTitle'));
-    setProgressSteps(steps);
-    setProgressOpen(true);
+    const { startCommit, updateStep: su, finishCommit } = useCommitProgressStore.getState();
+    startCommit(pid, t('review.progress.createPRTitle'), steps, 'create-pr');
 
     // Push first if there are unpushed commits
     if (needsPush) {
-      updateStep('push', { status: 'running' });
+      su(pid, 'push', { status: 'running' });
       const pushResult = effectiveThreadId
         ? await api.push(effectiveThreadId)
         : await api.projectPush(projectModeId!);
       if (pushResult.isErr()) {
-        updateStep('push', { status: 'failed', error: pushResult.error.message });
+        su(pid, 'push', { status: 'failed', error: pushResult.error.message });
         setPrInProgress(false);
         return;
       }
-      updateStep('push', { status: 'completed' });
+      su(pid, 'push', { status: 'completed' });
     }
 
-    updateStep('pr', { status: 'running' });
+    su(pid, 'pr', { status: 'running' });
     const prResult = await api.createPR(
       effectiveThreadId!,
       prDialog.title.trim(),
       prDialog.body.trim(),
     );
     if (prResult.isErr()) {
-      updateStep('pr', { status: 'failed', error: prResult.error.message });
+      su(pid, 'pr', { status: 'failed', error: prResult.error.message });
     } else {
-      updateStep('pr', { status: 'completed', url: prResult.value.url || undefined });
+      su(pid, 'pr', { status: 'completed', url: prResult.value.url || undefined });
+      finishCommit(pid);
+      toast.success(t('review.prSuccess', 'Pull request created'));
     }
     setPrInProgress(false);
     setPrDialog(null);
@@ -1438,7 +1457,39 @@ export function ReviewPane() {
           )}
 
           {/* Commit controls */}
-          {summaries.length > 0 && (
+          {summaries.length > 0 && commitInProgress && (
+            <div className="flex-shrink-0 space-y-2 border-t border-sidebar-border p-2">
+              <p className="text-xs font-medium text-foreground">{commitEntry.title}</p>
+              <InlineProgressSteps steps={commitEntry.steps} />
+              {(() => {
+                const hasFailed = commitEntry.steps.some((s) => s.status === 'failed');
+                const isRunning = commitEntry.steps.some((s) => s.status === 'running');
+                const isFinished =
+                  !isRunning &&
+                  (commitEntry.steps.every(
+                    (s) => s.status === 'completed' || s.status === 'failed',
+                  ) ||
+                    hasFailed);
+                if (isFinished && hasFailed) {
+                  return (
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => {
+                        useCommitProgressStore.getState().finishCommit(commitProgressId);
+                        setActionInProgress(null);
+                      }}
+                    >
+                      {t('review.progress.dismiss', 'Dismiss')}
+                    </Button>
+                  );
+                }
+                return null;
+              })()}
+            </div>
+          )}
+          {summaries.length > 0 && !commitInProgress && (
             <div className="flex-shrink-0 space-y-1.5 border-t border-sidebar-border p-2">
               <input
                 type="text"
@@ -1914,14 +1965,6 @@ export function ReviewPane() {
           })()}
         </DialogContent>
       </Dialog>
-
-      {/* Git operation progress modal */}
-      <GitProgressModal
-        open={progressOpen}
-        onOpenChange={setProgressOpen}
-        steps={progressSteps}
-        title={progressTitle}
-      />
     </div>
   );
 }

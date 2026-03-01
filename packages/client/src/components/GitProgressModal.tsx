@@ -30,7 +30,7 @@ interface GitProgressModalProps {
   autoClose?: boolean;
 }
 
-function formatElapsed(ms: number) {
+export function formatElapsed(ms: number) {
   const totalSeconds = ms / 1000;
   const m = Math.floor(totalSeconds / 60);
   const s = totalSeconds % 60;
@@ -41,7 +41,7 @@ function formatElapsed(ms: number) {
 }
 
 /** Tracks per-step elapsed time based on step status transitions. */
-function useStepTimers(steps: GitProgressStep[], open: boolean) {
+export function useStepTimers(steps: GitProgressStep[], open: boolean) {
   const startTimes = useRef<Map<string, number>>(new Map());
   const endTimes = useRef<Map<string, number>>(new Map());
   const [, tick] = useState(0);
@@ -94,7 +94,7 @@ function useStepTimers(steps: GitProgressStep[], open: boolean) {
 }
 
 /** Computes total elapsed as the sum of all individual step times. */
-function useTotalFromSteps(
+export function useTotalFromSteps(
   steps: GitProgressStep[],
   getStepElapsed: (id: string) => number | null,
 ) {

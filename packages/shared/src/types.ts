@@ -126,6 +126,7 @@ export interface Project {
 
 export type ThreadMode = 'local' | 'worktree';
 export type ThreadStatus =
+  | 'setting_up'
   | 'idle'
   | 'pending'
   | 'running'
@@ -424,7 +425,13 @@ export type WSEvent =
   | { type: 'workflow:step'; threadId: string; data: WSWorkflowStepData }
   | { type: 'workflow:status'; threadId: string; data: WSWorkflowStatusData }
   | { type: 'thread:event'; threadId: string; data: WSThreadEventData }
-  | { type: 'worktree:setup'; threadId: string; data: WSWorktreeSetupData };
+  | { type: 'worktree:setup'; threadId: string; data: WSWorktreeSetupData }
+  | { type: 'worktree:setup_complete'; threadId: string; data: WSWorktreeSetupCompleteData };
+
+export interface WSWorktreeSetupCompleteData {
+  branch: string;
+  worktreePath: string;
+}
 
 export type WSEventType = WSEvent['type'];
 

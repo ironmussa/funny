@@ -6,6 +6,7 @@ import type { ThreadStatus } from './types.js';
  * Thread lifecycle state machine (shared between client and server)
  *
  * States:
+ * - setting_up: Worktree is being created in the background
  * - pending: Thread created but not started
  * - running: Agent is actively working
  * - completed: Agent finished successfully
@@ -15,6 +16,9 @@ import type { ThreadStatus } from './types.js';
  * - waiting: Agent is waiting for user input (question/plan/permission)
  *
  * Valid transitions:
+ * - setting_up → pending (SETUP_COMPLETE — worktree created, agent about to start)
+ * - setting_up → idle (SETUP_COMPLETE — idle thread, no agent)
+ * - setting_up → failed (FAIL — worktree creation failed)
  * - pending → running (START)
  * - running → completed (COMPLETE)
  * - running → failed (FAIL)
@@ -56,6 +60,7 @@ export interface ThreadContext {
 
 export type ThreadEvent =
   | { type: 'START' }
+  | { type: 'SETUP_COMPLETE' }
   | { type: 'RESPOND' }
   | { type: 'RESTART' }
   | { type: 'FOLLOW_UP' }
@@ -118,10 +123,45 @@ export const threadMachine = setup({
     resultInfo: (input as ThreadContext).resultInfo,
   }),
   states: {
+    setting_up: {
+      on: {
+        SETUP_COMPLETE: { target: 'pending', actions: 'clearResultInfo' },
+        FAIL: {
+          target: 'failed',
+          actions: ['setResultInfo', 'clearResumeReason'],
+        },
+        SET_STATUS: [
+          { target: 'pending', guard: ({ event }) => event.status === 'pending' },
+          { target: 'idle', guard: ({ event }) => event.status === 'idle' },
+          { target: 'failed', guard: ({ event }) => event.status === 'failed' },
+          {
+            target: 'running',
+            guard: ({ event }) => event.status === 'running',
+            actions: 'setResumeFresh',
+          },
+        ],
+      },
+    },
+    idle: {
+      on: {
+        START: { target: 'running', actions: ['clearResultInfo', 'setResumeFresh'] },
+        SET_STATUS: [
+          {
+            target: 'running',
+            guard: ({ event }) => event.status === 'running',
+            actions: 'setResumeFresh',
+          },
+          { target: 'pending', guard: ({ event }) => event.status === 'pending' },
+          { target: 'failed', guard: ({ event }) => event.status === 'failed' },
+        ],
+      },
+    },
     pending: {
       on: {
         START: { target: 'running', actions: ['clearResultInfo', 'setResumeFresh'] },
         SET_STATUS: [
+          { target: 'setting_up', guard: ({ event }) => event.status === 'setting_up' },
+          { target: 'idle', guard: ({ event }) => event.status === 'idle' },
           {
             target: 'running',
             guard: ({ event }) => event.status === 'running',
@@ -312,6 +352,9 @@ export function wsEventToMachineEvent(wsEventType: string, data: any): ThreadEve
 
     case 'agent:error':
       return { type: 'FAIL', error: data.error };
+
+    case 'worktree:setup_complete':
+      return { type: 'SETUP_COMPLETE' };
 
     default:
       return null;

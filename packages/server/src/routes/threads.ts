@@ -137,7 +137,6 @@ threadRoutes.post('/idle', async (c) => {
 
   const userId = c.get('userId') as string;
   const threadId = nanoid();
-  let worktreePath: string | undefined;
   let threadBranch: string | undefined;
 
   const emitSetupProgress: SetupProgressFn = (step, label, status, error) => {
@@ -150,35 +149,117 @@ threadRoutes.post('/idle', async (c) => {
 
   // Create worktree if needed
   const resolvedBaseBranch = baseBranch?.trim() || undefined;
+
   if (mode === 'worktree') {
-    emitSetupProgress('worktree', 'Creating worktree', 'running');
+    // Non-blocking: create thread immediately with setting_up, setup in background
     const slug = slugifyTitle(title);
     const projectSlug = slugifyTitle(project.name);
     const branchName = `${projectSlug}/${slug}-${threadId.slice(0, 6)}`;
-    const wtResult = await createWorktree(project.path, branchName, resolvedBaseBranch);
-    if (wtResult.isErr()) {
-      emitSetupProgress('worktree', 'Creating worktree', 'failed', wtResult.error.message);
-      return c.json({ error: `Failed to create worktree: ${wtResult.error.message}` }, 500);
-    }
-    worktreePath = wtResult.value;
-    threadBranch = branchName;
-    emitSetupProgress('worktree', 'Creating worktree', 'completed');
 
-    try {
-      const setup = await setupWorktree(project.path, worktreePath, emitSetupProgress);
-      if (setup.postCreateErrors.length) {
-        log.warn('Worktree postCreate errors', { threadId, errors: setup.postCreateErrors });
+    const thread = {
+      id: threadId,
+      projectId,
+      userId,
+      title,
+      mode,
+      provider: 'claude' as const,
+      permissionMode: 'autoEdit' as const,
+      model: 'sonnet' as const,
+      source: source || 'web',
+      status: 'setting_up' as const,
+      stage: (stage || 'backlog') as 'backlog' | 'planning',
+      branch: branchName,
+      baseBranch: resolvedBaseBranch,
+      worktreePath: undefined as string | undefined,
+      initialPrompt: prompt,
+      cost: 0,
+      createdAt: new Date().toISOString(),
+      createdBy: userId,
+    };
+
+    tm.createThread(thread);
+
+    if (prompt) {
+      tm.insertMessage({
+        threadId,
+        role: 'user',
+        content: prompt,
+        images: images?.length ? JSON.stringify(images) : null,
+      });
+    }
+
+    threadEventBus.emit('thread:created', {
+      threadId,
+      projectId,
+      userId,
+      cwd: project.path,
+      worktreePath: null,
+      stage: 'backlog',
+      status: 'setting_up',
+      initialPrompt: prompt,
+    });
+
+    const responseThread = { ...thread };
+
+    // Background setup
+    (async () => {
+      try {
+        emitSetupProgress('worktree', 'Creating worktree', 'running');
+        const wtResult = await createWorktree(project.path, branchName, resolvedBaseBranch);
+        if (wtResult.isErr()) {
+          emitSetupProgress('worktree', 'Creating worktree', 'failed', wtResult.error.message);
+          tm.updateThread(threadId, { status: 'failed' });
+          wsBroker.emitToUser(userId, {
+            type: 'thread:updated',
+            threadId,
+            data: { status: 'failed' },
+          } as WSEvent);
+          return;
+        }
+        const wtPath = wtResult.value;
+        emitSetupProgress('worktree', 'Creating worktree', 'completed');
+
+        try {
+          const setup = await setupWorktree(project.path, wtPath, emitSetupProgress);
+          if (setup.postCreateErrors.length) {
+            log.warn('Worktree postCreate errors', { threadId, errors: setup.postCreateErrors });
+          }
+        } catch (err) {
+          log.warn('Failed to setup worktree', { threadId, error: String(err) });
+        }
+
+        // Update thread with worktree info and transition to idle
+        tm.updateThread(threadId, { worktreePath: wtPath, status: 'idle' });
+        wsBroker.emitToUser(userId, {
+          type: 'worktree:setup_complete',
+          threadId,
+          data: { branch: branchName, worktreePath: wtPath },
+        } as WSEvent);
+        wsBroker.emitToUser(userId, {
+          type: 'thread:updated',
+          threadId,
+          data: { status: 'idle', branch: branchName, worktreePath: wtPath },
+        } as WSEvent);
+      } catch (err) {
+        log.error('Background worktree setup failed', { threadId, error: String(err) });
+        tm.updateThread(threadId, { status: 'failed' });
+        wsBroker.emitToUser(userId, {
+          type: 'thread:updated',
+          threadId,
+          data: { status: 'failed' },
+        } as WSEvent);
       }
-    } catch (err) {
-      log.warn('Failed to setup worktree', { threadId, error: String(err) });
-    }
-  } else {
-    // Local mode: detect the current branch of the project
-    const branchResult = await getCurrentBranch(project.path);
-    if (branchResult.isOk()) {
-      threadBranch = branchResult.value;
-    }
+    })();
+
+    return c.json(responseThread, 201);
   }
+
+  // Local mode: detect the current branch of the project
+  const branchResult = await getCurrentBranch(project.path);
+  if (branchResult.isOk()) {
+    threadBranch = branchResult.value;
+  }
+
   const thread = {
     id: threadId,
     projectId,
@@ -193,16 +274,15 @@ threadRoutes.post('/idle', async (c) => {
     stage: (stage || 'backlog') as 'backlog' | 'planning',
     branch: threadBranch,
     baseBranch: resolvedBaseBranch || (mode === 'local' ? threadBranch : undefined),
-    worktreePath,
+    worktreePath: undefined,
     initialPrompt: prompt,
     cost: 0,
     createdAt: new Date().toISOString(),
-    createdBy: userId, // Track who created this thread
+    createdBy: userId,
   };
 
   tm.createThread(thread);
 
-  // Create a draft user message so prompt+images survive page refresh
   if (prompt) {
     tm.insertMessage({
       threadId,
@@ -216,8 +296,8 @@ threadRoutes.post('/idle', async (c) => {
     threadId,
     projectId,
     userId,
-    cwd: worktreePath ?? project.path,
-    worktreePath: worktreePath ?? null,
+    cwd: project.path,
+    worktreePath: null,
     stage: 'backlog',
     status: 'idle',
     initialPrompt: prompt,
@@ -268,30 +348,133 @@ threadRoutes.post('/', async (c) => {
 
   // Create worktree if needed
   const resolvedBaseBranch = baseBranch?.trim() || undefined;
-  if (mode === 'worktree') {
-    emitSetupProgress('worktree', 'Creating worktree', 'running');
+
+  // Resolve defaults: explicit value > project default > hardcoded fallback
+  const resolvedProvider = provider || project.defaultProvider || 'claude';
+  const resolvedModel = model || project.defaultModel || 'sonnet';
+  const resolvedPermissionMode = permissionMode || project.defaultPermissionMode || 'autoEdit';
+
+  if (mode === 'worktree' && !requestWorktreePath) {
+    // Non-blocking worktree creation: create thread immediately, setup in background
     const slug = slugifyTitle(title || prompt);
     const projectSlug = slugifyTitle(project.name);
     const branchName = `${projectSlug}/${slug}-${threadId.slice(0, 6)}`;
-    const wtResult = await createWorktree(project.path, branchName, resolvedBaseBranch);
-    if (wtResult.isErr()) {
-      emitSetupProgress('worktree', 'Creating worktree', 'failed', wtResult.error.message);
-      return c.json({ error: `Failed to create worktree: ${wtResult.error.message}` }, 500);
-    }
-    worktreePath = wtResult.value;
-    threadBranch = branchName;
-    emitSetupProgress('worktree', 'Creating worktree', 'completed');
 
-    try {
-      const setup = await setupWorktree(project.path, worktreePath, emitSetupProgress);
-      if (setup.postCreateErrors.length) {
-        log.warn('Worktree postCreate errors', { threadId, errors: setup.postCreateErrors });
+    const thread = {
+      id: threadId,
+      projectId,
+      userId,
+      title: title || prompt,
+      mode,
+      provider: resolvedProvider,
+      permissionMode: resolvedPermissionMode,
+      model: resolvedModel,
+      source: source || 'web',
+      status: 'setting_up' as const,
+      branch: branchName,
+      baseBranch: resolvedBaseBranch,
+      worktreePath: undefined as string | undefined,
+      parentThreadId,
+      cost: 0,
+      createdAt: new Date().toISOString(),
+      createdBy: userId,
+    };
+
+    tm.createThread(thread);
+
+    threadEventBus.emit('thread:created', {
+      threadId,
+      projectId,
+      userId,
+      cwd: project.path,
+      worktreePath: null,
+      stage: 'in_progress' as const,
+      status: 'setting_up',
+    });
+
+    // Return immediately — worktree creation runs in background
+    const responseThread = { ...thread };
+
+    // Background setup: create worktree, run post-create commands, start agent
+    (async () => {
+      try {
+        emitSetupProgress('worktree', 'Creating worktree', 'running');
+        const wtResult = await createWorktree(project.path, branchName, resolvedBaseBranch);
+        if (wtResult.isErr()) {
+          emitSetupProgress('worktree', 'Creating worktree', 'failed', wtResult.error.message);
+          tm.updateThread(threadId, { status: 'failed' });
+          wsBroker.emitToUser(userId, {
+            type: 'thread:updated',
+            threadId,
+            data: { status: 'failed' },
+          } as WSEvent);
+          return;
+        }
+        const wtPath = wtResult.value;
+        emitSetupProgress('worktree', 'Creating worktree', 'completed');
+
+        try {
+          const setup = await setupWorktree(project.path, wtPath, emitSetupProgress);
+          if (setup.postCreateErrors.length) {
+            log.warn('Worktree postCreate errors', { threadId, errors: setup.postCreateErrors });
+          }
+        } catch (err) {
+          log.warn('Failed to setup worktree', { threadId, error: String(err) });
+        }
+
+        // Update thread with worktree info and transition to pending
+        tm.updateThread(threadId, { worktreePath: wtPath, status: 'pending' });
+        wsBroker.emitToUser(userId, {
+          type: 'worktree:setup_complete',
+          threadId,
+          data: { branch: branchName, worktreePath: wtPath },
+        } as WSEvent);
+        wsBroker.emitToUser(userId, {
+          type: 'thread:updated',
+          threadId,
+          data: { status: 'pending', branch: branchName, worktreePath: wtPath },
+        } as WSEvent);
+
+        // Now start the agent
+        const cwd = wtPath;
+        const augmentedPrompt = await augmentPromptWithFiles(prompt, fileReferences, cwd);
+        try {
+          await startAgent(
+            threadId,
+            augmentedPrompt,
+            cwd,
+            resolvedModel,
+            resolvedPermissionMode,
+            images,
+            disallowedTools,
+            allowedTools,
+            resolvedProvider,
+          );
+        } catch (err: any) {
+          log.error('Failed to start agent after worktree setup', { threadId, error: err });
+          tm.updateThread(threadId, { status: 'failed' });
+          wsBroker.emitToUser(userId, {
+            type: 'thread:updated',
+            threadId,
+            data: { status: 'failed' },
+          } as WSEvent);
+        }
+      } catch (err) {
+        log.error('Background worktree setup failed', { threadId, error: String(err) });
+        tm.updateThread(threadId, { status: 'failed' });
+        wsBroker.emitToUser(userId, {
+          type: 'thread:updated',
+          threadId,
+          data: { status: 'failed' },
+        } as WSEvent);
       }
-    } catch (err) {
-      log.warn('Failed to setup worktree', { threadId, error: String(err) });
-    }
-  } else if (requestWorktreePath) {
-    // Local mode reusing an existing worktree directory (e.g. conflict resolution)
+    })();
+
+    return c.json(responseThread, 201);
+  }
+
+  // Non-worktree paths (local mode, or reusing an existing worktree)
+  if (requestWorktreePath) {
     worktreePath = requestWorktreePath;
     const branchResult = await getCurrentBranch(requestWorktreePath);
     if (branchResult.isOk()) {
@@ -314,10 +497,7 @@ threadRoutes.post('/', async (c) => {
       }
     }
   }
-  // Resolve defaults: explicit value > project default > hardcoded fallback
-  const resolvedProvider = provider || project.defaultProvider || 'claude';
-  const resolvedModel = model || project.defaultModel || 'sonnet';
-  const resolvedPermissionMode = permissionMode || project.defaultPermissionMode || 'autoEdit';
+
   const thread = {
     id: threadId,
     projectId,
@@ -335,7 +515,7 @@ threadRoutes.post('/', async (c) => {
     parentThreadId,
     cost: 0,
     createdAt: new Date().toISOString(),
-    createdBy: userId, // Thread creator is the authenticated user
+    createdBy: userId,
   };
 
   tm.createThread(thread);
@@ -371,10 +551,8 @@ threadRoutes.post('/', async (c) => {
       resolvedProvider,
     );
   } catch (err: any) {
-    // If startAgent throws (e.g. Claude CLI not found), return error to client
     log.error('Failed to start agent', { namespace: 'agent', threadId, error: err });
 
-    // Check if it's a binary-not-found error
     const isBinaryError =
       err.message?.includes('Could not find the claude CLI binary') ||
       err.message?.includes('CLAUDE_BINARY_PATH');
@@ -388,10 +566,9 @@ threadRoutes.post('/', async (c) => {
           details: err.message,
         },
         503,
-      ); // 503 Service Unavailable
+      );
     }
 
-    // Other errors
     return c.json(
       {
         error: 'Failed to start agent',

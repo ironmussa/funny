@@ -1,9 +1,8 @@
 import { GitBranch, Check, ChevronsUpDown, Search } from 'lucide-react';
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
-import { GitProgressModal, type GitProgressStep } from '@/components/GitProgressModal';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -57,55 +56,6 @@ export function NewThreadDialog() {
   const [branchOpen, setBranchOpen] = useState(false);
   const branchSearchRef = useRef<HTMLInputElement>(null);
 
-  // Setup progress modal state
-  const [setupProgressOpen, setSetupProgressOpen] = useState(false);
-  const [setupSteps, setSetupSteps] = useState<GitProgressStep[]>([]);
-
-  const updateSetupStep = useCallback(
-    (stepId: string, label: string, status: GitProgressStep['status'], error?: string) => {
-      setSetupSteps((prev) => {
-        const exists = prev.some((s) => s.id === stepId);
-        if (exists) {
-          return prev.map((s) => (s.id === stepId ? { ...s, label, status, error } : s));
-        }
-        return [...prev, { id: stepId, label, status, error }];
-      });
-    },
-    [],
-  );
-
-  // Ref to hold the created thread info until progress modal is dismissed
-  const pendingThreadRef = useRef<{ id: string; projectId: string } | null>(null);
-
-  const handleSetupProgressClose = useCallback(
-    async (open: boolean) => {
-      if (open) return;
-      const pending = pendingThreadRef.current;
-      pendingThreadRef.current = null;
-      if (pending) {
-        await loadThreadsForProject(pending.projectId);
-        await selectThread(pending.id);
-        setReviewPaneOpen(false);
-      }
-      // Batch these so React unmounts without rendering intermediate states
-      setSetupProgressOpen(false);
-      setCreating(false);
-      cancelNewThread();
-    },
-    [loadThreadsForProject, selectThread, setReviewPaneOpen, cancelNewThread],
-  );
-
-  // Listen for worktree:setup WS events while creating
-  useEffect(() => {
-    if (!creating || !createWorktree) return;
-    const handler = (e: Event) => {
-      const { step, label, status, error } = (e as CustomEvent).detail;
-      updateSetupStep(step, label, status, error);
-    };
-    window.addEventListener('worktree:setup', handler);
-    return () => window.removeEventListener('worktree:setup', handler);
-  }, [creating, createWorktree, updateSetupStep]);
-
   // Reset model when provider changes and current model isn't valid for new provider
   useEffect(() => {
     if (!models.some((m) => m.value === model)) {
@@ -137,12 +87,6 @@ export function NewThreadDialog() {
     if (!prompt || !newThreadProjectId || creating) return;
     setCreating(true);
 
-    // Show progress modal for worktree mode
-    if (createWorktree) {
-      setSetupSteps([]);
-      setSetupProgressOpen(true);
-    }
-
     const result = await api.createThread({
       projectId: newThreadProjectId,
       title: title || prompt,
@@ -156,47 +100,16 @@ export function NewThreadDialog() {
     if (result.isErr()) {
       toast.error(result.error.message);
       setCreating(false);
-      setSetupProgressOpen(false);
       return;
     }
 
-    if (createWorktree) {
-      // Keep modal open — user dismisses via "Done" button
-      pendingThreadRef.current = { id: result.value.id, projectId: newThreadProjectId };
-      // Ensure all steps show as completed since server has finished
-      setSetupSteps((prev) => {
-        if (prev.length === 0) {
-          return [
-            {
-              id: 'worktree',
-              label: t('newThread.worktreeCreated', 'Worktree created'),
-              status: 'completed' as const,
-            },
-          ];
-        }
-        return prev.map((s) =>
-          s.status === 'running' ? { ...s, status: 'completed' as const } : s,
-        );
-      });
-    } else {
-      await loadThreadsForProject(newThreadProjectId);
-      await selectThread(result.value.id);
-      setReviewPaneOpen(false);
-      cancelNewThread();
-      setCreating(false);
-    }
+    // Thread created — close dialog immediately (worktree setup runs in background)
+    await loadThreadsForProject(newThreadProjectId);
+    await selectThread(result.value.id);
+    setReviewPaneOpen(false);
+    cancelNewThread();
+    setCreating(false);
   };
-
-  if (setupProgressOpen) {
-    return (
-      <GitProgressModal
-        open
-        onOpenChange={handleSetupProgressClose}
-        steps={setupSteps}
-        title={t('newThread.settingUpWorktree', 'Setting up worktree')}
-      />
-    );
-  }
 
   return (
     <Dialog open onOpenChange={(open) => !open && !creating && cancelNewThread()}>

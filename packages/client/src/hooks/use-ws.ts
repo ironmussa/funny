@@ -286,6 +286,12 @@ function handleMessage(e: MessageEvent) {
     case 'worktree:setup': {
       // Dispatch a custom DOM event for components listening for setup progress
       window.dispatchEvent(new CustomEvent('worktree:setup', { detail: { threadId, ...data } }));
+      // Also update thread store for inline progress display
+      useThreadStore.getState().handleWSWorktreeSetup(threadId, data);
+      break;
+    }
+    case 'worktree:setup_complete': {
+      useThreadStore.getState().handleWSWorktreeSetupComplete(threadId, data);
       break;
     }
   }

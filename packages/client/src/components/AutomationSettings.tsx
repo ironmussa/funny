@@ -1,5 +1,5 @@
 import type { Automation, AgentModel, PermissionMode, AutomationSchedule } from '@funny/shared';
-import { Plus, Pencil, Trash2, Play, Pause, Timer, History } from 'lucide-react';
+import { Plus, Pencil, Trash2, Play, Pause, History } from 'lucide-react';
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -99,8 +99,6 @@ const defaultForm: FormState = {
 export function AutomationSettings() {
   const navigate = useNavigate();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
-  const projects = useAppStore((s) => s.projects);
-  const project = projects.find((p) => p.id === selectedProjectId);
 
   const automationsByProject = useAutomationStore((s) => s.automationsByProject);
   const loadAutomations = useAutomationStore((s) => s.loadAutomations);
@@ -202,14 +200,7 @@ export function AutomationSettings() {
   return (
     <div className="space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Timer className="h-3.5 w-3.5" />
-          <span>
-            Automations{' '}
-            {project && <span className="font-medium text-foreground">{project.name}</span>}
-          </span>
-        </div>
+      <div className="flex items-center justify-end">
         <Button
           variant="outline"
           size="sm"

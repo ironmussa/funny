@@ -1,9 +1,10 @@
 import type { StartupCommand } from '@funny/shared';
-import { Play, Plus, Pencil, Trash2, X, Check, Square, Loader2, Terminal } from 'lucide-react';
+import { Play, Plus, Pencil, Trash2, X, Check, Square, Loader2 } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { CommandHighlight } from '@/components/CommandHighlight';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -14,14 +15,11 @@ import { useTerminalStore } from '@/stores/terminal-store';
 export function StartupCommandsSettings() {
   const { t } = useTranslation();
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
-  const projects = useAppStore((s) => s.projects);
   const [commands, setCommands] = useState<StartupCommand[]>([]);
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [label, setLabel] = useState('');
   const [command, setCommand] = useState('');
-
-  const project = projects.find((p) => p.id === selectedProjectId);
 
   const loadCommands = useCallback(async () => {
     if (!selectedProjectId) return;
@@ -146,14 +144,7 @@ export function StartupCommandsSettings() {
   return (
     <div className="space-y-4">
       {/* Project indicator */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Terminal className="h-3.5 w-3.5" />
-          <span>
-            {t('startup.title')}{' '}
-            {project && <span className="font-medium text-foreground">{project.name}</span>}
-          </span>
-        </div>
+      <div className="flex items-center justify-end">
         <Button
           variant="outline"
           size="sm"
@@ -240,9 +231,7 @@ export function StartupCommandsSettings() {
                 )}
                 <span className="truncate text-sm font-medium">{cmd.label}</span>
               </div>
-              <span className="mt-0.5 block truncate font-mono text-xs text-muted-foreground">
-                {cmd.command}
-              </span>
+              <CommandHighlight command={cmd.command} />
             </div>
 
             {/* Actions */}

@@ -5,6 +5,7 @@ import {
   Sparkles,
   GitFork,
   Terminal,
+  Webhook,
   Timer,
   Archive,
   Users,
@@ -31,6 +32,7 @@ const baseSettingsItems = [
   { id: 'skills', label: 'Skills', icon: Sparkles },
   { id: 'worktrees', label: 'Worktrees', icon: GitFork },
   { id: 'startup-commands', label: 'Startup Commands', icon: Terminal },
+  { id: 'hooks', label: 'Hooks', icon: Webhook },
   { id: 'automations', label: 'Automations', icon: Timer },
   { id: 'archived-threads', label: 'Archived Threads', icon: Archive },
 ] as const;
@@ -44,6 +46,7 @@ export const settingsLabelKeys: Record<string, string> = {
   skills: 'settings.skills',
   worktrees: 'settings.worktrees',
   'startup-commands': 'startup.title',
+  hooks: 'hooks.title',
   automations: 'settings.automations',
   'archived-threads': 'settings.archivedThreads',
   users: 'users.title',

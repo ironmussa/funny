@@ -149,6 +149,26 @@ export const createCommandSchema = z.object({
   portEnvVar: z.string().optional(),
 });
 
+export const hookTypeSchema = z.enum(['postCommit', 'postPush', 'preMerge']);
+
+export const createHookSchema = z.object({
+  hookType: hookTypeSchema.optional().default('postCommit'),
+  label: z.string().min(1, 'label is required'),
+  command: z.string().min(1, 'command is required'),
+});
+
+export const updateHookSchema = z.object({
+  hookType: hookTypeSchema.optional(),
+  label: z.string().min(1).optional(),
+  command: z.string().min(1).optional(),
+  enabled: z.boolean().optional(),
+  sortOrder: z.number().int().optional(),
+});
+
+export const runHookSchema = z.object({
+  cwd: z.string().min(1, 'cwd is required'),
+});
+
 export const createWorktreeSchema = z.object({
   projectId: z.string().min(1),
   branchName: z.string().min(1),

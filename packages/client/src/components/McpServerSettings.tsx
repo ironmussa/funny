@@ -418,17 +418,6 @@ export function McpServerSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Project indicator */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <Server className="h-3.5 w-3.5" />
-        <span>
-          {t('mcp.showingFor')}{' '}
-          <span className="font-medium text-foreground">
-            {projects.find((p) => p.path === projectPath)?.name || projectPath}
-          </span>
-        </span>
-      </div>
-
       {/* Error banner */}
       {error && (
         <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">

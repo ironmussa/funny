@@ -27,6 +27,8 @@ import {
 } from './git-event-persistence-handler.js';
 import { gitStatusHandler } from './git-status-handler.js';
 import { stageTransitionOnAgentStartHandler } from './stage-transition-on-agent-start-handler.js';
+import { threadDeletedWsHandler } from './thread-deleted-ws-handler.js';
+import { threadStageChangedWsHandler } from './thread-stage-changed-ws-handler.js';
 import type { EventHandler, HandlerServiceContext } from './types.js';
 
 // ── Handler list ────────────────────────────────────────────────
@@ -47,6 +49,8 @@ const allHandlers: EventHandler<any>[] = [
   agentCompletedGitStatusHandler,
   agentCompletedQueueHandler,
   stageTransitionOnAgentStartHandler,
+  threadDeletedWsHandler,
+  threadStageChangedWsHandler,
 ];
 
 // ── Registration ────────────────────────────────────────────────

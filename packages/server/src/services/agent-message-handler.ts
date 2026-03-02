@@ -3,8 +3,7 @@
  * @domain subdomain-type: core
  * @domain type: handler
  * @domain layer: application
- * @domain consumes: agent:message
- * @domain emits: agent:tool_call, agent:tool_output, agent:result, agent:status, git:changed, thread:stage-changed
+ * @domain emits: agent:message, agent:tool_call, agent:tool_output, agent:result, agent:status, git:changed, thread:stage-changed
  * @domain depends: AgentStateTracker, ThreadManager, WSBroker, ThreadEventBus
  */
 

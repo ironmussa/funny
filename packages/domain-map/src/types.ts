@@ -151,6 +151,25 @@ export interface ValidationWarning {
   source: 'yaml' | 'annotation' | 'cross';
 }
 
+// ── Sync Types ──────────────────────────────────────────────────
+
+export type SyncDirection = 'code-to-yaml' | 'yaml-to-code';
+
+export interface SyncAction {
+  direction: SyncDirection;
+  kind:
+    | 'add-subdomain'
+    | 'add-events'
+    | 'add-context-map'
+    | 'update-subdomain-type'
+    | 'add-context'
+    | 'notify-unannotated';
+  message: string;
+  /** For code-to-yaml: YAML section path. For yaml-to-code: file path. */
+  target: string;
+  payload: Record<string, unknown>;
+}
+
 // ── CLI options ──────────────────────────────────────────────────
 
 export interface CLIOptions {
@@ -167,7 +186,7 @@ export interface CLIOptions {
   filterType?: DomainType[];
 
   /** Output format */
-  format: 'mermaid' | 'json' | 'sequence' | 'catalog' | 'context-map' | 'inventory';
+  format: 'mermaid' | 'json' | 'sequence' | 'catalog' | 'context-map' | 'inventory' | 'explorer';
 
   /** Show event flow only (suppress dependency arrows) */
   eventsOnly: boolean;
@@ -186,4 +205,10 @@ export interface CLIOptions {
 
   /** Run cross-validation between YAML and annotations */
   validate?: boolean;
+
+  /** Sync direction: code-to-yaml or yaml-to-code */
+  sync?: SyncDirection;
+
+  /** Write sync changes to files (default: dry-run) */
+  write?: boolean;
 }

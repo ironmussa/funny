@@ -382,6 +382,16 @@ export interface WSThreadUpdatedData {
   worktreePath?: string;
 }
 
+export interface WSThreadDeletedData {
+  projectId: string;
+}
+
+export interface WSThreadStageChangedData {
+  fromStage: ThreadStage | null;
+  toStage: ThreadStage;
+  projectId: string;
+}
+
 export interface WSAutomationRunUpdatedData {
   automationId: string;
   runId: string;
@@ -419,6 +429,8 @@ export type WSEvent =
   | { type: 'pty:data'; threadId: string; data: WSPtyDataData }
   | { type: 'pty:exit'; threadId: string; data: WSPtyExitData }
   | { type: 'thread:created'; threadId: string; data: WSThreadCreatedData }
+  | { type: 'thread:deleted'; threadId: string; data: WSThreadDeletedData }
+  | { type: 'thread:stage-changed'; threadId: string; data: WSThreadStageChangedData }
   | { type: 'thread:comment_deleted'; threadId: string; data: WSCommentDeletedData }
   | { type: 'thread:updated'; threadId: string; data: WSThreadUpdatedData }
   | { type: 'thread:queue_update'; threadId: string; data: WSQueueUpdateData }
@@ -444,6 +456,27 @@ export interface StartupCommand {
   command: string;
   sortOrder: number;
   createdAt: string;
+}
+
+// ─── Project Hooks ───────────────────────────────────────
+
+export type HookType = 'postCommit' | 'postPush' | 'preMerge';
+
+export interface ProjectHook {
+  id: string;
+  projectId: string;
+  hookType: HookType;
+  label: string;
+  command: string;
+  enabled: boolean;
+  sortOrder: number;
+  createdAt: string;
+}
+
+export interface HookRunResult {
+  ok: boolean;
+  output: string;
+  exitCode: number;
 }
 
 // ─── Git Diffs ───────────────────────────────────────────

@@ -2,16 +2,26 @@
 
 import { resolve } from 'path';
 
+import { applyActionsToCode } from './code-writer.js';
 import { generateCatalog } from './generators/catalog.js';
 import { generateContextMap } from './generators/context-map.js';
+import { generateExplorer } from './generators/explorer.js';
 import { generateInventory } from './generators/inventory.js';
 import { generateJSON } from './generators/json.js';
 import { generateMermaid } from './generators/mermaid.js';
 import { generateSequence } from './generators/sequence.js';
 import { buildEnrichedGraph, parseDirectory } from './parser.js';
 import { parseStrategicFile } from './strategic-parser.js';
-import type { CLIOptions, DomainType, DomainGraph, EnrichedDomainGraph } from './types.js';
+import { computeCodeToYamlActions, computeYamlToCodeActions } from './sync.js';
+import type {
+  CLIOptions,
+  DomainType,
+  DomainGraph,
+  EnrichedDomainGraph,
+  SyncDirection,
+} from './types.js';
 import { validateConsistency } from './validator.js';
+import { applyActionsToYAML } from './yaml-writer.js';
 
 // ── Argument parsing ─────────────────────────────────────────────
 
@@ -83,6 +93,21 @@ function parseArgs(argv: string[]): CLIOptions {
         options.validate = true;
         break;
 
+      case '--sync': {
+        const next = argv[i + 1];
+        if (next === 'yaml-to-code' || next === 'code-to-yaml') {
+          options.sync = next as SyncDirection;
+          i++;
+        } else {
+          options.sync = 'code-to-yaml'; // default direction
+        }
+        break;
+      }
+
+      case '--write':
+        options.write = true;
+        break;
+
       default:
         // Positional argument: directory
         if (!arg.startsWith('-')) {
@@ -111,7 +136,7 @@ Usage:
 
 Options:
   --output, -o <file>       Write output to file (default: stdout)
-  --format, -f <format>     Output format: mermaid | json | sequence | catalog | context-map | inventory (default: mermaid)
+  --format, -f <format>     Output format: mermaid | json | sequence | catalog | context-map | inventory | explorer (default: mermaid)
   --subdomain, -d <name>    Filter by subdomain (repeatable)
   --type, -t <type>         Filter by DDD type (repeatable)
   --events-only             Show only event flow arrows (mermaid format)
@@ -120,6 +145,8 @@ Options:
   --show-bus                Show EventBus as explicit mediator in sequence diagrams
   --domain-file <path>      Path to strategic domain.yaml file
   --validate                Cross-validate YAML against code annotations
+  --sync [direction]        Sync YAML ↔ code: code-to-yaml (default) | yaml-to-code
+  --write                   Apply sync changes (without: dry-run only)
   --help, -h                Show this help
 
 Examples:
@@ -139,9 +166,17 @@ Examples:
   bun packages/domain-map/src/cli.ts --format inventory packages/server/src
   bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format inventory packages/server/src
 
+  # Architecture explorer (unified view):
+  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format explorer packages/server/src
+
   # Strategic views (with domain.yaml):
   bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format context-map packages/server/src
   bun packages/domain-map/src/cli.ts --domain-file domain.yaml --validate packages/server/src
+
+  # 2-way sync:
+  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --sync packages/server/src
+  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --sync yaml-to-code packages/server/src
+  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --sync --write packages/server/src
 `);
 }
 
@@ -181,21 +216,21 @@ async function main(): Promise<void> {
   const options = parseArgs(args);
 
   const dir = resolve(options.dir);
-  console.log(`Scanning ${dir} for @domain annotations...`);
+  console.error(`Scanning ${dir} for @domain annotations...`);
 
   const graph = await parseDirectory(dir);
 
   const nodeCount = graph.nodes.size;
   const subdomainCount = graph.subdomains.size;
-  console.log(`Found ${nodeCount} annotated components in ${subdomainCount} subdomains.`);
+  console.error(`Found ${nodeCount} annotated components in ${subdomainCount} subdomains.`);
 
   // Load strategic model if provided
   let enriched: EnrichedDomainGraph;
   if (options.domainFile) {
     const domainPath = resolve(options.domainFile);
-    console.log(`Loading strategic model from ${domainPath}...`);
+    console.error(`Loading strategic model from ${domainPath}...`);
     const strategic = await parseStrategicFile(domainPath);
-    console.log(
+    console.error(
       `Strategic model: ${strategic.subdomains.size} subdomains, ${strategic.contextMap.length} relationships, ${strategic.teams.length} teams.`,
     );
 
@@ -240,10 +275,67 @@ async function main(): Promise<void> {
     return;
   }
 
-  // Apply filters for non-context-map formats
-  const filtered = options.format === 'context-map' ? enriched : applyFilters(enriched, options);
+  // Sync mode
+  if (options.sync) {
+    if (!enriched.strategic) {
+      console.error('--sync requires --domain-file. Provide a domain.yaml file.');
+      process.exit(1);
+    }
 
-  if (options.format !== 'context-map' && filtered.nodes.size === 0) {
+    const direction = options.sync;
+    const actions =
+      direction === 'yaml-to-code'
+        ? computeYamlToCodeActions(enriched, enriched.strategic)
+        : computeCodeToYamlActions(enriched, enriched.strategic);
+
+    if (actions.length === 0) {
+      console.log(`Sync (${direction}): Everything is in sync. No changes needed.`);
+      return;
+    }
+
+    // Print report
+    console.log(
+      `\n=== ${direction === 'code-to-yaml' ? 'Code → YAML' : 'YAML → Code'} Sync Report ===\n`,
+    );
+    for (const action of actions) {
+      const kindLabel = action.kind.toUpperCase().replace(/-/g, '_');
+      console.log(`  [${kindLabel}] ${action.message}`);
+    }
+    console.log(`\n${actions.length} change(s) detected.`);
+
+    if (options.write) {
+      if (direction === 'code-to-yaml') {
+        const domainPath = resolve(options.domainFile!);
+        const yamlContent = await Bun.file(domainPath).text();
+        const updated = applyActionsToYAML(yamlContent, actions);
+        await Bun.write(domainPath, updated);
+        console.log(`Updated ${options.domainFile}`);
+      } else {
+        const filePaths = new Set(
+          actions.filter((a) => a.kind !== 'notify-unannotated').map((a) => a.target),
+        );
+        const contents = new Map<string, string>();
+        for (const fp of filePaths) {
+          const abs = resolve(dir, fp);
+          contents.set(fp, await Bun.file(abs).text());
+        }
+        const patched = applyActionsToCode(contents, actions);
+        for (const [fp, content] of patched) {
+          await Bun.write(resolve(dir, fp), content);
+        }
+        console.log(`Updated ${patched.size} source file(s).`);
+      }
+    } else {
+      console.log('Dry run — no files modified. Use --write to apply changes.');
+    }
+    return;
+  }
+
+  // Apply filters for non-context-map formats
+  const noFilter = options.format === 'context-map' || options.format === 'explorer';
+  const filtered = noFilter ? enriched : applyFilters(enriched, options);
+
+  if (!noFilter && filtered.nodes.size === 0) {
     console.log('No @domain annotations found. Use /domain-annotate to add them.');
     process.exit(0);
   }
@@ -269,6 +361,9 @@ async function main(): Promise<void> {
       break;
     case 'inventory':
       output = generateInventory(filtered);
+      break;
+    case 'explorer':
+      output = generateExplorer(enriched);
       break;
     default:
       output = generateMermaid(filtered, {

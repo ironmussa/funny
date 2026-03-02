@@ -18,6 +18,8 @@ import type {
   GitHubRepo,
   PaginatedMessages,
   QueuedMessage,
+  ProjectHook,
+  HookRunResult,
 } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { internal, processError } from '@funny/shared/errors';
@@ -507,6 +509,39 @@ export const api = {
     request<{ ok: boolean }>(`/projects/${projectId}/commands/${cmdId}/start`, { method: 'POST' }),
   stopCommand: (projectId: string, cmdId: string) =>
     request<{ ok: boolean }>(`/projects/${projectId}/commands/${cmdId}/stop`, { method: 'POST' }),
+
+  // Project Hooks
+  listHooks: (projectId: string, hookType?: string) =>
+    request<ProjectHook[]>(
+      `/projects/${projectId}/hooks${hookType ? `?hookType=${hookType}` : ''}`,
+    ),
+  addHook: (projectId: string, data: { hookType?: string; label: string; command: string }) =>
+    request<ProjectHook>(`/projects/${projectId}/hooks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateHook: (
+    projectId: string,
+    hookId: string,
+    data: {
+      label?: string;
+      command?: string;
+      enabled?: boolean;
+      hookType?: string;
+      sortOrder?: number;
+    },
+  ) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/hooks/${hookId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteHook: (projectId: string, hookId: string) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/hooks/${hookId}`, { method: 'DELETE' }),
+  runHook: (projectId: string, hookId: string, cwd: string) =>
+    request<HookRunResult>(`/projects/${projectId}/hooks/${hookId}/run`, {
+      method: 'POST',
+      body: JSON.stringify({ cwd }),
+    }),
 
   // MCP Servers
   listMcpServers: (projectPath: string) =>

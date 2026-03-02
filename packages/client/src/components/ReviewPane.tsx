@@ -1,4 +1,4 @@
-import type { FileDiffSummary } from '@funny/shared';
+import type { FileDiffSummary, ProjectHook } from '@funny/shared';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   RefreshCw,
@@ -477,6 +477,18 @@ export function ReviewPane() {
     commitLockRef.current = true;
     setActionInProgress(selectedAction);
 
+    // Fetch postCommit hooks for the project
+    const hookProjectId = effectiveThreadId
+      ? useThreadStore.getState().activeThread?.projectId
+      : projectModeId;
+    let postCommitHooks: ProjectHook[] = [];
+    if (hookProjectId) {
+      const hooksResult = await api.listHooks(hookProjectId, 'postCommit');
+      if (hooksResult.isOk()) {
+        postCommitHooks = hooksResult.value.filter((h) => h.enabled);
+      }
+    }
+
     // Build steps based on selected action
     const steps: GitProgressStep[] = [];
     const toUnstage = summaries
@@ -504,6 +516,10 @@ export function ReviewPane() {
       label: isAmend ? t('review.progress.amending') : t('review.progress.committing'),
       status: 'pending',
     });
+    // Add postCommit hook steps
+    for (const hook of postCommitHooks) {
+      steps.push({ id: `hook-${hook.id}`, label: hook.label, status: 'pending' });
+    }
     if (selectedAction === 'commit-push' || selectedAction === 'commit-pr') {
       steps.push({ id: 'push', label: t('review.progress.pushing'), status: 'pending' });
     }
@@ -606,6 +622,20 @@ export function ReviewPane() {
       // Brief delay so the timer captures the transition
       await new Promise((r) => setTimeout(r, 50));
       setStep('commit', { status: 'completed' });
+
+      // Run postCommit hooks (non-blocking — commit is already done)
+      for (const hook of postCommitHooks) {
+        const stepId = `hook-${hook.id}`;
+        setStep(stepId, { status: 'running' });
+        const hookResult = await api.runHook(hookProjectId!, hook.id, basePath);
+        if (hookResult.isOk() && hookResult.value.ok) {
+          setStep(stepId, { status: 'completed' });
+        } else {
+          const errorMsg = hookResult.isOk() ? hookResult.value.output : hookResult.error.message;
+          setStep(stepId, { status: 'failed', error: errorMsg });
+          // Continue — don't abort push/pr/merge
+        }
+      }
 
       // Push (for commit-push and commit-pr)
       if (selectedAction === 'commit-push' || selectedAction === 'commit-pr') {

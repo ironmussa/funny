@@ -191,15 +191,6 @@ export function WorktreeSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Project indicator */}
-      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-        <GitFork className="h-3.5 w-3.5" />
-        <span>
-          {t('worktreeSettings.worktreesFor')}{' '}
-          <span className="font-medium text-foreground">{project.name}</span>
-        </span>
-      </div>
-
       {/* Error banner */}
       {error && (
         <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">

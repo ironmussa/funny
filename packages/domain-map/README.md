@@ -1,13 +1,14 @@
 # @funny/domain-map
 
-Parses `@domain` JSDoc annotations from TypeScript source files and generates architecture diagrams (Mermaid flowcharts, sequence diagrams), event catalogs, or structured JSON. Works on any TypeScript codebase — no framework coupling.
+Parses `@domain` JSDoc annotations from TypeScript source files and generates architecture diagrams (Mermaid flowcharts, sequence diagrams), event catalogs, file inventories, architecture explorers, or structured JSON. Supports **bidirectional sync** between a strategic `domain.yaml` and tactical code annotations. Works on any TypeScript codebase — no framework coupling.
 
 ## What it does
 
 1. Scans `.ts` files recursively for `/** @domain ... */` JSDoc blocks
 2. Extracts DDD metadata: subdomain, type, layer, events, dependencies
 3. Builds a `DomainGraph` (nodes grouped by subdomain, with event flow edges)
-4. Outputs a **Mermaid flowchart**, **sequence diagram**, **event catalog**, or **JSON** representation
+4. Outputs **Mermaid flowcharts**, **sequence diagrams**, **event catalogs**, **file inventories**, **architecture explorer**, or **JSON**
+5. **2-way sync**: detects drift between `domain.yaml` and code annotations, optionally applies fixes
 
 ## Installation
 
@@ -171,6 +172,12 @@ bun packages/domain-map/src/cli.ts --domain-file domain.yaml --validate src/
 
 # Enrich the standard mermaid/sequence/catalog with strategic data
 bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format mermaid src/
+
+# Architecture explorer — unified view combining strategic + tactical data
+bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format explorer src/
+
+# File inventory — which files implement each subdomain
+bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format inventory src/
 ```
 
 ### Cross-validation
@@ -185,6 +192,42 @@ The `--validate` flag checks consistency between the YAML and the `@domain` anno
 - Context map referencing undefined bounded contexts
 - Teams owning undefined bounded contexts
 - Bounded contexts not owned by any team
+
+### 2-Way Sync
+
+The `--sync` flag detects drift between `domain.yaml` and `@domain` code annotations and can automatically fix it.
+
+**Code → YAML** (default): discovers things in code that are missing from the YAML.
+
+```bash
+# Dry-run: shows what would change in domain.yaml
+bun packages/domain-map/src/cli.ts --domain-file domain.yaml --sync src/
+
+# Apply changes to domain.yaml
+bun packages/domain-map/src/cli.ts --domain-file domain.yaml --sync --write src/
+```
+
+Detects:
+- Subdomains annotated in code but missing from YAML → adds subdomain entry
+- Events emitted in code but not in YAML `publishes` → adds events
+- Cross-subdomain event flows without a context-map relationship → adds relationship
+
+**YAML → Code**: propagates strategic decisions from YAML to code annotations.
+
+```bash
+# Dry-run: shows what annotations would change
+bun packages/domain-map/src/cli.ts --domain-file domain.yaml --sync yaml-to-code src/
+
+# Apply changes to source files
+bun packages/domain-map/src/cli.ts --domain-file domain.yaml --sync yaml-to-code --write src/
+```
+
+Detects:
+- `subdomain-type` in YAML differs from annotation → updates `@domain subdomain-type:` tag
+- YAML defines `bounded-context` but annotation lacks `@domain context:` → inserts tag
+- Subdomain in YAML has no annotated files → reports as informational notice
+
+By default, sync runs in **dry-run** mode showing what would change. Add `--write` to apply.
 
 ### Programmatic API (strategic)
 
@@ -259,7 +302,7 @@ bun packages/domain-map/src/cli.ts --format sequence --show-bus src/
 | Option | Short | Description | Default |
 |--------|-------|-------------|---------|
 | `--output` | `-o` | Write output to file | stdout |
-| `--format` | `-f` | Output format: `mermaid`, `json`, `sequence`, `catalog`, or `context-map` | `mermaid` |
+| `--format` | `-f` | Output format: `mermaid`, `json`, `sequence`, `catalog`, `context-map`, `inventory`, or `explorer` | `mermaid` |
 | `--subdomain` | `-d` | Filter by subdomain (repeatable) | all |
 | `--type` | `-t` | Filter by DDD type (repeatable) | all |
 | `--events-only` | | Only show event flow arrows | `false` |
@@ -268,6 +311,8 @@ bun packages/domain-map/src/cli.ts --format sequence --show-bus src/
 | `--show-bus` | | Show event bus as explicit mediator in sequence diagrams | `false` |
 | `--domain-file` | | Path to strategic `domain.yaml` file | none |
 | `--validate` | | Cross-validate YAML against code annotations | `false` |
+| `--sync` | | Sync direction: `code-to-yaml` (default) or `yaml-to-code` | none |
+| `--write` | | Apply sync changes (without this flag, sync is dry-run only) | `false` |
 | `--help` | `-h` | Show help | |
 
 ## Output Formats
@@ -311,6 +356,25 @@ Strategic view showing bounded contexts as nodes and DDD relationships as labele
 - Edge labels show relationship abbreviation (C/S, ACL, OHS, PL, Partnership, Conformist, SK)
 - Component counts from tactical annotations shown on each BC node
 
+### Inventory (`--format inventory`)
+
+Markdown document mapping every annotated file to its subdomain, DDD type, and events. Useful as a "where is X implemented?" reference.
+
+- Files grouped by subdomain, then by DDD type
+- Shows emitted and consumed events per component
+- Summary table with subdomain counts, types, and bounded contexts
+- Subdomains sorted by strategic type: core → supporting → generic
+
+### Explorer (`--format explorer`)
+
+Comprehensive architecture overview combining strategic YAML data with tactical code annotations into a single Markdown document. Requires `--domain-file`.
+
+- **Subdomains by type** (core, supporting, generic) with file tables, events, APIs, and relationship summaries
+- **Context Map** table with upstream/downstream/relationship/description
+- **Event Flow Summary** grouped by family with cross-subdomain detection and orphan identification
+- **Health Dashboard** with YAML-code consistency warnings, orphan events, and dead-letter events
+- **Team Ownership** table mapping teams to bounded contexts and component counts
+
 ### JSON (`--format json`)
 
 Serialized graph as pretty-printed JSON for programmatic consumption.
@@ -319,7 +383,14 @@ Serialized graph as pretty-printed JSON for programmatic consumption.
 
 ```ts
 import { parseFile, parseDirectory, buildGraph } from '@funny/domain-map';
-import { generateMermaid, generateJSON, generateSequence, generateCatalog } from '@funny/domain-map';
+import {
+  generateMermaid, generateJSON, generateSequence,
+  generateCatalog, generateInventory, generateExplorer,
+} from '@funny/domain-map';
+import {
+  computeCodeToYamlActions, computeYamlToCodeActions,
+  applyActionsToYAML, applyActionsToCode,
+} from '@funny/domain-map';
 ```
 
 ### `parseFile(filePath, content): DomainAnnotation[]`
@@ -425,6 +496,69 @@ const json = generateJSON(graph);
 // { "nodes": { ... }, "subdomains": { ... }, "events": [...] }
 ```
 
+### `generateInventory(graph, options?): string`
+
+Generate a Markdown file inventory grouped by subdomain.
+
+```ts
+const inventory = generateInventory(graph);
+// # Domain Inventory
+// ## Agent Execution (core)
+// ### app-service
+// | File | Name | Emits | Consumes |
+```
+
+### `generateExplorer(graph, options?): string`
+
+Generate a comprehensive Markdown architecture overview. Works best with an enriched graph (strategic + tactical).
+
+```ts
+const enriched = buildEnrichedGraph(annotations, strategic);
+const explorer = generateExplorer(enriched);
+// # Architecture Explorer: Funny
+// > 12 subdomains | 75 components | 3 teams | 10 relationships
+```
+
+### `computeCodeToYamlActions(graph, strategic): SyncAction[]`
+
+Detect what's in code but missing from YAML: new subdomains, unpublished events, undocumented relationships.
+
+```ts
+const actions = computeCodeToYamlActions(graph, strategic);
+for (const a of actions) console.log(`[${a.kind}] ${a.message}`);
+```
+
+### `computeYamlToCodeActions(graph, strategic): SyncAction[]`
+
+Detect what's in YAML but missing from code annotations: type mismatches, missing context tags.
+
+```ts
+const actions = computeYamlToCodeActions(graph, strategic);
+for (const a of actions) console.log(`[${a.kind}] ${a.message}`);
+```
+
+### `applyActionsToYAML(yamlContent, actions): string`
+
+Apply code-to-yaml sync actions to a YAML string. Uses AST-based round-trip to preserve comments.
+
+```ts
+const yaml = await Bun.file('domain.yaml').text();
+const actions = computeCodeToYamlActions(graph, strategic);
+const updated = applyActionsToYAML(yaml, actions);
+```
+
+### `applyActionsToCode(fileContents, actions): Map<string, string>`
+
+Apply yaml-to-code sync actions to source files. Returns only modified files.
+
+```ts
+const actions = computeYamlToCodeActions(graph, strategic);
+const modified = applyActionsToCode(fileContents, actions);
+for (const [path, content] of modified) {
+  await Bun.write(path, content);
+}
+```
+
 ## Example output
 
 ### Mermaid Flowchart
@@ -448,6 +582,39 @@ flowchart LR
   Order_Management__Order -- "order:placed" --> Notifications__SendConfirmation
   Order_Management__OrderFactory -.-> Order_Management__Order
 ```
+
+## Interactive Viewer
+
+The package includes an interactive React SPA for exploring domain graphs visually. It lives in the `viewer/` directory.
+
+### Running the viewer
+
+```bash
+# Generate a JSON graph first
+bun packages/domain-map/src/cli.ts --format json --domain-file domain.yaml packages/server/src > architecture.json
+
+# Start the viewer dev server (port 5174)
+cd packages/domain-map && bun run viewer:dev
+```
+
+Then drag-and-drop the `architecture.json` file into the viewer.
+
+### Viewer features
+
+- **Graph View** — Interactive React Flow diagram with subdomain nodes and event edges (Dagre layout)
+- **Events View** — Event adjacency table showing producers and consumers
+- **Context Map** — Strategic bounded context relationships
+- **Health Dashboard** — Validation warnings, orphan events, dead-letter detection
+- **Sidebar filters** — Filter by subdomain type (core/supporting/generic) and individual subdomains
+- **Detail panel** — Click any subdomain to see its components, files, and events
+
+### Building the viewer
+
+```bash
+cd packages/domain-map && bun run viewer:build
+```
+
+Output goes to `viewer/dist/`.
 
 ## Claude Code Skill
 
@@ -509,6 +676,9 @@ import type {
   SharedKernelDefinition,// Shared kernel entry from YAML
   TeamDefinition,        // Team entry from YAML
   ValidationWarning,     // Cross-validation result
+  // Sync
+  SyncDirection,         // 'code-to-yaml' | 'yaml-to-code'
+  SyncAction,            // Sync action with direction, kind, message, target, payload
 } from '@funny/domain-map';
 
 import type {
@@ -516,5 +686,7 @@ import type {
   SequenceOptions,
   CatalogOptions,
   ContextMapOptions,
+  InventoryOptions,
+  ExplorerOptions,
 } from '@funny/domain-map';
 ```

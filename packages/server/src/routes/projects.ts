@@ -3,14 +3,15 @@
  * @domain subdomain-type: supporting
  * @domain type: adapter
  * @domain layer: infrastructure
- * @domain depends: ProjectManager
+ * @domain depends: ProjectManager, ProjectHooksService, StartupCommandsService, CommandRunner
  */
 
-import { listBranches, getDefaultBranch, getCurrentBranch } from '@funny/core/git';
+import { listBranches, getDefaultBranch, getCurrentBranch, executeShell } from '@funny/core/git';
 import { Hono } from 'hono';
 
 import { requireAdmin } from '../middleware/auth.js';
 import { startCommand, stopCommand, isCommandRunning } from '../services/command-runner.js';
+import * as ph from '../services/project-hooks-service.js';
 import * as pm from '../services/project-manager.js';
 import * as sc from '../services/startup-commands-service.js';
 import type { HonoEnv } from '../types/hono-env.js';
@@ -21,6 +22,9 @@ import {
   updateProjectSchema,
   reorderProjectsSchema,
   createCommandSchema,
+  createHookSchema,
+  updateHookSchema,
+  runHookSchema,
   validate,
 } from '../validation/schemas.js';
 
@@ -188,4 +192,70 @@ projectRoutes.post('/:id/commands/:cmdId/stop', async (c) => {
 projectRoutes.get('/:id/commands/:cmdId/status', (c) => {
   const cmdId = c.req.param('cmdId');
   return c.json({ running: isCommandRunning(cmdId) });
+});
+
+// ─── Project Hooks ──────────────────────────────────────
+
+// GET /api/projects/:id/hooks
+projectRoutes.get('/:id/hooks', (c) => {
+  const projectId = c.req.param('id');
+  const hookType = c.req.query('hookType') as import('@funny/shared').HookType | undefined;
+  const hooks = ph.listHooks(projectId, hookType);
+  return c.json(hooks);
+});
+
+// POST /api/projects/:id/hooks
+projectRoutes.post('/:id/hooks', async (c) => {
+  const projectId = c.req.param('id');
+  const raw = await c.req.json();
+  const parsed = validate(createHookSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { hookType, label, command } = parsed.value;
+  const entry = ph.createHook({ projectId, hookType, label, command });
+  return c.json(entry, 201);
+});
+
+// PUT /api/projects/:id/hooks/:hookId
+projectRoutes.put('/:id/hooks/:hookId', async (c) => {
+  const hookId = c.req.param('hookId');
+  const raw = await c.req.json();
+  const parsed = validate(updateHookSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  ph.updateHook(hookId, parsed.value);
+  return c.json({ ok: true });
+});
+
+// DELETE /api/projects/:id/hooks/:hookId
+projectRoutes.delete('/:id/hooks/:hookId', (c) => {
+  const hookId = c.req.param('hookId');
+  ph.deleteHook(hookId);
+  return c.json({ ok: true });
+});
+
+// POST /api/projects/:id/hooks/:hookId/run
+// Executes a single hook command and returns the result.
+projectRoutes.post('/:id/hooks/:hookId/run', async (c) => {
+  const hookId = c.req.param('hookId');
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(runHookSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+
+  const hook = ph.getHook(hookId);
+  if (!hook) return c.json({ error: 'Hook not found' }, 404);
+
+  try {
+    const result = await executeShell(hook.command, {
+      cwd: parsed.value.cwd,
+      timeout: 120_000,
+      reject: false,
+    });
+    return c.json({
+      ok: result.exitCode === 0,
+      output: result.stdout + (result.stderr ? '\n' + result.stderr : ''),
+      exitCode: result.exitCode,
+    });
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : 'Hook execution failed';
+    return c.json({ ok: false, output: message, exitCode: -1 }, 500);
+  }
 });

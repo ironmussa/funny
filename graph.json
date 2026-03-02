@@ -1,0 +1,1388 @@
+{
+  "nodes": {
+    "Shared Kernel::index": {
+      "filePath": "db\\index.ts",
+      "name": "index",
+      "subdomain": "Shared Kernel",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["ShutdownManager"]
+    },
+    "Shared Kernel::schemas": {
+      "filePath": "validation\\schemas.ts",
+      "name": "schemas",
+      "subdomain": "Shared Kernel",
+      "type": "value-object",
+      "layer": "domain",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Agent Execution::claude-binary": {
+      "filePath": "utils\\claude-binary.ts",
+      "name": "claude-binary",
+      "subdomain": "Agent Execution",
+      "subdomainType": "core",
+      "context": "AgentExecution",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Thread Management::file-mentions": {
+      "filePath": "utils\\file-mentions.ts",
+      "name": "file-mentions",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "domain-service",
+      "layer": "domain",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Agent Execution::provider-detection": {
+      "filePath": "utils\\provider-detection.ts",
+      "name": "provider-detection",
+      "subdomain": "Agent Execution",
+      "subdomainType": "core",
+      "context": "AgentExecution",
+      "type": "domain-service",
+      "layer": "domain",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Shared Kernel::result-response": {
+      "filePath": "utils\\result-response.ts",
+      "name": "result-response",
+      "subdomain": "Shared Kernel",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Shared Kernel::route-helpers": {
+      "filePath": "utils\\route-helpers.ts",
+      "name": "route-helpers",
+      "subdomain": "Shared Kernel",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Shared Kernel::HonoEnv": {
+      "filePath": "types\\hono-env.ts",
+      "name": "HonoEnv",
+      "subdomain": "Shared Kernel",
+      "type": "published-language",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Agent Execution::agent-message-handler": {
+      "filePath": "services\\agent-message-handler.ts",
+      "name": "agent-message-handler",
+      "subdomain": "Agent Execution",
+      "subdomainType": "core",
+      "context": "AgentExecution",
+      "type": "handler",
+      "layer": "application",
+      "emits": [
+        "agent:message",
+        "agent:tool_call",
+        "agent:tool_output",
+        "agent:result",
+        "agent:status",
+        "git:changed",
+        "thread:stage-changed"
+      ],
+      "consumes": [],
+      "depends": ["AgentStateTracker", "ThreadManager", "WSBroker", "ThreadEventBus"]
+    },
+    "Agent Execution::agent-runner": {
+      "filePath": "services\\agent-runner.ts",
+      "name": "agent-runner",
+      "subdomain": "Agent Execution",
+      "subdomainType": "core",
+      "context": "AgentExecution",
+      "type": "app-service",
+      "layer": "application",
+      "emits": ["agent:started", "agent:completed", "agent:error"],
+      "consumes": [],
+      "depends": [
+        "AgentOrchestrator",
+        "AgentStateTracker",
+        "AgentMessageHandler",
+        "ThreadManager",
+        "WSBroker",
+        "ThreadEventBus"
+      ]
+    },
+    "Agent Execution::agent-state": {
+      "filePath": "services\\agent-state.ts",
+      "name": "agent-state",
+      "subdomain": "Agent Execution",
+      "subdomainType": "core",
+      "context": "AgentExecution",
+      "type": "entity",
+      "layer": "domain",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Analytics::analytics-service": {
+      "filePath": "services\\analytics-service.ts",
+      "name": "analytics-service",
+      "subdomain": "Analytics",
+      "subdomainType": "generic",
+      "context": "AnalyticsEngine",
+      "type": "app-service",
+      "layer": "application",
+      "emits": [],
+      "consumes": [],
+      "depends": ["Database"]
+    },
+    "Authentication::auth-service": {
+      "filePath": "services\\auth-service.ts",
+      "name": "auth-service",
+      "subdomain": "Authentication",
+      "subdomainType": "generic",
+      "context": "Auth",
+      "type": "domain-service",
+      "layer": "domain",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Automation::automation-manager": {
+      "filePath": "services\\automation-manager.ts",
+      "name": "automation-manager",
+      "subdomain": "Automation",
+      "subdomainType": "supporting",
+      "context": "AutomationEngine",
+      "type": "repository",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "aggregate": "Automation",
+      "depends": ["Database", "AutomationScheduler"]
+    },
+    "Automation::automation-scheduler": {
+      "filePath": "services\\automation-scheduler.ts",
+      "name": "automation-scheduler",
+      "subdomain": "Automation",
+      "subdomainType": "supporting",
+      "context": "AutomationEngine",
+      "type": "app-service",
+      "layer": "application",
+      "emits": [],
+      "consumes": [],
+      "depends": ["AutomationManager", "AgentRunner", "ProjectManager", "ThreadManager", "WSBroker"]
+    },
+    "Process Management::command-runner": {
+      "filePath": "services\\command-runner.ts",
+      "name": "command-runner",
+      "subdomain": "Process Management",
+      "subdomainType": "supporting",
+      "context": "ProcessMgmt",
+      "type": "app-service",
+      "layer": "application",
+      "emits": ["command:status", "command:output"],
+      "consumes": [],
+      "depends": ["ProjectManager", "WSBroker", "ShutdownManager"]
+    },
+    "Thread Management::comment-repository": {
+      "filePath": "services\\comment-repository.ts",
+      "name": "comment-repository",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "repository",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["Database"]
+    },
+    "Git Operations::git-service": {
+      "filePath": "services\\git-service.ts",
+      "name": "git-service",
+      "subdomain": "Git Operations",
+      "subdomainType": "supporting",
+      "context": "GitOps",
+      "type": "app-service",
+      "layer": "application",
+      "emits": [
+        "git:staged",
+        "git:unstaged",
+        "git:reverted",
+        "git:committed",
+        "git:pushed",
+        "git:pulled",
+        "git:merged",
+        "git:stashed",
+        "git:stash-popped",
+        "git:reset-soft"
+      ],
+      "consumes": [],
+      "depends": ["GitCore", "ThreadEventBus", "ProfileService", "WSBroker"]
+    },
+    "External Integration::ingest-mapper": {
+      "filePath": "services\\ingest-mapper.ts",
+      "name": "ingest-mapper",
+      "subdomain": "External Integration",
+      "subdomainType": "supporting",
+      "context": "ExternalIngest",
+      "type": "anti-corruption-layer",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["ProjectManager", "ThreadManager", "WSBroker", "ShutdownManager"]
+    },
+    "Shared Kernel::interfaces": {
+      "filePath": "services\\interfaces.ts",
+      "name": "interfaces",
+      "subdomain": "Shared Kernel",
+      "type": "module",
+      "layer": "domain",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Extensions::mcp-oauth": {
+      "filePath": "services\\mcp-oauth.ts",
+      "name": "mcp-oauth",
+      "subdomain": "Extensions",
+      "subdomainType": "generic",
+      "context": "ExtensionPlatform",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Extensions::mcp-service": {
+      "filePath": "services\\mcp-service.ts",
+      "name": "mcp-service",
+      "subdomain": "Extensions",
+      "subdomainType": "generic",
+      "context": "ExtensionPlatform",
+      "type": "app-service",
+      "layer": "application",
+      "emits": [],
+      "consumes": [],
+      "depends": ["ClaudeBinary"]
+    },
+    "Thread Management::message-queue": {
+      "filePath": "services\\message-queue.ts",
+      "name": "message-queue",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "repository",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["Database"]
+    },
+    "Thread Management::message-repository": {
+      "filePath": "services\\message-repository.ts",
+      "name": "message-repository",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "repository",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "aggregate": "Thread",
+      "depends": ["Database"]
+    },
+    "Extensions::plugin-service": {
+      "filePath": "services\\plugin-service.ts",
+      "name": "plugin-service",
+      "subdomain": "Extensions",
+      "subdomainType": "generic",
+      "context": "ExtensionPlatform",
+      "type": "app-service",
+      "layer": "application",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "User Profile::profile-service": {
+      "filePath": "services\\profile-service.ts",
+      "name": "profile-service",
+      "subdomain": "User Profile",
+      "subdomainType": "generic",
+      "context": "UserProfile",
+      "type": "repository",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["Database", "Crypto"]
+    },
+    "Process Management::project-hooks-service": {
+      "filePath": "services\\project-hooks-service.ts",
+      "name": "project-hooks-service",
+      "subdomain": "Process Management",
+      "subdomainType": "supporting",
+      "context": "ProcessMgmt",
+      "type": "repository",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["Database"]
+    },
+    "Project Management::project-manager": {
+      "filePath": "services\\project-manager.ts",
+      "name": "project-manager",
+      "subdomain": "Project Management",
+      "subdomainType": "supporting",
+      "context": "ProjectMgmt",
+      "type": "repository",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "aggregate": "Project",
+      "depends": ["Database", "GitCore"]
+    },
+    "Process Management::pty-manager": {
+      "filePath": "services\\pty-manager.ts",
+      "name": "pty-manager",
+      "subdomain": "Process Management",
+      "subdomainType": "supporting",
+      "context": "ProcessMgmt",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["WSBroker", "ShutdownManager"]
+    },
+    "Thread Management::search-service": {
+      "filePath": "services\\search-service.ts",
+      "name": "search-service",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "domain-service",
+      "layer": "domain",
+      "emits": [],
+      "consumes": [],
+      "depends": ["Database"]
+    },
+    "Shared Kernel::server-interfaces": {
+      "filePath": "services\\server-interfaces.ts",
+      "name": "server-interfaces",
+      "subdomain": "Shared Kernel",
+      "type": "port",
+      "layer": "domain",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Shared Kernel::shutdown-manager": {
+      "filePath": "services\\shutdown-manager.ts",
+      "name": "shutdown-manager",
+      "subdomain": "Shared Kernel",
+      "type": "app-service",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Extensions::skills-service": {
+      "filePath": "services\\skills-service.ts",
+      "name": "skills-service",
+      "subdomain": "Extensions",
+      "subdomainType": "generic",
+      "context": "ExtensionPlatform",
+      "type": "app-service",
+      "layer": "application",
+      "emits": [],
+      "consumes": [],
+      "depends": ["ClaudeBinary"]
+    },
+    "Thread Management::stage-history": {
+      "filePath": "services\\stage-history.ts",
+      "name": "stage-history",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "repository",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["Database"]
+    },
+    "Process Management::startup-commands-service": {
+      "filePath": "services\\startup-commands-service.ts",
+      "name": "startup-commands-service",
+      "subdomain": "Process Management",
+      "subdomainType": "supporting",
+      "context": "ProcessMgmt",
+      "type": "repository",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["Database"]
+    },
+    "Thread Management::thread-context-builder": {
+      "filePath": "services\\thread-context-builder.ts",
+      "name": "thread-context-builder",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "domain-service",
+      "layer": "domain",
+      "emits": [],
+      "consumes": [],
+      "depends": ["ThreadManager"]
+    },
+    "Shared Kernel::thread-event-bus": {
+      "filePath": "services\\thread-event-bus.ts",
+      "name": "thread-event-bus",
+      "subdomain": "Shared Kernel",
+      "type": "event-bus",
+      "layer": "infrastructure",
+      "emits": [
+        "thread:created",
+        "thread:stage-changed",
+        "thread:deleted",
+        "agent:started",
+        "agent:completed",
+        "git:changed",
+        "git:committed",
+        "git:pushed",
+        "git:merged",
+        "git:staged",
+        "git:unstaged",
+        "git:reverted",
+        "git:pulled",
+        "git:stashed",
+        "git:stash-popped",
+        "git:reset-soft"
+      ],
+      "consumes": [],
+      "depends": []
+    },
+    "Thread Management::thread-event-service": {
+      "filePath": "services\\thread-event-service.ts",
+      "name": "thread-event-service",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "repository",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["Database"]
+    },
+    "Thread Management::thread-manager": {
+      "filePath": "services\\thread-manager.ts",
+      "name": "thread-manager",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "module",
+      "layer": "domain",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Thread Management::thread-repository": {
+      "filePath": "services\\thread-repository.ts",
+      "name": "thread-repository",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "repository",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "aggregate": "Thread",
+      "depends": ["Database", "StageHistory", "CommentRepository"]
+    },
+    "Thread Management::thread-service": {
+      "filePath": "services\\thread-service.ts",
+      "name": "thread-service",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "app-service",
+      "layer": "application",
+      "emits": ["thread:created", "thread:stage-changed", "thread:deleted"],
+      "consumes": [],
+      "depends": ["ThreadRepository", "AgentRunner", "WorktreeManager", "WSBroker"]
+    },
+    "Thread Management::thread-status-machine": {
+      "filePath": "services\\thread-status-machine.ts",
+      "name": "thread-status-machine",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "domain-service",
+      "layer": "domain",
+      "emits": [],
+      "consumes": [],
+      "aggregate": "Thread",
+      "depends": []
+    },
+    "Thread Management::tool-call-repository": {
+      "filePath": "services\\tool-call-repository.ts",
+      "name": "tool-call-repository",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "repository",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "aggregate": "Thread",
+      "depends": ["Database"]
+    },
+    "Real-time Communication::ws-broker": {
+      "filePath": "services\\ws-broker.ts",
+      "name": "ws-broker",
+      "subdomain": "Real-time Communication",
+      "subdomainType": "supporting",
+      "context": "RealtimeComms",
+      "type": "event-bus",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [
+        "agent:error",
+        "agent:message",
+        "agent:tool_call",
+        "agent:tool_output",
+        "agent:result",
+        "agent:status",
+        "git:status",
+        "command:status",
+        "command:output",
+        "thread:created",
+        "thread:deleted",
+        "thread:stage-changed"
+      ],
+      "depends": []
+    },
+    "Git Operations::agent-completed-git-status-handler": {
+      "filePath": "services\\handlers\\agent-completed-git-status-handler.ts",
+      "name": "agent-completed-git-status-handler",
+      "subdomain": "Git Operations",
+      "subdomainType": "supporting",
+      "context": "GitOps",
+      "type": "handler",
+      "layer": "application",
+      "emits": ["git:status"],
+      "consumes": ["agent:completed"],
+      "depends": []
+    },
+    "Agent Execution::agent-completed-queue-handler": {
+      "filePath": "services\\handlers\\agent-completed-queue-handler.ts",
+      "name": "agent-completed-queue-handler",
+      "subdomain": "Agent Execution",
+      "subdomainType": "core",
+      "context": "AgentExecution",
+      "type": "handler",
+      "layer": "application",
+      "emits": [],
+      "consumes": ["agent:completed"],
+      "depends": ["MessageQueue", "AgentRunner"]
+    },
+    "Thread Management::comment-handler": {
+      "filePath": "services\\handlers\\comment-handler.ts",
+      "name": "comment-handler",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "handler",
+      "layer": "application",
+      "emits": [],
+      "consumes": ["agent:completed"],
+      "depends": []
+    },
+    "Git Operations::git-event-persistence-handler": {
+      "filePath": "services\\handlers\\git-event-persistence-handler.ts",
+      "name": "git-event-persistence-handler",
+      "subdomain": "Git Operations",
+      "subdomainType": "supporting",
+      "context": "GitOps",
+      "type": "handler",
+      "layer": "application",
+      "emits": [],
+      "consumes": [
+        "git:committed",
+        "git:pushed",
+        "git:merged",
+        "git:staged",
+        "git:unstaged",
+        "git:reverted",
+        "git:pulled",
+        "git:stashed",
+        "git:stash-popped",
+        "git:reset-soft"
+      ],
+      "depends": []
+    },
+    "Git Operations::git-status-handler": {
+      "filePath": "services\\handlers\\git-status-handler.ts",
+      "name": "git-status-handler",
+      "subdomain": "Git Operations",
+      "subdomainType": "supporting",
+      "context": "GitOps",
+      "type": "handler",
+      "layer": "application",
+      "emits": ["git:status"],
+      "consumes": ["git:changed"],
+      "depends": []
+    },
+    "Shared Kernel::handler-registry": {
+      "filePath": "services\\handlers\\handler-registry.ts",
+      "name": "handler-registry",
+      "subdomain": "Shared Kernel",
+      "type": "context-map",
+      "layer": "application",
+      "emits": [],
+      "consumes": [],
+      "depends": ["ThreadEventBus"]
+    },
+    "Thread Management::stage-transition-on-agent-start-handler": {
+      "filePath": "services\\handlers\\stage-transition-on-agent-start-handler.ts",
+      "name": "stage-transition-on-agent-start-handler",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "handler",
+      "layer": "application",
+      "emits": [],
+      "consumes": ["agent:started"],
+      "depends": []
+    },
+    "Thread Management::thread-deleted-ws-handler": {
+      "filePath": "services\\handlers\\thread-deleted-ws-handler.ts",
+      "name": "thread-deleted-ws-handler",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "handler",
+      "layer": "application",
+      "emits": ["thread:deleted"],
+      "consumes": ["thread:deleted"],
+      "depends": []
+    },
+    "Thread Management::thread-stage-changed-ws-handler": {
+      "filePath": "services\\handlers\\thread-stage-changed-ws-handler.ts",
+      "name": "thread-stage-changed-ws-handler",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "handler",
+      "layer": "application",
+      "emits": ["thread:stage-changed"],
+      "consumes": ["thread:stage-changed"],
+      "depends": []
+    },
+    "Shared Kernel::types": {
+      "filePath": "services\\handlers\\types.ts",
+      "name": "types",
+      "subdomain": "Shared Kernel",
+      "type": "port",
+      "layer": "domain",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Analytics::analytics": {
+      "filePath": "routes\\analytics.ts",
+      "name": "analytics",
+      "subdomain": "Analytics",
+      "subdomainType": "generic",
+      "context": "AnalyticsEngine",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["AnalyticsService"]
+    },
+    "Authentication::auth": {
+      "filePath": "lib\\auth.ts",
+      "name": "auth",
+      "subdomain": "Authentication",
+      "subdomainType": "generic",
+      "context": "Auth",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["Database"]
+    },
+    "Automation::automations": {
+      "filePath": "routes\\automations.ts",
+      "name": "automations",
+      "subdomain": "Automation",
+      "subdomainType": "supporting",
+      "context": "AutomationEngine",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["AutomationManager", "AutomationScheduler"]
+    },
+    "Project Management::browse": {
+      "filePath": "routes\\browse.ts",
+      "name": "browse",
+      "subdomain": "Project Management",
+      "subdomainType": "supporting",
+      "context": "ProjectMgmt",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Project Management::files": {
+      "filePath": "routes\\files.ts",
+      "name": "files",
+      "subdomain": "Project Management",
+      "subdomainType": "supporting",
+      "context": "ProjectMgmt",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Git Operations::git": {
+      "filePath": "routes\\git.ts",
+      "name": "git",
+      "subdomain": "Git Operations",
+      "subdomainType": "supporting",
+      "context": "GitOps",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["GitService"]
+    },
+    "Git Operations::github": {
+      "filePath": "routes\\github.ts",
+      "name": "github",
+      "subdomain": "Git Operations",
+      "subdomainType": "supporting",
+      "context": "GitOps",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "External Integration::ingest": {
+      "filePath": "routes\\ingest.ts",
+      "name": "ingest",
+      "subdomain": "External Integration",
+      "subdomainType": "supporting",
+      "context": "ExternalIngest",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["IngestMapper"]
+    },
+    "Shared Kernel::logs": {
+      "filePath": "routes\\logs.ts",
+      "name": "logs",
+      "subdomain": "Shared Kernel",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Extensions::mcp": {
+      "filePath": "routes\\mcp.ts",
+      "name": "mcp",
+      "subdomain": "Extensions",
+      "subdomainType": "generic",
+      "context": "ExtensionPlatform",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["McpService"]
+    },
+    "Extensions::plugins": {
+      "filePath": "routes\\plugins.ts",
+      "name": "plugins",
+      "subdomain": "Extensions",
+      "subdomainType": "generic",
+      "context": "ExtensionPlatform",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["PluginService"]
+    },
+    "User Profile::profile": {
+      "filePath": "routes\\profile.ts",
+      "name": "profile",
+      "subdomain": "User Profile",
+      "subdomainType": "generic",
+      "context": "UserProfile",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["ProfileService"]
+    },
+    "Project Management::projects": {
+      "filePath": "routes\\projects.ts",
+      "name": "projects",
+      "subdomain": "Project Management",
+      "subdomainType": "supporting",
+      "context": "ProjectMgmt",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": [
+        "ProjectManager",
+        "ProjectHooksService",
+        "StartupCommandsService",
+        "CommandRunner"
+      ]
+    },
+    "Extensions::skills": {
+      "filePath": "routes\\skills.ts",
+      "name": "skills",
+      "subdomain": "Extensions",
+      "subdomainType": "generic",
+      "context": "ExtensionPlatform",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["SkillsService"]
+    },
+    "Thread Management::threads": {
+      "filePath": "routes\\threads.ts",
+      "name": "threads",
+      "subdomain": "Thread Management",
+      "subdomainType": "core",
+      "context": "ThreadManagement",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["ThreadService", "AgentRunner", "ThreadManager", "WSBroker"]
+    },
+    "Git Operations::worktrees": {
+      "filePath": "routes\\worktrees.ts",
+      "name": "worktrees",
+      "subdomain": "Git Operations",
+      "subdomainType": "supporting",
+      "context": "GitOps",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Shared Kernel::error-handler": {
+      "filePath": "middleware\\error-handler.ts",
+      "name": "error-handler",
+      "subdomain": "Shared Kernel",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Shared Kernel::rate-limit": {
+      "filePath": "middleware\\rate-limit.ts",
+      "name": "rate-limit",
+      "subdomain": "Shared Kernel",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["ShutdownManager"]
+    },
+    "Authentication::AuthMode": {
+      "filePath": "lib\\auth-mode.ts",
+      "name": "AuthMode",
+      "subdomain": "Authentication",
+      "subdomainType": "generic",
+      "context": "Auth",
+      "type": "value-object",
+      "layer": "domain",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Authentication::crypto": {
+      "filePath": "lib\\crypto.ts",
+      "name": "crypto",
+      "subdomain": "Authentication",
+      "subdomainType": "generic",
+      "context": "Auth",
+      "type": "domain-service",
+      "layer": "domain",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Shared Kernel::data-dir": {
+      "filePath": "lib\\data-dir.ts",
+      "name": "data-dir",
+      "subdomain": "Shared Kernel",
+      "type": "value-object",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Shared Kernel::logger": {
+      "filePath": "lib\\logger.ts",
+      "name": "logger",
+      "subdomain": "Shared Kernel",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    },
+    "Shared Kernel::migrate": {
+      "filePath": "db\\migrate.ts",
+      "name": "migrate",
+      "subdomain": "Shared Kernel",
+      "type": "adapter",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": ["Database"]
+    },
+    "Shared Kernel::schema": {
+      "filePath": "db\\schema.ts",
+      "name": "schema",
+      "subdomain": "Shared Kernel",
+      "type": "published-language",
+      "layer": "infrastructure",
+      "emits": [],
+      "consumes": [],
+      "depends": []
+    }
+  },
+  "subdomains": {
+    "Shared Kernel": [
+      "Shared Kernel::index",
+      "Shared Kernel::schemas",
+      "Shared Kernel::result-response",
+      "Shared Kernel::route-helpers",
+      "Shared Kernel::HonoEnv",
+      "Shared Kernel::interfaces",
+      "Shared Kernel::server-interfaces",
+      "Shared Kernel::shutdown-manager",
+      "Shared Kernel::thread-event-bus",
+      "Shared Kernel::handler-registry",
+      "Shared Kernel::types",
+      "Shared Kernel::logs",
+      "Shared Kernel::error-handler",
+      "Shared Kernel::rate-limit",
+      "Shared Kernel::data-dir",
+      "Shared Kernel::logger",
+      "Shared Kernel::migrate",
+      "Shared Kernel::schema"
+    ],
+    "Agent Execution": [
+      "Agent Execution::claude-binary",
+      "Agent Execution::provider-detection",
+      "Agent Execution::agent-message-handler",
+      "Agent Execution::agent-runner",
+      "Agent Execution::agent-state",
+      "Agent Execution::agent-completed-queue-handler"
+    ],
+    "Thread Management": [
+      "Thread Management::file-mentions",
+      "Thread Management::comment-repository",
+      "Thread Management::message-queue",
+      "Thread Management::message-repository",
+      "Thread Management::search-service",
+      "Thread Management::stage-history",
+      "Thread Management::thread-context-builder",
+      "Thread Management::thread-event-service",
+      "Thread Management::thread-manager",
+      "Thread Management::thread-repository",
+      "Thread Management::thread-service",
+      "Thread Management::thread-status-machine",
+      "Thread Management::tool-call-repository",
+      "Thread Management::comment-handler",
+      "Thread Management::stage-transition-on-agent-start-handler",
+      "Thread Management::thread-deleted-ws-handler",
+      "Thread Management::thread-stage-changed-ws-handler",
+      "Thread Management::threads"
+    ],
+    "Analytics": ["Analytics::analytics-service", "Analytics::analytics"],
+    "Authentication": [
+      "Authentication::auth-service",
+      "Authentication::auth",
+      "Authentication::AuthMode",
+      "Authentication::crypto"
+    ],
+    "Automation": [
+      "Automation::automation-manager",
+      "Automation::automation-scheduler",
+      "Automation::automations"
+    ],
+    "Process Management": [
+      "Process Management::command-runner",
+      "Process Management::project-hooks-service",
+      "Process Management::pty-manager",
+      "Process Management::startup-commands-service"
+    ],
+    "Git Operations": [
+      "Git Operations::git-service",
+      "Git Operations::agent-completed-git-status-handler",
+      "Git Operations::git-event-persistence-handler",
+      "Git Operations::git-status-handler",
+      "Git Operations::git",
+      "Git Operations::github",
+      "Git Operations::worktrees"
+    ],
+    "External Integration": ["External Integration::ingest-mapper", "External Integration::ingest"],
+    "Extensions": [
+      "Extensions::mcp-oauth",
+      "Extensions::mcp-service",
+      "Extensions::plugin-service",
+      "Extensions::skills-service",
+      "Extensions::mcp",
+      "Extensions::plugins",
+      "Extensions::skills"
+    ],
+    "User Profile": ["User Profile::profile-service", "User Profile::profile"],
+    "Project Management": [
+      "Project Management::project-manager",
+      "Project Management::browse",
+      "Project Management::files",
+      "Project Management::projects"
+    ],
+    "Real-time Communication": ["Real-time Communication::ws-broker"]
+  },
+  "events": [
+    "agent:message",
+    "agent:tool_call",
+    "agent:tool_output",
+    "agent:result",
+    "agent:status",
+    "git:changed",
+    "thread:stage-changed",
+    "agent:started",
+    "agent:completed",
+    "agent:error",
+    "command:status",
+    "command:output",
+    "git:staged",
+    "git:unstaged",
+    "git:reverted",
+    "git:committed",
+    "git:pushed",
+    "git:pulled",
+    "git:merged",
+    "git:stashed",
+    "git:stash-popped",
+    "git:reset-soft",
+    "thread:created",
+    "thread:deleted",
+    "git:status"
+  ],
+  "strategic": {
+    "domain": {
+      "name": "Funny",
+      "description": "Web UI for orchestrating multiple Claude Code agents in parallel using git worktrees for isolation."
+    },
+    "subdomains": {
+      "Agent Execution": {
+        "name": "Agent Execution",
+        "type": "core",
+        "description": "Orchestrates Claude CLI agents, manages their lifecycle (start, stop, resume), handles NDJSON message streams, and tracks agent state.",
+        "boundedContext": "AgentExecution",
+        "aggregates": [],
+        "publishes": [
+          "agent:started",
+          "agent:completed",
+          "agent:error",
+          "agent:stopped",
+          "agent:tool_call",
+          "agent:result"
+        ],
+        "exposes": ["startAgent", "stopAgent", "resumeAgent", "isAgentRunning"]
+      },
+      "Thread Management": {
+        "name": "Thread Management",
+        "type": "core",
+        "description": "Thread CRUD, message persistence, status machine, stage transitions, search, tool call tracking, and comment management.",
+        "boundedContext": "ThreadManagement",
+        "aggregates": [],
+        "publishes": ["thread:created", "thread:stage-changed", "thread:deleted"],
+        "exposes": [
+          "createThread",
+          "getThread",
+          "deleteThread",
+          "getThreadWithMessages",
+          "searchThreads"
+        ]
+      },
+      "Git Operations": {
+        "name": "Git Operations",
+        "type": "supporting",
+        "description": "Git diff, stage, unstage, revert, commit, push, pull, merge, stash, PR creation, and worktree management.",
+        "boundedContext": "GitOps",
+        "aggregates": [],
+        "publishes": [
+          "git:staged",
+          "git:unstaged",
+          "git:reverted",
+          "git:committed",
+          "git:pushed",
+          "git:pulled",
+          "git:merged",
+          "git:stashed",
+          "git:stash-popped",
+          "git:reset-soft",
+          "git:changed",
+          "git:status"
+        ],
+        "exposes": [
+          "stageFiles",
+          "unstageFiles",
+          "commit",
+          "push",
+          "pull",
+          "createPR",
+          "createWorktree",
+          "removeWorktree"
+        ]
+      },
+      "Project Management": {
+        "name": "Project Management",
+        "type": "supporting",
+        "description": "Project CRUD with git repo validation, filesystem browsing, and file operations.",
+        "boundedContext": "ProjectMgmt",
+        "aggregates": [],
+        "publishes": [],
+        "exposes": ["createProject", "getProject", "listProjects", "deleteProject"]
+      },
+      "Automation": {
+        "name": "Automation",
+        "type": "supporting",
+        "description": "Scheduled cron-based and triggered automation workflows. Automations spawn agent runs on a schedule.",
+        "boundedContext": "AutomationEngine",
+        "aggregates": [],
+        "publishes": [],
+        "exposes": ["createAutomation", "triggerRun", "scheduleAutomation"]
+      },
+      "Real-time Communication": {
+        "name": "Real-time Communication",
+        "type": "supporting",
+        "description": "WebSocket pub/sub broker for broadcasting events to connected UI clients.",
+        "boundedContext": "RealtimeComms",
+        "aggregates": [],
+        "publishes": [],
+        "exposes": ["emit", "emitToUser", "broadcast"]
+      },
+      "Process Management": {
+        "name": "Process Management",
+        "type": "supporting",
+        "description": "PTY management for interactive terminal sessions, startup commands, project hooks, and command execution.",
+        "boundedContext": "ProcessMgmt",
+        "aggregates": [],
+        "publishes": ["command:status", "command:output", "hook:executed"],
+        "exposes": ["runCommand", "startPty", "stopPty", "listHooks", "runHook"]
+      },
+      "External Integration": {
+        "name": "External Integration",
+        "type": "supporting",
+        "description": "Ingest API for external systems (GitHub Actions, CI/CD). Translates webhook payloads into thread operations.",
+        "boundedContext": "ExternalIngest",
+        "aggregates": [],
+        "publishes": [],
+        "exposes": ["handleIngestEvent"]
+      },
+      "Authentication": {
+        "name": "Authentication",
+        "type": "generic",
+        "description": "Dual-mode auth. Local mode: bearer token. Multi-user mode: Better Auth with cookie sessions.",
+        "boundedContext": "Auth",
+        "aggregates": [],
+        "publishes": [],
+        "exposes": ["authenticate", "createUser", "getSession"]
+      },
+      "Extensions": {
+        "name": "Extensions",
+        "type": "generic",
+        "description": "MCP server management, plugin discovery/execution, and skills (Claude Code slash commands).",
+        "boundedContext": "ExtensionPlatform",
+        "aggregates": [],
+        "publishes": [],
+        "exposes": ["listMcpServers", "addMcpServer", "listPlugins", "listSkills"]
+      },
+      "Analytics": {
+        "name": "Analytics",
+        "type": "generic",
+        "description": "Usage tracking, cost metrics, and reporting.",
+        "boundedContext": "AnalyticsEngine",
+        "aggregates": [],
+        "publishes": [],
+        "exposes": ["trackUsage", "getAnalytics"]
+      },
+      "User Profile": {
+        "name": "User Profile",
+        "type": "generic",
+        "description": "Per-user git identity, GitHub PAT (encrypted at rest), and user settings.",
+        "boundedContext": "UserProfile",
+        "aggregates": [],
+        "publishes": [],
+        "exposes": ["getProfile", "updateProfile", "getGitIdentity", "getGithubToken"]
+      }
+    },
+    "sharedKernel": {
+      "name": "Shared Kernel",
+      "description": "Database (SQLite/Drizzle), ThreadEventBus, logger, validation schemas, middleware, type contracts, handler registry, and shutdown manager.",
+      "includes": [
+        "ThreadEventBus",
+        "Database",
+        "Schema",
+        "Logger",
+        "HandlerRegistry",
+        "ValidationSchemas",
+        "HonoEnv",
+        "ServerInterfaces",
+        "ShutdownManager",
+        "ErrorHandler",
+        "RateLimit",
+        "RouteHelpers",
+        "DataDir"
+      ]
+    },
+    "contextMap": [
+      {
+        "upstream": "AgentExecution",
+        "downstream": "ThreadManagement",
+        "relationship": "customer-supplier",
+        "upstreamRole": "supplier",
+        "downstreamRole": "customer",
+        "description": "AgentRunner creates/updates threads and messages. Thread Management evolves its API to serve Agent Execution.",
+        "implementedBy": [
+          "AgentRunner -> ThreadManager.insertMessage",
+          "AgentMessageHandler -> MessageRepository, ToolCallRepository"
+        ]
+      },
+      {
+        "upstream": "AgentExecution",
+        "downstream": "GitOps",
+        "relationship": "partnership",
+        "description": "Agent completion triggers git status refresh. Git change detection feeds back into agent message handling.",
+        "implementedBy": [
+          "AgentCompletedGitStatusHandler (consumes agent:completed)",
+          "GitStatusHandler (consumes git:changed)"
+        ]
+      },
+      {
+        "upstream": "GitOps",
+        "downstream": "ThreadManagement",
+        "relationship": "conformist",
+        "description": "Git events update thread stage history. Thread Management conforms to git event payloads.",
+        "implementedBy": ["GitEventPersistenceHandler -> StageHistory"]
+      },
+      {
+        "upstream": "AgentExecution",
+        "downstream": "RealtimeComms",
+        "relationship": "published-language",
+        "via": "SharedKernel.ThreadEventBus",
+        "description": "Agent events broadcast to WebSocket clients through the shared event bus.",
+        "implementedBy": ["ThreadEventBus -> WSBroker.emit"]
+      },
+      {
+        "upstream": "ExternalIngest",
+        "downstream": "ThreadManagement",
+        "relationship": "anti-corruption-layer",
+        "description": "IngestMapper translates external webhook payloads into thread/message operations.",
+        "implementedBy": ["IngestMapper (ACL)"]
+      },
+      {
+        "upstream": "ExtensionPlatform",
+        "downstream": "AgentExecution",
+        "relationship": "conformist",
+        "description": "MCP servers and plugins configure agent tool availability. Extensions conform to the agent's tool interface.",
+        "implementedBy": []
+      },
+      {
+        "upstream": "AgentExecution",
+        "downstream": "AutomationEngine",
+        "relationship": "customer-supplier",
+        "upstreamRole": "supplier",
+        "downstreamRole": "customer",
+        "description": "AutomationScheduler triggers agent runs via startAgent.",
+        "implementedBy": ["AutomationScheduler -> AgentRunner.startAgent"]
+      },
+      {
+        "upstream": "Auth",
+        "downstream": "*",
+        "relationship": "open-host-service",
+        "description": "Auth middleware provides standard authentication protocol for all route handlers.",
+        "implementedBy": ["auth middleware (Hono middleware chain)"]
+      },
+      {
+        "upstream": "UserProfile",
+        "downstream": "GitOps",
+        "relationship": "customer-supplier",
+        "upstreamRole": "supplier",
+        "downstreamRole": "customer",
+        "description": "GitService retrieves git identity and GitHub PAT from ProfileService for commits and pushes.",
+        "implementedBy": ["GitService -> ProfileService.getGitIdentity"]
+      },
+      {
+        "upstream": "ThreadManagement",
+        "downstream": "AutomationEngine",
+        "relationship": "conformist",
+        "description": "AutomationScheduler creates threads via ThreadManager, conforming to the thread creation interface.",
+        "implementedBy": ["AutomationScheduler -> ThreadManager.createThread"]
+      },
+      {
+        "upstream": "ProcessMgmt",
+        "downstream": "ProjectMgmt",
+        "relationship": "customer-supplier",
+        "upstreamRole": "supplier",
+        "downstreamRole": "customer",
+        "description": "Project routes consume Process Management services for hooks, startup commands, and command execution.",
+        "implementedBy": [
+          "projects.ts routes -> ProjectHooksService",
+          "projects.ts routes -> StartupCommandsService, CommandRunner"
+        ]
+      }
+    ],
+    "teams": [
+      {
+        "name": "Core",
+        "description": "Owns the competitive differentiators — agent orchestration and thread management.",
+        "owns": ["AgentExecution", "ThreadManagement"]
+      },
+      {
+        "name": "Platform",
+        "description": "Owns developer-facing infrastructure — git integration, project management, process execution, real-time communication.",
+        "owns": ["GitOps", "ProjectMgmt", "ProcessMgmt", "RealtimeComms", "ExternalIngest"]
+      },
+      {
+        "name": "Foundation",
+        "description": "Owns generic and cross-cutting concerns — authentication, extensions, analytics, user profiles, automation.",
+        "owns": ["Auth", "ExtensionPlatform", "AnalyticsEngine", "UserProfile", "AutomationEngine"]
+      }
+    ]
+  }
+}

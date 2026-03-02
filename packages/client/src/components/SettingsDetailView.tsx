@@ -36,6 +36,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { ArchivedThreadsSettings } from './ArchivedThreadsSettings';
 import { AutomationSettings } from './AutomationSettings';
 import { McpServerSettings } from './McpServerSettings';
+import { ProjectHooksSettings } from './ProjectHooksSettings';
 import { UserManagement } from './settings/UserManagement';
 import { settingsLabelKeys, type SettingsItemId } from './SettingsPanel';
 import { SkillsSettings } from './SkillsSettings';
@@ -591,6 +592,8 @@ export function SettingsDetailView() {
             <WorktreeSettings />
           ) : page === 'startup-commands' ? (
             <StartupCommandsSettings />
+          ) : page === 'hooks' ? (
+            <ProjectHooksSettings />
           ) : page === 'automations' ? (
             <AutomationSettings />
           ) : page === 'archived-threads' ? (

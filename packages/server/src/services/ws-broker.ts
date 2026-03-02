@@ -3,6 +3,7 @@
  * @domain subdomain-type: supporting
  * @domain type: event-bus
  * @domain layer: infrastructure
+ * @domain consumes: agent:error, agent:message, agent:tool_call, agent:tool_output, agent:result, agent:status, git:status, command:status, command:output, thread:created, thread:deleted, thread:stage-changed
  */
 
 import type { WSEvent } from '@funny/shared';

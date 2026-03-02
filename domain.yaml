@@ -128,15 +128,18 @@ subdomains:
     type: supporting
     description: >
       PTY management for interactive terminal sessions,
-      startup commands, and command execution.
+      startup commands, project hooks, and command execution.
     bounded-context: ProcessMgmt
     publishes:
       - command:status
       - command:output
+      - hook:executed
     exposes:
       - runCommand
       - startPty
       - stopPty
+      - listHooks
+      - runHook
 
   External Integration:
     type: supporting
@@ -314,6 +317,18 @@ context-map:
       conforming to the thread creation interface.
     implemented-by:
       - "AutomationScheduler -> ThreadManager.createThread"
+
+  - upstream: ProcessMgmt
+    downstream: ProjectMgmt
+    relationship: customer-supplier
+    upstream-role: supplier
+    downstream-role: customer
+    description: >
+      Project routes consume Process Management services
+      for hooks, startup commands, and command execution.
+    implemented-by:
+      - "projects.ts routes -> ProjectHooksService"
+      - "projects.ts routes -> StartupCommandsService, CommandRunner"
 
 # -- Team Ownership --
 

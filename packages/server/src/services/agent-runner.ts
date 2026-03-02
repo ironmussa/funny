@@ -3,7 +3,7 @@
  * @domain subdomain-type: core
  * @domain type: app-service
  * @domain layer: application
- * @domain emits: agent:started, agent:completed, agent:error, agent:stopped
+ * @domain emits: agent:started, agent:completed, agent:error
  * @domain depends: AgentOrchestrator, AgentStateTracker, AgentMessageHandler, ThreadManager, WSBroker, ThreadEventBus
  */
 

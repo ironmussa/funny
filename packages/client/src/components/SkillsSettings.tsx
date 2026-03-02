@@ -316,19 +316,6 @@ export function SkillsSettings() {
 
   return (
     <div className="space-y-6">
-      {/* Project indicator */}
-      {projectPath && (
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          <Sparkles className="h-3.5 w-3.5" />
-          <span>
-            {t('skills.showingFor')}{' '}
-            <span className="font-medium text-foreground">
-              {projects.find((p) => p.path === projectPath)?.name || projectPath}
-            </span>
-          </span>
-        </div>
-      )}
-
       {/* Project skills */}
       {projectSkills.length > 0 && (
         <div>

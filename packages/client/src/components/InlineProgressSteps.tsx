@@ -2,6 +2,7 @@ import { Check, Circle, ExternalLink, Loader2, X } from 'lucide-react';
 
 import {
   formatElapsed,
+  SubItemsList,
   type GitProgressStep,
   useStepTimers,
   useTotalFromSteps,
@@ -74,21 +75,9 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
                   {step.url}
                 </a>
               )}
-              {step.subItems &&
-                step.subItems.length > 0 &&
-                (step.status === 'running' || step.status === 'failed') && (
-                  <div className="mt-1 space-y-0.5 pl-1">
-                    {step.subItems.map((item, i) => (
-                      <div
-                        key={i}
-                        className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                      >
-                        <span className="text-muted-foreground/40">{'>'}</span>
-                        <span className="truncate font-mono">{item}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              {step.subItems && step.subItems.length > 0 && (
+                <SubItemsList subItems={step.subItems} parentStatus={step.status} />
+              )}
             </div>
           </div>
         );

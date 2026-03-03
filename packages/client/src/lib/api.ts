@@ -360,10 +360,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ paths }),
     }),
-  commit: (threadId: string, message: string, amend?: boolean) =>
+  commit: (threadId: string, message: string, amend?: boolean, noVerify?: boolean) =>
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/commit`, {
       method: 'POST',
-      body: JSON.stringify({ message, amend }),
+      body: JSON.stringify({ message, amend, noVerify }),
+    }),
+  runHookCommand: (threadId: string, hookIndex: number) =>
+    request<{ success: boolean; output: string }>(`/git/${threadId}/run-hook-command`, {
+      method: 'POST',
+      body: JSON.stringify({ hookIndex }),
     }),
   push: (threadId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/push`, { method: 'POST' }),
@@ -446,10 +451,15 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ paths }),
     }),
-  projectCommit: (projectId: string, message: string, amend?: boolean) =>
+  projectCommit: (projectId: string, message: string, amend?: boolean, noVerify?: boolean) =>
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/commit`, {
       method: 'POST',
-      body: JSON.stringify({ message, amend }),
+      body: JSON.stringify({ message, amend, noVerify }),
+    }),
+  projectRunHookCommand: (projectId: string, hookIndex: number) =>
+    request<{ success: boolean; output: string }>(`/git/project/${projectId}/run-hook-command`, {
+      method: 'POST',
+      body: JSON.stringify({ hookIndex }),
     }),
   projectPush: (projectId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/push`, { method: 'POST' }),

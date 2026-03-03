@@ -33,6 +33,7 @@ export {
   revertFiles,
   addToGitignore,
   commit,
+  runHookCommand,
   push,
   pull,
   createPR,

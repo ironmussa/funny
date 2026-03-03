@@ -1,4 +1,4 @@
-import { Check, Circle, Loader2, X, ExternalLink } from 'lucide-react';
+import { Check, Circle, Loader2, Minus, X, ExternalLink } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -12,6 +12,14 @@ import {
 } from '@/components/ui/dialog';
 import { cn } from '@/lib/utils';
 
+export type SubItemStatus = 'pending' | 'running' | 'completed' | 'failed';
+
+export interface GitProgressSubItem {
+  label: string;
+  status: SubItemStatus;
+  error?: string;
+}
+
 export interface GitProgressStep {
   id: string;
   label: string;
@@ -19,8 +27,8 @@ export interface GitProgressStep {
   error?: string;
   /** Optional URL to display on completion (e.g., PR link) */
   url?: string;
-  /** Optional sub-items to show details (e.g., individual hook scripts) */
-  subItems?: string[];
+  /** Optional sub-items with individual status tracking (e.g., individual hook scripts) */
+  subItems?: GitProgressSubItem[];
 }
 
 interface GitProgressModalProps {
@@ -117,6 +125,45 @@ export function useTotalFromSteps(
   return total;
 }
 
+/** Renders sub-items with individual status icons (shared by modal and inline views). */
+export function SubItemsList({
+  subItems,
+  parentStatus,
+}: {
+  subItems: GitProgressSubItem[];
+  parentStatus: GitProgressStep['status'];
+}) {
+  // Show sub-items when the parent is running, failed, or completed
+  if (parentStatus === 'pending') return null;
+
+  return (
+    <div className="mt-1 space-y-0.5 pl-1">
+      {subItems.map((item, i) => (
+        <div
+          key={i}
+          className={cn(
+            'flex items-center gap-1.5 text-[11px]',
+            item.status === 'completed' && 'text-muted-foreground',
+            item.status === 'running' && 'text-foreground',
+            item.status === 'failed' && 'text-destructive',
+            item.status === 'pending' && 'text-muted-foreground/40',
+          )}
+        >
+          <div className="flex-shrink-0">
+            {item.status === 'completed' && <Check className="h-3 w-3 text-emerald-500" />}
+            {item.status === 'running' && <Loader2 className="h-3 w-3 animate-spin text-primary" />}
+            {item.status === 'failed' && <X className="h-3 w-3 text-destructive" />}
+            {item.status === 'pending' && <Minus className="h-3 w-3 text-muted-foreground/30" />}
+          </div>
+          <span className={cn('truncate font-mono', item.status === 'running' && 'font-medium')}>
+            {item.label}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
 export function GitProgressModal({
   open,
   onOpenChange,
@@ -211,21 +258,9 @@ export function GitProgressModal({
                       {step.url}
                     </a>
                   )}
-                  {step.subItems &&
-                    step.subItems.length > 0 &&
-                    (step.status === 'running' || step.status === 'failed') && (
-                      <div className="mt-1 space-y-0.5 pl-1">
-                        {step.subItems.map((item, i) => (
-                          <div
-                            key={i}
-                            className="flex items-center gap-1.5 text-[11px] text-muted-foreground"
-                          >
-                            <span className="text-muted-foreground/40">{'>'}</span>
-                            <span className="truncate font-mono">{item}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                  {step.subItems && step.subItems.length > 0 && (
+                    <SubItemsList subItems={step.subItems} parentStatus={step.status} />
+                  )}
                 </div>
               </div>
             );

@@ -133,9 +133,10 @@ export async function commitChanges(
   cwd: string,
   message: string,
   amend?: boolean,
+  noVerify?: boolean,
 ): Promise<string> {
   const identity = resolveIdentity(userId);
-  const result = await gitCommit(cwd, message, identity, amend);
+  const result = await gitCommit(cwd, message, identity, amend, noVerify);
   if (result.isErr()) throw result.error;
 
   threadEventBus.emit('git:committed', {
@@ -284,15 +285,16 @@ export async function merge(params: MergeParams): Promise<string> {
   }
 
   if (params.cleanup && thread.worktreePath) {
-    // removeWorktree now has a fallback (fs.rm + prune) and throws only
-    // when the directory truly cannot be deleted. If it throws, we skip
-    // the DB update so the worktree reference is preserved for retry.
-    try {
-      await removeWorktree(project.path, thread.worktreePath);
-    } catch (e) {
-      log.warn('Failed to remove worktree after merge', { namespace: 'git', error: String(e) });
-      throw new Error(`Merge succeeded but worktree cleanup failed: ${String(e)}`);
-    }
+    // removeWorktree has a fallback (fs.rm + prune). If even that fails,
+    // we still proceed — the merge succeeded, so we update the DB and let
+    // the orphaned directory be cleaned up manually or on next prune.
+    await removeWorktree(project.path, thread.worktreePath).catch((e) =>
+      log.warn('Worktree directory could not be removed (will be orphaned)', {
+        namespace: 'git',
+        worktreePath: thread.worktreePath,
+        error: String(e),
+      }),
+    );
 
     await removeBranch(project.path, thread.branch).catch((e) =>
       log.warn('Failed to remove branch after merge', { namespace: 'git', error: String(e) }),

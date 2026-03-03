@@ -18,6 +18,7 @@ import {
   revertFiles,
   addToGitignore,
   commit,
+  runHookCommand,
   push,
   pull,
   getStatusSummary,
@@ -48,6 +49,7 @@ import {
   resolveIdentity,
   validateFilePaths,
 } from '../services/git-service.js';
+import { listHooks } from '../services/project-hooks-service.js';
 import * as tm from '../services/thread-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
@@ -340,10 +342,37 @@ gitRoutes.post('/project/:projectId/commit', async (c) => {
   const parsed = validate(commitSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
   const identity = resolveIdentity(userId);
-  const result = await commit(cwd, parsed.value.message, identity, parsed.value.amend);
+  const result = await commit(
+    cwd,
+    parsed.value.message,
+    identity,
+    parsed.value.amend,
+    parsed.value.noVerify,
+  );
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/project/:projectId/run-hook-command
+// Runs a single pre-commit hook command by index for per-hook progress tracking
+gitRoutes.post('/project/:projectId/run-hook-command', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(projectId, userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  const raw = await c.req.json().catch(() => ({}));
+  const hookIndex = raw?.hookIndex;
+  if (typeof hookIndex !== 'number') {
+    return resultToResponse(c, err(badRequest('hookIndex is required')));
+  }
+  const hooks = listHooks(cwd, 'pre-commit').filter((h) => h.enabled);
+  if (hookIndex < 0 || hookIndex >= hooks.length) {
+    return resultToResponse(c, err(badRequest(`Invalid hookIndex: ${hookIndex}`)));
+  }
+  const result = await runHookCommand(cwd, hooks[hookIndex].command);
+  return c.json(result);
 });
 
 // POST /api/git/project/:projectId/push
@@ -739,12 +768,43 @@ gitRoutes.post('/:threadId/commit', async (c) => {
       cwd,
       parsed.value.message,
       parsed.value.amend,
+      parsed.value.noVerify,
     );
     invalidateGitStatusCache(threadId);
     return c.json({ ok: true, output });
   } catch (e: any) {
     return resultToResponse(c, err(internal(e.message)));
   }
+});
+
+// POST /api/git/:threadId/run-hook-command
+// Runs a single pre-commit hook command by index for per-hook progress tracking
+gitRoutes.post('/:threadId/run-hook-command', async (c) => {
+  const threadId = c.req.param('threadId');
+  const userId = c.get('userId') as string;
+  const cwdResult = requireThreadCwd(threadId, userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  const raw = await c.req.json().catch(() => ({}));
+  const hookIndex = raw?.hookIndex;
+  if (typeof hookIndex !== 'number') {
+    return resultToResponse(c, err(badRequest('hookIndex is required')));
+  }
+  // Look up the project path for hook config (worktree cwd may differ from project root)
+  const thread = tm.getThread(threadId);
+  const projectId = thread?.projectId;
+  let hookCwd = cwd;
+  if (projectId) {
+    const project = requireProject(projectId, userId);
+    if (project.isOk()) hookCwd = project.value.path;
+  }
+  const hooks = listHooks(hookCwd, 'pre-commit').filter((h) => h.enabled);
+  if (hookIndex < 0 || hookIndex >= hooks.length) {
+    return resultToResponse(c, err(badRequest(`Invalid hookIndex: ${hookIndex}`)));
+  }
+  // Run the hook command in the thread's working directory (not the project root)
+  const result = await runHookCommand(cwd, hooks[hookIndex].command);
+  return c.json(result);
 });
 
 // POST /api/git/:threadId/push

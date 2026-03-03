@@ -135,6 +135,7 @@ export const stageFilesSchema = z.object({
 export const commitSchema = z.object({
   message: z.string().min(1, 'message is required'),
   amend: z.boolean().optional().default(false),
+  noVerify: z.boolean().optional().default(false),
 });
 
 export const createPRSchema = z.object({

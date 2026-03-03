@@ -8,7 +8,14 @@ import { ok, err, ResultAsync, type Result } from 'neverthrow';
 
 import { getNativeGit } from './native.js';
 import { validatePath, validatePathSync } from './path-validation.js';
-import { execute, executeSync, gitRead, gitWrite, ProcessExecutionError } from './process.js';
+import {
+  execute,
+  executeShell,
+  executeSync,
+  gitRead,
+  gitWrite,
+  ProcessExecutionError,
+} from './process.js';
 
 /** Per-user git identity for multi-user mode. */
 export interface GitIdentityOptions {
@@ -314,6 +321,7 @@ export function addToGitignore(cwd: string, pattern: string): Result<void, Domai
  * Create a commit with a message.
  * When identity.author is provided, adds --author flag for per-user attribution.
  * When amend is true, amends the last commit instead of creating a new one.
+ * When noVerify is true, skips pre-commit hooks (use after running hooks individually).
  *
  * On Windows, hook output (lint errors, etc.) is often lost because it goes to the
  * console rather than through git's piped stdout/stderr. To capture it, we wrap the
@@ -324,15 +332,17 @@ export function commit(
   message: string,
   identity?: GitIdentityOptions,
   amend?: boolean,
+  noVerify?: boolean,
 ): ResultAsync<string, DomainError> {
   const args = ['commit', '-m', message];
   if (amend) args.push('--amend');
+  if (noVerify) args.push('--no-verify');
   if (identity?.author) {
     args.push('--author', `${identity.author.name} <${identity.author.email}>`);
   }
 
-  // Set up hook wrapper to capture pre-commit output
-  const hookWrapper = createHookWrapper(cwd);
+  // Set up hook wrapper to capture pre-commit output (skip if --no-verify)
+  const hookWrapper = noVerify ? null : createHookWrapper(cwd);
   if (hookWrapper) {
     args.unshift('-c', `core.hooksPath=${hookWrapper.dir.replace(/\\/g, '/')}`);
   }
@@ -348,6 +358,23 @@ export function commit(
     }
     return error;
   });
+}
+
+/**
+ * Run a single hook command (e.g. one step from .husky/pre-commit) in the given cwd.
+ * Returns { success, output } so the caller can track per-hook progress.
+ */
+export async function runHookCommand(
+  cwd: string,
+  command: string,
+): Promise<{ success: boolean; output: string }> {
+  try {
+    const result = await executeShell(command, { cwd, reject: false, timeout: 120_000 });
+    const output = (result.stdout + '\n' + result.stderr).trim();
+    return { success: result.exitCode === 0, output };
+  } catch (e: any) {
+    return { success: false, output: e.message || 'Hook command failed' };
+  }
 }
 
 /**

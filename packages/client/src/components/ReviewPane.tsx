@@ -30,6 +30,8 @@ import {
   ArchiveRestore,
   PenLine,
   RotateCcw,
+  ChevronRight,
+  Folder,
 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useCallback, memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -70,7 +72,7 @@ import { editorLabels } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
-import { type GitProgressStep } from './GitProgressModal';
+import { type GitProgressStep, type GitProgressSubItem } from './GitProgressModal';
 import { InlineProgressSteps } from './InlineProgressSteps';
 import { ReactDiffViewer, DIFF_VIEWER_STYLES } from './tool-cards/utils';
 
@@ -82,6 +84,87 @@ const fileStatusIcons: Record<string, typeof FileCode> = {
 };
 
 const FILE_ROW_HEIGHT = 28;
+const FOLDER_ROW_HEIGHT = 26;
+const INDENT_PX = 12;
+
+type TreeRow =
+  | { kind: 'folder'; path: string; label: string; depth: number; fileCount: number }
+  | { kind: 'file'; file: FileDiffSummary; depth: number };
+
+interface FolderNode {
+  children: Map<string, FolderNode>;
+  files: FileDiffSummary[];
+}
+
+function buildTreeRows(diffs: FileDiffSummary[], collapsed: Set<string>): TreeRow[] {
+  // Build tree
+  const root: FolderNode = { children: new Map(), files: [] };
+  for (const f of diffs) {
+    const parts = f.path.split('/');
+    parts.pop(); // remove filename, keep only directory parts
+    let node = root;
+    for (const part of parts) {
+      if (!node.children.has(part)) {
+        node.children.set(part, { children: new Map(), files: [] });
+      }
+      node = node.children.get(part)!;
+    }
+    node.files.push(f);
+  }
+
+  // Count all files under a node
+  function countFiles(node: FolderNode): number {
+    let count = node.files.length;
+    for (const child of node.children.values()) {
+      count += countFiles(child);
+    }
+    return count;
+  }
+
+  // Flatten with path compaction (merge single-child intermediate dirs)
+  const rows: TreeRow[] = [];
+
+  function flatten(node: FolderNode, depth: number, pathPrefix: string) {
+    // Sort folders first, then files
+    const sortedFolders = [...node.children.entries()].sort(([a], [b]) => a.localeCompare(b));
+
+    for (const [name, child] of sortedFolders) {
+      // Compact: merge single-subfolder chains with no files
+      let compactedName = name;
+      let current = child;
+      let currentPath = pathPrefix ? `${pathPrefix}/${name}` : name;
+      while (current.files.length === 0 && current.children.size === 1) {
+        const [nextName, nextChild] = [...current.children.entries()][0];
+        compactedName += `/${nextName}`;
+        currentPath += `/${nextName}`;
+        current = nextChild;
+      }
+
+      const folderPath = currentPath;
+      const fileCount = countFiles(current);
+
+      rows.push({
+        kind: 'folder',
+        path: folderPath,
+        label: compactedName,
+        depth,
+        fileCount,
+      });
+
+      if (!collapsed.has(folderPath)) {
+        flatten(current, depth + 1, currentPath);
+      }
+    }
+
+    // Files at root level (no folder)
+    for (const file of node.files.sort((a, b) => a.path.localeCompare(b.path))) {
+      rows.push({ kind: 'file', file, depth });
+    }
+  }
+
+  flatten(root, 0, '');
+  return rows;
+}
 
 function parseDiffOld(unifiedDiff: string): string {
   const lines = unifiedDiff.split('\n');
@@ -424,15 +507,36 @@ export function ReviewPane() {
     return summaries.filter((d) => d.path.toLowerCase().includes(query));
   }, [summaries, fileSearch]);
 
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+
+  const treeRows = useMemo(
+    () => buildTreeRows(filteredDiffs, collapsedFolders),
+    [filteredDiffs, collapsedFolders],
+  );
+
+  const toggleFolder = useCallback((folderPath: string) => {
+    setCollapsedFolders((prev) => {
+      const next = new Set(prev);
+      if (next.has(folderPath)) next.delete(folderPath);
+      else next.add(folderPath);
+      return next;
+    });
+  }, []);
+
   const selectedDiffContent = selectedFile ? diffCache.get(selectedFile) : undefined;
 
   const checkedCount = checkedFiles.size;
   const totalCount = summaries.length;
 
   const virtualizer = useVirtualizer({
-    count: filteredDiffs.length,
+    count: treeRows.length,
     getScrollElement: () => fileListRef.current,
-    estimateSize: () => FILE_ROW_HEIGHT,
+    estimateSize: (index) =>
+      treeRows[index]?.kind === 'folder' ? FOLDER_ROW_HEIGHT : FILE_ROW_HEIGHT,
+    getItemKey: (index) => {
+      const row = treeRows[index];
+      return row.kind === 'folder' ? `d:${row.path}` : `f:${row.file.path}`;
+    },
     overscan: 15,
   });
 
@@ -496,13 +600,15 @@ export function ReviewPane() {
     const isAmend = selectedAction === 'amend';
     // Fetch pre-commit hooks to show detail of what scripts will run
     const hookProjectId = useThreadStore.getState().activeThread?.projectId ?? selectedProjectId;
-    let hookSubItems: string[] | undefined;
+    let hookSubItems: GitProgressSubItem[] | undefined;
+    let hasIndividualHooks = false;
     if (hookProjectId) {
       const hooksResult = await api.listHooks(hookProjectId, 'pre-commit');
       if (hooksResult.isOk()) {
         const enabled = hooksResult.value.filter((h) => h.enabled);
         if (enabled.length > 0) {
-          hookSubItems = enabled.map((h) => h.label);
+          hookSubItems = enabled.map((h) => ({ label: h.label, status: 'pending' as const }));
+          hasIndividualHooks = true;
         }
       }
     }
@@ -581,41 +687,88 @@ export function ReviewPane() {
         setStep('stage', { status: 'completed' });
       }
 
-      // Pre-commit hooks + Commit
-      // hooks timer starts first; commit timer starts only after hooks completes
+      // Pre-commit hooks: run each individually for per-hook progress
       setStep('hooks', { status: 'running' });
       const commitMsg = commitBody.trim()
         ? `${commitTitle.trim()}\n\n${commitBody.trim()}`
         : commitTitle.trim();
-      const commitResult = effectiveThreadId
-        ? await api.commit(effectiveThreadId, commitMsg, isAmend)
-        : await api.projectCommit(projectModeId!, commitMsg, isAmend);
-      if (commitResult.isErr()) {
-        // If the error mentions hooks, mark hooks as failed; otherwise hooks passed but commit failed
-        const err = commitResult.error;
-        const stderr = (err as any).stderr as string | undefined;
-        const errMsg = (stderr || err.message).toLowerCase();
-        const isHookFailure =
-          errMsg.includes('hook') ||
-          errMsg.includes('husky') ||
-          errMsg.includes('lint-staged') ||
-          errMsg.includes('pre-commit');
-        // Show stderr (full hook output) when available, otherwise the short message
-        const displayError =
-          stderr || err.message || t('review.commitFailedGeneric', 'Commit failed');
-        if (isHookFailure) {
-          setStep('hooks', { status: 'failed', error: displayError });
-        } else {
-          setStep('hooks', { status: 'completed' });
-          setStep('commit', { status: 'running' });
-          setStep('commit', { status: 'failed', error: displayError });
+
+      let allHooksPassed = true;
+      if (hasIndividualHooks && hookSubItems) {
+        for (let i = 0; i < hookSubItems.length; i++) {
+          // Mark current hook as running
+          const updatedSubItems = hookSubItems.map((item, idx) => ({
+            ...item,
+            status:
+              idx < i
+                ? ('completed' as const)
+                : idx === i
+                  ? ('running' as const)
+                  : ('pending' as const),
+          }));
+          setStep('hooks', { status: 'running', subItems: updatedSubItems });
+
+          const hookResult = effectiveThreadId
+            ? await api.runHookCommand(effectiveThreadId, i)
+            : await api.projectRunHookCommand(projectModeId!, i);
+
+          if (hookResult.isErr() || (hookResult.isOk() && !hookResult.value.success)) {
+            // Mark this hook as failed, rest stay pending
+            const failedSubItems = hookSubItems.map((item, idx) => ({
+              ...item,
+              status:
+                idx < i
+                  ? ('completed' as const)
+                  : idx === i
+                    ? ('failed' as const)
+                    : ('pending' as const),
+            }));
+            const output = hookResult.isOk() ? hookResult.value.output : hookResult.error.message;
+            failedSubItems[i] = { ...failedSubItems[i], error: output };
+            setStep('hooks', { status: 'failed', subItems: failedSubItems, error: output });
+            toast.error(
+              t('review.hookFailed', 'Pre-commit hook failed: {{hook}}', {
+                hook: hookSubItems[i].label,
+              }),
+            );
+            setActionInProgress(null);
+            allHooksPassed = false;
+            break;
+          }
+
+          // Mark completed
+          hookSubItems[i] = { ...hookSubItems[i], status: 'completed' };
         }
-        toast.error(err.message || t('review.commitFailedGeneric', 'Commit failed'));
+
+        if (allHooksPassed) {
+          const completedSubItems = hookSubItems.map((item) => ({
+            ...item,
+            status: 'completed' as const,
+          }));
+          setStep('hooks', { status: 'completed', subItems: completedSubItems });
+        }
+      } else {
+        // No individual hooks to run — hooks will run inside git commit
+        setStep('hooks', { status: 'completed' });
+      }
+
+      if (!allHooksPassed) return;
+
+      // Commit (with --no-verify if hooks were run individually)
+      setStep('commit', { status: 'running' });
+      const commitResult = effectiveThreadId
+        ? await api.commit(effectiveThreadId, commitMsg, isAmend, hasIndividualHooks)
+        : await api.projectCommit(projectModeId!, commitMsg, isAmend, hasIndividualHooks);
+      if (commitResult.isErr()) {
+        const commitErr = commitResult.error;
+        const stderr = (commitErr as any).stderr as string | undefined;
+        const displayError =
+          stderr || commitErr.message || t('review.commitFailedGeneric', 'Commit failed');
+        setStep('commit', { status: 'failed', error: displayError });
+        toast.error(commitErr.message || t('review.commitFailedGeneric', 'Commit failed'));
         setActionInProgress(null);
         return;
       }
-      setStep('hooks', { status: 'completed' });
-      setStep('commit', { status: 'running' });
       // Brief delay so the timer captures the transition
       await new Promise((r) => setTimeout(r, 50));
       setStep('commit', { status: 'completed' });
@@ -1329,21 +1482,49 @@ export function ReviewPane() {
                 }}
               >
                 {virtualizer.getVirtualItems().map((virtualRow) => {
-                  const f = filteredDiffs[virtualRow.index];
+                  const row = treeRows[virtualRow.index];
+                  const baseStyle = {
+                    position: 'absolute' as const,
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    height: `${virtualRow.size}px`,
+                    transform: `translateY(${virtualRow.start}px)`,
+                  };
+
+                  if (row.kind === 'folder') {
+                    const isCollapsed = collapsedFolders.has(row.path);
+                    return (
+                      <div
+                        key={`folder-${row.path}`}
+                        className="flex cursor-pointer select-none items-center gap-1 text-[11px] text-muted-foreground/80 hover:bg-sidebar-accent/30"
+                        style={{ ...baseStyle, paddingLeft: `${8 + row.depth * INDENT_PX}px` }}
+                        onClick={() => toggleFolder(row.path)}
+                        data-testid={`review-folder-${row.path}`}
+                      >
+                        <ChevronRight
+                          className={cn(
+                            'h-3 w-3 flex-shrink-0 transition-transform',
+                            !isCollapsed && 'rotate-90',
+                          )}
+                        />
+                        <Folder className="h-3 w-3 flex-shrink-0 text-muted-foreground/60" />
+                        <span className="truncate font-medium">{row.label}</span>
+                        <span className="ml-auto flex-shrink-0 text-[10px] text-muted-foreground/50">
+                          {row.fileCount}
+                        </span>
+                      </div>
+                    );
+                  }
+
+                  const f = row.file;
                   const isChecked = checkedFiles.has(f.path);
                   return (
                     <div
                       key={f.path}
-                      style={{
-                        position: 'absolute',
-                        top: 0,
-                        left: 0,
-                        width: '100%',
-                        height: `${virtualRow.size}px`,
-                        transform: `translateY(${virtualRow.start}px)`,
-                      }}
+                      style={{ ...baseStyle, paddingLeft: `${8 + row.depth * INDENT_PX}px` }}
                       className={cn(
-                        'group flex items-center gap-1.5 px-4 text-xs cursor-pointer transition-colors',
+                        'group flex items-center gap-1.5 pr-4 text-xs cursor-pointer transition-colors',
                         selectedFile === f.path
                           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                           : 'hover:bg-sidebar-accent/50 text-muted-foreground',
@@ -1755,62 +1936,99 @@ export function ReviewPane() {
           {/* Standalone merge / create PR buttons — shown when no dirty files but worktree has unmerged commits */}
           {showMergeOnly && (
             <div className="flex-shrink-0 space-y-3 border-t border-sidebar-border p-3">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <GitMerge className="h-3.5 w-3.5" />
-                <span>
-                  {t('review.readyToMerge', {
-                    target: baseBranch || 'base',
-                    defaultValue: `Ready to merge into ${baseBranch || 'base'}`,
-                  })}
-                </span>
-              </div>
-              <div className="flex gap-1.5">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      className="flex-1"
-                      size="sm"
-                      onClick={handleMergeOnly}
-                      disabled={mergeInProgress || !!isAgentRunning}
-                      data-testid="review-merge"
-                    >
-                      {mergeInProgress ? (
-                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <GitMerge className="mr-1.5 h-3.5 w-3.5" />
-                      )}
-                      {t('review.mergeIntoBranch', {
+              {commitInProgress && commitEntry?.action === 'merge' ? (
+                <>
+                  <p className="text-xs font-medium text-foreground">{commitEntry.title}</p>
+                  <InlineProgressSteps steps={commitEntry.steps} />
+                  {(() => {
+                    const hasFailed = commitEntry.steps.some((s) => s.status === 'failed');
+                    const isRunning = commitEntry.steps.some((s) => s.status === 'running');
+                    const isFinished =
+                      !isRunning &&
+                      (commitEntry.steps.every(
+                        (s) => s.status === 'completed' || s.status === 'failed',
+                      ) ||
+                        hasFailed);
+                    if (isFinished && hasFailed) {
+                      return (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full"
+                          onClick={() => {
+                            useCommitProgressStore.getState().finishCommit(commitProgressId);
+                          }}
+                          data-testid="review-merge-dismiss"
+                        >
+                          {t('review.progress.dismiss', 'Dismiss')}
+                        </Button>
+                      );
+                    }
+                    return null;
+                  })()}
+                </>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <GitMerge className="h-3.5 w-3.5" />
+                    <span>
+                      {t('review.readyToMerge', {
                         target: baseBranch || 'base',
-                        defaultValue: `Merge into ${baseBranch || 'base'}`,
+                        defaultValue: `Ready to merge into ${baseBranch || 'base'}`,
                       })}
-                    </Button>
-                  </TooltipTrigger>
-                  {isAgentRunning && (
-                    <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
-                  )}
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => setPrDialog({ title: threadBranch || '', body: '' })}
-                      disabled={!!isAgentRunning}
-                      data-testid="review-create-pr"
-                    >
-                      <GitPullRequest className="h-3.5 w-3.5" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    {isAgentRunning
-                      ? t('review.agentRunningTooltip')
-                      : t('review.createPRTooltip', {
-                          branch: threadBranch,
-                          target: baseBranch || 'base',
-                        })}
-                  </TooltipContent>
-                </Tooltip>
-              </div>
+                    </span>
+                  </div>
+                  <div className="flex gap-1.5">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          className="flex-1"
+                          size="sm"
+                          onClick={handleMergeOnly}
+                          disabled={mergeInProgress || !!isAgentRunning}
+                          data-testid="review-merge"
+                        >
+                          {mergeInProgress ? (
+                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <GitMerge className="mr-1.5 h-3.5 w-3.5" />
+                          )}
+                          {t('review.mergeIntoBranch', {
+                            target: baseBranch || 'base',
+                            defaultValue: `Merge into ${baseBranch || 'base'}`,
+                          })}
+                        </Button>
+                      </TooltipTrigger>
+                      {isAgentRunning && (
+                        <TooltipContent side="top">
+                          {t('review.agentRunningTooltip')}
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setPrDialog({ title: threadBranch || '', body: '' })}
+                          disabled={!!isAgentRunning}
+                          data-testid="review-create-pr"
+                        >
+                          <GitPullRequest className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        {isAgentRunning
+                          ? t('review.agentRunningTooltip')
+                          : t('review.createPRTooltip', {
+                              branch: threadBranch,
+                              target: baseBranch || 'base',
+                            })}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </>
+              )}
             </div>
           )}
 

@@ -1,24 +1,35 @@
 import { Hono } from 'hono';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
-const { mockListSkills, mockListProjectSkills, mockAddSkill, mockRemoveSkill, MOCK_RECOMMENDED } =
-  vi.hoisted(() => ({
-    mockListSkills: vi.fn(),
-    mockListProjectSkills: vi.fn(),
-    mockAddSkill: vi.fn(),
-    mockRemoveSkill: vi.fn(),
-    MOCK_RECOMMENDED: [
-      {
-        name: 'find-skills',
-        description: 'Find skills',
-        identifier: 'vercel-labs/skills@find-skills',
-      },
-    ],
-  }));
+const {
+  mockListSkills,
+  mockListProjectSkills,
+  mockListDirectClaudeSkills,
+  mockListPluginCommands,
+  mockAddSkill,
+  mockRemoveSkill,
+  MOCK_RECOMMENDED,
+} = vi.hoisted(() => ({
+  mockListSkills: vi.fn(),
+  mockListProjectSkills: vi.fn(),
+  mockListDirectClaudeSkills: vi.fn(),
+  mockListPluginCommands: vi.fn(),
+  mockAddSkill: vi.fn(),
+  mockRemoveSkill: vi.fn(),
+  MOCK_RECOMMENDED: [
+    {
+      name: 'find-skills',
+      description: 'Find skills',
+      identifier: 'vercel-labs/skills@find-skills',
+    },
+  ],
+}));
 
 vi.mock('../../services/skills-service.js', () => ({
   listSkills: mockListSkills,
   listProjectSkills: mockListProjectSkills,
+  listDirectClaudeSkills: mockListDirectClaudeSkills,
+  listPluginCommands: mockListPluginCommands,
   addSkill: mockAddSkill,
   removeSkill: mockRemoveSkill,
   RECOMMENDED_SKILLS: MOCK_RECOMMENDED,
@@ -32,6 +43,8 @@ describe('Skills Routes', () => {
   beforeEach(() => {
     mockListSkills.mockReset();
     mockListProjectSkills.mockReset();
+    mockListDirectClaudeSkills.mockReset();
+    mockListPluginCommands.mockReset();
     mockAddSkill.mockReset();
     mockRemoveSkill.mockReset();
 
@@ -39,6 +52,8 @@ describe('Skills Routes', () => {
       { name: 'test-skill', description: 'A test skill', source: 'github', scope: 'global' },
     ]);
     mockListProjectSkills.mockReturnValue([]);
+    mockListDirectClaudeSkills.mockReturnValue([]);
+    mockListPluginCommands.mockReturnValue([]);
     mockAddSkill.mockImplementation(async () => {});
     mockRemoveSkill.mockImplementation(() => {});
 

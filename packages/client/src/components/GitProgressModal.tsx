@@ -158,8 +158,14 @@ export function GitProgressModal({
           {steps.map((step) => {
             const stepElapsed = getStepElapsed(step.id);
             return (
-              <div key={step.id} className="flex items-center gap-2.5">
-                <div className="flex-shrink-0">
+              <div
+                key={step.id}
+                className={cn(
+                  'flex items-start gap-2.5 rounded-md px-2 py-1 transition-colors',
+                  step.status === 'running' && 'bg-primary/8',
+                )}
+              >
+                <div className="mt-0.5 flex-shrink-0">
                   {step.status === 'completed' && <Check className="h-4 w-4 text-emerald-500" />}
                   {step.status === 'running' && (
                     <Loader2 className="h-4 w-4 animate-spin text-primary" />
@@ -177,7 +183,7 @@ export function GitProgressModal({
                         step.status === 'completed' && 'text-muted-foreground',
                         step.status === 'running' && 'text-foreground font-medium',
                         step.status === 'failed' && 'text-destructive font-medium',
-                        step.status === 'pending' && 'text-muted-foreground/60',
+                        step.status === 'pending' && 'text-muted-foreground/40',
                       )}
                     >
                       {step.label}

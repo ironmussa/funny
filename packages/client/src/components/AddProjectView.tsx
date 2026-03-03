@@ -75,8 +75,8 @@ export function AddProjectView() {
   };
 
   return (
-    <div className="flex flex-1 items-center justify-center">
-      <div className="w-full max-w-md space-y-6 px-4">
+    <div className="flex flex-1 justify-center overflow-y-auto pt-[10vh]">
+      <div className="w-full max-w-md space-y-6 px-4 pb-8">
         <div className="space-y-2 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
             <Plus className="h-6 w-6 text-primary" />

@@ -23,40 +23,40 @@ pub async fn list_branches(cwd: String) -> napi::Result<Vec<String>> {
     .local_branches()
     .map_err(|e| napi::Error::from_reason(format!("Failed to list local branches: {e}")))?;
 
+  let mut seen = std::collections::HashSet::new();
   let mut branches: Vec<String> = Vec::new();
 
   for reference in local_refs {
     if let Ok(r) = reference {
-      branches.push(r.name().shorten().to_string());
+      let name = r.name().shorten().to_string();
+      seen.insert(name.clone());
+      branches.push(name);
     }
   }
 
-  if branches.is_empty() {
-    // Fall back to remote tracking branches
-    let refs2 = repo
-      .references()
-      .map_err(|e| napi::Error::from_reason(format!("Failed to get references: {e}")))?;
+  // Always include remote branches that don't exist locally
+  let refs2 = repo
+    .references()
+    .map_err(|e| napi::Error::from_reason(format!("Failed to get references: {e}")))?;
 
-    let remote_refs = refs2
-      .remote_branches()
-      .map_err(|e| napi::Error::from_reason(format!("Failed to list remote branches: {e}")))?;
+  let remote_refs = refs2
+    .remote_branches()
+    .map_err(|e| napi::Error::from_reason(format!("Failed to list remote branches: {e}")))?;
 
-    let mut seen = std::collections::HashSet::new();
-    for reference in remote_refs {
-      if let Ok(r) = reference {
-        let name = r.name().shorten().to_string();
-        if name.contains("HEAD") {
-          continue;
-        }
-        // Strip "origin/" prefix
-        let branch = if let Some(stripped) = name.strip_prefix("origin/") {
-          stripped.to_string()
-        } else {
-          name
-        };
-        if seen.insert(branch.clone()) {
-          branches.push(branch);
-        }
+  for reference in remote_refs {
+    if let Ok(r) = reference {
+      let name = r.name().shorten().to_string();
+      if name.contains("HEAD") {
+        continue;
+      }
+      // Strip "origin/" prefix
+      let branch = if let Some(stripped) = name.strip_prefix("origin/") {
+        stripped.to_string()
+      } else {
+        name
+      };
+      if seen.insert(branch.clone()) {
+        branches.push(branch);
       }
     }
   }

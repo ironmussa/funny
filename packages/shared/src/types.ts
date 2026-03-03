@@ -410,6 +410,52 @@ export interface WSWorktreeSetupData {
   error?: string;
 }
 
+// ─── Git Workflow (server-side orchestration) ────────────
+
+export type GitWorkflowAction =
+  | 'commit'
+  | 'amend'
+  | 'commit-push'
+  | 'commit-pr'
+  | 'commit-merge'
+  | 'push'
+  | 'merge'
+  | 'create-pr';
+
+export interface GitWorkflowRequest {
+  action: GitWorkflowAction;
+  message?: string;
+  filesToStage?: string[];
+  filesToUnstage?: string[];
+  amend?: boolean;
+  noVerify?: boolean;
+  prTitle?: string;
+  prBody?: string;
+  targetBranch?: string;
+  cleanup?: boolean;
+}
+
+export interface GitWorkflowProgressStep {
+  id: string;
+  label: string;
+  status: 'pending' | 'running' | 'completed' | 'failed';
+  error?: string;
+  url?: string;
+  subItems?: {
+    label: string;
+    status: 'pending' | 'running' | 'completed' | 'failed';
+    error?: string;
+  }[];
+}
+
+export interface WSGitWorkflowProgressData {
+  workflowId: string;
+  status: 'started' | 'step_update' | 'completed' | 'failed';
+  title: string;
+  action: GitWorkflowAction;
+  steps: GitWorkflowProgressStep[];
+}
+
 export type WSEvent =
   | { type: 'agent:init'; threadId: string; data: WSInitData }
   | { type: 'agent:message'; threadId: string; data: WSMessageData }
@@ -437,12 +483,21 @@ export type WSEvent =
   | { type: 'workflow:step'; threadId: string; data: WSWorkflowStepData }
   | { type: 'workflow:status'; threadId: string; data: WSWorkflowStatusData }
   | { type: 'thread:event'; threadId: string; data: WSThreadEventData }
+  | { type: 'git:workflow_progress'; threadId: string; data: WSGitWorkflowProgressData }
   | { type: 'worktree:setup'; threadId: string; data: WSWorktreeSetupData }
-  | { type: 'worktree:setup_complete'; threadId: string; data: WSWorktreeSetupCompleteData };
+  | { type: 'worktree:setup_complete'; threadId: string; data: WSWorktreeSetupCompleteData }
+  | { type: 'clone:progress'; threadId: string; data: WSCloneProgressData };
 
 export interface WSWorktreeSetupCompleteData {
   branch: string;
   worktreePath: string;
+}
+
+export interface WSCloneProgressData {
+  cloneId: string;
+  phase: string;
+  percent?: number;
+  error?: string;
 }
 
 export type WSEventType = WSEvent['type'];

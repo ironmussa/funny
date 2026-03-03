@@ -2,6 +2,7 @@ import { existsSync } from 'fs';
 import { mkdir, rm } from 'fs/promises';
 import { resolve, dirname, basename, normalize } from 'path';
 
+import type { SetupProgressFn } from '@funny/core/ports';
 import { badRequest, internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
@@ -28,12 +29,12 @@ export function createWorktree(
   projectPath: string,
   branchName: string,
   baseBranch?: string,
+  onProgress?: SetupProgressFn,
 ): ResultAsync<string, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
       // Ensure the repo has at least one commit — git worktree requires it.
-      // If the repo is brand new (no commits), create an empty initial commit
-      // so worktree creation works transparently.
+      onProgress?.('worktree:init', 'Checking repository', 'running');
       const headResult = await gitRead(['rev-parse', 'HEAD'], {
         cwd: projectPath,
         reject: false,
@@ -44,23 +45,47 @@ export function createWorktree(
           reject: false,
         });
         if (commitResult.exitCode !== 0) {
+          onProgress?.('worktree:init', 'Checking repository', 'failed');
           throw badRequest(
             `Cannot create worktree: the repository has no commits and the auto-commit failed: ${commitResult.stderr}`,
           );
         }
       }
+      onProgress?.('worktree:init', 'Checking repository', 'completed');
 
-      // Verify the requested baseBranch actually exists as a ref.
-      // Common mismatch: agent detects "master" but the repo uses "main"
-      // (or vice versa). Fall back to HEAD when the ref is invalid.
+      // Resolve the base branch ref. Try the name as-is first, then try
+      // origin/<name> for remote-only branches (common after a fresh clone).
       let effectiveBase = baseBranch;
       if (baseBranch) {
+        onProgress?.('worktree:resolve', `Resolving branch "${baseBranch}"`, 'running');
         const branchCheck = await gitRead(['rev-parse', '--verify', baseBranch], {
           cwd: projectPath,
           reject: false,
         });
         if (branchCheck.exitCode !== 0) {
-          effectiveBase = undefined;
+          // Branch doesn't exist locally — try origin/<name>
+          const remoteRef = `origin/${baseBranch}`;
+          const remoteCheck = await gitRead(['rev-parse', '--verify', remoteRef], {
+            cwd: projectPath,
+            reject: false,
+          });
+          if (remoteCheck.exitCode === 0) {
+            effectiveBase = remoteRef;
+            onProgress?.(
+              'worktree:resolve',
+              `Using remote branch "origin/${baseBranch}"`,
+              'completed',
+            );
+          } else {
+            effectiveBase = undefined;
+            onProgress?.(
+              'worktree:resolve',
+              `Branch "${baseBranch}" not found, using HEAD`,
+              'completed',
+            );
+          }
+        } else {
+          onProgress?.('worktree:resolve', `Resolved branch "${baseBranch}"`, 'completed');
         }
       }
 
@@ -71,10 +96,27 @@ export function createWorktree(
         throw badRequest(`Worktree already exists: ${worktreePath}`);
       }
 
+      onProgress?.(
+        'worktree:create',
+        `Creating worktree from ${effectiveBase ?? 'HEAD'}`,
+        'running',
+      );
       const args = ['worktree', 'add', '-b', branchName, worktreePath];
       if (effectiveBase) args.push(effectiveBase);
       const result = await git(args, projectPath);
-      if (result.isErr()) throw result.error;
+      if (result.isErr()) {
+        onProgress?.(
+          'worktree:create',
+          `Creating worktree from ${effectiveBase ?? 'HEAD'}`,
+          'failed',
+        );
+        throw result.error;
+      }
+      onProgress?.(
+        'worktree:create',
+        `Creating worktree from ${effectiveBase ?? 'HEAD'}`,
+        'completed',
+      );
       return worktreePath;
     })(),
     (error) => {

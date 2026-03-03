@@ -502,6 +502,18 @@ export const api = {
       body: JSON.stringify({ pattern }),
     }),
 
+  // Git Workflow (server-side orchestration)
+  startWorkflow: (threadId: string, params: import('@funny/shared').GitWorkflowRequest) =>
+    request<{ workflowId: string }>(`/git/${threadId}/workflow`, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+  projectStartWorkflow: (projectId: string, params: import('@funny/shared').GitWorkflowRequest) =>
+    request<{ workflowId: string }>(`/git/project/${projectId}/workflow`, {
+      method: 'POST',
+      body: JSON.stringify(params),
+    }),
+
   // Startup Commands
   listCommands: (projectId: string) => request<StartupCommand[]>(`/projects/${projectId}/commands`),
   addCommand: (projectId: string, label: string, command: string) =>

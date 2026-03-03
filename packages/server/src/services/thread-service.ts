@@ -7,7 +7,13 @@
  * @domain depends: ThreadRepository, AgentRunner, WorktreeManager, WSBroker
  */
 
-import { createWorktree, removeWorktree, removeBranch, getCurrentBranch } from '@funny/core/git';
+import {
+  createWorktree,
+  removeWorktree,
+  removeBranch,
+  getCurrentBranch,
+  git,
+} from '@funny/core/git';
 import { setupWorktree, type SetupProgressFn } from '@funny/core/ports';
 import type { WSEvent, AgentProvider, AgentModel, PermissionMode } from '@funny/shared';
 import { nanoid } from 'nanoid';
@@ -256,16 +262,18 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
     // Background: create worktree, run post-create commands, start agent
     (async () => {
       try {
-        emitSetupProgress('worktree', 'Creating worktree', 'running');
-        const wtResult = await createWorktree(project.path, branchName, resolvedBaseBranch);
+        const wtResult = await createWorktree(
+          project.path,
+          branchName,
+          resolvedBaseBranch,
+          emitSetupProgress,
+        );
         if (wtResult.isErr()) {
-          emitSetupProgress('worktree', 'Creating worktree', 'failed', wtResult.error.message);
           tm.updateThread(threadId, { status: 'failed' });
           emitThreadUpdated(params.userId, threadId, { status: 'failed' });
           return;
         }
         const wtPath = wtResult.value;
-        emitSetupProgress('worktree', 'Creating worktree', 'completed');
 
         try {
           const setup = await setupWorktree(project.path, wtPath, emitSetupProgress);
@@ -338,10 +346,16 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
       threadBranch = branchResult.value;
 
       if (resolvedBaseBranch && resolvedBaseBranch !== threadBranch) {
-        throw new ThreadServiceError(
-          `Cannot create local thread on branch "${resolvedBaseBranch}". Current branch is "${threadBranch}". Enable "Create worktree" to work on a different branch.`,
-          400,
-        );
+        // Switch to the requested branch — git checkout handles both local
+        // and remote-only branches (auto-creates tracking branch from origin).
+        const checkoutResult = await git(['checkout', resolvedBaseBranch], project.path);
+        if (checkoutResult.isErr()) {
+          throw new ThreadServiceError(
+            `Failed to checkout branch "${resolvedBaseBranch}": ${checkoutResult.error.message}`,
+            400,
+          );
+        }
+        threadBranch = resolvedBaseBranch;
       }
     }
   }
@@ -745,20 +759,18 @@ async function autoStartIdleThread(
     // Background: create worktree, run post-create, then start agent
     (async () => {
       try {
-        emitSetupProgress('worktree', 'Creating worktree', 'running');
         const wtResult = await createWorktree(
           project.path,
           thread.branch!,
           thread.baseBranch || undefined,
+          emitSetupProgress,
         );
         if (wtResult.isErr()) {
-          emitSetupProgress('worktree', 'Creating worktree', 'failed', wtResult.error.message);
           tm.updateThread(threadId, { status: 'failed' });
           emitThreadUpdated(thread.userId, threadId, { status: 'failed' });
           return;
         }
         const wtPath = wtResult.value;
-        emitSetupProgress('worktree', 'Creating worktree', 'completed');
 
         try {
           const setup = await setupWorktree(project.path, wtPath, emitSetupProgress);

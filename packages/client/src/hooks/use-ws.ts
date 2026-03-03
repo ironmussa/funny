@@ -235,10 +235,34 @@ function handleMessage(e: MessageEvent) {
       break;
     }
     case 'git:status': {
-      console.log('[ws] git:status received:', data.statuses);
       import('@/stores/git-status-store').then(({ useGitStatusStore }) => {
         useGitStatusStore.getState().updateFromWS(data.statuses);
       });
+      break;
+    }
+    case 'git:workflow_progress': {
+      import('@/stores/commit-progress-store').then(({ useCommitProgressStore }) => {
+        const store = useCommitProgressStore.getState();
+        const { status: wfStatus, title, action, steps } = data;
+
+        if (wfStatus === 'started') {
+          store.startCommit(threadId, title, steps, action);
+        } else if (wfStatus === 'step_update') {
+          store.replaceSteps(threadId, steps);
+        } else if (wfStatus === 'completed') {
+          store.replaceSteps(threadId, steps);
+          setTimeout(() => store.finishCommit(threadId), 1500);
+        } else if (wfStatus === 'failed') {
+          store.replaceSteps(threadId, steps);
+        }
+      });
+
+      // Refresh review pane on completion or failure
+      if (data.status === 'completed' || data.status === 'failed') {
+        import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
+          useReviewPaneStore.getState().notifyDirty(threadId);
+        });
+      }
       break;
     }
     case 'thread:event': {
@@ -262,10 +286,6 @@ function handleMessage(e: MessageEvent) {
       break;
     }
     case 'pty:data': {
-      console.log(`[DEBUG] pty:data received via WS`, {
-        ptyId: data.ptyId,
-        len: data.data?.length,
-      });
       const termStore = useTerminalStore.getState();
       termStore.emitPtyData(data.ptyId, data.data);
       break;
@@ -281,6 +301,10 @@ function handleMessage(e: MessageEvent) {
     }
     case 'thread:queue_update': {
       useThreadStore.getState().handleWSQueueUpdate(threadId, data);
+      break;
+    }
+    case 'clone:progress': {
+      window.dispatchEvent(new CustomEvent('clone:progress', { detail: data }));
       break;
     }
     case 'worktree:setup': {
@@ -317,8 +341,6 @@ function connect() {
       ? `ws://localhost:${serverPort}/ws`
       : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
     const url = `${base}?token=${encodeURIComponent(token)}`;
-    console.log(`[ws] Connecting to ${base}...`);
-
     const ws = new WebSocket(url);
     activeWS = ws;
     setupWS(ws);
@@ -329,7 +351,6 @@ function connect() {
     const base = isTauri
       ? `ws://localhost:${serverPort}/ws`
       : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
-    console.log(`[ws] Connecting to ${base}...`);
 
     const ws = new WebSocket(base);
     activeWS = ws;
@@ -339,13 +360,11 @@ function connect() {
 
 function setupWS(ws: WebSocket) {
   ws.onopen = () => {
-    console.log('[ws] Connected');
     // WebSocket connected — server is alive, so reset the HTTP circuit breaker
     // to dismiss the "server unavailable" overlay immediately
     useCircuitBreakerStore.getState().recordSuccess();
     // Always re-sync loaded threads on connect — events may have been lost
     // while disconnected (e.g. agent:result emitted when 0 clients were connected)
-    console.log('[ws] Syncing all loaded threads with server');
     useThreadStore.getState().refreshAllLoadedThreads();
     _wasConnected = true;
   };
@@ -364,7 +383,6 @@ function setupWS(ws: WebSocket) {
         return;
       }
     }
-    console.log('[ws] Disconnected, reconnecting in 2s...');
     reconnectTimer = setTimeout(connect, 2000);
   };
 

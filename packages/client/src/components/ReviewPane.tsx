@@ -72,7 +72,6 @@ import { editorLabels } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
-import { type GitProgressStep, type GitProgressSubItem } from './GitProgressModal';
 import { InlineProgressSteps } from './InlineProgressSteps';
 import { ReactDiffViewer, DIFF_VIEWER_STYLES } from './tool-cards/utils';
 
@@ -345,11 +344,93 @@ export function ReviewPane() {
   const [prInProgress, setPrInProgress] = useState(false);
   const [prDialog, setPrDialog] = useState<{ title: string; body: string } | null>(null);
   const [hasRebaseConflict, setHasRebaseConflict] = useState(false);
+  const commitLockRef = useRef(false);
 
   // Commit progress (per-thread, persists across thread switches)
   const commitProgressId = effectiveThreadId || projectModeId || '';
   const commitEntry = useCommitProgressStore((s) => s.activeCommits[commitProgressId]);
   const commitInProgress = !!commitEntry;
+
+  // React to server-driven workflow progress (completion, failure, cleanup)
+  const prevCommitEntryRef = useRef(commitEntry);
+  useEffect(() => {
+    const prev = prevCommitEntryRef.current;
+    prevCommitEntryRef.current = commitEntry;
+
+    // Workflow finished (entry removed by finishCommit after completed)
+    if (prev && !commitEntry) {
+      setActionInProgress(null);
+      commitLockRef.current = false;
+      setPushInProgress(false);
+      setMergeInProgress(false);
+      setPrInProgress(false);
+      // Refresh diffs and git status
+      refresh();
+      if (effectiveThreadId && prev.action === 'commit-merge') {
+        useThreadStore.getState().refreshActiveThread();
+      }
+      if (effectiveThreadId && prev.action === 'merge') {
+        useThreadStore.getState().refreshActiveThread();
+      }
+      return;
+    }
+
+    if (!commitEntry) return;
+
+    const hasFailed = commitEntry.steps.some((s) => s.status === 'failed');
+    const allCompleted = commitEntry.steps.every((s) => s.status === 'completed');
+
+    if (hasFailed) {
+      setActionInProgress(null);
+      commitLockRef.current = false;
+      setPushInProgress(false);
+      setMergeInProgress(false);
+      setPrInProgress(false);
+
+      // Detect rebase/merge conflicts
+      const mergeStep = commitEntry.steps.find((s) => s.id === 'merge' && s.status === 'failed');
+      if (mergeStep?.error) {
+        const lower = mergeStep.error.toLowerCase();
+        if (
+          lower.includes('conflict') ||
+          lower.includes('rebase failed') ||
+          lower.includes('merge failed') ||
+          lower.includes('automatic merge failed') ||
+          lower.includes('fix conflicts') ||
+          lower.includes('could not apply')
+        ) {
+          setHasRebaseConflict(true);
+        }
+      }
+
+      // Detect hook failures for toast
+      const hookStep = commitEntry.steps.find((s) => s.id === 'hooks' && s.status === 'failed');
+      if (hookStep?.error) {
+        const failedHook = hookStep.subItems?.find((si) => si.status === 'failed');
+        toast.error(
+          t('review.hookFailed', 'Pre-commit hook failed: {{hook}}', {
+            hook: failedHook?.label || 'unknown',
+          }),
+        );
+      }
+
+      refresh();
+    }
+
+    if (allCompleted && prev && !prev.steps.every((s) => s.status === 'completed')) {
+      // Just transitioned to all-completed — show success toast
+      const action = commitEntry.action;
+      if (action === 'push') {
+        toast.success(t('review.pushSuccess', 'Pushed successfully'));
+      } else if (action === 'merge') {
+        toast.success(t('review.mergeSuccess', 'Merged successfully'));
+      } else if (action === 'create-pr') {
+        toast.success(t('review.prSuccess', 'Pull request created'));
+      } else {
+        toast.success(t('review.commitSuccess', 'Changes committed successfully'));
+      }
+    }
+  }, [commitEntry]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Show standalone merge button when worktree has no dirty files but has unmerged commits.
   // Also require the worktree to actually exist (has a path) and the branch to differ from baseBranch.
@@ -572,17 +653,13 @@ export function ReviewPane() {
     setGeneratingMsg(false);
   };
 
-  const commitLockRef = useRef(false);
   const handleCommitAction = async () => {
     if (!hasGitContext || !commitTitle.trim() || checkedFiles.size === 0 || actionInProgress)
       return;
-    // Guard against double-clicks before React state update takes effect
     if (commitLockRef.current) return;
     commitLockRef.current = true;
     setActionInProgress(selectedAction);
 
-    // Build steps based on selected action
-    const steps: GitProgressStep[] = [];
     const toUnstage = summaries
       .filter((f) => f.staged && !checkedFiles.has(f.path))
       .map((f) => f.path);
@@ -591,254 +668,36 @@ export function ReviewPane() {
       return s && !s.staged;
     });
 
-    if (toUnstage.length > 0) {
-      steps.push({ id: 'unstage', label: t('review.progress.unstaging'), status: 'pending' });
-    }
-    if (toStage.length > 0) {
-      steps.push({ id: 'stage', label: t('review.progress.staging'), status: 'pending' });
-    }
-    const isAmend = selectedAction === 'amend';
-    // Fetch pre-commit hooks to show detail of what scripts will run
-    const hookProjectId = useThreadStore.getState().activeThread?.projectId ?? selectedProjectId;
-    let hookSubItems: GitProgressSubItem[] | undefined;
-    let hasIndividualHooks = false;
-    if (hookProjectId) {
-      const hooksResult = await api.listHooks(hookProjectId, 'pre-commit');
-      if (hooksResult.isOk()) {
-        const enabled = hooksResult.value.filter((h) => h.enabled);
-        if (enabled.length > 0) {
-          hookSubItems = enabled.map((h) => ({ label: h.label, status: 'pending' as const }));
-          hasIndividualHooks = true;
-        }
-      }
-    }
-    steps.push({
-      id: 'hooks',
-      label: t('review.progress.runningHooks'),
-      status: 'pending',
-      subItems: hookSubItems,
-    });
-    steps.push({
-      id: 'commit',
-      label: isAmend ? t('review.progress.amending') : t('review.progress.committing'),
-      status: 'pending',
-    });
-    if (selectedAction === 'commit-push' || selectedAction === 'commit-pr') {
-      steps.push({ id: 'push', label: t('review.progress.pushing'), status: 'pending' });
-    }
-    if (selectedAction === 'commit-pr') {
-      steps.push({ id: 'pr', label: t('review.progress.creatingPR'), status: 'pending' });
-    }
-    if (selectedAction === 'commit-merge') {
-      steps.push({ id: 'merge', label: t('review.progress.merging'), status: 'pending' });
-    }
+    const commitMsg = commitBody.trim()
+      ? `${commitTitle.trim()}\n\n${commitBody.trim()}`
+      : commitTitle.trim();
 
-    // Determine title
-    const titleMap: Record<string, string> = {
-      commit: t('review.progress.commitTitle'),
-      amend: t('review.progress.amendTitle'),
-      'commit-push': t('review.progress.commitPushTitle'),
-      'commit-pr': t('review.progress.commitPRTitle'),
-      'commit-merge': t('review.progress.commitMergeTitle'),
-    };
-    const progressId = effectiveThreadId || projectModeId || '';
-    const {
-      startCommit,
-      updateStep: storeUpdateStep,
-      finishCommit,
-    } = useCommitProgressStore.getState();
-    startCommit(
-      progressId,
-      titleMap[selectedAction] || t('review.progress.commitTitle'),
-      steps,
-      selectedAction,
-    );
-
-    const setStep = (id: string, update: Partial<GitProgressStep>) => {
-      storeUpdateStep(progressId, id, update);
+    const params: import('@funny/shared').GitWorkflowRequest = {
+      action: selectedAction,
+      message: commitMsg,
+      filesToStage: toStage,
+      filesToUnstage: toUnstage,
+      amend: selectedAction === 'amend',
+      prTitle: selectedAction === 'commit-pr' ? commitTitle.trim() : undefined,
+      prBody: selectedAction === 'commit-pr' ? commitBody.trim() : undefined,
+      cleanup: selectedAction === 'commit-merge',
     };
 
-    try {
-      // Unstage
-      if (toUnstage.length > 0) {
-        setStep('unstage', { status: 'running' });
-        const unstageResult = effectiveThreadId
-          ? await api.unstageFiles(effectiveThreadId, toUnstage)
-          : await api.projectUnstageFiles(projectModeId!, toUnstage);
-        if (unstageResult.isErr()) {
-          setStep('unstage', { status: 'failed', error: unstageResult.error.message });
-          setActionInProgress(null);
-          return;
-        }
-        setStep('unstage', { status: 'completed' });
-      }
+    const result = effectiveThreadId
+      ? await api.startWorkflow(effectiveThreadId, params)
+      : await api.projectStartWorkflow(projectModeId!, params);
 
-      // Stage
-      if (toStage.length > 0) {
-        setStep('stage', { status: 'running' });
-        const stageResult = effectiveThreadId
-          ? await api.stageFiles(effectiveThreadId, toStage)
-          : await api.projectStageFiles(projectModeId!, toStage);
-        if (stageResult.isErr()) {
-          setStep('stage', { status: 'failed', error: stageResult.error.message });
-          setActionInProgress(null);
-          return;
-        }
-        setStep('stage', { status: 'completed' });
-      }
-
-      // Pre-commit hooks: run each individually for per-hook progress
-      setStep('hooks', { status: 'running' });
-      const commitMsg = commitBody.trim()
-        ? `${commitTitle.trim()}\n\n${commitBody.trim()}`
-        : commitTitle.trim();
-
-      let allHooksPassed = true;
-      if (hasIndividualHooks && hookSubItems) {
-        for (let i = 0; i < hookSubItems.length; i++) {
-          // Mark current hook as running
-          const updatedSubItems = hookSubItems.map((item, idx) => ({
-            ...item,
-            status:
-              idx < i
-                ? ('completed' as const)
-                : idx === i
-                  ? ('running' as const)
-                  : ('pending' as const),
-          }));
-          setStep('hooks', { status: 'running', subItems: updatedSubItems });
-
-          const hookResult = effectiveThreadId
-            ? await api.runHookCommand(effectiveThreadId, i)
-            : await api.projectRunHookCommand(projectModeId!, i);
-
-          if (hookResult.isErr() || (hookResult.isOk() && !hookResult.value.success)) {
-            // Mark this hook as failed, rest stay pending
-            const failedSubItems = hookSubItems.map((item, idx) => ({
-              ...item,
-              status:
-                idx < i
-                  ? ('completed' as const)
-                  : idx === i
-                    ? ('failed' as const)
-                    : ('pending' as const),
-            }));
-            const output = hookResult.isOk() ? hookResult.value.output : hookResult.error.message;
-            failedSubItems[i] = { ...failedSubItems[i], error: output };
-            setStep('hooks', { status: 'failed', subItems: failedSubItems, error: output });
-            toast.error(
-              t('review.hookFailed', 'Pre-commit hook failed: {{hook}}', {
-                hook: hookSubItems[i].label,
-              }),
-            );
-            setActionInProgress(null);
-            allHooksPassed = false;
-            break;
-          }
-
-          // Mark completed
-          hookSubItems[i] = { ...hookSubItems[i], status: 'completed' };
-        }
-
-        if (allHooksPassed) {
-          const completedSubItems = hookSubItems.map((item) => ({
-            ...item,
-            status: 'completed' as const,
-          }));
-          setStep('hooks', { status: 'completed', subItems: completedSubItems });
-        }
-      } else {
-        // No individual hooks to run — hooks will run inside git commit
-        setStep('hooks', { status: 'completed' });
-      }
-
-      if (!allHooksPassed) return;
-
-      // Commit (with --no-verify if hooks were run individually)
-      setStep('commit', { status: 'running' });
-      const commitResult = effectiveThreadId
-        ? await api.commit(effectiveThreadId, commitMsg, isAmend, hasIndividualHooks)
-        : await api.projectCommit(projectModeId!, commitMsg, isAmend, hasIndividualHooks);
-      if (commitResult.isErr()) {
-        const commitErr = commitResult.error;
-        const stderr = (commitErr as any).stderr as string | undefined;
-        const displayError =
-          stderr || commitErr.message || t('review.commitFailedGeneric', 'Commit failed');
-        setStep('commit', { status: 'failed', error: displayError });
-        toast.error(commitErr.message || t('review.commitFailedGeneric', 'Commit failed'));
-        setActionInProgress(null);
-        return;
-      }
-      // Brief delay so the timer captures the transition
-      await new Promise((r) => setTimeout(r, 50));
-      setStep('commit', { status: 'completed' });
-
-      // Push (for commit-push and commit-pr)
-      if (selectedAction === 'commit-push' || selectedAction === 'commit-pr') {
-        setStep('push', { status: 'running' });
-        const pushResult = effectiveThreadId
-          ? await api.push(effectiveThreadId)
-          : await api.projectPush(projectModeId!);
-        if (pushResult.isErr()) {
-          setStep('push', { status: 'failed', error: pushResult.error.message });
-          setActionInProgress(null);
-          if (selectedAction === 'commit-pr') await refresh();
-          return;
-        }
-        setStep('push', { status: 'completed' });
-      }
-
-      // Create PR (for commit-pr)
-      if (selectedAction === 'commit-pr') {
-        setStep('pr', { status: 'running' });
-        const prResult = await api.createPR(
-          effectiveThreadId!,
-          commitTitle.trim(),
-          commitBody.trim(),
-        );
-        if (prResult.isErr()) {
-          setStep('pr', { status: 'failed', error: prResult.error.message });
-          setActionInProgress(null);
-          return;
-        }
-        setStep('pr', { status: 'completed', url: prResult.value.url || undefined });
-      }
-
-      // Merge (for commit-merge)
-      if (selectedAction === 'commit-merge') {
-        setStep('merge', { status: 'running' });
-        const mergeResult = await api.merge(effectiveThreadId!, { cleanup: true });
-        if (mergeResult.isErr()) {
-          const lower = mergeResult.error.message.toLowerCase();
-          const isConflict =
-            lower.includes('conflict') ||
-            lower.includes('rebase failed') ||
-            lower.includes('merge failed');
-          setStep('merge', { status: 'failed', error: mergeResult.error.message });
-          if (isConflict) setHasRebaseConflict(true);
-          setActionInProgress(null);
-          await refresh();
-          return;
-        }
-        setStep('merge', { status: 'completed' });
-        await useThreadStore.getState().refreshActiveThread();
-        useGitStatusStore.getState().fetchForThread(effectiveThreadId!);
-      }
-
-      setCommitTitleRaw('');
-      setCommitBodyRaw('');
-      if (draftId) clearCommitDraft(draftId);
-      finishCommit(progressId);
+    if (result.isErr()) {
+      toast.error(result.error.message);
       setActionInProgress(null);
-      toast.success(t('review.commitSuccess', 'Changes committed successfully'));
-      // Only refresh if still on the same thread
-      const currentTid = useThreadStore.getState().activeThread?.id;
-      if (currentTid === effectiveThreadId || !effectiveThreadId) {
-        await refresh();
-      }
-    } finally {
       commitLockRef.current = false;
+      return;
     }
+
+    // Clear draft on successful submission — progress is now driven by WS
+    setCommitTitleRaw('');
+    setCommitBodyRaw('');
+    if (draftId) clearCommitDraft(draftId);
   };
 
   const handleRevertFile = (path: string) => {
@@ -898,109 +757,50 @@ export function ReviewPane() {
     if (!hasGitContext || pushInProgress) return;
     setPushInProgress(true);
 
-    const pid = effectiveThreadId || projectModeId || '';
-    const steps: GitProgressStep[] = [
-      { id: 'push', label: t('review.progress.pushing'), status: 'running' },
-    ];
-    const { startCommit, updateStep: su, finishCommit } = useCommitProgressStore.getState();
-    startCommit(pid, t('review.progress.pushTitle'), steps, 'push');
+    const result = effectiveThreadId
+      ? await api.startWorkflow(effectiveThreadId, { action: 'push' })
+      : await api.projectStartWorkflow(projectModeId!, { action: 'push' });
 
-    const pushResult = effectiveThreadId
-      ? await api.push(effectiveThreadId)
-      : await api.projectPush(projectModeId!);
-    if (pushResult.isErr()) {
-      su(pid, 'push', { status: 'failed', error: pushResult.error.message });
-    } else {
-      su(pid, 'push', { status: 'completed' });
-      finishCommit(pid);
-      toast.success(t('review.pushSuccess', 'Pushed successfully'));
+    if (result.isErr()) {
+      toast.error(result.error.message);
+      setPushInProgress(false);
     }
-    setPushInProgress(false);
-    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId);
-    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId);
+    // pushInProgress will be cleared by the useEffect watching commitEntry
   };
 
   const handleMergeOnly = async () => {
     if (!hasGitContext || mergeInProgress) return;
     setMergeInProgress(true);
 
-    const pid = effectiveThreadId || projectModeId || '';
-    const target = baseBranch || 'base';
-    const steps: GitProgressStep[] = [
-      { id: 'merge', label: t('review.progress.merging'), status: 'running' },
-    ];
-    const { startCommit, updateStep: su, finishCommit } = useCommitProgressStore.getState();
-    startCommit(pid, t('review.progress.mergeTitle', { target }), steps, 'merge');
+    const result = await api.startWorkflow(effectiveThreadId!, {
+      action: 'merge',
+      cleanup: true,
+    });
 
-    const mergeResult = await api.merge(effectiveThreadId!, { cleanup: true });
-    if (mergeResult.isErr()) {
-      su(pid, 'merge', { status: 'failed', error: mergeResult.error.message });
-      const lower = mergeResult.error.message.toLowerCase();
-      const isConflict =
-        lower.includes('conflict') ||
-        lower.includes('rebase failed') ||
-        lower.includes('merge failed') ||
-        lower.includes('automatic merge failed') ||
-        lower.includes('fix conflicts') ||
-        lower.includes('could not apply');
-      if (isConflict) setHasRebaseConflict(true);
-    } else {
-      su(pid, 'merge', { status: 'completed' });
-      finishCommit(pid);
-      toast.success(t('review.mergeSuccess', 'Merged successfully'));
-      await useThreadStore.getState().refreshActiveThread();
+    if (result.isErr()) {
+      toast.error(result.error.message);
+      setMergeInProgress(false);
     }
-    setMergeInProgress(false);
-    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId);
-    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId);
+    // mergeInProgress will be cleared by the useEffect watching commitEntry
   };
 
   const handleCreatePROnly = async () => {
     if (!hasGitContext || prInProgress || !prDialog) return;
     setPrInProgress(true);
 
-    const pid = effectiveThreadId || projectModeId || '';
-    const steps: GitProgressStep[] = [];
-    const needsPush = gitStatus && gitStatus.unpushedCommitCount > 0;
-    if (needsPush) {
-      steps.push({ id: 'push', label: t('review.progress.pushing'), status: 'pending' });
-    }
-    steps.push({ id: 'pr', label: t('review.progress.creatingPR'), status: 'pending' });
+    const result = await api.startWorkflow(effectiveThreadId!, {
+      action: 'create-pr',
+      prTitle: prDialog.title.trim(),
+      prBody: prDialog.body.trim(),
+    });
 
-    const { startCommit, updateStep: su, finishCommit } = useCommitProgressStore.getState();
-    startCommit(pid, t('review.progress.createPRTitle'), steps, 'create-pr');
-
-    // Push first if there are unpushed commits
-    if (needsPush) {
-      su(pid, 'push', { status: 'running' });
-      const pushResult = effectiveThreadId
-        ? await api.push(effectiveThreadId)
-        : await api.projectPush(projectModeId!);
-      if (pushResult.isErr()) {
-        su(pid, 'push', { status: 'failed', error: pushResult.error.message });
-        setPrInProgress(false);
-        return;
-      }
-      su(pid, 'push', { status: 'completed' });
+    if (result.isErr()) {
+      toast.error(result.error.message);
+      setPrInProgress(false);
+      return;
     }
-
-    su(pid, 'pr', { status: 'running' });
-    const prResult = await api.createPR(
-      effectiveThreadId!,
-      prDialog.title.trim(),
-      prDialog.body.trim(),
-    );
-    if (prResult.isErr()) {
-      su(pid, 'pr', { status: 'failed', error: prResult.error.message });
-    } else {
-      su(pid, 'pr', { status: 'completed', url: prResult.value.url || undefined });
-      finishCommit(pid);
-      toast.success(t('review.prSuccess', 'Pull request created'));
-    }
-    setPrInProgress(false);
     setPrDialog(null);
-    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId);
-    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId);
+    // prInProgress will be cleared by the useEffect watching commitEntry
   };
 
   const handleAskAgentResolve = async () => {

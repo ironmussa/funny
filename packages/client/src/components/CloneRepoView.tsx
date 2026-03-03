@@ -13,15 +13,15 @@ import {
   LogOut,
   Settings,
 } from 'lucide-react';
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { ScrollArea } from '@/components/ui/scroll-area';
 import { api } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -57,6 +57,8 @@ export function CloneRepoView() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(false);
   const [loadingRepos, setLoadingRepos] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const listRef = useRef<HTMLDivElement>(null);
 
   // Clone config state
   const [selectedRepo, setSelectedRepo] = useState<GitHubRepo | null>(null);
@@ -65,8 +67,19 @@ export function CloneRepoView() {
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [_isCloning, setIsCloning] = useState(false);
 
-  // Search debounce
-  const searchTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Clone progress from WebSocket
+  const [clonePhase, setClonePhase] = useState('');
+  const [clonePercent, setClonePercent] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const data = (e as CustomEvent).detail;
+      if (data.phase) setClonePhase(data.phase);
+      if (data.percent !== undefined) setClonePercent(data.percent);
+    };
+    window.addEventListener('clone:progress', handler);
+    return () => window.removeEventListener('clone:progress', handler);
+  }, []);
 
   const checkConnection = useCallback(async () => {
     const result = await api.githubStatus();
@@ -97,13 +110,12 @@ export function CloneRepoView() {
     }
   };
 
-  // Load repos
-  const fetchRepos = useCallback(async (searchQuery: string, pageNum: number, append = false) => {
+  // Load repos (always fetches without search — filtering is done client-side)
+  const fetchRepos = useCallback(async (pageNum: number, append = false) => {
     setLoadingRepos(true);
     const result = await api.githubRepos({
       page: pageNum,
       per_page: 30,
-      search: searchQuery || undefined,
       sort: 'updated',
     });
     if (result.isOk()) {
@@ -113,25 +125,57 @@ export function CloneRepoView() {
     setLoadingRepos(false);
   }, []);
 
+  // Client-side filtering — searches full_name, description, and language
+  const filteredRepos = useMemo(() => {
+    if (!search.trim()) return repos;
+    const q = search.toLowerCase();
+    return repos.filter(
+      (r) =>
+        r.full_name.toLowerCase().includes(q) ||
+        r.description?.toLowerCase().includes(q) ||
+        r.language?.toLowerCase().includes(q),
+    );
+  }, [repos, search]);
+
+  // Reset highlight when search or filtered results change
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [search]);
+
+  // Keyboard navigation for repo list
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => Math.min(prev + 1, filteredRepos.length - 1));
+    } else if (e.key === 'ArrowUp') {
+      e.preventDefault();
+      setHighlightedIndex((prev) => Math.max(prev - 1, 0));
+    } else if (
+      e.key === 'Enter' &&
+      highlightedIndex >= 0 &&
+      highlightedIndex < filteredRepos.length
+    ) {
+      e.preventDefault();
+      const repo = filteredRepos[highlightedIndex];
+      setSelectedRepo(repo);
+      setProjectName(repo.name);
+      setView('clone-config');
+    }
+  };
+
+  // Scroll highlighted item into view
+  useEffect(() => {
+    if (highlightedIndex < 0 || !listRef.current) return;
+    const items = listRef.current.querySelectorAll('[data-repo-item]');
+    items[highlightedIndex]?.scrollIntoView({ block: 'nearest' });
+  }, [highlightedIndex]);
+
   // Load repos when entering repo view
   useEffect(() => {
     if (view === 'repos') {
-      fetchRepos('', 1);
+      fetchRepos(1);
     }
   }, [view, fetchRepos]);
-
-  // Debounced search
-  useEffect(() => {
-    if (view !== 'repos') return;
-    if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    searchTimerRef.current = setTimeout(() => {
-      setPage(1);
-      fetchRepos(search, 1);
-    }, 300);
-    return () => {
-      if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
-    };
-  }, [search, view, fetchRepos]);
 
   // Cleanup poll timer on unmount
   useEffect(() => {
@@ -213,6 +257,8 @@ export function CloneRepoView() {
   const handleClone = async () => {
     if (!selectedRepo || !destinationPath || !projectName) return;
     setIsCloning(true);
+    setClonePhase('');
+    setClonePercent(undefined);
     setView('cloning');
 
     const result = await api.cloneRepo(selectedRepo.clone_url, destinationPath, projectName);
@@ -372,16 +418,24 @@ export function CloneRepoView() {
             placeholder={t('github.repos.searchPlaceholder')}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            data-testid="clone-repo-search"
           />
         </div>
 
         {/* Repo list */}
-        <ScrollArea className="-mx-1 flex-1">
-          {repos.map((repo) => (
+        <div ref={listRef} className="-mx-1 max-h-[40vh] min-h-0 flex-1 overflow-y-auto">
+          {filteredRepos.map((repo, index) => (
             <button
               key={repo.id}
+              data-repo-item
+              data-testid={`clone-repo-item-${repo.id}`}
               onClick={() => selectRepo(repo)}
-              className="flex w-full flex-col gap-0.5 rounded-md px-3 py-2 text-left transition-colors hover:bg-accent"
+              onMouseEnter={() => setHighlightedIndex(index)}
+              className={cn(
+                'flex w-full flex-col gap-0.5 rounded-md px-3 py-2 text-left transition-colors hover:bg-accent',
+                highlightedIndex === index && 'bg-accent',
+              )}
             >
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm font-medium">{repo.full_name}</span>
@@ -407,7 +461,7 @@ export function CloneRepoView() {
             </div>
           )}
 
-          {!loadingRepos && repos.length === 0 && (
+          {!loadingRepos && filteredRepos.length === 0 && (
             <p className="py-8 text-center text-sm text-muted-foreground">
               {t('github.repos.noRepos')}
             </p>
@@ -421,14 +475,14 @@ export function CloneRepoView() {
                 onClick={() => {
                   const nextPage = page + 1;
                   setPage(nextPage);
-                  fetchRepos(search, nextPage, true);
+                  fetchRepos(nextPage, true);
                 }}
               >
                 {t('github.repos.loadMore')}
               </Button>
             </div>
           )}
-        </ScrollArea>
+        </div>
       </div>
     );
   }
@@ -516,9 +570,29 @@ export function CloneRepoView() {
     return (
       <div className="flex flex-col items-center gap-4 py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm font-medium">
           {t('github.clone.cloning', { repo: selectedRepo?.full_name })}
         </p>
+
+        {/* Progress bar */}
+        {clonePercent !== undefined && (
+          <div className="w-full max-w-xs">
+            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-primary transition-all duration-300"
+                style={{ width: `${clonePercent}%` }}
+              />
+            </div>
+            <p className="mt-1 text-right text-xs text-muted-foreground">{clonePercent}%</p>
+          </div>
+        )}
+
+        {/* Phase text */}
+        {clonePhase && (
+          <p className="max-w-sm truncate text-xs text-muted-foreground" title={clonePhase}>
+            {clonePhase}
+          </p>
+        )}
       </div>
     );
   }

@@ -113,34 +113,42 @@ export function getCurrentBranch(cwd: string): ResultAsync<string, DomainError> 
  * Falls back to remote branches if no local branches exist.
  */
 export function listBranches(cwd: string): ResultAsync<string[], DomainError> {
-  const native = getNativeGit();
-  if (native) {
-    return ResultAsync.fromPromise(native.listBranches(cwd), (error) =>
-      processError(String(error), 1, ''),
-    );
-  }
+  // Always use CLI — native module merges local+remote branches but the .node
+  // file can only be rebuilt when the server is stopped. CLI fallback is correct.
   return ResultAsync.fromPromise(
     (async () => {
-      // Try local branches first
+      const seen = new Set<string>();
+      const branches: string[] = [];
+
+      // Local branches first
       const localOutput = await gitOptional(['branch', '--format=%(refname:short)'], cwd);
       if (localOutput) {
-        const locals = localOutput
+        for (const b of localOutput
           .split('\n')
-          .map((b) => b.trim())
-          .filter(Boolean);
-        if (locals.length > 0) return locals;
+          .map((s) => s.trim())
+          .filter(Boolean)) {
+          seen.add(b);
+          branches.push(b);
+        }
       }
 
-      // Fall back to remote tracking branches
+      // Always include remote branches that don't exist locally
       const remoteOutput = await gitOptional(['branch', '-r', '--format=%(refname:short)'], cwd);
       if (remoteOutput) {
-        const remotes = remoteOutput
+        for (const raw of remoteOutput
           .split('\n')
-          .map((b) => b.trim())
-          .filter((b) => b && !b.includes('HEAD'))
-          .map((b) => b.replace(/^origin\//, ''));
-        if (remotes.length > 0) return [...new Set(remotes)];
+          .map((s) => s.trim())
+          .filter(Boolean)) {
+          if (raw.includes('HEAD')) continue;
+          const name = raw.replace(/^origin\//, '');
+          if (!seen.has(name)) {
+            seen.add(name);
+            branches.push(name);
+          }
+        }
       }
+
+      if (branches.length > 0) return branches;
 
       // Fall back to symbolic-ref for empty repos (no commits yet)
       const symbolicBranch = await gitOptional(['symbolic-ref', '--short', 'HEAD'], cwd);
@@ -948,7 +956,7 @@ export function getStatusSummary(
         }
       }
 
-      // Parse combined line stats
+      // Parse combined line stats (working tree)
       let linesAdded = 0;
       let linesDeleted = 0;
       if (diffResult.exitCode === 0 && diffResult.stdout.trim()) {

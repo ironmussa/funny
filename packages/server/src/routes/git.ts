@@ -49,6 +49,7 @@ import {
   resolveIdentity,
   validateFilePaths,
 } from '../services/git-service.js';
+import { executeWorkflow, isWorkflowActive } from '../services/git-workflow-service.js';
 import { listHooks } from '../services/project-hooks-service.js';
 import * as tm from '../services/thread-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
@@ -60,6 +61,7 @@ import {
   stageFilesSchema,
   commitSchema,
   createPRSchema,
+  workflowSchema,
 } from '../validation/schemas.js';
 
 export const gitRoutes = new Hono<HonoEnv>();
@@ -994,6 +996,92 @@ gitRoutes.post('/:threadId/merge', async (c) => {
     });
     invalidateGitStatusCache(threadId);
     return c.json({ ok: true, output });
+  } catch (e: any) {
+    return resultToResponse(c, err(internal(e.message)));
+  }
+});
+
+// ═══════════════════════════════════════════════════════════════════════════
+// Server-side workflow orchestration
+// ═══════════════════════════════════════════════════════════════════════════
+
+// POST /api/git/:threadId/workflow — orchestrate multi-step git workflow
+gitRoutes.post('/:threadId/workflow', async (c) => {
+  const threadId = c.req.param('threadId');
+  const userId = c.get('userId') as string;
+  const threadResult = requireThread(threadId, userId);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+  const thread = threadResult.value;
+
+  const cwdResult = requireThreadCwd(threadId, userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(workflowSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+
+  // Validate file paths
+  const allPaths = [...(parsed.value.filesToStage || []), ...(parsed.value.filesToUnstage || [])];
+  if (allPaths.length > 0) {
+    const pathError = validateFilePaths(cwdResult.value, allPaths);
+    if (pathError) return c.json({ error: pathError }, 400);
+  }
+
+  if (isWorkflowActive(threadId)) {
+    return c.json({ error: 'A workflow is already in progress' }, 409);
+  }
+
+  try {
+    const { workflowId } = executeWorkflow({
+      contextId: threadId,
+      threadId,
+      projectId: thread.projectId,
+      userId,
+      cwd: cwdResult.value,
+      ...parsed.value,
+    });
+    return c.json({ workflowId }, 202);
+  } catch (e: any) {
+    return resultToResponse(c, err(internal(e.message)));
+  }
+});
+
+// POST /api/git/project/:projectId/workflow — project-scoped workflow
+gitRoutes.post('/project/:projectId/workflow', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const cwdResult = requireProjectCwd(projectId, userId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(workflowSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+
+  // Validate: merge/PR not supported in project mode
+  if (['commit-merge', 'merge', 'commit-pr', 'create-pr'].includes(parsed.value.action)) {
+    return c.json({ error: `Action "${parsed.value.action}" requires a thread` }, 400);
+  }
+
+  // Validate file paths
+  const allPaths = [...(parsed.value.filesToStage || []), ...(parsed.value.filesToUnstage || [])];
+  if (allPaths.length > 0) {
+    const pathError = validateFilePaths(cwdResult.value, allPaths);
+    if (pathError) return c.json({ error: pathError }, 400);
+  }
+
+  if (isWorkflowActive(projectId)) {
+    return c.json({ error: 'A workflow is already in progress' }, 409);
+  }
+
+  try {
+    const { workflowId } = executeWorkflow({
+      contextId: projectId,
+      projectId,
+      userId,
+      cwd: cwdResult.value,
+      ...parsed.value,
+    });
+    return c.json({ workflowId }, 202);
   } catch (e: any) {
     return resultToResponse(c, err(internal(e.message)));
   }

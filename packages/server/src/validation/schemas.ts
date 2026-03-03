@@ -210,6 +210,30 @@ export const mergeSchema = z.object({
   cleanup: z.boolean().optional().default(false),
 });
 
+const gitWorkflowActionSchema = z.enum([
+  'commit',
+  'amend',
+  'commit-push',
+  'commit-pr',
+  'commit-merge',
+  'push',
+  'merge',
+  'create-pr',
+]);
+
+export const workflowSchema = z.object({
+  action: gitWorkflowActionSchema,
+  message: z.string().optional(),
+  filesToStage: z.array(z.string()).optional().default([]),
+  filesToUnstage: z.array(z.string()).optional().default([]),
+  amend: z.boolean().optional().default(false),
+  noVerify: z.boolean().optional().default(false),
+  prTitle: z.string().optional(),
+  prBody: z.string().optional(),
+  targetBranch: z.string().optional(),
+  cleanup: z.boolean().optional().default(true),
+});
+
 export const gitInitSchema = z.object({
   path: z.string().min(1, 'path is required'),
 });

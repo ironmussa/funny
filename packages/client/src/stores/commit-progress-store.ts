@@ -14,6 +14,8 @@ interface CommitProgressState {
 
   startCommit: (id: string, title: string, steps: GitProgressStep[], action: string) => void;
   updateStep: (id: string, stepId: string, update: Partial<GitProgressStep>) => void;
+  /** Replace all steps at once (used by server-side workflow progress via WS) */
+  replaceSteps: (id: string, steps: GitProgressStep[]) => void;
   finishCommit: (id: string) => void;
 }
 
@@ -36,6 +38,18 @@ export const useCommitProgressStore = create<CommitProgressState>((set) => ({
             ...entry,
             steps: entry.steps.map((s) => (s.id === stepId ? { ...s, ...update } : s)),
           },
+        },
+      };
+    }),
+
+  replaceSteps: (id, steps) =>
+    set((state) => {
+      const entry = state.activeCommits[id];
+      if (!entry) return state;
+      return {
+        activeCommits: {
+          ...state.activeCommits,
+          [id]: { ...entry, steps },
         },
       };
     }),

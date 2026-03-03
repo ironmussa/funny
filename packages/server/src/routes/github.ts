@@ -13,15 +13,15 @@
 import { existsSync } from 'fs';
 import { resolve, isAbsolute, join } from 'path';
 
-import { execute } from '@funny/core/git';
 import { getRemoteUrl } from '@funny/core/git';
-import type { GitHubRepo, GitHubIssue } from '@funny/shared';
+import type { GitHubRepo, GitHubIssue, WSCloneProgressData } from '@funny/shared';
 import { badRequest, internal } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { err } from 'neverthrow';
 
 import * as profileService from '../services/profile-service.js';
 import * as pm from '../services/project-manager.js';
+import { wsBroker } from '../services/ws-broker.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
 import { validate, cloneRepoSchema, githubPollSchema } from '../validation/schemas.js';
@@ -323,16 +323,72 @@ githubRoutes.post('/clone', async (c) => {
     );
   }
 
-  try {
-    await execute('git', ['clone', authenticatedUrl, clonePath], {
-      timeout: 300_000, // 5 minutes for large repos
+  // Clone ID for WebSocket progress events
+  const cloneId = `clone:${Date.now()}`;
+
+  const emitProgress = (data: Omit<WSCloneProgressData, 'cloneId'>) => {
+    wsBroker.emitToUser(userId, {
+      type: 'clone:progress',
+      threadId: cloneId,
+      data: { cloneId, ...data },
     });
+  };
+
+  try {
+    emitProgress({ phase: 'Starting clone...', percent: 0 });
+
+    const proc = Bun.spawn(['git', 'clone', '--progress', authenticatedUrl, clonePath], {
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+
+    // Git clone progress goes to stderr
+    const decoder = new TextDecoder();
+    let stderrBuffer = '';
+
+    const readStderr = async () => {
+      if (!proc.stderr) return;
+      for await (const chunk of proc.stderr) {
+        stderrBuffer += decoder.decode(chunk, { stream: true });
+        // Git progress uses \r for in-place updates
+        const lines = stderrBuffer.split(/[\r\n]+/);
+        stderrBuffer = lines.pop() || '';
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (!trimmed) continue;
+          // Sanitize — never leak the token
+          const safeLine = trimmed.replace(/x-access-token:[^@]+@/g, 'x-access-token:***@');
+          // Parse percentage from git output like "Receiving objects:  45% (123/456)"
+          const pctMatch = safeLine.match(/(\d+)%/);
+          emitProgress({
+            phase: safeLine,
+            percent: pctMatch ? Number.parseInt(pctMatch[1], 10) : undefined,
+          });
+        }
+      }
+    };
+
+    await Promise.all([readStderr(), proc.exited]);
+
+    if (proc.exitCode !== 0) {
+      // Read any remaining stdout for error context
+      const stdoutText = await new Response(proc.stdout).text();
+      const errorMsg = (stderrBuffer + stdoutText).replace(
+        /x-access-token:[^@]+@/g,
+        'x-access-token:***@',
+      );
+      emitProgress({ phase: 'Clone failed', percent: 0, error: errorMsg });
+      return resultToResponse(c, err(internal(`Clone failed: ${errorMsg}`)));
+    }
+
+    emitProgress({ phase: 'Clone complete', percent: 100 });
   } catch (error: any) {
     // Sanitize error message — never leak the token
     const safeMsg = (error.message || String(error)).replace(
       /x-access-token:[^@]+@/g,
       'x-access-token:***@',
     );
+    emitProgress({ phase: 'Clone failed', percent: 0, error: safeMsg });
     return resultToResponse(c, err(internal(`Clone failed: ${safeMsg}`)));
   }
 

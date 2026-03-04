@@ -59,11 +59,6 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
                   </span>
                 )}
               </div>
-              {step.error && (
-                <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-destructive/5 p-1.5 font-mono text-[11px] text-destructive/80">
-                  {step.error}
-                </pre>
-              )}
               {step.url && step.status === 'completed' && (
                 <a
                   href={step.url}
@@ -77,6 +72,11 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
               )}
               {step.subItems && step.subItems.length > 0 && (
                 <SubItemsList subItems={step.subItems} parentStatus={step.status} />
+              )}
+              {step.error && !(step.subItems && step.subItems.length > 0) && (
+                <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-destructive/5 p-1.5 font-mono text-[11px] text-destructive/80">
+                  {step.error}
+                </pre>
               )}
             </div>
           </div>

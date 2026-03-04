@@ -349,6 +349,8 @@ export interface WSQueueUpdateData {
   threadId: string;
   queuedCount: number;
   nextMessage?: string;
+  /** Content of the message that was just dequeued and is now being processed */
+  dequeuedMessage?: string;
 }
 
 export interface WSWorkflowStepData {

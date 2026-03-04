@@ -6,6 +6,7 @@
  * @domain depends: AutomationManager, AgentRunner, ProjectManager, ThreadManager, WSBroker
  */
 
+import { getCurrentBranch } from '@funny/core/git';
 import type { AgentModel, AgentProvider, PermissionMode } from '@funny/shared';
 import { Cron } from 'croner';
 import { nanoid } from 'nanoid';
@@ -57,6 +58,10 @@ export async function triggerAutomationRun(automation: {
   const runId = nanoid();
   const now = new Date().toISOString();
 
+  // Resolve current branch so the thread shares branchKey with siblings
+  const branchResult = await getCurrentBranch(project.path);
+  const branch = branchResult.isOk() ? branchResult.value : null;
+
   // Automations always run in local mode (no worktree) and read-only
   tm.createThread({
     id: threadId,
@@ -65,8 +70,8 @@ export async function triggerAutomationRun(automation: {
     mode: 'local',
     permissionMode: automation.permissionMode,
     status: 'pending',
-    branch: null,
-    baseBranch: null,
+    branch,
+    baseBranch: branch,
     worktreePath: null,
     source: 'automation',
     automationId: automation.id,

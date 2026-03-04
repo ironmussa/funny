@@ -244,7 +244,7 @@ const ThreadColumn = memo(function ThreadColumn({ threadId }: { threadId: string
       const { allowedTools, disallowedTools } = deriveToolLists(
         useSettingsStore.getState().toolPermissions,
       );
-      await api.sendMessage(
+      const result = await api.sendMessage(
         threadId,
         prompt,
         {
@@ -257,6 +257,14 @@ const ThreadColumn = memo(function ThreadColumn({ threadId }: { threadId: string
         },
         images,
       );
+      if (result.isErr()) {
+        const err = result.error;
+        if (err.type === 'INTERNAL') {
+          toast.error(t('thread.sendFailed'));
+        } else {
+          toast.error(t('thread.sendFailedGeneric', { error: err.message }));
+        }
+      }
       setSending(false);
     },
     [sending, threadId, thread],

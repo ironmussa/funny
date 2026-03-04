@@ -424,7 +424,12 @@ function ChatView({
       images,
     );
     if (result.isErr()) {
-      console.error('Send failed:', result.error);
+      const err = result.error;
+      if (err.type === 'INTERNAL') {
+        toast.error(t('thread.sendFailed'));
+      } else {
+        toast.error(t('thread.sendFailedGeneric', { error: err.message }));
+      }
     }
     setSending(false);
   };

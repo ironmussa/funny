@@ -101,6 +101,8 @@
     "typeToInterrupt": "Escribe para enviar un seguimiento...",
     "interruptingAgent": "Interrumpiendo agente con nuevo prompt...",
     "messageQueued": "Mensaje en cola — se enviará cuando el agente termine",
+    "sendFailed": "No se pudo enviar el mensaje — el servidor no está disponible",
+    "sendFailedGeneric": "No se pudo enviar el mensaje: {{error}}",
     "followUpDialogTitle": "El agente está ejecutándose",
     "followUpDialogDesc": "El agente está trabajando actualmente. ¿Qué deseas hacer?",
     "followUpInterrupt": "Interrumpir y enviar",
@@ -649,6 +651,8 @@
     "moreFilesHint": "Escribe para filtrar...",
     "emptyPrompt": "Escribe un prompt antes de enviar",
     "queued": "en cola",
+    "queuedOne": "1 mensaje en cola",
+    "queuedMany": "{{count}} mensajes en cola",
     "queueMessage": "Encolar mensaje"
   },
   "gitStatus": {

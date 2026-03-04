@@ -278,7 +278,11 @@ export class AgentOrchestrator extends EventEmitter {
         hadResult: this.resultReceived.has(threadId),
         manuallyStopped: this.manuallyStopped.has(threadId),
       });
-      this.activeAgents.delete(threadId);
+      // Only remove if THIS proc is still the active one — a newer process
+      // may already have replaced it in the map (race during kill + restart).
+      if (this.activeAgents.get(threadId) === proc) {
+        this.activeAgents.delete(threadId);
+      }
 
       if (this.manuallyStopped.has(threadId)) {
         this.manuallyStopped.delete(threadId);
@@ -351,7 +355,11 @@ export class AgentOrchestrator extends EventEmitter {
         gotMessage,
         hadResult: this.resultReceived.has(threadId),
       });
-      this.activeAgents.delete(threadId);
+      // Only remove if THIS proc is still the active one — a newer process
+      // may already have replaced it in the map (race during kill + restart).
+      if (this.activeAgents.get(threadId) === proc) {
+        this.activeAgents.delete(threadId);
+      }
 
       if (this.manuallyStopped.has(threadId)) {
         this.manuallyStopped.delete(threadId);

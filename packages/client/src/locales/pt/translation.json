@@ -101,6 +101,8 @@
     "typeToInterrupt": "Digite para enviar um acompanhamento...",
     "interruptingAgent": "Interrompendo agente com novo prompt...",
     "messageQueued": "Mensagem enfileirada — será enviada quando o agente terminar",
+    "sendFailed": "Não foi possível enviar a mensagem — servidor indisponível",
+    "sendFailedGeneric": "Não foi possível enviar a mensagem: {{error}}",
     "queuedMessages": "{{count}} mensagem(ns) enfileirada(s)",
     "source": {
       "web": "Criado pela interface web",
@@ -639,6 +641,8 @@
     "moreFilesHint": "Digite para filtrar...",
     "emptyPrompt": "Digite um prompt antes de enviar",
     "queued": "enfileirado",
+    "queuedOne": "1 mensagem na fila",
+    "queuedMany": "{{count}} mensagens na fila",
     "queueMessage": "Enfileirar mensagem"
   },
   "gitStatus": {

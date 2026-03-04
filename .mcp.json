@@ -16,6 +16,16 @@
       "headers": {
         "Authorization": "Basic cm9vdEBleGFtcGxlLmNvbTpDb21wbGV4cGFzcyMxMjM="
       }
+    },
+    "openobserve": {
+      "type": "stdio",
+      "command": "bun",
+      "args": ["c:/Users/argen/Documents/GitHub/a-parallel/packages/mcp-openobserve/src/index.ts"],
+      "env": {
+        "OPENOBSERVE_URL": "http://localhost:5080",
+        "OPENOBSERVE_USER": "root@example.com",
+        "OPENOBSERVE_PASSWORD": "Complexpass#123"
+      }
     }
   }
 }

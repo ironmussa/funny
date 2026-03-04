@@ -60,6 +60,7 @@ import { worktreeRoutes } from './routes/worktrees.js';
 import { startAgent } from './services/agent-runner.js';
 import { getAuthToken, validateToken } from './services/auth-service.js';
 import { startScheduler } from './services/automation-scheduler.js';
+import { rehydrateWatchers } from './services/git-watcher-service.js';
 import { registerAllHandlers } from './services/handlers/handler-registry.js';
 import type { HandlerServiceContext } from './services/handlers/types.js';
 import { startExternalThreadSweep } from './services/ingest-mapper.js';
@@ -287,6 +288,11 @@ if (!prev) {
   markStaleThreadsInterrupted();
   markStaleExternalThreadsStopped();
 }
+
+// Re-register existing threads with the git file watcher so external git
+// changes (stage, commit, branch switch) trigger status updates even after
+// a server restart where the in-memory watcher registry was lost.
+rehydrateWatchers();
 
 // Periodic sweep: stop external threads that haven't received events in 10 minutes
 startExternalThreadSweep();

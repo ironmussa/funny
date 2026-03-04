@@ -14,6 +14,7 @@ import {
   Github,
   FolderOpen,
   Copy,
+  ListOrdered,
 } from 'lucide-react';
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -73,6 +74,7 @@ interface PromptInputProps {
   loading?: boolean;
   running?: boolean;
   queuedCount?: number;
+  queuedNextMessage?: string;
   isQueueMode?: boolean;
   placeholder?: string;
   isNewThread?: boolean;
@@ -80,6 +82,8 @@ interface PromptInputProps {
   projectId?: string;
   initialPrompt?: string;
   initialImages?: ImageAttachment[];
+  /** Imperative ref — PromptInput writes setPrompt into it so the parent can restore text */
+  setPromptRef?: React.RefObject<((text: string) => void) | null>;
 }
 
 export const PromptInput = memo(function PromptInput({
@@ -88,6 +92,7 @@ export const PromptInput = memo(function PromptInput({
   loading = false,
   running = false,
   queuedCount = 0,
+  queuedNextMessage,
   isQueueMode = false,
   placeholder,
   isNewThread = false,
@@ -95,6 +100,7 @@ export const PromptInput = memo(function PromptInput({
   projectId: propProjectId,
   initialPrompt: initialPromptProp,
   initialImages: initialImagesProp,
+  setPromptRef,
 }: PromptInputProps) {
   const { t } = useTranslation();
 
@@ -111,6 +117,17 @@ export const PromptInput = memo(function PromptInput({
   const defaultThreadMode = effectiveProject?.defaultMode ?? 'worktree';
 
   const [prompt, setPrompt] = useState(initialPromptProp ?? '');
+
+  // Expose setPrompt to parent via ref
+  useEffect(() => {
+    if (setPromptRef) {
+      setPromptRef.current = setPrompt;
+      return () => {
+        setPromptRef.current = null;
+      };
+    }
+  }, [setPromptRef]);
+
   const [unifiedModel, setUnifiedModel] = useState<string>(`${defaultProvider}:${defaultModel}`);
   const { provider, model } = useMemo(() => parseUnifiedModel(unifiedModel), [unifiedModel]);
   const [mode, setMode] = useState<string>(defaultPermissionMode);
@@ -831,6 +848,26 @@ export const PromptInput = memo(function PromptInput({
           onClose={() => setLightboxOpen(false)}
         />
 
+        {/* Queue indicator */}
+        {queuedCount > 0 && (
+          <div
+            data-testid="queue-indicator"
+            className="group flex items-center gap-1.5 rounded-md border border-border/60 bg-muted/50 px-2.5 py-1.5"
+          >
+            <ListOrdered className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <span className="text-xs text-muted-foreground">
+              {queuedCount === 1
+                ? t('prompt.queuedOne', '1 message in queue')
+                : t('prompt.queuedMany', '{{count}} messages in queue', { count: queuedCount })}
+            </span>
+            {queuedNextMessage && (
+              <span className="ml-auto max-w-[50%] truncate text-xs text-muted-foreground/70">
+                {queuedNextMessage}
+              </span>
+            )}
+          </div>
+        )}
+
         {/* Textarea + bottom toolbar */}
         <div
           className={cn(
@@ -1087,11 +1124,6 @@ export const PromptInput = memo(function PromptInput({
                     ))}
                   </SelectContent>
                 </Select>
-                {queuedCount > 0 && (
-                  <span className="inline-flex items-center rounded bg-muted px-1.5 py-0.5 text-xs font-medium text-muted-foreground">
-                    {queuedCount} {t('prompt.queued')}
-                  </span>
-                )}
                 {running && !prompt.trim() ? (
                   <Button
                     data-testid="prompt-stop"

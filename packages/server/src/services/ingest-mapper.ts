@@ -8,7 +8,7 @@
  * Translates external webhook events into thread/message operations and WebSocket emissions.
  */
 
-import { getRemoteUrl } from '@funny/core/git';
+import { getCurrentBranch, getRemoteUrl } from '@funny/core/git';
 import type { WSEvent, WSWorkflowStepData, WSWorkflowStatusData } from '@funny/shared';
 import { nanoid } from 'nanoid';
 
@@ -328,8 +328,15 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
   const title =
     (data.title as string) ??
     (data.branch ? `Pipeline: ${data.branch}` : `External: ${request_id.slice(0, 8)}`);
-  const branch = (data.branch as string) ?? null;
-  const baseBranch = (data.base_branch as string) ?? null;
+  // Resolve branch: prefer explicit value from event, fall back to current branch
+  // so local-mode threads share branchKey with siblings on the same branch.
+  const project = pm.getProject(projectId);
+  let branch = (data.branch as string) ?? null;
+  if (!branch && project) {
+    const branchResult = await getCurrentBranch(project.path);
+    if (branchResult.isOk()) branch = branchResult.value;
+  }
+  const baseBranch = (data.base_branch as string) ?? branch;
   const worktreePath = (data.worktree_path as string) ?? null;
   // createdBy: allow external caller to specify agent/pipeline name, otherwise mark as "external"
   const createdBy = (metadata?.createdBy as string) ?? (data.created_by as string) ?? 'external';

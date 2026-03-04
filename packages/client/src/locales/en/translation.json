@@ -101,6 +101,8 @@
     "typeToInterrupt": "Type to send a follow-up...",
     "interruptingAgent": "Interrupting agent with new prompt...",
     "messageQueued": "Message queued — will send when agent finishes",
+    "sendFailed": "Could not send message — server is unavailable",
+    "sendFailedGeneric": "Could not send message: {{error}}",
     "followUpDialogTitle": "Agent is running",
     "followUpDialogDesc": "The agent is currently working. What would you like to do?",
     "followUpInterrupt": "Interrupt & Send",
@@ -651,6 +653,8 @@
     "moreFilesHint": "Type to narrow results...",
     "emptyPrompt": "Please enter a prompt before sending",
     "queued": "queued",
+    "queuedOne": "1 message in queue",
+    "queuedMany": "{{count}} messages in queue",
     "queueMessage": "Queue message"
   },
   "gitStatus": {

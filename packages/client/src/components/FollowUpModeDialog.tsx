@@ -27,15 +27,18 @@ export function FollowUpModeDialog({
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onCancel()}>
-      <DialogContent className="sm:max-w-sm" data-testid="followup-mode-dialog">
-        <DialogHeader>
-          <DialogTitle>{t('thread.followUpDialogTitle')}</DialogTitle>
-          <DialogDescription>{t('thread.followUpDialogDesc')}</DialogDescription>
+      <DialogContent className="sm:max-w-xs" data-testid="followup-mode-dialog">
+        <DialogHeader className="pb-1">
+          <DialogTitle className="text-sm">{t('thread.followUpDialogTitle')}</DialogTitle>
+          <DialogDescription className="text-xs">
+            {t('thread.followUpDialogDesc')}
+          </DialogDescription>
         </DialogHeader>
-        <DialogFooter className="flex-col gap-2 sm:flex-col">
+        <DialogFooter className="flex-col gap-1.5 sm:flex-col sm:justify-stretch sm:space-x-0">
           <Button
             data-testid="followup-interrupt"
             variant="default"
+            size="sm"
             className="w-full"
             onClick={onInterrupt}
           >
@@ -44,6 +47,7 @@ export function FollowUpModeDialog({
           <Button
             data-testid="followup-queue"
             variant="secondary"
+            size="sm"
             className="w-full"
             onClick={onQueue}
           >
@@ -52,6 +56,7 @@ export function FollowUpModeDialog({
           <Button
             data-testid="followup-cancel"
             variant="ghost"
+            size="sm"
             className="w-full"
             onClick={onCancel}
           >

@@ -48,18 +48,26 @@ export const agentCompletedQueueHandler: EventHandler<'agent:completed'> = {
         next.provider || thread.provider || 'claude',
       );
 
-      // Emit updated queue count
+      // Emit queue update with the dequeued message content so the client
+      // can inject the user message into the thread (optimistic rendering
+      // is skipped for queued messages to avoid showing them prematurely)
       const remaining = ctx.queueCount(threadId);
       const peekNext = ctx.peekMessage(threadId);
-      ctx.emitToUser(thread.userId, {
-        type: 'thread:queue_update',
+      const queueEvent = {
+        type: 'thread:queue_update' as const,
         threadId,
         data: {
           threadId,
           queuedCount: remaining,
           nextMessage: peekNext?.content?.slice(0, 100),
+          dequeuedMessage: next.content,
         },
-      });
+      };
+      if (thread.userId) {
+        ctx.emitToUser(thread.userId, queueEvent);
+      } else {
+        ctx.broadcast(queueEvent);
+      }
     } catch (err: any) {
       ctx.log(`Failed to auto-send queued message for thread ${threadId}: ${err.message}`);
     }

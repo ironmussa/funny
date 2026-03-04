@@ -21,6 +21,12 @@ const wsLog = createClientLogger('ws-handlers');
 type Get = () => ThreadState;
 type Set = (partial: Partial<ThreadState> | ((state: ThreadState) => Partial<ThreadState>)) => void;
 
+// Buffer for dequeued user messages — injected when the next agent:message
+// arrives so the user message appears right before the new agent's response.
+// We use handleWSMessage (called synchronously during flush) rather than
+// handleWSInit (deferred via startTransition) to guarantee correct ordering.
+const pendingDequeuedMessages = new Map<string, string>();
+
 // ── Init ────────────────────────────────────────────────────────
 
 export function handleWSInit(get: Get, set: Set, threadId: string, data: AgentInitInfo): void {
@@ -59,11 +65,27 @@ export function handleWSMessage(
       }
     }
 
+    // If there's a buffered dequeued user message, prepend it before this
+    // assistant message so the user message appears in the correct position
+    const dequeuedMsg = pendingDequeuedMessages.get(threadId);
+    const extraMessages: typeof activeThread.messages = [];
+    if (dequeuedMsg) {
+      pendingDequeuedMessages.delete(threadId);
+      extraMessages.push({
+        id: crypto.randomUUID(),
+        threadId,
+        role: 'user' as MessageRole,
+        content: dequeuedMsg,
+        timestamp: new Date().toISOString(),
+      });
+    }
+
     set({
       activeThread: {
         ...activeThread,
         messages: [
           ...activeThread.messages,
+          ...extraMessages,
           {
             id: messageId || crypto.randomUUID(),
             threadId,
@@ -429,9 +451,15 @@ export function handleWSQueueUpdate(
   get: Get,
   set: Set,
   threadId: string,
-  data: { threadId: string; queuedCount: number; nextMessage?: string },
+  data: { threadId: string; queuedCount: number; nextMessage?: string; dequeuedMessage?: string },
 ): void {
   const { activeThread } = get();
+
+  // Buffer dequeued message — will be injected on next agent:init to ensure
+  // it appears after the previous agent's response (correct visual ordering)
+  if (data.dequeuedMessage) {
+    pendingDequeuedMessages.set(threadId, data.dequeuedMessage);
+  }
 
   if (activeThread?.id === threadId) {
     set({

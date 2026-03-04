@@ -16,7 +16,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 
 import { log } from '../lib/logger.js';
-import { getProject } from './project-manager.js';
+import { getProject, listProjects } from './project-manager.js';
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 import { threadEventBus } from './thread-event-bus.js';
 import { listThreads } from './thread-manager.js';
@@ -185,6 +185,35 @@ function closeWatcher(projectId: string, pw: ProjectWatcher): void {
 export function closeAllWatchers(): void {
   for (const [projectId, pw] of projectWatchers) {
     closeWatcher(projectId, pw);
+  }
+}
+
+/**
+ * Re-register existing active threads with the git watcher on server startup.
+ * After a restart, the in-memory projectWatchers map is empty so external git
+ * changes would go unnoticed for all pre-existing threads.
+ */
+export function rehydrateWatchers(): void {
+  const projects = listProjects('__local__');
+  let total = 0;
+
+  for (const project of projects) {
+    const threads = listThreads({
+      projectId: project.id,
+      userId: '__local__',
+      includeArchived: false,
+    });
+
+    for (const thread of threads) {
+      startWatching(project.id, project.path, thread.id);
+      total++;
+    }
+  }
+
+  if (total > 0) {
+    log.info(`Git watcher: rehydrated ${total} thread(s) across ${projects.length} project(s)`, {
+      namespace: 'git-watcher',
+    });
   }
 }
 

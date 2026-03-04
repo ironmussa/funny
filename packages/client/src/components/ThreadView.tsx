@@ -926,6 +926,7 @@ export function ThreadView() {
     };
     images?: any[];
   } | null>(null);
+  const setPromptRef = useRef<((text: string) => void) | null>(null);
 
   // Track which message/tool-call IDs existed when the thread was loaded.
   // Messages in this set skip entrance animations to prevent CLS.
@@ -1201,13 +1202,18 @@ export function ThreadView() {
         promptPreview: prompt.slice(0, 120),
       });
 
-      const threadIsRunning = thread.status === 'running';
+      // Treat thread as running if agent is active OR queued messages are pending
+      // (queue drains immediately on completion — there's a brief gap where status
+      // is 'completed' but the next queued agent hasn't started yet)
+      const queuedCount = (thread as any).queuedCount ?? 0;
+      const threadIsRunning = thread.status === 'running' || queuedCount > 0;
       const currentProject = useProjectStore
         .getState()
         .projects.find((p) => p.id === thread.projectId);
       const followUpMode = currentProject?.followUpMode || 'interrupt';
 
-      // "Ask" mode: show dialog when agent is running, return false to restore prompt
+      // "Ask" mode: show dialog when agent is running — prompt clears immediately,
+      // restored on cancel via setPromptRef
       if (threadIsRunning && followUpMode === 'ask') {
         const { allowedTools, disallowedTools } = deriveToolLists(
           useSettingsStore.getState().toolPermissions,
@@ -1226,7 +1232,7 @@ export function ThreadView() {
           images,
         };
         setFollowUpDialogOpen(true);
-        return false;
+        return; // prompt already cleared by PromptInput
       }
 
       setSending(true);
@@ -1241,18 +1247,22 @@ export function ThreadView() {
       smoothScrollPending.current = true;
       if (scrollDownRef.current) scrollDownRef.current.style.display = 'none';
 
-      startTransition(() => {
-        useThreadStore
-          .getState()
-          .appendOptimisticMessage(
-            thread.id,
-            prompt,
-            images,
-            opts.model as any,
-            opts.mode as any,
-            opts.fileReferences,
-          );
-      });
+      // Don't show optimistic message for queued messages — it will appear when processed
+      const willQueue = threadIsRunning && followUpMode === 'queue';
+      if (!willQueue) {
+        startTransition(() => {
+          useThreadStore
+            .getState()
+            .appendOptimisticMessage(
+              thread.id,
+              prompt,
+              images,
+              opts.model as any,
+              opts.mode as any,
+              opts.fileReferences,
+            );
+        });
+      }
 
       const { allowedTools, disallowedTools } = deriveToolLists(
         useSettingsStore.getState().toolPermissions,
@@ -1272,8 +1282,13 @@ export function ThreadView() {
         images,
       );
       if (result.isErr()) {
-        console.error('Send failed:', result.error);
-      } else if (threadIsRunning && followUpMode === 'queue') {
+        const err = result.error;
+        if (err.type === 'INTERNAL') {
+          toast.error(t('thread.sendFailed'));
+        } else {
+          toast.error(t('thread.sendFailedGeneric', { error: err.message }));
+        }
+      } else if (willQueue) {
         toast.success(t('thread.messageQueued'));
       }
       setSending(false);
@@ -1302,18 +1317,21 @@ export function ThreadView() {
       smoothScrollPending.current = true;
       if (scrollDownRef.current) scrollDownRef.current.style.display = 'none';
 
-      startTransition(() => {
-        useThreadStore
-          .getState()
-          .appendOptimisticMessage(
-            thread.id,
-            pending.prompt,
-            pending.images,
-            pending.opts.model as any,
-            pending.opts.permissionMode as any,
-            pending.opts.fileReferences as any,
-          );
-      });
+      // Don't show optimistic message for queued messages — it will appear when processed
+      if (action !== 'queue') {
+        startTransition(() => {
+          useThreadStore
+            .getState()
+            .appendOptimisticMessage(
+              thread.id,
+              pending.prompt,
+              pending.images,
+              pending.opts.model as any,
+              pending.opts.permissionMode as any,
+              pending.opts.fileReferences as any,
+            );
+        });
+      }
 
       const result = await api.sendMessage(
         thread.id,
@@ -1325,7 +1343,12 @@ export function ThreadView() {
         pending.images,
       );
       if (result.isErr()) {
-        console.error('Send failed:', result.error);
+        const err = result.error;
+        if (err.type === 'INTERNAL') {
+          toast.error(t('thread.sendFailed'));
+        } else {
+          toast.error(t('thread.sendFailedGeneric', { error: err.message }));
+        }
       } else if (action === 'queue') {
         toast.success(t('thread.messageQueued'));
       }
@@ -1336,6 +1359,11 @@ export function ThreadView() {
 
   const handleFollowUpCancel = useCallback(() => {
     setFollowUpDialogOpen(false);
+    // Restore the prompt text that was cleared when the dialog opened
+    const pending = pendingSendRef.current;
+    if (pending && setPromptRef.current) {
+      setPromptRef.current(pending.prompt);
+    }
     pendingSendRef.current = null;
   }, []);
 
@@ -1419,9 +1447,10 @@ export function ThreadView() {
     );
   }
 
-  const isRunning = activeThread.status === 'running';
+  const uiQueuedCount = (activeThread as any).queuedCount ?? 0;
+  const isRunning = activeThread.status === 'running' || uiQueuedCount > 0;
   const isExternal = activeThread.provider === 'external';
-  const isIdle = activeThread.status === 'idle';
+  const isIdle = activeThread.status === 'idle' && uiQueuedCount === 0;
   const currentProject = useProjectStore
     .getState()
     .projects.find((p) => p.id === activeThread.projectId);
@@ -1686,6 +1715,8 @@ export function ThreadView() {
                   running={isRunning && !isExternal}
                   isQueueMode={isQueueMode}
                   queuedCount={(activeThread as any).queuedCount ?? 0}
+                  queuedNextMessage={(activeThread as any).queuedNextMessage}
+                  setPromptRef={setPromptRef}
                   placeholder={t('thread.nextPrompt')}
                 />
               </div>

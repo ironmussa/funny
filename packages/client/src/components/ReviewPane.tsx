@@ -432,17 +432,17 @@ export function ReviewPane() {
     }
   }, [commitEntry]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Show standalone merge button when worktree has no dirty files but has unmerged commits.
-  // Also require the worktree to actually exist (has a path) and the branch to differ from baseBranch.
+  // Show standalone merge button when no dirty files but branch has unmerged commits.
+  // Works in both worktree and local mode — as long as the thread is on a different branch from base.
+  const isOnDifferentBranch =
+    !!effectiveThreadId && !!baseBranch && !!threadBranch && threadBranch !== baseBranch;
   const showMergeOnly =
-    isWorktree &&
-    hasWorktreePath &&
+    isOnDifferentBranch &&
     summaries.length === 0 &&
     !loading &&
     gitStatus &&
     !gitStatus.isMergedIntoBase &&
-    !hasRebaseConflict &&
-    (!baseBranch || threadBranch !== baseBranch);
+    !hasRebaseConflict;
 
   // Show standalone push button when no dirty files but there are unpushed commits
   const showPushOnly =
@@ -653,6 +653,56 @@ export function ReviewPane() {
     setGeneratingMsg(false);
   };
 
+  // Build a prompt that delegates a git action to the agent via /commit or /commit-push-pr
+  const buildAgentCommitPrompt = (
+    action: 'commit' | 'amend' | 'commit-push' | 'commit-pr' | 'commit-merge',
+    filesToStage: string[],
+    filesToUnstage: string[],
+    commitMsg: string,
+  ): string => {
+    const parts: string[] = [];
+
+    if (filesToUnstage.length > 0) {
+      parts.push(`First unstage these files: ${filesToUnstage.join(', ')}`);
+    }
+    if (filesToStage.length > 0) {
+      parts.push(`Stage these files: ${filesToStage.join(', ')}`);
+    }
+
+    const isCommitOnly = action === 'commit' || action === 'amend';
+    const slashCommand = isCommitOnly ? '/commit' : '/commit-push-pr';
+
+    parts.push(`Then use ${slashCommand} with this commit message:`);
+    parts.push(commitMsg);
+
+    if (action === 'amend') {
+      parts.push('\nNote: This should amend the previous commit, not create a new one.');
+    }
+
+    return parts.join('\n\n');
+  };
+
+  const sendAgentCommitMessage = async (prompt: string): Promise<boolean> => {
+    if (!effectiveThreadId) return false;
+
+    const { allowedTools, disallowedTools } = deriveToolLists(
+      useSettingsStore.getState().toolPermissions,
+    );
+
+    const result = await api.sendMessage(effectiveThreadId, prompt, {
+      allowedTools,
+      disallowedTools,
+    });
+
+    if (result.isErr()) {
+      toast.error(result.error.message);
+      return false;
+    }
+
+    toast.success(t('review.agentCommitSent', 'Commit task sent to agent'));
+    return true;
+  };
+
   const handleCommitAction = async () => {
     if (!hasGitContext || !commitTitle.trim() || checkedFiles.size === 0 || actionInProgress)
       return;
@@ -672,6 +722,25 @@ export function ReviewPane() {
       ? `${commitTitle.trim()}\n\n${commitBody.trim()}`
       : commitTitle.trim();
 
+    // When a thread is active, delegate to the agent via /commit or /commit-push-pr
+    if (effectiveThreadId) {
+      const prompt = buildAgentCommitPrompt(selectedAction, toStage, toUnstage, commitMsg);
+      const ok = await sendAgentCommitMessage(prompt);
+      if (!ok) {
+        setActionInProgress(null);
+        commitLockRef.current = false;
+        return;
+      }
+      // Agent takes over — clear UI state
+      setActionInProgress(null);
+      commitLockRef.current = false;
+      setCommitTitleRaw('');
+      setCommitBodyRaw('');
+      if (draftId) clearCommitDraft(draftId);
+      return;
+    }
+
+    // Project-mode (no thread) — use existing git-workflow-service
     const params: import('@funny/shared').GitWorkflowRequest = {
       action: selectedAction,
       message: commitMsg,
@@ -683,9 +752,7 @@ export function ReviewPane() {
       cleanup: selectedAction === 'commit-merge',
     };
 
-    const result = effectiveThreadId
-      ? await api.startWorkflow(effectiveThreadId, params)
-      : await api.projectStartWorkflow(projectModeId!, params);
+    const result = await api.projectStartWorkflow(projectModeId!, params);
 
     if (result.isErr()) {
       toast.error(result.error.message);
@@ -757,9 +824,16 @@ export function ReviewPane() {
     if (!hasGitContext || pushInProgress) return;
     setPushInProgress(true);
 
-    const result = effectiveThreadId
-      ? await api.startWorkflow(effectiveThreadId, { action: 'push' })
-      : await api.projectStartWorkflow(projectModeId!, { action: 'push' });
+    // When a thread is active, delegate to agent
+    if (effectiveThreadId) {
+      const ok = await sendAgentCommitMessage('Push the current branch to the remote origin.');
+      setPushInProgress(false);
+      if (!ok) return;
+      return;
+    }
+
+    // Project-mode — use existing workflow
+    const result = await api.projectStartWorkflow(projectModeId!, { action: 'push' });
 
     if (result.isErr()) {
       toast.error(result.error.message);
@@ -772,6 +846,18 @@ export function ReviewPane() {
     if (!hasGitContext || mergeInProgress) return;
     setMergeInProgress(true);
 
+    // Delegate to agent when a thread is active (works for both worktree and local mode)
+    if (effectiveThreadId) {
+      const target = baseBranch || 'main';
+      const ok = await sendAgentCommitMessage(
+        `Merge the current branch into ${target}. After merging, clean up the branch.`,
+      );
+      setMergeInProgress(false);
+      if (!ok) return;
+      return;
+    }
+
+    // Fallback (shouldn't reach here as merge is thread-only, but keep for safety)
     const result = await api.startWorkflow(effectiveThreadId!, {
       action: 'merge',
       cleanup: true,
@@ -788,6 +874,21 @@ export function ReviewPane() {
     if (!hasGitContext || prInProgress || !prDialog) return;
     setPrInProgress(true);
 
+    // When a thread is active, delegate to agent
+    if (effectiveThreadId) {
+      const title = prDialog.title.trim();
+      const body = prDialog.body.trim();
+      const prompt = body
+        ? `Push the current branch and create a pull request with title: "${title}" and body: "${body}"`
+        : `Push the current branch and create a pull request with title: "${title}"`;
+      const ok = await sendAgentCommitMessage(prompt);
+      setPrInProgress(false);
+      if (!ok) return;
+      setPrDialog(null);
+      return;
+    }
+
+    // Fallback (shouldn't reach here as PR is thread-only, but keep for safety)
     const result = await api.startWorkflow(effectiveThreadId!, {
       action: 'create-pr',
       prTitle: prDialog.title.trim(),
@@ -980,8 +1081,12 @@ export function ReviewPane() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshStashList is a non-memoized function; only trigger on context/visibility change
   }, [gitContextKey, reviewPaneOpen]);
 
+  // When a thread is active, commits are delegated to the agent, so allow even if agent is running
   const canCommit =
-    checkedFiles.size > 0 && commitTitle.trim().length > 0 && !actionInProgress && !isAgentRunning;
+    checkedFiles.size > 0 &&
+    commitTitle.trim().length > 0 &&
+    !actionInProgress &&
+    (effectiveThreadId ? true : !isAgentRunning);
 
   return (
     <div className="flex h-full flex-col">
@@ -1542,7 +1647,7 @@ export function ReviewPane() {
               <div
                 className={cn(
                   'grid gap-1 mt-2',
-                  isWorktree && hasWorktreePath ? 'grid-cols-5' : 'grid-cols-3',
+                  isOnDifferentBranch ? 'grid-cols-5' : 'grid-cols-3',
                 )}
               >
                 {[
@@ -1564,7 +1669,7 @@ export function ReviewPane() {
                     label: t('review.commitAndPush', 'Commit & Push'),
                     testId: 'review-action-commit-push',
                   },
-                  ...(isWorktree && hasWorktreePath
+                  ...(isOnDifferentBranch
                     ? [
                         {
                           value: 'commit-pr' as const,
@@ -1586,7 +1691,7 @@ export function ReviewPane() {
                       <button
                         type="button"
                         onClick={() => setSelectedAction(value)}
-                        disabled={!!actionInProgress || !!isAgentRunning}
+                        disabled={!!actionInProgress || (!!isAgentRunning && !effectiveThreadId)}
                         data-testid={testId}
                         className={cn(
                           'flex flex-col items-center gap-1 rounded-md border p-2 text-center transition-all',
@@ -1785,7 +1890,7 @@ export function ReviewPane() {
                           className="flex-1"
                           size="sm"
                           onClick={handleMergeOnly}
-                          disabled={mergeInProgress || !!isAgentRunning}
+                          disabled={mergeInProgress || (!!isAgentRunning && !effectiveThreadId)}
                           data-testid="review-merge"
                         >
                           {mergeInProgress ? (

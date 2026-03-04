@@ -9,6 +9,10 @@
 import { EventEmitter } from 'events';
 
 import type { AgentProvider, AgentModel, PermissionMode } from '@funny/shared';
+
+import { createDebugLogger } from '../debug.js';
+
+const dlog = createDebugLogger('orch');
 import {
   resolveModelId,
   resolvePermissionMode,
@@ -84,14 +88,19 @@ export class AgentOrchestrator extends EventEmitter {
       systemPrefix,
     } = options;
 
-    console.log(
-      `[orchestrator] start thread=${threadId} provider=${provider} model=${model} cwd=${cwd}`,
-    );
+    dlog.info('startAgent', {
+      threadId,
+      provider,
+      model,
+      cwd,
+      hasSessionId: !!sessionId,
+      permissionMode,
+    });
 
     // Kill existing process if still running
     const existing = this.activeAgents.get(threadId);
     if (existing && !existing.exited) {
-      console.log(`[orchestrator] stopping existing agent for thread=${threadId} before restart`);
+      dlog.info('Stopping existing agent before restart', { threadId });
       this.manuallyStopped.add(threadId);
       try {
         await existing.kill();
@@ -108,7 +117,7 @@ export class AgentOrchestrator extends EventEmitter {
     const isResume = !!sessionId;
     let effectivePrompt = prompt;
     if (isResume) {
-      console.log(`[orchestrator] Resuming session=${sessionId} for thread=${threadId}`);
+      dlog.info('Resuming session', { threadId, sessionId });
       const prefix =
         systemPrefix ??
         `[SYSTEM NOTE: This is a session resume after an interruption. Your previous session was interrupted mid-execution. Continue from where you left off. Do NOT re-plan or start over — pick up execution from the last completed step.]`;
@@ -161,7 +170,7 @@ export class AgentOrchestrator extends EventEmitter {
       try {
         await proc.kill();
       } catch (e) {
-        console.error(`[orchestrator] Error killing process for thread ${threadId}:`, e);
+        dlog.error('Error killing process', { threadId, error: String(e).slice(0, 200) });
       }
       this.activeAgents.delete(threadId);
     }
@@ -206,7 +215,7 @@ export class AgentOrchestrator extends EventEmitter {
    */
   adoptProcess(threadId: string, proc: IAgentProcess): void {
     this.wireProcessHandlers(proc, threadId);
-    console.log(`[orchestrator] Adopted surviving agent for thread=${threadId}`);
+    dlog.info('Adopted surviving agent', { threadId });
   }
 
   /**
@@ -215,18 +224,18 @@ export class AgentOrchestrator extends EventEmitter {
   async stopAll(): Promise<void> {
     const entries = [...this.activeAgents.entries()];
     if (entries.length === 0) return;
-    console.log(`[orchestrator] Stopping ${entries.length} active agent(s)...`);
+    dlog.info('Stopping all agents', { count: entries.length });
     await Promise.allSettled(
       entries.map(async ([threadId, proc]) => {
         try {
           await proc.kill();
         } catch (e) {
-          console.error(`[orchestrator] Error killing agent for thread ${threadId}:`, e);
+          dlog.error('Error killing agent', { threadId, error: String(e).slice(0, 200) });
         }
         this.activeAgents.delete(threadId);
       }),
     );
-    console.log('[orchestrator] All agents stopped.');
+    dlog.info('All agents stopped');
   }
 
   // ── Process wiring ─────────────────────────────────────────────
@@ -240,9 +249,15 @@ export class AgentOrchestrator extends EventEmitter {
     this.resultReceived.delete(threadId);
 
     proc.on('message', (msg: CLIMessage) => {
+      dlog.debug('wireProcessHandlers message', {
+        threadId,
+        type: msg.type,
+        subtype: (msg as any).subtype,
+      });
       if (msg.type === 'result') {
         if (this.manuallyStopped.has(threadId)) {
-          return; // Suppress result messages for manually stopped agents
+          dlog.debug('Suppressing result for manually stopped agent', { threadId });
+          return;
         }
         this.resultReceived.add(threadId);
       }
@@ -250,13 +265,19 @@ export class AgentOrchestrator extends EventEmitter {
     });
 
     proc.on('error', (err: Error) => {
-      console.error(`[orchestrator] Error in thread ${threadId}:`, err);
+      dlog.error('Process error', { threadId, error: String(err).slice(0, 200) });
       if (!this.resultReceived.has(threadId) && !this.manuallyStopped.has(threadId)) {
         this.emit('agent:error', threadId, err);
       }
     });
 
     proc.on('exit', (code: number | null) => {
+      dlog.info('Process exit', {
+        threadId,
+        code,
+        hadResult: this.resultReceived.has(threadId),
+        manuallyStopped: this.manuallyStopped.has(threadId),
+      });
       this.activeAgents.delete(threadId);
 
       if (this.manuallyStopped.has(threadId)) {
@@ -266,6 +287,7 @@ export class AgentOrchestrator extends EventEmitter {
       }
 
       if (!this.resultReceived.has(threadId)) {
+        dlog.warn('Unexpected exit (no result received)', { threadId, code });
         this.emit('agent:unexpected-exit', threadId, code);
       }
 
@@ -292,6 +314,12 @@ export class AgentOrchestrator extends EventEmitter {
 
     proc.on('message', (msg: CLIMessage) => {
       gotMessage = true;
+      dlog.debug('wireResumeHandlers message', {
+        threadId,
+        type: msg.type,
+        subtype: (msg as any).subtype,
+        firstMessage: !gotMessage,
+      });
       if (msg.type === 'result') {
         if (this.manuallyStopped.has(threadId)) return;
         this.resultReceived.add(threadId);
@@ -301,21 +329,28 @@ export class AgentOrchestrator extends EventEmitter {
 
     proc.on('error', (err: Error) => {
       if (!gotMessage) {
-        // Resume crashed before producing any output — will retry on exit
-        console.warn(
-          `[orchestrator] Resume error for thread=${threadId}:`,
-          String(err).slice(0, 200),
-        );
+        dlog.warn('Resume error before any message (stale session?)', {
+          threadId,
+          error: String(err).slice(0, 200),
+        });
         return;
       }
-      // Session was live (got messages), so this is a real error
-      console.error(`[orchestrator] Error in thread ${threadId}:`, err);
+      dlog.error('Resume process error (after messages)', {
+        threadId,
+        error: String(err).slice(0, 200),
+      });
       if (!this.resultReceived.has(threadId) && !this.manuallyStopped.has(threadId)) {
         this.emit('agent:error', threadId, err);
       }
     });
 
     proc.on('exit', (code: number | null) => {
+      dlog.info('Resume process exit', {
+        threadId,
+        code,
+        gotMessage,
+        hadResult: this.resultReceived.has(threadId),
+      });
       this.activeAgents.delete(threadId);
 
       if (this.manuallyStopped.has(threadId)) {
@@ -325,12 +360,13 @@ export class AgentOrchestrator extends EventEmitter {
       }
 
       if (!gotMessage) {
-        // Process died without ever sending a message → stale session, retry fresh
+        dlog.warn('Stale session detected — retrying fresh', { threadId });
         onStaleSession();
         return;
       }
 
       if (!this.resultReceived.has(threadId)) {
+        dlog.warn('Resume unexpected exit (no result)', { threadId, code });
         this.emit('agent:unexpected-exit', threadId, code);
       }
       setTimeout(() => this.resultReceived.delete(threadId), 1000);
@@ -341,6 +377,7 @@ export class AgentOrchestrator extends EventEmitter {
 
   /** Start a fresh (non-resume) agent process. */
   private startFresh(threadId: string, processOpts: Record<string, any>, sessionId?: string): void {
+    dlog.info('startFresh', { threadId, hasSessionId: !!sessionId });
     const proc = this.processFactory.create({ ...processOpts, sessionId } as any);
     this.wireProcessHandlers(proc, threadId);
 
@@ -348,6 +385,7 @@ export class AgentOrchestrator extends EventEmitter {
       proc.start();
       this.emit('agent:started', threadId);
     } catch (err) {
+      dlog.error('startFresh failed', { threadId, error: String(err).slice(0, 200) });
       this.activeAgents.delete(threadId);
       throw err;
     }
@@ -366,7 +404,7 @@ export class AgentOrchestrator extends EventEmitter {
     const resumeProc = this.processFactory.create({ ...processOpts, sessionId } as any);
 
     const retryFresh = () => {
-      console.warn(`[orchestrator] Resume failed for thread=${threadId}, retrying without session`);
+      dlog.warn('Resume failed, retrying without session', { threadId, sessionId });
       this.emit('agent:session-cleared', threadId);
 
       const freshProc = this.processFactory.create({ ...processOpts, sessionId: undefined } as any);

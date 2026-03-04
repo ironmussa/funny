@@ -2,9 +2,12 @@ import { MessageCircleQuestion, Check, Send, PenLine, ChevronRight } from 'lucid
 import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
 
 import { getQuestions, type Question } from './utils';
+
+const cardLog = createClientLogger('AskUserQuestion');
 
 // Special index to represent "Other" option
 const OTHER_INDEX = -1;
@@ -83,6 +86,12 @@ export function AskQuestionCard({
   const questions = getQuestions(parsed);
   if (!questions || questions.length === 0) return null;
 
+  cardLog.info('render', {
+    questionCount: String(questions.length),
+    hasOnRespond: String(!!onRespond),
+    hasOutput: String(!!output),
+  });
+
   const alreadyAnswered = !!output;
   // Parse existing output back into selections for read-only display
   const restoredState = useMemo(() => {
@@ -154,7 +163,9 @@ export function AskQuestionCard({
       }
     });
     if (parts.length > 0) {
-      onRespond(parts.join('\n\n'));
+      const answer = parts.join('\n\n');
+      cardLog.info('response submitted', { answerPreview: answer.slice(0, 200) });
+      onRespond(answer);
       setSubmitted(true);
     }
   };

@@ -9,8 +9,11 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import type { SDKMessage, HookCallback, Query } from '@anthropic-ai/claude-agent-sdk';
 
+import { createDebugLogger } from '../debug.js';
 import { BaseAgentProcess } from './base-process.js';
 import type { CLIMessage } from './types.js';
+
+const dlog = createDebugLogger('sdk');
 
 export class SDKClaudeProcess extends BaseAgentProcess {
   private activeQuery: Query | null = null;
@@ -18,6 +21,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   // ── Overrides ──────────────────────────────────────────────────
 
   async kill(): Promise<void> {
+    dlog.debug('kill() called', { hasActiveQuery: !!this.activeQuery });
     await super.kill();
     // close() forcefully ends the query, stopping all in-flight API calls
     // and preventing further messages from being yielded
@@ -123,30 +127,55 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       sdkOptions.allowedTools = [...(sdkOptions.allowedTools || []), ...mcpWildcards];
     }
 
-    console.log(
-      '[sdk-claude-process] Starting query with executable:',
-      sdkOptions.executable,
-      'model:',
-      sdkOptions.model,
-      'cwd:',
-      sdkOptions.cwd,
-    );
+    dlog.info('Starting SDK query', {
+      executable: sdkOptions.executable,
+      model: sdkOptions.model,
+      cwd: sdkOptions.cwd,
+      hasResume: !!sdkOptions.resume,
+      permissionMode: sdkOptions.permissionMode,
+    });
     const gen = query({ prompt: promptInput, options: sdkOptions });
     this.activeQuery = gen;
 
     try {
+      let msgCount = 0;
       for await (const sdkMsg of gen) {
-        if (this.isAborted) break;
+        if (this.isAborted) {
+          dlog.debug('Loop aborted, breaking', { msgCount });
+          break;
+        }
+
+        msgCount++;
+        dlog.debug(`SDK message #${msgCount}`, {
+          type: sdkMsg.type,
+          subtype: (sdkMsg as any).subtype,
+        });
 
         const cliMsg = this.translateMessage(sdkMsg);
         if (cliMsg) {
+          dlog.debug('Translated to CLIMessage', {
+            type: cliMsg.type,
+            ...(cliMsg.type === 'result'
+              ? { subtype: cliMsg.subtype, isError: cliMsg.is_error }
+              : {}),
+            ...(cliMsg.type === 'assistant'
+              ? {
+                  contentBlocks: cliMsg.message.content.length,
+                  toolUseBlocks: cliMsg.message.content
+                    .filter((b: any) => b.type === 'tool_use')
+                    .map((b: any) => b.name),
+                }
+              : {}),
+          });
           this.emit('message', cliMsg);
         }
       }
+      dlog.info('SDK query loop finished', { msgCount, aborted: this.isAborted });
     } catch (err: any) {
       if (this.isAborted || err?.name === 'AbortError') {
-        // Normal cancellation — not an error
+        dlog.debug('Query cancelled (AbortError)', { aborted: this.isAborted });
       } else {
+        dlog.error('Query error', { error: String(err).slice(0, 300) });
         this.emit('error', err instanceof Error ? err : new Error(String(err)));
       }
     } finally {
@@ -196,8 +225,14 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // when it sees the tool_use block. When the user answers, AgentRunner
     // kills this process and starts a new one with session resume.
     if (toolName === 'AskUserQuestion' || toolName === 'ExitPlanMode') {
+      dlog.info(`preToolUseHook PAUSING for ${toolName}`, {
+        toolName,
+        alreadyAborted: signal.aborted,
+        inputKeys: Object.keys(input),
+      });
       return new Promise<any>((resolve) => {
         const onAbort = () => {
+          dlog.info(`preToolUseHook RESUMED (abort signal) for ${toolName}`, { toolName });
           resolve({
             hookSpecificOutput: {
               hookEventName: 'PreToolUse',
@@ -213,6 +248,8 @@ export class SDKClaudeProcess extends BaseAgentProcess {
         }
       });
     }
+
+    dlog.debug(`preToolUseHook ALLOW ${toolName}`);
 
     // Auto-allow all other tools
     return {

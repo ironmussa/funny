@@ -6,6 +6,8 @@
 import type { Thread, MessageRole, ThreadStatus } from '@funny/shared';
 import { toast } from 'sonner';
 
+import { createClientLogger } from '@/lib/client-logger';
+
 import {
   transitionThreadStatus,
   getThreadActor,
@@ -13,6 +15,8 @@ import {
 } from './thread-machine-bridge';
 import type { AgentInitInfo, ThreadState } from './thread-store';
 import { bufferWSEvent, getNavigate } from './thread-store-internals';
+
+const wsLog = createClientLogger('ws-handlers');
 
 type Get = () => ThreadState;
 type Set = (partial: Partial<ThreadState> | ((state: ThreadState) => Partial<ThreadState>)) => void;
@@ -187,7 +191,7 @@ export function handleWSStatus(
 
   const machineEvent = wsEventToMachineEvent('agent:status', data);
   if (!machineEvent) {
-    console.warn(`[thread-store] Invalid status transition for thread ${threadId}:`, data.status);
+    wsLog.warn('Invalid status transition', { threadId, status: data.status });
     return;
   }
 
@@ -200,6 +204,12 @@ export function handleWSStatus(
       foundInSidebar = true;
       const t = threads[idx];
       const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, t.cost);
+      wsLog.debug('status transition', {
+        threadId,
+        from: t.status,
+        to: newStatus,
+        waitingReason: data.waitingReason ?? '',
+      });
       if (
         newStatus !== t.status ||
         (data.stage && data.stage !== t.stage) ||
@@ -240,6 +250,12 @@ export function handleWSStatus(
       (data.permissionMode && data.permissionMode !== activeThread.permissionMode)
     ) {
       // If transitioning to waiting, include waitingReason and permissionRequest
+      if (newStatus === 'waiting' && !data.waitingReason) {
+        wsLog.warn('BUG-HUNT: agent:status waiting but NO waitingReason', {
+          threadId,
+          dataStatus: data.status,
+        });
+      }
       if (newStatus === 'waiting') {
         stateUpdate.activeThread = {
           ...activeThread,
@@ -296,12 +312,18 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
 
   const machineEvent = wsEventToMachineEvent('agent:result', data);
   if (!machineEvent) {
-    console.warn(`[thread-store] Invalid result event for thread ${threadId}:`, data);
+    wsLog.warn('Invalid result event', { threadId, data: JSON.stringify(data).slice(0, 200) });
     return;
   }
 
   const serverStatus: ThreadStatus = data.status ?? 'completed';
   let resultStatus: ThreadStatus = serverStatus;
+  wsLog.info('result processing', {
+    threadId,
+    serverStatus,
+    cost: String(data.cost ?? ''),
+    errorReason: data.errorReason ?? '',
+  });
   let updatedProject: { pid: string; threads: Thread[] } | null = null;
 
   for (const [pid, threads] of Object.entries(threadsByProject)) {
@@ -341,6 +363,12 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
     const isWaiting = resultStatus === 'waiting';
 
     if (isWaiting) {
+      if (!data.waitingReason) {
+        wsLog.warn(
+          'BUG-HUNT: agent:result waiting but NO waitingReason — will show generic WaitingActions instead of question/plan card',
+          { threadId },
+        );
+      }
       stateUpdate.activeThread = {
         ...activeThread,
         status: resultStatus,

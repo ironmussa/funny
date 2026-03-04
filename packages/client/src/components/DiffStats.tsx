@@ -29,32 +29,11 @@ export function DiffStats({
   const { t } = useTranslation();
   const showTooltips = tooltips ?? size === 'sm';
 
-  const hasLines = linesAdded > 0 || linesDeleted > 0;
-  const hasFiles = (dirtyFileCount ?? 0) > 0;
-
-  if (!hasLines && !hasFiles) return null;
+  if (linesAdded === 0 && linesDeleted === 0 && (dirtyFileCount ?? 0) === 0) return null;
 
   const textSize = size === 'xs' ? 'text-xs' : 'text-sm';
 
-  // Only file count, no line stats
-  if (!hasLines && hasFiles) {
-    const content = (
-      <span className={cn('flex-shrink-0 font-mono text-muted-foreground', textSize, className)}>
-        {dirtyFileCount} {dirtyFileCount === 1 ? 'file' : 'files'}
-      </span>
-    );
-    if (!showTooltips) return content;
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>{content}</TooltipTrigger>
-        <TooltipContent side="top" className="text-xs">
-          {t('gitStats.dirtyFiles', { count: dirtyFileCount })}
-        </TooltipContent>
-      </Tooltip>
-    );
-  }
-
-  const added = linesAdded > 0 && (
+  const added = (
     <Stat
       value={`+${linesAdded}`}
       colorClass="text-diff-added"
@@ -62,7 +41,7 @@ export function DiffStats({
     />
   );
 
-  const deleted = linesDeleted > 0 && (
+  const deleted = (
     <Stat
       value={`-${linesDeleted}`}
       colorClass="text-diff-removed"
@@ -70,11 +49,11 @@ export function DiffStats({
     />
   );
 
-  const files = hasFiles && (
+  const files = (
     <Stat
-      value={`· ${dirtyFileCount}`}
+      value={`· ${dirtyFileCount ?? 0}`}
       colorClass="text-muted-foreground"
-      tooltip={showTooltips ? t('gitStats.dirtyFiles', { count: dirtyFileCount }) : undefined}
+      tooltip={showTooltips ? t('gitStats.dirtyFiles', { count: dirtyFileCount ?? 0 }) : undefined}
     />
   );
 

@@ -301,6 +301,20 @@ export async function merge(params: MergeParams): Promise<string> {
     );
     tm.updateThread(params.threadId, { worktreePath: null, branch: null, mode: 'local' });
 
+    // Calculate actual unpushed commits on the target branch after merge
+    let unpushedCommitCount = 0;
+    try {
+      const countResult = await git(
+        ['rev-list', '--count', `origin/${targetBranch}..${targetBranch}`],
+        project.path,
+      );
+      if (countResult.isOk()) {
+        unpushedCommitCount = parseInt(countResult.value.trim(), 10) || 0;
+      }
+    } catch {
+      // If remote tracking branch doesn't exist, leave as 0
+    }
+
     // Broadcast merged status so Kanban cards update immediately
     wsBroker.emitToUser(params.userId, {
       type: 'git:status',
@@ -312,8 +326,8 @@ export async function merge(params: MergeParams): Promise<string> {
             branchKey: `tid:${params.threadId}`,
             state: 'merged' as const,
             dirtyFileCount: 0,
-            unpushedCommitCount: 0,
-            hasRemoteBranch: false,
+            unpushedCommitCount,
+            hasRemoteBranch: unpushedCommitCount > 0,
             isMergedIntoBase: true,
             linesAdded: 0,
             linesDeleted: 0,

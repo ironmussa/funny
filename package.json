@@ -23,8 +23,11 @@
   "scripts": {
     "start": "bun ./bin/funny.js",
     "dev": "concurrently --kill-others \"bun run --cwd packages/server dev\" \"bun run --cwd packages/client dev\"",
+    "dev:debug": "concurrently --kill-others \"cross-env LOG_LEVEL=debug DEBUG_AGENT=1 bun run --cwd packages/server dev\" \"bun run --cwd packages/client dev\"",
     "dev:test": "concurrently --kill-others \"bun run --cwd packages/server dev:test\" \"bun run --cwd packages/client dev:test\"",
     "dev:server": "bun run --cwd packages/server dev",
+    "dev:server:debug": "cross-env LOG_LEVEL=debug DEBUG_AGENT=1 OTEL_ENABLED=true OTEL_EXPORTER_OTLP_ENDPOINT=http://localhost:5080/api/default OTEL_EXPORTER_OTLP_HEADERS=Authorization=Basic cm9vdEBleGFtcGxlLmNvbTpDb21wbGV4cGFzcyMxMjM= bun run --cwd packages/server dev",
+    "openobserve:start": "bun scripts/start-openobserve.ts",
     "dev:client": "bun run --cwd packages/client dev",
     "dev:agent": "bun run --cwd packages/agent dev",
     "build": "bun run --cwd packages/client build && bun run --cwd packages/server build",
@@ -49,7 +52,7 @@
     "format:check": "oxfmt --check .",
     "test:e2e": "bunx playwright test",
     "test:e2e:ui": "bunx playwright test --ui",
-    "codegen": "bunx playwright codegen http://localhost:5179"
+    "codegen": "bunx playwright codegen http://localhost:5180"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.14.1",
@@ -62,6 +65,7 @@
     "@tauri-apps/cli": "^2.10.0",
     "@tauri-apps/plugin-shell": "^2.3.5",
     "concurrently": "^9.2.1",
+    "cross-env": "^10.1.0",
     "husky": "^9.1.7",
     "neverthrow": "^8.2.0",
     "oxfmt": "^0.35.0",

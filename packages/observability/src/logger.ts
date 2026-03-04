@@ -1,13 +1,15 @@
 import { logs, SeverityNumber } from '@opentelemetry/api-logs';
-import type { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-http';
+import type { OTLPLogExporter } from '@opentelemetry/exporter-logs-otlp-proto';
 import type { Resource } from '@opentelemetry/resources';
 import { LoggerProvider, BatchLogRecordProcessor } from '@opentelemetry/sdk-logs';
 
 let loggerProvider: LoggerProvider | null = null;
 
 export function initLogger(resource: Resource, exporter: OTLPLogExporter): void {
-  loggerProvider = new LoggerProvider({ resource });
-  loggerProvider.addLogRecordProcessor(new BatchLogRecordProcessor(exporter));
+  loggerProvider = new LoggerProvider({
+    resource,
+    processors: [new BatchLogRecordProcessor(exporter)],
+  });
   logs.setGlobalLoggerProvider(loggerProvider);
 }
 

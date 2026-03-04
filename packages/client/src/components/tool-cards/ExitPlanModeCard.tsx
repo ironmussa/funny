@@ -5,7 +5,10 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
 import { Input } from '@/components/ui/input';
+import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
+
+const cardLog = createClientLogger('ExitPlanMode');
 
 export function ExitPlanModeCard({
   plan,
@@ -17,6 +20,11 @@ export function ExitPlanModeCard({
   output?: string;
 }) {
   const { t } = useTranslation();
+  cardLog.info('render', {
+    hasOnRespond: String(!!onRespond),
+    hasOutput: String(!!output),
+    hasPlan: String(!!plan),
+  });
   const [input, setInput] = useState('');
   const alreadyAnswered = !!output;
   const [submitted, setSubmitted] = useState(alreadyAnswered);
@@ -30,12 +38,14 @@ export function ExitPlanModeCard({
 
   const handleAccept = () => {
     if (!onRespond || submitted) return;
+    cardLog.info('plan accepted');
     onRespond('Plan accepted');
     setSubmitted(true);
   };
 
   const handleReject = () => {
     if (!onRespond || submitted) return;
+    cardLog.info('plan rejected');
     onRespond('Plan rejected. Do not proceed with this plan.');
     setSubmitted(true);
   };
@@ -43,6 +53,7 @@ export function ExitPlanModeCard({
   const handleSubmitInput = () => {
     const text = input.trim();
     if (!text || !onRespond || submitted) return;
+    cardLog.info('custom response', { responsePreview: text.slice(0, 200) });
     onRespond(text);
     setSubmitted(true);
   };

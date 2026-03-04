@@ -31,7 +31,7 @@ class OtelTransport extends winston.Transport {
           : level === 'debug'
             ? 'debug'
             : 'info';
-    const attrs: Record<string, string> = {};
+    const attrs: Record<string, string> = { 'log.source': 'server' };
     if (namespace) attrs['log.namespace'] = String(namespace);
     if (service) attrs['service.name'] = String(service);
     for (const [k, v] of Object.entries(rest)) {

@@ -1,13 +1,4 @@
-import {
-  Trash2,
-  Plus,
-  Loader2,
-  AlertCircle,
-  GitFork,
-  GitBranch,
-  FolderOpen,
-  ChevronUp,
-} from 'lucide-react';
+import { Trash2, Plus, Loader2, AlertCircle, GitFork, FolderOpen, ChevronUp } from 'lucide-react';
 import { useEffect, useState, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -22,15 +13,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { api } from '@/lib/api';
 import { useAppStore } from '@/stores/app-store';
+
+import { BranchPicker } from './SearchablePicker';
 
 interface WorktreeInfo {
   path: string;
@@ -250,21 +236,16 @@ export function WorktreeSettings() {
                 <label className="mb-1 block text-xs text-muted-foreground">
                   {t('worktreeSettings.baseBranch')}
                 </label>
-                <Select value={baseBranch} onValueChange={setBaseBranch}>
-                  <SelectTrigger className="h-8 w-full text-xs">
-                    <SelectValue placeholder="main (default)" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {branches.map((b) => (
-                      <SelectItem key={b} value={b}>
-                        <div className="flex items-center gap-1.5">
-                          <GitBranch className="h-3 w-3" />
-                          {b}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <BranchPicker
+                  branches={branches}
+                  selected={baseBranch}
+                  onChange={setBaseBranch}
+                  triggerClassName="flex h-8 w-full items-center gap-2 rounded-md border border-input bg-background px-3 text-xs transition-colors hover:bg-accent/50 focus:outline-none focus:ring-1 focus:ring-ring"
+                  side="bottom"
+                  align="start"
+                  showCopy={false}
+                  placeholder="main (default)"
+                />
               </div>
 
               <Button

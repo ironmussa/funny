@@ -5,7 +5,7 @@ import {
   type Histogram,
   type UpDownCounter,
 } from '@opentelemetry/api';
-import type { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-http';
+import type { OTLPMetricExporter } from '@opentelemetry/exporter-metrics-otlp-proto';
 import type { Resource } from '@opentelemetry/resources';
 import { MeterProvider, PeriodicExportingMetricReader } from '@opentelemetry/sdk-metrics';
 

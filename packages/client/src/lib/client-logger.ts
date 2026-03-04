@@ -1,0 +1,23 @@
+import { BrowserLogger } from '@funny/observability/browser';
+
+import { getAuthToken, getAuthMode } from '@/lib/api';
+
+let shared: BrowserLogger | null = null;
+
+function getLogger(): BrowserLogger {
+  if (!shared) {
+    const token = getAuthToken();
+    const mode = getAuthMode();
+    shared = new BrowserLogger({
+      endpoint: '/api/logs',
+      authToken: mode !== 'multi' && token ? token : undefined,
+      credentials: mode === 'multi' ? 'include' : 'same-origin',
+    });
+  }
+  return shared;
+}
+
+/** Non-React logger factory for Zustand stores and plain modules. */
+export function createClientLogger(namespace: string) {
+  return getLogger().child({ 'log.namespace': namespace });
+}

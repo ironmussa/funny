@@ -28,6 +28,7 @@ packages/chrome-extension/popup.js
 packages/chrome-extension/content.js
 packages/chrome-extension/page-bridge.js
 *.zip
+.funny-test
 /test-results
 e2e-report.json
 

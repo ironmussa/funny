@@ -220,6 +220,16 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
   if (!project) throw new ThreadServiceError('Project not found', 404);
 
   const threadId = nanoid();
+  log.info('createAndStartThread called', {
+    namespace: 'thread-service',
+    threadId,
+    userId: params.userId ?? 'unknown',
+    projectId: params.projectId,
+    mode: params.mode ?? 'local',
+    model: params.model ?? 'default',
+    provider: params.provider ?? 'default',
+    promptPreview: params.prompt.slice(0, 120),
+  });
   const resolvedBaseBranch = params.baseBranch?.trim() || undefined;
 
   // Resolve defaults: explicit value > project default > hardcoded fallback
@@ -550,6 +560,17 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
   const thread = tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
+  log.info('sendMessage called', {
+    namespace: 'thread-service',
+    threadId: params.threadId,
+    userId: thread.userId ?? params.userId ?? 'unknown',
+    projectId: thread.projectId,
+    threadStatus: thread.status,
+    sessionId: thread.sessionId ?? '',
+    agentRunning: String(isAgentRunning(params.threadId)),
+    contentPreview: params.content.slice(0, 120),
+  });
+
   const cwd = thread.worktreePath ?? pm.getProject(thread.projectId)?.path;
   if (!cwd) throw new ThreadServiceError('Project path not found', 404);
 
@@ -601,6 +622,14 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
   // If the thread was waiting for user input, persist the answer in tool call output
   if (thread.status === 'waiting') {
     const pendingTC = tm.findLastUnansweredInteractiveToolCall(params.threadId);
+    log.info('sendMessage: thread is waiting, resolving tool call', {
+      namespace: 'thread-service',
+      threadId: params.threadId,
+      userId: thread.userId ?? 'unknown',
+      projectId: thread.projectId,
+      pendingToolCallId: pendingTC?.id ?? 'none',
+      pendingToolCallName: pendingTC?.name ?? 'none',
+    });
     if (pendingTC) {
       tm.updateToolCallOutput(pendingTC.id, params.content);
     }
@@ -664,6 +693,14 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
   }
 
   // Default interrupt behavior — start agent (throws on failure)
+  log.info('sendMessage: calling startAgent', {
+    namespace: 'thread-service',
+    threadId: params.threadId,
+    userId: thread.userId ?? 'unknown',
+    projectId: thread.projectId,
+    threadStatusBefore: thread.status,
+    hasDraftMessage: String(hasDraftMessage),
+  });
   await startAgent(
     params.threadId,
     augmentedContent,

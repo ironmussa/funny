@@ -40,6 +40,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useTodoSnapshots } from '@/hooks/use-todo-panel';
 import { api } from '@/lib/api';
+import { createClientLogger } from '@/lib/client-logger';
 import { remarkPlugins, baseMarkdownComponents } from '@/lib/markdown-components';
 import { parseReferencedFiles } from '@/lib/parse-referenced-files';
 import {
@@ -55,6 +56,8 @@ import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { selectLastMessage, selectFirstMessage } from '@/stores/thread-selectors';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
+
+const tvLog = createClientLogger('ThreadView');
 
 import { D4CAnimation } from './D4CAnimation';
 import { ImageLightbox } from './ImageLightbox';
@@ -637,6 +640,11 @@ const MemoizedMessageList = memo(
                 onRespond={
                   tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode'
                     ? (answer: string) => {
+                        tvLog.info('onRespond (single)', {
+                          toolName: tc.name,
+                          toolCallId: tc.id,
+                          answerPreview: answer.slice(0, 120),
+                        });
                         useThreadStore
                           .getState()
                           .handleWSToolOutput(threadId, { toolCallId: tc.id, output: answer });
@@ -673,6 +681,11 @@ const MemoizedMessageList = memo(
                 onRespond={
                   ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode'
                     ? (answer: string) => {
+                        tvLog.info('onRespond (group)', {
+                          toolName: ti.name,
+                          callCount: String(ti.calls.length),
+                          answerPreview: answer.slice(0, 120),
+                        });
                         for (const call of ti.calls) {
                           if (!call.output) {
                             useThreadStore.getState().handleWSToolOutput(threadId, {
@@ -1156,9 +1169,19 @@ export function ThreadView() {
       },
       images?: any[],
     ) => {
-      if (sendingRef.current) return;
+      if (sendingRef.current) {
+        tvLog.warn('handleSend: blocked by sendingRef (duplicate send attempt)', {
+          promptPreview: prompt.slice(0, 80),
+        });
+        return;
+      }
       const thread = activeThreadRef.current;
       if (!thread) return;
+      tvLog.info('handleSend', {
+        threadId: thread.id,
+        threadStatus: thread.status,
+        promptPreview: prompt.slice(0, 120),
+      });
       setSending(true);
 
       const threadIsRunning = thread.status === 'running';

@@ -53,6 +53,19 @@ export class AgentMessageHandler {
     return this._getProject!(id);
   }
 
+  /** Build common log attributes with thread context for observability */
+  private threadCtx(threadId: string): Record<string, string> {
+    const thread = this.threadManager.getThread(threadId);
+    return {
+      namespace: 'agent',
+      threadId,
+      userId: thread?.userId ?? 'unknown',
+      projectId: thread?.projectId ?? 'unknown',
+      threadStatus: thread?.status ?? 'unknown',
+      sessionId: thread?.sessionId ?? '',
+    };
+  }
+
   private emitWS(threadId: string, type: WSEvent['type'], data: unknown): void {
     const event = { type, threadId, data } as WSEvent;
     const thread = this.threadManager.getThread(threadId);
@@ -65,9 +78,15 @@ export class AgentMessageHandler {
   }
 
   handle(threadId: string, msg: CLIMessage): void {
+    log.debug('handle() raw message', {
+      ...this.threadCtx(threadId),
+      type: msg.type,
+      subtype: (msg as any).subtype,
+    });
+
     // System init — capture session ID and broadcast init info
     if (msg.type === 'system' && 'subtype' in msg && msg.subtype === 'init') {
-      log.info('Session initialized', { namespace: 'agent', sessionId: msg.session_id, threadId });
+      log.info('Session initialized', { ...this.threadCtx(threadId), sessionId: msg.session_id });
       this.threadManager.updateThread(threadId, {
         sessionId: msg.session_id,
         initTools: JSON.stringify(msg.tools ?? []),
@@ -134,6 +153,19 @@ export class AgentMessageHandler {
         .join('\n\n'),
     );
 
+    // Count tool_use blocks in this message
+    const toolUseBlocks = msg.message.content.filter(
+      (b: any) => 'type' in b && b.type === 'tool_use',
+    );
+    log.info('assistant message', {
+      ...this.threadCtx(threadId),
+      cliMsgId,
+      hasText: String(!!textContent),
+      textChars: String(textContent.length),
+      toolUseCount: String(toolUseBlocks.length),
+      toolNames: toolUseBlocks.map((b: any) => b.name).join(','),
+    });
+
     if (textContent) {
       let msgId = this.state.currentAssistantMsgId.get(threadId) || cliMap.get(cliMsgId);
       if (msgId) {
@@ -175,6 +207,12 @@ export class AgentMessageHandler {
     for (const block of msg.message.content) {
       if ('type' in block && block.type === 'tool_use') {
         if (seen.has(block.id)) {
+          log.debug('Skipping already-seen tool_use block (dedup)', {
+            namespace: 'agent',
+            threadId,
+            tool: block.name,
+            cliBlockId: block.id,
+          });
           this.state.currentAssistantMsgId.delete(threadId);
           continue;
         }
@@ -186,7 +224,7 @@ export class AgentMessageHandler {
           continue;
         }
 
-        log.info(`tool_use: ${block.name}`, { namespace: 'agent', threadId, tool: block.name });
+        log.info(`tool_use: ${block.name}`, { ...this.threadCtx(threadId), tool: block.name });
         log.debug('tool_use input', {
           namespace: 'agent',
           threadId,
@@ -216,6 +254,12 @@ export class AgentMessageHandler {
         const existingTC = this.threadManager.findToolCall(parentMsgId, block.name, inputJson);
 
         if (existingTC) {
+          log.debug('Dedup: found existing ToolCall in DB (resume re-send)', {
+            namespace: 'agent',
+            threadId,
+            tool: block.name,
+            existingId: existingTC.id,
+          });
           seen.set(block.id, existingTC.id);
         } else {
           const toolCallId = this.threadManager.insertToolCall({
@@ -235,6 +279,11 @@ export class AgentMessageHandler {
 
         // Track if this tool call means Claude is waiting for user input
         if (block.name === 'AskUserQuestion') {
+          log.info('AskUserQuestion detected — transitioning to waiting', {
+            ...this.threadCtx(threadId),
+            previousPendingInput: this.state.pendingUserInput.get(threadId) ?? 'none',
+            inputPreview: JSON.stringify(block.input).slice(0, 300),
+          });
           this.state.pendingUserInput.set(threadId, 'question');
           const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
           const { status } = transitionStatus(
@@ -242,9 +291,19 @@ export class AgentMessageHandler {
             { type: 'WAIT' },
             currentStatus as ThreadStatus,
           );
+          log.debug('AskUserQuestion status transition', {
+            namespace: 'agent',
+            threadId,
+            from: currentStatus,
+            to: status,
+          });
           this.threadManager.updateThread(threadId, { status });
           this.emitWS(threadId, 'agent:status', { status, waitingReason: 'question' });
         } else if (block.name === 'ExitPlanMode') {
+          log.info('ExitPlanMode detected — transitioning to waiting', {
+            ...this.threadCtx(threadId),
+            previousPendingInput: this.state.pendingUserInput.get(threadId) ?? 'none',
+          });
           this.state.pendingUserInput.set(threadId, 'plan');
           const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
           const { status } = transitionStatus(
@@ -252,9 +311,25 @@ export class AgentMessageHandler {
             { type: 'WAIT' },
             currentStatus as ThreadStatus,
           );
+          log.debug('ExitPlanMode status transition', {
+            namespace: 'agent',
+            threadId,
+            from: currentStatus,
+            to: status,
+          });
           this.threadManager.updateThread(threadId, { status });
           this.emitWS(threadId, 'agent:status', { status, waitingReason: 'plan' });
         } else {
+          if (this.state.pendingUserInput.has(threadId)) {
+            log.warn(
+              'BUG-HUNT: Clearing pendingUserInput due to non-interactive tool call — may cause plan/question auto-continue',
+              {
+                ...this.threadCtx(threadId),
+                tool: block.name,
+                wasPending: this.state.pendingUserInput.get(threadId),
+              },
+            );
+          }
           this.state.pendingUserInput.delete(threadId);
         }
 
@@ -271,6 +346,13 @@ export class AgentMessageHandler {
     const seen = this.state.processedToolUseIds.get(threadId);
     if (!seen || !msg.message.content) return;
 
+    const resultBlocks = msg.message.content.filter((b: any) => b.type === 'tool_result');
+    log.info('user message (tool_results)', {
+      ...this.threadCtx(threadId),
+      resultCount: String(resultBlocks.length),
+      toolUseIds: resultBlocks.map((b: any) => b.tool_use_id).join(','),
+    });
+
     for (const block of msg.message.content) {
       if (block.type === 'tool_result' && block.tool_use_id) {
         const toolCallId = seen.get(block.tool_use_id);
@@ -278,10 +360,9 @@ export class AgentMessageHandler {
           const decodedOutput = decodeUnicodeEscapes(block.content);
 
           log.info(`tool_result: ${toolCallId}`, {
-            namespace: 'agent',
-            threadId,
+            ...this.threadCtx(threadId),
             toolCallId,
-            chars: decodedOutput.length,
+            chars: String(decodedOutput.length),
           });
           log.debug('tool_result output', {
             namespace: 'agent',
@@ -302,6 +383,11 @@ export class AgentMessageHandler {
           // Clear pending user input when AskUserQuestion/ExitPlanMode tool result is received
           // (the SDK processed the user's answer, so the agent is no longer waiting)
           if (tc?.name === 'AskUserQuestion' || tc?.name === 'ExitPlanMode') {
+            log.info(`${tc.name} tool_result received — clearing pendingUserInput`, {
+              ...this.threadCtx(threadId),
+              toolCallId: toolCallId ?? '',
+              wasPending: this.state.pendingUserInput.get(threadId) ?? 'none',
+            });
             this.state.pendingUserInput.delete(threadId);
           }
 
@@ -342,20 +428,30 @@ export class AgentMessageHandler {
   // ── Result handling ────────────────────────────────────────────
 
   private handleResult(threadId: string, msg: CLIMessage & { type: 'result' }): void {
-    if (this.state.resultReceived.has(threadId)) return;
+    if (this.state.resultReceived.has(threadId)) {
+      log.debug('Ignoring duplicate result', { namespace: 'agent', threadId });
+      return;
+    }
 
     log.info('Agent completed', {
-      namespace: 'agent',
-      threadId,
+      ...this.threadCtx(threadId),
       status: msg.subtype,
-      cost: msg.total_cost_usd,
-      durationMs: msg.duration_ms,
+      cost: String(msg.total_cost_usd ?? 0),
+      durationMs: String(msg.duration_ms ?? 0),
+      numTurns: String(msg.num_turns ?? 0),
+      isError: String(msg.is_error ?? false),
     });
     this.state.resultReceived.add(threadId);
     this.state.currentAssistantMsgId.delete(threadId);
 
     let waitingReason = this.state.pendingUserInput.get(threadId);
     const permReq = this.state.pendingPermissionRequest.get(threadId);
+
+    log.debug('handleResult state snapshot', {
+      ...this.threadCtx(threadId),
+      pendingUserInput: waitingReason ?? 'none',
+      pendingPermission: permReq ? permReq.toolName : 'none',
+    });
 
     if (!waitingReason && permReq) {
       waitingReason = 'permission';
@@ -377,6 +473,16 @@ export class AgentMessageHandler {
       currentStatus as ThreadStatus,
       msg.total_cost_usd ?? 0,
     );
+
+    log.info('handleResult final transition', {
+      ...this.threadCtx(threadId),
+      eventType: resultEvent.type,
+      from: currentStatus,
+      to: finalStatus,
+      isWaitingForUser: String(isWaitingForUser),
+      waitingReason: waitingReason ?? 'none',
+    });
+
     this.state.pendingUserInput.delete(threadId);
 
     this.threadManager.updateThread(threadId, {

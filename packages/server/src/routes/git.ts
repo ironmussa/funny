@@ -28,6 +28,7 @@ import {
   stashPop,
   stashList,
   resetSoft,
+  git,
 } from '@funny/core/git';
 import { badRequest, internal } from '@funny/shared/errors';
 import { Hono } from 'hono';
@@ -95,6 +96,17 @@ function invalidateGitStatusCache(threadId: string) {
 /** Invalidate cached git status by project ID directly. Exported for use by event handlers. */
 export function invalidateGitStatusCacheByProject(projectId: string) {
   _gitStatusCache.delete(projectId);
+}
+
+/** Count unpushed commits on a branch vs its remote tracking branch. */
+async function countUnpushedCommits(projectPath: string, branch: string): Promise<number> {
+  try {
+    const result = await git(['rev-list', '--count', `origin/${branch}..${branch}`], projectPath);
+    if (result.isOk()) return parseInt(result.value.trim(), 10) || 0;
+  } catch {
+    /* remote tracking branch may not exist */
+  }
+  return 0;
 }
 
 /** Resolve project path from projectId and verify ownership. */
@@ -167,17 +179,22 @@ gitRoutes.get('/status', async (c) => {
       .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
       .map((r) => r.value)
       .filter(Boolean),
-    ...mergedThreads.map((t) => ({
-      threadId: t.id,
-      branchKey: computeBranchKey(t),
-      state: 'merged' as const,
-      dirtyFileCount: 0,
-      unpushedCommitCount: 0,
-      hasRemoteBranch: false,
-      isMergedIntoBase: true,
-      linesAdded: 0,
-      linesDeleted: 0,
-    })),
+    ...(await Promise.all(
+      mergedThreads.map(async (t) => {
+        const unpushed = t.baseBranch ? await countUnpushedCommits(project.path, t.baseBranch) : 0;
+        return {
+          threadId: t.id,
+          branchKey: computeBranchKey(t),
+          state: 'merged' as const,
+          dirtyFileCount: 0,
+          unpushedCommitCount: unpushed,
+          hasRemoteBranch: unpushed > 0,
+          isMergedIntoBase: true,
+          linesAdded: 0,
+          linesDeleted: 0,
+        };
+      }),
+    )),
     ...(localSummary
       ? localThreads.map((t) => ({
           threadId: t.id,
@@ -593,13 +610,16 @@ gitRoutes.get('/:threadId/status', async (c) => {
   const thread = threadResult.value;
 
   if (!thread.worktreePath && !thread.branch && thread.baseBranch) {
+    const projectResult = requireProject(thread.projectId);
+    const projectPath = projectResult.isOk() ? projectResult.value.path : null;
+    const unpushed = projectPath ? await countUnpushedCommits(projectPath, thread.baseBranch) : 0;
     return c.json({
       threadId,
       branchKey: computeBranchKey(thread),
       state: 'merged' as const,
       dirtyFileCount: 0,
-      unpushedCommitCount: 0,
-      hasRemoteBranch: false,
+      unpushedCommitCount: unpushed,
+      hasRemoteBranch: unpushed > 0,
       isMergedIntoBase: true,
       linesAdded: 0,
       linesDeleted: 0,

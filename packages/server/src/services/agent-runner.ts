@@ -7,6 +7,7 @@
  * @domain depends: AgentOrchestrator, AgentStateTracker, AgentMessageHandler, ThreadManager, WSBroker, ThreadEventBus
  */
 
+import { setLogSink } from '@funny/core';
 import { AgentOrchestrator, defaultProcessFactory } from '@funny/core/agents';
 import type { IAgentProcessFactory } from '@funny/core/agents';
 import type {
@@ -172,6 +173,17 @@ export class AgentRunner {
     mcpServers?: Record<string, any>,
     skipMessageInsert?: boolean,
   ): Promise<void> {
+    log.info('startAgent called', {
+      namespace: 'agent',
+      threadId,
+      model,
+      permissionMode,
+      provider,
+      hasImages: !!images?.length,
+      skipMessageInsert: !!skipMessageInsert,
+      promptPreview: prompt.slice(0, 100),
+    });
+
     // Clear stale DB-mapping state from previous runs
     this.state.clearRunState(threadId);
 
@@ -182,6 +194,15 @@ export class AgentRunner {
     const currentThread = this.threadManager.getThread(threadId);
     const currentStatus = (currentThread?.status ?? 'pending') as ThreadStatus;
     const startEvent = this.pickStartEvent(currentStatus);
+
+    log.debug('startAgent state machine input', {
+      namespace: 'agent',
+      threadId,
+      currentStatus,
+      startEventType: startEvent.type,
+      hasSessionId: !!currentThread?.sessionId,
+    });
+
     const { status: newStatus, resumeReason } = transitionStatus(
       threadId,
       startEvent,
@@ -228,6 +249,17 @@ export class AgentRunner {
     // Derive the system prefix from the machine's resumeReason
     const isPostMerge = !!(thread?.sessionId && thread?.baseBranch && !thread?.worktreePath);
     const systemPrefix = getResumeSystemPrefix(resumeReason, isPostMerge);
+
+    log.debug('startAgent resume context', {
+      namespace: 'agent',
+      threadId,
+      newStatus,
+      resumeReason: resumeReason ?? 'none',
+      isPostMerge,
+      needsRecovery: needsRecovery,
+      effectiveSessionId: effectiveSessionId ?? 'none',
+      systemPrefixPreview: systemPrefix ? systemPrefix.slice(0, 80) : 'none',
+    });
 
     // When resuming a plan-mode thread, the orchestrator downgrades to autoEdit.
     // Sync the DB and notify the client so the PromptInput dropdown updates.
@@ -355,6 +387,12 @@ export const isAgentRunning = defaultRunner.isAgentRunning.bind(defaultRunner);
 export const cleanupThreadState = defaultRunner.cleanupThreadState.bind(defaultRunner);
 export const extractActiveAgents = defaultRunner.extractActiveAgents.bind(defaultRunner);
 
+// ── Bridge core debug logs to Winston/OTLP ──────────────────
+setLogSink((level, namespace, message, data) => {
+  const meta: Record<string, unknown> = { namespace: `core:${namespace}`, ...data };
+  log[level](message, meta);
+});
+
 // ── Self-register with ShutdownManager ──────────────────────
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 shutdownManager.register(
@@ -365,7 +403,7 @@ shutdownManager.register(
       const surviving = extractActiveAgents();
       if (surviving.size > 0) {
         (globalThis as any).__funnyActiveAgents = surviving;
-        console.log(`[shutdown] Preserved ${surviving.size} agent(s) for next instance`);
+        log.info(`Preserved ${surviving.size} agent(s) for next instance`, { namespace: 'agent' });
       } else {
         await stopAllAgents();
       }

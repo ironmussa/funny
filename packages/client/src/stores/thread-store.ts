@@ -574,8 +574,16 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         permissionMode,
       };
 
-      // Append message using concat (avoids spreading the entire messages array)
-      const nextMessages = activeThread.messages.concat(newMessage);
+      // For idle threads (backlog/planning), a draft user message already exists —
+      // replace it instead of appending a duplicate.
+      const existingDraftIdx =
+        activeThread.status === 'idle'
+          ? activeThread.messages.findIndex((m) => m.role === 'user')
+          : -1;
+      const nextMessages =
+        existingDraftIdx >= 0
+          ? activeThread.messages.map((m, i) => (i === existingDraftIdx ? newMessage : m))
+          : activeThread.messages.concat(newMessage);
 
       // Only rebuild threadsByProject if the status actually changed
       const statusChanged = newStatus !== activeThread.status;

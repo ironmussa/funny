@@ -3,9 +3,12 @@ import { toast } from 'sonner';
 
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
 import { getAuthToken, getAuthMode } from '@/lib/api';
+import { createClientLogger } from '@/lib/client-logger';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useThreadStore } from '@/stores/thread-store';
+
+const wsLog = createClientLogger('ws');
 
 // Module-level singleton to prevent duplicate WebSocket connections
 // (React StrictMode double-mounts effects in development)
@@ -93,11 +96,24 @@ function handleMessage(e: MessageEvent) {
       });
       break;
     case 'agent:status':
+      wsLog.info('agent:status', {
+        threadId,
+        status: data.status,
+        waitingReason: data.waitingReason ?? '',
+        permissionRequest: data.permissionRequest?.toolName ?? '',
+      });
       startTransition(() => {
         useThreadStore.getState().handleWSStatus(threadId, data);
       });
       break;
     case 'agent:result': {
+      wsLog.info('agent:result', {
+        threadId,
+        status: data.status ?? '',
+        cost: String(data.cost ?? ''),
+        errorReason: data.errorReason ?? '',
+        isWaiting: String(data.status === 'waiting'),
+      });
       // Flush any pending batched messages synchronously (outside
       // startTransition) so React commits them immediately.  Then
       // defer the result dispatch to the next animation frame — this
@@ -134,6 +150,13 @@ function handleMessage(e: MessageEvent) {
       break;
     }
     case 'agent:tool_call': {
+      if (data.name === 'AskUserQuestion' || data.name === 'ExitPlanMode') {
+        wsLog.info('interactive tool_call received', {
+          threadId,
+          toolName: data.name,
+          toolCallId: data.toolCallId ?? '',
+        });
+      }
       // Flush pending messages first so the parent message exists,
       // then dispatch tool_call — all inside one transition.
       const hasPendingTC = pendingMessages.size > 0;
@@ -160,6 +183,7 @@ function handleMessage(e: MessageEvent) {
       break;
     }
     case 'agent:error':
+      wsLog.error('agent:error', { threadId, error: data.error ?? 'unknown' });
       useThreadStore.getState().handleWSStatus(threadId, { status: 'failed' });
       break;
     case 'agent:compact_boundary':

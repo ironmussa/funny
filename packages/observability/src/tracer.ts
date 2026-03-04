@@ -1,14 +1,15 @@
 import { trace } from '@opentelemetry/api';
-import type { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
+import type { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-proto';
 import type { Resource } from '@opentelemetry/resources';
-import { NodeTracerProvider } from '@opentelemetry/sdk-trace-node';
-import { BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
+import { NodeTracerProvider, BatchSpanProcessor } from '@opentelemetry/sdk-trace-node';
 
 let provider: NodeTracerProvider | null = null;
 
 export function initTracer(resource: Resource, exporter: OTLPTraceExporter): void {
-  provider = new NodeTracerProvider({ resource });
-  provider.addSpanProcessor(new BatchSpanProcessor(exporter));
+  provider = new NodeTracerProvider({
+    resource,
+    spanProcessors: [new BatchSpanProcessor(exporter)],
+  });
   provider.register();
 }
 

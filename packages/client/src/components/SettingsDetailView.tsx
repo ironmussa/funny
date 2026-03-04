@@ -39,6 +39,7 @@ import { AutomationSettings } from './AutomationSettings';
 import { McpServerSettings } from './McpServerSettings';
 import { ProjectConfigSettings } from './ProjectConfigSettings';
 import { ProjectHooksSettings } from './ProjectHooksSettings';
+import { BranchPicker } from './SearchablePicker';
 import { UserManagement } from './settings/UserManagement';
 import { settingsLabelKeys, type SettingsItemId } from './SettingsPanel';
 import { SkillsSettings } from './SkillsSettings';
@@ -374,8 +375,6 @@ function GeneralSettings() {
 
   // Branch selector state for project default branch
   const [settingsBranches, setSettingsBranches] = useState<string[]>([]);
-  const [branchOpen, setBranchOpen] = useState(false);
-  const [branchSearch, setBranchSearch] = useState('');
 
   useEffect(() => {
     if (selectedProject) {
@@ -385,6 +384,7 @@ function GeneralSettings() {
         }
       });
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally keyed on id only; using selectedProject object would loop
   }, [selectedProject?.id]);
 
   return (
@@ -506,73 +506,27 @@ function GeneralSettings() {
                 'Branch pre-selected when creating new threads',
               )}
             >
-              <Popover
-                open={branchOpen}
-                onOpenChange={(v) => {
-                  setBranchOpen(v);
-                  if (!v) setBranchSearch('');
+              <BranchPicker
+                branches={settingsBranches}
+                selected={selectedProject.defaultBranch || ''}
+                onChange={(branch) => {
+                  const value = branch === '__git_default__' ? null : branch;
+                  saveProject(selectedProject.id, { defaultBranch: value });
                 }}
-              >
-                <PopoverTrigger asChild>
-                  <button
-                    data-testid="settings-default-branch-trigger"
-                    className="flex h-9 items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm hover:bg-accent/50"
-                  >
-                    <GitBranch className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                    <span className="truncate font-mono text-xs">
-                      {selectedProject.defaultBranch || t('settings.gitDefault', 'Git default')}
-                    </span>
-                    <ChevronsUpDown className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                  </button>
-                </PopoverTrigger>
-                <PopoverContent className="w-[220px] p-0" align="end">
-                  <Command>
-                    <CommandInput
-                      data-testid="settings-default-branch-search"
-                      placeholder={t('newThread.searchBranches', 'Search branches...')}
-                      value={branchSearch}
-                      onValueChange={setBranchSearch}
-                    />
-                    <CommandList>
-                      <CommandEmpty>
-                        {t('newThread.noBranchesMatch', 'No branches match')}
-                      </CommandEmpty>
-                      <CommandGroup>
-                        <CommandItem
-                          data-testid="settings-default-branch-git-default"
-                          onSelect={() => {
-                            saveProject(selectedProject.id, { defaultBranch: null });
-                            setBranchOpen(false);
-                          }}
-                        >
-                          <span className="text-muted-foreground">
-                            {t('settings.gitDefault', 'Git default')}
-                          </span>
-                          {!selectedProject.defaultBranch && (
-                            <Check className="ml-auto h-3.5 w-3.5" />
-                          )}
-                        </CommandItem>
-                        {settingsBranches.map((b) => (
-                          <CommandItem
-                            key={b}
-                            data-testid={`settings-default-branch-${b}`}
-                            onSelect={() => {
-                              saveProject(selectedProject.id, { defaultBranch: b });
-                              setBranchOpen(false);
-                            }}
-                          >
-                            <GitBranch className="mr-2 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                            <span className="truncate font-mono text-xs">{b}</span>
-                            {selectedProject.defaultBranch === b && (
-                              <Check className="ml-auto h-3.5 w-3.5" />
-                            )}
-                          </CommandItem>
-                        ))}
-                      </CommandGroup>
-                    </CommandList>
-                  </Command>
-                </PopoverContent>
-              </Popover>
+                extraItems={[
+                  {
+                    key: '__git_default__',
+                    label: t('settings.gitDefault', 'Git default'),
+                    isSelected: !selectedProject.defaultBranch,
+                  },
+                ]}
+                placeholder={t('settings.gitDefault', 'Git default')}
+                triggerClassName="flex h-9 items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm hover:bg-accent/50"
+                side="bottom"
+                align="end"
+                showCopy={false}
+                testId="settings-default-branch-trigger"
+              />
             </SettingRow>
             <ProjectUrlPatterns
               projectId={selectedProject.id}

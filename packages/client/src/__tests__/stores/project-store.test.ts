@@ -22,6 +22,8 @@ vi.mock('@/lib/api', () => ({
     deleteProject: vi.fn(),
     reorderProjects: vi.fn(),
   },
+  getAuthToken: vi.fn(() => null),
+  getAuthMode: vi.fn(() => 'local'),
 }));
 
 vi.mock('@/stores/thread-store', () => ({

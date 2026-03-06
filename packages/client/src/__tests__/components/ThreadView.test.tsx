@@ -43,6 +43,8 @@ vi.mock('@/lib/api', async () => {
       remoteUrl: vi.fn().mockReturnValue(okAsync({ url: '' })),
       browseFiles: vi.fn().mockReturnValue(okAsync({ entries: [] })),
     },
+    getAuthToken: vi.fn(() => null),
+    getAuthMode: vi.fn(() => 'local'),
   };
 });
 

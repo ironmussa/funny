@@ -17,6 +17,8 @@ vi.mock('@/lib/api', () => ({
     archiveThread: vi.fn(),
     getGitStatuses: vi.fn().mockReturnValue({ isOk: () => false, isErr: () => true }),
   },
+  getAuthToken: vi.fn(() => null),
+  getAuthMode: vi.fn(() => 'local'),
 }));
 
 import { api } from '@/lib/api';
@@ -129,7 +131,7 @@ describe('AppStore', () => {
         status: 'completed',
       };
       mockApi.getThread.mockReturnValueOnce(okAsync(mockThread) as any);
-      mockApi.getThreadEvents.mockReturnValueOnce(okAsync([]) as any);
+      mockApi.getThreadEvents.mockReturnValueOnce(okAsync({ events: [] }) as any);
       mockApi.listThreads.mockReturnValueOnce(okAsync([]) as any);
 
       await useAppStore.getState().selectThread('t1');

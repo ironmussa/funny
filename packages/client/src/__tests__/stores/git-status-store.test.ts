@@ -8,6 +8,8 @@ vi.mock('@/lib/api', () => ({
     getGitStatuses: vi.fn(),
     getGitStatus: vi.fn(),
   },
+  getAuthToken: vi.fn(() => null),
+  getAuthMode: vi.fn(() => 'local'),
 }));
 
 import { api } from '@/lib/api';

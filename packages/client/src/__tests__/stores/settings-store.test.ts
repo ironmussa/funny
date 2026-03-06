@@ -8,6 +8,8 @@ vi.mock('@/lib/api', async () => {
     api: {
       updateProfile: vi.fn(() => okAsync({})),
     },
+    getAuthToken: vi.fn(() => null),
+    getAuthMode: vi.fn(() => 'local'),
   };
 });
 

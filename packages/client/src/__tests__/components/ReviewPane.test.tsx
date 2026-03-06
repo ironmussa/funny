@@ -54,6 +54,8 @@ vi.mock('@/lib/api', async () => {
       ),
       getGitStatuses: vi.fn().mockReturnValue(ok({ statuses: [] })),
     },
+    getAuthToken: vi.fn(() => null),
+    getAuthMode: vi.fn(() => 'local'),
   };
 });
 

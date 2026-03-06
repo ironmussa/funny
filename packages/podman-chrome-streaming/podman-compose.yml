@@ -1,0 +1,63 @@
+version: "3.8"
+
+services:
+  funny-runtime:
+    build:
+      context: ../..
+      dockerfile: packages/podman-chrome-streaming/Containerfile
+    image: funny-runtime:latest
+    container_name: funny-runtime
+    ports:
+      - "${FUNNY_PORT:-3001}:${FUNNY_PORT:-3001}"              # Funny server API + WS
+      - "${STREAM_HTTP_PORT:-3500}:${STREAM_HTTP_PORT:-3500}"  # Stream viewer
+      - "${STREAM_WS_PORT:-3501}:${STREAM_WS_PORT:-3501}"      # Stream websocket
+      - "${NOVNC_PORT:-6080}:${NOVNC_PORT:-6080}"              # noVNC
+      - "${CHROME_DEBUG_PORT:-9222}:${CHROME_DEBUG_PORT:-9222}" # Chrome CDP
+    environment:
+      # ── Profiles ───────────────────────────────────────
+      - ENABLE_RUNTIME=${ENABLE_RUNTIME:-true}
+      - ENABLE_STREAMING=${ENABLE_STREAMING:-true}
+      # ── Repository ─────────────────────────────────────
+      - REPO_MODE=${REPO_MODE:-clone}
+      - REPO_URL=${REPO_URL:-}
+      - REPO_REF=${REPO_REF:-}
+      - WORK_BRANCH=${WORK_BRANCH:-}
+      - WORKSPACE_PATH=${WORKSPACE_PATH:-/workspace/repo}
+      # ── Git credentials ───────────────────────────────
+      - GIT_TOKEN=${GIT_TOKEN:-}
+      - GIT_TOKEN_FILE=${GIT_TOKEN_FILE:-}
+      - GIT_USERNAME=${GIT_USERNAME:-x-access-token}
+      # ── Funny server ──────────────────────────────────
+      - FUNNY_PORT=${FUNNY_PORT:-3001}
+      - CLIENT_ORIGIN=${CLIENT_ORIGIN:-http://localhost:5173}
+      - AUTH_MODE=${AUTH_MODE:-local}
+      - FUNNY_DATA_DIR=${FUNNY_DATA_DIR:-/workspace/.funny-data}
+      # ── Chrome streaming ──────────────────────────────
+      - START_URL=${START_URL:-https://example.com}
+      - STREAM_HTTP_PORT=${STREAM_HTTP_PORT:-3500}
+      - STREAM_WS_PORT=${STREAM_WS_PORT:-3501}
+      - NOVNC_PORT=${NOVNC_PORT:-6080}
+      - CHROME_DEBUG_PORT=${CHROME_DEBUG_PORT:-9222}
+    volumes:
+      - funny-data:/workspace/.funny-data
+      # For REPO_MODE=mount, uncomment the next line and point it at your repo:
+      # - ${HOST_REPO_PATH}:/workspace/repo
+    shm_size: "2gb"
+    security_opt:
+      - seccomp=unconfined
+    cap_add:
+      - SYS_ADMIN
+    restart: unless-stopped
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "if [ \"$ENABLE_RUNTIME\" = \"false\" ]; then curl -f http://localhost:${STREAM_HTTP_PORT:-3500}/health; else curl -f http://localhost:${FUNNY_PORT:-3001}/api/projects; fi",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+volumes:
+  funny-data:

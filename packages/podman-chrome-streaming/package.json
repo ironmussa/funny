@@ -1,0 +1,43 @@
+{
+  "name": "@funny/podman-chrome-streaming",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/runtime/entrypoint.ts",
+  "exports": {
+    ".": "./src/runtime/entrypoint.ts",
+    "./stream-only": "./src/index.ts",
+    "./launcher": "./src/launcher/server.ts"
+  },
+  "scripts": {
+    "dev": "bun --watch src/runtime/entrypoint.ts",
+    "dev:stream": "bun --watch src/index.ts",
+    "dev:launcher": "bun --watch src/launcher/server.ts",
+    "start": "bun src/runtime/entrypoint.ts",
+    "start:stream": "bun src/index.ts",
+    "start:launcher": "bun src/launcher/server.ts",
+    "test": "bun test",
+    "build": "bun build src/runtime/entrypoint.ts --outdir dist --target bun",
+    "podman:build": "bun scripts/podman.mjs build -t funny-runtime -f Containerfile ../..",
+    "podman:run": "bun scripts/podman.mjs run",
+    "podman:compose:up": "bun scripts/podman-compose.mjs up -d",
+    "podman:compose:down": "bun scripts/podman-compose.mjs down",
+    "podman:machine:start": "bun scripts/podman.mjs machine start"
+  },
+  "dependencies": {
+    "@funny/core": "*",
+    "@funny/shared": "*",
+    "chrome-remote-interface": "^0.33.2",
+    "neverthrow": "^8.2.0",
+    "pixelmatch": "^6.0.0",
+    "playwright-core": "^1.50.0",
+    "pngjs": "^7.0.0",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/bun": "latest",
+    "@types/chrome-remote-interface": "^0.31.11",
+    "@types/pngjs": "^6.0.0",
+    "@types/ws": "^8.5.14"
+  }
+}

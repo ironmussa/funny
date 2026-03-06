@@ -1,0 +1,77 @@
+# syntax=docker/dockerfile:1
+FROM debian:bookworm-slim
+
+# ── System deps ────────────────────────────────────────────────────────────────
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    chromium \
+    xvfb \
+    x11vnc \
+    novnc \
+    websockify \
+    supervisor \
+    curl \
+    unzip \
+    git \
+    ca-certificates \
+    fonts-liberation \
+    libgbm1 \
+    && rm -rf /var/lib/apt/lists/*
+
+# ── Bun runtime ────────────────────────────────────────────────────────────────
+RUN curl -fsSL https://bun.sh/install | bash
+ENV PATH="/root/.bun/bin:$PATH"
+
+# ── Workspace source ───────────────────────────────────────────────────────────
+WORKDIR /app
+COPY package.json bun.lock ./
+COPY packages ./packages
+
+# ── Install runtime + local workspace deps ────────────────────────────────────
+RUN printf '#!/bin/sh\nexit 0\n' > /usr/local/bin/husky && chmod +x /usr/local/bin/husky
+RUN HUSKY=0 CI=0 bun install --production
+
+# ── Install published Funny server in an isolated directory ───────────────────
+WORKDIR /opt/funny-server-runtime
+COPY packages/podman-chrome-streaming/funny-server-runtime.package.json ./package.json
+RUN CI=0 bun install --production
+
+WORKDIR /app
+
+# ── Runtime directories ────────────────────────────────────────────────────────
+RUN mkdir -p /workspace/repo /workspace/.funny-data /var/log/supervisor
+
+# ── Config files ───────────────────────────────────────────────────────────────
+COPY packages/podman-chrome-streaming/supervisord.conf /etc/supervisor/conf.d/supervisord.conf
+
+# ── Ports ──────────────────────────────────────────────────────────────────────
+# 3001  → Funny server (API + WebSocket)
+# 3500  → viewer HTTP (stream UI)
+# 3501  → WebSocket (frame stream)
+# 6080  → noVNC (alternative visual access)
+# 9222  → Chrome CDP remote debugging
+EXPOSE 3001 3500 3501 6080 9222
+
+# ── Environment defaults ──────────────────────────────────────────────────────
+ENV ENABLE_RUNTIME=true
+ENV ENABLE_STREAMING=true
+ENV REPO_MODE=clone
+ENV REPO_URL=
+ENV REPO_REF=
+ENV WORK_BRANCH=
+ENV GIT_TOKEN=
+ENV GIT_TOKEN_FILE=
+ENV GIT_USERNAME=x-access-token
+ENV WORKSPACE_PATH=/workspace/repo
+ENV FUNNY_PORT=3001
+ENV CLIENT_ORIGIN=http://localhost:5173
+ENV AUTH_MODE=local
+ENV FUNNY_DATA_DIR=/workspace/.funny-data
+ENV FUNNY_SERVER_BIN=/opt/funny-server-runtime/node_modules/.bin/funny-server
+ENV STREAM_HTTP_PORT=3500
+ENV STREAM_WS_PORT=3501
+ENV NOVNC_PORT=6080
+ENV CHROME_DEBUG_PORT=9222
+ENV START_URL=https://example.com
+
+CMD ["/usr/bin/supervisord", "-n", "-c", "/etc/supervisor/conf.d/supervisord.conf"]

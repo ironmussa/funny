@@ -1,0 +1,662 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Chrome Stream Viewer</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #0f0f0f;
+      color: #e0e0e0;
+      height: 100vh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: #1a1a1a;
+      border-bottom: 1px solid #2a2a2a;
+      padding: 8px 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+    header h1 { font-size: 14px; font-weight: 600; color: #fff; letter-spacing: 0.5px; }
+
+    .status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: #555; transition: background 0.3s;
+    }
+    .status-dot.connected { background: #22c55e; }
+    .status-dot.error     { background: #ef4444; }
+
+    .stats { margin-left: auto; font-size: 11px; color: #666; display: flex; gap: 16px; }
+    .stats span { display: flex; gap: 4px; }
+    .stats b    { color: #aaa; }
+
+    .interact-toggle {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 11px; color: #888; cursor: pointer; user-select: none;
+    }
+    .interact-toggle input { cursor: pointer; accent-color: #22c55e; }
+    .interact-toggle.active { color: #22c55e; }
+
+    .controls {
+      background: #161616; border-bottom: 1px solid #2a2a2a;
+      padding: 6px 16px; display: flex; gap: 8px; align-items: center; flex-shrink: 0;
+    }
+    .controls input {
+      flex: 1; background: #252525; border: 1px solid #333;
+      border-radius: 4px; color: #e0e0e0; padding: 4px 10px; font-size: 13px; outline: none;
+    }
+    .controls input:focus { border-color: #555; }
+
+    button {
+      background: #2a2a2a; border: 1px solid #383838; border-radius: 4px; color: #ccc;
+      padding: 4px 12px; font-size: 12px; cursor: pointer; transition: background 0.15s; white-space: nowrap;
+    }
+    button:hover  { background: #363636; color: #fff; }
+    button:active { background: #1e1e1e; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    button.run-btn  { background: #14532d; border-color: #166534; color: #86efac; }
+    button.run-btn:hover  { background: #166534; color: #bbf7d0; }
+    button.stop-btn { background: #450a0a; border-color: #7f1d1d; color: #fca5a5; }
+    button.stop-btn:hover { background: #7f1d1d; color: #fecaca; }
+
+    .main { flex: 1; display: flex; overflow: hidden; }
+
+    .canvas-wrap {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      overflow: hidden; background: #0a0a0a; position: relative;
+    }
+    .canvas-wrap.interactive { cursor: none; }
+
+    #stream-canvas {
+      max-width: 100%; max-height: 100%; object-fit: contain; image-rendering: auto;
+      display: block; user-select: none; -webkit-user-select: none;
+    }
+
+    .placeholder { text-align: center; color: #444; }
+    .placeholder svg { margin-bottom: 12px; opacity: 0.4; }
+    .placeholder p   { font-size: 13px; }
+
+    #cursor-dot {
+      position: absolute; width: 14px; height: 14px; border-radius: 50%;
+      border: 2px solid #22c55e; background: rgba(34,197,94,0.25);
+      pointer-events: none; display: none; transform: translate(-50%, -50%);
+    }
+
+    .fps-badge {
+      position: absolute; top: 8px; right: 8px;
+      background: rgba(0,0,0,0.65); color: #22c55e;
+      font-size: 11px; font-weight: 600; padding: 2px 8px; border-radius: 3px; font-family: monospace;
+    }
+
+    .interact-badge {
+      position: absolute; top: 8px; left: 8px;
+      background: rgba(34,197,94,0.15); color: #22c55e; border: 1px solid rgba(34,197,94,0.3);
+      font-size: 10px; font-weight: 600; padding: 2px 8px; border-radius: 3px; display: none;
+    }
+
+    /* ── Sidebar ────────────────────────────────────────────────────────────── */
+    .sidebar {
+      width: 300px; background: #141414; border-left: 1px solid #2a2a2a;
+      display: flex; flex-direction: column; overflow: hidden;
+    }
+
+    .sidebar-section { padding: 10px 12px; border-bottom: 1px solid #222; flex-shrink: 0; }
+    .sidebar-section h3 {
+      font-size: 10px; text-transform: uppercase;
+      letter-spacing: 1px; color: #555; margin-bottom: 8px;
+    }
+
+    /* ── Script panel ───────────────────────────────────────────────────────── */
+    .script-controls { display: flex; gap: 6px; align-items: center; margin-bottom: 8px; }
+
+    .script-select {
+      flex: 1; background: #252525; border: 1px solid #333; border-radius: 4px;
+      color: #e0e0e0; padding: 4px 8px; font-size: 12px; outline: none; cursor: pointer;
+    }
+    .script-select:focus { border-color: #555; }
+
+    .script-editor-wrap { margin-top: 6px; display: none; }
+    .script-editor-wrap.visible { display: block; }
+
+    #script-editor {
+      width: 100%; height: 180px;
+      background: #0d1117; border: 1px solid #333; border-radius: 4px;
+      color: #c9d1d9; padding: 8px; font-family: monospace; font-size: 11px;
+      line-height: 1.5; resize: vertical; outline: none; tab-size: 2;
+    }
+    #script-editor:focus { border-color: #444; }
+
+    /* ── Log area ───────────────────────────────────────────────────────────── */
+    .log-tabs {
+      display: flex; border-bottom: 1px solid #222; flex-shrink: 0;
+    }
+    .log-tab {
+      padding: 5px 12px; font-size: 10px; text-transform: uppercase; letter-spacing: 0.8px;
+      color: #555; cursor: pointer; border-bottom: 2px solid transparent; user-select: none;
+    }
+    .log-tab.active { color: #aaa; border-color: #555; }
+
+    .log-pane { display: none; flex: 1; overflow-y: auto; }
+    .log-pane.active { display: flex; flex-direction: column; }
+
+    .log-area {
+      flex: 1; overflow-y: auto; padding: 8px 12px;
+      font-family: monospace; font-size: 11px; line-height: 1.6;
+    }
+    .log-entry        { color: #666; word-break: break-all; }
+    .log-entry.info   { color: #888; }
+    .log-entry.event  { color: #60a5fa; }
+    .log-entry.error  { color: #ef4444; }
+    .log-entry.nav    { color: #a3e635; }
+    .log-entry.mouse  { color: #a78bfa; }
+
+    /* Script output */
+    .script-log-area {
+      flex: 1; overflow-y: auto; padding: 8px 12px; background: #0a0a0a;
+      font-family: monospace; font-size: 11px; line-height: 1.7;
+    }
+    .slog           { word-break: break-all; display: flex; gap: 6px; }
+    .slog .ts       { color: #444; flex-shrink: 0; }
+    .slog.out .msg  { color: #d4d4d4; }
+    .slog.err .msg  { color: #fbbf24; }
+    .slog.sys .msg  { color: #60a5fa; }
+    .slog.done .msg { color: #4ade80; }
+    .slog.fail .msg { color: #f87171; }
+
+    .script-running-indicator {
+      display: none; align-items: center; gap: 6px;
+      font-size: 10px; color: #4ade80; padding: 4px 12px;
+      border-bottom: 1px solid #222; background: rgba(34,197,94,0.05);
+    }
+    .script-running-indicator.visible { display: flex; }
+    .pulse {
+      width: 6px; height: 6px; border-radius: 50%; background: #4ade80;
+      animation: pulse 1.2s infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50%       { opacity: 0.4; transform: scale(0.7); }
+    }
+
+    .exec-input {
+      display: flex; gap: 4px; padding: 6px 12px; border-top: 1px solid #222; flex-shrink: 0;
+    }
+    .exec-input input {
+      flex: 1; background: #252525; border: 1px solid #333; border-radius: 4px;
+      color: #e0e0e0; padding: 4px 8px; font-size: 12px; font-family: monospace; outline: none;
+    }
+
+    .kbd {
+      display: inline-block; background: #252525; border: 1px solid #444;
+      border-radius: 3px; padding: 1px 5px; font-family: monospace; font-size: 10px; color: #aaa;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="status-dot" id="status-dot"></div>
+    <h1>Chrome Stream Viewer</h1>
+    <label class="interact-toggle" id="interact-label">
+      <input type="checkbox" id="interact-cb" />
+      Interactive mode
+    </label>
+    <div class="stats">
+      <span><b id="stat-fps">0</b> fps</span>
+      <span><b id="stat-clients">0</b> clients</span>
+      <span>uptime <b id="stat-uptime">0s</b></span>
+    </div>
+  </header>
+
+  <div class="controls">
+    <input id="url-input" type="text" placeholder="https://example.com" value="https://example.com" />
+    <button id="btn-navigate">Go</button>
+    <button id="btn-back">←</button>
+    <button id="btn-forward">→</button>
+    <button id="btn-reload">↺</button>
+    <button id="btn-screenshot">Screenshot</button>
+  </div>
+
+  <div class="main">
+    <!-- ── Stream canvas ─────────────────────────────────────────────────── -->
+    <div class="canvas-wrap" id="canvas-wrap">
+      <div class="placeholder" id="placeholder">
+        <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <rect x="2" y="3" width="20" height="14" rx="2"></rect>
+          <line x1="8" y1="21" x2="16" y2="21"></line>
+          <line x1="12" y1="17" x2="12" y2="21"></line>
+        </svg>
+        <p>Waiting for Chrome stream...</p>
+      </div>
+      <img id="stream-canvas" style="display:none" alt="Chrome stream" />
+      <div id="cursor-dot"></div>
+      <div class="fps-badge" id="fps-badge" style="display:none">0 fps</div>
+      <div class="interact-badge" id="interact-badge">INTERACTIVE</div>
+    </div>
+
+    <!-- ── Sidebar ───────────────────────────────────────────────────────── -->
+    <div class="sidebar">
+
+      <!-- Script runner panel -->
+      <div class="sidebar-section">
+        <h3>Scripts</h3>
+        <div class="script-controls">
+          <select class="script-select" id="script-select">
+            <option value="demo-search">demo-search (Google)</option>
+            <option value="demo-scroll">demo-scroll (MDN docs)</option>
+            <option value="demo-visual-regression">visual regression test</option>
+            <option value="custom">custom script...</option>
+          </select>
+          <button class="run-btn" id="btn-run">▶ Run</button>
+          <button class="stop-btn" id="btn-stop" style="display:none">■ Stop</button>
+        </div>
+
+        <!-- Custom script editor -->
+        <div class="script-editor-wrap" id="script-editor-wrap">
+          <div style="font-size:10px;color:#555;margin-bottom:4px">
+            TypeScript · <code style="color:#888">CDP_URL</code> available as env var
+          </div>
+          <textarea id="script-editor" spellcheck="false"></textarea>
+        </div>
+      </div>
+
+      <!-- Script running indicator -->
+      <div class="script-running-indicator" id="script-running-indicator">
+        <div class="pulse"></div>
+        <span id="running-script-name">Running script...</span>
+      </div>
+
+      <!-- Tabs: Logs / Script output -->
+      <div class="log-tabs">
+        <div class="log-tab active" data-tab="events">Events</div>
+        <div class="log-tab" data-tab="script">Script Output</div>
+      </div>
+
+      <!-- Events log -->
+      <div class="log-pane active" id="pane-events">
+        <div class="sidebar-section" style="padding:8px 12px 6px">
+          <div id="chrome-stats" style="font-size:11px; color:#666; line-height:1.8">Not connected</div>
+        </div>
+        <div class="sidebar-section" style="padding:6px 12px">
+          <div style="font-size:10px; color:#555; line-height:2">
+            Toggle interactive: <span class="kbd">I</span> &nbsp;
+            Exit interactive: <span class="kbd">Escape</span>
+          </div>
+        </div>
+        <div class="log-area" id="log-area"></div>
+      </div>
+
+      <!-- Script output pane -->
+      <div class="log-pane" id="pane-script">
+        <div class="script-log-area" id="script-log-area">
+          <div class="slog sys"><span class="ts">--:--:--</span><span class="msg">Script output will appear here.</span></div>
+        </div>
+      </div>
+
+      <div class="exec-input">
+        <input id="exec-input" type="text" placeholder="document.title" />
+        <button id="btn-exec">Run JS</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const WS_PORT   = 3501;
+    const CHROME_W  = 1280;
+    const CHROME_H  = 720;
+
+    let ws = null;
+    let reconnectTimer = null;
+    let frameCount = 0;
+    let lastFpsTime = Date.now();
+    let fps = 0;
+    let interactive = false;
+    let scriptRunning = false;
+
+    // ── Element refs ─────────────────────────────────────────────────────────
+    const dot              = document.getElementById('status-dot');
+    const streamImg        = document.getElementById('stream-canvas');
+    const placeholder      = document.getElementById('placeholder');
+    const fpsBadge         = document.getElementById('fps-badge');
+    const interactBadge    = document.getElementById('interact-badge');
+    const interactCb       = document.getElementById('interact-cb');
+    const interactLabel    = document.getElementById('interact-label');
+    const cursorDot        = document.getElementById('cursor-dot');
+    const canvasWrap       = document.getElementById('canvas-wrap');
+    const logArea          = document.getElementById('log-area');
+    const scriptLogArea    = document.getElementById('script-log-area');
+    const statFps          = document.getElementById('stat-fps');
+    const statClients      = document.getElementById('stat-clients');
+    const statUptime       = document.getElementById('stat-uptime');
+    const chromeStats      = document.getElementById('chrome-stats');
+    const scriptSelect     = document.getElementById('script-select');
+    const scriptEditorWrap = document.getElementById('script-editor-wrap');
+    const scriptEditor     = document.getElementById('script-editor');
+    const btnRun           = document.getElementById('btn-run');
+    const btnStop          = document.getElementById('btn-stop');
+    const runningIndicator = document.getElementById('script-running-indicator');
+    const runningName      = document.getElementById('running-script-name');
+
+    // ── Default custom script template ───────────────────────────────────────
+    const CUSTOM_TEMPLATE = `import { RemotePage } from "../lib/page.ts";
+
+const page = await RemotePage.connect();
+
+try {
+  console.log("Current URL:", await page.url());
+
+  await page.goto("https://example.com");
+  await page.sleep(800);
+
+  const title = await page.title();
+  console.log("Page title:", title);
+
+  // Examples:
+  // await page.click("button#submit");
+  // await page.fill("input[name='q']", "hello world");
+  // await page.press("Enter");
+  // await page.scroll(0, 500);
+  // await page.waitForSelector(".result");
+} finally {
+  await page.close();
+}
+`;
+    scriptEditor.value = CUSTOM_TEMPLATE;
+
+    // ── Tabs ─────────────────────────────────────────────────────────────────
+    document.querySelectorAll('.log-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.log-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.log-pane').forEach(p => p.classList.remove('active'));
+        tab.classList.add('active');
+        document.getElementById(`pane-${tab.dataset.tab}`).classList.add('active');
+      });
+    });
+
+    // ── Script select ─────────────────────────────────────────────────────────
+    scriptSelect.addEventListener('change', () => {
+      const isCustom = scriptSelect.value === 'custom';
+      scriptEditorWrap.className = `script-editor-wrap${isCustom ? ' visible' : ''}`;
+    });
+
+    // ── Logging ───────────────────────────────────────────────────────────────
+    function log(msg, type = 'info') {
+      const el = document.createElement('div');
+      el.className = `log-entry ${type}`;
+      el.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+      logArea.appendChild(el);
+      logArea.scrollTop = logArea.scrollHeight;
+      if (logArea.children.length > 300) logArea.removeChild(logArea.firstChild);
+    }
+
+    function scriptLog(line, type = 'out') {
+      const el = document.createElement('div');
+      el.className = `slog ${type}`;
+      const ts = new Date().toLocaleTimeString();
+      el.innerHTML = `<span class="ts">${ts}</span><span class="msg">${escHtml(line)}</span>`;
+      scriptLogArea.appendChild(el);
+      scriptLogArea.scrollTop = scriptLogArea.scrollHeight;
+      if (scriptLogArea.children.length > 500) scriptLogArea.removeChild(scriptLogArea.firstChild);
+    }
+
+    function escHtml(str) {
+      return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    // ── Script running state ──────────────────────────────────────────────────
+    function setScriptRunning(running, name = '') {
+      scriptRunning = running;
+      btnRun.style.display  = running ? 'none'  : '';
+      btnStop.style.display = running ? ''      : 'none';
+      btnRun.disabled       = running;
+      runningIndicator.className = `script-running-indicator${running ? ' visible' : ''}`;
+      if (running) runningName.textContent = `Running: ${name}`;
+      if (running) {
+        // Auto-switch to script output tab
+        document.querySelectorAll('.log-tab').forEach(t => t.classList.remove('active'));
+        document.querySelectorAll('.log-pane').forEach(p => p.classList.remove('active'));
+        document.querySelector('[data-tab="script"]').classList.add('active');
+        document.getElementById('pane-script').classList.add('active');
+      }
+    }
+
+    // ── WebSocket ─────────────────────────────────────────────────────────────
+    function connect() {
+      const host = location.hostname || 'localhost';
+      ws = new WebSocket(`ws://${host}:${WS_PORT}`);
+      ws.onopen  = () => { dot.className = 'status-dot connected'; log('Connected', 'event'); clearTimeout(reconnectTimer); };
+      ws.onclose = () => { dot.className = 'status-dot error'; log('Disconnected. Reconnecting in 3s...', 'error'); reconnectTimer = setTimeout(connect, 3000); };
+      ws.onerror = () => log('WebSocket error', 'error');
+      ws.onmessage = handleMessage;
+    }
+
+    function send(msg) {
+      if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+    }
+
+    function handleMessage(e) {
+      const msg = JSON.parse(e.data);
+
+      if (msg.type === 'frame') {
+        streamImg.src = `data:image/jpeg;base64,${msg.data}`;
+        streamImg.style.display = 'block';
+        placeholder.style.display = 'none';
+        fpsBadge.style.display = 'block';
+        frameCount++;
+        const now = Date.now();
+        if (now - lastFpsTime >= 1000) {
+          fps = Math.round(frameCount * 1000 / (now - lastFpsTime));
+          frameCount = 0; lastFpsTime = now;
+          fpsBadge.textContent = `${fps} fps`;
+          statFps.textContent = fps;
+        }
+
+      } else if (msg.type === 'stats') {
+        updateStats(msg.data);
+
+      } else if (msg.type === 'navigate') {
+        log(`Navigated: ${msg.url}`, 'nav');
+
+      } else if (msg.type === 'pageLoad') {
+        log('Page loaded', 'event');
+
+      } else if (msg.type === 'chromeDisconnected') {
+        log('Chrome disconnected', 'error');
+        streamImg.style.display = 'none';
+        placeholder.style.display = 'block';
+        fpsBadge.style.display = 'none';
+
+      } else if (msg.type === 'executeResult') {
+        log(`> ${JSON.stringify(msg.result)}`, 'event');
+
+      } else if (msg.type === 'screenshot') {
+        const link = document.createElement('a');
+        link.href = `data:image/png;base64,${msg.data}`;
+        link.download = `screenshot-${Date.now()}.png`;
+        link.click();
+        log('Screenshot downloaded', 'event');
+
+      } else if (msg.type === 'ack') {
+        log(`Ack: ${msg.action} ${msg.url ?? ''}`, 'info');
+
+      } else if (msg.type === 'error') {
+        log(`Error: ${msg.message}`, 'error');
+
+      // ── Script events ─────────────────────────────────────────────────────
+      } else if (msg.type === 'scriptStart') {
+        setScriptRunning(true, msg.script);
+        scriptLog(`▶ Script started: ${msg.script}`, 'sys');
+
+      } else if (msg.type === 'scriptLog') {
+        const type = msg.stream === 'stderr' ? 'err' : 'out';
+        scriptLog(msg.line, type);
+
+      } else if (msg.type === 'scriptDone') {
+        scriptLog(`✓ Finished (exit ${msg.exitCode})`, 'done');
+        setScriptRunning(false);
+
+      } else if (msg.type === 'scriptError') {
+        scriptLog(`✗ Error: ${msg.message}`, 'fail');
+        setScriptRunning(false);
+
+      } else if (msg.type === 'scriptStopped') {
+        scriptLog('⏹ Stopped by user.', 'err');
+        setScriptRunning(false);
+
+      } else if (msg.type === 'scriptRunning') {
+        setScriptRunning(true, 'script');
+      }
+    }
+
+    function updateStats(data) {
+      statClients.textContent = data.connectedClients;
+      statUptime.textContent  = `${data.uptime}s`;
+      if (data.chrome) {
+        chromeStats.innerHTML =
+          `host: ${data.chrome.host}:${data.chrome.port}<br>` +
+          `frames: ${data.chrome.framesReceived}<br>` +
+          `connected: ${data.chrome.connected}`;
+      }
+      if (data.scriptRunning && !scriptRunning) setScriptRunning(true, 'script');
+    }
+
+    // ── Script runner ─────────────────────────────────────────────────────────
+    btnRun.addEventListener('click', () => {
+      const script = scriptSelect.value;
+      const code   = script === 'custom' ? scriptEditor.value : undefined;
+      // Clear previous output
+      scriptLogArea.innerHTML = '';
+      send({ type: 'runScript', script, scriptCode: code });
+    });
+
+    btnStop.addEventListener('click', () => {
+      send({ type: 'stopScript' });
+    });
+
+    // ── Coordinate scaling ────────────────────────────────────────────────────
+    function toChrome(clientX, clientY) {
+      const rect = streamImg.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return null;
+      const x = Math.round(((clientX - rect.left) / rect.width)  * CHROME_W);
+      const y = Math.round(((clientY - rect.top)  / rect.height) * CHROME_H);
+      return { x: Math.max(0, Math.min(CHROME_W, x)), y: Math.max(0, Math.min(CHROME_H, y)) };
+    }
+
+    // ── Interactive mode ──────────────────────────────────────────────────────
+    function setInteractive(value) {
+      interactive = value;
+      interactCb.checked = value;
+      interactLabel.className = `interact-toggle${value ? ' active' : ''}`;
+      canvasWrap.className    = `canvas-wrap${value ? ' interactive' : ''}`;
+      interactBadge.style.display = value ? 'block' : 'none';
+      cursorDot.style.display     = value ? 'block' : 'none';
+      if (value) log('Interactive mode ON', 'mouse');
+      else       log('Interactive mode OFF', 'info');
+    }
+    interactCb.addEventListener('change', () => setInteractive(interactCb.checked));
+
+    function modifiers(e) {
+      return (e.altKey ? 1 : 0) | (e.ctrlKey ? 2 : 0) | (e.metaKey ? 4 : 0) | (e.shiftKey ? 8 : 0);
+    }
+    function cdpButton(e) {
+      return ({ 0: 'left', 1: 'middle', 2: 'right' })[e.button] ?? 'none';
+    }
+
+    // ── Mouse events ──────────────────────────────────────────────────────────
+    streamImg.addEventListener('mousemove', (e) => {
+      const pos = toChrome(e.clientX, e.clientY);
+      if (!pos) return;
+      const wrapRect = canvasWrap.getBoundingClientRect();
+      cursorDot.style.left = `${e.clientX - wrapRect.left}px`;
+      cursorDot.style.top  = `${e.clientY - wrapRect.top}px`;
+      if (!interactive) return;
+      send({ type: 'mouseEvent', mouseType: 'mouseMoved', ...pos, modifiers: modifiers(e) });
+    });
+
+    streamImg.addEventListener('mousedown', (e) => {
+      if (!interactive) return;
+      e.preventDefault();
+      const pos = toChrome(e.clientX, e.clientY);
+      if (!pos) return;
+      send({ type: 'mouseEvent', mouseType: 'mousePressed', ...pos, button: cdpButton(e), clickCount: 1, modifiers: modifiers(e) });
+      streamImg.focus();
+    });
+
+    streamImg.addEventListener('mouseup', (e) => {
+      if (!interactive) return;
+      e.preventDefault();
+      const pos = toChrome(e.clientX, e.clientY);
+      if (!pos) return;
+      send({ type: 'mouseEvent', mouseType: 'mouseReleased', ...pos, button: cdpButton(e), clickCount: 1, modifiers: modifiers(e) });
+    });
+
+    streamImg.addEventListener('contextmenu', (e) => { if (interactive) e.preventDefault(); });
+
+    streamImg.addEventListener('wheel', (e) => {
+      if (!interactive) return;
+      e.preventDefault();
+      const pos = toChrome(e.clientX, e.clientY);
+      if (!pos) return;
+      send({ type: 'scroll', ...pos, deltaX: e.deltaX, deltaY: e.deltaY });
+    }, { passive: false });
+
+    streamImg.addEventListener('mouseleave', () => { cursorDot.style.display = 'none'; });
+    streamImg.addEventListener('mouseenter', () => { cursorDot.style.display = interactive ? 'block' : 'none'; });
+
+    // ── Keyboard events ───────────────────────────────────────────────────────
+    streamImg.setAttribute('tabindex', '0');
+
+    streamImg.addEventListener('keydown', (e) => {
+      if (!interactive) return;
+      if (e.key === 'Escape') { setInteractive(false); document.getElementById('url-input').focus(); return; }
+      e.preventDefault(); e.stopPropagation();
+      const base = { key: e.key, code: e.code, modifiers: modifiers(e), windowsVirtualKeyCode: e.keyCode };
+      send({ type: 'keyEvent', keyType: 'keyDown', ...base });
+      if (e.key.length === 1) send({ type: 'keyEvent', keyType: 'char', ...base, text: e.key });
+    });
+
+    streamImg.addEventListener('keyup', (e) => {
+      if (!interactive) return;
+      e.preventDefault();
+      send({ type: 'keyEvent', keyType: 'keyUp', key: e.key, code: e.code, modifiers: modifiers(e), windowsVirtualKeyCode: e.keyCode });
+    });
+
+    document.addEventListener('keydown', (e) => {
+      if (e.target === document.getElementById('url-input') ||
+          e.target === document.getElementById('exec-input') ||
+          e.target === scriptEditor) return;
+      if (e.key === 'i' || e.key === 'I') setInteractive(!interactive);
+    });
+
+    // ── Toolbar ───────────────────────────────────────────────────────────────
+    document.getElementById('btn-navigate').onclick = () => {
+      const url = document.getElementById('url-input').value.trim();
+      if (url) send({ type: 'navigate', payload: url });
+    };
+    document.getElementById('url-input').onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('btn-navigate').click(); };
+    document.getElementById('btn-back').onclick    = () => send({ type: 'execute', payload: 'history.back()' });
+    document.getElementById('btn-forward').onclick = () => send({ type: 'execute', payload: 'history.forward()' });
+    document.getElementById('btn-reload').onclick  = () => send({ type: 'execute', payload: 'location.reload()' });
+    document.getElementById('btn-screenshot').onclick = () => send({ type: 'screenshot' });
+
+    document.getElementById('btn-exec').onclick = () => {
+      const code = document.getElementById('exec-input').value.trim();
+      if (code) { log(`$ ${code}`, 'info'); send({ type: 'execute', payload: code }); }
+    };
+    document.getElementById('exec-input').onkeydown = (e) => { if (e.key === 'Enter') document.getElementById('btn-exec').click(); };
+
+    // ── Stats poll ────────────────────────────────────────────────────────────
+    setInterval(() => send({ type: 'stats' }), 5000);
+
+    connect();
+  </script>
+</body>
+</html>

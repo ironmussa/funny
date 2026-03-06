@@ -31,7 +31,6 @@ import {
   PenLine,
   RotateCcw,
   ChevronRight,
-  Folder,
 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useCallback, memo, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -62,6 +61,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
 import { api } from '@/lib/api';
 import { openFileInEditor, getEditorLabel } from '@/lib/editor-utils';
+import { FileExtensionIcon, FolderIcon } from '@/lib/file-icons';
 import { cn } from '@/lib/utils';
 import { useCommitProgressStore } from '@/stores/commit-progress-store';
 import { useDraftStore } from '@/stores/draft-store';
@@ -1372,7 +1372,7 @@ export function ReviewPane() {
 
           {/* Select all / count */}
           {summaries.length > 0 && (
-            <div className="flex items-center gap-1.5 border-b border-sidebar-border px-4 py-1.5">
+            <div className="flex items-center gap-1.5 border-b border-sidebar-border py-1.5 pl-2 pr-4">
               <button
                 role="checkbox"
                 aria-checked={
@@ -1450,7 +1450,11 @@ export function ReviewPane() {
                             !isCollapsed && 'rotate-90',
                           )}
                         />
-                        <Folder className="h-3 w-3 flex-shrink-0 text-muted-foreground/60" />
+                        <FolderIcon
+                          folderPath={row.path}
+                          isOpen={!isCollapsed}
+                          className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/70"
+                        />
                         <span className="truncate font-medium">{row.label}</span>
                         <span className="ml-auto flex-shrink-0 text-[10px] text-muted-foreground/50">
                           {row.fileCount}
@@ -1493,6 +1497,10 @@ export function ReviewPane() {
                       >
                         {isChecked && <Check className="h-2.5 w-2.5" />}
                       </button>
+                      <FileExtensionIcon
+                        filePath={f.path}
+                        className="h-4 w-4 flex-shrink-0 text-muted-foreground/80"
+                      />
                       <span className="flex-1 truncate font-mono text-[11px]">
                         {f.path.split('/').pop()}
                       </span>

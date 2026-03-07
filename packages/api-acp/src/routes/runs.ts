@@ -13,13 +13,14 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { Hono } from 'hono';
 
+import { log, metric, startSpan } from '../lib/telemetry.js';
 import { resolveModel } from '../utils/model-resolver.js';
 import * as registry from '../utils/run-registry.js';
 import type { RunResult, RunUsage, ToolCallInfo } from '../utils/run-registry.js';
 
 const DEBUG = !!process.env.API_ACP_DEBUG;
 function dbg(msg: string) {
-  if (DEBUG) console.log(msg);
+  if (DEBUG) log.debug(msg);
 }
 
 export const runsRoute = new Hono();
@@ -246,9 +247,12 @@ runsRoute.post('/', async (c) => {
   const body = await c.req.json<CreateRunRequest>();
   const { model: requestedModel, system_prompt, prompt, tools, max_turns, stream } = body;
 
-  console.log(
-    `[api-acp] POST /v1/runs model=${requestedModel} stream=${stream} tools=${tools?.length ?? 0}`,
-  );
+  log.info('run requested', {
+    model: requestedModel,
+    stream: !!stream,
+    toolCount: tools?.length ?? 0,
+  });
+  metric('runs.created', 1, { attributes: { model: requestedModel, stream: !!stream } });
 
   if (!requestedModel) {
     return c.json({ error: { message: 'model is required', type: 'invalid_request_error' } }, 400);
@@ -331,6 +335,7 @@ async function handleNonStreaming(
   abortController: AbortController,
 ) {
   registry.setRunning(run.id);
+  const span = startSpan('run.execute', { attributes: { runId: run.id, model: modelId } });
 
   try {
     const textParts: string[] = [];
@@ -396,9 +401,22 @@ async function handleNonStreaming(
     }
 
     registry.setCompleted(run.id, result, usage);
+    log.info('run completed', {
+      runId: run.id,
+      model: modelId,
+      inputTokens,
+      outputTokens,
+      toolCalls: result.tool_calls?.length ?? 0,
+    });
+    metric('runs.completed', 1, { attributes: { model: modelId } });
+    metric('tokens.input', inputTokens, { type: 'sum', attributes: { model: modelId } });
+    metric('tokens.output', outputTokens, { type: 'sum', attributes: { model: modelId } });
+    span.end('ok');
     return c.json(registry.get(run.id));
   } catch (err: any) {
-    console.error('[api-acp] run error:', err.message);
+    log.error('run failed', { runId: run.id, model: modelId, error: err.message });
+    metric('runs.failed', 1, { attributes: { model: modelId } });
+    span.end('error', err.message);
     registry.setFailed(run.id, err.message);
     return c.json(registry.get(run.id), 500);
   }
@@ -420,6 +438,7 @@ function handleStreaming(
   const readableStream = new ReadableStream({
     async start(controller) {
       registry.setRunning(run.id);
+      const span = startSpan('run.stream', { attributes: { runId: run.id, model: modelId } });
 
       try {
         // Emit run.created
@@ -515,13 +534,25 @@ function handleStreaming(
         }
 
         registry.setCompleted(run.id, result, usage);
+        log.info('stream run completed', {
+          runId: run.id,
+          model: modelId,
+          inputTokens,
+          outputTokens,
+        });
+        metric('runs.completed', 1, { attributes: { model: modelId, stream: true } });
+        metric('tokens.input', inputTokens, { type: 'sum', attributes: { model: modelId } });
+        metric('tokens.output', outputTokens, { type: 'sum', attributes: { model: modelId } });
+        span.end('ok');
 
         // Emit run.completed with full run object
         controller.enqueue(encoder.encode(sseEvent('run.completed', registry.get(run.id))));
         controller.enqueue(encoder.encode(sseEvent('done', '[DONE]')));
         controller.close();
       } catch (err: any) {
-        console.error('[api-acp] stream error:', err.message);
+        log.error('stream run failed', { runId: run.id, model: modelId, error: err.message });
+        metric('runs.failed', 1, { attributes: { model: modelId, stream: true } });
+        span.end('error', err.message);
         registry.setFailed(run.id, err.message);
         controller.enqueue(
           encoder.encode(sseEvent('run.failed', { id: run.id, error: { message: err.message } })),
@@ -531,7 +562,8 @@ function handleStreaming(
       }
     },
     cancel() {
-      console.log(`[api-acp] client disconnected, cancelling run ${run.id}`);
+      log.warn('client disconnected, cancelling run', { runId: run.id });
+      metric('runs.cancelled', 1, { attributes: { model: modelId } });
       registry.cancel(run.id);
     },
   });

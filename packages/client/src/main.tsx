@@ -1,4 +1,5 @@
 import './wdyr'; // must be first — tracks unnecessary re-renders in dev
+import { AbbacchioProvider } from '@abbacchio/browser-transport/react';
 import { ThemeProvider, useTheme } from 'next-themes';
 import React, { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react';
 import ReactDOM from 'react-dom/client';
@@ -163,15 +164,23 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         'monochrome-dark': 'theme-monochrome-dark',
       }}
     >
-      <TooltipProvider delayDuration={300} skipDelayDuration={0}>
-        {isPreviewWindow ? (
-          <Suspense fallback={null}>
-            <PreviewBrowser />
-          </Suspense>
-        ) : (
-          <AuthGate />
-        )}
-      </TooltipProvider>
+      <AbbacchioProvider
+        endpoint={import.meta.env.VITE_OTLP_ENDPOINT || 'http://localhost:4000'}
+        serviceName="funny-client"
+        captureConsole
+        level="debug"
+        enabled={!!import.meta.env.VITE_OTLP_ENDPOINT}
+      >
+        <TooltipProvider delayDuration={300} skipDelayDuration={0}>
+          {isPreviewWindow ? (
+            <Suspense fallback={null}>
+              <PreviewBrowser />
+            </Suspense>
+          ) : (
+            <AuthGate />
+          )}
+        </TooltipProvider>
+      </AbbacchioProvider>
     </ThemeProvider>
   </React.StrictMode>,
 );

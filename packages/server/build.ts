@@ -32,19 +32,6 @@ const result = await Bun.build({
     // It's only used in pty-helper.mjs which runs under Node.js.
     // Listed here just in case any transitive import pulls it in.
     'node-pty',
-    // OpenTelemetry uses globalThis singletons for provider registration.
-    // Bundling inlines multiple copies, breaking the shared state between
-    // initLogger() and emitLog(). Must remain external.
-    '@opentelemetry/api',
-    '@opentelemetry/api-logs',
-    '@opentelemetry/sdk-logs',
-    '@opentelemetry/sdk-metrics',
-    '@opentelemetry/sdk-trace-node',
-    '@opentelemetry/exporter-logs-otlp-http',
-    '@opentelemetry/exporter-metrics-otlp-http',
-    '@opentelemetry/exporter-trace-otlp-http',
-    '@opentelemetry/resources',
-    '@opentelemetry/semantic-conventions',
   ],
   minify: false, // Keep readable for debugging production issues
   sourcemap: 'external', // Generate .js.map alongside the bundle

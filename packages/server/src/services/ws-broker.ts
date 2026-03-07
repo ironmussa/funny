@@ -10,6 +10,7 @@ import type { WSEvent } from '@funny/shared';
 import type { ServerWebSocket } from 'bun';
 
 import { log } from '../lib/logger.js';
+import { metric } from '../lib/telemetry.js';
 
 class WSBroker {
   private clients = new Map<ServerWebSocket<unknown>, string>(); // ws → userId
@@ -17,11 +18,13 @@ class WSBroker {
   addClient(ws: ServerWebSocket<unknown>, userId: string): void {
     this.clients.set(ws, userId);
     log.info('Client connected', { namespace: 'ws', userId, total: this.clients.size });
+    metric('ws.connections', this.clients.size, { type: 'gauge' });
   }
 
   removeClient(ws: ServerWebSocket<unknown>): void {
     this.clients.delete(ws);
     log.info('Client disconnected', { namespace: 'ws', total: this.clients.size });
+    metric('ws.connections', this.clients.size, { type: 'gauge' });
   }
 
   /** Emit to all clients of a specific user */
@@ -43,6 +46,8 @@ class WSBroker {
     for (const ws of dead) {
       this.clients.delete(ws);
     }
+
+    metric('ws.events', 1, { type: 'sum', attributes: { event: event.type, sent: String(sent) } });
 
     if (sent === 0 && event.type === 'agent:result') {
       log.warn('agent:result sent to 0 clients', {
@@ -72,6 +77,8 @@ class WSBroker {
     for (const ws of dead) {
       this.clients.delete(ws);
     }
+
+    metric('ws.events', 1, { type: 'sum', attributes: { event: event.type, sent: String(sent) } });
 
     if (sent === 0 && event.type === 'agent:result') {
       log.warn('agent:result sent to 0 clients (broadcast)', {

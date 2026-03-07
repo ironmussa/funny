@@ -21,6 +21,7 @@ import { getResumeSystemPrefix } from '@funny/shared/thread-machine';
 import type { ThreadEvent } from '@funny/shared/thread-machine';
 
 import { log } from '../lib/logger.js';
+import { metric, startSpan, setThreadTrace, clearThreadTrace } from '../lib/telemetry.js';
 import { AgentMessageHandler, type ProjectLookup } from './agent-message-handler.js';
 import { AgentStateTracker } from './agent-state.js';
 import * as pm from './project-manager.js';
@@ -37,6 +38,7 @@ export class AgentRunner {
   private orchestrator: AgentOrchestrator;
   private state: AgentStateTracker;
   private messageHandler: AgentMessageHandler;
+  private runSpans = new Map<string, ReturnType<typeof startSpan>>();
 
   constructor(
     private threadManager: IThreadManager,
@@ -51,10 +53,12 @@ export class AgentRunner {
     // Subscribe to orchestrator events — bridge to DB + WebSocket
     this.orchestrator.on('agent:message', (threadId: string, msg: any) => {
       this.messageHandler.handle(threadId, msg);
+      metric('agent.messages', 1, { type: 'sum', attributes: { threadId } });
     });
 
     this.orchestrator.on('agent:error', (threadId: string, err: Error) => {
       log.error('Agent error', { namespace: 'agent', threadId, error: err.message });
+      this.endRunSpan(threadId, 'error', err.message);
       const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
       const { status } = transitionStatus(
         threadId,
@@ -69,6 +73,7 @@ export class AgentRunner {
 
     this.orchestrator.on('agent:unexpected-exit', (threadId: string) => {
       log.error('Agent exited unexpectedly', { namespace: 'agent', threadId });
+      this.endRunSpan(threadId, 'error', 'unexpected exit');
       const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
       const { status } = transitionStatus(
         threadId,
@@ -85,6 +90,7 @@ export class AgentRunner {
 
     this.orchestrator.on('agent:stopped', (threadId: string) => {
       log.info('Agent stopped', { namespace: 'agent', threadId });
+      this.endRunSpan(threadId, 'ok');
       const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
       const { status } = transitionStatus(
         threadId,
@@ -94,6 +100,18 @@ export class AgentRunner {
       this.threadManager.updateThread(threadId, { status, completedAt: new Date().toISOString() });
       this.emitWS(threadId, 'agent:status', { status });
       this.emitAgentCompleted(threadId, 'stopped');
+    });
+
+    // End run span on natural completion (emitted from message handler)
+    threadEventBus.on('agent:completed', (event) => {
+      if (this.runSpans.has(event.threadId)) {
+        const status = event.status === 'completed' ? 'ok' : 'error';
+        this.endRunSpan(
+          event.threadId,
+          status,
+          event.status !== 'completed' ? event.status : undefined,
+        );
+      }
     });
 
     this.orchestrator.on('agent:session-cleared', (threadId: string) => {
@@ -134,6 +152,16 @@ export class AgentRunner {
       }
       delete (globalThis as any).__funnyActiveAgents;
     }
+  }
+
+  private endRunSpan(threadId: string, status: 'ok' | 'error', errorMsg?: string): void {
+    const span = this.runSpans.get(threadId);
+    if (span) {
+      span.end(status, errorMsg);
+      this.runSpans.delete(threadId);
+    }
+    clearThreadTrace(threadId);
+    metric('agents.running', this.runSpans.size, { type: 'gauge' });
   }
 
   private emitWS(threadId: string, type: WSEvent['type'], data: unknown): void {
@@ -283,6 +311,15 @@ export class AgentRunner {
       ...(isPlanResume ? { permissionMode: 'autoEdit' as PermissionMode } : {}),
     });
 
+    // Start a trace span for the entire agent run
+    const runSpan = startSpan('agent.run', {
+      attributes: { threadId, model, provider, permissionMode },
+    });
+    this.runSpans.set(threadId, runSpan);
+    setThreadTrace(threadId, { traceId: runSpan.traceId, spanId: runSpan.spanId });
+    metric('agents.running', this.runSpans.size, { type: 'gauge' });
+    metric('threads.started', 1, { type: 'sum', attributes: { model, provider } });
+
     // Delegate lifecycle to orchestrator
     try {
       await this.orchestrator.startAgent({
@@ -310,6 +347,7 @@ export class AgentRunner {
         provider,
       });
     } catch (err: any) {
+      this.endRunSpan(threadId, 'error', err.message);
       log.error(`Failed to start ${provider} process`, {
         namespace: 'agent',
         threadId,

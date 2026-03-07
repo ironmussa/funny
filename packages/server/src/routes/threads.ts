@@ -9,6 +9,7 @@
 import { Hono } from 'hono';
 
 import { log } from '../lib/logger.js';
+import { startSpan, metric } from '../lib/telemetry.js';
 import * as mq from '../services/message-queue.js';
 import { getThreadEvents } from '../services/thread-event-service.js';
 import * as tm from '../services/thread-manager.js';
@@ -167,11 +168,19 @@ threadRoutes.post('/', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
   const userId = c.get('userId') as string;
+  const span = startSpan('thread.create', {
+    traceId: c.get('traceId'),
+    parentSpanId: c.get('spanId'),
+    attributes: { projectId: parsed.value.projectId, model: parsed.value.model },
+  });
 
   try {
     const thread = await createAndStartThread({ ...parsed.value, userId });
+    metric('threads.created', 1, { type: 'sum' });
+    span.end('ok');
     return c.json(thread, 201);
   } catch (error) {
+    span.end('error');
     return handleServiceError(c, error);
   }
 });

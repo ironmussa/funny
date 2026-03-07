@@ -21,7 +21,6 @@ import {
   getNativeGit,
   WORKTREE_DIR_NAME,
 } from '@funny/core/git';
-import { observability, observabilityShutdown } from '@funny/observability';
 import {
   getProviderModels,
   getProviderModelsWithLabels,
@@ -41,6 +40,7 @@ import './db/index.js'; // triggers self-registration with shutdownManager
 import { authMiddleware } from './middleware/auth.js';
 import { handleError } from './middleware/error-handler.js';
 import { rateLimit } from './middleware/rate-limit.js';
+import { tracingMiddleware } from './middleware/tracing.js';
 import { analyticsRoutes } from './routes/analytics.js';
 import { authRoutes } from './routes/auth.js';
 import { automationRoutes } from './routes/automations.js';
@@ -118,9 +118,7 @@ app.use(
   }),
 );
 app.use('/api/*', rateLimit({ windowMs: 60_000, max: 5000 }));
-app.use('*', observability());
-
-// Ingest webhook — mounted BEFORE authMiddleware (uses its own secret-based auth)
+app.use('/api/*', tracingMiddleware);
 app.route('/api/ingest', ingestRoutes);
 
 app.use('/api/*', authMiddleware);
@@ -404,14 +402,6 @@ import { shutdownManager, ShutdownPhase } from './services/shutdown-manager.js';
 
 // Phase 0: release the port immediately
 shutdownManager.register('http-server', () => server.stop(true), ShutdownPhase.SERVER);
-
-// Phase 1: flush telemetry (only on hard shutdown — no need on hot reload)
-shutdownManager.register(
-  'observability',
-  () => observabilityShutdown(),
-  ShutdownPhase.SERVICES,
-  false,
-);
 
 // Phase 3: Windows tree kill + exit (only on hard shutdown)
 shutdownManager.register(

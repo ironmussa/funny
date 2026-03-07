@@ -1,14 +1,6 @@
 /**
  * Vanilla JS browser logger — no framework dependencies.
- * Batches logs and sends them to an HTTP endpoint (e.g. POST /api/logs).
- * Works in any browser environment: React, Vue, Svelte, vanilla JS, etc.
- *
- * Usage:
- *   import { BrowserLogger } from '@funny/observability/browser';
- *
- *   const logger = new BrowserLogger({ endpoint: '/api/logs' });
- *   logger.info('Page loaded');
- *   logger.error('API call failed', { 'api.url': '/users' });
+ * Batches logs and sends them to POST /api/logs on the funny server.
  */
 
 type LogLevel = 'debug' | 'info' | 'warn' | 'error';
@@ -83,7 +75,6 @@ export class BrowserLogger {
     this.enqueue('error', message, attributes);
   }
 
-  /** Force-flush all buffered logs immediately. */
   flush(): void {
     if (this.buffer.length === 0) return;
     const batch = this.buffer.splice(0, this.buffer.length);
@@ -94,19 +85,15 @@ export class BrowserLogger {
     if (this.authToken) {
       headers['Authorization'] = `Bearer ${this.authToken}`;
     }
-    // Fire-and-forget — don't block the caller
     fetch(this.endpoint, {
       method: 'POST',
       headers,
       credentials: this.credentials,
       body: JSON.stringify({ logs: batch }),
-      keepalive: true, // survive page unload
-    }).catch(() => {
-      // Silently drop — observability should never break the app
-    });
+      keepalive: true,
+    }).catch(() => {});
   }
 
-  /** Stop the flush timer and flush remaining logs. */
   destroy(): void {
     if (this.flushTimer) {
       clearInterval(this.flushTimer);
@@ -115,19 +102,17 @@ export class BrowserLogger {
     this.flush();
   }
 
-  /** Create a child logger with additional default attributes. */
   child(attributes: Record<string, string>): BrowserLogger {
     const child = new BrowserLogger({
       endpoint: this.endpoint,
       maxBatchSize: this.maxBatchSize,
-      flushIntervalMs: 0, // child shares parent's buffer
+      flushIntervalMs: 0,
       defaultAttributes: { ...this.defaultAttributes, ...attributes },
       authToken: this.authToken,
-      captureGlobalErrors: false, // only parent captures
+      captureGlobalErrors: false,
       credentials: this.credentials,
       headers: this.customHeaders,
     });
-    // Share buffer — child pushes to parent's buffer
     child.buffer = this.buffer;
     if (child.flushTimer) {
       clearInterval(child.flushTimer);

@@ -41,17 +41,8 @@
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
+    "@abbacchio/transport": "file:../../../pino-live/packages/transport",
     "@anthropic-ai/claude-agent-sdk": "^0.2.42",
-    "@opentelemetry/api": "^1.9.0",
-    "@opentelemetry/api-logs": "^0.213.0",
-    "@opentelemetry/exporter-logs-otlp-http": "^0.213.0",
-    "@opentelemetry/exporter-metrics-otlp-http": "^0.213.0",
-    "@opentelemetry/exporter-trace-otlp-http": "^0.213.0",
-    "@opentelemetry/resources": "^2.6.0",
-    "@opentelemetry/sdk-logs": "^0.213.0",
-    "@opentelemetry/sdk-metrics": "^2.6.0",
-    "@opentelemetry/sdk-trace-node": "^2.6.0",
-    "@opentelemetry/semantic-conventions": "^1.40.0",
     "better-auth": "^1.4.18",
     "croner": "^10.0.1",
     "drizzle-orm": "^0.45.1",
@@ -67,7 +58,6 @@
   },
   "devDependencies": {
     "@funny/core": "*",
-    "@funny/observability": "*",
     "@funny/shared": "*",
     "@types/bun": "^1.3.8",
     "drizzle-kit": "^0.31.9",

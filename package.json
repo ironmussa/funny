@@ -29,7 +29,6 @@
     "dev:server:debug": "bun run --env-file .env.debug --cwd packages/server dev",
     "start:server:debug": "bun run --cwd packages/server build && bun run --env-file .env.debug packages/server/dist/index.js",
     "start:client": "bun run --cwd packages/client build && bun run --cwd packages/client preview",
-    "openobserve:start": "bun scripts/start-openobserve.ts",
     "dev:client": "bun run --cwd packages/client dev",
     "dev:agent": "bun run --cwd packages/agent dev",
     "build": "bun run --cwd packages/client build && bun run --cwd packages/server build",

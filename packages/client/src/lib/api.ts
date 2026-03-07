@@ -26,6 +26,7 @@ import type { DomainError } from '@funny/shared/errors';
 import { internal, processError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
+import { startSpan, metric } from '@/lib/telemetry';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
@@ -82,14 +83,22 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
   return ResultAsync.fromPromise(
     (async () => {
       const cb = useCircuitBreakerStore.getState();
+      const method = init?.method || 'GET';
+      const span = startSpan('http.client', {
+        attributes: { 'http.method': method, 'http.url': path },
+      });
+      const t0 = performance.now();
 
       // Fail fast if circuit is open
       if (cb.state === 'open') {
+        span.end('ERROR');
         throw internal('Server unavailable (circuit open)');
       }
 
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
+        // W3C Trace Context — propagate client span to the server
+        traceparent: span.traceparent,
       };
       // In local mode, use Bearer token; in multi mode, rely on cookies
       if (authMode !== 'multi' && authToken) {
@@ -109,10 +118,23 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
       } catch (networkError) {
         // Network error (server down, no connectivity, etc.)
         useCircuitBreakerStore.getState().recordFailure();
+        span.end('ERROR');
+        metric('http.client.duration', performance.now() - t0, {
+          type: 'gauge',
+          attributes: { method, path, status: '0' },
+        });
         throw internal(String(networkError));
       }
 
+      const durationMs = performance.now() - t0;
+      metric('http.client.duration', durationMs, {
+        type: 'gauge',
+        attributes: { method, path, status: String(res.status) },
+      });
+
       if (!res.ok) {
+        span.end('ERROR');
+
         // On 401 in multi mode, trigger logout
         if (res.status === 401 && authMode === 'multi') {
           import('@/stores/auth-store').then(({ useAuthStore }) => {
@@ -149,6 +171,7 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
       }
 
       // Successful response — reset circuit breaker
+      span.end('OK');
       useCircuitBreakerStore.getState().recordSuccess();
 
       return res.json() as Promise<T>;

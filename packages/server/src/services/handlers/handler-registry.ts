@@ -28,6 +28,18 @@ import {
 import { gitStatusHandler } from './git-status-handler.js';
 import { gitWatcherStartHandler, gitWatcherStopHandler } from './git-watcher-lifecycle-handler.js';
 import { stageTransitionOnAgentStartHandler } from './stage-transition-on-agent-start-handler.js';
+import {
+  gitCommitTelemetryHandler,
+  gitPushTelemetryHandler,
+  gitMergeTelemetryHandler,
+  gitPullTelemetryHandler,
+  gitStageTelemetryHandler,
+  gitUnstageTelemetryHandler,
+  gitRevertTelemetryHandler,
+  gitStashTelemetryHandler,
+  gitStashPopTelemetryHandler,
+  gitResetSoftTelemetryHandler,
+} from './telemetry-handler.js';
 import { threadDeletedWsHandler } from './thread-deleted-ws-handler.js';
 import { threadStageChangedWsHandler } from './thread-stage-changed-ws-handler.js';
 import type { EventHandler, HandlerServiceContext } from './types.js';
@@ -54,6 +66,17 @@ const allHandlers: EventHandler<any>[] = [
   threadStageChangedWsHandler,
   gitWatcherStartHandler,
   gitWatcherStopHandler,
+  // Telemetry
+  gitCommitTelemetryHandler,
+  gitPushTelemetryHandler,
+  gitMergeTelemetryHandler,
+  gitPullTelemetryHandler,
+  gitStageTelemetryHandler,
+  gitUnstageTelemetryHandler,
+  gitRevertTelemetryHandler,
+  gitStashTelemetryHandler,
+  gitStashPopTelemetryHandler,
+  gitResetSoftTelemetryHandler,
 ];
 
 // ── Registration ────────────────────────────────────────────────

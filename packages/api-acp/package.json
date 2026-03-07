@@ -9,6 +9,7 @@
     "start": "bun src/index.ts"
   },
   "dependencies": {
+    "@abbacchio/transport": "file:../../../pino-live/packages/transport",
     "@anthropic-ai/claude-agent-sdk": "^0.2.42",
     "@funny/shared": "*",
     "hono": "^4.11.9"

@@ -17,6 +17,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 
+import { log, metric } from './lib/telemetry.js';
 import { modelsRoute } from './routes/models.js';
 import { runsRoute } from './routes/runs.js';
 import { getAdvertisedModels } from './utils/model-resolver.js';
@@ -53,15 +54,25 @@ app.get('/', (c) => c.json({ status: 'ok', service: 'funny-api-acp' }));
 const portArg = process.argv.find((_, i, arr) => arr[i - 1] === '--port');
 const port = Number(portArg) || Number(process.env.API_ACP_PORT) || 4010;
 
-console.log(`\n  funny agent api`);
-console.log(`  ────────────────────────`);
-console.log(`  Base URL:  http://localhost:${port}/v1`);
-console.log(`  Auth:      ${requiredKey ? 'Bearer token required' : 'none (local mode)'}`);
-console.log(`  Models:`);
-for (const m of getAdvertisedModels()) {
-  console.log(`    - ${m.id} (${m.owned_by})`);
-}
-console.log();
+log.info(
+  [
+    '',
+    '  funny agent api',
+    '  ────────────────────────',
+    `  Base URL:  http://localhost:${port}/v1`,
+    `  Auth:      ${requiredKey ? 'Bearer token required' : 'none (local mode)'}`,
+    '  Models:',
+    ...getAdvertisedModels().map((m) => `    - ${m.id} (${m.owned_by})`),
+    '',
+  ].join('\n'),
+);
+
+log.info('api-acp server started', {
+  port,
+  auth: !!requiredKey,
+  models: getAdvertisedModels().length,
+});
+metric('server.start', 1, { type: 'sum', attributes: { port } });
 
 export default {
   port,

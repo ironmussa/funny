@@ -8,11 +8,11 @@ import { mkdirSync } from 'fs';
 import { resolve } from 'path';
 
 import 'winston-daily-rotate-file';
-import { emitLog } from '@funny/observability';
+import { AbbacchioWinstonTransport } from '@abbacchio/transport';
 import winston from 'winston';
-import Transport from 'winston-transport';
 
 import { DATA_DIR } from './data-dir.js';
+import { getTelemetryConfig } from './telemetry-config.js';
 
 const isDev = process.env.NODE_ENV !== 'production';
 
@@ -20,30 +20,7 @@ const isDev = process.env.NODE_ENV !== 'production';
 const logDir = resolve(DATA_DIR, 'logs');
 mkdirSync(logDir, { recursive: true });
 
-/** Winston transport that forwards logs to OTLP via the observability package. */
-class OtelTransport extends Transport {
-  log(info: any, callback: () => void) {
-    const { level, message, namespace, service, timestamp: _timestamp, ...rest } = info;
-    const otelLevel =
-      level === 'warn'
-        ? 'warn'
-        : level === 'error'
-          ? 'error'
-          : level === 'debug'
-            ? 'debug'
-            : 'info';
-    const attrs: Record<string, string> = { 'log.source': 'server' };
-    if (namespace) attrs['log.namespace'] = String(namespace);
-    if (service) attrs['service.name'] = String(service);
-    for (const [k, v] of Object.entries(rest)) {
-      if (v !== undefined && v !== null && k !== 'splat') {
-        attrs[k] = String(v);
-      }
-    }
-    emitLog(otelLevel, String(message), attrs);
-    callback();
-  }
-}
+const cfg = getTelemetryConfig();
 
 export const log = winston.createLogger({
   level: process.env.LOG_LEVEL || 'info',
@@ -51,9 +28,13 @@ export const log = winston.createLogger({
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),
   ),
-  defaultMeta: { service: 'funny-server' },
+  defaultMeta: { service: cfg.serverServiceName },
   transports: [
-    new OtelTransport(),
+    new AbbacchioWinstonTransport({
+      endpoint: cfg.endpoint,
+      serviceName: cfg.serverServiceName,
+      enabled: cfg.enabled,
+    }),
     // Persist logs to ~/.funny/logs/server-YYYY-MM-DD.log (rotated daily, 7 days max)
     new winston.transports.DailyRotateFile({
       dirname: logDir,

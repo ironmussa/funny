@@ -1,6 +1,5 @@
-import { BrowserLogger } from '@funny/observability/browser';
-
 import { getAuthToken, getAuthMode } from '@/lib/api';
+import { BrowserLogger } from '@/lib/browser-logger';
 
 let shared: BrowserLogger | null = null;
 

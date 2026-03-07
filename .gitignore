@@ -34,3 +34,5 @@ e2e-report.json
 
 *storybook.log
 storybook-static
+.env.debug
+.env.debug

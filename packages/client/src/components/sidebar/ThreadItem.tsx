@@ -131,6 +131,13 @@ export const ThreadItem = memo(function ThreadItem({
     }
   }
 
+  // Whether to show the second row (has project subtitle or git diff stats)
+  const hasDiffStats =
+    showGitIcon &&
+    (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0 || gitStatus.dirtyFileCount > 0);
+  const hasGitIconOnly = showGitIcon && !hasDiffStats && GitIcon;
+  const hasSecondRow = !!subtitle || hasDiffStats || hasGitIconOnly;
+
   return (
     <div
       className={cn(
@@ -143,53 +150,59 @@ export const ThreadItem = memo(function ThreadItem({
       <button
         data-testid={`thread-item-${thread.id}`}
         onClick={onSelect}
-        className="flex min-w-0 flex-1 items-center gap-1 overflow-hidden py-1 pl-2 text-left"
+        className={cn(
+          'flex min-w-0 flex-1 flex-col overflow-hidden text-left',
+          hasSecondRow ? 'py-1.5 pl-2 gap-0.5' : 'py-1 pl-2 justify-center',
+        )}
       >
-        {/* Thread status / pin icon */}
-        <div className="relative h-3.5 w-3.5 flex-shrink-0">
-          {/* Default state: show pin icon if pinned, otherwise status icon */}
-          {thread.pinned ? (
-            <span
-              className={cn(
-                'absolute inset-0 flex items-center justify-center text-muted-foreground',
-                onPin && !isBusy && 'group-hover/thread:hidden',
-              )}
-            >
-              <Pin className="h-3.5 w-3.5" />
-            </span>
-          ) : (
-            thread.status !== 'completed' && (
+        {/* Row 1: Status icon + Title */}
+        <div className="flex min-w-0 items-center gap-1.5">
+          {/* Thread status / pin icon */}
+          <div className="relative h-3.5 w-3.5 flex-shrink-0">
+            {thread.pinned ? (
               <span
-                className={cn('absolute inset-0', onPin && !isBusy && 'group-hover/thread:hidden')}
+                className={cn(
+                  'absolute inset-0 flex items-center justify-center text-muted-foreground',
+                  onPin && !isBusy && 'group-hover/thread:hidden',
+                )}
               >
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <StatusIcon className={cn('h-3.5 w-3.5', threadStatusCfg.className)} />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    {t(`thread.status.${thread.status}`)}
-                  </TooltipContent>
-                </Tooltip>
+                <Pin className="h-3.5 w-3.5" />
               </span>
-            )
-          )}
-          {/* Hover: pin/unpin toggle */}
-          {onPin && !isBusy && (
-            <span
-              className="absolute inset-0 hidden cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground group-hover/thread:flex"
-              onClick={(e) => {
-                e.stopPropagation();
-                onPin();
-              }}
-            >
-              {thread.pinned ? <PinOff className="h-3.5 w-3.5" /> : <Pin className="h-3.5 w-3.5" />}
-            </span>
-          )}
-        </div>
-        <div className="flex min-w-0 flex-1 items-center gap-1">
-          {subtitle && (
-            <ProjectChip name={subtitle} color={projectColor} className="flex-shrink-0" />
-          )}
+            ) : (
+              thread.status !== 'completed' && (
+                <span
+                  className={cn(
+                    'absolute inset-0',
+                    onPin && !isBusy && 'group-hover/thread:hidden',
+                  )}
+                >
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <StatusIcon className={cn('h-3.5 w-3.5', threadStatusCfg.className)} />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      {t(`thread.status.${thread.status}`)}
+                    </TooltipContent>
+                  </Tooltip>
+                </span>
+              )
+            )}
+            {onPin && !isBusy && (
+              <span
+                className="absolute inset-0 hidden cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground group-hover/thread:flex"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onPin();
+                }}
+              >
+                {thread.pinned ? (
+                  <PinOff className="h-3.5 w-3.5" />
+                ) : (
+                  <Pin className="h-3.5 w-3.5" />
+                )}
+              </span>
+            )}
+          </div>
           {isRenaming ? (
             <input
               ref={renameInputRef}
@@ -207,27 +220,6 @@ export const ThreadItem = memo(function ThreadItem({
           ) : (
             <span className="truncate text-sm leading-tight">{thread.title}</span>
           )}
-          {/* Git status (worktree threads only) */}
-          {showGitIcon &&
-          (gitStatus.linesAdded > 0 ||
-            gitStatus.linesDeleted > 0 ||
-            gitStatus.dirtyFileCount > 0) ? (
-            <DiffStats
-              linesAdded={gitStatus.linesAdded}
-              linesDeleted={gitStatus.linesDeleted}
-              dirtyFileCount={gitStatus.dirtyFileCount}
-              size="sm"
-            />
-          ) : showGitIcon && GitIcon ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <GitIcon className={cn('h-3.5 w-3.5 flex-shrink-0', gitCfg!.className)} />
-              </TooltipTrigger>
-              <TooltipContent side="top" className="text-xs">
-                {gitTooltip}
-              </TooltipContent>
-            </Tooltip>
-          ) : null}
           {/* External creator icon */}
           {thread.createdBy && thread.createdBy !== 'user' && thread.createdBy !== '__local__' && (
             <Tooltip>
@@ -240,6 +232,37 @@ export const ThreadItem = memo(function ThreadItem({
             </Tooltip>
           )}
         </div>
+
+        {/* Row 2: Project name (left) + Diff stats (right) */}
+        {hasSecondRow && (
+          <div className="flex min-w-0 items-center gap-1.5 pl-5">
+            {subtitle && (
+              <ProjectChip
+                name={subtitle}
+                color={projectColor}
+                size="sm"
+                className="flex-shrink-0"
+              />
+            )}
+            {hasDiffStats ? (
+              <DiffStats
+                linesAdded={gitStatus.linesAdded}
+                linesDeleted={gitStatus.linesDeleted}
+                dirtyFileCount={gitStatus.dirtyFileCount}
+                size="xs"
+              />
+            ) : hasGitIconOnly ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <GitIcon className={cn('h-3 w-3 flex-shrink-0', gitCfg!.className)} />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {gitTooltip}
+                </TooltipContent>
+              </Tooltip>
+            ) : null}
+          </div>
+        )}
       </button>
       <div className="flex flex-shrink-0 items-center gap-1.5 py-1 pl-2 pr-1.5">
         <div className="grid min-w-[2.5rem] place-items-center justify-items-center">

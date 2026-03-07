@@ -8,5 +8,7 @@ export type HonoEnv = {
   Variables: {
     userId: string;
     userRole: string;
+    traceId: string;
+    spanId: string;
   };
 };

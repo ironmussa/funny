@@ -233,16 +233,10 @@ export const ThreadItem = memo(function ThreadItem({
           )}
         </div>
 
-        {/* Row 2: Snippet + metadata (git icon, diff stats, project chip) */}
+        {/* Row 2: Project chip → Git status → Snippet */}
         {hasSecondRow && (
           <div className="flex min-w-0 items-center gap-1.5 pl-5">
-            {/* Snippet fills available space */}
-            {hasSnippet && (
-              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-                {thread.lastAssistantMessage}
-              </span>
-            )}
-            {/* Git / project metadata pushed to the right */}
+            {/* 1. Project chip */}
             {subtitle && (
               <ProjectChip
                 name={subtitle}
@@ -251,6 +245,7 @@ export const ThreadItem = memo(function ThreadItem({
                 className="flex-shrink-0"
               />
             )}
+            {/* 2. Git status */}
             {hasDiffStats ? (
               <DiffStats
                 linesAdded={gitStatus.linesAdded}
@@ -268,6 +263,12 @@ export const ThreadItem = memo(function ThreadItem({
                 </TooltipContent>
               </Tooltip>
             ) : null}
+            {/* 3. Last agent message snippet */}
+            {hasSnippet && (
+              <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+                {thread.lastAssistantMessage}
+              </span>
+            )}
           </div>
         )}
       </button>

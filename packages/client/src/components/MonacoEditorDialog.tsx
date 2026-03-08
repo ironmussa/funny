@@ -98,7 +98,6 @@ export function MonacoEditorDialog({
           isFullscreen
             ? 'max-w-[100vw] max-h-[100vh] w-[100vw] h-[100vh] p-0'
             : 'max-w-5xl max-h-[85vh] h-[85vh] p-0',
-          '[&>button:last-child]:hidden',
           '!duration-0',
           'overflow-hidden',
         )}
@@ -153,17 +152,6 @@ export function MonacoEditorDialog({
                 ) : (
                   <Maximize2 className="h-4 w-4" />
                 )}
-              </Button>
-
-              {/* Close button */}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleClose}
-                title={t('common.close', 'Close')}
-                className="h-8 w-8"
-              >
-                <X className="h-4 w-4" />
               </Button>
             </div>
           </div>

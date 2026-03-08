@@ -764,6 +764,7 @@
     "connectGithub": "Conectar con GitHub",
     "connectDesc": "Autentica con GitHub para explorar y clonar tus repositorios",
     "useToken": "Usar Token de Acceso Personal",
+    "useTokenHint": "¿No tienes un token? <link>Crea uno en GitHub</link>",
     "connected": "Conectado como {{login}}",
     "disconnect": "Desconectar",
     "disconnected": "GitHub desconectado",

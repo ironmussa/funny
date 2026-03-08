@@ -14,7 +14,7 @@ import {
   Settings,
 } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useTranslation } from 'react-i18next';
+import { Trans, useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
@@ -338,6 +338,21 @@ export function CloneRepoView() {
             <Settings className="mr-2 h-4 w-4" />
             {t('github.useToken')}
           </Button>
+          <p className="text-center text-xs text-muted-foreground">
+            <Trans
+              i18nKey="github.useTokenHint"
+              components={{
+                link: (
+                  <a
+                    href="https://github.com/settings/tokens/new"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline hover:text-foreground"
+                  />
+                ),
+              }}
+            />
+          </p>
         </div>
       </div>
     );

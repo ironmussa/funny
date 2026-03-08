@@ -4,7 +4,7 @@
  * @domain type: app-service
  * @domain layer: application
  * @domain emits: pipeline:run_started, pipeline:stage_update, pipeline:run_completed (via WSBroker)
- * @domain depends: ThreadService, AgentRunner, GitService, ThreadEventBus
+ * @domain depends: ThreadService, GitService, ThreadEventBus
  *
  * Orchestrates the review→fix pipeline loop.
  *
@@ -28,7 +28,6 @@ import { nanoid } from 'nanoid';
 import { db } from '../db/index.js';
 import { pipelineRuns, pipelines } from '../db/schema.js';
 import { log } from '../lib/logger.js';
-import { startAgent } from './agent-runner.js';
 import * as pm from './project-manager.js';
 import * as tm from './thread-manager.js';
 import { createAndStartThread } from './thread-service.js';
@@ -58,12 +57,14 @@ const activeRuns = new Map<string, boolean>();
 /** Maps threadId → pipelineRunId for corrector threads */
 const correctorThreadToRun = new Map<string, string>();
 
+/** Maps threadId → pipelineRunId for reviewer threads */
+const reviewerThreadToRun = new Map<string, string>();
+
 // ── Pipeline Repository ─────────────────────────────────────
 
-export function getPipelineForProject(projectId: string): PipelineConfig | null {
-  const rows = db.select().from(pipelines).where(eq(pipelines.projectId, projectId)).all();
-  const row = rows.find((r) => r.enabled);
-  if (!row) return null;
+type PipelineRow = typeof pipelines.$inferSelect;
+
+function toPipelineConfig(row: PipelineRow): PipelineConfig {
   return {
     id: row.id,
     projectId: row.projectId,
@@ -77,6 +78,13 @@ export function getPipelineForProject(projectId: string): PipelineConfig | null 
     precommitFixModel: row.precommitFixModel as AgentModel,
     precommitFixMaxIterations: row.precommitFixMaxIterations,
   };
+}
+
+export function getPipelineForProject(projectId: string): PipelineConfig | null {
+  const rows = db.select().from(pipelines).where(eq(pipelines.projectId, projectId)).all();
+  const row = rows.find((r) => r.enabled);
+  if (!row) return null;
+  return toPipelineConfig(row);
 }
 
 export function createPipeline(data: {
@@ -168,6 +176,10 @@ export function getRunsForThread(threadId: string) {
 
 export function getRunForCorrectorThread(threadId: string): string | undefined {
   return correctorThreadToRun.get(threadId);
+}
+
+export function getRunForReviewerThread(threadId: string): string | undefined {
+  return reviewerThreadToRun.get(threadId);
 }
 
 // ── WS emission helpers ─────────────────────────────────────
@@ -297,7 +309,10 @@ export async function startReview(opts: {
 }
 
 /**
- * Run the reviewer stage — spawns a read-only agent to analyze the diff.
+ * Run the reviewer stage — creates a worktree thread and spawns a read-only agent.
+ *
+ * Each reviewer gets its own worktree so multiple pipelines can run
+ * in parallel without checkout conflicts.
  */
 async function runReviewerStage(
   runId: string,
@@ -305,10 +320,12 @@ async function runReviewerStage(
   threadId: string,
   userId: string,
   projectId: string,
-  cwd: string,
+  _cwd: string,
   commitSha?: string,
 ): Promise<void> {
   updateRun(runId, { status: 'reviewing', currentStage: 'reviewer' });
+
+  const run = getRunById(runId);
 
   emitPipelineEvent(userId, {
     type: 'pipeline:stage_update',
@@ -318,22 +335,43 @@ async function runReviewerStage(
       runId,
       threadId,
       stage: 'reviewer' as PipelineStageType,
-      iteration: getRunById(runId)?.iteration || 1,
+      iteration: run?.iteration || 1,
       maxIterations: pipeline.maxIterations,
     },
   });
 
-  const prompt = buildReviewerPrompt(commitSha, cwd);
+  // Resolve the branch to base the worktree on.
+  // Use the parent thread's branch so the reviewer sees exactly the same code.
+  const parentThread = tm.getThread(threadId);
+  const baseBranch = parentThread?.branch || undefined;
 
-  // Start the reviewer agent directly on the same thread (local mode, read-only)
+  const prompt = buildReviewerPrompt(commitSha, _cwd);
+
   try {
-    await startAgent(
-      threadId,
+    const reviewerThread = await createAndStartThread({
+      projectId,
+      userId,
+      title: `Pipeline review (iteration ${run?.iteration || 1})`,
+      mode: 'worktree',
+      provider: 'claude',
+      model: pipeline.reviewModel,
+      permissionMode: 'plan', // read-only
+      source: 'automation',
       prompt,
-      cwd,
-      pipeline.reviewModel,
-      'plan', // read-only permission mode
-    );
+      parentThreadId: threadId,
+      baseBranch,
+    });
+
+    // Track the reviewer thread → run mapping
+    reviewerThreadToRun.set(reviewerThread.id, runId);
+    updateRun(runId, { reviewerThreadId: reviewerThread.id });
+
+    log.info('Pipeline: reviewer thread created', {
+      namespace: 'pipeline',
+      runId,
+      reviewerThreadId: reviewerThread.id,
+      baseBranch,
+    });
   } catch (err) {
     log.error('Pipeline: failed to start reviewer agent', {
       namespace: 'pipeline',
@@ -346,33 +384,39 @@ async function runReviewerStage(
 
 /**
  * Handle reviewer completion — parse verdict and decide next action.
- * Called by the pipeline-completed-handler when agent:completed fires.
+ * Called by the pipeline-completed-handler when agent:completed fires
+ * on a reviewer worktree thread.
  */
 export async function handleReviewerCompleted(
   runId: string,
-  threadId: string,
+  reviewerThreadId: string,
   userId: string,
   projectId: string,
-  cwd: string,
 ): Promise<void> {
   const run = getRunById(runId);
   if (!run) return;
 
-  const pipeline = getPipelineById(run.pipelineId);
-  if (!pipeline) return;
+  const pipelineRow = getPipelineById(run.pipelineId);
+  if (!pipelineRow) return;
+  const pipeline = toPipelineConfig(pipelineRow);
 
-  // Get the last assistant message to parse the verdict
-  const thread = tm.getThreadWithMessages(threadId);
-  if (!thread) return;
+  const parentThreadId = run.threadId;
 
-  const lastAssistantMsg = [...thread.messages].reverse().find((m) => m.role === 'assistant');
+  // Get the last assistant message from the REVIEWER thread to parse the verdict
+  const reviewerThread = tm.getThreadWithMessages(reviewerThreadId);
+  if (!reviewerThread) return;
+
+  const lastAssistantMsg = [...reviewerThread.messages]
+    .reverse()
+    .find((m) => m.role === 'assistant');
 
   if (!lastAssistantMsg) {
     log.warn('Pipeline: no assistant message found after review', {
       namespace: 'pipeline',
       runId,
     });
-    completePipelineRun(runId, threadId, userId, pipeline.id, 'failed');
+    await cleanupReviewerThread(reviewerThreadId, projectId);
+    completePipelineRun(runId, parentThreadId, userId, pipeline.id, 'failed');
     return;
   }
 
@@ -383,11 +427,11 @@ export async function handleReviewerCompleted(
 
   emitPipelineEvent(userId, {
     type: 'pipeline:stage_update',
-    threadId,
+    threadId: parentThreadId,
     data: {
       pipelineId: pipeline.id,
       runId,
-      threadId,
+      threadId: parentThreadId,
       stage: 'reviewer' as PipelineStageType,
       iteration: run.iteration,
       maxIterations: run.maxIterations,
@@ -396,9 +440,12 @@ export async function handleReviewerCompleted(
     },
   });
 
+  // Clean up the reviewer worktree — we're done with it
+  await cleanupReviewerThread(reviewerThreadId, projectId);
+
   if (verdict === 'pass') {
     log.info('Pipeline: review PASSED', { namespace: 'pipeline', runId });
-    completePipelineRun(runId, threadId, userId, pipeline.id, 'completed');
+    completePipelineRun(runId, parentThreadId, userId, pipeline.id, 'completed');
     return;
   }
 
@@ -409,7 +456,16 @@ export async function handleReviewerCompleted(
       runId,
       iteration: run.iteration,
     });
-    completePipelineRun(runId, threadId, userId, pipeline.id, 'failed');
+    completePipelineRun(runId, parentThreadId, userId, pipeline.id, 'failed');
+    return;
+  }
+
+  // Resolve the parent thread's cwd for the corrector stage
+  const parentThread = tm.getThread(parentThreadId);
+  const project = pm.getProject(projectId);
+  const parentCwd = parentThread?.worktreePath || project?.path;
+  if (!parentCwd) {
+    completePipelineRun(runId, parentThreadId, userId, pipeline.id, 'failed');
     return;
   }
 
@@ -420,24 +476,7 @@ export async function handleReviewerCompleted(
     iteration: run.iteration,
   });
 
-  await runCorrectorStage(
-    runId,
-    {
-      id: pipeline.id,
-      projectId: pipeline.projectId,
-      userId: pipeline.userId,
-      name: pipeline.name,
-      enabled: !!pipeline.enabled,
-      reviewModel: pipeline.reviewModel as AgentModel,
-      fixModel: pipeline.fixModel as AgentModel,
-      maxIterations: pipeline.maxIterations,
-    },
-    threadId,
-    userId,
-    projectId,
-    cwd,
-    findings,
-  );
+  await runCorrectorStage(runId, pipeline, parentThreadId, userId, projectId, parentCwd, findings);
 }
 
 /**
@@ -517,15 +556,17 @@ export async function handleCorrectorCompleted(
   const run = getRunById(runId);
   if (!run) return;
 
-  const pipeline = getPipelineById(run.pipelineId);
-  if (!pipeline) return;
+  const pipelineRow = getPipelineById(run.pipelineId);
+  if (!pipelineRow) return;
 
   const correctorThread = tm.getThread(correctorThreadId);
   if (!correctorThread) return;
 
+  const pipelineId = pipelineRow.id;
+
   const correctorCwd = correctorThread.worktreePath || correctorThread.initCwd;
   if (!correctorCwd) {
-    completePipelineRun(runId, run.threadId, userId, pipeline.id, 'failed');
+    completePipelineRun(runId, run.threadId, userId, pipelineId, 'failed');
     return;
   }
 
@@ -543,7 +584,7 @@ export async function handleCorrectorCompleted(
         namespace: 'pipeline',
         runId,
       });
-      completePipelineRun(runId, run.threadId, userId, pipeline.id, 'skipped');
+      completePipelineRun(runId, run.threadId, userId, pipelineId, 'skipped');
       correctorThreadToRun.delete(correctorThreadId);
       return;
     }
@@ -562,7 +603,7 @@ export async function handleCorrectorCompleted(
         namespace: 'pipeline',
         runId,
       });
-      completePipelineRun(runId, run.threadId, userId, pipeline.id, 'failed');
+      completePipelineRun(runId, run.threadId, userId, pipelineId, 'failed');
       correctorThreadToRun.delete(correctorThreadId);
       return;
     }
@@ -574,7 +615,7 @@ export async function handleCorrectorCompleted(
     const targetCwd = parentCwd || project?.path;
 
     if (!targetCwd) {
-      completePipelineRun(runId, run.threadId, userId, pipeline.id, 'failed');
+      completePipelineRun(runId, run.threadId, userId, pipelineId, 'failed');
       correctorThreadToRun.delete(correctorThreadId);
       return;
     }
@@ -595,7 +636,7 @@ export async function handleCorrectorCompleted(
         runId,
         error: String(applyErr),
       });
-      completePipelineRun(runId, run.threadId, userId, pipeline.id, 'failed');
+      completePipelineRun(runId, run.threadId, userId, pipelineId, 'failed');
       correctorThreadToRun.delete(correctorThreadId);
       return;
     }
@@ -644,9 +685,56 @@ export async function handleCorrectorCompleted(
       runId,
       error: String(err),
     });
-    completePipelineRun(runId, run.threadId, userId, pipeline.id, 'failed');
+    completePipelineRun(runId, run.threadId, userId, pipelineId, 'failed');
     correctorThreadToRun.delete(correctorThreadId);
   }
+}
+
+// ── Reviewer cleanup ─────────────────────────────────────────
+
+/**
+ * Clean up a reviewer worktree thread — remove the worktree, branch, and
+ * archive the thread. Called after the reviewer verdict is parsed.
+ */
+async function cleanupReviewerThread(reviewerThreadId: string, projectId: string): Promise<void> {
+  reviewerThreadToRun.delete(reviewerThreadId);
+
+  const reviewerThread = tm.getThread(reviewerThreadId);
+  if (!reviewerThread) return;
+
+  const project = pm.getProject(projectId);
+  if (!project) return;
+
+  // Remove worktree and branch
+  if (reviewerThread.worktreePath && reviewerThread.mode === 'worktree') {
+    const { removeWorktree, removeBranch } = await import('@funny/core/git');
+    await removeWorktree(project.path, reviewerThread.worktreePath).catch((e) => {
+      log.warn('Pipeline: failed to remove reviewer worktree', {
+        namespace: 'pipeline',
+        error: String(e),
+      });
+    });
+    if (reviewerThread.branch) {
+      await removeBranch(project.path, reviewerThread.branch).catch((e) => {
+        log.warn('Pipeline: failed to remove reviewer branch', {
+          namespace: 'pipeline',
+          error: String(e),
+        });
+      });
+    }
+  }
+
+  // Archive the reviewer thread
+  tm.updateThread(reviewerThreadId, {
+    archived: 1,
+    worktreePath: null,
+    branch: null,
+  });
+
+  log.info('Pipeline: reviewer thread cleaned up', {
+    namespace: 'pipeline',
+    reviewerThreadId,
+  });
 }
 
 // ── Completion ──────────────────────────────────────────────

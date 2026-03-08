@@ -15,7 +15,7 @@
 
 import { log } from '../../lib/logger.js';
 import {
-  getRunsForThread,
+  getRunForReviewerThread,
   getRunForCorrectorThread,
   handleReviewerCompleted,
   handleCorrectorCompleted,
@@ -27,20 +27,18 @@ export const pipelineCompletedHandler: EventHandler<'agent:completed'> = {
   event: 'agent:completed',
 
   action: async (event) => {
-    const { threadId, userId, projectId, cwd } = event;
+    const { threadId, userId, projectId } = event;
 
-    // Case 1: Check if this thread has an active pipeline run (reviewer completed)
-    const runs = getRunsForThread(threadId);
-    const activeRun = runs.find((r) => r.status === 'reviewing' && r.currentStage === 'reviewer');
-
-    if (activeRun) {
+    // Case 1: Check if this is a reviewer worktree thread
+    const reviewerRunId = getRunForReviewerThread(threadId);
+    if (reviewerRunId) {
       log.info('Pipeline: reviewer agent completed', {
         namespace: 'pipeline',
-        runId: activeRun.id,
+        runId: reviewerRunId,
         threadId,
       });
 
-      await handleReviewerCompleted(activeRun.id, threadId, userId, projectId, cwd);
+      await handleReviewerCompleted(reviewerRunId, threadId, userId, projectId);
       return;
     }
 

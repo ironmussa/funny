@@ -5,17 +5,14 @@ export interface PipelineState {
   /** Active pipeline runs keyed by source threadId */
   activeRuns: Record<string, PipelineRun>;
 
-  /** Handle pipeline:started WS event */
+  /** Handle pipeline:run_started WS event */
   handlePipelineStarted: (data: PipelineRun) => void;
 
-  /** Handle pipeline:stage_completed WS event */
-  handlePipelineStageCompleted: (data: PipelineRun) => void;
+  /** Handle pipeline:stage_update WS event */
+  handlePipelineStageUpdate: (data: PipelineRun) => void;
 
-  /** Handle pipeline:completed WS event */
+  /** Handle pipeline:run_completed WS event */
   handlePipelineCompleted: (data: PipelineRun) => void;
-
-  /** Handle pipeline:failed WS event */
-  handlePipelineFailed: (data: PipelineRun) => void;
 
   /** Clear a run from active state */
   clearRun: (threadId: string) => void;
@@ -29,17 +26,12 @@ export const usePipelineStore = create<PipelineState>((set) => ({
       activeRuns: { ...state.activeRuns, [data.threadId]: data },
     })),
 
-  handlePipelineStageCompleted: (data) =>
+  handlePipelineStageUpdate: (data) =>
     set((state) => ({
       activeRuns: { ...state.activeRuns, [data.threadId]: data },
     })),
 
   handlePipelineCompleted: (data) =>
-    set((state) => ({
-      activeRuns: { ...state.activeRuns, [data.threadId]: data },
-    })),
-
-  handlePipelineFailed: (data) =>
     set((state) => ({
       activeRuns: { ...state.activeRuns, [data.threadId]: data },
     })),

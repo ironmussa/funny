@@ -244,6 +244,7 @@ export const pipelineRuns = sqliteTable('pipeline_runs', {
   commitSha: text('commit_sha'),
   verdict: text('verdict'), // pass | fail
   findings: text('findings'), // JSON-encoded findings from reviewer
+  reviewerThreadId: text('reviewer_thread_id'),
   fixerThreadId: text('fixer_thread_id'),
   precommitIteration: integer('precommit_iteration'),
   hookName: text('hook_name'),

@@ -227,16 +227,14 @@ function handleMessage(e: MessageEvent) {
       });
       break;
     }
-    case 'pipeline:started':
-    case 'pipeline:stage_completed':
-    case 'pipeline:completed':
-    case 'pipeline:failed': {
+    case 'pipeline:run_started':
+    case 'pipeline:stage_update':
+    case 'pipeline:run_completed': {
       import('@/stores/pipeline-store').then(({ usePipelineStore }) => {
         const store = usePipelineStore.getState();
-        if (type === 'pipeline:started') store.handlePipelineStarted(data);
-        else if (type === 'pipeline:stage_completed') store.handlePipelineStageCompleted(data);
-        else if (type === 'pipeline:completed') store.handlePipelineCompleted(data);
-        else if (type === 'pipeline:failed') store.handlePipelineFailed(data);
+        if (type === 'pipeline:run_started') store.handlePipelineStarted(data);
+        else if (type === 'pipeline:stage_update') store.handlePipelineStageUpdate(data);
+        else if (type === 'pipeline:run_completed') store.handlePipelineCompleted(data);
       });
       break;
     }

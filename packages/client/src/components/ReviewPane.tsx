@@ -1297,9 +1297,22 @@ export function ReviewPane() {
           {selectedFile && (
             <div className="flex flex-shrink-0 items-center gap-2 border-b border-sidebar-border px-3 py-1.5">
               <span
-                className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground"
+                role="button"
+                tabIndex={0}
+                onClick={() => {
+                  const fullPath = basePath ? `${basePath}/${selectedFile}` : selectedFile;
+                  openFileInEditor(fullPath);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    const fullPath = basePath ? `${basePath}/${selectedFile}` : selectedFile;
+                    openFileInEditor(fullPath);
+                  }
+                }}
+                className="min-w-0 flex-1 cursor-pointer truncate font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
                 title={selectedFile}
                 style={{ direction: 'rtl', textAlign: 'left' }}
+                data-testid="review-open-selected-file"
               >
                 {selectedFile}
               </span>

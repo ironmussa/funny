@@ -527,8 +527,9 @@ ${diffSummary}`;
           permissionMode: 'plan',
           abortController: controller,
           pathToClaudeCodeExecutable: resolveSDKCliPath(),
-          systemPrompt: { type: 'preset', preset: 'claude_code' },
-          tools: { type: 'preset', preset: 'claude_code' },
+          systemPrompt:
+            'You are a commit message generator. Output only the requested format, nothing else.',
+          tools: [],
         },
       });
 
@@ -956,8 +957,9 @@ ${diffSummary}`;
           permissionMode: 'plan',
           abortController: controller,
           pathToClaudeCodeExecutable: resolveSDKCliPath(),
-          systemPrompt: { type: 'preset', preset: 'claude_code' },
-          tools: { type: 'preset', preset: 'claude_code' },
+          systemPrompt:
+            'You are a commit message generator. Output only the requested format, nothing else.',
+          tools: [],
         },
       });
 

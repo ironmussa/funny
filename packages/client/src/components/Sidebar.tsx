@@ -240,6 +240,7 @@ export function AppSidebar() {
     (projectId: string) => {
       startTransition(() => {
         useProjectStore.getState().selectProject(projectId);
+        useUIStore.getState().setReviewPaneOpen(false);
         navigate(`/projects/${projectId}`);
       });
       requestAnimationFrame(() => {

@@ -18,6 +18,7 @@ import { nanoid } from 'nanoid';
 import { ok, err, type Result } from 'neverthrow';
 
 import { db, schema } from '../db/index.js';
+import { createPipeline } from './pipeline-orchestrator.js';
 
 type ProjectRow = typeof schema.projects.$inferSelect;
 
@@ -145,6 +146,14 @@ export function createProject(
   };
 
   db.insert(schema.projects).values(projectRow).run();
+
+  // Auto-create a default pipeline so review triggers on every commit
+  createPipeline({
+    projectId: project.id,
+    userId,
+    name: 'Default Pipeline',
+  });
+
   return ok(project);
 }
 

@@ -1041,6 +1041,9 @@ export function ThreadView() {
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const userHasScrolledUp = useRef(false);
   const smoothScrollPending = useRef(false);
+  // Guard flag: while a programmatic scroll-to-bottom is in progress,
+  // the scroll handler must NOT flip userHasScrolledUp back to true.
+  const scrollingToBottomRef = useRef(false);
   // Tracks the thread ID for which we've already forced a scroll-to-bottom.
   // Used by the fingerprint effect to force one extra scroll after the thread
   // switch effect, catching content that renders after the initial commit.
@@ -1249,10 +1252,20 @@ export function ThreadView() {
       const hasOverflow = scrollHeight > clientHeight + 10;
       const promptPinned = promptPinSpacerHeightRef.current > 0;
       const isAtBottom = scrollHeight - scrollTop - clientHeight <= 80;
-      userHasScrolledUp.current = promptPinned || !isAtBottom;
+
+      // While a programmatic scroll-to-bottom is in progress, don't mark
+      // the user as scrolled-up — intermediate positions during the animation
+      // would otherwise set the flag and break sticky-bottom.
+      if (!scrollingToBottomRef.current) {
+        userHasScrolledUp.current = promptPinned || !isAtBottom;
+      } else if (isAtBottom) {
+        // Programmatic scroll reached the bottom — clear the guard
+        scrollingToBottomRef.current = false;
+        userHasScrolledUp.current = false;
+      }
 
       // Update scroll-to-bottom button visibility via DOM (fast path, no React state)
-      const shouldShow = hasOverflow && !isAtBottom;
+      const shouldShow = hasOverflow && !isAtBottom && !scrollingToBottomRef.current;
       if (scrollDownRef.current) {
         scrollDownRef.current.style.display = shouldShow ? '' : 'none';
       }
@@ -1340,6 +1353,13 @@ export function ThreadView() {
       if (viewport) {
         requestAnimationFrame(() => {
           viewport.scrollTop = viewport.scrollHeight;
+          // Second frame: catch layout shifts from windowed-rendering expansion
+          // triggered by the first scroll (spacer recalc, new items rendered).
+          requestAnimationFrame(() => {
+            if (!userHasScrolledUp.current) {
+              viewport.scrollTop = viewport.scrollHeight;
+            }
+          });
         });
       }
     }
@@ -1370,9 +1390,28 @@ export function ThreadView() {
       pinnedPromptIdRef.current = null;
       flushSync(() => setPromptPinSpacerHeight(0));
     }
-    viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
+    // Set the guard flag so intermediate scroll events don't flip
+    // userHasScrolledUp back to true during the animation.
+    scrollingToBottomRef.current = true;
     userHasScrolledUp.current = false;
     if (scrollDownRef.current) scrollDownRef.current.style.display = 'none';
+
+    // Use instant scroll to avoid stale-target issues: smooth scrolling
+    // animates toward the scrollHeight captured at call time, but windowed
+    // rendering may change scrollHeight mid-animation (spacer recalc,
+    // render-window expansion), causing the scroll to stop short.
+    viewport.scrollTop = viewport.scrollHeight;
+
+    // After the DOM settles (layout may shift due to render-window
+    // expansion triggered by the scroll), re-snap to the true bottom.
+    // Two rAF frames ensures React has committed any state changes.
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        if (!scrollingToBottomRef.current) return;
+        viewport.scrollTop = viewport.scrollHeight;
+        scrollingToBottomRef.current = false;
+      });
+    });
   }, []);
 
   // Stable ref to avoid recreating handleSend on every render.
@@ -1450,7 +1489,8 @@ export function ThreadView() {
         toast.info(t('thread.interruptingAgent'));
       }
 
-      // Always scroll to bottom when the user sends a message (smooth)
+      // Always scroll to bottom when the user sends a message
+      scrollingToBottomRef.current = true;
       userHasScrolledUp.current = false;
       smoothScrollPending.current = true;
       if (scrollDownRef.current) scrollDownRef.current.style.display = 'none';
@@ -1521,6 +1561,7 @@ export function ThreadView() {
         toast.info(t('thread.interruptingAgent'));
       }
 
+      scrollingToBottomRef.current = true;
       userHasScrolledUp.current = false;
       smoothScrollPending.current = true;
       if (scrollDownRef.current) scrollDownRef.current.style.display = 'none';

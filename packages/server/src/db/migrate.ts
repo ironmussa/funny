@@ -593,6 +593,12 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    name: '031_pipeline_reviewer_thread',
+    up() {
+      addColumn('pipeline_runs', 'reviewer_thread_id', 'TEXT');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

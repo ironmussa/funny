@@ -482,6 +482,8 @@ export const PromptInput = memo(function PromptInput({
   const projectDefaultBranch = effectiveProjectId
     ? projects.find((p) => p.id === effectiveProjectId)?.defaultBranch
     : undefined;
+  // Track currentBranch from the API for local mode defaults
+  const [gitCurrentBranch, setGitCurrentBranch] = useState<string | null>(null);
   useEffect(() => {
     if (isNewThread && effectiveProjectId) {
       setNewThreadBranchesLoading(true);
@@ -490,8 +492,12 @@ export const PromptInput = memo(function PromptInput({
         if (result.isOk()) {
           const data = result.value;
           setNewThreadBranches(data.branches);
-          // Priority: project defaultBranch > git defaultBranch > first branch
-          if (projectDefaultBranch && data.branches.includes(projectDefaultBranch)) {
+          setGitCurrentBranch(data.currentBranch);
+          // Local mode: prioritize currentBranch (the branch actually checked out)
+          // Worktree mode: prioritize project defaultBranch > git defaultBranch
+          if (!createWorktree && data.currentBranch && data.branches.includes(data.currentBranch)) {
+            setSelectedBranch(data.currentBranch);
+          } else if (projectDefaultBranch && data.branches.includes(projectDefaultBranch)) {
             setSelectedBranch(projectDefaultBranch);
           } else if (data.defaultBranch) {
             setSelectedBranch(data.defaultBranch);
@@ -500,11 +506,12 @@ export const PromptInput = memo(function PromptInput({
           }
         } else {
           setNewThreadBranches([]);
+          setGitCurrentBranch(null);
         }
         setNewThreadBranchesLoading(false);
       })();
     }
-  }, [isNewThread, effectiveProjectId, projectDefaultBranch]);
+  }, [isNewThread, effectiveProjectId, projectDefaultBranch, createWorktree]);
 
   // Fetch current branch for local mode threads without a saved branch
   useEffect(() => {
@@ -856,6 +863,30 @@ export const PromptInput = memo(function PromptInput({
     if (!prompt.trim() && images.length === 0) {
       toast.warning(t('prompt.emptyPrompt', 'Please enter a prompt before sending'));
       return;
+    }
+
+    // Pre-flight checkout validation for local mode with a different branch
+    if (
+      isNewThread &&
+      !createWorktree &&
+      effectiveProjectId &&
+      selectedBranch &&
+      gitCurrentBranch &&
+      selectedBranch !== gitCurrentBranch
+    ) {
+      const preflight = await api.checkoutPreflight(effectiveProjectId, selectedBranch);
+      if (preflight.isOk() && !preflight.value.canCheckout) {
+        const files = preflight.value.conflictingFiles?.join(', ') || '';
+        toast.error(
+          t('prompt.checkoutBlocked', {
+            branch: selectedBranch,
+            currentBranch: gitCurrentBranch,
+            files,
+          }),
+          { duration: 8000 },
+        );
+        return;
+      }
     }
 
     // Capture current values and clear immediately for responsive UX

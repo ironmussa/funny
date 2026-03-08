@@ -85,23 +85,31 @@ function randomHex(bytes: number): string {
   return Array.from(arr, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
-/** Start a trace span — returns a function to call when the span ends */
+export interface SpanHandle {
+  traceId: string;
+  spanId: string;
+  /** Mutable — update before calling end() to change the recorded span name */
+  name: string;
+  /** Mutable — add/update attributes before calling end() */
+  attributes: Record<string, unknown>;
+  durationMs: number;
+  end: (status?: 'ok' | 'error', errorMsg?: string) => void;
+}
+
+/** Start a trace span — returns a handle whose name/attributes can be updated before end() */
 export function startSpan(
   name: string,
   opts?: { traceId?: string; parentSpanId?: string; attributes?: Record<string, unknown> },
-): {
-  traceId: string;
-  spanId: string;
-  durationMs: number;
-  end: (status?: 'ok' | 'error', errorMsg?: string) => void;
-} {
+): SpanHandle {
   const traceId = opts?.traceId ?? randomHex(16);
   const spanId = randomHex(8);
   const startTime = Date.now();
 
-  const handle = {
+  const handle: SpanHandle = {
     traceId,
     spanId,
+    name,
+    attributes: { ...opts?.attributes },
     durationMs: 0,
     end(status?: 'ok' | 'error', errorMsg?: string) {
       const endTime = Date.now();
@@ -110,11 +118,11 @@ export function startSpan(
         traceId,
         spanId,
         parentSpanId: opts?.parentSpanId,
-        name,
+        name: handle.name,
         startTimeUnixNano: String(startTime * 1_000_000),
         endTimeUnixNano: String(endTime * 1_000_000),
         attributes: {
-          ...opts?.attributes,
+          ...handle.attributes,
           'duration.ms': handle.durationMs,
         },
         status: status === 'error' ? { code: 2, message: errorMsg } : { code: 1 },

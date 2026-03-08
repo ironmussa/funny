@@ -9,7 +9,8 @@
 import { Hono } from 'hono';
 
 import { log } from '../lib/logger.js';
-import { startSpan, metric } from '../lib/telemetry.js';
+import { metric } from '../lib/telemetry.js';
+import { requestSpan } from '../middleware/tracing.js';
 import * as mq from '../services/message-queue.js';
 import { getThreadEvents } from '../services/thread-event-service.js';
 import * as tm from '../services/thread-manager.js';
@@ -168,10 +169,9 @@ threadRoutes.post('/', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
   const userId = c.get('userId') as string;
-  const span = startSpan('thread.create', {
-    traceId: c.get('traceId'),
-    parentSpanId: c.get('spanId'),
-    attributes: { projectId: parsed.value.projectId, model: parsed.value.model },
+  const span = requestSpan(c, 'thread.create', {
+    projectId: parsed.value.projectId,
+    model: parsed.value.model,
   });
 
   try {
@@ -180,7 +180,7 @@ threadRoutes.post('/', async (c) => {
     span.end('ok');
     return c.json(thread, 201);
   } catch (error) {
-    span.end('error');
+    span.end('error', error instanceof Error ? error.message : String(error));
     return handleServiceError(c, error);
   }
 });
@@ -196,11 +196,14 @@ threadRoutes.post('/:id/message', async (c) => {
   const threadResult = requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
+  const span = requestSpan(c, 'thread.send_message', { threadId: id });
   try {
     const result = await sendMessage({ ...parsed.value, threadId: id, userId });
+    span.end('ok');
     return c.json(result);
   } catch (error) {
     log.error('Failed to send message', { namespace: 'agent', threadId: id, error });
+    span.end('error', error instanceof Error ? error.message : String(error));
     return handleServiceError(c, error);
   }
 });

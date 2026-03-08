@@ -493,7 +493,10 @@ export type WSEvent =
   | { type: 'git:workflow_progress'; threadId: string; data: WSGitWorkflowProgressData }
   | { type: 'worktree:setup'; threadId: string; data: WSWorktreeSetupData }
   | { type: 'worktree:setup_complete'; threadId: string; data: WSWorktreeSetupCompleteData }
-  | { type: 'clone:progress'; threadId: string; data: WSCloneProgressData };
+  | { type: 'clone:progress'; threadId: string; data: WSCloneProgressData }
+  | { type: 'pipeline:run_started'; threadId: string; data: WSPipelineRunStartedData }
+  | { type: 'pipeline:stage_update'; threadId: string; data: WSPipelineStageUpdateData }
+  | { type: 'pipeline:run_completed'; threadId: string; data: WSPipelineRunCompletedData };
 
 export interface WSWorktreeSetupCompleteData {
   branch: string;
@@ -887,6 +890,89 @@ export interface TriggerReviewRequest {
   prNumber: number;
   model?: string;
   provider?: string;
+}
+
+// ─── Pipelines ──────────────────────────────────────────
+
+export type PipelineStatus = 'idle' | 'running' | 'completed' | 'failed';
+export type PipelineRunStatus =
+  | 'running'
+  | 'reviewing'
+  | 'fixing'
+  | 'completed'
+  | 'failed'
+  | 'skipped';
+export type PipelineStageType = 'reviewer' | 'corrector';
+export type PipelineVerdict = 'pass' | 'fail';
+
+export interface PipelineStageConfig {
+  type: PipelineStageType;
+  model: AgentModel;
+  permissionMode: PermissionMode;
+  prompt: string;
+}
+
+export interface Pipeline {
+  id: string;
+  projectId: string;
+  userId: string;
+  name: string;
+  enabled: boolean;
+  reviewModel: AgentModel;
+  fixModel: AgentModel;
+  maxIterations: number;
+  precommitFixEnabled: boolean;
+  precommitFixModel: AgentModel;
+  precommitFixMaxIterations: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface PipelineRun {
+  id: string;
+  pipelineId: string;
+  threadId: string;
+  status: PipelineRunStatus;
+  currentStage: PipelineStageType;
+  iteration: number;
+  maxIterations: number;
+  commitSha?: string;
+  verdict?: PipelineVerdict;
+  findings?: string;
+  fixerThreadId?: string;
+  precommitIteration?: number;
+  hookName?: string;
+  hookError?: string;
+  createdAt: string;
+  completedAt?: string;
+}
+
+// ─── Pipeline WebSocket Events ──────────────────────────
+
+export interface WSPipelineRunStartedData {
+  pipelineId: string;
+  runId: string;
+  threadId: string;
+  commitSha?: string;
+}
+
+export interface WSPipelineStageUpdateData {
+  pipelineId: string;
+  runId: string;
+  threadId: string;
+  stage: PipelineStageType;
+  iteration: number;
+  maxIterations: number;
+  verdict?: PipelineVerdict;
+  findings?: string;
+}
+
+export interface WSPipelineRunCompletedData {
+  pipelineId: string;
+  runId: string;
+  threadId: string;
+  status: PipelineRunStatus;
+  totalIterations: number;
 }
 
 // ─── Project Worktree Configuration (.funny.json) ───────

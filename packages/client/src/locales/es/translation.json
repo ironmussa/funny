@@ -269,6 +269,7 @@
     "environments": "Entornos",
     "worktrees": "Worktrees",
     "automations": "Automatizaciones",
+    "pipelines": "Pipelines",
     "archivedThreads": "Hilos Archivados",
     "selectSetting": "Selecciona una opción del menú lateral",
     "comingSoon": "Configuración de {{label}} próximamente.",
@@ -659,7 +660,8 @@
     "editQueuedMessage": "Editar",
     "deleteQueuedMessage": "Eliminar",
     "saveQueuedMessage": "Guardar",
-    "cancelQueuedEdit": "Cancelar"
+    "cancelQueuedEdit": "Cancelar",
+    "checkoutBlocked": "No se puede cambiar a la rama \"{{branch}}\" — tienes cambios sin confirmar que se perderían. Rama actual: {{currentBranch}}. Archivos en conflicto: {{files}}. Confirma o guarda tus cambios, o usa el modo worktree."
   },
   "gitStatus": {
     "dirty": "Cambios sin commitear",

@@ -61,6 +61,8 @@ export function NewThreadDialog() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only runs when provider changes to reset model; models is derived from provider
   }, [provider]);
 
+  const [gitCurrentBranch, setGitCurrentBranch] = useState<string | null>(null);
+
   // Load branches and detect default branch when dialog opens
   useEffect(() => {
     if (newThreadProjectId) {
@@ -68,8 +70,12 @@ export function NewThreadDialog() {
         if (result.isOk()) {
           const data = result.value;
           setBranches(data.branches);
-          // Priority: project defaultBranch > git defaultBranch > first branch
-          if (project?.defaultBranch && data.branches.includes(project.defaultBranch)) {
+          setGitCurrentBranch(data.currentBranch);
+          // Local mode: prioritize currentBranch (the branch actually checked out)
+          // Worktree mode: prioritize project defaultBranch > git defaultBranch
+          if (!createWorktree && data.currentBranch && data.branches.includes(data.currentBranch)) {
+            setSelectedBranch(data.currentBranch);
+          } else if (project?.defaultBranch && data.branches.includes(project.defaultBranch)) {
             setSelectedBranch(project.defaultBranch);
           } else if (data.defaultBranch) {
             setSelectedBranch(data.defaultBranch);
@@ -81,12 +87,35 @@ export function NewThreadDialog() {
         }
       });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only runs when dialog opens for a project; project.defaultBranch is read but shouldn't trigger refetch
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only runs when dialog opens for a project; project.defaultBranch and createWorktree are read but shouldn't trigger refetch
   }, [newThreadProjectId]);
 
   const handleCreate = async () => {
     if (!prompt || !newThreadProjectId || creating) return;
     setCreating(true);
+
+    // Pre-flight checkout validation for local mode with a different branch
+    if (
+      !createWorktree &&
+      selectedBranch &&
+      gitCurrentBranch &&
+      selectedBranch !== gitCurrentBranch
+    ) {
+      const preflight = await api.checkoutPreflight(newThreadProjectId, selectedBranch);
+      if (preflight.isOk() && !preflight.value.canCheckout) {
+        const files = preflight.value.conflictingFiles?.join(', ') || '';
+        toast.error(
+          t('prompt.checkoutBlocked', {
+            branch: selectedBranch,
+            currentBranch: gitCurrentBranch,
+            files,
+          }),
+          { duration: 8000 },
+        );
+        setCreating(false);
+        return;
+      }
+    }
 
     const result = await api.createThread({
       projectId: newThreadProjectId,

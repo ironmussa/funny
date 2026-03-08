@@ -269,6 +269,7 @@
     "environments": "Environments",
     "worktrees": "Worktrees",
     "automations": "Automations",
+    "pipelines": "Pipelines",
     "archivedThreads": "Archived Threads",
     "selectSetting": "Select a setting from the sidebar",
     "comingSoon": "{{label}} settings coming soon.",
@@ -661,7 +662,8 @@
     "editQueuedMessage": "Edit",
     "deleteQueuedMessage": "Delete",
     "saveQueuedMessage": "Save",
-    "cancelQueuedEdit": "Cancel"
+    "cancelQueuedEdit": "Cancel",
+    "checkoutBlocked": "Cannot switch to branch \"{{branch}}\" — you have uncommitted changes that would be overwritten. Current branch: {{currentBranch}}. Conflicting files: {{files}}. Commit or stash your changes, or use worktree mode."
   },
   "gitStatus": {
     "dirty": "Uncommitted changes",

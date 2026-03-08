@@ -6,7 +6,7 @@
  * @domain depends: ProjectManager, ProjectHooksService, StartupCommandsService, CommandRunner
  */
 
-import { listBranches, getDefaultBranch, getCurrentBranch } from '@funny/core/git';
+import { listBranches, getDefaultBranch, getCurrentBranch, git } from '@funny/core/git';
 import { Hono } from 'hono';
 
 import { requireAdmin } from '../middleware/auth.js';
@@ -121,6 +121,72 @@ projectRoutes.get('/:id/branches', async (c) => {
     defaultBranch: defaultBranchResult.isOk() ? defaultBranchResult.value : null,
     currentBranch: currentBranchResult.isOk() ? currentBranchResult.value : null,
   });
+});
+
+// GET /api/projects/:id/checkout-preflight?branch=<branch>
+// Pre-flight check: can we checkout the target branch without conflicts?
+projectRoutes.get('/:id/checkout-preflight', async (c) => {
+  const projectResult = requireProject(c.req.param('id'));
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+
+  const targetBranch = c.req.query('branch');
+  if (!targetBranch) return c.json({ error: 'Missing required query parameter: branch' }, 400);
+
+  const project = projectResult.value;
+
+  // Get current branch
+  const currentBranchResult = await getCurrentBranch(project.path);
+  const currentBranch = currentBranchResult.isOk() ? currentBranchResult.value : null;
+
+  // Same branch — no checkout needed
+  if (currentBranch === targetBranch) {
+    return c.json({ canCheckout: true, currentBranch });
+  }
+
+  // Check for dirty files
+  const statusResult = await git(['status', '--porcelain'], project.path);
+  if (statusResult.isErr()) {
+    return c.json({ canCheckout: false, currentBranch, reason: 'git_status_failed' });
+  }
+
+  const dirtyFiles = statusResult.value
+    .split('\n')
+    .filter((l) => l.trim())
+    .map((l) => l.slice(3).trim());
+
+  if (dirtyFiles.length === 0) {
+    // No dirty files — checkout is safe
+    return c.json({ canCheckout: true, currentBranch });
+  }
+
+  // Check which files differ between HEAD and target branch
+  const diffResult = await git(['diff', '--name-only', `HEAD...${targetBranch}`], project.path);
+
+  if (diffResult.isErr()) {
+    // Can't compare — assume checkout would fail with dirty files
+    return c.json({
+      canCheckout: false,
+      currentBranch,
+      reason: 'dirty_files',
+      conflictingFiles: dirtyFiles.slice(0, 10),
+    });
+  }
+
+  const changedInTarget = new Set(diffResult.value.split('\n').filter((l) => l.trim()));
+
+  const conflicting = dirtyFiles.filter((f) => changedInTarget.has(f));
+
+  if (conflicting.length > 0) {
+    return c.json({
+      canCheckout: false,
+      currentBranch,
+      reason: 'dirty_files',
+      conflictingFiles: conflicting.slice(0, 10),
+    });
+  }
+
+  // Dirty files exist but none conflict with the target branch
+  return c.json({ canCheckout: true, currentBranch });
 });
 
 // ─── Startup Commands ───────────────────────────────────

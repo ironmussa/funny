@@ -60,6 +60,12 @@ export interface GitCommittedEvent {
   message: string;
   amend?: boolean;
   cwd: string;
+  /** SHA of the newly created commit (when available) */
+  commitSha?: string;
+  /** Set to true when this commit was made by a pipeline corrector agent */
+  isPipelineCommit?: boolean;
+  /** Pipeline run ID if this commit was made by a pipeline */
+  pipelineRunId?: string;
 }
 
 export interface GitPushedEvent {

@@ -227,6 +227,19 @@ function handleMessage(e: MessageEvent) {
       });
       break;
     }
+    case 'pipeline:started':
+    case 'pipeline:stage_completed':
+    case 'pipeline:completed':
+    case 'pipeline:failed': {
+      import('@/stores/pipeline-store').then(({ usePipelineStore }) => {
+        const store = usePipelineStore.getState();
+        if (type === 'pipeline:started') store.handlePipelineStarted(data);
+        else if (type === 'pipeline:stage_completed') store.handlePipelineStageCompleted(data);
+        else if (type === 'pipeline:completed') store.handlePipelineCompleted(data);
+        else if (type === 'pipeline:failed') store.handlePipelineFailed(data);
+      });
+      break;
+    }
     case 'thread:created': {
       // New thread created externally (e.g. Chrome extension ingest)
       // Refresh threads for the project so it appears in the sidebar

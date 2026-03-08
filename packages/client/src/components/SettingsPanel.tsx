@@ -10,6 +10,7 @@ import {
   Timer,
   Archive,
   Users,
+  Workflow,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -36,6 +37,7 @@ const baseSettingsItems = [
   { id: 'project-config', label: 'Project Config', icon: FileJson2 },
   { id: 'hooks', label: 'Hooks', icon: Webhook },
   { id: 'automations', label: 'Automations', icon: Timer },
+  { id: 'pipelines', label: 'Pipelines', icon: Workflow },
   { id: 'archived-threads', label: 'Archived Threads', icon: Archive },
 ] as const;
 
@@ -51,6 +53,7 @@ export const settingsLabelKeys: Record<string, string> = {
   'project-config': 'projectConfig.title',
   hooks: 'hooks.title',
   automations: 'settings.automations',
+  pipelines: 'settings.pipelines',
   'archived-threads': 'settings.archivedThreads',
   users: 'users.title',
 };

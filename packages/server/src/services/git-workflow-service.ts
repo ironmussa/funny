@@ -17,14 +17,17 @@ import {
   push as gitPush,
   runHookCommand,
   invalidateStatusCache,
+  gitRead,
 } from '@funny/core/git';
 import type {
+  AgentModel,
   GitWorkflowAction,
   GitWorkflowProgressStep,
   WSGitWorkflowProgressData,
 } from '@funny/shared';
 
 import { log } from '../lib/logger.js';
+import { startAgent } from './agent-runner.js';
 import {
   stage as gitServiceStage,
   unstage as gitServiceUnstage,
@@ -34,6 +37,11 @@ import {
   createPullRequest as gitServiceCreatePR,
   resolveIdentity,
 } from './git-service.js';
+import {
+  getPipelineForProject,
+  isHookAutoFixable,
+  buildPrecommitFixerPrompt,
+} from './pipeline-orchestrator.js';
 import { listHooks } from './project-hooks-service.js';
 import { wsBroker } from './ws-broker.js';
 
@@ -248,6 +256,36 @@ async function runWorkflow(params: WorkflowParams, workflowId: string): Promise<
           const hookResult = await runHookCommand(cwd, hooks[i].command);
 
           if (!hookResult.success) {
+            // Check if we can auto-fix this hook failure
+            const pipelineConfig = params.projectId
+              ? getPipelineForProject(params.projectId)
+              : null;
+            const canAutoFix =
+              pipelineConfig && isHookAutoFixable(hooks[i].label) && !params.noVerify;
+
+            if (canAutoFix && pipelineConfig.precommitFixEnabled) {
+              // Attempt auto-fix via agent
+              const fixed = await attemptPrecommitAutoFix({
+                cwd,
+                userId,
+                threadId: params.threadId,
+                hookLabel: hooks[i].label,
+                hookCommand: hooks[i].command,
+                hookError: hookResult.output || 'Hook failed',
+                fixModel: pipelineConfig.precommitFixModel || 'sonnet',
+                maxIterations: pipelineConfig.precommitFixMaxIterations || 3,
+                setStep,
+                hooks,
+                hookIndex: i,
+              });
+
+              if (fixed) {
+                // Hook was fixed — continue to next hook
+                continue;
+              }
+            }
+
+            // Not auto-fixable or auto-fix failed
             const failedSubItems = hooks.map((h, idx) => ({
               label: h.label,
               status: (idx < i ? 'completed' : idx === i ? 'failed' : 'pending') as
@@ -372,4 +410,130 @@ async function runWorkflow(params: WorkflowParams, workflowId: string): Promise<
   } finally {
     activeWorkflows.delete(contextId);
   }
+}
+
+// ── Pre-commit auto-fix ─────────────────────────────────────
+
+interface AutoFixParams {
+  cwd: string;
+  userId: string;
+  threadId?: string;
+  hookLabel: string;
+  hookCommand: string;
+  hookError: string;
+  fixModel: string;
+  maxIterations: number;
+  setStep: (stepId: string, update: Partial<GitWorkflowProgressStep>) => void;
+  hooks: { label: string; command: string }[];
+  hookIndex: number;
+}
+
+/**
+ * Attempt to auto-fix a failed pre-commit hook by spawning an agent.
+ * Returns true if the hook passes after fixing, false otherwise.
+ */
+async function attemptPrecommitAutoFix(params: AutoFixParams): Promise<boolean> {
+  const { cwd, threadId, hookLabel, hookCommand, hookError, fixModel, maxIterations } = params;
+
+  log.info('Pre-commit auto-fix: starting', {
+    namespace: 'pipeline',
+    hookLabel,
+    maxIterations,
+  });
+
+  for (let attempt = 1; attempt <= maxIterations; attempt++) {
+    // Update progress UI
+    const fixingSubItems = params.hooks.map((h, idx) => ({
+      label: idx === params.hookIndex ? `${h.label} (auto-fixing, attempt ${attempt})` : h.label,
+      status: (idx < params.hookIndex
+        ? 'completed'
+        : idx === params.hookIndex
+          ? 'running'
+          : 'pending') as 'pending' | 'running' | 'completed' | 'failed',
+    }));
+    params.setStep('hooks', { status: 'running', subItems: fixingSubItems });
+
+    // Get list of staged files for context
+    let stagedFiles: string[] = [];
+    try {
+      const result = await gitRead(['diff', '--cached', '--name-only'], {
+        cwd,
+        reject: false,
+      });
+      if (result.exitCode === 0) {
+        stagedFiles = result.stdout.trim().split('\n').filter(Boolean);
+      }
+    } catch {
+      // Non-critical
+    }
+
+    // Build and run the fixer prompt
+    const prompt = buildPrecommitFixerPrompt(hookLabel, hookError, stagedFiles);
+
+    try {
+      // Start the agent and wait for it to complete
+      // We use the existing thread if available, creating a temporary approach
+      if (threadId) {
+        await startAgent(threadId, prompt, cwd, fixModel as AgentModel, 'autoEdit');
+
+        // Wait for the agent to complete (poll-based)
+        await waitForAgentCompletion(threadId);
+      } else {
+        // No thread context — can't run agent, bail out
+        log.warn('Pre-commit auto-fix: no thread context, skipping', {
+          namespace: 'pipeline',
+        });
+        return false;
+      }
+    } catch (err) {
+      log.error('Pre-commit auto-fix: agent failed', {
+        namespace: 'pipeline',
+        attempt,
+        error: String(err),
+      });
+      return false;
+    }
+
+    // Re-run the failed hook to check if it passes now
+    const retryResult = await runHookCommand(cwd, hookCommand);
+    if (retryResult.success) {
+      log.info('Pre-commit auto-fix: hook now passes', {
+        namespace: 'pipeline',
+        hookLabel,
+        attempt,
+      });
+      return true;
+    }
+
+    log.info('Pre-commit auto-fix: hook still failing', {
+      namespace: 'pipeline',
+      hookLabel,
+      attempt,
+      error: retryResult.output,
+    });
+  }
+
+  log.warn('Pre-commit auto-fix: max iterations reached', {
+    namespace: 'pipeline',
+    hookLabel,
+    maxIterations,
+  });
+  return false;
+}
+
+/**
+ * Wait for an agent running on a thread to complete.
+ * Simple poll-based approach.
+ */
+async function waitForAgentCompletion(threadId: string, timeoutMs = 300_000): Promise<void> {
+  const { isAgentRunning } = await import('./agent-runner.js');
+  const start = Date.now();
+  const pollInterval = 1000;
+
+  while (Date.now() - start < timeoutMs) {
+    if (!isAgentRunning(threadId)) return;
+    await new Promise((resolve) => setTimeout(resolve, pollInterval));
+  }
+
+  throw new Error(`Agent timed out after ${timeoutMs}ms`);
 }

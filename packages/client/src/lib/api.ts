@@ -21,6 +21,8 @@ import type {
   ProjectHook,
   HookType,
   FunnyProjectConfig,
+  Pipeline,
+  PipelineRun,
 } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { internal, processError } from '@funny/shared/errors';
@@ -213,6 +215,13 @@ export const api = {
     request<{ branches: string[]; defaultBranch: string | null; currentBranch: string | null }>(
       `/projects/${projectId}/branches`,
     ),
+  checkoutPreflight: (projectId: string, branch: string) =>
+    request<{
+      canCheckout: boolean;
+      currentBranch: string | null;
+      reason?: string;
+      conflictingFiles?: string[];
+    }>(`/projects/${projectId}/checkout-preflight?branch=${encodeURIComponent(branch)}`),
 
   // Threads
   listThreads: (projectId?: string, includeArchived?: boolean) => {
@@ -695,6 +704,40 @@ export const api = {
       method: 'PATCH',
       body: JSON.stringify({ triageStatus }),
     }),
+
+  // Pipelines
+  listPipelines: (projectId: string) => request<Pipeline[]>(`/pipelines?projectId=${projectId}`),
+  createPipeline: (data: {
+    projectId: string;
+    name: string;
+    reviewModel?: string;
+    fixModel?: string;
+    maxIterations?: number;
+    precommitFixEnabled?: boolean;
+    precommitFixModel?: string;
+    precommitFixMaxIterations?: number;
+  }) => request<Pipeline>('/pipelines', { method: 'POST', body: JSON.stringify(data) }),
+  updatePipeline: (
+    id: string,
+    data: Partial<{
+      name: string;
+      enabled: boolean;
+      reviewModel: string;
+      fixModel: string;
+      maxIterations: number;
+      precommitFixEnabled: boolean;
+      precommitFixModel: string;
+      precommitFixMaxIterations: number;
+    }>,
+  ) =>
+    request<{ ok: boolean }>(`/pipelines/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    }),
+  deletePipeline: (id: string) =>
+    request<{ ok: boolean }>(`/pipelines/${id}`, { method: 'DELETE' }),
+  listPipelineRuns: (threadId: string) =>
+    request<PipelineRun[]>(`/pipelines/runs/thread/${threadId}`),
 
   // Browse (filesystem)
   browseRoots: () => request<{ roots: string[]; home: string }>('/browse/roots'),

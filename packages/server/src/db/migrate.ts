@@ -541,6 +541,58 @@ const migrations: Migration[] = [
       addColumn('projects', 'default_branch', 'TEXT');
     },
   },
+  {
+    name: '030_pipelines',
+    up() {
+      db.run(sql`
+        CREATE TABLE IF NOT EXISTS pipelines (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL DEFAULT '__local__',
+          name TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          review_model TEXT NOT NULL DEFAULT 'sonnet',
+          fix_model TEXT NOT NULL DEFAULT 'sonnet',
+          max_iterations INTEGER NOT NULL DEFAULT 10,
+          precommit_fix_enabled INTEGER NOT NULL DEFAULT 0,
+          precommit_fix_model TEXT NOT NULL DEFAULT 'sonnet',
+          precommit_fix_max_iterations INTEGER NOT NULL DEFAULT 3,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+
+      db.run(sql`
+        CREATE TABLE IF NOT EXISTS pipeline_runs (
+          id TEXT PRIMARY KEY,
+          pipeline_id TEXT NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          status TEXT NOT NULL DEFAULT 'running',
+          current_stage TEXT NOT NULL DEFAULT 'reviewer',
+          iteration INTEGER NOT NULL DEFAULT 0,
+          max_iterations INTEGER NOT NULL DEFAULT 10,
+          commit_sha TEXT,
+          verdict TEXT,
+          findings TEXT,
+          fixer_thread_id TEXT,
+          precommit_iteration INTEGER,
+          hook_name TEXT,
+          hook_error TEXT,
+          created_at TEXT NOT NULL,
+          completed_at TEXT
+        )
+      `);
+
+      db.run(sql`
+        CREATE INDEX IF NOT EXISTS idx_pipeline_runs_pipeline
+        ON pipeline_runs (pipeline_id)
+      `);
+      db.run(sql`
+        CREATE INDEX IF NOT EXISTS idx_pipeline_runs_thread
+        ON pipeline_runs (thread_id)
+      `);
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

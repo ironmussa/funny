@@ -19,7 +19,6 @@ import {
   EllipsisVertical,
   Trash2,
   FolderOpen,
-  PanelLeftClose,
 } from 'lucide-react';
 import { memo, useState, useEffect, useCallback, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -58,7 +57,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useSidebar } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
 import { api } from '@/lib/api';
@@ -101,7 +99,6 @@ function threadToMarkdown(messages: MessageWithToolCalls[], includeToolCalls: bo
 const MoreActionsMenu = memo(function MoreActionsMenu() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { toggleSidebar } = useSidebar();
   const threadId = useThreadStore((s) => s.activeThread?.id);
   const threadProjectId = useThreadStore((s) => s.activeThread?.projectId);
   const threadTitle = useThreadStore((s) => s.activeThread?.title);
@@ -162,14 +159,6 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
           <TooltipContent>{t('thread.moreActions', 'More actions')}</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end">
-          <DropdownMenuItem
-            data-testid="header-menu-toggle-sidebar"
-            onClick={toggleSidebar}
-            className="cursor-pointer"
-          >
-            <PanelLeftClose className="mr-2 h-4 w-4" />
-            {t('sidebar.collapse', 'Toggle sidebar')}
-          </DropdownMenuItem>
           {threadId && (
             <DropdownMenuItem
               data-testid="header-menu-toggle-timeline"

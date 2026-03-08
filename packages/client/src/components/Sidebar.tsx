@@ -1,6 +1,14 @@
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { Thread } from '@funny/shared';
-import { Columns3, BarChart3, FolderPlus, Settings, LayoutGrid, Search } from 'lucide-react';
+import {
+  Columns3,
+  BarChart3,
+  FolderPlus,
+  Settings,
+  LayoutGrid,
+  Search,
+  PanelLeftClose,
+} from 'lucide-react';
 import { useState, useCallback, useEffect, useRef, useMemo, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -21,6 +29,7 @@ import {
   SidebarFooter,
   SidebarHeader,
   SidebarRail,
+  useSidebar,
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
@@ -43,6 +52,7 @@ const EMPTY_THREADS: Thread[] = [];
 export function AppSidebar() {
   const navigate = useStableNavigate();
   const { t } = useTranslation();
+  const { toggleSidebar } = useSidebar();
   // project-store
   const projects = useProjectStore((s) => s.projects);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
@@ -216,7 +226,7 @@ export function AppSidebar() {
     await deleteProject(projectId);
     toast.success(t('toast.projectDeleted', { name }));
     navigate('/');
-  }, [deleteProjectConfirm, deleteProject, t]);
+  }, [deleteProjectConfirm, deleteProject, t, navigate]);
 
   // ── Stable callbacks for ProjectItem (avoids breaking memo) ──────────
   const handleToggleProject = useCallback(
@@ -226,16 +236,19 @@ export function AppSidebar() {
     [toggleProject],
   );
 
-  const handleSelectProject = useCallback((projectId: string) => {
-    startTransition(() => {
-      useProjectStore.getState().selectProject(projectId);
-      navigate(`/projects/${projectId}`);
-    });
-    requestAnimationFrame(() => {
-      const ta = document.querySelector<HTMLTextAreaElement>('[data-testid="prompt-textarea"]');
-      ta?.focus();
-    });
-  }, []);
+  const handleSelectProject = useCallback(
+    (projectId: string) => {
+      startTransition(() => {
+        useProjectStore.getState().selectProject(projectId);
+        navigate(`/projects/${projectId}`);
+      });
+      requestAnimationFrame(() => {
+        const ta = document.querySelector<HTMLTextAreaElement>('[data-testid="prompt-textarea"]');
+        ta?.focus();
+      });
+    },
+    [navigate],
+  );
 
   const handleNewThread = useCallback(
     (projectId: string) => {
@@ -244,7 +257,7 @@ export function AppSidebar() {
         navigate(`/projects/${projectId}`);
       });
     },
-    [startNewThread],
+    [startNewThread, navigate],
   );
 
   const handleRenameProject = useCallback((projectId: string, currentName: string) => {
@@ -255,18 +268,21 @@ export function AppSidebar() {
     setDeleteProjectConfirm({ projectId, name });
   }, []);
 
-  const handleSelectThread = useCallback((projectId: string, threadId: string) => {
-    startTransition(() => {
-      const store = useThreadStore.getState();
-      if (
-        store.selectedThreadId === threadId &&
-        (!store.activeThread || store.activeThread.id !== threadId)
-      ) {
-        store.selectThread(threadId);
-      }
-      navigate(`/projects/${projectId}/threads/${threadId}`);
-    });
-  }, []);
+  const handleSelectThread = useCallback(
+    (projectId: string, threadId: string) => {
+      startTransition(() => {
+        const store = useThreadStore.getState();
+        if (
+          store.selectedThreadId === threadId &&
+          (!store.activeThread || store.activeThread.id !== threadId)
+        ) {
+          store.selectThread(threadId);
+        }
+        navigate(`/projects/${projectId}/threads/${threadId}`);
+      });
+    },
+    [navigate],
+  );
 
   const handleArchiveThread = useCallback((projectId: string, threadId: string, title: string) => {
     const threads = useThreadStore.getState().threadsByProject[projectId] ?? [];
@@ -324,7 +340,7 @@ export function AppSidebar() {
       showGlobalSearch();
       navigate(`/list?project=${projectId}`);
     },
-    [showGlobalSearch],
+    [showGlobalSearch, navigate],
   );
 
   const handleShowIssues = useCallback((projectId: string) => {
@@ -426,6 +442,22 @@ export function AppSidebar() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">{t('sidebar.analytics')}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  data-testid="sidebar-collapse"
+                  onClick={toggleSidebar}
+                  className="text-muted-foreground"
+                >
+                  <PanelLeftClose className="h-3.5 w-3.5" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {t('sidebar.collapse', 'Collapse sidebar')}
+              </TooltipContent>
             </Tooltip>
           </div>
         </div>

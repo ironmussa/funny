@@ -37,6 +37,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { ArchivedThreadsSettings } from './ArchivedThreadsSettings';
 import { AutomationSettings } from './AutomationSettings';
 import { McpServerSettings } from './McpServerSettings';
+import { PipelineSettings } from './PipelineSettings';
 import { ProjectConfigSettings } from './ProjectConfigSettings';
 import { ProjectHooksSettings } from './ProjectHooksSettings';
 import { BranchPicker } from './SearchablePicker';
@@ -651,6 +652,8 @@ export function SettingsDetailView() {
             <ProjectHooksSettings />
           ) : page === 'automations' ? (
             <AutomationSettings />
+          ) : page === 'pipelines' ? (
+            <PipelineSettings />
           ) : page === 'archived-threads' ? (
             <ArchivedThreadsSettings />
           ) : page === 'users' ? (

@@ -20,6 +20,7 @@ import {
   resetSoft as gitResetSoft,
   createPR as gitCreatePR,
   git,
+  gitRead,
   invalidateStatusCache,
   sanitizePath,
   removeWorktree,
@@ -139,6 +140,15 @@ export async function commitChanges(
   const result = await gitCommit(cwd, message, identity, amend, noVerify);
   if (result.isErr()) throw result.error;
 
+  // Capture the SHA of the newly created commit
+  let commitSha: string | undefined;
+  try {
+    const shaResult = await gitRead(['rev-parse', 'HEAD'], { cwd, reject: false });
+    if (shaResult.exitCode === 0) commitSha = shaResult.stdout.trim();
+  } catch {
+    // Non-critical — SHA is informational
+  }
+
   threadEventBus.emit('git:committed', {
     threadId,
     userId,
@@ -146,6 +156,7 @@ export async function commitChanges(
     message,
     amend,
     cwd,
+    commitSha,
   });
 
   invalidateStatusCache(cwd);

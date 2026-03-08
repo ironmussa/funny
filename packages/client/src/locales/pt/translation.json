@@ -264,6 +264,7 @@
     "environments": "Ambientes",
     "worktrees": "Worktrees",
     "automations": "Automações",
+    "pipelines": "Pipelines",
     "archivedThreads": "Threads Arquivadas",
     "selectSetting": "Selecione uma opção do menu lateral",
     "comingSoon": "Configurações de {{label}} em breve.",
@@ -649,7 +650,8 @@
     "editQueuedMessage": "Editar",
     "deleteQueuedMessage": "Excluir",
     "saveQueuedMessage": "Salvar",
-    "cancelQueuedEdit": "Cancelar"
+    "cancelQueuedEdit": "Cancelar",
+    "checkoutBlocked": "Não é possível mudar para a branch \"{{branch}}\" — você tem alterações não commitadas que seriam sobrescritas. Branch atual: {{currentBranch}}. Arquivos em conflito: {{files}}. Faça commit ou stash das suas alterações, ou use o modo worktree."
   },
   "gitStatus": {
     "dirty": "Alterações não commitadas",

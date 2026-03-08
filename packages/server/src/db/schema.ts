@@ -211,6 +211,47 @@ export const mcpOauthTokens = sqliteTable('mcp_oauth_tokens', {
   updatedAt: text('updated_at').notNull(),
 });
 
+export const pipelines = sqliteTable('pipelines', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull().default('__local__'),
+  name: text('name').notNull(),
+  enabled: integer('enabled').notNull().default(1),
+  reviewModel: text('review_model').notNull().default(DEFAULT_MODEL),
+  fixModel: text('fix_model').notNull().default(DEFAULT_MODEL),
+  maxIterations: integer('max_iterations').notNull().default(10),
+  precommitFixEnabled: integer('precommit_fix_enabled').notNull().default(0),
+  precommitFixModel: text('precommit_fix_model').notNull().default(DEFAULT_MODEL),
+  precommitFixMaxIterations: integer('precommit_fix_max_iterations').notNull().default(3),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
+
+export const pipelineRuns = sqliteTable('pipeline_runs', {
+  id: text('id').primaryKey(),
+  pipelineId: text('pipeline_id')
+    .notNull()
+    .references(() => pipelines.id, { onDelete: 'cascade' }),
+  threadId: text('thread_id')
+    .notNull()
+    .references(() => threads.id, { onDelete: 'cascade' }),
+  status: text('status').notNull().default('running'), // running | reviewing | fixing | completed | failed | skipped
+  currentStage: text('current_stage').notNull().default('reviewer'), // reviewer | corrector
+  iteration: integer('iteration').notNull().default(0),
+  maxIterations: integer('max_iterations').notNull().default(10),
+  commitSha: text('commit_sha'),
+  verdict: text('verdict'), // pass | fail
+  findings: text('findings'), // JSON-encoded findings from reviewer
+  fixerThreadId: text('fixer_thread_id'),
+  precommitIteration: integer('precommit_iteration'),
+  hookName: text('hook_name'),
+  hookError: text('hook_error'),
+  createdAt: text('created_at').notNull(),
+  completedAt: text('completed_at'),
+});
+
 export const threadEvents = sqliteTable('thread_events', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')

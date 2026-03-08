@@ -69,6 +69,7 @@ const tvLog = createClientLogger('ThreadView');
 import { D4CAnimation } from './D4CAnimation';
 import { FollowUpModeDialog } from './FollowUpModeDialog';
 import { ImageLightbox } from './ImageLightbox';
+import { PipelineProgressBanner } from './PipelineProgressBanner';
 import { PromptInput } from './PromptInput';
 import { AgentResultCard, AgentInterruptedCard, AgentStoppedCard } from './thread/AgentStatusCards';
 import { CompactionEventCard } from './thread/CompactionEventCard';
@@ -1173,8 +1174,11 @@ export function ThreadView() {
         viewport.scrollTop = finalPos;
       }
       userHasScrolledUp.current = true;
+      // Re-evaluate scroll-to-bottom visibility after pinning
       if (scrollDownRef.current) {
-        scrollDownRef.current.style.display = 'none';
+        const isBottom = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight <= 80;
+        const hasOverflow = viewport.scrollHeight > viewport.clientHeight + 10;
+        scrollDownRef.current.style.display = hasOverflow && !isBottom ? '' : 'none';
       }
       scheduleIdle(() => setVisibleMessageId(targetId));
     },
@@ -1199,6 +1203,7 @@ export function ThreadView() {
       });
     });
     return () => cancelAnimationFrame(rafId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only reset on thread ID change, not on every activeThread reference update
   }, [activeThread?.id, pinUserMessageToTop]);
 
   const openLightbox = useCallback((images: { src: string; alt: string }[], index: number) => {
@@ -1247,7 +1252,7 @@ export function ThreadView() {
       userHasScrolledUp.current = promptPinned || !isAtBottom;
 
       // Update scroll-to-bottom button visibility via DOM (fast path, no React state)
-      const shouldShow = hasOverflow && !promptPinned && !isAtBottom;
+      const shouldShow = hasOverflow && !isAtBottom;
       if (scrollDownRef.current) {
         scrollDownRef.current.style.display = shouldShow ? '' : 'none';
       }
@@ -1707,6 +1712,7 @@ export function ThreadView() {
   return (
     <div className="relative flex h-full min-w-0 flex-1 flex-col">
       <ProjectHeader />
+      {activeThread?.id && <PipelineProgressBanner threadId={activeThread.id} />}
 
       {/* Messages + Timeline */}
       <div className="thread-container flex min-h-0 flex-1">

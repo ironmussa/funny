@@ -37,6 +37,7 @@ import { Hono } from 'hono';
 import { err, ok } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
+import { requestSpan } from '../middleware/tracing.js';
 import {
   stage as gitServiceStage,
   unstage as gitServiceUnstage,
@@ -148,6 +149,13 @@ gitRoutes.get('/status', async (c) => {
   const mergedThreads = threads.filter((t) => !t.worktreePath && !t.branch && t.baseBranch);
   const localThreads = threads.filter((t) => !t.worktreePath && !(!t.branch && t.baseBranch));
 
+  const statusSpan = requestSpan(c, 'git.status.aggregate', {
+    projectId,
+    worktreeCount: worktreeThreads.length,
+    localCount: localThreads.length,
+    mergedCount: mergedThreads.length,
+  });
+
   const localStatusPromise: Promise<GitStatusSummary | null> =
     localThreads.length > 0
       ? (async (): Promise<GitStatusSummary | null> => {
@@ -178,6 +186,8 @@ gitRoutes.get('/status', async (c) => {
     ),
     localStatusPromise,
   ]);
+
+  statusSpan.end('ok');
 
   const statuses = [
     ...worktreeResults
@@ -789,6 +799,7 @@ gitRoutes.post('/:threadId/commit', async (c) => {
   const parsed = validate(commitSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
+  const span = requestSpan(c, 'git.commit', { threadId });
   try {
     const output = await gitServiceCommit(
       threadId,
@@ -799,8 +810,10 @@ gitRoutes.post('/:threadId/commit', async (c) => {
       parsed.value.noVerify,
     );
     invalidateGitStatusCache(threadId);
+    span.end('ok');
     return c.json({ ok: true, output });
   } catch (e: any) {
+    span.end('error', e.message);
     return resultToResponse(c, err(internal(e.message)));
   }
 });
@@ -842,11 +855,14 @@ gitRoutes.post('/:threadId/push', async (c) => {
   const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
+  const span = requestSpan(c, 'git.push', { threadId });
   try {
     const output = await gitServicePush(threadId, userId, cwdResult.value);
     invalidateGitStatusCache(threadId);
+    span.end('ok');
     return c.json({ ok: true, output });
   } catch (e: any) {
+    span.end('error', e.message);
     return resultToResponse(c, err(internal(e.message)));
   }
 });
@@ -862,6 +878,7 @@ gitRoutes.post('/:threadId/pr', async (c) => {
   const parsed = validate(createPRSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
+  const span = requestSpan(c, 'git.create_pr', { threadId });
   try {
     const url = await gitServiceCreatePR({
       threadId,
@@ -870,8 +887,10 @@ gitRoutes.post('/:threadId/pr', async (c) => {
       title: parsed.value.title,
       body: parsed.value.body,
     });
+    span.end('ok');
     return c.json({ ok: true, url });
   } catch (e: any) {
+    span.end('error', e.message);
     return resultToResponse(c, err(internal(e.message)));
   }
 });
@@ -916,6 +935,11 @@ BODY: <the body>
 No quotes, no markdown, no extra explanation.
 
 ${diffSummary}`;
+
+  const span = requestSpan(c, 'ai.generate_commit_message', {
+    diffLength: diffSummary.length,
+    fileCount: relevantDiffs.length,
+  });
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60_000);
@@ -966,8 +990,11 @@ ${diffSummary}`;
   })();
 
   if ('error' in output) {
+    span.end('error', output.error);
     return resultToResponse(c, err(internal(output.error)));
   }
+
+  span.end('ok');
 
   const trimmed = output.text.trim();
   const errorPatterns = [
@@ -1013,6 +1040,10 @@ gitRoutes.post('/:threadId/merge', async (c) => {
   const parsed = validate(mergeSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
+  const span = requestSpan(c, 'git.merge', {
+    threadId,
+    targetBranch: parsed.value.targetBranch,
+  });
   try {
     const output = await gitServiceMerge({
       threadId,
@@ -1022,8 +1053,10 @@ gitRoutes.post('/:threadId/merge', async (c) => {
       cleanup: parsed.value.cleanup,
     });
     invalidateGitStatusCache(threadId);
+    span.end('ok');
     return c.json({ ok: true, output });
   } catch (e: any) {
+    span.end('error', e.message);
     return resultToResponse(c, err(internal(e.message)));
   }
 });

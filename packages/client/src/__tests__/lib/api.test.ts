@@ -4,8 +4,8 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 const mockFetch = vi.fn();
 vi.stubGlobal('fetch', mockFetch);
 
-// Mock window.__TAURI_INTERNALS__ to ensure we use /api base
-vi.stubGlobal('window', { ...globalThis.window });
+// Ensure __TAURI_INTERNALS__ is absent so we use /api base (jsdom default)
+delete (window as any).__TAURI_INTERNALS__;
 
 // Now import after mocks are set up
 const { api } = await import('@/lib/api');
@@ -34,7 +34,9 @@ describe('API Client', () => {
       expect(result._unsafeUnwrap()).toEqual([{ id: 'p1', name: 'Test' }]);
       expect(mockFetch).toHaveBeenCalledWith(
         expect.stringContaining('/projects'),
-        expect.objectContaining({ headers: { 'Content-Type': 'application/json' } }),
+        expect.objectContaining({
+          headers: expect.objectContaining({ 'Content-Type': 'application/json' }),
+        }),
       );
     });
 

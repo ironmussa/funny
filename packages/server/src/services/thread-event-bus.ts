@@ -66,6 +66,8 @@ export interface GitCommittedEvent {
   isPipelineCommit?: boolean;
   /** Pipeline run ID if this commit was made by a pipeline */
   pipelineRunId?: string;
+  /** Workflow ID for grouping with workflow events in the UI */
+  workflowId?: string;
 }
 
 export interface GitPushedEvent {
@@ -73,6 +75,8 @@ export interface GitPushedEvent {
   userId: string;
   projectId: string;
   cwd: string;
+  /** Workflow ID for grouping with workflow events in the UI */
+  workflowId?: string;
 }
 
 export interface GitMergedEvent {
@@ -90,6 +94,8 @@ export interface GitStagedEvent {
   projectId: string;
   paths: string[];
   cwd: string;
+  /** Workflow ID for grouping with workflow events in the UI */
+  workflowId?: string;
 }
 
 export interface GitUnstagedEvent {
@@ -98,6 +104,8 @@ export interface GitUnstagedEvent {
   projectId: string;
   paths: string[];
   cwd: string;
+  /** Workflow ID for grouping with workflow events in the UI */
+  workflowId?: string;
 }
 
 export interface GitRevertedEvent {
@@ -106,6 +114,8 @@ export interface GitRevertedEvent {
   projectId: string;
   paths: string[];
   cwd: string;
+  /** Workflow ID for grouping with workflow events in the UI */
+  workflowId?: string;
 }
 
 export interface GitPulledEvent {

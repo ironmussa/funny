@@ -125,6 +125,7 @@ export interface ThreadState {
     permissionMode?: PermissionMode,
     fileReferences?: { path: string; type?: 'file' | 'folder' }[],
   ) => void;
+  rollbackOptimisticMessage: (threadId: string) => void;
   loadOlderMessages: () => Promise<void>;
   refreshActiveThread: () => Promise<void>;
   refreshAllLoadedThreads: () => Promise<void>;
@@ -692,6 +693,29 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         threadsByProject: nextThreadsByProject,
       });
     }
+  },
+
+  rollbackOptimisticMessage: (threadId) => {
+    const { activeThread } = get();
+    if (activeThread?.id !== threadId) return;
+
+    // Remove the last user message (the optimistic one we just added)
+    let lastUserIdx = -1;
+    for (let i = activeThread.messages.length - 1; i >= 0; i--) {
+      if (activeThread.messages[i].role === 'user') {
+        lastUserIdx = i;
+        break;
+      }
+    }
+    if (lastUserIdx < 0) return;
+
+    const nextMessages = activeThread.messages.filter((_, i) => i !== lastUserIdx);
+    set({
+      activeThread: {
+        ...activeThread,
+        messages: nextMessages,
+      },
+    });
   },
 
   loadOlderMessages: async () => {

@@ -77,6 +77,7 @@ import { GitEventCard } from './thread/GitEventCard';
 import { NewThreadInput } from './thread/NewThreadInput';
 import { ProjectHeader } from './thread/ProjectHeader';
 import { PromptTimeline } from './thread/PromptTimeline';
+import { WorkflowEventGroup } from './thread/WorkflowEventGroup';
 import { ToolCallCard } from './ToolCallCard';
 import { ToolCallGroup } from './ToolCallGroup';
 import { WorktreeSetupProgress } from './WorktreeSetupProgress';
@@ -506,6 +507,7 @@ function estimateItemHeight(item: RenderItem): number {
   if (item.type === 'toolcall-run') return 44 * item.items.length;
   if (item.type === 'thread-event') return 32;
   if (item.type === 'compaction-event') return 32;
+  if (item.type === 'workflow-event-group') return 32;
   return 60;
 }
 
@@ -859,6 +861,14 @@ const MemoizedMessageList = memo(
           return (
             <div key={key} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' }}>
               <div className="space-y-1">{item.items.map(renderToolItem)}</div>
+            </div>
+          );
+        }
+
+        if (item.type === 'workflow-event-group') {
+          return (
+            <div key={key} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 32px' }}>
+              <WorkflowEventGroup events={item.events} />
             </div>
           );
         }
@@ -1537,6 +1547,10 @@ export function ThreadView() {
           toast.error(t('thread.sendFailedGeneric', { error: err.message }));
         }
       } else if (result.value && (result.value as any).queued) {
+        // Server confirmed the message was queued — remove the optimistic
+        // message from the stream so it only appears in the queue widget.
+        // It will be re-injected when the queue drains and the agent starts.
+        useThreadStore.getState().rollbackOptimisticMessage(thread.id);
         toast.success(t('thread.messageQueued'));
       }
       setSending(false);
@@ -1597,6 +1611,7 @@ export function ThreadView() {
           toast.error(t('thread.sendFailedGeneric', { error: err.message }));
         }
       } else if (result.value && (result.value as any).queued) {
+        useThreadStore.getState().rollbackOptimisticMessage(thread.id);
         toast.success(t('thread.messageQueued'));
       }
       setSending(false);

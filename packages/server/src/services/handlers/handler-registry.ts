@@ -27,7 +27,6 @@ import {
 } from './git-event-persistence-handler.js';
 import { gitStatusHandler } from './git-status-handler.js';
 import { gitWatcherStartHandler, gitWatcherStopHandler } from './git-watcher-lifecycle-handler.js';
-import { pipelineCompletedHandler } from './pipeline-completed-handler.js';
 import { pipelineTriggerHandler } from './pipeline-trigger-handler.js';
 import { stageTransitionOnAgentStartHandler } from './stage-transition-on-agent-start-handler.js';
 import {
@@ -70,7 +69,6 @@ const allHandlers: EventHandler<any>[] = [
   gitWatcherStopHandler,
   // Pipeline
   pipelineTriggerHandler,
-  pipelineCompletedHandler,
   // Telemetry
   gitCommitTelemetryHandler,
   gitPushTelemetryHandler,

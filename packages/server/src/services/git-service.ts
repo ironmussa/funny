@@ -73,6 +73,7 @@ export async function stage(
   userId: string,
   cwd: string,
   paths: string[],
+  workflowId?: string,
 ): Promise<void> {
   const result = await gitStage(cwd, paths);
   if (result.isErr()) throw result.error;
@@ -83,6 +84,7 @@ export async function stage(
     projectId: getProjectId(threadId),
     paths,
     cwd,
+    workflowId,
   });
 
   invalidateStatusCache(cwd);
@@ -93,6 +95,7 @@ export async function unstage(
   userId: string,
   cwd: string,
   paths: string[],
+  workflowId?: string,
 ): Promise<void> {
   const result = await gitUnstage(cwd, paths);
   if (result.isErr()) throw result.error;
@@ -103,6 +106,7 @@ export async function unstage(
     projectId: getProjectId(threadId),
     paths,
     cwd,
+    workflowId,
   });
 
   invalidateStatusCache(cwd);
@@ -113,6 +117,7 @@ export async function revert(
   userId: string,
   cwd: string,
   paths: string[],
+  workflowId?: string,
 ): Promise<void> {
   const result = await gitRevert(cwd, paths);
   if (result.isErr()) throw result.error;
@@ -123,6 +128,7 @@ export async function revert(
     projectId: getProjectId(threadId),
     paths,
     cwd,
+    workflowId,
   });
 
   invalidateStatusCache(cwd);
@@ -135,6 +141,7 @@ export async function commitChanges(
   message: string,
   amend?: boolean,
   noVerify?: boolean,
+  workflowId?: string,
 ): Promise<string> {
   const identity = resolveIdentity(userId);
   const result = await gitCommit(cwd, message, identity, amend, noVerify);
@@ -157,13 +164,19 @@ export async function commitChanges(
     amend,
     cwd,
     commitSha,
+    workflowId,
   });
 
   invalidateStatusCache(cwd);
   return result.value;
 }
 
-export async function pushChanges(threadId: string, userId: string, cwd: string): Promise<string> {
+export async function pushChanges(
+  threadId: string,
+  userId: string,
+  cwd: string,
+  workflowId?: string,
+): Promise<string> {
   const identity = resolveIdentity(userId);
   const result = await gitPush(cwd, identity);
   if (result.isErr()) throw result.error;
@@ -173,6 +186,7 @@ export async function pushChanges(threadId: string, userId: string, cwd: string)
     userId,
     projectId: getProjectId(threadId),
     cwd,
+    workflowId,
   });
 
   invalidateStatusCache(cwd);

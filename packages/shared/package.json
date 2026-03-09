@@ -9,7 +9,8 @@
     ".": "./src/types.ts",
     "./errors": "./src/errors.ts",
     "./models": "./src/models.ts",
-    "./thread-machine": "./src/thread-machine.ts"
+    "./thread-machine": "./src/thread-machine.ts",
+    "./pipeline-engine": "./src/pipeline-engine.ts"
   },
   "scripts": {
     "test": "bun test"

@@ -11,7 +11,8 @@ export type RenderItem =
   | ToolItem
   | { type: 'toolcall-run'; items: ToolItem[] }
   | { type: 'thread-event'; event: ThreadEvent }
-  | { type: 'compaction-event'; event: CompactionEvent };
+  | { type: 'compaction-event'; event: CompactionEvent }
+  | { type: 'workflow-event-group'; events: ThreadEvent[] };
 
 /** Get timestamp for a render item (used for chronological interleaving with events) */
 export function getItemTimestamp(item: RenderItem): string {
@@ -24,6 +25,7 @@ export function getItemTimestamp(item: RenderItem): string {
     const first = item.items[0];
     return first.type === 'toolcall' ? first.tc.timestamp || '' : first.calls[0]?.timestamp || '';
   }
+  if (item.type === 'workflow-event-group') return item.events[0]?.createdAt || '';
   return '';
 }
 
@@ -38,6 +40,7 @@ export function getItemKey(item: RenderItem): string {
   }
   if (item.type === 'thread-event') return item.event.id;
   if (item.type === 'compaction-event') return `compact-${item.event.timestamp}`;
+  if (item.type === 'workflow-event-group') return `workflow-${item.events[0]?.id}`;
   return '';
 }
 
@@ -164,9 +167,45 @@ export function buildGroupedRenderItems(
   const hasEvents = threadEvents?.length || compactionEvents?.length;
   if (!hasEvents) return final;
 
-  const eventItems: RenderItem[] = (threadEvents ?? [])
-    .filter((e) => e.type !== 'git:changed' && e.type !== 'compact_boundary')
-    .map((e) => ({ type: 'thread-event' as const, event: e }));
+  const filteredEvents = (threadEvents ?? []).filter(
+    (e) => e.type !== 'git:changed' && e.type !== 'compact_boundary',
+  );
+
+  // Group workflow events: all events sharing the same workflowId become a
+  // single workflow-event-group item. Git events (git:stage, git:commit, etc.)
+  // carry the workflowId when emitted from a workflow pipeline.
+  const eventItems: RenderItem[] = [];
+  const workflowGroups = new Map<string, ThreadEvent[]>();
+  const consumedEventIds = new Set<string>();
+
+  // First pass: collect all events that carry a workflowId and group them
+  for (const e of filteredEvents) {
+    const data = parseEventDataCompat(e.data);
+    const wfId = data.workflowId;
+    if (wfId) {
+      if (!workflowGroups.has(wfId)) workflowGroups.set(wfId, []);
+      workflowGroups.get(wfId)!.push(e);
+      consumedEventIds.add(e.id);
+    }
+  }
+
+  // Sort events within each workflow group chronologically
+  for (const [, events] of workflowGroups) {
+    events.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''));
+  }
+
+  // Build render items: workflow groups + remaining individual events
+  for (const [, events] of workflowGroups) {
+    if (events.length > 0) {
+      eventItems.push({ type: 'workflow-event-group' as const, events });
+    }
+  }
+
+  for (const e of filteredEvents) {
+    if (!consumedEventIds.has(e.id)) {
+      eventItems.push({ type: 'thread-event' as const, event: e });
+    }
+  }
 
   const compactionItems: RenderItem[] = (compactionEvents ?? []).map((e) => ({
     type: 'compaction-event' as const,
@@ -184,4 +223,16 @@ export function buildGroupedRenderItems(
   });
 
   return merged;
+}
+
+/** Parse event data string or object */
+function parseEventDataCompat(data: string | Record<string, unknown>): Record<string, any> {
+  if (typeof data === 'string') {
+    try {
+      return JSON.parse(data);
+    } catch {
+      return {};
+    }
+  }
+  return data as Record<string, any>;
 }

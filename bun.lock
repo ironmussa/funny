@@ -129,7 +129,7 @@
       },
       "devDependencies": {
         "@chromatic-com/storybook": "^5.0.1",
-        "@storybook/addon-a11y": "^10.2.13",
+        "@storybook/addon-a11y": "^10.2.16",
         "@storybook/addon-docs": "^10.2.13",
         "@storybook/addon-onboarding": "^10.2.13",
         "@storybook/addon-vitest": "^10.2.13",
@@ -1120,7 +1120,7 @@
 
     "@standard-schema/utils": ["@standard-schema/utils@0.3.0", "", {}, "sha512-e7Mew686owMaPJVNNLs55PUvgz371nKgwsc4vxE49zsODpJEnxgxRo2y/OKrqueavXgZNMDVj3DdHFlaSAeU8g=="],
 
-    "@storybook/addon-a11y": ["@storybook/addon-a11y@10.2.13", "", { "dependencies": { "@storybook/global": "^5.0.0", "axe-core": "^4.2.0" }, "peerDependencies": { "storybook": "^10.2.13" } }, "sha512-zuR1n1xgWoieEnr6E5xdTR40BI61IBQahgmsRpTvqRffL3mxAs5aFoORDmA5pZWI2LE9URdMkY85h218ijuLiw=="],
+    "@storybook/addon-a11y": ["@storybook/addon-a11y@10.2.16", "", { "dependencies": { "@storybook/global": "^5.0.0", "axe-core": "^4.2.0" }, "peerDependencies": { "storybook": "^10.2.16" } }, "sha512-mdAOhAHMaeN9bLRpuW03p3UAiL0DZSa/uqHWR5Y1usCvslA6zBn23HnD8si6nhKTnjnSbXv/S4W6H8OVmlbmtg=="],
 
     "@storybook/addon-docs": ["@storybook/addon-docs@10.2.13", "", { "dependencies": { "@mdx-js/react": "^3.0.0", "@storybook/csf-plugin": "10.2.13", "@storybook/icons": "^2.0.1", "@storybook/react-dom-shim": "10.2.13", "react": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0", "react-dom": "^16.8.0 || ^17.0.0 || ^18.0.0 || ^19.0.0", "ts-dedent": "^2.0.0" }, "peerDependencies": { "storybook": "^10.2.13" } }, "sha512-puMxpJbt/CuodLIbKDxWrW1ZgADYomfNHWEKp2d2l2eJjp17rADx0h3PABuNbX+YHbJwYcDdqluSnQwMysFEOA=="],
 

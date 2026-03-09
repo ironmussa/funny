@@ -355,6 +355,8 @@ export interface WSQueueUpdateData {
   nextMessage?: string;
   /** Content of the message that was just dequeued and is now being processed */
   dequeuedMessage?: string;
+  /** Images attached to the dequeued message */
+  dequeuedImages?: ImageAttachment[];
 }
 
 export interface WSWorkflowStepData {
@@ -847,7 +849,24 @@ export type ThreadEventType =
   | 'git:stash'
   | 'git:stash_pop'
   | 'git:reset_soft'
-  | 'compact_boundary';
+  | 'compact_boundary'
+  | 'workflow:started'
+  | 'workflow:completed'
+  | 'workflow:hooks'
+  | 'workflow:review'
+  | 'workflow:fix'
+  | 'workflow:precommit_fix'
+  | 'pipeline:started'
+  | 'pipeline:reviewer_started'
+  | 'pipeline:review_verdict'
+  | 'pipeline:corrector_started'
+  | 'pipeline:fix_applied'
+  | 'pipeline:completed'
+  | 'pipeline:precommit_hooks'
+  | 'pipeline:precommit_fixer_started'
+  | 'pipeline:precommit_fixing'
+  | 'pipeline:precommit_fixed'
+  | 'pipeline:precommit_failed';
 
 export interface ThreadEvent {
   id: string;

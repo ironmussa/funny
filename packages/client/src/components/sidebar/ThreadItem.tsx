@@ -31,7 +31,7 @@ import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { statusConfig, gitSyncStateConfig, timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
-interface ThreadItemProps {
+export interface ThreadItemProps {
   thread: Thread;
   projectPath: string;
   isSelected: boolean;

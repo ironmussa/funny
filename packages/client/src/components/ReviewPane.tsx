@@ -674,54 +674,6 @@ export function ReviewPane() {
     setGeneratingMsg(false);
   };
 
-  // Build a prompt that delegates a git action to the agent via /commit or /commit-push-pr
-  const buildAgentCommitPrompt = (
-    action: 'commit' | 'amend' | 'commit-pr',
-    filesToStage: string[],
-    filesToUnstage: string[],
-    commitMsg: string,
-  ): string => {
-    const parts: string[] = [];
-
-    if (filesToUnstage.length > 0) {
-      parts.push(`First unstage these files: ${filesToUnstage.join(', ')}`);
-    }
-    if (filesToStage.length > 0) {
-      parts.push(`Stage these files: ${filesToStage.join(', ')}`);
-    }
-
-    const slashCommand = action === 'commit-pr' ? '/commit-push-pr' : '/commit';
-    parts.push(`Then use ${slashCommand} with this commit message:`);
-    parts.push(commitMsg);
-
-    if (action === 'amend') {
-      parts.push('\nNote: This should amend the previous commit, not create a new one.');
-    }
-
-    return parts.join('\n\n');
-  };
-
-  const sendAgentCommitMessage = async (prompt: string): Promise<boolean> => {
-    if (!effectiveThreadId) return false;
-
-    const { allowedTools, disallowedTools } = deriveToolLists(
-      useSettingsStore.getState().toolPermissions,
-    );
-
-    const result = await api.sendMessage(effectiveThreadId, prompt, {
-      allowedTools,
-      disallowedTools,
-    });
-
-    if (result.isErr()) {
-      toast.error(result.error.message);
-      return false;
-    }
-
-    toast.success(t('review.agentCommitSent', 'Commit task sent to agent'));
-    return true;
-  };
-
   const handleCommitAction = async () => {
     if (!hasGitContext || !commitTitle.trim() || checkedFiles.size === 0 || actionInProgress)
       return;
@@ -741,64 +693,29 @@ export function ReviewPane() {
       ? `${commitTitle.trim()}\n\n${commitBody.trim()}`
       : commitTitle.trim();
 
-    // When a thread is active, delegate git actions
+    // When a thread is active, use the server-side workflow service
+    // so operations appear as grouped workflow events (not agent messages)
     if (effectiveThreadId) {
-      // commit-pr delegates to the agent via /commit-push-pr (handles hook retries)
-      if (selectedAction === 'commit-pr') {
-        const prompt = buildAgentCommitPrompt('commit-pr', toStage, toUnstage, commitMsg);
-        const ok = await sendAgentCommitMessage(prompt);
-        if (!ok) {
-          setActionInProgress(null);
-          commitLockRef.current = false;
-          return;
-        }
-        setActionInProgress(null);
-        commitLockRef.current = false;
-        setCommitTitleRaw('');
-        setCommitBodyRaw('');
-        if (draftId) clearCommitDraft(draftId);
-        return;
-      }
+      const params: import('@funny/shared').GitWorkflowRequest = {
+        action: selectedAction,
+        message: commitMsg,
+        filesToStage: toStage,
+        filesToUnstage: toUnstage,
+        amend: selectedAction === 'amend',
+        prTitle: selectedAction === 'commit-pr' ? commitTitle.trim() : undefined,
+        prBody: selectedAction === 'commit-pr' ? commitBody.trim() : undefined,
+        cleanup: selectedAction === 'commit-merge',
+      };
 
-      // Multi-step actions (push, merge) use the server-side workflow service
-      if (selectedAction === 'commit-push' || selectedAction === 'commit-merge') {
-        const params: import('@funny/shared').GitWorkflowRequest = {
-          action: selectedAction,
-          message: commitMsg,
-          filesToStage: toStage,
-          filesToUnstage: toUnstage,
-          amend: false,
-          prTitle: undefined,
-          prBody: undefined,
-          cleanup: selectedAction === 'commit-merge',
-        };
-
-        const result = await api.startWorkflow(effectiveThreadId, params);
-        if (result.isErr()) {
-          toast.error(result.error.message);
-          setActionInProgress(null);
-          commitLockRef.current = false;
-          return;
-        }
-
-        // Progress is now driven by WS events
-        setCommitTitleRaw('');
-        setCommitBodyRaw('');
-        if (draftId) clearCommitDraft(draftId);
-        return;
-      }
-
-      // Simple commit/amend use the agent via slash commands
-      const prompt = buildAgentCommitPrompt(selectedAction, toStage, toUnstage, commitMsg);
-      const ok = await sendAgentCommitMessage(prompt);
-      if (!ok) {
+      const result = await api.startWorkflow(effectiveThreadId, params);
+      if (result.isErr()) {
+        toast.error(result.error.message);
         setActionInProgress(null);
         commitLockRef.current = false;
         return;
       }
-      // Agent takes over — clear UI state
-      setActionInProgress(null);
-      commitLockRef.current = false;
+
+      // Progress is now driven by WS events (workflow events in the timeline)
       setCommitTitleRaw('');
       setCommitBodyRaw('');
       if (draftId) clearCommitDraft(draftId);
@@ -904,22 +821,9 @@ export function ReviewPane() {
     if (!hasGitContext || mergeInProgress) return;
     setMergeInProgress(true);
 
-    // Delegate to agent when a thread is active (works for both worktree and local mode)
-    if (effectiveThreadId) {
-      const target = baseBranch || 'main';
-      const ok = await sendAgentCommitMessage(
-        `Merge the current branch into ${target}. After merging, clean up the branch.`,
-      );
-      setMergeInProgress(false);
-      if (!ok) return;
-      return;
-    }
-
-    // Fallback (shouldn't reach here as merge is thread-only, but keep for safety)
-    const result = await api.startWorkflow(effectiveThreadId!, {
-      action: 'merge',
-      cleanup: true,
-    });
+    const result = effectiveThreadId
+      ? await api.startWorkflow(effectiveThreadId, { action: 'merge', cleanup: true })
+      : await api.projectStartWorkflow(projectModeId!, { action: 'merge', cleanup: true });
 
     if (result.isErr()) {
       toast.error(result.error.message);
@@ -932,26 +836,17 @@ export function ReviewPane() {
     if (!hasGitContext || prInProgress || !prDialog) return;
     setPrInProgress(true);
 
-    // When a thread is active, delegate to agent
-    if (effectiveThreadId) {
-      const title = prDialog.title.trim();
-      const body = prDialog.body.trim();
-      const prompt = body
-        ? `Push the current branch and create a pull request with title: "${title}" and body: "${body}"`
-        : `Push the current branch and create a pull request with title: "${title}"`;
-      const ok = await sendAgentCommitMessage(prompt);
-      setPrInProgress(false);
-      if (!ok) return;
-      setPrDialog(null);
-      return;
-    }
-
-    // Fallback (shouldn't reach here as PR is thread-only, but keep for safety)
-    const result = await api.startWorkflow(effectiveThreadId!, {
-      action: 'create-pr',
-      prTitle: prDialog.title.trim(),
-      prBody: prDialog.body.trim(),
-    });
+    const result = effectiveThreadId
+      ? await api.startWorkflow(effectiveThreadId, {
+          action: 'create-pr',
+          prTitle: prDialog.title.trim(),
+          prBody: prDialog.body.trim(),
+        })
+      : await api.projectStartWorkflow(projectModeId!, {
+          action: 'create-pr',
+          prTitle: prDialog.title.trim(),
+          prBody: prDialog.body.trim(),
+        });
 
     if (result.isErr()) {
       toast.error(result.error.message);

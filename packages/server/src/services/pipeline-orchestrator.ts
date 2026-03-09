@@ -4,17 +4,19 @@
  * @domain type: app-service
  * @domain layer: application
  * @domain emits: pipeline:run_started, pipeline:stage_update, pipeline:run_completed (via WSBroker)
- * @domain depends: ThreadService, GitService, ThreadEventBus
+ * @domain depends: GitPipelines, ThreadEventBus
  *
- * Orchestrates the review→fix pipeline loop.
+ * Pipeline configuration CRUD, run tracking, and the entry point for
+ * automatic post-commit review (triggered by pipeline-trigger-handler).
  *
- * Stage 0 (pre-commit fixer) is handled by git-workflow-service.
- * This orchestrator handles:
- *   Stage 1: REVIEWER — read-only agent that analyzes the commit diff
- *   Stage 2: CORRECTOR — worktree agent that fixes findings
+ * All review→fix node logic lives in git-pipelines.ts.
+ * This module provides:
+ *   - Pipeline/run CRUD (DB)
+ *   - startPipelineRun() — runs the review-fix sub-pipeline for non-workflow commits
+ *   - Pure helpers: parseReviewVerdict, isHookAutoFixable, buildPrecommitFixerPrompt
+ *   - cleanupReviewerThread
  */
 
-import { gitRead, gitWrite } from '@funny/core/git';
 import type {
   AgentModel,
   PipelineRunStatus,
@@ -22,15 +24,16 @@ import type {
   PipelineVerdict,
   WSEvent,
 } from '@funny/shared';
+import { runPipeline, type PipelineStateChange } from '@funny/shared/pipeline-engine';
 import { eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import { db } from '../db/index.js';
 import { pipelineRuns, pipelines } from '../db/schema.js';
 import { log } from '../lib/logger.js';
+import type { GitPipelineContext } from './git-pipelines.js';
 import * as pm from './project-manager.js';
 import * as tm from './thread-manager.js';
-import { createAndStartThread } from './thread-service.js';
 import { wsBroker } from './ws-broker.js';
 
 // ── Types ────────────────────────────────────────────────────
@@ -49,16 +52,9 @@ export interface PipelineConfig {
   precommitFixMaxIterations: number;
 }
 
-// ── In-memory tracking of active pipeline runs ──────────────
+// ── Active runs (for cancellation) ───────────────────────────
 
-/** Maps pipelineRunId → true while a run is active */
-const activeRuns = new Map<string, boolean>();
-
-/** Maps threadId → pipelineRunId for corrector threads */
-const correctorThreadToRun = new Map<string, string>();
-
-/** Maps threadId → pipelineRunId for reviewer threads */
-const reviewerThreadToRun = new Map<string, string>();
+const activeRuns = new Map<string, AbortController>();
 
 // ── Pipeline Repository ─────────────────────────────────────
 
@@ -174,83 +170,50 @@ export function getRunsForThread(threadId: string) {
   return db.select().from(pipelineRuns).where(eq(pipelineRuns.threadId, threadId)).all();
 }
 
-export function getRunForCorrectorThread(threadId: string): string | undefined {
-  return correctorThreadToRun.get(threadId);
-}
-
-export function getRunForReviewerThread(threadId: string): string | undefined {
-  return reviewerThreadToRun.get(threadId);
-}
-
 // ── WS emission helpers ─────────────────────────────────────
 
 function emitPipelineEvent(userId: string, event: WSEvent) {
   wsBroker.emitToUser(userId, event);
 }
 
-// ── Reviewer Prompt ─────────────────────────────────────────
+// ── Node name → DB status/stage mapping ──────────────────────
 
-function buildReviewerPrompt(commitSha: string | undefined, _cwd: string): string {
-  const shaRef = commitSha ? commitSha : 'HEAD';
-  return `You are a code reviewer. Analyze the changes in the latest commit.
-
-Run this command to get the diff:
-\`git diff ${shaRef}~1..${shaRef}\`
-
-If that fails (first commit), run: \`git show ${shaRef}\`
-
-Review the diff for:
-- Bugs and logic errors
-- Security vulnerabilities
-- Performance issues
-- Missing error handling
-- Code that contradicts existing patterns
-
-You MUST respond with a JSON block at the end of your message in exactly this format:
-\`\`\`json
-{
-  "verdict": "pass" | "fail",
-  "findings": [
-    {
-      "severity": "critical" | "high" | "medium" | "low",
-      "category": "bug" | "security" | "performance" | "logic" | "style",
-      "file": "path/to/file.ts",
-      "line": 42,
-      "description": "What is wrong",
-      "suggestion": "How to fix it"
-    }
-  ]
-}
-\`\`\`
-
-If there are no significant issues, return verdict "pass" with an empty findings array.
-Only flag real problems — do not flag style preferences or nitpicks unless they indicate bugs.`;
+function nodeToRunStatus(nodeName: string, kind: string): PipelineRunStatus {
+  if (kind === 'terminal') return 'completed';
+  switch (nodeName) {
+    case 'review':
+      return 'reviewing';
+    case 'fix':
+    case 'apply-patch':
+    case 'commit-fix':
+      return 'fixing';
+    default:
+      return 'running';
+  }
 }
 
-// ── Corrector Prompt ────────────────────────────────────────
-
-function buildCorrectorPrompt(findings: string): string {
-  return `You are a code corrector. The reviewer found the following issues that need to be fixed:
-
-${findings}
-
-Instructions:
-1. Read each finding carefully
-2. Fix the issues in the source files
-3. Run the build to verify your changes compile: \`bun run build\` or equivalent
-4. Run the tests to verify nothing is broken: \`bun run test\` or equivalent
-5. Do NOT create a git commit — just fix the files
-
-Fix only what the reviewer flagged. Do not make unrelated changes.`;
+function nodeToStageType(nodeName: string): PipelineStageType {
+  switch (nodeName) {
+    case 'fix':
+    case 'apply-patch':
+    case 'commit-fix':
+      return 'corrector';
+    default:
+      return 'reviewer';
+  }
 }
 
-// ── Core orchestration ──────────────────────────────────────
+// ── Start pipeline run ───────────────────────────────────────
 
 /**
- * Start a new pipeline review for a commit.
- * Called by the pipeline-trigger-handler when git:committed fires.
+ * Start a standalone pipeline review-fix run.
+ * Called by pipeline-trigger-handler for commits made outside the workflow
+ * (e.g., by an agent running `git commit` directly).
+ *
+ * For workflow commits (from the UI), the review-fix is embedded as a
+ * sub-pipeline inside the commit pipeline — see git-pipelines.ts.
  */
-export async function startReview(opts: {
+export async function startPipelineRun(opts: {
   pipeline: PipelineConfig;
   threadId: string;
   userId: string;
@@ -262,21 +225,15 @@ export async function startReview(opts: {
 }): Promise<void> {
   const { pipeline, threadId, userId, projectId, commitSha, cwd } = opts;
 
-  // If this commit came from the corrector, continue the existing run
-  if (opts.isPipelineCommit && opts.pipelineRunId) {
-    const existingRun = getRunById(opts.pipelineRunId);
-    if (existingRun) {
-      log.info('Pipeline: continuing review after corrector commit', {
-        namespace: 'pipeline',
-        runId: opts.pipelineRunId,
-        iteration: existingRun.iteration,
-      });
-      await runReviewerStage(existingRun.id, pipeline, threadId, userId, projectId, cwd, commitSha);
-      return;
-    }
+  // Skip pipeline commits — the review-fix loop drives these internally
+  if (opts.isPipelineCommit) {
+    log.info('Pipeline: skipping trigger for pipeline commit', {
+      namespace: 'pipeline',
+      pipelineRunId: opts.pipelineRunId,
+    });
+    return;
   }
 
-  // Create a new pipeline run
   const runId = createRun({
     pipelineId: pipeline.id,
     threadId,
@@ -284,20 +241,13 @@ export async function startReview(opts: {
     commitSha,
   });
 
-  activeRuns.set(runId, true);
-
   emitPipelineEvent(userId, {
     type: 'pipeline:run_started',
     threadId,
-    data: {
-      pipelineId: pipeline.id,
-      runId,
-      threadId,
-      commitSha,
-    },
+    data: { pipelineId: pipeline.id, runId, threadId, commitSha },
   });
 
-  log.info('Pipeline: starting review', {
+  log.info('Pipeline: starting standalone review-fix run', {
     namespace: 'pipeline',
     runId,
     pipelineId: pipeline.id,
@@ -305,407 +255,163 @@ export async function startReview(opts: {
     commitSha,
   });
 
-  await runReviewerStage(runId, pipeline, threadId, userId, projectId, cwd, commitSha);
-}
+  const abortController = new AbortController();
+  activeRuns.set(runId, abortController);
 
-/**
- * Run the reviewer stage — creates a worktree thread and spawns a read-only agent.
- *
- * Each reviewer gets its own worktree so multiple pipelines can run
- * in parallel without checkout conflicts.
- */
-async function runReviewerStage(
-  runId: string,
-  pipeline: PipelineConfig,
-  threadId: string,
-  userId: string,
-  projectId: string,
-  _cwd: string,
-  commitSha?: string,
-): Promise<void> {
-  updateRun(runId, { status: 'reviewing', currentStage: 'reviewer' });
-
-  const run = getRunById(runId);
-
-  emitPipelineEvent(userId, {
-    type: 'pipeline:stage_update',
+  // Build a GitPipelineContext with only the fields needed for review-fix
+  const noop = () => {};
+  const initialCtx: GitPipelineContext = {
+    contextId: threadId,
     threadId,
-    data: {
-      pipelineId: pipeline.id,
-      runId,
-      threadId,
-      stage: 'reviewer' as PipelineStageType,
-      iteration: run?.iteration || 1,
-      maxIterations: pipeline.maxIterations,
-    },
-  });
+    projectId,
+    userId,
+    cwd,
+    action: 'commit', // not used by review-fix nodes
+    hooks: [],
+    workflowId: runId,
+    steps: [],
+    emit: noop,
+    setStep: noop,
+    // Pipeline config
+    pipelineEnabled: true,
+    precommitFixEnabled: pipeline.precommitFixEnabled,
+    precommitFixModel: pipeline.precommitFixModel,
+    precommitFixMaxIterations: pipeline.precommitFixMaxIterations,
+    reviewModel: pipeline.reviewModel,
+    fixModel: pipeline.fixModel,
+    maxReviewIterations: pipeline.maxIterations,
+    // Review-fix tracking
+    commitSha: commitSha ?? null,
+    iteration: 1,
+    reviewerThreadId: null,
+    verdict: null,
+    findings: null,
+    correctorThreadId: null,
+    patchDiff: null,
+    noChanges: false,
+  };
 
-  // Resolve the branch to base the worktree on.
-  // Use the parent thread's branch so the reviewer sees exactly the same code.
-  const parentThread = tm.getThread(threadId);
-  const baseBranch = parentThread?.branch || undefined;
+  // State change callback — persist to DB + emit WS
+  const onStateChange = (change: PipelineStateChange<GitPipelineContext>) => {
+    const { kind, nodeName, ctx } = change;
 
-  const prompt = buildReviewerPrompt(commitSha, _cwd);
+    if (kind === 'entering' || kind === 'completed') {
+      const dbStatus = nodeToRunStatus(nodeName, kind);
+      const dbStage = nodeToStageType(nodeName);
 
-  try {
-    const reviewerThread = await createAndStartThread({
-      projectId,
-      userId,
-      title: `Pipeline review (iteration ${run?.iteration || 1})`,
-      mode: 'worktree',
-      provider: 'claude',
-      model: pipeline.reviewModel,
-      permissionMode: 'plan', // read-only
-      source: 'automation',
-      prompt,
-      parentThreadId: threadId,
-      baseBranch,
-    });
-
-    // Track the reviewer thread → run mapping
-    reviewerThreadToRun.set(reviewerThread.id, runId);
-    updateRun(runId, { reviewerThreadId: reviewerThread.id });
-
-    log.info('Pipeline: reviewer thread created', {
-      namespace: 'pipeline',
-      runId,
-      reviewerThreadId: reviewerThread.id,
-      baseBranch,
-    });
-  } catch (err) {
-    log.error('Pipeline: failed to start reviewer agent', {
-      namespace: 'pipeline',
-      runId,
-      error: String(err),
-    });
-    completePipelineRun(runId, threadId, userId, pipeline.id, 'failed');
-  }
-}
-
-/**
- * Handle reviewer completion — parse verdict and decide next action.
- * Called by the pipeline-completed-handler when agent:completed fires
- * on a reviewer worktree thread.
- */
-export async function handleReviewerCompleted(
-  runId: string,
-  reviewerThreadId: string,
-  userId: string,
-  projectId: string,
-): Promise<void> {
-  const run = getRunById(runId);
-  if (!run) return;
-
-  const pipelineRow = getPipelineById(run.pipelineId);
-  if (!pipelineRow) return;
-  const pipeline = toPipelineConfig(pipelineRow);
-
-  const parentThreadId = run.threadId;
-
-  // Get the last assistant message from the REVIEWER thread to parse the verdict
-  const reviewerThread = tm.getThreadWithMessages(reviewerThreadId);
-  if (!reviewerThread) return;
-
-  const lastAssistantMsg = [...reviewerThread.messages]
-    .reverse()
-    .find((m) => m.role === 'assistant');
-
-  if (!lastAssistantMsg) {
-    log.warn('Pipeline: no assistant message found after review', {
-      namespace: 'pipeline',
-      runId,
-    });
-    await cleanupReviewerThread(reviewerThreadId, projectId);
-    completePipelineRun(runId, parentThreadId, userId, pipeline.id, 'failed');
-    return;
-  }
-
-  // Parse the verdict from the message
-  const { verdict, findings } = parseReviewVerdict(lastAssistantMsg.content);
-
-  updateRun(runId, { verdict, findings: findings ? JSON.stringify(findings) : null });
-
-  emitPipelineEvent(userId, {
-    type: 'pipeline:stage_update',
-    threadId: parentThreadId,
-    data: {
-      pipelineId: pipeline.id,
-      runId,
-      threadId: parentThreadId,
-      stage: 'reviewer' as PipelineStageType,
-      iteration: run.iteration,
-      maxIterations: run.maxIterations,
-      verdict: verdict as PipelineVerdict,
-      findings: findings ? JSON.stringify(findings) : undefined,
-    },
-  });
-
-  // Clean up the reviewer worktree — we're done with it
-  await cleanupReviewerThread(reviewerThreadId, projectId);
-
-  if (verdict === 'pass') {
-    log.info('Pipeline: review PASSED', { namespace: 'pipeline', runId });
-    completePipelineRun(runId, parentThreadId, userId, pipeline.id, 'completed');
-    return;
-  }
-
-  // FAIL — check iteration limit
-  if (run.iteration >= run.maxIterations) {
-    log.warn('Pipeline: max iterations reached', {
-      namespace: 'pipeline',
-      runId,
-      iteration: run.iteration,
-    });
-    completePipelineRun(runId, parentThreadId, userId, pipeline.id, 'failed');
-    return;
-  }
-
-  // Resolve the parent thread's cwd for the corrector stage
-  const parentThread = tm.getThread(parentThreadId);
-  const project = pm.getProject(projectId);
-  const parentCwd = parentThread?.worktreePath || project?.path;
-  if (!parentCwd) {
-    completePipelineRun(runId, parentThreadId, userId, pipeline.id, 'failed');
-    return;
-  }
-
-  // Start the corrector stage
-  log.info('Pipeline: review FAILED, starting corrector', {
-    namespace: 'pipeline',
-    runId,
-    iteration: run.iteration,
-  });
-
-  await runCorrectorStage(runId, pipeline, parentThreadId, userId, projectId, parentCwd, findings);
-}
-
-/**
- * Run the corrector stage — creates a worktree thread and spawns a fixer agent.
- */
-async function runCorrectorStage(
-  runId: string,
-  pipeline: PipelineConfig,
-  parentThreadId: string,
-  userId: string,
-  projectId: string,
-  cwd: string,
-  findings: unknown,
-): Promise<void> {
-  updateRun(runId, { status: 'fixing', currentStage: 'corrector' });
-
-  emitPipelineEvent(userId, {
-    type: 'pipeline:stage_update',
-    threadId: parentThreadId,
-    data: {
-      pipelineId: pipeline.id,
-      runId,
-      threadId: parentThreadId,
-      stage: 'corrector' as PipelineStageType,
-      iteration: getRunById(runId)?.iteration || 1,
-      maxIterations: pipeline.maxIterations,
-    },
-  });
-
-  const findingsStr = typeof findings === 'string' ? findings : JSON.stringify(findings, null, 2);
-  const prompt = buildCorrectorPrompt(findingsStr);
-
-  try {
-    // Create a worktree thread for the corrector
-    const correctorThread = await createAndStartThread({
-      projectId,
-      userId,
-      title: `Pipeline fix (iteration ${getRunById(runId)?.iteration || 1})`,
-      mode: 'worktree',
-      provider: 'claude',
-      model: pipeline.fixModel,
-      permissionMode: 'autoEdit',
-      source: 'automation',
-      prompt,
-      parentThreadId,
-    });
-
-    // Track the corrector thread → run mapping
-    correctorThreadToRun.set(correctorThread.id, runId);
-    updateRun(runId, { fixerThreadId: correctorThread.id });
-
-    log.info('Pipeline: corrector thread created', {
-      namespace: 'pipeline',
-      runId,
-      correctorThreadId: correctorThread.id,
-    });
-  } catch (err) {
-    log.error('Pipeline: failed to start corrector', {
-      namespace: 'pipeline',
-      runId,
-      error: String(err),
-    });
-    completePipelineRun(runId, parentThreadId, userId, pipeline.id, 'failed');
-  }
-}
-
-/**
- * Handle corrector completion — apply changes and commit.
- * Called by the pipeline-completed-handler when agent:completed fires on a corrector thread.
- */
-export async function handleCorrectorCompleted(
-  runId: string,
-  correctorThreadId: string,
-  userId: string,
-  projectId: string,
-): Promise<void> {
-  const run = getRunById(runId);
-  if (!run) return;
-
-  const pipelineRow = getPipelineById(run.pipelineId);
-  if (!pipelineRow) return;
-
-  const correctorThread = tm.getThread(correctorThreadId);
-  if (!correctorThread) return;
-
-  const pipelineId = pipelineRow.id;
-
-  const correctorCwd = correctorThread.worktreePath || correctorThread.initCwd;
-  if (!correctorCwd) {
-    completePipelineRun(runId, run.threadId, userId, pipelineId, 'failed');
-    return;
-  }
-
-  // Check if the corrector made any changes
-  try {
-    const statusResult = await gitRead(['status', '--porcelain'], {
-      cwd: correctorCwd,
-      reject: false,
-    });
-
-    const hasChanges = statusResult.exitCode === 0 && statusResult.stdout.trim().length > 0;
-
-    if (!hasChanges) {
-      log.info('Pipeline: corrector made no changes, skipping', {
-        namespace: 'pipeline',
-        runId,
+      updateRun(runId, {
+        status: dbStatus,
+        currentStage: dbStage,
+        iteration: ctx.iteration,
+        commitSha: ctx.commitSha,
+        verdict: ctx.verdict,
+        findings: ctx.findings,
+        reviewerThreadId: ctx.reviewerThreadId,
+        fixerThreadId: ctx.correctorThreadId,
+        completedAt: null,
       });
-      completePipelineRun(runId, run.threadId, userId, pipelineId, 'skipped');
-      correctorThreadToRun.delete(correctorThreadId);
-      return;
-    }
 
-    // Stage all changes in the worktree
-    await gitRead(['add', '-A'], { cwd: correctorCwd, reject: false });
-
-    // Generate a diff patch from the worktree
-    const diffResult = await gitRead(['diff', '--cached'], {
-      cwd: correctorCwd,
-      reject: false,
-    });
-
-    if (diffResult.exitCode !== 0 || !diffResult.stdout.trim()) {
-      log.warn('Pipeline: failed to get diff from corrector worktree', {
-        namespace: 'pipeline',
-        runId,
-      });
-      completePipelineRun(runId, run.threadId, userId, pipelineId, 'failed');
-      correctorThreadToRun.delete(correctorThreadId);
-      return;
-    }
-
-    // Apply the patch to the original thread's working directory
-    const parentThread = tm.getThread(run.threadId);
-    const parentCwd = parentThread?.worktreePath || parentThread?.initCwd;
-    const project = pm.getProject(projectId);
-    const targetCwd = parentCwd || project?.path;
-
-    if (!targetCwd) {
-      completePipelineRun(runId, run.threadId, userId, pipelineId, 'failed');
-      correctorThreadToRun.delete(correctorThreadId);
-      return;
-    }
-
-    // Apply patch via gitWrite (supports stdin)
-    try {
-      const applyResult = await gitWrite(['apply', '--index', '-'], {
-        cwd: targetCwd,
-        stdin: diffResult.stdout,
-        reject: false,
-      });
-      if (applyResult.exitCode !== 0) {
-        throw new Error(applyResult.stderr || 'git apply failed');
+      if (kind === 'entering') {
+        emitPipelineEvent(userId, {
+          type: 'pipeline:stage_update',
+          threadId,
+          data: {
+            pipelineId: pipeline.id,
+            runId,
+            threadId,
+            stage: dbStage,
+            iteration: ctx.iteration,
+            maxIterations: ctx.maxReviewIterations,
+            verdict: ctx.verdict ?? undefined,
+            findings: ctx.findings ?? undefined,
+          },
+        });
       }
-    } catch (applyErr) {
-      log.error('Pipeline: failed to apply corrector patch', {
+    }
+
+    if (kind === 'terminal') {
+      const now = new Date().toISOString();
+      let terminalStatus: PipelineRunStatus;
+      if (change.outcome === 'completed') {
+        terminalStatus = ctx.noChanges ? 'skipped' : 'completed';
+      } else if (change.outcome === 'cancelled') {
+        terminalStatus = 'failed';
+      } else {
+        terminalStatus = 'failed';
+      }
+
+      updateRun(runId, {
+        status: terminalStatus,
+        iteration: ctx.iteration,
+        commitSha: ctx.commitSha,
+        verdict: ctx.verdict,
+        findings: ctx.findings,
+        completedAt: now,
+      });
+
+      emitPipelineEvent(userId, {
+        type: 'pipeline:run_completed',
+        threadId,
+        data: {
+          pipelineId: pipeline.id,
+          runId,
+          threadId,
+          status: terminalStatus,
+          totalIterations: ctx.iteration,
+        },
+      });
+
+      log.info('Pipeline: run completed', {
         namespace: 'pipeline',
         runId,
-        error: String(applyErr),
+        status: terminalStatus,
+        iterations: ctx.iteration,
       });
-      completePipelineRun(runId, run.threadId, userId, pipelineId, 'failed');
-      correctorThreadToRun.delete(correctorThreadId);
-      return;
     }
+  };
 
-    // Commit the fix on the original thread's branch
-    const iteration = run.iteration;
-    const commitMessage = `fix: address review findings (pipeline run ${runId.slice(0, 8)}, iteration ${iteration})`;
+  // Lazy import to avoid circular dependency at module load time
+  const { reviewFixSubPipeline } = await import('./git-pipelines.js');
 
-    const { commitChanges } = await import('./git-service.js');
-
-    // We need to set the pipeline metadata on the event so it doesn't trigger an infinite loop
-    // We do this by importing threadEventBus and adding a one-time listener before the commit
-    const { threadEventBus } = await import('./thread-event-bus.js');
-
-    // Temporarily patch the next git:committed event to include pipeline metadata
-    const patchListener = (event: { isPipelineCommit?: boolean; pipelineRunId?: string }) => {
-      event.isPipelineCommit = true;
-      event.pipelineRunId = runId;
-    };
-    threadEventBus.on('git:committed', patchListener as any);
-
-    try {
-      await commitChanges(run.threadId, userId, targetCwd, commitMessage, false, true);
-    } finally {
-      threadEventBus.removeListener('git:committed', patchListener as any);
-    }
-
-    // Increment iteration
-    updateRun(runId, { iteration: iteration + 1 });
-
-    // Clean up corrector thread tracking
-    correctorThreadToRun.delete(correctorThreadId);
-
-    log.info('Pipeline: corrector changes committed, re-reviewing', {
-      namespace: 'pipeline',
-      runId,
-      iteration: iteration + 1,
+  // Fire-and-forget
+  runPipeline(reviewFixSubPipeline, initialCtx, {
+    signal: abortController.signal,
+    onStateChange,
+    maxIterations: pipeline.maxIterations,
+  })
+    .catch((err) => {
+      log.error('Pipeline: unexpected error', {
+        namespace: 'pipeline',
+        runId,
+        error: String(err),
+      });
+    })
+    .finally(() => {
+      activeRuns.delete(runId);
     });
+}
 
-    // The git:committed event will trigger a new review via the pipeline-trigger-handler
-    // with isPipelineCommit=true and pipelineRunId set, which will call startReview
-    // to continue the existing run.
-  } catch (err) {
-    log.error('Pipeline: corrector completion error', {
-      namespace: 'pipeline',
-      runId,
-      error: String(err),
-    });
-    completePipelineRun(runId, run.threadId, userId, pipelineId, 'failed');
-    correctorThreadToRun.delete(correctorThreadId);
-  }
+// ── Cancel pipeline run ──────────────────────────────────────
+
+export function cancelPipelineRun(runId: string): boolean {
+  const controller = activeRuns.get(runId);
+  if (!controller) return false;
+  controller.abort();
+  return true;
 }
 
 // ── Reviewer cleanup ─────────────────────────────────────────
 
-/**
- * Clean up a reviewer worktree thread — remove the worktree, branch, and
- * archive the thread. Called after the reviewer verdict is parsed.
- */
-async function cleanupReviewerThread(reviewerThreadId: string, projectId: string): Promise<void> {
-  reviewerThreadToRun.delete(reviewerThreadId);
-
+export async function cleanupReviewerThread(
+  reviewerThreadId: string,
+  projectId: string,
+): Promise<void> {
   const reviewerThread = tm.getThread(reviewerThreadId);
   if (!reviewerThread) return;
 
   const project = pm.getProject(projectId);
   if (!project) return;
 
-  // Remove worktree and branch
   if (reviewerThread.worktreePath && reviewerThread.mode === 'worktree') {
     const { removeWorktree, removeBranch } = await import('@funny/core/git');
     await removeWorktree(project.path, reviewerThread.worktreePath).catch((e) => {
@@ -724,7 +430,6 @@ async function cleanupReviewerThread(reviewerThreadId: string, projectId: string
     }
   }
 
-  // Archive the reviewer thread
   tm.updateThread(reviewerThreadId, {
     archived: 1,
     worktreePath: null,
@@ -737,51 +442,12 @@ async function cleanupReviewerThread(reviewerThreadId: string, projectId: string
   });
 }
 
-// ── Completion ──────────────────────────────────────────────
-
-function completePipelineRun(
-  runId: string,
-  threadId: string,
-  userId: string,
-  pipelineId: string,
-  status: PipelineRunStatus,
-) {
-  updateRun(runId, {
-    status,
-    completedAt: new Date().toISOString(),
-  });
-
-  activeRuns.delete(runId);
-
-  const run = getRunById(runId);
-
-  emitPipelineEvent(userId, {
-    type: 'pipeline:run_completed',
-    threadId,
-    data: {
-      pipelineId,
-      runId,
-      threadId,
-      status,
-      totalIterations: run?.iteration || 0,
-    },
-  });
-
-  log.info('Pipeline: run completed', {
-    namespace: 'pipeline',
-    runId,
-    status,
-    iterations: run?.iteration || 0,
-  });
-}
-
 // ── Verdict parser ──────────────────────────────────────────
 
-function parseReviewVerdict(content: string): {
+export function parseReviewVerdict(content: string): {
   verdict: PipelineVerdict;
   findings: unknown;
 } {
-  // Try to extract JSON block from the message
   const jsonMatch = content.match(/```json\s*([\s\S]*?)```/);
   if (jsonMatch) {
     try {
@@ -791,11 +457,10 @@ function parseReviewVerdict(content: string): {
         findings: parsed.findings || [],
       };
     } catch {
-      // Fall through to heuristic
+      // Fall through
     }
   }
 
-  // Try raw JSON object
   const rawJsonMatch = content.match(/\{[\s\S]*"verdict"\s*:\s*"(pass|fail)"[\s\S]*\}/);
   if (rawJsonMatch) {
     try {
@@ -805,11 +470,10 @@ function parseReviewVerdict(content: string): {
         findings: parsed.findings || [],
       };
     } catch {
-      // Fall through to heuristic
+      // Fall through
     }
   }
 
-  // Heuristic: look for pass/fail keywords
   const lowerContent = content.toLowerCase();
   if (
     lowerContent.includes('"verdict": "pass"') ||
@@ -819,18 +483,11 @@ function parseReviewVerdict(content: string): {
     return { verdict: 'pass', findings: [] };
   }
 
-  // Default to fail if we can't parse
   return { verdict: 'fail', findings: content };
 }
 
-// ── Pre-commit fixer ────────────────────────────────────────
+// ── Pre-commit fixer helpers ────────────────────────────────
 
-/**
- * Auto-fixable hook names — secretlint is NOT auto-fixable (security decision).
- */
-// Hook names that the pipeline auto-fixer can handle.
-// Some names reference JS debug primitives — built dynamically to avoid
-// triggering the pre-commit debug-statement grep.
 const _dbg = ['de', 'bug', 'ger'].join('');
 const AUTO_FIXABLE_HOOKS = new Set([
   'oxlint',
@@ -847,9 +504,6 @@ export function isHookAutoFixable(hookLabel: string): boolean {
   return false;
 }
 
-/**
- * Build a prompt for the pre-commit fixer agent.
- */
 export function buildPrecommitFixerPrompt(
   hookName: string,
   errorOutput: string,

@@ -69,6 +69,7 @@ export const agentCompletedQueueHandler: EventHandler<'agent:completed'> = {
           queuedCount: remaining,
           nextMessage: peekNext?.content?.slice(0, 100),
           dequeuedMessage: next.content,
+          dequeuedImages: next.images ? JSON.parse(next.images) : undefined,
         },
       };
       if (thread.userId) {

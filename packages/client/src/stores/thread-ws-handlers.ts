@@ -3,7 +3,7 @@
  * Each handler receives Zustand's get/set accessors plus the event payload.
  */
 
-import type { Thread, MessageRole, ThreadStatus } from '@funny/shared';
+import type { Thread, MessageRole, ThreadStatus, ImageAttachment } from '@funny/shared';
 import { toast } from 'sonner';
 
 import { createClientLogger } from '@/lib/client-logger';
@@ -25,7 +25,11 @@ type Set = (partial: Partial<ThreadState> | ((state: ThreadState) => Partial<Thr
 // arrives so the user message appears right before the new agent's response.
 // We use handleWSMessage (called synchronously during flush) rather than
 // handleWSInit (deferred via startTransition) to guarantee correct ordering.
-const pendingDequeuedMessages = new Map<string, string>();
+interface DequeuedMessageBuffer {
+  content: string;
+  images?: ImageAttachment[];
+}
+const pendingDequeuedMessages = new Map<string, DequeuedMessageBuffer>();
 
 // ── Init ────────────────────────────────────────────────────────
 
@@ -75,7 +79,8 @@ export function handleWSMessage(
         id: crypto.randomUUID(),
         threadId,
         role: 'user' as MessageRole,
-        content: dequeuedMsg,
+        content: dequeuedMsg.content,
+        images: dequeuedMsg.images,
         timestamp: new Date().toISOString(),
       });
     }
@@ -468,14 +473,23 @@ export function handleWSQueueUpdate(
   get: Get,
   set: Set,
   threadId: string,
-  data: { threadId: string; queuedCount: number; nextMessage?: string; dequeuedMessage?: string },
+  data: {
+    threadId: string;
+    queuedCount: number;
+    nextMessage?: string;
+    dequeuedMessage?: string;
+    dequeuedImages?: ImageAttachment[];
+  },
 ): void {
   const { activeThread } = get();
 
   // Buffer dequeued message — will be injected on next agent:init to ensure
   // it appears after the previous agent's response (correct visual ordering)
   if (data.dequeuedMessage) {
-    pendingDequeuedMessages.set(threadId, data.dequeuedMessage);
+    pendingDequeuedMessages.set(threadId, {
+      content: data.dequeuedMessage,
+      images: data.dequeuedImages,
+    });
   }
 
   if (activeThread?.id === threadId) {

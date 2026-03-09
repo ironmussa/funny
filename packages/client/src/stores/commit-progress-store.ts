@@ -6,13 +6,20 @@ export interface CommitProgressEntry {
   title: string;
   steps: GitProgressStep[];
   action: string;
+  workflowId?: string;
 }
 
 interface CommitProgressState {
   /** Active commit operations keyed by threadId (or projectModeId) */
   activeCommits: Record<string, CommitProgressEntry>;
 
-  startCommit: (id: string, title: string, steps: GitProgressStep[], action: string) => void;
+  startCommit: (
+    id: string,
+    title: string,
+    steps: GitProgressStep[],
+    action: string,
+    workflowId?: string,
+  ) => void;
   updateStep: (id: string, stepId: string, update: Partial<GitProgressStep>) => void;
   /** Replace all steps at once (used by server-side workflow progress via WS) */
   replaceSteps: (id: string, steps: GitProgressStep[]) => void;
@@ -22,9 +29,9 @@ interface CommitProgressState {
 export const useCommitProgressStore = create<CommitProgressState>((set) => ({
   activeCommits: {},
 
-  startCommit: (id, title, steps, action) =>
+  startCommit: (id, title, steps, action, workflowId) =>
     set((state) => ({
-      activeCommits: { ...state.activeCommits, [id]: { title, steps, action } },
+      activeCommits: { ...state.activeCommits, [id]: { title, steps, action, workflowId } },
     })),
 
   updateStep: (id, stepId, update) =>

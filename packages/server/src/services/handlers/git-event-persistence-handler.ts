@@ -50,10 +50,12 @@ export const gitCommitPersistenceHandler: EventHandler<'git:committed'> = {
       message: event.message,
       amend: event.amend,
       cwd: event.cwd,
+      workflowId: event.workflowId,
     });
     broadcastThreadEvent(ctx, event.userId, event.threadId, 'git:commit', {
       message: event.message,
       amend: event.amend,
+      workflowId: event.workflowId,
     });
   },
 };
@@ -65,8 +67,11 @@ export const gitPushPersistenceHandler: EventHandler<'git:pushed'> = {
   async action(event: GitPushedEvent, ctx) {
     await ctx.saveThreadEvent(event.threadId, 'git:push', {
       cwd: event.cwd,
+      workflowId: event.workflowId,
     });
-    broadcastThreadEvent(ctx, event.userId, event.threadId, 'git:push', {});
+    broadcastThreadEvent(ctx, event.userId, event.threadId, 'git:push', {
+      workflowId: event.workflowId,
+    });
   },
 };
 
@@ -95,9 +100,11 @@ export const gitStagePersistenceHandler: EventHandler<'git:staged'> = {
     await ctx.saveThreadEvent(event.threadId, 'git:stage', {
       paths: event.paths,
       cwd: event.cwd,
+      workflowId: event.workflowId,
     });
     broadcastThreadEvent(ctx, event.userId, event.threadId, 'git:stage', {
       paths: event.paths,
+      workflowId: event.workflowId,
     });
   },
 };
@@ -110,9 +117,11 @@ export const gitUnstagePersistenceHandler: EventHandler<'git:unstaged'> = {
     await ctx.saveThreadEvent(event.threadId, 'git:unstage', {
       paths: event.paths,
       cwd: event.cwd,
+      workflowId: event.workflowId,
     });
     broadcastThreadEvent(ctx, event.userId, event.threadId, 'git:unstage', {
       paths: event.paths,
+      workflowId: event.workflowId,
     });
   },
 };
@@ -125,9 +134,11 @@ export const gitRevertPersistenceHandler: EventHandler<'git:reverted'> = {
     await ctx.saveThreadEvent(event.threadId, 'git:revert', {
       paths: event.paths,
       cwd: event.cwd,
+      workflowId: event.workflowId,
     });
     broadcastThreadEvent(ctx, event.userId, event.threadId, 'git:revert', {
       paths: event.paths,
+      workflowId: event.workflowId,
     });
   },
 };

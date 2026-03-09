@@ -282,17 +282,29 @@ function handleMessage(e: MessageEvent) {
     case 'git:workflow_progress': {
       import('@/stores/commit-progress-store').then(({ useCommitProgressStore }) => {
         const store = useCommitProgressStore.getState();
-        const { status: wfStatus, title, action, steps } = data;
+        const { status: wfStatus, title, action, steps, workflowId } = data;
 
         if (wfStatus === 'started') {
-          store.startCommit(threadId, title, steps, action);
+          store.startCommit(threadId, title, steps, action, workflowId);
         } else if (wfStatus === 'step_update') {
           store.replaceSteps(threadId, steps);
+          // Toast when pre-commit hooks fail
+          const failedHook = steps?.find((s: any) => s.id === 'hooks' && s.status === 'failed');
+          if (failedHook) {
+            toast.error('Pre-commit hook failed', {
+              description: failedHook.error
+                ? failedHook.error.slice(0, 120)
+                : 'A pre-commit hook did not pass',
+            });
+          }
         } else if (wfStatus === 'completed') {
           store.replaceSteps(threadId, steps);
           setTimeout(() => store.finishCommit(threadId), 1500);
         } else if (wfStatus === 'failed') {
           store.replaceSteps(threadId, steps);
+          toast.error('Workflow failed', {
+            description: data.title || 'The git operation failed',
+          });
         }
       });
 

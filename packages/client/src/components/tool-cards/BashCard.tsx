@@ -29,19 +29,12 @@ export function BashCard({
   );
   const { highlight } = useShiki();
   const [highlightedCommand, setHighlightedCommand] = useState<string | null>(null);
-  const [highlightedOutput, setHighlightedOutput] = useState<string | null>(null);
 
   useEffect(() => {
     if (expanded && command) {
       highlight(command, 'bash').then(setHighlightedCommand);
     }
   }, [expanded, command, highlight]);
-
-  useEffect(() => {
-    if (expanded && output) {
-      highlight(output, 'bash').then(setHighlightedOutput);
-    }
-  }, [expanded, output, highlight]);
 
   return (
     <div className="max-w-full overflow-hidden text-sm">
@@ -93,17 +86,10 @@ export function BashCard({
             </div>
             {output ? (
               <div className="rounded border border-border/40 bg-background/80 px-2.5 py-1.5">
-                {highlightedOutput ? (
-                  <div
-                    className="whitespace-pre-wrap break-all font-mono text-sm leading-relaxed [&_.shiki]:!bg-transparent [&_code]:!p-0 [&_pre]:!m-0"
-                    dangerouslySetInnerHTML={{ __html: highlightedOutput }}
-                  />
-                ) : (
-                  <pre
-                    className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-muted-foreground"
-                    dangerouslySetInnerHTML={{ __html: htmlOutput! }}
-                  />
-                )}
+                <pre
+                  className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-muted-foreground"
+                  dangerouslySetInnerHTML={{ __html: htmlOutput! }}
+                />
               </div>
             ) : (
               <div className="py-1 text-sm italic text-muted-foreground/50">

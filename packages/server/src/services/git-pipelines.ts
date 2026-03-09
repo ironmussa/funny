@@ -126,7 +126,17 @@ async function unstageNode(ctx: GitPipelineContext): Promise<GitPipelineContext>
   ctx.setStep('unstage', { status: 'running' });
 
   if (ctx.threadId) {
-    await gitServiceUnstage(ctx.threadId, ctx.userId, ctx.cwd, ctx.filesToUnstage!, ctx.workflowId);
+    const result = await gitServiceUnstage(
+      ctx.threadId,
+      ctx.userId,
+      ctx.cwd,
+      ctx.filesToUnstage!,
+      ctx.workflowId,
+    );
+    if (result.isErr()) {
+      const e = result.error;
+      throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
+    }
   } else {
     const result = await gitUnstageFiles(ctx.cwd, ctx.filesToUnstage!);
     if (result.isErr()) throw new Error(result.error.message);
@@ -140,7 +150,17 @@ async function stageNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
   ctx.setStep('stage', { status: 'running' });
 
   if (ctx.threadId) {
-    await gitServiceStage(ctx.threadId, ctx.userId, ctx.cwd, ctx.filesToStage!, ctx.workflowId);
+    const result = await gitServiceStage(
+      ctx.threadId,
+      ctx.userId,
+      ctx.cwd,
+      ctx.filesToStage!,
+      ctx.workflowId,
+    );
+    if (result.isErr()) {
+      const e = result.error;
+      throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
+    }
   } else {
     const result = await gitStageFiles(ctx.cwd, ctx.filesToStage!);
     if (result.isErr()) throw new Error(result.error.message);
@@ -281,7 +301,7 @@ async function commitNode(ctx: GitPipelineContext): Promise<GitPipelineContext> 
 
   try {
     if (ctx.threadId) {
-      await gitServiceCommit(
+      const result = await gitServiceCommit(
         ctx.threadId,
         ctx.userId,
         ctx.cwd,
@@ -290,10 +310,18 @@ async function commitNode(ctx: GitPipelineContext): Promise<GitPipelineContext> 
         noVerify,
         ctx.workflowId,
       );
+      if (result.isErr()) {
+        const e = result.error;
+        const errorMsg = e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message;
+        throw new Error(errorMsg);
+      }
     } else {
       const identity = resolveIdentity(ctx.userId);
       const result = await gitCommit(ctx.cwd, ctx.message!, identity, isAmend, noVerify);
-      if (result.isErr()) throw result.error;
+      if (result.isErr()) {
+        const e = result.error;
+        throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
+      }
       invalidateStatusCache(ctx.cwd);
     }
   } catch (e: any) {
@@ -611,7 +639,7 @@ async function commitFixNode(ctx: GitPipelineContext): Promise<GitPipelineContex
   threadEventBus.on('git:committed', patchListener as any);
 
   try {
-    await commitChanges(
+    const result = await commitChanges(
       ctx.threadId,
       ctx.userId,
       targetCwd,
@@ -620,6 +648,10 @@ async function commitFixNode(ctx: GitPipelineContext): Promise<GitPipelineContex
       true,
       ctx.workflowId,
     );
+    if (result.isErr()) {
+      const e = result.error;
+      throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
+    }
 
     const shaResult = await gitRead(['rev-parse', 'HEAD'], { cwd: targetCwd, reject: false });
     const newSha = shaResult.exitCode === 0 ? shaResult.stdout.trim() : undefined;
@@ -662,11 +694,18 @@ async function pushNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
 
   try {
     if (ctx.threadId) {
-      await gitServicePush(ctx.threadId, ctx.userId, ctx.cwd, ctx.workflowId);
+      const result = await gitServicePush(ctx.threadId, ctx.userId, ctx.cwd, ctx.workflowId);
+      if (result.isErr()) {
+        const e = result.error;
+        throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
+      }
     } else {
       const identity = resolveIdentity(ctx.userId);
       const result = await gitPush(ctx.cwd, identity);
-      if (result.isErr()) throw result.error;
+      if (result.isErr()) {
+        const e = result.error;
+        throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
+      }
       invalidateStatusCache(ctx.cwd);
     }
   } catch (e: any) {
@@ -683,13 +722,18 @@ async function prNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
 
   try {
     if (!ctx.threadId) throw new Error('PR creation requires a thread');
-    const prUrl = await gitServiceCreatePR({
+    const result = await gitServiceCreatePR({
       threadId: ctx.threadId,
       userId: ctx.userId,
       cwd: ctx.cwd,
       title: ctx.prTitle || ctx.message || '',
       body: ctx.prBody || '',
     });
+    if (result.isErr()) {
+      const e = result.error;
+      throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
+    }
+    const prUrl = result.value;
     ctx.setStep('pr', { status: 'completed', url: prUrl || undefined });
     ctx.prUrl = prUrl || undefined;
   } catch (e: any) {
@@ -705,12 +749,16 @@ async function mergeNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
 
   try {
     if (!ctx.threadId) throw new Error('Merge requires a thread');
-    await gitServiceMerge({
+    const result = await gitServiceMerge({
       threadId: ctx.threadId,
       userId: ctx.userId,
       targetBranch: ctx.targetBranch,
       cleanup: ctx.cleanup,
     });
+    if (result.isErr()) {
+      const e = result.error;
+      throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
+    }
   } catch (e: any) {
     ctx.setStep('merge', { status: 'failed', error: e.message || 'Merge failed' });
     throw new Error(e.message || 'Merge failed', { cause: e });

@@ -188,6 +188,23 @@ bunx tsc --noEmit
 - WebSocket events carry a `threadId` field so the client can associate updates with the correct thread
 - The model selector maps friendly names (sonnet/opus/haiku) to full model IDs in `agent-runner.ts`
 
+### Error Handling with `neverthrow`
+
+**Always prefer `neverthrow` for error handling over try/catch when possible.** The `neverthrow` library is already installed across all packages and widely used in the codebase. Use `Result<T, E>`, `ok()`, and `err()` to represent fallible operations instead of throwing exceptions.
+
+```typescript
+import { Result, ok, err } from 'neverthrow';
+
+function parseConfig(raw: string): Result<Config, string> {
+  // return ok(config) on success, err("message") on failure
+}
+```
+
+- Use `ResultAsync` for async operations that can fail
+- Chain results with `.map()`, `.mapErr()`, `.andThen()` instead of nested try/catch
+- Reserve try/catch for boundaries (route handlers, top-level entry points) or third-party code that throws
+- On the server, use `result-response.ts` helpers to convert `Result` values into HTTP responses
+
 ## Agent Safety Rules
 
 **NEVER start dev servers or long-running processes.** You are running headlessly without a browser — commands like `bun run dev`, `npm run dev`, `yarn dev`, `bun --watch`, or `vite` will hang forever and may kill the main development server via `kill-port.ts`.

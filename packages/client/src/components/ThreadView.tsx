@@ -899,7 +899,7 @@ const MemoizedMessageList = memo(
         const msg = item.msg;
         const key = getItemKey(item);
         return (
-          <div key={key} className="sticky top-0 z-20 pb-3 pt-3">
+          <div className="sticky top-0 z-20 pb-3 pt-3">
             <div
               className={cn(
                 'relative group text-sm',

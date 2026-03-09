@@ -22,8 +22,8 @@ import {
 } from 'lucide-react';
 import { memo, useState, useEffect, useCallback, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
+import { useShallow } from 'zustand/react/shallow';
 
 import { DiffStats } from '@/components/DiffStats';
 import {
@@ -59,6 +59,7 @@ import {
 } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
+import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
 import { stageConfig } from '@/lib/thread-utils';
 import { useGitStatusStore, useGitStatusForThread } from '@/stores/git-status-store';
@@ -98,16 +99,27 @@ function threadToMarkdown(messages: MessageWithToolCalls[], includeToolCalls: bo
 
 const MoreActionsMenu = memo(function MoreActionsMenu() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const threadId = useThreadStore((s) => s.activeThread?.id);
-  const threadProjectId = useThreadStore((s) => s.activeThread?.projectId);
-  const threadTitle = useThreadStore((s) => s.activeThread?.title);
-  const threadMode = useThreadStore((s) => s.activeThread?.mode);
-  const threadBranch = useThreadStore((s) => s.activeThread?.branch);
-  const threadPinned = useThreadStore((s) => s.activeThread?.pinned);
-  const hasMessages = useThreadStore((s) => (s.activeThread?.messages?.length ?? 0) > 0);
+  const navigate = useStableNavigate();
+  const {
+    threadId,
+    threadProjectId,
+    threadTitle,
+    threadMode,
+    threadBranch,
+    threadPinned,
+    hasMessages,
+  } = useThreadStore(
+    useShallow((s) => ({
+      threadId: s.activeThread?.id,
+      threadProjectId: s.activeThread?.projectId,
+      threadTitle: s.activeThread?.title,
+      threadMode: s.activeThread?.mode,
+      threadBranch: s.activeThread?.branch,
+      threadPinned: s.activeThread?.pinned,
+      hasMessages: (s.activeThread?.messages?.length ?? 0) > 0,
+    })),
+  );
   const pinThread = useThreadStore((s) => s.pinThread);
-  const deleteThread = useThreadStore((s) => s.deleteThread);
   const timelineVisible = useUIStore((s) => s.timelineVisible);
   const setTimelineVisible = useUIStore((s) => s.setTimelineVisible);
   const [copiedText, setCopiedText] = useState(false);
@@ -117,14 +129,18 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
   const isWorktree = threadMode === 'worktree' && !!threadBranch;
 
   const handleDeleteConfirm = useCallback(async () => {
-    if (!threadId || !threadProjectId) return;
+    const state = useThreadStore.getState();
+    const id = state.activeThread?.id;
+    const projId = state.activeThread?.projectId;
+    const title = state.activeThread?.title;
+    if (!id || !projId) return;
     setDeleteLoading(true);
-    await deleteThread(threadId, threadProjectId);
+    await state.deleteThread(id, projId);
     setDeleteLoading(false);
     setDeleteOpen(false);
-    toast.success(t('toast.threadDeleted', { title: threadTitle }));
-    navigate(`/projects/${threadProjectId}`);
-  }, [threadId, threadProjectId, threadTitle, deleteThread, navigate, t]);
+    toast.success(t('toast.threadDeleted', { title }));
+    navigate(`/projects/${projId}`);
+  }, [navigate, t]);
 
   const handleCopy = useCallback((includeToolCalls: boolean) => {
     const messages = useThreadStore.getState().activeThread?.messages;
@@ -423,14 +439,26 @@ const StageSelectorBadge = memo(function StageSelectorBadge({
 
 export const ProjectHeader = memo(function ProjectHeader() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
-  const activeThreadId = useThreadStore((s) => s.activeThread?.id);
-  const activeThreadProjectId = useThreadStore((s) => s.activeThread?.projectId);
-  const activeThreadTitle = useThreadStore((s) => s.activeThread?.title);
-  const activeThreadStage = useThreadStore((s) => s.activeThread?.stage);
-  const activeThreadStatus = useThreadStore((s) => s.activeThread?.status);
-  const activeThreadWorktreePath = useThreadStore((s) => s.activeThread?.worktreePath);
-  const activeThreadParentId = useThreadStore((s) => s.activeThread?.parentThreadId);
+  const navigate = useStableNavigate();
+  const {
+    activeThreadId,
+    activeThreadProjectId,
+    activeThreadTitle,
+    activeThreadStage,
+    activeThreadStatus,
+    activeThreadWorktreePath,
+    activeThreadParentId,
+  } = useThreadStore(
+    useShallow((s) => ({
+      activeThreadId: s.activeThread?.id,
+      activeThreadProjectId: s.activeThread?.projectId,
+      activeThreadTitle: s.activeThread?.title,
+      activeThreadStage: s.activeThread?.stage,
+      activeThreadStatus: s.activeThread?.status,
+      activeThreadWorktreePath: s.activeThread?.worktreePath,
+      activeThreadParentId: s.activeThread?.parentThreadId,
+    })),
+  );
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projects = useProjectStore((s) => s.projects);
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
@@ -698,7 +726,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
               </TooltipTrigger>
               <TooltipContent>{t('review.title')}</TooltipContent>
             </Tooltip>
-            <MoreActionsMenu />
+            {activeThreadId && <MoreActionsMenu />}
           </div>
         )}
       </div>

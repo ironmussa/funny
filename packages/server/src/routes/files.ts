@@ -9,10 +9,13 @@ import { readFile, writeFile, stat } from 'fs/promises';
 import { homedir } from 'os';
 import { normalize, resolve } from 'path';
 
+import { badRequest, internal, notFound } from '@funny/shared/errors';
 import { Hono } from 'hono';
+import { ResultAsync, err } from 'neverthrow';
 
 import * as pm from '../services/project-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
+import { resultToResponse } from '../utils/result-response.js';
 
 const app = new Hono<HonoEnv>();
 
@@ -96,27 +99,26 @@ app.get('/read', async (c) => {
   const denied = checkAllowedPath(filePath, userId);
   if (denied) return denied;
 
-  try {
-    // Check if file is binary
-    const ext = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
-    if (BINARY_EXTENSIONS.includes(ext)) {
-      return c.json({ error: 'Cannot edit binary files in internal editor' }, 400);
-    }
-
-    // Check file size (max 2MB)
-    const stats = await stat(filePath);
-    if (stats.size > 2 * 1024 * 1024) {
-      return c.json({ error: 'File too large for internal editor (max 2MB)' }, 400);
-    }
-
-    const content = await readFile(filePath, 'utf-8');
-    return c.json({ content });
-  } catch (error: any) {
-    if (error.code === 'ENOENT') {
-      return c.json({ error: 'File not found' }, 404);
-    }
-    return c.json({ error: error.message }, 500);
+  // Check if file is binary
+  const ext = filePath.substring(filePath.lastIndexOf('.')).toLowerCase();
+  if (BINARY_EXTENSIONS.includes(ext)) {
+    return resultToResponse(c, err(badRequest('Cannot edit binary files in internal editor')));
   }
+
+  // Check file size (max 2MB)
+  const statsResult = await ResultAsync.fromPromise(stat(filePath), (e: any) =>
+    e.code === 'ENOENT' ? notFound('File not found') : internal(e.message),
+  );
+  if (statsResult.isErr()) return resultToResponse(c, statsResult);
+  if (statsResult.value.size > 2 * 1024 * 1024) {
+    return resultToResponse(c, err(badRequest('File too large for internal editor (max 2MB)')));
+  }
+
+  const contentResult = await ResultAsync.fromPromise(readFile(filePath, 'utf-8'), (e: any) =>
+    e.code === 'ENOENT' ? notFound('File not found') : internal(e.message),
+  );
+  if (contentResult.isErr()) return resultToResponse(c, contentResult);
+  return c.json({ content: contentResult.value });
 });
 
 /**
@@ -139,12 +141,12 @@ app.post('/write', async (c) => {
   const denied = checkAllowedPath(filePath, userId);
   if (denied) return denied;
 
-  try {
-    await writeFile(filePath, content, 'utf-8');
-    return c.json({ ok: true });
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500);
-  }
+  const writeResult = await ResultAsync.fromPromise(
+    writeFile(filePath, content, 'utf-8'),
+    (e: any) => internal(e.message),
+  );
+  if (writeResult.isErr()) return resultToResponse(c, writeResult);
+  return c.json({ ok: true });
 });
 
 export default app;

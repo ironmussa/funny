@@ -321,8 +321,8 @@ gitRoutes.post('/project/:projectId/stage', async (c) => {
   const raw = await c.req.json().catch(() => ({}));
   const parsed = validate(stageFilesSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const pathError = validateFilePaths(cwd, parsed.value.paths);
-  if (pathError) return c.json({ error: pathError }, 400);
+  const pathCheck = validateFilePaths(cwd, parsed.value.paths);
+  if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
   const result = await stageFiles(cwd, parsed.value.paths);
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
@@ -339,8 +339,8 @@ gitRoutes.post('/project/:projectId/unstage', async (c) => {
   const raw = await c.req.json().catch(() => ({}));
   const parsed = validate(stageFilesSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const pathError = validateFilePaths(cwd, parsed.value.paths);
-  if (pathError) return c.json({ error: pathError }, 400);
+  const pathCheck = validateFilePaths(cwd, parsed.value.paths);
+  if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
   const result = await unstageFiles(cwd, parsed.value.paths);
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
@@ -357,8 +357,8 @@ gitRoutes.post('/project/:projectId/revert', async (c) => {
   const raw = await c.req.json().catch(() => ({}));
   const parsed = validate(stageFilesSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
-  const pathError = validateFilePaths(cwd, parsed.value.paths);
-  if (pathError) return c.json({ error: pathError }, 400);
+  const pathCheck = validateFilePaths(cwd, parsed.value.paths);
+  if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
   const result = await revertFiles(cwd, parsed.value.paths);
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
@@ -725,14 +725,11 @@ gitRoutes.post('/:threadId/stage', async (c) => {
   const parsed = validate(stageFilesSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const pathError = validateFilePaths(cwd, parsed.value.paths);
-  if (pathError) return c.json({ error: pathError }, 400);
+  const pathCheck = validateFilePaths(cwd, parsed.value.paths);
+  if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
 
-  try {
-    await gitServiceStage(threadId, userId, cwd, parsed.value.paths);
-  } catch (e: any) {
-    return resultToResponse(c, err(internal(e.message)));
-  }
+  const result = await gitServiceStage(threadId, userId, cwd, parsed.value.paths);
+  if (result.isErr()) return resultToResponse(c, result);
 
   invalidateGitStatusCache(threadId);
   return c.json({ ok: true });
@@ -750,14 +747,11 @@ gitRoutes.post('/:threadId/unstage', async (c) => {
   const parsed = validate(stageFilesSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const pathError = validateFilePaths(cwd, parsed.value.paths);
-  if (pathError) return c.json({ error: pathError }, 400);
+  const pathCheck = validateFilePaths(cwd, parsed.value.paths);
+  if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
 
-  try {
-    await gitServiceUnstage(threadId, userId, cwd, parsed.value.paths);
-  } catch (e: any) {
-    return resultToResponse(c, err(internal(e.message)));
-  }
+  const result = await gitServiceUnstage(threadId, userId, cwd, parsed.value.paths);
+  if (result.isErr()) return resultToResponse(c, result);
 
   invalidateGitStatusCache(threadId);
   return c.json({ ok: true });
@@ -775,14 +769,11 @@ gitRoutes.post('/:threadId/revert', async (c) => {
   const parsed = validate(stageFilesSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const pathError = validateFilePaths(cwd, parsed.value.paths);
-  if (pathError) return c.json({ error: pathError }, 400);
+  const pathCheck = validateFilePaths(cwd, parsed.value.paths);
+  if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
 
-  try {
-    await gitServiceRevert(threadId, userId, cwd, parsed.value.paths);
-  } catch (e: any) {
-    return resultToResponse(c, err(internal(e.message)));
-  }
+  const result = await gitServiceRevert(threadId, userId, cwd, parsed.value.paths);
+  if (result.isErr()) return resultToResponse(c, result);
 
   invalidateGitStatusCache(threadId);
   return c.json({ ok: true });
@@ -801,22 +792,21 @@ gitRoutes.post('/:threadId/commit', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
   const span = requestSpan(c, 'git.commit', { threadId });
-  try {
-    const output = await gitServiceCommit(
-      threadId,
-      userId,
-      cwd,
-      parsed.value.message,
-      parsed.value.amend,
-      parsed.value.noVerify,
-    );
-    invalidateGitStatusCache(threadId);
-    span.end('ok');
-    return c.json({ ok: true, output });
-  } catch (e: any) {
-    span.end('error', e.message);
-    return resultToResponse(c, err(internal(e.message)));
+  const result = await gitServiceCommit(
+    threadId,
+    userId,
+    cwd,
+    parsed.value.message,
+    parsed.value.amend,
+    parsed.value.noVerify,
+  );
+  if (result.isErr()) {
+    span.end('error', result.error.message);
+    return resultToResponse(c, result);
   }
+  invalidateGitStatusCache(threadId);
+  span.end('ok');
+  return c.json({ ok: true, output: result.value });
 });
 
 // POST /api/git/:threadId/run-hook-command
@@ -857,15 +847,14 @@ gitRoutes.post('/:threadId/push', async (c) => {
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const span = requestSpan(c, 'git.push', { threadId });
-  try {
-    const output = await gitServicePush(threadId, userId, cwdResult.value);
-    invalidateGitStatusCache(threadId);
-    span.end('ok');
-    return c.json({ ok: true, output });
-  } catch (e: any) {
-    span.end('error', e.message);
-    return resultToResponse(c, err(internal(e.message)));
+  const result = await gitServicePush(threadId, userId, cwdResult.value);
+  if (result.isErr()) {
+    span.end('error', result.error.message);
+    return resultToResponse(c, result);
   }
+  invalidateGitStatusCache(threadId);
+  span.end('ok');
+  return c.json({ ok: true, output: result.value });
 });
 
 // POST /api/git/:threadId/pr
@@ -880,20 +869,19 @@ gitRoutes.post('/:threadId/pr', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
   const span = requestSpan(c, 'git.create_pr', { threadId });
-  try {
-    const url = await gitServiceCreatePR({
-      threadId,
-      userId,
-      cwd: cwdResult.value,
-      title: parsed.value.title,
-      body: parsed.value.body,
-    });
-    span.end('ok');
-    return c.json({ ok: true, url });
-  } catch (e: any) {
-    span.end('error', e.message);
-    return resultToResponse(c, err(internal(e.message)));
+  const result = await gitServiceCreatePR({
+    threadId,
+    userId,
+    cwd: cwdResult.value,
+    title: parsed.value.title,
+    body: parsed.value.body,
+  });
+  if (result.isErr()) {
+    span.end('error', result.error.message);
+    return resultToResponse(c, result);
   }
+  span.end('ok');
+  return c.json({ ok: true, url: result.value });
 });
 
 // POST /api/git/:threadId/generate-commit-message
@@ -1046,21 +1034,20 @@ gitRoutes.post('/:threadId/merge', async (c) => {
     threadId,
     targetBranch: parsed.value.targetBranch,
   });
-  try {
-    const output = await gitServiceMerge({
-      threadId,
-      userId,
-      targetBranch: parsed.value.targetBranch,
-      push: parsed.value.push,
-      cleanup: parsed.value.cleanup,
-    });
-    invalidateGitStatusCache(threadId);
-    span.end('ok');
-    return c.json({ ok: true, output });
-  } catch (e: any) {
-    span.end('error', e.message);
-    return resultToResponse(c, err(internal(e.message)));
+  const result = await gitServiceMerge({
+    threadId,
+    userId,
+    targetBranch: parsed.value.targetBranch,
+    push: parsed.value.push,
+    cleanup: parsed.value.cleanup,
+  });
+  if (result.isErr()) {
+    span.end('error', result.error.message);
+    return resultToResponse(c, result);
   }
+  invalidateGitStatusCache(threadId);
+  span.end('ok');
+  return c.json({ ok: true, output: result.value });
 });
 
 // ═══════════════════════════════════════════════════════════════════════════
@@ -1085,8 +1072,8 @@ gitRoutes.post('/:threadId/workflow', async (c) => {
   // Validate file paths
   const allPaths = [...(parsed.value.filesToStage || []), ...(parsed.value.filesToUnstage || [])];
   if (allPaths.length > 0) {
-    const pathError = validateFilePaths(cwdResult.value, allPaths);
-    if (pathError) return c.json({ error: pathError }, 400);
+    const pathCheck = validateFilePaths(cwdResult.value, allPaths);
+    if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
   }
 
   if (isWorkflowActive(threadId)) {
@@ -1127,8 +1114,8 @@ gitRoutes.post('/project/:projectId/workflow', async (c) => {
   // Validate file paths
   const allPaths = [...(parsed.value.filesToStage || []), ...(parsed.value.filesToUnstage || [])];
   if (allPaths.length > 0) {
-    const pathError = validateFilePaths(cwdResult.value, allPaths);
-    if (pathError) return c.json({ error: pathError }, 400);
+    const pathCheck = validateFilePaths(cwdResult.value, allPaths);
+    if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
   }
 
   if (isWorkflowActive(projectId)) {
@@ -1175,13 +1162,10 @@ gitRoutes.post('/:threadId/pull', async (c) => {
   const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
-  try {
-    const output = await gitServicePull(threadId, userId, cwdResult.value);
-    invalidateGitStatusCache(threadId);
-    return c.json({ ok: true, output });
-  } catch (e: any) {
-    return resultToResponse(c, err(internal(e.message)));
-  }
+  const result = await gitServicePull(threadId, userId, cwdResult.value);
+  if (result.isErr()) return resultToResponse(c, result);
+  invalidateGitStatusCache(threadId);
+  return c.json({ ok: true, output: result.value });
 });
 
 // POST /api/git/:threadId/stash
@@ -1191,13 +1175,10 @@ gitRoutes.post('/:threadId/stash', async (c) => {
   const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
-  try {
-    const output = await gitServiceStash(threadId, userId, cwdResult.value);
-    invalidateGitStatusCache(threadId);
-    return c.json({ ok: true, output });
-  } catch (e: any) {
-    return resultToResponse(c, err(internal(e.message)));
-  }
+  const result = await gitServiceStash(threadId, userId, cwdResult.value);
+  if (result.isErr()) return resultToResponse(c, result);
+  invalidateGitStatusCache(threadId);
+  return c.json({ ok: true, output: result.value });
 });
 
 // POST /api/git/:threadId/stash/pop
@@ -1207,13 +1188,10 @@ gitRoutes.post('/:threadId/stash/pop', async (c) => {
   const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
-  try {
-    const output = await gitServicePopStash(threadId, userId, cwdResult.value);
-    invalidateGitStatusCache(threadId);
-    return c.json({ ok: true, output });
-  } catch (e: any) {
-    return resultToResponse(c, err(internal(e.message)));
-  }
+  const result = await gitServicePopStash(threadId, userId, cwdResult.value);
+  if (result.isErr()) return resultToResponse(c, result);
+  invalidateGitStatusCache(threadId);
+  return c.json({ ok: true, output: result.value });
 });
 
 // GET /api/git/:threadId/stash/list
@@ -1234,13 +1212,10 @@ gitRoutes.post('/:threadId/reset-soft', async (c) => {
   const cwdResult = requireThreadCwd(threadId, userId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
-  try {
-    const output = await gitServiceSoftReset(threadId, userId, cwdResult.value);
-    invalidateGitStatusCache(threadId);
-    return c.json({ ok: true, output });
-  } catch (e: any) {
-    return resultToResponse(c, err(internal(e.message)));
-  }
+  const result = await gitServiceSoftReset(threadId, userId, cwdResult.value);
+  if (result.isErr()) return resultToResponse(c, result);
+  invalidateGitStatusCache(threadId);
+  return c.json({ ok: true, output: result.value });
 });
 
 // POST /api/git/:threadId/gitignore

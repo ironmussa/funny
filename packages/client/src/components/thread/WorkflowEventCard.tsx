@@ -195,12 +195,21 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
       statusIcon = isPassed ? (
         <CheckCircle2 className="h-3 w-3 text-muted-foreground" />
       ) : (
-        <XCircle className="h-3 w-3 text-muted-foreground" />
+        <XCircle className="h-3 w-3 text-destructive" />
       );
       detail = (
-        <span className="font-medium text-muted-foreground">
-          {isPassed ? 'completed' : 'failed'}
-        </span>
+        <>
+          <span
+            className={cn('font-medium', isPassed ? 'text-muted-foreground' : 'text-destructive')}
+          >
+            {isPassed ? 'completed' : 'failed'}
+          </span>
+          {!isPassed && metadata.error && (
+            <span className="min-w-0 truncate font-mono text-destructive/80">
+              — {metadata.error}
+            </span>
+          )}
+        </>
       );
       break;
     }

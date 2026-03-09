@@ -55,6 +55,7 @@ function getWorkflowStatus(events: ThreadEvent[]): {
   action: string;
   icon: typeof GitCommit;
   running: boolean;
+  error?: string;
 } {
   // Find the workflow:started event for the action label
   const startedEvent = events.find((e) => e.type === 'workflow:started');
@@ -68,7 +69,13 @@ function getWorkflowStatus(events: ThreadEvent[]): {
     if (metadata.status === 'completed') {
       return { label: 'completed', action: actionLabel, icon: CheckCircle2, running: false };
     }
-    return { label: 'failed', action: actionLabel, icon: XCircle, running: false };
+    return {
+      label: 'failed',
+      action: actionLabel,
+      icon: XCircle,
+      running: false,
+      error: metadata.error as string | undefined,
+    };
   }
 
   return { label: 'running', action: actionLabel, icon: GitCommit, running: true };
@@ -163,7 +170,7 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
 }) {
   const { t } = useTranslation();
   const status = getWorkflowStatus(events);
-  const [expanded, setExpanded] = useState(status.running);
+  const [expanded, setExpanded] = useState(status.running || !!status.error);
   const StatusIcon = status.icon;
 
   // Extract workflowId from the started event
@@ -214,7 +221,14 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
         <span className="flex-shrink-0 font-mono font-medium text-foreground">
           {status.action || 'Workflow'}
         </span>
-        <span className="font-mono font-medium text-muted-foreground">{status.label}</span>
+        <span
+          className={cn(
+            'font-mono font-medium',
+            status.label === 'failed' ? 'text-destructive' : 'text-muted-foreground',
+          )}
+        >
+          {status.label}
+        </span>
         {activeProgress.stepLabel && (
           <span className="truncate font-mono text-muted-foreground/70">
             — {activeProgress.stepLabel}
@@ -248,7 +262,18 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
               })()}
             </>
           ) : (
-            innerEvents.map((evt) => <WorkflowEventCard key={evt.id} event={evt} />)
+            <>
+              {innerEvents.map((evt) => (
+                <WorkflowEventCard key={evt.id} event={evt} />
+              ))}
+              {status.error && innerEvents.length === 0 && (
+                <div className="px-3 py-1.5">
+                  <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-destructive/5 p-2 font-mono text-[11px] text-destructive/80">
+                    {status.error}
+                  </pre>
+                </div>
+              )}
+            </>
           )}
         </div>
       )}

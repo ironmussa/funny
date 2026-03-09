@@ -212,6 +212,7 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
             workflowId,
             action: params.action,
             status: 'failed',
+            error: result.error || undefined,
           });
         }
       }

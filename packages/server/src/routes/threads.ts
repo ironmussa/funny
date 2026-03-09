@@ -6,7 +6,10 @@
  * @domain depends: ThreadService, AgentRunner, ThreadManager, WSBroker
  */
 
+import type { DomainError } from '@funny/shared/errors';
+import { badRequest, conflict, forbidden, internal, notFound } from '@funny/shared/errors';
 import { Hono } from 'hono';
+import { err } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
 import { metric } from '../lib/telemetry.js';
@@ -42,36 +45,42 @@ import {
 
 export const threadRoutes = new Hono<HonoEnv>();
 
-/** Format a ThreadServiceError into an HTTP response */
-function handleServiceError(c: any, error: unknown) {
+/** Map a ThreadServiceError or unknown error to a DomainError */
+function toDomainError(error: unknown): DomainError {
   if (error instanceof ThreadServiceError) {
-    return c.json({ error: error.message }, error.statusCode);
+    switch (error.statusCode) {
+      case 400:
+        return badRequest(error.message);
+      case 403:
+        return forbidden(error.message);
+      case 404:
+        return notFound(error.message);
+      case 409:
+        return conflict(error.message);
+      default:
+        return internal(error.message);
+    }
   }
 
-  const err = error as any;
+  const e = error as any;
   const isBinaryError =
-    err.message?.includes('Could not find the claude CLI binary') ||
-    err.message?.includes('CLAUDE_BINARY_PATH');
+    e.message?.includes('Could not find the claude CLI binary') ||
+    e.message?.includes('CLAUDE_BINARY_PATH');
 
   if (isBinaryError) {
-    return c.json(
-      {
-        error: 'Claude CLI not installed',
-        message:
-          'The Claude Code CLI is not installed or not found in PATH. Please install it from https://docs.anthropic.com/en/docs/agents/overview',
-        details: err.message,
-      },
-      503,
-    );
+    return {
+      type: 'INTERNAL',
+      message:
+        'The Claude Code CLI is not installed or not found in PATH. Please install it from https://docs.anthropic.com/en/docs/agents/overview',
+    };
   }
 
-  return c.json(
-    {
-      error: 'Internal server error',
-      message: err.message || 'Unknown error occurred',
-    },
-    500,
-  );
+  return internal(e.message || 'Unknown error occurred');
+}
+
+/** Format a ThreadServiceError into an HTTP response via resultToResponse */
+function handleServiceError(c: any, error: unknown) {
+  return resultToResponse(c, err(toDomainError(error)));
 }
 
 // ── GET routes (query-only, already thin) ────────────────────────

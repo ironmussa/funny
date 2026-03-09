@@ -70,8 +70,8 @@
     --status-violet: 263 70% 50%;
 
     /* Git diff colors — always green/red regardless of theme */
-    --diff-added: 142 76% 36%;
-    --diff-removed: 0 84% 60%;
+    --diff-added: 142 40% 45%;
+    --diff-removed: 0 45% 55%;
   }
 
   .dark {
@@ -114,8 +114,8 @@
     --status-neutral: 220 9% 46%;
     --status-violet: 263 70% 50%;
 
-    --diff-added: 142 76% 36%;
-    --diff-removed: 0 84% 60%;
+    --diff-added: 142 40% 45%;
+    --diff-removed: 0 45% 55%;
   }
 
   /* ── One Dark Pro ─────────────────────────────────────────── */
@@ -158,8 +158,8 @@
     --status-neutral: 219 10% 55%;
     --status-violet: 263 73% 52%;
 
-    --diff-added: 142 76% 36%;
-    --diff-removed: 0 84% 60%;
+    --diff-added: 142 40% 45%;
+    --diff-removed: 0 45% 55%;
   }
 
   /* ── Dracula ──────────────────────────────────────────────── */
@@ -202,8 +202,8 @@
     --status-neutral: 225.5 26.6% 51.4%;
     --status-violet: 264.7 89.5% 77.6%;
 
-    --diff-added: 142 76% 36%;
-    --diff-removed: 0 84% 60%;
+    --diff-added: 142 40% 45%;
+    --diff-removed: 0 45% 55%;
   }
 
   /* ── GitHub Dark ──────────────────────────────────────────── */
@@ -246,8 +246,8 @@
     --status-neutral: 214.7 7.9% 52.7%;
     --status-violet: 263 70% 50%;
 
-    --diff-added: 142 76% 36%;
-    --diff-removed: 0 84% 60%;
+    --diff-added: 142 40% 45%;
+    --diff-removed: 0 45% 55%;
   }
 
   /* ── Night Owl ────────────────────────────────────────────── */
@@ -290,8 +290,8 @@
     --status-neutral: 206.8 22.8% 48.2%;
     --status-violet: 261.9 46.7% 55.1%;
 
-    --diff-added: 142 76% 36%;
-    --diff-removed: 0 84% 60%;
+    --diff-added: 142 40% 45%;
+    --diff-removed: 0 45% 55%;
   }
 
   /* ── Monochrome (Black & White) ───────────────────────────── */
@@ -334,8 +334,8 @@
     --status-neutral: 0 0% 60%;
     --status-violet: 0 0% 40%;
 
-    --diff-added: 142 76% 36%;
-    --diff-removed: 0 84% 60%;
+    --diff-added: 142 40% 45%;
+    --diff-removed: 0 45% 55%;
   }
 
   /* ── Monochrome Dark (Black & White) ─────────────────────── */
@@ -378,8 +378,8 @@
     --status-neutral: 0 0% 45%;
     --status-violet: 0 0% 60%;
 
-    --diff-added: 142 76% 36%;
-    --diff-removed: 0 84% 60%;
+    --diff-added: 142 40% 45%;
+    --diff-removed: 0 45% 55%;
   }
 
   /* ── Catppuccin Mocha ─────────────────────────────────────── */
@@ -422,8 +422,8 @@
     --status-neutral: 227.6 23.6% 71.8%;
     --status-violet: 267.4 83.5% 80%;
 
-    --diff-added: 142 76% 36%;
-    --diff-removed: 0 84% 60%;
+    --diff-added: 142 40% 45%;
+    --diff-removed: 0 45% 55%;
   }
 }
 

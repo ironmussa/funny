@@ -20,6 +20,8 @@ import {
   MoreVertical,
   Undo2,
   EyeOff,
+  Folder,
+  FolderOpen,
   FolderX,
   Copy,
   ClipboardCopy,
@@ -61,7 +63,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
 import { api } from '@/lib/api';
 import { openFileInEditor, getEditorLabel } from '@/lib/editor-utils';
-import { FileExtensionIcon, FolderIcon } from '@/lib/file-icons';
+import { FileExtensionIcon } from '@/lib/file-icons';
 import { cn } from '@/lib/utils';
 import { useCommitProgressStore } from '@/stores/commit-progress-store';
 import { useDraftStore } from '@/stores/draft-store';
@@ -82,8 +84,8 @@ const fileStatusIcons: Record<string, typeof FileCode> = {
   renamed: FileCode,
 };
 
-const FILE_ROW_HEIGHT = 28;
-const FOLDER_ROW_HEIGHT = 26;
+const FILE_ROW_HEIGHT = 24;
+const FOLDER_ROW_HEIGHT = 22;
 const INDENT_PX = 12;
 
 type TreeRow =
@@ -1368,7 +1370,7 @@ export function ReviewPane() {
                     return (
                       <div
                         key={`folder-${row.path}`}
-                        className="flex cursor-pointer select-none items-center gap-1 text-sm text-muted-foreground/80 hover:bg-sidebar-accent/30"
+                        className="flex cursor-pointer select-none items-center gap-1 text-xs text-muted-foreground/80 hover:bg-sidebar-accent/30"
                         style={{ ...baseStyle, paddingLeft: `${8 + row.depth * INDENT_PX}px` }}
                         onClick={() => toggleFolder(row.path)}
                         data-testid={`review-folder-${row.path}`}
@@ -1379,15 +1381,12 @@ export function ReviewPane() {
                             !isCollapsed && 'rotate-90',
                           )}
                         />
-                        <FolderIcon
-                          folderPath={row.path}
-                          isOpen={!isCollapsed}
-                          className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/70"
-                        />
-                        <span className="truncate font-medium">{row.label}</span>
-                        <span className="ml-auto flex-shrink-0 text-[10px] text-muted-foreground/50">
-                          {row.fileCount}
-                        </span>
+                        {isCollapsed ? (
+                          <Folder className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/70" />
+                        ) : (
+                          <FolderOpen className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/70" />
+                        )}
+                        <span className="truncate text-xs font-medium">{row.label}</span>
                       </div>
                     );
                   }
@@ -1399,7 +1398,7 @@ export function ReviewPane() {
                       key={f.path}
                       style={{ ...baseStyle, paddingLeft: `${8 + row.depth * INDENT_PX}px` }}
                       className={cn(
-                        'group flex items-center gap-1.5 pr-4 text-sm cursor-pointer transition-colors',
+                        'group flex items-center gap-1.5 text-xs cursor-pointer transition-colors',
                         selectedFile === f.path
                           ? 'bg-sidebar-accent text-sidebar-accent-foreground'
                           : 'hover:bg-sidebar-accent/50 text-muted-foreground',
@@ -1430,7 +1429,7 @@ export function ReviewPane() {
                         filePath={f.path}
                         className="h-4 w-4 flex-shrink-0 text-muted-foreground/80"
                       />
-                      <span className="flex-1 truncate font-mono text-sm">
+                      <span className="flex-1 truncate font-mono text-xs">
                         {f.path.split('/').pop()}
                       </span>
                       <span

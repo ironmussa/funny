@@ -115,8 +115,8 @@ const HooksEventCard = memo(function HooksEventCard({
         type="button"
         data-testid="workflow-hooks-toggle"
         className={cn(
-          'flex w-full items-center gap-2 overflow-hidden px-3 py-1 text-xs',
-          hasError && 'cursor-pointer hover:bg-muted/50',
+          'flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors',
+          hasError && 'cursor-pointer hover:bg-accent/30',
         )}
         onClick={() => hasError && setExpanded(!expanded)}
         disabled={!hasError}
@@ -345,7 +345,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
   return (
     <div
       data-testid={`workflow-event-${event.type}`}
-      className="flex w-full items-center gap-2 overflow-hidden px-3 py-1 text-xs"
+      className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-accent/30"
     >
       {statusIcon || <Icon className={cn('h-3 w-3 shrink-0 text-muted-foreground')} />}
       <span className="shrink-0 font-mono font-medium text-muted-foreground">{config.label}</span>

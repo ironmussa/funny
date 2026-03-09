@@ -18,40 +18,11 @@ import type {
 import { runPipeline, type PipelineRunOptions } from '@funny/shared/pipeline-engine';
 
 import { log } from '../lib/logger.js';
-import { getActionPipeline, type GitPipelineContext } from './git-pipelines.js';
+import { getActionPipeline, deriveSteps, type GitPipelineContext } from './git-pipelines.js';
 import { getPipelineForProject } from './pipeline-orchestrator.js';
 import { listHooks } from './project-hooks-service.js';
-import { saveThreadEvent } from './thread-event-service.js';
+import { emitWorkflowEvent } from './workflow-event-helpers.js';
 import { wsBroker } from './ws-broker.js';
-
-// ── Thread event helpers ────────────────────────────────────────
-
-function broadcastThreadEvent(
-  userId: string,
-  threadId: string,
-  type: string,
-  data: Record<string, unknown>,
-) {
-  const id = crypto.randomUUID();
-  const createdAt = new Date().toISOString();
-  wsBroker.emitToUser(userId, {
-    type: 'thread:event',
-    threadId,
-    data: {
-      event: { id, threadId, type, data: JSON.stringify(data), createdAt },
-    },
-  });
-}
-
-async function emitWorkflowEvent(
-  userId: string,
-  threadId: string,
-  type: string,
-  data: Record<string, unknown>,
-) {
-  await saveThreadEvent(threadId, type, data);
-  broadcastThreadEvent(userId, threadId, type, data);
-}
 
 // ── Types ────────────────────────────────────────────────────
 
@@ -125,59 +96,6 @@ function isCommitAction(action: GitWorkflowAction): boolean {
   return ['commit', 'amend', 'commit-push', 'commit-pr', 'commit-merge'].includes(action);
 }
 
-// ── Step builder ─────────────────────────────────────────────
-
-function buildSteps(
-  params: WorkflowParams,
-  hooks: { label: string; command: string }[],
-  pipelineEnabled: boolean,
-): GitWorkflowProgressStep[] {
-  const steps: GitWorkflowProgressStep[] = [];
-
-  if (params.filesToUnstage && params.filesToUnstage.length > 0) {
-    steps.push({ id: 'unstage', label: 'Unstaging files', status: 'pending' });
-  }
-  if (params.filesToStage && params.filesToStage.length > 0) {
-    steps.push({ id: 'stage', label: 'Staging files', status: 'pending' });
-  }
-
-  if (isCommitAction(params.action)) {
-    const hookSubItems =
-      hooks.length > 0
-        ? hooks.map((h) => ({ label: h.label, status: 'pending' as const }))
-        : undefined;
-    steps.push({
-      id: 'hooks',
-      label: 'Running pre-commit hooks',
-      status: 'pending',
-      subItems: hookSubItems,
-    });
-    steps.push({
-      id: 'commit',
-      label: params.action === 'amend' ? 'Amending commit' : 'Committing',
-      status: 'pending',
-    });
-
-    // Add review-fix steps if pipeline is enabled
-    if (pipelineEnabled && params.threadId && params.projectId) {
-      steps.push({ id: 'review', label: 'Reviewing code', status: 'pending' });
-      steps.push({ id: 'fix', label: 'Fixing issues', status: 'pending' });
-    }
-  }
-
-  if (['commit-push', 'commit-pr', 'push', 'create-pr'].includes(params.action)) {
-    steps.push({ id: 'push', label: 'Pushing', status: 'pending' });
-  }
-  if (['commit-pr', 'create-pr'].includes(params.action)) {
-    steps.push({ id: 'pr', label: 'Creating pull request', status: 'pending' });
-  }
-  if (['commit-merge', 'merge'].includes(params.action)) {
-    steps.push({ id: 'merge', label: 'Merging', status: 'pending' });
-  }
-
-  return steps;
-}
-
 // ── Main executor ────────────────────────────────────────────
 
 export function executeWorkflow(params: WorkflowParams): { workflowId: string } {
@@ -200,9 +118,9 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
   const pipelineConfig = params.projectId ? getPipelineForProject(params.projectId) : null;
   const pipelineEnabled = !!pipelineConfig;
 
-  let steps = buildSteps(params, hooks, pipelineEnabled);
+  // Create bound helpers for progress emission (close over `steps`)
+  let steps: GitWorkflowProgressStep[] = [];
 
-  // Create bound helpers for progress emission
   const emit = (status: WSGitWorkflowProgressData['status']) =>
     emitProgress(params.userId, params.contextId, workflowId, status, params.action, steps);
 
@@ -253,6 +171,13 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
     prUrl: undefined,
   };
 
+  // Select the right pipeline for this action
+  const pipeline = getActionPipeline(params.action);
+
+  // Derive steps from the pipeline definition by walking nodes and evaluating guards
+  steps = deriveSteps(pipeline, initialCtx);
+  initialCtx.steps = steps;
+
   emit('started');
 
   // Emit workflow:started thread event (only for thread-scoped operations)
@@ -263,9 +188,6 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
       title: TITLES[params.action],
     });
   }
-
-  // Select the right pipeline for this action
-  const pipeline = getActionPipeline(params.action);
 
   const pipelineOpts: PipelineRunOptions<GitPipelineContext> = {
     signal: abortController.signal,

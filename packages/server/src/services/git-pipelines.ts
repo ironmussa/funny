@@ -62,30 +62,9 @@ import {
 } from './pipeline-orchestrator.js';
 import * as pm from './project-manager.js';
 import { threadEventBus } from './thread-event-bus.js';
-import { saveThreadEvent } from './thread-event-service.js';
 import * as tm from './thread-manager.js';
 import { createAndStartThread } from './thread-service.js';
-import { wsBroker } from './ws-broker.js';
-
-// ── Thread event helper ─────────────────────────────────────────
-
-async function emitWorkflowEvent(
-  userId: string,
-  threadId: string,
-  type: string,
-  data: Record<string, unknown>,
-) {
-  await saveThreadEvent(threadId, type, data);
-  const id = crypto.randomUUID();
-  const createdAt = new Date().toISOString();
-  wsBroker.emitToUser(userId, {
-    type: 'thread:event',
-    threadId,
-    data: {
-      event: { id, threadId, type, data: JSON.stringify(data), createdAt },
-    },
-  });
-}
+import { emitWorkflowEvent } from './workflow-event-helpers.js';
 
 // ── Unified pipeline context ─────────────────────────────────
 
@@ -747,66 +726,23 @@ export const mergeNodes: PipelineNode<GitPipelineContext>[] = [node('merge', mer
 
 // ── Pipeline definitions (one per action) ────────────────────
 
-export const commitPipeline = definePipeline<GitPipelineContext>({
-  name: 'git:commit',
-  nodes: compose(stageNodes, commitNodes, [
-    subPipeline('review-fix', reviewFixSubPipeline, {
-      when: (ctx) => ctx.pipelineEnabled && !!ctx.threadId && !!ctx.projectId,
-    }),
-  ]),
+/** Shared review-fix sub-pipeline node — used by all commit-based pipelines. */
+const reviewFixNode = subPipeline('review-fix', reviewFixSubPipeline, {
+  when: (ctx) => ctx.pipelineEnabled && !!ctx.threadId && !!ctx.projectId,
 });
 
-export const amendPipeline = definePipeline<GitPipelineContext>({
-  name: 'git:amend',
-  nodes: compose(stageNodes, commitNodes, [
-    subPipeline('review-fix', reviewFixSubPipeline, {
-      when: (ctx) => ctx.pipelineEnabled && !!ctx.threadId && !!ctx.projectId,
-    }),
-  ]),
-});
+/** Build a commit-based pipeline: stage → commit → review-fix → ...tail */
+function commitPipelineWith(name: string, ...tail: PipelineNode<GitPipelineContext>[][]) {
+  return definePipeline<GitPipelineContext>({
+    name,
+    nodes: compose(stageNodes, commitNodes, [reviewFixNode], ...tail),
+  });
+}
 
-export const commitPushPipeline = definePipeline<GitPipelineContext>({
-  name: 'git:commit-push',
-  nodes: compose(
-    stageNodes,
-    commitNodes,
-    [
-      subPipeline('review-fix', reviewFixSubPipeline, {
-        when: (ctx) => ctx.pipelineEnabled && !!ctx.threadId && !!ctx.projectId,
-      }),
-    ],
-    pushNodes,
-  ),
-});
-
-export const commitPrPipeline = definePipeline<GitPipelineContext>({
-  name: 'git:commit-pr',
-  nodes: compose(
-    stageNodes,
-    commitNodes,
-    [
-      subPipeline('review-fix', reviewFixSubPipeline, {
-        when: (ctx) => ctx.pipelineEnabled && !!ctx.threadId && !!ctx.projectId,
-      }),
-    ],
-    pushNodes,
-    prNodes,
-  ),
-});
-
-export const commitMergePipeline = definePipeline<GitPipelineContext>({
-  name: 'git:commit-merge',
-  nodes: compose(
-    stageNodes,
-    commitNodes,
-    [
-      subPipeline('review-fix', reviewFixSubPipeline, {
-        when: (ctx) => ctx.pipelineEnabled && !!ctx.threadId && !!ctx.projectId,
-      }),
-    ],
-    mergeNodes,
-  ),
-});
+export const commitPipeline = commitPipelineWith('git:commit');
+export const commitPushPipeline = commitPipelineWith('git:commit-push', pushNodes);
+export const commitPrPipeline = commitPipelineWith('git:commit-pr', pushNodes, prNodes);
+export const commitMergePipeline = commitPipelineWith('git:commit-merge', mergeNodes);
 
 export const pushPipeline = definePipeline<GitPipelineContext>({
   name: 'git:push',
@@ -829,9 +765,8 @@ export function getActionPipeline(
 ): PipelineDefinition<GitPipelineContext> {
   switch (action) {
     case 'commit':
-      return commitPipeline;
     case 'amend':
-      return amendPipeline;
+      return commitPipeline;
     case 'commit-push':
       return commitPushPipeline;
     case 'commit-pr':
@@ -845,6 +780,75 @@ export function getActionPipeline(
     case 'create-pr':
       return createPrPipeline;
   }
+}
+
+// ── Step derivation ──────────────────────────────────────────
+
+/** Human-readable labels for each pipeline node, keyed by node name. */
+const STEP_LABELS: Record<string, string> = {
+  unstage: 'Unstaging files',
+  stage: 'Staging files',
+  hooks: 'Running pre-commit hooks',
+  commit: 'Committing',
+  review: 'Reviewing code',
+  fix: 'Fixing issues',
+  push: 'Pushing',
+  pr: 'Creating pull request',
+  merge: 'Merging',
+};
+
+/**
+ * Derive the progress steps array by walking the pipeline's node list
+ * and evaluating guards against the initial context. This replaces the
+ * hand-built `buildSteps()` that duplicated pipeline composition logic.
+ *
+ * Sub-pipeline nodes (e.g. review-fix) are expanded into their child nodes.
+ */
+export function deriveSteps(
+  pipeline: PipelineDefinition<GitPipelineContext>,
+  ctx: GitPipelineContext,
+): GitWorkflowProgressStep[] {
+  const steps: GitWorkflowProgressStep[] = [];
+
+  for (const n of pipeline.nodes) {
+    // Skip guarded-out nodes
+    if (n.when && !n.when(ctx)) continue;
+
+    // Expand the review-fix sub-pipeline into its visible child nodes.
+    // Guards on child nodes are NOT evaluated here — they depend on runtime
+    // state (e.g. verdict), not on the initial context. We show only the
+    // user-facing steps (review + fix), skipping internal ones (apply-patch,
+    // commit-fix) that don't have UI labels.
+    if (n.name === 'review-fix') {
+      for (const child of reviewFixSubPipeline.nodes) {
+        const label = STEP_LABELS[child.name];
+        if (!label) continue; // skip internal nodes without UI labels
+        steps.push({ id: child.name, label, status: 'pending' });
+      }
+      continue;
+    }
+
+    const step: GitWorkflowProgressStep = {
+      id: n.name,
+      label:
+        n.name === 'commit' && ctx.action === 'amend'
+          ? 'Amending commit'
+          : (STEP_LABELS[n.name] ?? n.name),
+      status: 'pending',
+    };
+
+    // Add hook sub-items if this is the hooks step
+    if (n.name === 'hooks' && ctx.hooks.length > 0) {
+      step.subItems = ctx.hooks.map((h) => ({
+        label: h.label,
+        status: 'pending' as const,
+      }));
+    }
+
+    steps.push(step);
+  }
+
+  return steps;
 }
 
 // ── Pre-commit auto-fix (moved from git-workflow-service) ────

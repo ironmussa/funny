@@ -141,7 +141,8 @@ export const ThreadItem = memo(function ThreadItem({
     (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0 || gitStatus.dirtyFileCount > 0);
   const hasGitIconOnly = showGitIcon && !hasDiffStats && GitIcon;
   const hasSnippet = !!thread.lastAssistantMessage;
-  const hasSecondRow = !!subtitle || hasDiffStats || hasGitIconOnly || hasSnippet;
+  const showLaunching = isBusy && !hasSnippet;
+  const hasSecondRow = !!subtitle || hasDiffStats || hasGitIconOnly || hasSnippet || showLaunching;
 
   return (
     <div
@@ -263,12 +264,16 @@ export const ThreadItem = memo(function ThreadItem({
                 </TooltipContent>
               </Tooltip>
             ) : null}
-            {/* 3. Last agent message snippet */}
-            {hasSnippet && (
+            {/* 3. Last agent message snippet or launching indicator */}
+            {hasSnippet ? (
               <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground/50">
                 {thread.lastAssistantMessage}
               </span>
-            )}
+            ) : showLaunching ? (
+              <span className="min-w-0 flex-1 truncate text-xs italic text-muted-foreground/50">
+                {t('thread.launching', 'Launching...')}
+              </span>
+            ) : null}
           </div>
         )}
       </button>

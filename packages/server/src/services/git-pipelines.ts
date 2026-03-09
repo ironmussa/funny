@@ -55,11 +55,12 @@ import {
   createPullRequest as gitServiceCreatePR,
   resolveIdentity,
 } from './git-service.js';
+import { parseReviewVerdict, cleanupReviewerThread } from './pipeline-orchestrator.js';
 import {
   buildPrecommitFixerPrompt,
-  parseReviewVerdict,
-  cleanupReviewerThread,
-} from './pipeline-orchestrator.js';
+  buildReviewerPrompt,
+  buildCorrectorPrompt,
+} from './pipeline-prompts.js';
 import * as pm from './project-manager.js';
 import { threadEventBus } from './thread-event-bus.js';
 import * as tm from './thread-manager.js';
@@ -383,58 +384,6 @@ function waitForAgentCompletion(
       reject(new Error('Pipeline cancelled'));
     }
   });
-}
-
-function buildReviewerPrompt(commitSha: string | undefined): string {
-  const shaRef = commitSha ? commitSha : 'HEAD';
-  return `You are a code reviewer. Analyze the changes in the latest commit.
-
-Run this command to get the diff:
-\`git diff ${shaRef}~1..${shaRef}\`
-
-If that fails (first commit), run: \`git show ${shaRef}\`
-
-Review the diff for:
-- Bugs and logic errors
-- Security vulnerabilities
-- Performance issues
-- Missing error handling
-- Code that contradicts existing patterns
-
-You MUST respond with a JSON block at the end of your message in exactly this format:
-\`\`\`json
-{
-  "verdict": "pass" | "fail",
-  "findings": [
-    {
-      "severity": "critical" | "high" | "medium" | "low",
-      "category": "bug" | "security" | "performance" | "logic" | "style",
-      "file": "path/to/file.ts",
-      "line": 42,
-      "description": "What is wrong",
-      "suggestion": "How to fix it"
-    }
-  ]
-}
-\`\`\`
-
-If there are no significant issues, return verdict "pass" with an empty findings array.
-Only flag real problems — do not flag style preferences or nitpicks unless they indicate bugs.`;
-}
-
-function buildCorrectorPrompt(findings: string): string {
-  return `You are a code corrector. The reviewer found the following issues that need to be fixed:
-
-${findings}
-
-Instructions:
-1. Read each finding carefully
-2. Fix the issues in the source files
-3. Run the build to verify your changes compile: \`bun run build\` or equivalent
-4. Run the tests to verify nothing is broken: \`bun run test\` or equivalent
-5. Do NOT create a git commit — just fix the files
-
-Fix only what the reviewer flagged. Do not make unrelated changes.`;
 }
 
 async function reviewNode(

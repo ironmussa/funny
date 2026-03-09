@@ -504,21 +504,4 @@ export function isHookAutoFixable(hookLabel: string): boolean {
   return false;
 }
 
-export function buildPrecommitFixerPrompt(
-  hookName: string,
-  errorOutput: string,
-  stagedFiles: string[],
-): string {
-  return `A pre-commit hook "${hookName}" failed with the following error:
-
-\`\`\`
-${errorOutput}
-\`\`\`
-
-The staged files are:
-${stagedFiles.map((f) => `- ${f}`).join('\n')}
-
-Fix the issues reported by the hook. Only modify the files that have errors.
-After fixing, stage your changes with \`git add\`.
-Do NOT create a commit.`;
-}
+export { buildPrecommitFixerPrompt } from './pipeline-prompts.js';

@@ -54,6 +54,10 @@ import {
   validateFilePaths,
 } from '../services/git-service.js';
 import { executeWorkflow, isWorkflowActive } from '../services/git-workflow-service.js';
+import {
+  buildCommitMessagePrompt,
+  COMMIT_MESSAGE_SYSTEM_PROMPT,
+} from '../services/pipeline-prompts.js';
 import { listHooks } from '../services/project-hooks-service.js';
 import * as tm from '../services/thread-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
@@ -499,18 +503,7 @@ gitRoutes.post('/project/:projectId/generate-commit-message', async (c) => {
     diffSummary = diffSummary.slice(0, MAX_DIFF_LEN) + '\n\n... (diff truncated for length)';
   }
 
-  const prompt = `You are a commit message generator. Based on the following git diff, generate a commit title and a commit body.
-
-Rules:
-- The title must use conventional commits style (e.g. "feat: ...", "fix: ...", "refactor: ..."), be concise (max 72 chars), and summarize the change.
-- The body must be a short paragraph (2-4 sentences) explaining what changed and why.
-- Output EXACTLY in this format, with the separator line:
-TITLE: <the title>
-BODY: <the body>
-
-No quotes, no markdown, no extra explanation.
-
-${diffSummary}`;
+  const prompt = buildCommitMessagePrompt(diffSummary);
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 60_000);
@@ -527,8 +520,7 @@ ${diffSummary}`;
           permissionMode: 'plan',
           abortController: controller,
           pathToClaudeCodeExecutable: resolveSDKCliPath(),
-          systemPrompt:
-            'You are a commit message generator. Output only the requested format, nothing else.',
+          systemPrompt: COMMIT_MESSAGE_SYSTEM_PROMPT,
           tools: [],
         },
       });
@@ -912,18 +904,7 @@ gitRoutes.post('/:threadId/generate-commit-message', async (c) => {
     diffSummary = diffSummary.slice(0, MAX_DIFF_LEN) + '\n\n... (diff truncated for length)';
   }
 
-  const prompt = `You are a commit message generator. Based on the following git diff, generate a commit title and a commit body.
-
-Rules:
-- The title must use conventional commits style (e.g. "feat: ...", "fix: ...", "refactor: ..."), be concise (max 72 chars), and summarize the change.
-- The body must be a short paragraph (2-4 sentences) explaining what changed and why.
-- Output EXACTLY in this format, with the separator line:
-TITLE: <the title>
-BODY: <the body>
-
-No quotes, no markdown, no extra explanation.
-
-${diffSummary}`;
+  const prompt = buildCommitMessagePrompt(diffSummary);
 
   const span = requestSpan(c, 'ai.generate_commit_message', {
     diffLength: diffSummary.length,
@@ -945,8 +926,7 @@ ${diffSummary}`;
           permissionMode: 'plan',
           abortController: controller,
           pathToClaudeCodeExecutable: resolveSDKCliPath(),
-          systemPrompt:
-            'You are a commit message generator. Output only the requested format, nothing else.',
+          systemPrompt: COMMIT_MESSAGE_SYSTEM_PROMPT,
           tools: [],
         },
       });

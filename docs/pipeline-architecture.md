@@ -87,7 +87,7 @@ WITH ISOLATION (proposed):
          │  Spawn  │       aborted
          │  Fixer  │       (manual fix
          │  Agent  │        needed)
-         └────┬────┘
+         └────┬────┘vs
               │
               ▼
       ┌───────────────┐

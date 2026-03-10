@@ -1,16 +1,16 @@
 import { PanelLeft } from 'lucide-react';
-import { lazy, Suspense, useCallback, useEffect, useRef, useState, startTransition } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
+import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useRouteSync } from '@/hooks/use-route-sync';
 import { useWS } from '@/hooks/use-ws';
 import { cn } from '@/lib/utils';
 import { TOAST_DURATION } from '@/lib/utils';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useProjectStore } from '@/stores/project-store';
-import { useTerminalStore } from '@/stores/terminal-store';
 import { setAppNavigate } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -65,6 +65,9 @@ const TerminalPanel = lazy(() =>
 const SettingsDetailView = lazy(() =>
   import('@/components/SettingsDetailView').then((m) => ({ default: m.SettingsDetailView })),
 );
+const GeneralSettingsView = lazy(() =>
+  import('@/components/GeneralSettingsView').then((m) => ({ default: m.GeneralSettingsView })),
+);
 const AutomationInboxView = lazy(() =>
   import('@/components/AutomationInboxView').then((m) => ({ default: m.AutomationInboxView })),
 );
@@ -109,6 +112,7 @@ export function App() {
   const reviewPaneWidth = useUIStore((s) => s.reviewPaneWidth);
   const setReviewPaneWidth = useUIStore((s) => s.setReviewPaneWidth);
   const settingsOpen = useUIStore((s) => s.settingsOpen);
+  const generalSettingsOpen = useUIStore((s) => s.generalSettingsOpen);
   const allThreadsProjectId = useUIStore((s) => s.allThreadsProjectId);
   const automationInboxOpen = useUIStore((s) => s.automationInboxOpen);
   const addProjectOpen = useUIStore((s) => s.addProjectOpen);
@@ -185,55 +189,11 @@ export function App() {
     loadProjects();
   }, [loadProjects]);
 
-  // Global keyboard shortcuts
-  useEffect(() => {
-    const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
-
-    const handler = (e: KeyboardEvent) => {
-      // Ctrl+K for command palette (toggle)
-      if (e.ctrlKey && e.key === 'k') {
-        e.preventDefault();
-        e.stopPropagation();
-        startTransition(() => {
-          setCommandPaletteOpen((prev) => !prev);
-        });
-        return;
-      }
-
-      // Ctrl+Shift+F for global thread search
-      if (e.ctrlKey && e.shiftKey && e.key === 'F') {
-        e.preventDefault();
-        e.stopPropagation();
-        navigate('/list');
-        return;
-      }
-
-      // Ctrl+` to toggle terminal (only in Tauri mode)
-      if (e.ctrlKey && e.key === '`') {
-        e.preventDefault();
-        if (!isTauri) return; // Terminal panel only works in Tauri desktop app
-        const store = useTerminalStore.getState();
-        const { selectedProjectId, projects } = useProjectStore.getState();
-        if (!selectedProjectId) return;
-        const projectTabs = store.tabs.filter((t) => t.projectId === selectedProjectId);
-        if (projectTabs.length === 0 && !store.panelVisible) {
-          const project = projects.find((p: any) => p.id === selectedProjectId);
-          const cwd = project?.path ?? 'C:\\';
-          store.addTab({
-            id: crypto.randomUUID(),
-            label: 'Terminal 1',
-            cwd,
-            alive: true,
-            projectId: selectedProjectId,
-          });
-        } else {
-          store.togglePanel();
-        }
-      }
-    };
-    window.addEventListener('keydown', handler);
-    return () => window.removeEventListener('keydown', handler);
-  }, [navigate]);
+  // Global keyboard shortcuts (extracted to dedicated hook)
+  const toggleCommandPalette = useCallback(() => {
+    setCommandPaletteOpen((prev) => !prev);
+  }, []);
+  useGlobalShortcuts(toggleCommandPalette);
 
   return (
     <SidebarProvider defaultOpen={true} className="h-screen overflow-hidden">
@@ -246,7 +206,9 @@ export function App() {
         {/* Main content + terminal */}
         <div className="flex min-h-0 flex-1 overflow-hidden">
           <Suspense>
-            {settingsOpen ? (
+            {generalSettingsOpen ? (
+              <GeneralSettingsView />
+            ) : settingsOpen ? (
               <SettingsDetailView />
             ) : analyticsOpen ? (
               <AnalyticsView />

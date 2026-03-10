@@ -71,8 +71,8 @@ const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThrea
     [onSelectThread, projectId, thread.id],
   );
   const handleRename = useCallback(
-    (newTitle: string) => onRenameThread(projectId, thread.id, newTitle),
-    [onRenameThread, projectId, thread.id],
+    () => onRenameThread(projectId, thread.id, thread.title),
+    [onRenameThread, projectId, thread.id, thread.title],
   );
   const handleArchive = useCallback(
     () => onArchiveThread(projectId, thread.id, thread.title),
@@ -315,7 +315,7 @@ export const ProjectItem = memo(function ProjectItem({
                 : 'opacity-0 pointer-events-none group-hover/project:opacity-100 group-hover/project:pointer-events-auto',
             )}
           >
-            <DropdownMenu onOpenChange={setOpenDropdown}>
+            <DropdownMenu open={openDropdown} onOpenChange={setOpenDropdown}>
               <DropdownMenuTrigger asChild>
                 <Button
                   variant="ghost"
@@ -368,6 +368,7 @@ export const ProjectItem = memo(function ProjectItem({
                   data-testid="project-menu-settings"
                   onClick={(e) => {
                     e.stopPropagation();
+                    setOpenDropdown(false);
                     navigate(`/projects/${project.id}/settings/general`);
                   }}
                 >
@@ -378,6 +379,7 @@ export const ProjectItem = memo(function ProjectItem({
                   data-testid="project-menu-analytics"
                   onClick={(e) => {
                     e.stopPropagation();
+                    setOpenDropdown(false);
                     navigate(`/projects/${project.id}/analytics`);
                   }}
                 >
@@ -388,6 +390,7 @@ export const ProjectItem = memo(function ProjectItem({
                   data-testid="project-menu-github-issues"
                   onClick={(e) => {
                     e.stopPropagation();
+                    setOpenDropdown(false);
                     onShowIssues(project.id);
                   }}
                 >
@@ -399,6 +402,7 @@ export const ProjectItem = memo(function ProjectItem({
                   data-testid="project-menu-rename"
                   onClick={(e) => {
                     e.stopPropagation();
+                    setOpenDropdown(false);
                     onRenameProject(project.id, project.name);
                   }}
                 >
@@ -409,6 +413,7 @@ export const ProjectItem = memo(function ProjectItem({
                   data-testid="project-menu-delete"
                   onClick={(e) => {
                     e.stopPropagation();
+                    setOpenDropdown(false);
                     onDeleteProject(project.id, project.name);
                   }}
                   className="text-status-error focus:text-status-error"

@@ -52,7 +52,6 @@ import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
-import { GeneralSettingsDialog } from './GeneralSettingsDialog';
 import { IssuesDialog } from './IssuesDialog';
 import { OrgSwitcher } from './OrgSwitcher';
 import { SettingsPanel } from './SettingsPanel';
@@ -111,8 +110,6 @@ export function AppSidebar() {
     name: string;
   } | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
-  const generalSettingsOpen = useUIStore((s) => s.generalSettingsOpen);
-  const setGeneralSettingsOpen = useUIStore((s) => s.setGeneralSettingsOpen);
   const [issuesProjectId, setIssuesProjectId] = useState<string | null>(null);
   const projectsScrollRef = useRef<HTMLDivElement>(null);
   const threadsScrollRef = useRef<HTMLDivElement>(null);
@@ -495,6 +492,7 @@ export function AppSidebar() {
             )}
           />
           <ThreadList
+            onRenameThread={handleRenameThread}
             onArchiveThread={handleArchiveThreadFromList}
             onDeleteThread={handleDeleteThreadFromList}
           />
@@ -602,7 +600,7 @@ export function AppSidebar() {
                 <DropdownMenuContent side="top" align="end" className="w-48">
                   <DropdownMenuItem
                     data-testid="sidebar-user-settings"
-                    onClick={() => setGeneralSettingsOpen(true)}
+                    onClick={() => navigate('/preferences/general')}
                   >
                     <Settings className="h-3.5 w-3.5" />
                     {t('settings.title')}
@@ -622,7 +620,7 @@ export function AppSidebar() {
                   variant="ghost"
                   size="icon-xs"
                   data-testid="sidebar-settings"
-                  onClick={() => setGeneralSettingsOpen(true)}
+                  onClick={() => navigate('/preferences/general')}
                   className="ml-auto h-7 w-7 text-muted-foreground"
                 >
                   <Settings className="h-4 w-4" />
@@ -633,8 +631,6 @@ export function AppSidebar() {
           )}
         </div>
       </SidebarFooter>
-
-      <GeneralSettingsDialog open={generalSettingsOpen} onOpenChange={setGeneralSettingsOpen} />
 
       {issuesProjectId && (
         <IssuesDialog

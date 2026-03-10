@@ -112,12 +112,12 @@ threadRoutes.get('/archived', async (c) => {
 });
 
 // GET /api/threads/search/content?q=xxx&projectId=xxx
-threadRoutes.get('/search/content', (c) => {
+threadRoutes.get('/search/content', async (c) => {
   const userId = c.get('userId') as string;
   const q = c.req.query('q')?.trim() || '';
   const projectId = c.req.query('projectId');
   if (!q) return c.json({ threadIds: [], snippets: {} });
-  const matches = tm.searchThreadIdsByContent({
+  const matches = await tm.searchThreadIdsByContent({
     query: q,
     projectId: projectId || undefined,
     userId,

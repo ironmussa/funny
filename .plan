@@ -1,0 +1,84 @@
+# Plan: Implement Email Sending for Team Invitations via Nodemailer
+
+## Overview
+Add nodemailer to send invitation emails when a team member is invited. SMTP credentials are configurable via environment variables (primary) with optional UI override in Team Settings for admins. The invitation email includes an acceptance link that routes back to the app.
+
+## Architecture
+
+### SMTP Config Resolution (priority order)
+1. **Org-level settings** (UI override, stored encrypted in org schema fields)
+2. **Environment variables** (fallback): `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM`
+
+If neither is configured, invitations still work (stored in DB) but no email is sent — a warning is logged.
+
+---
+
+## Tasks
+
+### 1. Install nodemailer
+```bash
+cd packages/server && bun add nodemailer && bun add -d @types/nodemailer
+```
+
+### 2. Create `packages/server/src/lib/email.ts` — Email service
+- Export `sendEmail(to, subject, html)` function
+- Export `getSmtpConfig(orgId?)` that resolves SMTP settings (org override > env vars)
+- Export `isEmailConfigured(orgId?)` to check if SMTP is available
+- Use nodemailer `createTransport()` with the resolved config
+- Log a warning (not error) when no SMTP config is found
+
+### 3. Add SMTP fields to Better Auth org schema in `packages/server/src/lib/auth.ts`
+Add 4 new optional fields to the `organization.schema.fields`:
+- `smtpHost` (string, optional)
+- `smtpPort` (string, optional)
+- `smtpUser` (string, optional)
+- `smtpPass` (string, optional) — stored encrypted via `crypto.ts`
+- `smtpFrom` (string, optional)
+
+### 4. Add `sendInvitationEmail` callback to the organization plugin in `auth.ts`
+Wire the Better Auth `organization({ sendInvitationEmail: ... })` callback to call the email service. This is the hook that Better Auth calls when `inviteMember` succeeds. It receives `{ organization, email, role, inviter }`.
+
+The email body should include:
+- Who invited them (inviter name)
+- Which organization
+- Their assigned role
+- A link to accept: `{APP_URL}/invite/{invitationId}` (or just the login page with a note)
+
+### 5. Add SMTP routes to `packages/server/src/routes/team-settings.ts`
+- `GET /api/team-settings/smtp` — returns `{ host, port, user, from, hasPassword }` (never returns the actual password)
+- `PUT /api/team-settings/smtp` — saves SMTP config (encrypts password)
+- `POST /api/team-settings/smtp/test` — sends a test email to the current user's email
+
+### 6. Add API client methods in `packages/client/src/lib/api.ts`
+- `getSmtpSettings()` → GET `/team-settings/smtp`
+- `updateSmtpSettings(data)` → PUT `/team-settings/smtp`
+- `testSmtpSettings()` → POST `/team-settings/smtp/test`
+
+### 7. Add SMTP Settings UI section to `packages/client/src/components/settings/TeamSettings.tsx`
+Add a new "Email (SMTP)" section below the existing "Anthropic API Key" section:
+- Host input
+- Port input
+- Username input
+- Password input (type=password, shows "saved" placeholder if configured)
+- From address input
+- "Save" button
+- "Send Test Email" button
+- Status indicator (configured/not configured)
+
+### 8. Build & type-check
+```bash
+bun run build
+```
+
+## Files Modified
+- `packages/server/package.json` — add nodemailer dependency
+- `packages/server/src/lib/auth.ts` — add org schema fields + sendInvitationEmail callback
+- `packages/server/src/lib/email.ts` — **NEW** email service
+- `packages/server/src/routes/team-settings.ts` — add SMTP endpoints
+- `packages/client/src/lib/api.ts` — add SMTP API methods
+- `packages/client/src/components/settings/TeamSettings.tsx` — add SMTP settings UI
+
+## Notes
+- No invitation acceptance page needed right now — Better Auth handles acceptance via its built-in API. The email just links to the login page.
+- SMTP password is encrypted at rest using the same `crypto.ts` (AES-256-GCM) used for GitHub tokens.
+- Environment variables serve as the default/fallback, so self-hosted users who prefer env config don't need to touch the UI.

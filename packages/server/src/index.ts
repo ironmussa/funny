@@ -55,6 +55,7 @@ import { pipelineRoutes } from './routes/pipelines.js';
 import pluginRoutes from './routes/plugins.js';
 import { profileRoutes } from './routes/profile.js';
 import { projectRoutes } from './routes/projects.js';
+import { settingsRoutes } from './routes/settings.js';
 import skillsRoutes from './routes/skills.js';
 import { teamProjectRoutes } from './routes/team-projects.js';
 import { teamSettingsRoutes } from './routes/team-settings.js';
@@ -218,6 +219,7 @@ app.route('/api/pipelines', pipelineRoutes);
 app.route('/api/profile', profileRoutes);
 app.route('/api/github', githubRoutes);
 app.route('/api/analytics', analyticsRoutes);
+app.route('/api/settings', settingsRoutes);
 app.route('/api/team-projects', teamProjectRoutes);
 app.route('/api/team-settings', teamSettingsRoutes);
 

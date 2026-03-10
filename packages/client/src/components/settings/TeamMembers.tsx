@@ -1,11 +1,12 @@
 import type { TeamRole } from '@funny/shared';
-import { UserMinus } from 'lucide-react';
+import { Send, UserMinus, X } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import {
   Select,
   SelectContent,
@@ -38,11 +39,33 @@ const ROLE_COLORS: Record<TeamRole, string> = {
   viewer: 'bg-gray-500/15 text-gray-700 dark:text-gray-400',
 };
 
+/** Better Auth org plugin only supports these roles for invitations */
+type InviteRole = 'admin' | 'owner' | 'member';
+
+interface PendingInvitation {
+  id: string;
+  email: string;
+  role: string;
+  status: string;
+  expiresAt: string;
+}
+
+const INVITE_ROLES: { value: InviteRole; label: string }[] = [
+  { value: 'admin', label: 'Admin' },
+  { value: 'member', label: 'Member' },
+];
+
 export function TeamMembers() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
   const [removeConfirm, setRemoveConfirm] = useState<Member | null>(null);
   const currentUser = useAuthStore((s) => s.user);
+
+  // Invitation state
+  const [invitations, setInvitations] = useState<PendingInvitation[]>([]);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteRole, setInviteRole] = useState<InviteRole>('member');
+  const [sending, setSending] = useState(false);
 
   const loadMembers = useCallback(async () => {
     try {
@@ -57,9 +80,23 @@ export function TeamMembers() {
     }
   }, []);
 
+  const loadInvitations = useCallback(async () => {
+    try {
+      const res = await authClient.organization.listInvitations();
+      if (res.data) {
+        setInvitations(
+          (res.data as unknown as PendingInvitation[]).filter((i) => i.status === 'pending'),
+        );
+      }
+    } catch (err) {
+      console.error('[TeamMembers] Failed to load invitations:', err);
+    }
+  }, []);
+
   useEffect(() => {
     loadMembers();
-  }, [loadMembers]);
+    loadInvitations();
+  }, [loadMembers, loadInvitations]);
 
   const handleRoleChange = useCallback(async (memberId: string, newRole: TeamRole) => {
     try {
@@ -88,6 +125,34 @@ export function TeamMembers() {
     setRemoveConfirm(null);
   }, [removeConfirm]);
 
+  const handleInvite = useCallback(async () => {
+    if (!inviteEmail.trim()) return;
+    setSending(true);
+    try {
+      await authClient.organization.inviteMember({
+        email: inviteEmail.trim(),
+        role: inviteRole,
+      });
+      toast.success(`Invitation sent to ${inviteEmail.trim()}`);
+      setInviteEmail('');
+      await loadInvitations();
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to send invitation');
+    } finally {
+      setSending(false);
+    }
+  }, [inviteEmail, inviteRole, loadInvitations]);
+
+  const handleCancelInvitation = useCallback(async (invitationId: string) => {
+    try {
+      await authClient.organization.cancelInvitation({ invitationId });
+      setInvitations((prev) => prev.filter((i) => i.id !== invitationId));
+      toast.success('Invitation cancelled');
+    } catch (err: any) {
+      toast.error(err.message || 'Failed to cancel invitation');
+    }
+  }, []);
+
   const ownerCount = members.filter((m) => m.role === 'owner').length;
 
   if (loading) {
@@ -100,10 +165,53 @@ export function TeamMembers() {
 
   return (
     <>
-      <h3 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Members ({members.length})
-      </h3>
-      <div className="overflow-hidden rounded-lg border border-border/50">
+      {/* Invite form */}
+      <h3 className="settings-section-header">Invite Member</h3>
+      <div className="settings-card">
+        <div className="px-4 py-3.5">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Send an invitation to join this organization.
+          </p>
+          <div className="flex items-center gap-2">
+            <Input
+              type="email"
+              value={inviteEmail}
+              onChange={(e) => setInviteEmail(e.target.value)}
+              placeholder="user@example.com"
+              className="flex-1 text-sm"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleInvite();
+              }}
+              data-testid="team-invite-email"
+            />
+            <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as InviteRole)}>
+              <SelectTrigger className="h-9 w-[100px]" data-testid="team-invite-role">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {INVITE_ROLES.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              onClick={handleInvite}
+              disabled={!inviteEmail.trim() || sending}
+              data-testid="team-invite-send"
+            >
+              <Send className="mr-1.5 h-3.5 w-3.5" />
+              Invite
+            </Button>
+          </div>
+        </div>
+      </div>
+
+      {/* Members list */}
+      <h3 className="settings-section-header">Members ({members.length})</h3>
+      <div className="settings-card">
         {members.map((member) => {
           const isCurrentUser = member.userId === currentUser?.id;
           const isLastOwner = member.role === 'owner' && ownerCount <= 1;
@@ -111,7 +219,7 @@ export function TeamMembers() {
           return (
             <div
               key={member.id}
-              className="flex items-center justify-between gap-4 border-b border-border/50 px-4 py-3 last:border-b-0"
+              className="settings-row"
               data-testid={`team-member-${member.userId}`}
             >
               <div className="min-w-0 flex-1">
@@ -167,6 +275,37 @@ export function TeamMembers() {
           );
         })}
       </div>
+
+      {/* Pending invitations */}
+      {invitations.length > 0 && (
+        <>
+          <h3 className="settings-section-header">Pending Invitations ({invitations.length})</h3>
+          <div className="settings-card">
+            {invitations.map((inv) => (
+              <div key={inv.id} className="settings-row" data-testid={`team-invitation-${inv.id}`}>
+                <div className="min-w-0">
+                  <p className="truncate text-sm text-foreground">{inv.email}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Expires {new Date(inv.expiresAt).toLocaleDateString()}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Badge variant="secondary">{inv.role}</Badge>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    onClick={() => handleCancelInvitation(inv.id)}
+                    data-testid={`team-invitation-cancel-${inv.id}`}
+                  >
+                    <X className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
 
       <ConfirmDialog
         open={!!removeConfirm}

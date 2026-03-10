@@ -5,153 +5,119 @@
  * @domain layer: infrastructure
  * @domain depends: WSBroker, ShutdownManager
  *
- * Spawns and manages interactive PTY sessions via a helper Node.js process.
+ * Manages interactive PTY sessions. Selects the best backend at startup:
+ *   1. Bun native terminal (Linux/macOS — zero dependencies)
+ *   2. node-pty via helper process (Windows — requires node-pty package)
+ *   3. Null fallback (reports error to client)
  */
 
-import { spawn, type ChildProcess } from 'child_process';
-import { join } from 'path';
-import { createInterface } from 'readline';
-
 import { log } from '../lib/logger.js';
+import type { PtyBackend } from './pty-backend.js';
 import { wsBroker } from './ws-broker.js';
 
-let helperProcess: ChildProcess | null = null;
-let helperStdin: any = null; // Type as any to avoid strict stream types mismatch
-const _pendingSpawns = new Set<string>();
+// ── Backend selection ───────────────────────────────────────────────
 
-// Ensure helper is running
-function ensureHelper() {
-  if (helperProcess && !helperProcess.killed) return;
-
-  const helperPath = join(import.meta.dir, 'pty-helper.mjs');
-  log.info('Spawning PTY helper process', { namespace: 'pty-manager', helperPath });
-
-  helperProcess = spawn('node', [helperPath], {
-    // ALL fds must be 'pipe' (not 'inherit') to prevent Windows handle inheritance.
-    // When any fd uses 'inherit', Node sets bInheritHandles=TRUE in CreateProcess,
-    // causing the child to inherit ALL parent handles — including the server's
-    // listening socket. If the server dies without cleanup, the helper keeps the
-    // port occupied indefinitely (ghost socket).
-    stdio: ['pipe', 'pipe', 'pipe'],
-    windowsHide: true,
-  });
-
-  helperStdin = helperProcess.stdin;
-
-  // Forward helper's stderr to server's stderr (replaces 'inherit')
-  if (helperProcess.stderr) {
-    helperProcess.stderr.on('data', (chunk: Buffer) => {
-      process.stderr.write(chunk);
-    });
+function selectBackend(): PtyBackend {
+  // 1. Try Bun native (POSIX only)
+  if (process.platform !== 'win32') {
+    const { BunPtyBackend } =
+      require('./pty-backend-bun.js') as typeof import('./pty-backend-bun.js');
+    const backend = new BunPtyBackend();
+    if (backend.available) {
+      log.info('PTY backend selected: bun-native', { namespace: 'pty-manager' });
+      return backend;
+    }
   }
 
-  if (helperProcess.stdout) {
-    const rl = createInterface({
-      input: helperProcess.stdout,
-      terminal: false,
-    });
-
-    rl.on('line', (line) => {
-      if (!line.trim()) return;
-      try {
-        const msg = JSON.parse(line);
-        handleHelperMessage(msg);
-      } catch (err) {
-        log.error('Failed to parse PTY helper output', {
-          namespace: 'pty-manager',
-          line,
-          error: err,
-        });
-      }
-    });
+  // 2. Try node-pty (Windows or POSIX fallback)
+  try {
+    const { NodePtyBackend } =
+      require('./pty-backend-node-pty.js') as typeof import('./pty-backend-node-pty.js');
+    const backend = new NodePtyBackend();
+    if (backend.available) {
+      log.info('PTY backend selected: node-pty', { namespace: 'pty-manager' });
+      return backend;
+    }
+  } catch {
+    // node-pty not available
   }
 
-  helperProcess.on('exit', (code) => {
-    log.warn('PTY helper process exited', { namespace: 'pty-manager', exitCode: code });
-    helperProcess = null;
-    helperStdin = null;
-    // We might want to restart it immediately or on next demand
-    // For now, let next action trigger restart
-  });
+  // 3. Null fallback
+  log.warn('No PTY backend available — terminal will not work', { namespace: 'pty-manager' });
+  const { NullPtyBackend } =
+    require('./pty-backend-null.js') as typeof import('./pty-backend-null.js');
+  return new NullPtyBackend();
 }
 
-function handleHelperMessage(msg: any) {
-  const { type, data } = msg;
+const backend = selectBackend();
 
-  switch (type) {
-    case 'pty:data':
-      if (data.ptyId) {
-        log.info(`[DEBUG] pty:data received from helper`, {
-          namespace: 'pty-manager',
-          ptyId: data.ptyId,
-          len: data.data?.length,
-          clients: wsBroker.clientCount,
-        });
-        // If the PTY is associated with a specific user (we don't track user mapping easily here anymore
-        // without complex state, so we broadcast to all sessions for now or check if we can retrieve it).
-        //
-        // In the original code we had:
-        // if (userId && userId !== '__local__') wsBroker.emitToUser(userId, event);
-        // else wsBroker.emit(event);
-        //
-        // To keep it simple and since we lost the direct userId context in this event stream
-        // (unless we store it in a map in this file), let's store it.
+// ── Session tracking (for user-scoped WS events) ───────────────────
 
-        const session = activeSessions.get(data.ptyId);
-        const event = {
-          type: 'pty:data' as const,
-          threadId: '',
-          data: { ptyId: data.ptyId, data: data.data },
-        };
-
-        if (session?.userId && session.userId !== '__local__') {
-          wsBroker.emitToUser(session.userId, event);
-        } else {
-          wsBroker.emit(event);
-        }
-      }
-      break;
-
-    case 'pty:exit':
-      if (data.ptyId) {
-        const session = activeSessions.get(data.ptyId);
-        log.info('PTY exited', {
-          namespace: 'pty-manager',
-          ptyId: data.ptyId,
-          exitCode: data.exitCode,
-        });
-
-        const event = {
-          type: 'pty:exit' as const,
-          threadId: '',
-          data: { ptyId: data.ptyId, exitCode: data.exitCode },
-        };
-
-        if (session?.userId && session.userId !== '__local__') {
-          wsBroker.emitToUser(session.userId, event);
-        } else {
-          wsBroker.emit(event);
-        }
-
-        activeSessions.delete(data.ptyId);
-      }
-      break;
-  }
-}
-
-// Track sessions just for user mapping
 interface SessionMeta {
   userId: string;
   cwd: string;
 }
+
 const activeSessions = new Map<string, SessionMeta>();
 
-function sendToHelper(type: string, args: any) {
-  ensureHelper();
-  if (helperStdin) {
-    helperStdin.write(JSON.stringify({ type, ...args }) + '\n');
-  }
-}
+// ── Wire backend callbacks to WS broker ─────────────────────────────
+
+backend.init({
+  onData(ptyId, data) {
+    const session = activeSessions.get(ptyId);
+    const event = {
+      type: 'pty:data' as const,
+      threadId: '',
+      data: { ptyId, data },
+    };
+
+    if (session?.userId && session.userId !== '__local__') {
+      wsBroker.emitToUser(session.userId, event);
+    } else {
+      wsBroker.emit(event);
+    }
+  },
+
+  onExit(ptyId, exitCode) {
+    const session = activeSessions.get(ptyId);
+    log.info('PTY exited', { namespace: 'pty-manager', ptyId, exitCode });
+
+    const event = {
+      type: 'pty:exit' as const,
+      threadId: '',
+      data: { ptyId, exitCode },
+    };
+
+    if (session?.userId && session.userId !== '__local__') {
+      wsBroker.emitToUser(session.userId, event);
+    } else {
+      wsBroker.emit(event);
+    }
+
+    activeSessions.delete(ptyId);
+  },
+
+  onError(ptyId, error) {
+    const session = activeSessions.get(ptyId);
+    log.error('PTY error', { namespace: 'pty-manager', ptyId, error });
+
+    const event = {
+      type: 'pty:error' as const,
+      threadId: '',
+      data: { ptyId, error },
+    };
+
+    if (session?.userId && session.userId !== '__local__') {
+      wsBroker.emitToUser(session.userId, event);
+    } else {
+      wsBroker.emit(event);
+    }
+
+    activeSessions.delete(ptyId);
+  },
+});
+
+// ── Public API (unchanged from previous version) ────────────────────
 
 export function spawnPty(
   id: string,
@@ -163,50 +129,36 @@ export function spawnPty(
 ): void {
   if (activeSessions.has(id)) return;
 
-  log.info('Requesting spawn PTY', { namespace: 'pty-manager', ptyId: id, shell });
+  log.info('Requesting spawn PTY', {
+    namespace: 'pty-manager',
+    ptyId: id,
+    backend: backend.name,
+    shell,
+  });
   activeSessions.set(id, { userId, cwd });
 
-  sendToHelper('spawn', { id, cwd, cols, rows, env: process.env, shell });
+  backend.spawn(id, cwd, cols, rows, process.env as Record<string, string>, shell);
 }
 
 export function writePty(id: string, data: string): void {
-  sendToHelper('write', { id, data });
+  backend.write(id, data);
 }
 
 export function resizePty(id: string, cols: number, rows: number): void {
-  sendToHelper('resize', { id, cols, rows });
+  backend.resize(id, cols, rows);
 }
 
 export function killPty(id: string): void {
   log.info('Requesting kill PTY', { namespace: 'pty-manager', ptyId: id });
-  sendToHelper('kill', { id });
+  backend.kill(id);
   activeSessions.delete(id);
 }
 
-// ── Self-register with ShutdownManager ──────────────────────
-import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
-shutdownManager.register('pty-manager', () => killAllPtys(), ShutdownPhase.SERVICES);
-
 export function killAllPtys(): void {
-  if (helperProcess) {
-    if (process.platform === 'win32' && helperProcess.pid) {
-      // On Windows, child.kill() only kills the helper — grandchild shell
-      // processes (spawned by node-pty) survive. Use taskkill /T to kill
-      // the entire process tree.
-      try {
-        const r = Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${helperProcess.pid}`]);
-        // Fallback: if taskkill fails, try the normal kill
-        if (r.exitCode !== 0) helperProcess.kill();
-      } catch {
-        try {
-          helperProcess.kill();
-        } catch {}
-      }
-    } else {
-      helperProcess.kill();
-    }
-    helperProcess = null;
-    helperStdin = null;
-  }
+  backend.killAll();
   activeSessions.clear();
 }
+
+// ── Self-register with ShutdownManager ──────────────────────────────
+import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
+shutdownManager.register('pty-manager', () => killAllPtys(), ShutdownPhase.SERVICES);

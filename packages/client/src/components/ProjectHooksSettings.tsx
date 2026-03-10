@@ -182,7 +182,7 @@ function HookItem({
                 checked={hook.enabled}
                 onCheckedChange={() => onToggleEnabled(hook)}
                 data-testid={`hook-toggle-${key}`}
-                className="h-4 w-7 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input [&>span]:h-3 [&>span]:w-3 [&>span]:data-[state=checked]:translate-x-3"
+                className=""
               />
             </div>
           </TooltipTrigger>
@@ -404,7 +404,7 @@ export function ProjectHooksSettings() {
         <Button
           variant="outline"
           size="sm"
-          className="h-7 gap-1.5 text-xs"
+          className="settings-btn-sm gap-1.5"
           data-testid="hooks-add"
           onClick={() => {
             cancelEdit();
@@ -437,15 +437,9 @@ export function ProjectHooksSettings() {
             const key = hookKey(hook);
             if (editingKey === key) {
               return (
-                <div
-                  key={key}
-                  data-testid={`hook-item-${key}`}
-                  className="space-y-2 rounded-lg border border-border bg-muted/30 p-3"
-                >
+                <div key={key} data-testid={`hook-item-${key}`} className="settings-form-panel">
                   <div>
-                    <label className="mb-1 block text-xs text-muted-foreground">
-                      {t('hooks.hookType')}
-                    </label>
+                    <label className="settings-label">{t('hooks.hookType')}</label>
                     <Select value={hookType} onValueChange={(v) => setHookType(v as HookType)}>
                       <SelectTrigger className="text-sm" data-testid="hooks-type-select">
                         <SelectValue />
@@ -460,11 +454,9 @@ export function ProjectHooksSettings() {
                     </Select>
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-muted-foreground">
-                      {t('hooks.label')}
-                    </label>
+                    <label className="settings-label">{t('hooks.label')}</label>
                     <Input
-                      className="h-auto py-1.5"
+                      className="settings-form-input"
                       placeholder={t('hooks.label')}
                       value={label}
                       onChange={(e) => setLabel(e.target.value)}
@@ -473,9 +465,7 @@ export function ProjectHooksSettings() {
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-muted-foreground">
-                      {t('hooks.command')}
-                    </label>
+                    <label className="settings-label">{t('hooks.command')}</label>
                     <ShellEditor
                       value={command}
                       onChange={setCommand}
@@ -512,11 +502,9 @@ export function ProjectHooksSettings() {
 
       {/* Add form */}
       {adding && (
-        <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+        <div className="settings-form-panel">
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">
-              {t('hooks.hookType')}
-            </label>
+            <label className="settings-label">{t('hooks.hookType')}</label>
             <Select value={hookType} onValueChange={(v) => setHookType(v as HookType)}>
               <SelectTrigger className="text-sm" data-testid="hooks-type-select">
                 <SelectValue />
@@ -531,9 +519,9 @@ export function ProjectHooksSettings() {
             </Select>
           </div>
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">{t('hooks.label')}</label>
+            <label className="settings-label">{t('hooks.label')}</label>
             <Input
-              className="h-auto py-1.5"
+              className="settings-form-input"
               placeholder={t('hooks.label')}
               value={label}
               onChange={(e) => setLabel(e.target.value)}
@@ -542,7 +530,7 @@ export function ProjectHooksSettings() {
             />
           </div>
           <div>
-            <label className="mb-1 block text-xs text-muted-foreground">{t('hooks.command')}</label>
+            <label className="settings-label">{t('hooks.command')}</label>
             <ShellEditor value={command} onChange={setCommand} testId="hooks-command-input" />
           </div>
           <div className="flex items-center justify-end gap-2 pt-1">

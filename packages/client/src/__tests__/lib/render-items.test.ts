@@ -250,4 +250,65 @@ describe('buildGroupedRenderItems', () => {
     expect(result).toHaveLength(1);
     expect(result[0].type).toBe('message');
   });
+
+  test('attaches plan text from Write to .plan file for ExitPlanMode', () => {
+    const writeTc = {
+      id: 'tc-write',
+      name: 'Write',
+      input: JSON.stringify({ file_path: '/project/.plan', content: '# My Plan\nStep 1\nStep 2' }),
+      timestamp: '2024-01-01T00:00:00Z',
+    };
+    const exitTc = {
+      id: 'tc-exit',
+      name: 'ExitPlanMode',
+      input: '{}',
+      timestamp: '2024-01-01T00:00:01Z',
+    };
+    const messages = [makeMessage('m1', '', [writeTc]), makeMessage('m2', '', [exitTc])];
+
+    const result = buildGroupedRenderItems(messages);
+
+    // Find the ExitPlanMode tool call
+    let exitPlanTc: any;
+    for (const item of result) {
+      if (item.type === 'toolcall' && item.tc.name === 'ExitPlanMode') exitPlanTc = item.tc;
+      if (item.type === 'toolcall-run') {
+        for (const sub of (item as any).items) {
+          if (sub.type === 'toolcall' && sub.tc.name === 'ExitPlanMode') exitPlanTc = sub.tc;
+        }
+      }
+    }
+    expect(exitPlanTc).toBeDefined();
+    expect(exitPlanTc._planText).toBe('# My Plan\nStep 1\nStep 2');
+  });
+
+  test('attaches plan text from Write to plan.md file for ExitPlanMode', () => {
+    const writeTc = {
+      id: 'tc-write',
+      name: 'Write',
+      input: JSON.stringify({ file_path: '/project/plan.md', content: '# Plan from MD' }),
+      timestamp: '2024-01-01T00:00:00Z',
+    };
+    const exitTc = {
+      id: 'tc-exit',
+      name: 'ExitPlanMode',
+      input: '{}',
+      timestamp: '2024-01-01T00:00:01Z',
+    };
+    const messages = [makeMessage('m1', '', [writeTc, exitTc])];
+
+    const result = buildGroupedRenderItems(messages);
+
+    let exitPlanTc: any;
+    for (const item of result) {
+      if (item.type === 'toolcall' && item.tc.name === 'ExitPlanMode') exitPlanTc = item.tc;
+      if (item.type === 'toolcall-run') {
+        for (const sub of (item as any).items) {
+          if (sub.type === 'toolcall' && sub.tc.name === 'ExitPlanMode') exitPlanTc = sub.tc;
+        }
+      }
+    }
+    expect(exitPlanTc).toBeDefined();
+    expect(exitPlanTc._planText).toBe('# Plan from MD');
+  });
 });

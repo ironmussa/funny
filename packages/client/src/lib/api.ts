@@ -942,6 +942,30 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+  getSmtpSettings: () =>
+    request<{
+      host: string;
+      port: string;
+      user: string;
+      from: string;
+      hasPassword: boolean;
+      source: 'database' | 'environment' | 'none';
+      configured: boolean;
+    }>('/settings/smtp'),
+  updateSmtpSettings: (data: {
+    host: string;
+    port: string;
+    user: string;
+    pass?: string;
+    from: string;
+  }) =>
+    request<{ ok: boolean }>('/settings/smtp', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  testSmtpSettings: () =>
+    request<{ ok: boolean; sentTo: string }>('/settings/smtp/test', { method: 'POST' }),
+
   listTeamProjects: () => request<import('@funny/shared').Project[]>('/team-projects'),
   addTeamProject: (projectId: string) =>
     request<{ ok: boolean }>('/team-projects', {

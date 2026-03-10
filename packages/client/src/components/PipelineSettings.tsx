@@ -13,6 +13,8 @@ import { PROVIDER_MODELS, PROVIDERS } from '@/lib/providers';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
+import { SettingRow } from './settings/SettingRow';
+
 /** Model selector matching the PromptInput pattern — grouped by provider */
 const ModelSelect = memo(function ModelSelect({
   value,
@@ -82,26 +84,6 @@ const ModelSelect = memo(function ModelSelect({
     </Popover>
   );
 });
-
-function SettingRow({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-border/50 px-4 py-3 last:border-b-0">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-foreground">{title}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
-      </div>
-      <div className="flex-shrink-0">{children}</div>
-    </div>
-  );
-}
 
 export function PipelineSettings() {
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
@@ -185,7 +167,7 @@ export function PipelineSettings() {
       </div>
 
       {/* Pre-commit fixer section */}
-      <div className="overflow-hidden rounded-lg border border-border/50">
+      <div className="settings-card mb-0">
         <div className="flex items-center justify-between bg-muted/30 px-3 py-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Pre-commit Auto-fix
@@ -226,7 +208,7 @@ export function PipelineSettings() {
       </div>
 
       {/* Post-commit review section */}
-      <div className="overflow-hidden rounded-lg border border-border/50">
+      <div className="settings-card mb-0">
         <div className="flex items-center justify-between bg-muted/30 px-3 py-2">
           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
             Post-commit Review
@@ -270,7 +252,7 @@ export function PipelineSettings() {
 
       {/* Custom Prompts section */}
       <Collapsible>
-        <div className="overflow-hidden rounded-lg border border-border/50">
+        <div className="settings-card mb-0">
           <CollapsibleTrigger className="flex w-full items-center justify-between bg-muted/30 px-3 py-2 hover:bg-muted/50 transition-colors">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Custom Prompts

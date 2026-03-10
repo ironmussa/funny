@@ -717,9 +717,16 @@ export const PromptInput = memo(function PromptInput({
     activeItem?.scrollIntoView({ block: 'nearest' });
   }, [mentionIndex, showMentionMenu]);
 
-  // Focus when switching threads or when agent stops running
+  // Focus and reset popup state when switching threads
   useEffect(() => {
     textareaRef.current?.focus();
+    setShowMentionMenu(false);
+    setShowSlashMenu(false);
+    setMentionFilter('');
+    setSlashFilter('');
+    setMentionIndex(0);
+    setSlashIndex(0);
+    setMentionItems([]);
   }, [effectiveThreadId]);
 
   useEffect(() => {
@@ -1411,49 +1418,18 @@ export const PromptInput = memo(function PromptInput({
               )}
             </div>
           )}
-          {/* File chips above textarea */}
+          {/* Textarea */}
           {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-          <div className="px-3 pt-2" onClick={() => textareaRef.current?.focus()}>
-            {selectedFiles.length > 0 && (
-              <div className="mb-1 flex flex-wrap gap-1">
-                {selectedFiles.map((file) => (
-                  <span
-                    key={file}
-                    data-testid={`selected-file-${file}`}
-                    className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 bg-muted/60 px-2 py-0.5 font-mono text-xs text-foreground/80"
-                    title={file}
-                  >
-                    {selectedFileTypes[file] === 'folder' ? (
-                      <FolderOpen className="h-3 w-3 shrink-0 text-muted-foreground" />
-                    ) : (
-                      <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
-                    )}
-                    {file.split('/').pop()}
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setSelectedFiles((prev) => prev.filter((f) => f !== file));
-                        setSelectedFileTypes((prev) => {
-                          const next = { ...prev };
-                          delete next[file];
-                          return next;
-                        });
-                      }}
-                      aria-label={t('prompt.removeFile', 'Remove file')}
-                      className="ml-0.5 rounded-sm hover:text-destructive"
-                    >
-                      <X className="h-3 w-3" />
-                    </button>
-                  </span>
-                ))}
-              </div>
-            )}
+          <div
+            className="px-3 pt-2"
+            onClick={() => textareaRef.current?.focus()}
+          >
             <textarea
               ref={textareaCallbackRef}
               data-testid="prompt-textarea"
               aria-label={t('prompt.messageLabel', 'Message')}
-              className="w-full resize-none bg-transparent py-0.5 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-              style={{ minHeight: selectedFiles.length > 0 ? '1.5rem' : '4.5rem' }}
+              className="w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
+              style={{ minHeight: '1.5rem' }}
               placeholder={
                 running
                   ? isQueueMode
@@ -1476,6 +1452,41 @@ export const PromptInput = memo(function PromptInput({
               disabled={loading}
             />
           </div>
+          {/* File chips below textarea */}
+          {selectedFiles.length > 0 && (
+            <div className="flex flex-wrap gap-1 px-3 pb-1">
+              {selectedFiles.map((file) => (
+                <span
+                  key={file}
+                  data-testid={`selected-file-${file}`}
+                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 bg-muted/60 px-2 py-0.5 font-mono text-xs text-foreground/80"
+                  title={file}
+                >
+                  {selectedFileTypes[file] === 'folder' ? (
+                    <FolderOpen className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  ) : (
+                    <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  )}
+                  {file.split('/').pop()}
+                  <button
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSelectedFiles((prev) => prev.filter((f) => f !== file));
+                      setSelectedFileTypes((prev) => {
+                        const next = { ...prev };
+                        delete next[file];
+                        return next;
+                      });
+                    }}
+                    aria-label={t('prompt.removeFile', 'Remove file')}
+                    className="ml-0.5 rounded-sm hover:text-destructive"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
           {/* Bottom toolbar */}
           <input
             ref={fileInputRef}

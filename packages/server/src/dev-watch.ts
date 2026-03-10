@@ -35,7 +35,7 @@ function startServer() {
     env: { ...process.env },
   });
 
-  child.exited.then((code) => {
+  void child.exited.then((code) => {
     child = null;
     if (!exitRequested && !restarting) {
       // Server crashed — restart after a short delay
@@ -96,7 +96,7 @@ let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 function onFileChange(_event: string, filename: string | null) {
   if (filename && !filename.endsWith('.ts') && !filename.endsWith('.tsx')) return;
   if (debounceTimer) clearTimeout(debounceTimer);
-  debounceTimer = setTimeout(restart, 300);
+  debounceTimer = setTimeout(() => void restart(), 300);
 }
 
 // Watch server source + sibling packages
@@ -124,8 +124,8 @@ async function cleanup() {
   await killServer();
   process.exit(0);
 }
-process.on('SIGINT', cleanup);
-process.on('SIGTERM', cleanup);
+process.on('SIGINT', () => void cleanup());
+process.on('SIGTERM', () => void cleanup());
 
 // Run kill-port first, then start server
 await import('./kill-port.js');

@@ -1,5 +1,5 @@
 import AnsiToHtml from 'ansi-to-html';
-import { Plus, X, Square, Loader2 } from 'lucide-react';
+import { Plus, X, Square, Loader2, AlertCircle } from 'lucide-react';
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
@@ -167,6 +167,7 @@ function WebTerminalTabContent({
   const termRef = useRef<{ terminal: any; fitAddon: any } | null>(null);
   const registerPtyCallback = useTerminalStore((s) => s.registerPtyCallback);
   const unregisterPtyCallback = useTerminalStore((s) => s.unregisterPtyCallback);
+  const tabError = useTerminalStore((s) => s.tabs.find((t) => t.id === id)?.error);
   const [loading, setLoading] = useState(true);
   useThemeSync(termRef);
 
@@ -295,14 +296,21 @@ function WebTerminalTabContent({
   return (
     <div className={cn('relative w-full h-full', !active && 'hidden')}>
       <div ref={containerRef} className="h-full w-full" />
-      {loading && (
+      {tabError ? (
+        <div className="absolute inset-0 flex items-center justify-center bg-background">
+          <div className="flex items-center gap-2 text-xs text-destructive">
+            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <span>{tabError}</span>
+          </div>
+        </div>
+      ) : loading ? (
         <div className="absolute inset-0 flex items-center justify-center bg-background">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
             <Loader2 className="h-4 w-4 animate-spin" />
             <span>{t('terminal.loading')}</span>
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

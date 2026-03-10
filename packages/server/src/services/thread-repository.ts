@@ -9,7 +9,7 @@
 
 import { eq, and, or, ne, like, desc, inArray, count as drizzleCount, sql } from 'drizzle-orm';
 
-import { db, sqlite, schema, dbAll, dbGet, dbRun } from '../db/index.js';
+import { db, schema, dbAll, dbGet, dbRun } from '../db/index.js';
 import { log } from '../lib/logger.js';
 import { getCommentCounts } from './comment-repository.js';
 import { recordStageChange } from './stage-history.js';
@@ -72,7 +72,7 @@ export async function listThreads(opts: {
   if (threads.length > 0) {
     const ids = threads.map((t: any) => t.id);
     const counts = await getCommentCounts(ids);
-    const snippets = getLastAssistantSnippets(ids);
+    const snippets = await getLastAssistantSnippets(ids);
     return threads.map((t: any) => ({
       ...t,
       commentCount: counts.get(t.id) ?? 0,
@@ -210,35 +210,50 @@ export async function deleteThread(id: string) {
 
 /**
  * Fetch the last non-empty assistant message snippet for a batch of thread IDs.
- * Uses a single raw SQL query with a window function for efficiency.
+ * Uses Drizzle with MAX(timestamp) subquery — works on both SQLite and PostgreSQL.
  */
-function getLastAssistantSnippets(threadIds: string[]): Map<string, string> {
+async function getLastAssistantSnippets(threadIds: string[]): Promise<Map<string, string>> {
   if (threadIds.length === 0) return new Map();
 
-  if (!sqlite) {
-    // TODO(team-version task 4.3): implement Postgres-compatible path
-    return new Map();
-  }
+  // Find the max timestamp per thread for non-empty assistant messages
+  const latestTimestamps = await dbAll<{ threadId: string; maxTs: string }>(
+    db
+      .select({
+        threadId: schema.messages.threadId,
+        maxTs: sql<string>`MAX(${schema.messages.timestamp})`,
+      })
+      .from(schema.messages)
+      .where(
+        and(
+          inArray(schema.messages.threadId, threadIds),
+          eq(schema.messages.role, 'assistant'),
+          ne(schema.messages.content, ''),
+        ),
+      )
+      .groupBy(schema.messages.threadId) as any,
+  );
 
-  const placeholders = threadIds.map(() => '?').join(',');
-  const rows = sqlite
-    .prepare(
-      `SELECT thread_id, SUBSTR(content, 1, ${SNIPPET_MAX_LENGTH}) AS snippet
-       FROM (
-         SELECT thread_id, content,
-                ROW_NUMBER() OVER (PARTITION BY thread_id ORDER BY timestamp DESC) AS rn
-         FROM messages
-         WHERE thread_id IN (${placeholders})
-           AND role = 'assistant'
-           AND content != ''
-       )
-       WHERE rn = 1`,
-    )
-    .all(...threadIds) as { thread_id: string; snippet: string }[];
+  if (latestTimestamps.length === 0) return new Map();
+
+  // Fetch the actual content for those messages
+  const conditions = latestTimestamps.map((r) =>
+    and(eq(schema.messages.threadId, r.threadId), eq(schema.messages.timestamp, r.maxTs)),
+  );
+  const rows = await dbAll<{ threadId: string; content: string }>(
+    db
+      .select({
+        threadId: schema.messages.threadId,
+        content: schema.messages.content,
+      })
+      .from(schema.messages)
+      .where(or(...conditions)!) as any,
+  );
 
   const map = new Map<string, string>();
   for (const row of rows) {
-    map.set(row.thread_id, row.snippet);
+    if (!map.has(row.threadId)) {
+      map.set(row.threadId, row.content.slice(0, SNIPPET_MAX_LENGTH));
+    }
   }
   return map;
 }

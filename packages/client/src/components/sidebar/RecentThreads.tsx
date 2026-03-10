@@ -24,6 +24,7 @@ interface FinishedThread extends Thread {
 }
 
 interface RecentThreadsProps {
+  onRenameThread: (threadId: string, projectId: string, title: string) => void;
   onArchiveThread: (
     threadId: string,
     projectId: string,
@@ -33,13 +34,16 @@ interface RecentThreadsProps {
   onDeleteThread: (threadId: string, projectId: string, title: string, isWorktree: boolean) => void;
 }
 
-export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreadsProps) {
+export function RecentThreads({
+  onRenameThread,
+  onArchiveThread,
+  onDeleteThread,
+}: RecentThreadsProps) {
   const { t } = useTranslation();
   useMinuteTick();
   const navigate = useNavigate();
   const threadsByProject = useThreadStore((s) => s.threadsByProject);
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
-  const renameThread = useThreadStore((s) => s.renameThread);
   const projects = useProjectStore((s) => s.projects);
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
   const [isExpanded, setIsExpanded] = useState(true);
@@ -123,7 +127,7 @@ export function RecentThreads({ onArchiveThread, onDeleteThread }: RecentThreads
                   }
                   navigate(`/projects/${thread.projectId}/threads/${thread.id}`);
                 }}
-                onRename={(newTitle) => renameThread(thread.id, thread.projectId, newTitle)}
+                onRename={() => onRenameThread(thread.id, thread.projectId, thread.title)}
                 onArchive={() =>
                   onArchiveThread(
                     thread.id,

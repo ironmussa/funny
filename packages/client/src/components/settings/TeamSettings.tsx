@@ -6,25 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
 
-function SettingRow({
-  title,
-  description,
-  children,
-}: {
-  title: string;
-  description: string;
-  children: React.ReactNode;
-}) {
-  return (
-    <div className="flex items-center justify-between gap-4 border-b border-border/50 px-4 py-3.5 last:border-b-0">
-      <div className="min-w-0">
-        <p className="text-sm font-medium text-foreground">{title}</p>
-        <p className="mt-0.5 text-xs text-muted-foreground">{description}</p>
-      </div>
-      <div className="flex-shrink-0">{children}</div>
-    </div>
-  );
-}
+import { SettingRow } from './SettingRow';
 
 interface TeamSettingsData {
   id: string;
@@ -98,10 +80,8 @@ export function TeamSettings() {
   return (
     <>
       {/* General */}
-      <h3 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Organization
-      </h3>
-      <div className="mb-6 overflow-hidden rounded-lg border border-border/50">
+      <h3 className="settings-section-header">Organization</h3>
+      <div className="settings-card">
         <SettingRow title="Name" description="Your organization's display name">
           <span className="text-sm text-foreground" data-testid="team-settings-name">
             {settings.name}
@@ -118,13 +98,11 @@ export function TeamSettings() {
       </div>
 
       {/* API Key */}
-      <h3 className="px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-        Anthropic API Key
-      </h3>
-      <div className="mb-6 overflow-hidden rounded-lg border border-border/50">
+      <h3 className="settings-section-header">Anthropic API Key</h3>
+      <div className="settings-card">
         <div className="px-4 py-3.5">
-          <p className="text-sm font-medium text-foreground">Team API Key</p>
-          <p className="mb-3 mt-0.5 text-xs text-muted-foreground">
+          <p className="settings-row-title">Team API Key</p>
+          <p className="settings-row-desc mb-3">
             Shared API key used for all team members. Encrypted at rest.
           </p>
           <div className="flex items-center gap-2">

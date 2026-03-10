@@ -22,6 +22,7 @@ interface UIState {
   analyticsOpen: boolean;
   liveColumnsOpen: boolean;
   generalSettingsOpen: boolean;
+  activePreferencesPage: string | null;
   timelineVisible: boolean;
   kanbanContext: { projectId?: string; search?: string; threadId?: string } | null;
   setReviewPaneOpen: (open: boolean) => void;
@@ -29,6 +30,7 @@ interface UIState {
   setSettingsOpen: (open: boolean) => void;
   setActiveSettingsPage: (page: string | null) => void;
   setGeneralSettingsOpen: (open: boolean) => void;
+  setActivePreferencesPage: (page: string | null) => void;
   startNewThread: (projectId: string, idleOnly?: boolean) => void;
   cancelNewThread: () => void;
   closeAllThreads: () => void;
@@ -63,6 +65,7 @@ export const useUIStore = create<UIState>((set) => ({
   analyticsOpen: false,
   liveColumnsOpen: false,
   generalSettingsOpen: false,
+  activePreferencesPage: null,
   timelineVisible: (() => {
     try {
       const stored = localStorage.getItem(TIMELINE_VISIBLE_KEY);
@@ -87,7 +90,28 @@ export const useUIStore = create<UIState>((set) => ({
         : { settingsOpen: false, activeSettingsPage: null },
     ),
   setActiveSettingsPage: (page) => set({ activeSettingsPage: page }),
-  setGeneralSettingsOpen: (open) => set({ generalSettingsOpen: open }),
+  setGeneralSettingsOpen: (open) => {
+    if (open) {
+      invalidateSelectThread();
+      useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+    }
+    set(
+      open
+        ? {
+            generalSettingsOpen: true,
+            settingsOpen: false,
+            activeSettingsPage: null,
+            reviewPaneOpen: false,
+            automationInboxOpen: false,
+            addProjectOpen: false,
+            allThreadsProjectId: null,
+            analyticsOpen: false,
+            liveColumnsOpen: false,
+          }
+        : { generalSettingsOpen: false, activePreferencesPage: null },
+    );
+  },
+  setActivePreferencesPage: (page) => set({ activePreferencesPage: page }),
   setAutomationInboxOpen: (open) => {
     if (open) {
       invalidateSelectThread();

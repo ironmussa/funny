@@ -32,6 +32,7 @@ interface EnrichedThread extends Thread {
 }
 
 interface ThreadListProps {
+  onRenameThread: (threadId: string, projectId: string, title: string) => void;
   onArchiveThread: (
     threadId: string,
     projectId: string,
@@ -51,7 +52,7 @@ function enrichedThreadVisuallyEqual(a: EnrichedThread, b: EnrichedThread): bool
   );
 }
 
-export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps) {
+export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: ThreadListProps) {
   const { t: _t } = useTranslation();
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
   const navigate = useStableNavigate();
@@ -177,12 +178,11 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
     [navigate],
   );
 
-  const renameThread = useThreadStore((s) => s.renameThread);
   const handleRename = useCallback(
-    (thread: EnrichedThread, newTitle: string) => {
-      renameThread(thread.id, thread.projectId, newTitle);
+    (thread: EnrichedThread) => {
+      onRenameThread(thread.id, thread.projectId, thread.title);
     },
-    [renameThread],
+    [onRenameThread],
   );
 
   const handleArchive = useCallback(
@@ -258,7 +258,7 @@ const ThreadListItem = memo(function ThreadListItem({
   isRunning: boolean;
   gitStatus?: GitStatusInfo;
   onSelect: (threadId: string, projectId: string) => void;
-  onRename: (thread: EnrichedThread, newTitle: string) => void;
+  onRename: (thread: EnrichedThread) => void;
   onArchive: (thread: EnrichedThread) => void;
   onDelete: (thread: EnrichedThread) => void;
 }) {
@@ -272,10 +272,7 @@ const ThreadListItem = memo(function ThreadListItem({
     () => onSelect(thread.id, thread.projectId),
     [onSelect, thread.id, thread.projectId],
   );
-  const handleRename = useCallback(
-    (newTitle: string) => onRename(threadRef.current, newTitle),
-    [onRename, threadRef],
-  );
+  const handleRename = useCallback(() => onRename(threadRef.current), [onRename, threadRef]);
   const handleArchive = useCallback(() => onArchive(threadRef.current), [onArchive, threadRef]);
   const handleDelete = useCallback(() => onDelete(threadRef.current), [onDelete, threadRef]);
 

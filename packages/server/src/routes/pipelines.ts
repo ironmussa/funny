@@ -23,9 +23,9 @@ export const pipelineRoutes = new Hono();
 
 // ── List pipelines for a project ────────────────────────────
 
-pipelineRoutes.get('/project/:projectId', (c) => {
+pipelineRoutes.get('/project/:projectId', async (c) => {
   const { projectId } = c.req.param();
-  const rows = getPipelinesByProject(projectId);
+  const rows = await getPipelinesByProject(projectId);
   return c.json(rows);
 });
 
@@ -48,7 +48,7 @@ pipelineRoutes.post('/', async (c) => {
     return c.json({ error: 'projectId and name are required' }, 400);
   }
 
-  const id = createPipeline({
+  const id = await createPipeline({
     projectId: body.projectId,
     userId,
     name: body.name,
@@ -64,7 +64,7 @@ pipelineRoutes.post('/', async (c) => {
     commitMessagePrompt: body.commitMessagePrompt,
   });
 
-  const pipeline = getPipelineById(id);
+  const pipeline = await getPipelineById(id);
   return c.json(pipeline, 201);
 });
 
@@ -112,8 +112,8 @@ pipelineRoutes.delete('/:id', async (c) => {
 
 // ── Get pipeline runs for a thread ──────────────────────────
 
-pipelineRoutes.get('/runs/thread/:threadId', (c) => {
+pipelineRoutes.get('/runs/thread/:threadId', async (c) => {
   const { threadId } = c.req.param();
-  const runs = getRunsForThread(threadId);
+  const runs = await getRunsForThread(threadId);
   return c.json(runs);
 });

@@ -32,6 +32,8 @@ interface ThreadListViewProps {
   autoFocusSearch?: boolean;
   hideSearch?: boolean;
   contentSnippets?: Map<string, string>;
+  /** Expose the search keyboard handler so external inputs can drive arrow navigation */
+  onSearchKeyDownRef?: React.MutableRefObject<((e: React.KeyboardEvent) => void) | null>;
 }
 
 export function ThreadListView({
@@ -56,6 +58,7 @@ export function ThreadListView({
   autoFocusSearch,
   hideSearch = false,
   contentSnippets,
+  onSearchKeyDownRef,
 }: ThreadListViewProps) {
   const { t } = useTranslation();
   useMinuteTick();
@@ -95,6 +98,18 @@ export function ThreadListView({
     },
     [threads, onThreadClick, highlightIndex],
   );
+
+  // Expose the search keyboard handler to parent components
+  useEffect(() => {
+    if (onSearchKeyDownRef) {
+      onSearchKeyDownRef.current = handleSearchKeyDown;
+    }
+    return () => {
+      if (onSearchKeyDownRef) {
+        onSearchKeyDownRef.current = null;
+      }
+    };
+  }, [onSearchKeyDownRef, handleSearchKeyDown]);
 
   const handleItemKeyDown = useCallback(
     (e: React.KeyboardEvent, i: number) => {

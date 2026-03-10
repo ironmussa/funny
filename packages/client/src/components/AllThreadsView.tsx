@@ -176,6 +176,8 @@ export function AllThreadsView() {
     navigate(qs ? `${path}?${qs}` : path, { replace: true });
   };
 
+  const searchInputRef = useRef<HTMLInputElement>(null);
+  const searchKeyDownRef = useRef<((e: React.KeyboardEvent) => void) | null>(null);
   const [search, setSearch] = useState('');
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<Set<string>>(() => {
@@ -188,6 +190,11 @@ export function AllThreadsView() {
   const [showArchived, setShowArchived] = useState(false);
   const [sortField, setSortField] = useState<SortField>('updated');
   const [sortDir, setSortDir] = useState<SortDir>('desc');
+
+  // Auto-focus search input on mount (e.g. when navigating via Ctrl+F)
+  useEffect(() => {
+    searchInputRef.current?.focus();
+  }, []);
 
   // Content search: debounced server call to find threads matching by message content
   // Stores threadId → snippet so we can display matching text on cards
@@ -465,6 +472,7 @@ export function AllThreadsView() {
         <div className="relative flex-shrink-0">
           <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-sm text-muted-foreground" />
           <Input
+            ref={searchInputRef}
             type="text"
             placeholder={
               projectFilter
@@ -473,6 +481,7 @@ export function AllThreadsView() {
             }
             value={search}
             onChange={(e) => handleSearchChange(e.target.value)}
+            onKeyDown={(e) => searchKeyDownRef.current?.(e)}
             className="h-7 w-72 bg-transparent py-1 pl-6 pr-7 text-xs md:text-xs"
             data-testid="all-threads-search"
           />
@@ -753,6 +762,7 @@ export function AllThreadsView() {
               }
               hideSearch={true}
               contentSnippets={contentMatches}
+              onSearchKeyDownRef={searchKeyDownRef}
               renderExtraBadges={(thread) => {
                 const gs = statusByBranch[computeBranchKey(thread)];
                 const gitConf = gs ? gitSyncStateConfig[gs.state] : null;

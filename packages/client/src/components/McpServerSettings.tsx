@@ -432,9 +432,7 @@ export function McpServerSettings() {
       {/* Installed servers */}
       <div>
         <div className="mb-2 flex items-center justify-between">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('mcp.installedServers')}
-          </h3>
+          <h3 className="settings-section-header px-0 pb-0">{t('mcp.installedServers')}</h3>
           <Button
             variant="ghost"
             size="sm"
@@ -452,10 +450,10 @@ export function McpServerSettings() {
 
         {/* Add custom server form */}
         {showAddForm && (
-          <div className="mb-3 space-y-3 rounded-lg border border-border/50 bg-muted/30 p-3">
+          <div className="settings-form-panel mb-3">
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">{t('mcp.name')}</label>
+                <label className="settings-label">{t('mcp.name')}</label>
                 <Input
                   type="text"
                   value={addName}
@@ -465,7 +463,7 @@ export function McpServerSettings() {
                 />
               </div>
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">{t('mcp.type')}</label>
+                <label className="settings-label">{t('mcp.type')}</label>
                 <Select value={addType} onValueChange={(v) => setAddType(v as McpServerType)}>
                   <SelectTrigger className="h-8">
                     <SelectValue />
@@ -481,7 +479,7 @@ export function McpServerSettings() {
 
             {addType === 'http' || addType === 'sse' ? (
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">{t('mcp.url')}</label>
+                <label className="settings-label">{t('mcp.url')}</label>
                 <Input
                   type="text"
                   value={addUrl}
@@ -493,9 +491,7 @@ export function McpServerSettings() {
             ) : (
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">
-                    {t('mcp.command')}
-                  </label>
+                  <label className="settings-label">{t('mcp.command')}</label>
                   <Input
                     type="text"
                     value={addCommand}
@@ -505,9 +501,7 @@ export function McpServerSettings() {
                   />
                 </div>
                 <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">
-                    {t('mcp.arguments')}
-                  </label>
+                  <label className="settings-label">{t('mcp.arguments')}</label>
                   <Input
                     type="text"
                     value={addArgs}
@@ -565,9 +559,7 @@ export function McpServerSettings() {
       {/* Recommended servers */}
       {recommended.length > 0 && (
         <div>
-          <h3 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
-            {t('mcp.recommendedServers')}
-          </h3>
+          <h3 className="settings-section-header mb-2 px-0 pb-0">{t('mcp.recommendedServers')}</h3>
           <div className="space-y-1.5">
             {recommended.map((server) => (
               <RecommendedServerCard

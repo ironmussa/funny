@@ -398,6 +398,11 @@ export interface WSPtyExitData {
   exitCode: number;
 }
 
+export interface WSPtyErrorData {
+  ptyId: string;
+  error: string;
+}
+
 export interface WSQueueUpdateData {
   threadId: string;
   queuedCount: number;
@@ -532,6 +537,7 @@ export type WSEvent =
   | { type: 'git:status'; threadId: string; data: WSGitStatusData }
   | { type: 'pty:data'; threadId: string; data: WSPtyDataData }
   | { type: 'pty:exit'; threadId: string; data: WSPtyExitData }
+  | { type: 'pty:error'; threadId: string; data: WSPtyErrorData }
   | { type: 'thread:created'; threadId: string; data: WSThreadCreatedData }
   | { type: 'thread:deleted'; threadId: string; data: WSThreadDeletedData }
   | { type: 'thread:stage-changed'; threadId: string; data: WSThreadStageChangedData }

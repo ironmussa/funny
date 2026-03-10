@@ -20,6 +20,7 @@ import pg from 'pg';
 import { getDatabaseUrl } from '../db/db-mode.js';
 import { db, dbMode } from '../db/index.js';
 import { DATA_DIR } from './data-dir.js';
+import { sendEmail } from './email.js';
 import { log } from './logger.js';
 
 const SECRET_PATH = resolve(DATA_DIR, 'auth-secret');
@@ -135,6 +136,24 @@ export const auth = betterAuth({
             },
           },
         },
+      },
+      async sendInvitationEmail({ email, organization, role, inviter }) {
+        const inviterName = inviter?.user?.name || inviter?.user?.email || 'A team member';
+        const roleName = role || 'member';
+        const orgName = organization.name || 'a team';
+
+        const html = `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 480px; margin: 0 auto; padding: 24px;">
+            <h2 style="margin-top: 0;">You've been invited to join ${orgName}</h2>
+            <p><strong>${inviterName}</strong> has invited you to join <strong>${orgName}</strong> as a <strong>${roleName}</strong>.</p>
+            <p>Log in to Funny to accept the invitation and start collaborating.</p>
+            <p style="color: #666; font-size: 13px; margin-top: 24px;">
+              This invitation expires in 48 hours. If you don't have an account, ask your team admin to create one for you.
+            </p>
+          </div>
+        `;
+
+        await sendEmail(email, `You've been invited to join ${orgName} on Funny`, html);
       },
     }),
   ],

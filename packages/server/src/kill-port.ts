@@ -89,7 +89,7 @@ async function isPortBindable(targetPort: number, hostname: string): Promise<boo
         return new Response('');
       },
     });
-    testServer.stop(true);
+    await testServer.stop(true);
     return true;
   } catch {
     return false;

@@ -11,7 +11,7 @@ import {
   Bot,
   Pencil,
 } from 'lucide-react';
-import { useState, useRef, useEffect, memo, useCallback } from 'react';
+import { useState, memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -39,7 +39,7 @@ export interface ThreadItemProps {
   subtitle?: string;
   projectColor?: string;
   timeValue?: string;
-  onRename?: (newTitle: string) => void;
+  onRename?: () => void;
   onArchive?: () => void;
   onPin?: () => void;
   onDelete?: () => void;
@@ -80,30 +80,7 @@ export const ThreadItem = memo(function ThreadItem({
 }: ThreadItemProps) {
   const { t } = useTranslation();
   const [openDropdown, setOpenDropdown] = useState(false);
-  const [isRenaming, setIsRenaming] = useState(false);
-  const [renameValue, setRenameValue] = useState('');
-  const renameInputRef = useRef<HTMLInputElement>(null);
   const handleDropdownChange = useCallback((open: boolean) => setOpenDropdown(open), []);
-
-  const startRename = useCallback(() => {
-    setRenameValue(thread.title);
-    setIsRenaming(true);
-  }, [thread.title]);
-
-  const commitRename = useCallback(() => {
-    const trimmed = renameValue.trim();
-    if (trimmed && trimmed !== thread.title && onRename) {
-      onRename(trimmed);
-    }
-    setIsRenaming(false);
-  }, [renameValue, thread.title, onRename]);
-
-  useEffect(() => {
-    if (isRenaming && renameInputRef.current) {
-      renameInputRef.current.focus();
-      renameInputRef.current.select();
-    }
-  }, [isRenaming]);
 
   // Thread status config
   const threadStatusCfg = statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending;
@@ -145,6 +122,7 @@ export const ThreadItem = memo(function ThreadItem({
   const hasMetadataRow = !!subtitle || hasDiffStats || hasGitIconOnly;
   const hasSnippetRow = hasSnippet || showLaunching;
   const hasSecondRow = hasMetadataRow || hasSnippetRow;
+  const hasRow2 = hasMetadataRow || hasSnippetRow;
 
   return (
     <div
@@ -206,23 +184,7 @@ export const ThreadItem = memo(function ThreadItem({
               </span>
             )}
           </div>
-          {isRenaming ? (
-            <input
-              ref={renameInputRef}
-              data-testid={`thread-rename-input-${thread.id}`}
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onBlur={commitRename}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commitRename();
-                if (e.key === 'Escape') setIsRenaming(false);
-              }}
-              onClick={(e) => e.stopPropagation()}
-              className="h-5 w-full min-w-0 truncate rounded border border-border bg-background px-1 text-sm leading-tight text-foreground outline-none focus:ring-1 focus:ring-ring"
-            />
-          ) : (
-            <span className="truncate text-sm leading-tight">{thread.title}</span>
-          )}
+          <span className="truncate text-sm leading-tight">{thread.title}</span>
           {/* External creator icon */}
           {thread.createdBy && thread.createdBy !== 'user' && thread.createdBy !== '__local__' && (
             <Tooltip>
@@ -242,8 +204,8 @@ export const ThreadItem = memo(function ThreadItem({
           )}
         </div>
 
-        {/* Row 2: Project chip + Git status */}
-        {hasMetadataRow && (
+        {/* Row 2: Project chip + Git status + Snippet + Time */}
+        {(hasMetadataRow || hasSnippetRow) && (
           <div className="flex min-w-0 items-center gap-1.5 pl-5">
             {subtitle && (
               <ProjectChip
@@ -270,11 +232,6 @@ export const ThreadItem = memo(function ThreadItem({
                 </TooltipContent>
               </Tooltip>
             ) : null}
-          </div>
-        )}
-        {/* Row 3: Last agent message snippet or launching indicator */}
-        {hasSnippetRow && (
-          <div className="flex min-w-0 items-center pl-5">
             {hasSnippet ? (
               <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground/50">
                 {thread.lastAssistantMessage}
@@ -347,7 +304,7 @@ export const ThreadItem = memo(function ThreadItem({
                     data-testid={`thread-rename-${thread.id}`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      startRename();
+                      onRename();
                     }}
                   >
                     <Pencil className="h-3.5 w-3.5" />

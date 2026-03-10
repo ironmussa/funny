@@ -735,6 +735,19 @@ const migrations: Migration[] = [
       `);
     },
   },
+
+  {
+    name: '036_instance_settings',
+    async up() {
+      await exec(sql`
+        CREATE TABLE IF NOT EXISTS instance_settings (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

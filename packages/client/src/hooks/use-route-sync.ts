@@ -7,11 +7,28 @@ import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 function parseRoute(pathname: string) {
+  // Preferences (general settings): /preferences/:pageId
+  const preferencesMatch = matchPath('/preferences/:pageId', pathname);
+  if (preferencesMatch) {
+    return {
+      settingsPage: null,
+      preferencesPage: preferencesMatch.params.pageId!,
+      projectId: null,
+      threadId: null,
+      globalSearch: false,
+      inbox: false,
+      analytics: false,
+      liveColumns: false,
+      addProject: false,
+    };
+  }
+
   // Project-scoped settings: /projects/:projectId/settings/:pageId
   const projectSettingsMatch = matchPath('/projects/:projectId/settings/:pageId', pathname);
   if (projectSettingsMatch) {
     return {
       settingsPage: projectSettingsMatch.params.pageId!,
+      preferencesPage: null,
       projectId: projectSettingsMatch.params.projectId!,
       threadId: null,
       globalSearch: false,
@@ -26,6 +43,7 @@ function parseRoute(pathname: string) {
   if (settingsMatch) {
     return {
       settingsPage: settingsMatch.params.pageId!,
+      preferencesPage: null,
       projectId: null,
       threadId: null,
       globalSearch: false,
@@ -42,6 +60,7 @@ function parseRoute(pathname: string) {
       settingsPage: null,
       projectId: threadMatch.params.projectId!,
       threadId: threadMatch.params.threadId!,
+      preferencesPage: null,
       globalSearch: false,
       inbox: false,
       analytics: false,
@@ -54,6 +73,7 @@ function parseRoute(pathname: string) {
   if (projectMatch) {
     return {
       settingsPage: null,
+      preferencesPage: null,
       projectId: projectMatch.params.projectId!,
       threadId: null,
       globalSearch: false,
@@ -68,6 +88,7 @@ function parseRoute(pathname: string) {
   if (pathname === '/inbox') {
     return {
       settingsPage: null,
+      preferencesPage: null,
       projectId: null,
       threadId: null,
       globalSearch: false,
@@ -82,6 +103,7 @@ function parseRoute(pathname: string) {
   if (pathname === '/list') {
     return {
       settingsPage: null,
+      preferencesPage: null,
       projectId: null,
       threadId: null,
       globalSearch: true,
@@ -96,6 +118,7 @@ function parseRoute(pathname: string) {
   if (pathname === '/kanban') {
     return {
       settingsPage: null,
+      preferencesPage: null,
       projectId: null,
       threadId: null,
       globalSearch: true,
@@ -111,6 +134,7 @@ function parseRoute(pathname: string) {
   if (projectAnalyticsMatch) {
     return {
       settingsPage: null,
+      preferencesPage: null,
       projectId: projectAnalyticsMatch.params.projectId!,
       threadId: null,
       globalSearch: false,
@@ -125,6 +149,7 @@ function parseRoute(pathname: string) {
   if (pathname === '/analytics') {
     return {
       settingsPage: null,
+      preferencesPage: null,
       projectId: null,
       threadId: null,
       globalSearch: false,
@@ -139,6 +164,7 @@ function parseRoute(pathname: string) {
   if (pathname === '/grid') {
     return {
       settingsPage: null,
+      preferencesPage: null,
       projectId: null,
       threadId: null,
       globalSearch: false,
@@ -153,6 +179,7 @@ function parseRoute(pathname: string) {
   if (pathname === '/new') {
     return {
       settingsPage: null,
+      preferencesPage: null,
       projectId: null,
       threadId: null,
       globalSearch: false,
@@ -165,6 +192,7 @@ function parseRoute(pathname: string) {
 
   return {
     settingsPage: null,
+    preferencesPage: null,
     projectId: null,
     threadId: null,
     globalSearch: false,
@@ -180,7 +208,6 @@ const validSettingsIds = new Set([
   'users',
   'team-settings',
   'team-members',
-  'team-invitations',
 ]);
 
 export function useRouteSync() {
@@ -194,6 +221,7 @@ export function useRouteSync() {
 
     const {
       settingsPage,
+      preferencesPage,
       projectId,
       threadId,
       globalSearch,
@@ -206,6 +234,19 @@ export function useRouteSync() {
     const projectStore = useProjectStore.getState();
     const threadStore = useThreadStore.getState();
     const uiStore = useUIStore.getState();
+
+    // Preferences (general settings): /preferences/:pageId
+    if (preferencesPage) {
+      if (!uiStore.generalSettingsOpen) uiStore.setGeneralSettingsOpen(true);
+      if (uiStore.activePreferencesPage !== preferencesPage)
+        uiStore.setActivePreferencesPage(preferencesPage);
+      return;
+    }
+
+    // Close preferences if navigating away from /preferences
+    if (uiStore.generalSettingsOpen) {
+      uiStore.setGeneralSettingsOpen(false);
+    }
 
     if (settingsPage && validSettingsIds.has(settingsPage as any)) {
       if (!uiStore.settingsOpen) uiStore.setSettingsOpen(true);

@@ -345,7 +345,7 @@ export function CloneRepoView() {
           <Button
             variant="outline"
             className="w-full"
-            onClick={() => useUIStore.getState().setGeneralSettingsOpen(true)}
+            onClick={() => navigate('/preferences/github')}
           >
             <Settings className="mr-2 h-4 w-4" />
             {t('github.useToken')}

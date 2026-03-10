@@ -283,3 +283,9 @@ export const threadEvents = sqliteTable('thread_events', {
   data: text('data').notNull(), // JSON-encoded event data
   createdAt: text('created_at').notNull(),
 });
+
+export const instanceSettings = sqliteTable('instance_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});

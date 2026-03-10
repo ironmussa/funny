@@ -17,6 +17,8 @@ export interface TerminalTab {
   type?: 'pty' | 'command';
   /** Shell override for this terminal (e.g. 'git-bash', 'powershell') */
   shell?: TerminalShell;
+  /** Error message if the PTY failed to spawn */
+  error?: string;
 }
 
 interface TerminalState {
@@ -36,6 +38,7 @@ interface TerminalState {
   togglePanel: () => void;
   appendCommandOutput: (commandId: string, data: string) => void;
   markCommandExited: (commandId: string) => void;
+  setTabError: (ptyId: string, error: string) => void;
   registerPtyCallback: (ptyId: string, callback: (data: string) => void) => void;
   unregisterPtyCallback: (ptyId: string) => void;
   emitPtyData: (ptyId: string, data: string) => void;
@@ -96,6 +99,11 @@ export const useTerminalStore = create<TerminalState>((set, get) => ({
   markCommandExited: (commandId) =>
     set((state) => ({
       tabs: state.tabs.map((t) => (t.commandId === commandId ? { ...t, alive: false } : t)),
+    })),
+
+  setTabError: (ptyId, error) =>
+    set((state) => ({
+      tabs: state.tabs.map((t) => (t.id === ptyId ? { ...t, error, alive: false } : t)),
     })),
 
   registerPtyCallback: (ptyId, callback) =>

@@ -353,6 +353,8 @@ function handleMessage(e: MessageEvent) {
       break;
     }
     case 'pty:error': {
+      const termStore = useTerminalStore.getState();
+      termStore.setTabError(data.ptyId, data.error ?? 'Failed to create terminal');
       toast.error(data.error ?? 'Failed to create terminal');
       break;
     }

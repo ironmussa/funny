@@ -71,12 +71,15 @@ export function NewThreadDialog() {
           const data = result.value;
           setBranches(data.branches);
           setGitCurrentBranch(data.currentBranch);
-          // Local mode: prioritize currentBranch (the branch actually checked out)
-          // Worktree mode: prioritize project defaultBranch > git defaultBranch
-          if (!createWorktree && data.currentBranch && data.branches.includes(data.currentBranch)) {
-            setSelectedBranch(data.currentBranch);
-          } else if (project?.defaultBranch && data.branches.includes(project.defaultBranch)) {
+          // Priority: project defaultBranch (user setting) > currentBranch (local mode) > git defaultBranch > first branch
+          if (project?.defaultBranch && data.branches.includes(project.defaultBranch)) {
             setSelectedBranch(project.defaultBranch);
+          } else if (
+            !createWorktree &&
+            data.currentBranch &&
+            data.branches.includes(data.currentBranch)
+          ) {
+            setSelectedBranch(data.currentBranch);
           } else if (data.defaultBranch) {
             setSelectedBranch(data.defaultBranch);
           } else if (data.branches.length > 0) {

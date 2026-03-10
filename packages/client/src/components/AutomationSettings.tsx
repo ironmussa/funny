@@ -19,13 +19,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useAutomationStore } from '@/stores/automation-store';
 
-const inputClass =
-  'w-full rounded-md border border-input bg-background px-2.5 py-1.5 text-sm focus:outline-none focus:ring-1 focus:ring-ring';
+import { SegmentedControl } from './settings/SegmentedControl';
 
 const SCHEDULE_PRESETS: { value: string; label: string }[] = [
   { value: '*/15 * * * *', label: 'Every 15 min' },
@@ -49,36 +49,6 @@ const MODEL_OPTIONS: { value: AgentModel; label: string }[] = [
   { value: 'sonnet', label: 'Sonnet' },
   { value: 'opus', label: 'Opus' },
 ];
-
-function SegmentedControl<T extends string>({
-  options,
-  value,
-  onChange,
-}: {
-  options: { value: T; label: string; icon?: React.ReactNode }[];
-  value: T;
-  onChange: (value: T) => void;
-}) {
-  return (
-    <div className="flex rounded-md border border-border bg-muted/30 p-0.5">
-      {options.map((opt) => (
-        <button
-          key={opt.value}
-          onClick={() => onChange(opt.value)}
-          className={cn(
-            'flex items-center gap-1.5 px-2.5 py-1 text-xs rounded-sm transition-colors',
-            value === opt.value
-              ? 'bg-background text-foreground shadow-sm'
-              : 'text-muted-foreground hover:text-foreground',
-          )}
-        >
-          {opt.icon}
-          {opt.label}
-        </button>
-      ))}
-    </div>
-  );
-}
 
 interface FormState {
   name: string;
@@ -224,7 +194,7 @@ export function AutomationSettings() {
       ) : (
         automations.map((a) => (
           <div key={a.id} className="space-y-1">
-            <div className="group flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-card px-3 py-2.5 transition-colors hover:bg-accent/30">
+            <div className="settings-item-card group flex items-center justify-between gap-3">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
                   <span
@@ -386,9 +356,9 @@ export function AutomationSettings() {
           </DialogHeader>
           <div className="space-y-3">
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Name</label>
+              <label className="settings-label">Name</label>
               <Input
-                className="h-auto py-1.5"
+                className="settings-form-input"
                 placeholder="e.g. Daily Issue Triage"
                 value={form.name}
                 onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
@@ -396,9 +366,9 @@ export function AutomationSettings() {
               />
             </div>
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">Prompt</label>
-              <textarea
-                className={`${inputClass} min-h-[100px] resize-y`}
+              <label className="settings-label">Prompt</label>
+              <Textarea
+                className="min-h-[100px] resize-y text-sm"
                 placeholder="What should the agent do?"
                 value={form.prompt}
                 onChange={(e) => setForm((f) => ({ ...f, prompt: e.target.value }))}
@@ -406,7 +376,7 @@ export function AutomationSettings() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Schedule</label>
+                <label className="settings-label">Schedule</label>
                 <Select
                   value={
                     SCHEDULE_PRESETS.some((p) => p.value === form.schedule)
@@ -431,7 +401,7 @@ export function AutomationSettings() {
                 </Select>
                 {!SCHEDULE_PRESETS.some((p) => p.value === form.schedule) && (
                   <Input
-                    className="mt-1.5 h-auto py-1.5 font-mono text-xs"
+                    className="mt-1.5 settings-form-input font-mono text-xs"
                     placeholder="*/30 * * * *"
                     value={form.schedule}
                     onChange={(e) => setForm((f) => ({ ...f, schedule: e.target.value }))}
@@ -442,7 +412,7 @@ export function AutomationSettings() {
                 </p>
               </div>
               <div>
-                <label className="mb-1 block text-xs text-muted-foreground">Model</label>
+                <label className="settings-label">Model</label>
                 <SegmentedControl
                   options={MODEL_OPTIONS}
                   value={form.model}

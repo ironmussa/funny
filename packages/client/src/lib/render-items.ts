@@ -62,13 +62,15 @@ export function buildGroupedRenderItems(
       flat.push({ type: 'message', msg });
     }
     for (const tc of msg.toolCalls ?? []) {
-      // Track the most recent Write to a plan file (plan.md or ~/.claude/plans/*.md)
+      // Track the most recent Write to a plan file (.plan, plan.md, or ~/.claude/plans/*.md)
       if (tc.name === 'Write') {
         try {
           const inp = typeof tc.input === 'string' ? JSON.parse(tc.input) : tc.input;
           const fp = (inp?.file_path || '') as string;
           if (
-            (/plan\.md$/i.test(fp) || /\.claude\/plans\/[^/]+\.md$/i.test(fp)) &&
+            (/\.plan$/i.test(fp) ||
+              /plan\.md$/i.test(fp) ||
+              /\.claude\/plans\/[^/]+\.md$/i.test(fp)) &&
             typeof inp?.content === 'string'
           ) {
             lastWrittenPlanContent = inp.content;

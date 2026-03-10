@@ -114,7 +114,16 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
   const filteredDirs = useMemo(() => {
     if (!search.trim()) return dirs;
     const q = search.toLowerCase();
-    return dirs.filter((d) => d.name.toLowerCase().includes(q));
+    return dirs
+      .filter((d) => d.name.toLowerCase().includes(q))
+      .sort((a, b) => {
+        const aLower = a.name.toLowerCase();
+        const bLower = b.name.toLowerCase();
+        const aStartsWith = aLower.startsWith(q) ? 0 : 1;
+        const bStartsWith = bLower.startsWith(q) ? 0 : 1;
+        if (aStartsWith !== bStartsWith) return aStartsWith - bStartsWith;
+        return aLower.length - bLower.length || aLower.localeCompare(bLower);
+      });
   }, [dirs, search]);
 
   const pushHistory = useCallback((path: string) => {

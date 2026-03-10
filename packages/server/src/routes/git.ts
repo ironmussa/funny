@@ -161,15 +161,7 @@ gitRoutes.get('/status', async (c) => {
     mergedCount: mergedThreads.length,
   });
 
-  const localStatusPromise: Promise<GitStatusSummary | null> =
-    localThreads.length > 0
-      ? (async (): Promise<GitStatusSummary | null> => {
-          const result = await getStatusSummary(project.path);
-          return result.isOk() ? result.value : null;
-        })()
-      : Promise.resolve(null);
-
-  const [worktreeResults, localSummary] = await Promise.all([
+  const [worktreeResults, localResults] = await Promise.all([
     Promise.allSettled(
       worktreeThreads.map(async (thread) => {
         const summaryResult = await getStatusSummary(
@@ -189,7 +181,25 @@ gitRoutes.get('/status', async (c) => {
         );
       }),
     ),
-    localStatusPromise,
+    Promise.allSettled(
+      localThreads.map(async (thread) => {
+        const summaryResult = await getStatusSummary(
+          project.path,
+          thread.baseBranch ?? undefined,
+          project.path,
+        );
+        if (summaryResult.isErr()) return null;
+        const summary = summaryResult.value;
+        return Object.assign(
+          {
+            threadId: thread.id,
+            branchKey: computeBranchKey(thread),
+            state: deriveGitSyncState(summary),
+          },
+          summary,
+        );
+      }),
+    ),
   ]);
 
   statusSpan.end('ok');
@@ -215,14 +225,10 @@ gitRoutes.get('/status', async (c) => {
         };
       }),
     )),
-    ...(localSummary
-      ? localThreads.map((t) => ({
-          threadId: t.id,
-          branchKey: computeBranchKey(t),
-          state: deriveGitSyncState(localSummary),
-          ...localSummary,
-        }))
-      : []),
+    ...localResults
+      .filter((r): r is PromiseFulfilledResult<any> => r.status === 'fulfilled')
+      .map((r) => r.value)
+      .filter(Boolean),
   ];
 
   const response = { statuses };

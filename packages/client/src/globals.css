@@ -658,6 +658,63 @@
   flex-shrink: 0;
 }
 
+@layer components {
+  /* Settings section header */
+  .settings-section-header {
+    @apply px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground;
+  }
+
+  /* Settings card container */
+  .settings-card {
+    @apply mb-6 overflow-hidden rounded-lg border border-border/50;
+  }
+
+  /* Settings row */
+  .settings-row {
+    @apply flex items-center justify-between gap-4 border-b border-border/50 px-4 py-3.5 last:border-b-0;
+  }
+
+  /* Settings row title */
+  .settings-row-title {
+    @apply text-sm font-medium text-foreground;
+  }
+
+  /* Settings row description */
+  .settings-row-desc {
+    @apply mt-0.5 text-xs text-muted-foreground;
+  }
+
+  /* Settings compact input (inside setting rows) */
+  .settings-input {
+    @apply h-8 text-sm;
+  }
+
+  /* Settings form input (inside edit forms/dialogs) */
+  .settings-form-input {
+    @apply h-auto py-1.5 text-sm;
+  }
+
+  /* Small action button */
+  .settings-btn-sm {
+    @apply h-7 text-xs;
+  }
+
+  /* Form label */
+  .settings-label {
+    @apply mb-1 block text-xs text-muted-foreground;
+  }
+
+  /* Edit form panel */
+  .settings-form-panel {
+    @apply space-y-2 rounded-lg border border-border bg-muted/30 p-3;
+  }
+
+  /* Item card (for list items like hooks, commands, servers) */
+  .settings-item-card {
+    @apply rounded-lg border border-border/50 bg-card px-3 py-2.5 transition-colors hover:bg-accent/30;
+  }
+}
+
 @layer utilities {
   .no-scrollbar {
     -ms-overflow-style: none;

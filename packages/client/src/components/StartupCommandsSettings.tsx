@@ -175,14 +175,12 @@ export function StartupCommandsSettings() {
 
         if (editingId === cmd.id) {
           return (
-            <div key={cmd.id} className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+            <div key={cmd.id} className="settings-form-panel">
               <div className="grid grid-cols-4 gap-2">
                 <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">
-                    {t('startup.label')}
-                  </label>
+                  <label className="settings-label">{t('startup.label')}</label>
                   <Input
-                    className="h-auto py-1.5"
+                    className="settings-form-input"
                     placeholder={t('startup.label')}
                     value={label}
                     onChange={(e) => setLabel(e.target.value)}
@@ -190,11 +188,9 @@ export function StartupCommandsSettings() {
                   />
                 </div>
                 <div className="col-span-3">
-                  <label className="mb-1 block text-xs text-muted-foreground">
-                    {t('startup.command')}
-                  </label>
+                  <label className="settings-label">{t('startup.command')}</label>
                   <Input
-                    className="h-auto py-1.5 font-mono"
+                    className="settings-form-input font-mono"
                     placeholder={t('startup.command')}
                     value={command}
                     onChange={(e) => setCommand(e.target.value)}
@@ -222,7 +218,7 @@ export function StartupCommandsSettings() {
         return (
           <div
             key={cmd.id}
-            className="group flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-card px-3 py-2.5 transition-colors hover:bg-accent/30"
+            className="settings-item-card group flex items-center justify-between gap-3"
           >
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
@@ -298,12 +294,10 @@ export function StartupCommandsSettings() {
 
       {/* Add form */}
       {adding && (
-        <div className="space-y-2 rounded-lg border border-border bg-muted/30 p-3">
+        <div className="settings-form-panel">
           <div className="grid grid-cols-4 gap-2">
             <div>
-              <label className="mb-1 block text-xs text-muted-foreground">
-                {t('startup.label')}
-              </label>
+              <label className="settings-label">{t('startup.label')}</label>
               <Input
                 className="h-auto py-1.5"
                 placeholder={t('startup.label')}
@@ -313,9 +307,7 @@ export function StartupCommandsSettings() {
               />
             </div>
             <div className="col-span-3">
-              <label className="mb-1 block text-xs text-muted-foreground">
-                {t('startup.command')}
-              </label>
+              <label className="settings-label">{t('startup.command')}</label>
               <Input
                 className="h-auto py-1.5 font-mono"
                 placeholder={t('startup.commandPlaceholder')}

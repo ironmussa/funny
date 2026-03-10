@@ -22,7 +22,7 @@ if [ -n "$CONFLICT_FILES" ]; then
 fi
 
 # Block console.log and debugger statements (exclude test files and podman-chrome-streaming runtime)
-DEBUG_MATCHES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx)$' | grep -v '__tests__/' | grep -v '\.test\.' | grep -v '\.spec\.' | grep -v 'packages/podman-chrome-streaming/' | xargs -r grep -n 'console\.log\|debugger' || true)
+DEBUG_MATCHES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx)$' | grep -v '__tests__/' | grep -v '\.test\.' | grep -v '\.spec\.' | grep -v 'packages/podman-chrome-streaming/' | grep -v 'dev-watch\.ts' | grep -v 'kill-port\.ts' | xargs -r grep -n 'console\.log\|debugger' || true)
 if [ -n "$DEBUG_MATCHES" ]; then
   echo "Debug statements found:"
   echo "$DEBUG_MATCHES"

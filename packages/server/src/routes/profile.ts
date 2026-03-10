@@ -14,9 +14,9 @@ import type { HonoEnv } from '../types/hono-env.js';
 export const profileRoutes = new Hono<HonoEnv>();
 
 // GET /api/profile — get current user's git profile
-profileRoutes.get('/', (c) => {
+profileRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string;
-  const profile = ps.getProfile(userId);
+  const profile = await ps.getProfile(userId);
   return c.json(
     profile ?? {
       gitName: null,
@@ -50,12 +50,12 @@ profileRoutes.put('/', async (c) => {
     data.toolPermissions = raw.toolPermissions;
   if (typeof raw.theme === 'string') data.theme = raw.theme;
 
-  const profile = ps.updateProfile(userId, data);
+  const profile = await ps.updateProfile(userId, data);
   return c.json(profile);
 });
 
 // GET /api/profile/setup-completed — lightweight check for setup status
-profileRoutes.get('/setup-completed', (c) => {
+profileRoutes.get('/setup-completed', async (c) => {
   const userId = c.get('userId') as string;
-  return c.json({ setupCompleted: ps.isSetupCompleted(userId) });
+  return c.json({ setupCompleted: await ps.isSetupCompleted(userId) });
 });

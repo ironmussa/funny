@@ -10,7 +10,7 @@
 
 import { eq, and, gte, lt, sql } from 'drizzle-orm';
 
-import { db, schema } from '../db/index.js';
+import { db, dbAll, dbGet, dbMode, schema } from '../db/index.js';
 
 type TimeRange = 'day' | 'week' | 'month' | 'all';
 type GroupBy = 'day' | 'week' | 'month' | 'year';
@@ -31,6 +31,21 @@ function tzOffsetToModifier(offsetMinutes: number): string {
 
 /** Returns a SQL expression that buckets a date column by the requested granularity. */
 function dateBucket(column: any, groupBy: GroupBy, tzMod: string) {
+  if (dbMode === 'postgres') {
+    // PostgreSQL: use to_char + timezone conversion via INTERVAL
+    switch (groupBy) {
+      case 'week':
+        return sql`to_char((${column})::timestamp AT TIME ZONE 'UTC' AT TIME ZONE ${tzMod}, 'IYYY-"W"IW')`;
+      case 'month':
+        return sql`to_char((${column})::timestamp AT TIME ZONE 'UTC' AT TIME ZONE ${tzMod}, 'YYYY-MM')`;
+      case 'year':
+        return sql`to_char((${column})::timestamp AT TIME ZONE 'UTC' AT TIME ZONE ${tzMod}, 'YYYY')`;
+      case 'day':
+      default:
+        return sql`to_char((${column})::timestamp AT TIME ZONE 'UTC' AT TIME ZONE ${tzMod}, 'YYYY-MM-DD')`;
+    }
+  }
+  // SQLite: use strftime + datetime modifier
   switch (groupBy) {
     case 'week':
       return sql`strftime('%Y-W%W', datetime(${column}, ${tzMod}))`;
@@ -89,24 +104,25 @@ function baseFiltersFor(opts: { projectId?: string; userId: string }) {
 }
 
 /** Count stage transitions to a given stage within a date range. */
-function countTransitionsTo(
+async function countTransitionsTo(
   stage: string,
   baseFilters: ReturnType<typeof eq>[],
   range: { start: string; end: string },
 ) {
-  const result = db
-    .select({ count: sql<number>`COUNT(DISTINCT ${schema.stageHistory.threadId})` })
-    .from(schema.stageHistory)
-    .innerJoin(schema.threads, eq(schema.stageHistory.threadId, schema.threads.id))
-    .where(
-      and(
-        ...baseFilters,
-        eq(schema.stageHistory.toStage, stage),
-        gte(schema.stageHistory.changedAt, range.start),
-        lt(schema.stageHistory.changedAt, range.end),
+  const result = await dbGet(
+    db
+      .select({ count: sql<number>`COUNT(DISTINCT ${schema.stageHistory.threadId})` })
+      .from(schema.stageHistory)
+      .innerJoin(schema.threads, eq(schema.stageHistory.threadId, schema.threads.id))
+      .where(
+        and(
+          ...baseFilters,
+          eq(schema.stageHistory.toStage, stage),
+          gte(schema.stageHistory.changedAt, range.start),
+          lt(schema.stageHistory.changedAt, range.end),
+        ),
       ),
-    )
-    .get();
+  );
   return result?.count ?? 0;
 }
 
@@ -119,27 +135,29 @@ export interface OverviewParams {
   offsetMinutes?: number;
 }
 
-export function getOverview(params: OverviewParams) {
+export async function getOverview(params: OverviewParams) {
   const { userId, projectId, timeRange, offsetMinutes = 0 } = params;
   const range = getDateRange(timeRange, offsetMinutes);
   const filters = baseFiltersFor({ projectId, userId });
 
   // Current stage distribution (non-archived threads by stage)
-  const stageRows = db
-    .select({
-      stage: schema.threads.stage,
-      count: sql<number>`COUNT(*)`,
-    })
-    .from(schema.threads)
-    .where(and(...filters, eq(schema.threads.archived, 0)))
-    .groupBy(schema.threads.stage)
-    .all();
+  const stageRows = await dbAll(
+    db
+      .select({
+        stage: schema.threads.stage,
+        count: sql<number>`COUNT(*)`,
+      })
+      .from(schema.threads)
+      .where(and(...filters, eq(schema.threads.archived, 0)))
+      .groupBy(schema.threads.stage),
+  );
 
-  const archivedResult = db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(schema.threads)
-    .where(and(...filters, eq(schema.threads.archived, 1)))
-    .get();
+  const archivedResult = await dbGet(
+    db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(schema.threads)
+      .where(and(...filters, eq(schema.threads.archived, 1))),
+  );
 
   const distribution: Record<string, number> = {
     backlog: 0,
@@ -154,52 +172,55 @@ export function getOverview(params: OverviewParams) {
   }
 
   // Threads created in time range
-  const createdResult = db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(schema.threads)
-    .where(
-      and(
-        ...filters,
-        gte(schema.threads.createdAt, range.start),
-        lt(schema.threads.createdAt, range.end),
+  const createdResult = await dbGet(
+    db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(schema.threads)
+      .where(
+        and(
+          ...filters,
+          gte(schema.threads.createdAt, range.start),
+          lt(schema.threads.createdAt, range.end),
+        ),
       ),
-    )
-    .get();
+  );
 
   // Threads completed in time range
-  const completedResult = db
-    .select({ count: sql<number>`COUNT(*)` })
-    .from(schema.threads)
-    .where(
-      and(
-        ...filters,
-        sql`${schema.threads.completedAt} IS NOT NULL`,
-        gte(schema.threads.completedAt, range.start),
-        lt(schema.threads.completedAt, range.end),
+  const completedResult = await dbGet(
+    db
+      .select({ count: sql<number>`COUNT(*)` })
+      .from(schema.threads)
+      .where(
+        and(
+          ...filters,
+          sql`${schema.threads.completedAt} IS NOT NULL`,
+          gte(schema.threads.completedAt, range.start),
+          lt(schema.threads.completedAt, range.end),
+        ),
       ),
-    )
-    .get();
+  );
 
-  const totalCostResult = db
-    .select({ total: sql<number>`COALESCE(SUM(${schema.threads.cost}), 0)` })
-    .from(schema.threads)
-    .where(
-      and(
-        ...filters,
-        gte(schema.threads.createdAt, range.start),
-        lt(schema.threads.createdAt, range.end),
+  const totalCostResult = await dbGet(
+    db
+      .select({ total: sql<number>`COALESCE(SUM(${schema.threads.cost}), 0)` })
+      .from(schema.threads)
+      .where(
+        and(
+          ...filters,
+          gte(schema.threads.createdAt, range.start),
+          lt(schema.threads.createdAt, range.end),
+        ),
       ),
-    )
-    .get();
+  );
 
   return {
     currentStageDistribution: distribution,
     createdCount: createdResult?.count ?? 0,
     completedCount: completedResult?.count ?? 0,
-    movedToPlanningCount: countTransitionsTo('planning', filters, range),
-    movedToReviewCount: countTransitionsTo('review', filters, range),
-    movedToDoneCount: countTransitionsTo('done', filters, range),
-    movedToArchivedCount: countTransitionsTo('archived', filters, range),
+    movedToPlanningCount: await countTransitionsTo('planning', filters, range),
+    movedToReviewCount: await countTransitionsTo('review', filters, range),
+    movedToDoneCount: await countTransitionsTo('done', filters, range),
+    movedToArchivedCount: await countTransitionsTo('archived', filters, range),
     totalCost: totalCostResult?.total ?? 0,
     timeRange: range,
   };
@@ -214,7 +235,7 @@ export interface TimelineParams {
 }
 
 /** Get timeline by-date bucket for a specific stage transition. */
-function stageTransitionsByDate(
+async function stageTransitionsByDate(
   stage: string,
   baseFilters: ReturnType<typeof eq>[],
   range: { start: string; end: string },
@@ -222,27 +243,28 @@ function stageTransitionsByDate(
   tzMod: string,
 ) {
   const bucket = dateBucket(schema.stageHistory.changedAt, groupBy, tzMod);
-  return db
-    .select({
-      date: bucket.as('date'),
-      count: sql<number>`COUNT(DISTINCT ${schema.stageHistory.threadId})`,
-    })
-    .from(schema.stageHistory)
-    .innerJoin(schema.threads, eq(schema.stageHistory.threadId, schema.threads.id))
-    .where(
-      and(
-        ...baseFilters,
-        eq(schema.stageHistory.toStage, stage),
-        gte(schema.stageHistory.changedAt, range.start),
-        lt(schema.stageHistory.changedAt, range.end),
-      ),
-    )
-    .groupBy(bucket)
-    .orderBy(bucket)
-    .all();
+  return dbAll(
+    db
+      .select({
+        date: bucket.as('date'),
+        count: sql<number>`COUNT(DISTINCT ${schema.stageHistory.threadId})`,
+      })
+      .from(schema.stageHistory)
+      .innerJoin(schema.threads, eq(schema.stageHistory.threadId, schema.threads.id))
+      .where(
+        and(
+          ...baseFilters,
+          eq(schema.stageHistory.toStage, stage),
+          gte(schema.stageHistory.changedAt, range.start),
+          lt(schema.stageHistory.changedAt, range.end),
+        ),
+      )
+      .groupBy(bucket)
+      .orderBy(bucket),
+  );
 }
 
-export function getTimeline(params: TimelineParams) {
+export async function getTimeline(params: TimelineParams) {
   const { userId, projectId, timeRange, groupBy: gb = 'day', offsetMinutes = 0 } = params;
   const groupBy = gb as GroupBy;
   const tzMod = tzOffsetToModifier(offsetMinutes);
@@ -251,44 +273,46 @@ export function getTimeline(params: TimelineParams) {
 
   // Tasks created by date
   const createdBucket = dateBucket(schema.threads.createdAt, groupBy, tzMod);
-  const createdByDate = db
-    .select({ date: createdBucket.as('date'), count: sql<number>`COUNT(*)` })
-    .from(schema.threads)
-    .where(
-      and(
-        ...filters,
-        gte(schema.threads.createdAt, range.start),
-        lt(schema.threads.createdAt, range.end),
-      ),
-    )
-    .groupBy(createdBucket)
-    .orderBy(createdBucket)
-    .all();
+  const createdByDate = await dbAll(
+    db
+      .select({ date: createdBucket.as('date'), count: sql<number>`COUNT(*)` })
+      .from(schema.threads)
+      .where(
+        and(
+          ...filters,
+          gte(schema.threads.createdAt, range.start),
+          lt(schema.threads.createdAt, range.end),
+        ),
+      )
+      .groupBy(createdBucket)
+      .orderBy(createdBucket),
+  );
 
   // Tasks completed by date
   const completedBucket = dateBucket(schema.threads.completedAt, groupBy, tzMod);
-  const completedByDate = db
-    .select({ date: completedBucket.as('date'), count: sql<number>`COUNT(*)` })
-    .from(schema.threads)
-    .where(
-      and(
-        ...filters,
-        sql`${schema.threads.completedAt} IS NOT NULL`,
-        gte(schema.threads.completedAt, range.start),
-        lt(schema.threads.completedAt, range.end),
-      ),
-    )
-    .groupBy(completedBucket)
-    .orderBy(completedBucket)
-    .all();
+  const completedByDate = await dbAll(
+    db
+      .select({ date: completedBucket.as('date'), count: sql<number>`COUNT(*)` })
+      .from(schema.threads)
+      .where(
+        and(
+          ...filters,
+          sql`${schema.threads.completedAt} IS NOT NULL`,
+          gte(schema.threads.completedAt, range.start),
+          lt(schema.threads.completedAt, range.end),
+        ),
+      )
+      .groupBy(completedBucket)
+      .orderBy(completedBucket),
+  );
 
   return {
     createdByDate,
     completedByDate,
-    movedToPlanningByDate: stageTransitionsByDate('planning', filters, range, groupBy, tzMod),
-    movedToReviewByDate: stageTransitionsByDate('review', filters, range, groupBy, tzMod),
-    movedToDoneByDate: stageTransitionsByDate('done', filters, range, groupBy, tzMod),
-    movedToArchivedByDate: stageTransitionsByDate('archived', filters, range, groupBy, tzMod),
+    movedToPlanningByDate: await stageTransitionsByDate('planning', filters, range, groupBy, tzMod),
+    movedToReviewByDate: await stageTransitionsByDate('review', filters, range, groupBy, tzMod),
+    movedToDoneByDate: await stageTransitionsByDate('done', filters, range, groupBy, tzMod),
+    movedToArchivedByDate: await stageTransitionsByDate('archived', filters, range, groupBy, tzMod),
     timeRange: range,
     groupBy,
   };

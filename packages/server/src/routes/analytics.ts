@@ -14,9 +14,9 @@ import type { HonoEnv } from '../types/hono-env.js';
 export const analyticsRoutes = new Hono<HonoEnv>();
 
 // GET /api/analytics/overview?projectId=xxx&timeRange=month&tz=300
-analyticsRoutes.get('/overview', (c) => {
+analyticsRoutes.get('/overview', async (c) => {
   const userId = c.get('userId') as string;
-  const result = getOverview({
+  const result = await getOverview({
     userId,
     projectId: c.req.query('projectId'),
     timeRange: c.req.query('timeRange'),
@@ -26,9 +26,9 @@ analyticsRoutes.get('/overview', (c) => {
 });
 
 // GET /api/analytics/timeline?projectId=xxx&timeRange=month&groupBy=week&tz=300
-analyticsRoutes.get('/timeline', (c) => {
+analyticsRoutes.get('/timeline', async (c) => {
   const userId = c.get('userId') as string;
-  const result = getTimeline({
+  const result = await getTimeline({
     userId,
     projectId: c.req.query('projectId'),
     timeRange: c.req.query('timeRange'),

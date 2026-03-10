@@ -49,6 +49,12 @@ export function AddProjectView() {
       return;
     }
     await loadProjects();
+    toast.success(
+      t('project.created', {
+        name: newProjectName,
+        defaultValue: `Project "${newProjectName}" created`,
+      }),
+    );
     navigate('/');
     navigate(`/projects/${retryResult.value.id}`);
     setIsCreating(false);
@@ -69,6 +75,12 @@ export function AddProjectView() {
       return;
     }
     await loadProjects();
+    toast.success(
+      t('project.created', {
+        name: newProjectName,
+        defaultValue: `Project "${newProjectName}" created`,
+      }),
+    );
     navigate('/');
     navigate(`/projects/${result.value.id}`);
     setIsCreating(false);

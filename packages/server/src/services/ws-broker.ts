@@ -12,12 +12,22 @@ import type { ServerWebSocket } from 'bun';
 import { log } from '../lib/logger.js';
 import { metric } from '../lib/telemetry.js';
 
-class WSBroker {
-  private clients = new Map<ServerWebSocket<unknown>, string>(); // ws → userId
+interface ClientInfo {
+  userId: string;
+  organizationId: string | null;
+}
 
-  addClient(ws: ServerWebSocket<unknown>, userId: string): void {
-    this.clients.set(ws, userId);
-    log.info('Client connected', { namespace: 'ws', userId, total: this.clients.size });
+class WSBroker {
+  private clients = new Map<ServerWebSocket<unknown>, ClientInfo>();
+
+  addClient(ws: ServerWebSocket<unknown>, userId: string, organizationId?: string | null): void {
+    this.clients.set(ws, { userId, organizationId: organizationId ?? null });
+    log.info('Client connected', {
+      namespace: 'ws',
+      userId,
+      organizationId,
+      total: this.clients.size,
+    });
     metric('ws.connections', this.clients.size, { type: 'gauge' });
   }
 
@@ -33,8 +43,8 @@ class WSBroker {
     const dead: ServerWebSocket<unknown>[] = [];
     let sent = 0;
 
-    for (const [ws, uid] of this.clients) {
-      if (uid !== userId) continue;
+    for (const [ws, info] of this.clients) {
+      if (info.userId !== userId) continue;
       try {
         ws.send(payload);
         sent++;
@@ -57,6 +67,32 @@ class WSBroker {
         total: this.clients.size,
       });
     }
+  }
+
+  /** Emit to all clients in a specific organization */
+  emitToOrg(orgId: string, event: WSEvent): void {
+    const payload = JSON.stringify(event);
+    const dead: ServerWebSocket<unknown>[] = [];
+    let sent = 0;
+
+    for (const [ws, info] of this.clients) {
+      if (info.organizationId !== orgId) continue;
+      try {
+        ws.send(payload);
+        sent++;
+      } catch {
+        dead.push(ws);
+      }
+    }
+
+    for (const ws of dead) {
+      this.clients.delete(ws);
+    }
+
+    metric('ws.events', 1, {
+      type: 'sum',
+      attributes: { event: event.type, sent: String(sent), orgId },
+    });
   }
 
   /** Emit to all connected clients (broadcast) */

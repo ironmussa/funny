@@ -8,6 +8,7 @@
 
 import { listBranches, getDefaultBranch, getCurrentBranch, git } from '@funny/core/git';
 import { Hono } from 'hono';
+import { err } from 'neverthrow';
 
 import { requireAdmin } from '../middleware/auth.js';
 import { startCommand, stopCommand, isCommandRunning } from '../services/command-runner.js';
@@ -32,22 +33,30 @@ import {
 export const projectRoutes = new Hono<HonoEnv>();
 
 // GET /api/projects
-projectRoutes.get('/', (c) => {
+projectRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string;
-  const projects = pm.listProjects(userId);
+  const orgId = c.get('organizationId');
+
+  // If an active org is set, return org-scoped projects
+  if (orgId) {
+    const projects = await pm.listProjectsByOrg(orgId);
+    return c.json(projects);
+  }
+
+  const projects = await pm.listProjects(userId);
   return c.json(projects);
 });
 
 // GET /api/projects/resolve?url=<url>
 // Returns the project matching the given URL pattern, or null if none match.
-projectRoutes.get('/resolve', (c) => {
+projectRoutes.get('/resolve', async (c) => {
   const userId = c.get('userId') as string;
   const url = c.req.query('url');
   if (!url) {
     return c.json({ error: 'Missing required query parameter: url' }, 400);
   }
 
-  const projects = pm.listProjects(userId);
+  const projects = await pm.listProjects(userId);
   const matched = projects.find((p) => p.urls?.some((pattern) => url.startsWith(pattern)));
 
   if (matched) {
@@ -60,9 +69,20 @@ projectRoutes.get('/resolve', (c) => {
 projectRoutes.post('/', async (c) => {
   const userId = c.get('userId') as string;
   const raw = await c.req.json();
-  const result = validate(createProjectSchema, raw).andThen(({ name, path }) =>
-    pm.createProject(name, path, userId),
-  );
+  const parsed = validate(createProjectSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { name, path } = parsed.value;
+
+  // Early duplicate name check before any further validation
+  const nameExists = await pm.projectNameExists(name, userId);
+  if (nameExists) {
+    return resultToResponse(
+      c,
+      err({ code: 'CONFLICT' as const, message: `A project named "${name}" already exists` }),
+    );
+  }
+
+  const result = await pm.createProject(name, path, userId);
   return resultToResponse(c, result, 201);
 });
 
@@ -70,24 +90,24 @@ projectRoutes.post('/', async (c) => {
 projectRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const projectResult = requireProject(id, userId);
+  const projectResult = await requireProject(id, userId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const raw = await c.req.json();
-  const result = validate(updateProjectSchema, raw).andThen((fields) =>
-    pm.updateProject(id, fields),
-  );
+  const parsed = validate(updateProjectSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const result = await pm.updateProject(id, parsed.value);
   return resultToResponse(c, result);
 });
 
 // DELETE /api/projects/:id
-projectRoutes.delete('/:id', (c) => {
+projectRoutes.delete('/:id', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const projectResult = requireProject(id, userId);
+  const projectResult = await requireProject(id, userId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
-  pm.deleteProject(id);
+  await pm.deleteProject(id);
   return c.json({ ok: true });
 });
 
@@ -95,16 +115,17 @@ projectRoutes.delete('/:id', (c) => {
 projectRoutes.put('/reorder', async (c) => {
   const userId = c.get('userId') as string;
   const raw = await c.req.json();
-  const result = validate(reorderProjectsSchema, raw).andThen(({ projectIds }) =>
-    pm.reorderProjects(userId, projectIds),
-  );
+  const parsed = validate(reorderProjectsSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const { projectIds } = parsed.value;
+  const result = await pm.reorderProjects(userId, projectIds);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ ok: true });
 });
 
 // GET /api/projects/:id/branches
 projectRoutes.get('/:id/branches', async (c) => {
-  const projectResult = requireProject(c.req.param('id'));
+  const projectResult = await requireProject(c.req.param('id'));
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const project = projectResult.value;
@@ -126,7 +147,7 @@ projectRoutes.get('/:id/branches', async (c) => {
 // GET /api/projects/:id/checkout-preflight?branch=<branch>
 // Pre-flight check: can we checkout the target branch without conflicts?
 projectRoutes.get('/:id/checkout-preflight', async (c) => {
-  const projectResult = requireProject(c.req.param('id'));
+  const projectResult = await requireProject(c.req.param('id'));
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const targetBranch = c.req.query('branch');
@@ -192,9 +213,9 @@ projectRoutes.get('/:id/checkout-preflight', async (c) => {
 // ─── Startup Commands ───────────────────────────────────
 
 // GET /api/projects/:id/commands
-projectRoutes.get('/:id/commands', (c) => {
+projectRoutes.get('/:id/commands', async (c) => {
   const id = c.req.param('id');
-  const commands = sc.listCommands(id);
+  const commands = await sc.listCommands(id);
   return c.json(commands);
 });
 
@@ -206,7 +227,7 @@ projectRoutes.post('/:id/commands', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
   const { label, command } = parsed.value;
 
-  const entry = sc.createCommand({ projectId, label, command });
+  const entry = await sc.createCommand({ projectId, label, command });
   return c.json(entry, 201);
 });
 
@@ -218,14 +239,14 @@ projectRoutes.put('/:id/commands/:cmdId', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
   const { label, command, port, portEnvVar } = parsed.value;
 
-  sc.updateCommand(cmdId, { label, command, port, portEnvVar });
+  await sc.updateCommand(cmdId, { label, command, port, portEnvVar });
   return c.json({ ok: true });
 });
 
 // DELETE /api/projects/:id/commands/:cmdId
-projectRoutes.delete('/:id/commands/:cmdId', (c) => {
+projectRoutes.delete('/:id/commands/:cmdId', async (c) => {
   const cmdId = c.req.param('cmdId');
-  sc.deleteCommand(cmdId);
+  await sc.deleteCommand(cmdId);
   return c.json({ ok: true });
 });
 
@@ -237,11 +258,11 @@ projectRoutes.post('/:id/commands/:cmdId/start', requireAdmin, async (c) => {
   const projectId = c.req.param('id');
   const cmdId = c.req.param('cmdId');
 
-  const projectResult = requireProject(projectId);
+  const projectResult = await requireProject(projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
 
-  const cmd = sc.getCommand(cmdId);
+  const cmd = await sc.getCommand(cmdId);
   if (!cmd) return c.json({ error: 'Command not found' }, 404);
 
   await startCommand(cmdId, cmd.command, project.path, projectId, cmd.label);
@@ -264,10 +285,10 @@ projectRoutes.get('/:id/commands/:cmdId/status', (c) => {
 // ─── Project Config (.funny.json) ──────────────────────
 
 // GET /api/projects/:id/config
-projectRoutes.get('/:id/config', (c) => {
+projectRoutes.get('/:id/config', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = requireProject(projectId, userId);
+  const projectResult = await requireProject(projectId, userId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const config = pc.getConfig(projectResult.value.path);
@@ -278,7 +299,7 @@ projectRoutes.get('/:id/config', (c) => {
 projectRoutes.put('/:id/config', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = requireProject(projectId, userId);
+  const projectResult = await requireProject(projectId, userId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const body = await c.req.json();
@@ -289,10 +310,10 @@ projectRoutes.put('/:id/config', async (c) => {
 // ─── Project Hooks (Husky-backed) ──────────────────────
 
 // GET /api/projects/:id/hooks
-projectRoutes.get('/:id/hooks', (c) => {
+projectRoutes.get('/:id/hooks', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = requireProject(projectId, userId);
+  const projectResult = await requireProject(projectId, userId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const hookType = c.req.query('hookType') as import('@funny/shared').HookType | undefined;
@@ -304,7 +325,7 @@ projectRoutes.get('/:id/hooks', (c) => {
 projectRoutes.post('/:id/hooks', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = requireProject(projectId, userId);
+  const projectResult = await requireProject(projectId, userId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const raw = await c.req.json();
@@ -321,7 +342,7 @@ projectRoutes.post('/:id/hooks', async (c) => {
 projectRoutes.put('/:id/hooks/reorder', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = requireProject(projectId, userId);
+  const projectResult = await requireProject(projectId, userId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const raw = await c.req.json();
@@ -336,7 +357,7 @@ projectRoutes.put('/:id/hooks/reorder', async (c) => {
 projectRoutes.put('/:id/hooks/:hookType/:index', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = requireProject(projectId, userId);
+  const projectResult = await requireProject(projectId, userId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const hookType = c.req.param('hookType') as import('@funny/shared').HookType;
@@ -356,10 +377,10 @@ projectRoutes.put('/:id/hooks/:hookType/:index', async (c) => {
 });
 
 // DELETE /api/projects/:id/hooks/:hookType/:index — delete a command
-projectRoutes.delete('/:id/hooks/:hookType/:index', (c) => {
+projectRoutes.delete('/:id/hooks/:hookType/:index', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = requireProject(projectId, userId);
+  const projectResult = await requireProject(projectId, userId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const hookType = c.req.param('hookType') as import('@funny/shared').HookType;

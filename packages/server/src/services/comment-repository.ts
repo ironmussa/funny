@@ -9,20 +9,21 @@
 import { eq, asc, inArray, count as drizzleCount } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
-import { db, schema } from '../db/index.js';
+import { db, dbAll, dbRun, schema } from '../db/index.js';
 
 /** List comments for a thread, ordered by creation time */
-export function listComments(threadId: string) {
-  return db
-    .select()
-    .from(schema.threadComments)
-    .where(eq(schema.threadComments.threadId, threadId))
-    .orderBy(asc(schema.threadComments.createdAt))
-    .all();
+export async function listComments(threadId: string) {
+  return dbAll(
+    db
+      .select()
+      .from(schema.threadComments)
+      .where(eq(schema.threadComments.threadId, threadId))
+      .orderBy(asc(schema.threadComments.createdAt)),
+  );
 }
 
 /** Insert a comment, returns the created record */
-export function insertComment(data: {
+export async function insertComment(data: {
   threadId: string;
   userId: string;
   source: string;
@@ -30,35 +31,36 @@ export function insertComment(data: {
 }) {
   const id = nanoid();
   const createdAt = new Date().toISOString();
-  db.insert(schema.threadComments)
-    .values({
+  await dbRun(
+    db.insert(schema.threadComments).values({
       id,
       threadId: data.threadId,
       userId: data.userId,
       source: data.source,
       content: data.content,
       createdAt,
-    })
-    .run();
+    }),
+  );
   return { id, ...data, createdAt };
 }
 
 /** Delete a comment by ID */
-export function deleteComment(commentId: string) {
-  db.delete(schema.threadComments).where(eq(schema.threadComments.id, commentId)).run();
+export async function deleteComment(commentId: string) {
+  await dbRun(db.delete(schema.threadComments).where(eq(schema.threadComments.id, commentId)));
 }
 
 /** Get comment counts for a list of thread IDs */
-export function getCommentCounts(threadIds: string[]): Map<string, number> {
+export async function getCommentCounts(threadIds: string[]): Promise<Map<string, number>> {
   if (threadIds.length === 0) return new Map();
-  const rows = db
-    .select({
-      threadId: schema.threadComments.threadId,
-      count: drizzleCount(),
-    })
-    .from(schema.threadComments)
-    .where(inArray(schema.threadComments.threadId, threadIds))
-    .groupBy(schema.threadComments.threadId)
-    .all();
-  return new Map(rows.map((r) => [r.threadId, r.count]));
+  const rows = await dbAll(
+    db
+      .select({
+        threadId: schema.threadComments.threadId,
+        count: drizzleCount(),
+      })
+      .from(schema.threadComments)
+      .where(inArray(schema.threadComments.threadId, threadIds))
+      .groupBy(schema.threadComments.threadId),
+  );
+  return new Map(rows.map((r: any) => [r.threadId, r.count]));
 }

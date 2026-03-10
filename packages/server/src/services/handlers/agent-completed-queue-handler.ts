@@ -28,15 +28,15 @@ export const agentCompletedQueueHandler: EventHandler<'agent:completed'> = {
   async action(event: AgentCompletedEvent, ctx) {
     const { threadId } = event;
 
-    const thread = ctx.getThread(threadId);
+    const thread = await ctx.getThread(threadId);
     if (!thread) return;
 
-    const project = ctx.getProject(thread.projectId);
+    const project = await ctx.getProject(thread.projectId);
     if (!project) return;
     const mode = project?.followUpMode ?? DEFAULT_FOLLOW_UP_MODE;
     if (mode !== 'queue' && mode !== 'ask') return;
 
-    const next = ctx.dequeueMessage(threadId);
+    const next = await ctx.dequeueMessage(threadId);
     if (!next) return;
 
     ctx.log(`Auto-sending queued message for thread ${threadId} (messageId: ${next.id})`);
@@ -59,8 +59,8 @@ export const agentCompletedQueueHandler: EventHandler<'agent:completed'> = {
       // Emit queue update with the dequeued message content so the client
       // can inject the user message into the thread (optimistic rendering
       // is skipped for queued messages to avoid showing them prematurely)
-      const remaining = ctx.queueCount(threadId);
-      const peekNext = ctx.peekMessage(threadId);
+      const remaining = await ctx.queueCount(threadId);
+      const peekNext = await ctx.peekMessage(threadId);
       const queueEvent = {
         type: 'thread:queue_update' as const,
         threadId,

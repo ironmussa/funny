@@ -16,16 +16,16 @@ export const stageTransitionOnAgentStartHandler: EventHandler<'agent:started'> =
   name: 'transition-stage-on-agent-start',
   event: 'agent:started',
 
-  filter(event: AgentStartedEvent, ctx) {
-    const thread = ctx.getThread(event.threadId);
+  async filter(event: AgentStartedEvent, ctx) {
+    const thread = await ctx.getThread(event.threadId);
     if (!thread) return false;
     return thread.stage === 'backlog' || thread.stage === 'planning' || thread.stage === 'review';
   },
 
-  action(event: AgentStartedEvent, ctx) {
-    const thread = ctx.getThread(event.threadId);
+  async action(event: AgentStartedEvent, ctx) {
+    const thread = await ctx.getThread(event.threadId);
     if (!thread) return;
-    ctx.updateThread(event.threadId, { stage: 'in_progress' });
+    await ctx.updateThread(event.threadId, { stage: 'in_progress' });
     ctx.emitToUser(event.userId, {
       type: 'agent:status',
       threadId: event.threadId,

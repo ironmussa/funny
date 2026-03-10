@@ -48,11 +48,11 @@ interface RunningCommand {
 
 const activeCommands = new Map<string, RunningCommand>();
 
-function emitWS(type: string, data: unknown, projectId?: string) {
+async function emitWS(type: string, data: unknown, projectId?: string) {
   const event = { type, threadId: '', data } as any;
   // Look up project userId for per-user filtering
   if (projectId) {
-    const project = pm.getProject(projectId);
+    const project = await pm.getProject(projectId);
     if (project?.userId && project.userId !== '__local__') {
       wsBroker.emitToUser(project.userId, event);
       return;
@@ -96,7 +96,7 @@ export async function startCommand(
 
   activeCommands.set(commandId, entry);
 
-  emitWS(
+  await emitWS(
     'command:status',
     {
       commandId,
@@ -108,17 +108,17 @@ export async function startCommand(
   );
 
   // Stream stdout
-  readStream(proc.stdout as ReadableStream<Uint8Array>, commandId, 'stdout', projectId);
+  void readStream(proc.stdout as ReadableStream<Uint8Array>, commandId, 'stdout', projectId);
   // Stream stderr
-  readStream(proc.stderr as ReadableStream<Uint8Array>, commandId, 'stderr', projectId);
+  void readStream(proc.stderr as ReadableStream<Uint8Array>, commandId, 'stderr', projectId);
 
   // Handle exit
   proc.exited
-    .then((exitCode) => {
+    .then(async (exitCode) => {
       log.info(`Command "${label}" exited`, { namespace: 'command-runner', exitCode });
       entry.exited = true;
       activeCommands.delete(commandId);
-      emitWS(
+      await emitWS(
         'command:status',
         {
           commandId,
@@ -130,11 +130,11 @@ export async function startCommand(
         projectId,
       );
     })
-    .catch((err) => {
+    .catch(async (err) => {
       log.error(`Command "${label}" error`, { namespace: 'command-runner', error: err });
       entry.exited = true;
       activeCommands.delete(commandId);
-      emitWS(
+      await emitWS(
         'command:status',
         {
           commandId,
@@ -163,7 +163,7 @@ async function readStream(
       if (done) break;
 
       const text = decoder.decode(value, { stream: true });
-      emitWS('command:output', { commandId, data: text, channel }, projectId);
+      await emitWS('command:output', { commandId, data: text, channel }, projectId);
     }
   } catch {
     // Stream closed — process likely killed
@@ -199,7 +199,7 @@ export async function stopCommand(commandId: string): Promise<void> {
   entry.exited = true;
   activeCommands.delete(commandId);
 
-  emitWS(
+  await emitWS(
     'command:status',
     {
       commandId,

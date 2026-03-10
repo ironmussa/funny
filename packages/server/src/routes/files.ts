@@ -23,13 +23,13 @@ const app = new Hono<HonoEnv>();
  * Check if a path is within an allowed directory.
  * Scoped to the requesting user's projects in multi-user mode.
  */
-function isPathAllowed(targetPath: string, userId: string): boolean {
+async function isPathAllowed(targetPath: string, userId: string): Promise<boolean> {
   const normalizedTarget = normalize(resolve(targetPath));
 
   const home = normalize(resolve(homedir()));
   if (normalizedTarget.startsWith(home)) return true;
 
-  const projects = pm.listProjects(userId);
+  const projects = await pm.listProjects(userId);
   for (const project of projects) {
     const projectPath = normalize(resolve(project.path));
     if (normalizedTarget.startsWith(projectPath)) return true;
@@ -40,8 +40,8 @@ function isPathAllowed(targetPath: string, userId: string): boolean {
 }
 
 /** Return 403 response if path is not in an allowed directory */
-function checkAllowedPath(path: string, userId: string): Response | null {
-  if (!isPathAllowed(path, userId)) {
+async function checkAllowedPath(path: string, userId: string): Promise<Response | null> {
+  if (!(await isPathAllowed(path, userId))) {
     return new Response(
       JSON.stringify({ error: 'Access denied: path is outside allowed directories' }),
       {
@@ -96,7 +96,7 @@ app.get('/read', async (c) => {
   }
 
   const userId = c.get('userId') as string;
-  const denied = checkAllowedPath(filePath, userId);
+  const denied = await checkAllowedPath(filePath, userId);
   if (denied) return denied;
 
   // Check if file is binary
@@ -138,7 +138,7 @@ app.post('/write', async (c) => {
   }
 
   const userId = c.get('userId') as string;
-  const denied = checkAllowedPath(filePath, userId);
+  const denied = await checkAllowedPath(filePath, userId);
   if (denied) return denied;
 
   const writeResult = await ResultAsync.fromPromise(

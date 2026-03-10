@@ -10,17 +10,15 @@ import type { UserProfile, UpdateProfileRequest } from '@funny/shared';
 import { eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
-import { db } from '../db/index.js';
+import { db, dbGet, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
 import { encrypt, decrypt } from '../lib/crypto.js';
 
 /** Retrieve a user's git profile. Returns null if not yet configured. */
-export function getProfile(userId: string): UserProfile | null {
-  const row = db
-    .select()
-    .from(schema.userProfiles)
-    .where(eq(schema.userProfiles.userId, userId))
-    .get();
+export async function getProfile(userId: string): Promise<UserProfile | null> {
+  const row = await dbGet(
+    db.select().from(schema.userProfiles).where(eq(schema.userProfiles.userId, userId)),
+  );
   if (!row) return null;
   return {
     id: row.id,
@@ -40,48 +38,54 @@ export function getProfile(userId: string): UserProfile | null {
 }
 
 /** Retrieve the raw GitHub token (server-only, never return to client). */
-export function getGithubToken(userId: string): string | null {
-  const row = db
-    .select({ githubToken: schema.userProfiles.githubToken })
-    .from(schema.userProfiles)
-    .where(eq(schema.userProfiles.userId, userId))
-    .get();
+export async function getGithubToken(userId: string): Promise<string | null> {
+  const row = await dbGet(
+    db
+      .select({ githubToken: schema.userProfiles.githubToken })
+      .from(schema.userProfiles)
+      .where(eq(schema.userProfiles.userId, userId)),
+  );
   if (!row?.githubToken) return null;
   return decrypt(row.githubToken);
 }
 
 /** Retrieve git author info for --author flag. Returns null if either field is missing. */
-export function getGitIdentity(userId: string): { name: string; email: string } | null {
-  const row = db
-    .select({
-      gitName: schema.userProfiles.gitName,
-      gitEmail: schema.userProfiles.gitEmail,
-    })
-    .from(schema.userProfiles)
-    .where(eq(schema.userProfiles.userId, userId))
-    .get();
+export async function getGitIdentity(
+  userId: string,
+): Promise<{ name: string; email: string } | null> {
+  const row = await dbGet(
+    db
+      .select({
+        gitName: schema.userProfiles.gitName,
+        gitEmail: schema.userProfiles.gitEmail,
+      })
+      .from(schema.userProfiles)
+      .where(eq(schema.userProfiles.userId, userId)),
+  );
   if (!row?.gitName || !row?.gitEmail) return null;
   return { name: row.gitName, email: row.gitEmail };
 }
 
 /** Check if user has completed setup. */
-export function isSetupCompleted(userId: string): boolean {
-  const row = db
-    .select({ setupCompleted: schema.userProfiles.setupCompleted })
-    .from(schema.userProfiles)
-    .where(eq(schema.userProfiles.userId, userId))
-    .get();
+export async function isSetupCompleted(userId: string): Promise<boolean> {
+  const row = await dbGet(
+    db
+      .select({ setupCompleted: schema.userProfiles.setupCompleted })
+      .from(schema.userProfiles)
+      .where(eq(schema.userProfiles.userId, userId)),
+  );
   return !!row?.setupCompleted;
 }
 
 /** Upsert the user's profile. */
-export function updateProfile(userId: string, data: UpdateProfileRequest): UserProfile {
+export async function updateProfile(
+  userId: string,
+  data: UpdateProfileRequest,
+): Promise<UserProfile> {
   const now = new Date().toISOString();
-  const existing = db
-    .select()
-    .from(schema.userProfiles)
-    .where(eq(schema.userProfiles.userId, userId))
-    .get();
+  const existing = await dbGet(
+    db.select().from(schema.userProfiles).where(eq(schema.userProfiles.userId, userId)),
+  );
 
   const encryptedToken = data.githubToken ? encrypt(data.githubToken) : null;
 
@@ -98,10 +102,12 @@ export function updateProfile(userId: string, data: UpdateProfileRequest): UserP
     if (data.toolPermissions !== undefined)
       updates.toolPermissions = JSON.stringify(data.toolPermissions);
     if (data.theme !== undefined) updates.theme = data.theme;
-    db.update(schema.userProfiles).set(updates).where(eq(schema.userProfiles.userId, userId)).run();
+    await dbRun(
+      db.update(schema.userProfiles).set(updates).where(eq(schema.userProfiles.userId, userId)),
+    );
   } else {
-    db.insert(schema.userProfiles)
-      .values({
+    await dbRun(
+      db.insert(schema.userProfiles).values({
         id: nanoid(),
         userId,
         gitName: data.gitName || null,
@@ -115,9 +121,9 @@ export function updateProfile(userId: string, data: UpdateProfileRequest): UserP
         theme: data.theme ?? null,
         createdAt: now,
         updatedAt: now,
-      })
-      .run();
+      }),
+    );
   }
 
-  return getProfile(userId)!;
+  return (await getProfile(userId))!;
 }

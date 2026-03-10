@@ -46,7 +46,7 @@ export class AgentMessageHandler {
   }
 
   /** Lazy-load project-manager to avoid importing the singleton DB in tests */
-  private getProject(id: string): { path: string; [key: string]: any } | undefined {
+  private async getProject(id: string): Promise<{ path: string; [key: string]: any } | undefined> {
     if (!this._getProject) {
       const pm = require('./project-manager.js');
       this._getProject = pm.getProject;
@@ -55,8 +55,8 @@ export class AgentMessageHandler {
   }
 
   /** Build common log attributes with thread context for observability */
-  private threadCtx(threadId: string): Record<string, string> {
-    const thread = this.threadManager.getThread(threadId);
+  private async threadCtx(threadId: string): Promise<Record<string, string>> {
+    const thread = await this.threadManager.getThread(threadId);
     return {
       namespace: 'agent',
       threadId,
@@ -67,9 +67,9 @@ export class AgentMessageHandler {
     };
   }
 
-  private emitWS(threadId: string, type: WSEvent['type'], data: unknown): void {
+  private async emitWS(threadId: string, type: WSEvent['type'], data: unknown): Promise<void> {
     const event = { type, threadId, data } as WSEvent;
-    const thread = this.threadManager.getThread(threadId);
+    const thread = await this.threadManager.getThread(threadId);
     const userId = thread?.userId;
     if (userId) {
       this.wsBroker.emitToUser(userId, event);
@@ -78,23 +78,26 @@ export class AgentMessageHandler {
     }
   }
 
-  handle(threadId: string, msg: CLIMessage): void {
+  async handle(threadId: string, msg: CLIMessage): Promise<void> {
     log.debug('handle() raw message', {
-      ...this.threadCtx(threadId),
+      ...(await this.threadCtx(threadId)),
       type: msg.type,
       subtype: (msg as any).subtype,
     });
 
     // System init — capture session ID and broadcast init info
     if (msg.type === 'system' && 'subtype' in msg && msg.subtype === 'init') {
-      log.info('Session initialized', { ...this.threadCtx(threadId), sessionId: msg.session_id });
-      this.threadManager.updateThread(threadId, {
+      log.info('Session initialized', {
+        ...(await this.threadCtx(threadId)),
+        sessionId: msg.session_id,
+      });
+      await this.threadManager.updateThread(threadId, {
         sessionId: msg.session_id,
         initTools: JSON.stringify(msg.tools ?? []),
         initCwd: msg.cwd ?? '',
       });
 
-      this.emitWS(threadId, 'agent:init', {
+      await this.emitWS(threadId, 'agent:init', {
         tools: msg.tools ?? [],
         cwd: msg.cwd ?? '',
         model: msg.model ?? '',
@@ -104,13 +107,13 @@ export class AgentMessageHandler {
 
     // Assistant messages — text and tool calls
     if (msg.type === 'assistant') {
-      this.handleAssistantMessage(threadId, msg);
+      await this.handleAssistantMessage(threadId, msg);
       return;
     }
 
     // User messages — tool results (output from tool executions)
     if (msg.type === 'user') {
-      this.handleToolResults(threadId, msg);
+      await this.handleToolResults(threadId, msg);
       return;
     }
 
@@ -118,13 +121,13 @@ export class AgentMessageHandler {
     if (msg.type === 'compact_boundary') {
       const timestamp = new Date().toISOString();
       log.info('Context compacted', {
-        ...this.threadCtx(threadId),
+        ...(await this.threadCtx(threadId)),
         trigger: msg.trigger,
         preTokens: String(msg.preTokens),
         timestamp,
       });
       this.state.cumulativeInputTokens.set(threadId, 0);
-      this.emitWS(threadId, 'agent:compact_boundary', {
+      await this.emitWS(threadId, 'agent:compact_boundary', {
         trigger: msg.trigger,
         preTokens: msg.preTokens,
         timestamp,
@@ -147,13 +150,16 @@ export class AgentMessageHandler {
 
     // Result — agent finished
     if (msg.type === 'result') {
-      this.handleResult(threadId, msg);
+      await this.handleResult(threadId, msg);
     }
   }
 
   // ── Assistant message handling ─────────────────────────────────
 
-  private handleAssistantMessage(threadId: string, msg: CLIMessage & { type: 'assistant' }): void {
+  private async handleAssistantMessage(
+    threadId: string,
+    msg: CLIMessage & { type: 'assistant' },
+  ): Promise<void> {
     const cliMsgId = msg.message.id;
 
     // Get or init the CLI→DB message ID map for this thread
@@ -173,7 +179,7 @@ export class AgentMessageHandler {
       (b: any) => 'type' in b && b.type === 'tool_use',
     );
     log.info('assistant message', {
-      ...this.threadCtx(threadId),
+      ...(await this.threadCtx(threadId)),
       cliMsgId,
       hasText: String(!!textContent),
       textChars: String(textContent.length),
@@ -185,9 +191,9 @@ export class AgentMessageHandler {
     if (textContent) {
       let msgId = this.state.currentAssistantMsgId.get(threadId) || cliMap.get(cliMsgId);
       if (msgId) {
-        this.threadManager.updateMessage(msgId, textContent);
+        await this.threadManager.updateMessage(msgId, textContent);
       } else {
-        msgId = this.threadManager.insertMessage({
+        msgId = await this.threadManager.insertMessage({
           threadId,
           role: 'assistant',
           content: textContent,
@@ -196,23 +202,24 @@ export class AgentMessageHandler {
       this.state.currentAssistantMsgId.set(threadId, msgId);
       cliMap.set(cliMsgId, msgId);
 
-      this.emitWS(threadId, 'agent:message', {
+      await this.emitWS(threadId, 'agent:message', {
         messageId: msgId,
         role: 'assistant',
         content: textContent,
       });
     }
 
-    // Emit per-message context usage if available
+    // Emit per-message context usage if available.
+    // usage.input_tokens from the Anthropic API represents the TOTAL input
+    // tokens for this API call (system prompt + full conversation history),
+    // so it directly reflects how full the context window is — no accumulation needed.
     const usage = msg.message.usage;
     if (usage) {
-      const prev = this.state.cumulativeInputTokens.get(threadId) ?? 0;
-      const cumulative = prev + usage.input_tokens;
-      this.state.cumulativeInputTokens.set(threadId, cumulative);
-      this.emitWS(threadId, 'agent:context_usage', {
+      this.state.cumulativeInputTokens.set(threadId, usage.input_tokens);
+      await this.emitWS(threadId, 'agent:context_usage', {
         inputTokens: usage.input_tokens,
         outputTokens: usage.output_tokens,
-        cumulativeInputTokens: cumulative,
+        cumulativeInputTokens: usage.input_tokens,
       });
     } else {
       log.debug('No usage data in assistant message', { namespace: 'agent', threadId });
@@ -240,7 +247,10 @@ export class AgentMessageHandler {
           continue;
         }
 
-        log.info(`tool_use: ${block.name}`, { ...this.threadCtx(threadId), tool: block.name });
+        log.info(`tool_use: ${block.name}`, {
+          ...(await this.threadCtx(threadId)),
+          tool: block.name,
+        });
         log.debug('tool_use input', {
           namespace: 'agent',
           threadId,
@@ -251,12 +261,12 @@ export class AgentMessageHandler {
         // Ensure there's always a parent assistant message for tool calls
         let parentMsgId = this.state.currentAssistantMsgId.get(threadId) || cliMap.get(cliMsgId);
         if (!parentMsgId) {
-          parentMsgId = this.threadManager.insertMessage({
+          parentMsgId = await this.threadManager.insertMessage({
             threadId,
             role: 'assistant',
             content: '',
           });
-          this.emitWS(threadId, 'agent:message', {
+          await this.emitWS(threadId, 'agent:message', {
             messageId: parentMsgId,
             role: 'assistant',
             content: '',
@@ -267,7 +277,11 @@ export class AgentMessageHandler {
 
         // Check DB for existing duplicate (guards against session resume re-sending old tool_use blocks)
         const inputJson = JSON.stringify(block.input);
-        const existingTC = this.threadManager.findToolCall(parentMsgId, block.name, inputJson);
+        const existingTC = await this.threadManager.findToolCall(
+          parentMsgId,
+          block.name,
+          inputJson,
+        );
 
         if (existingTC) {
           log.debug('Dedup: found existing ToolCall in DB (resume re-send)', {
@@ -278,14 +292,14 @@ export class AgentMessageHandler {
           });
           seen.set(block.id, existingTC.id);
         } else {
-          const toolCallId = this.threadManager.insertToolCall({
+          const toolCallId = await this.threadManager.insertToolCall({
             messageId: parentMsgId,
             name: block.name,
             input: inputJson,
           });
           seen.set(block.id, toolCallId);
 
-          this.emitWS(threadId, 'agent:tool_call', {
+          await this.emitWS(threadId, 'agent:tool_call', {
             toolCallId,
             messageId: parentMsgId,
             name: block.name,
@@ -296,12 +310,12 @@ export class AgentMessageHandler {
         // Track if this tool call means Claude is waiting for user input
         if (block.name === 'AskUserQuestion') {
           log.info('AskUserQuestion detected — transitioning to waiting', {
-            ...this.threadCtx(threadId),
+            ...(await this.threadCtx(threadId)),
             previousPendingInput: this.state.pendingUserInput.get(threadId) ?? 'none',
             inputPreview: JSON.stringify(block.input).slice(0, 300),
           });
           this.state.pendingUserInput.set(threadId, 'question');
-          const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
+          const currentStatus = (await this.threadManager.getThread(threadId))?.status ?? 'running';
           const { status } = transitionStatus(
             threadId,
             { type: 'WAIT' },
@@ -313,15 +327,15 @@ export class AgentMessageHandler {
             from: currentStatus,
             to: status,
           });
-          this.threadManager.updateThread(threadId, { status });
-          this.emitWS(threadId, 'agent:status', { status, waitingReason: 'question' });
+          await this.threadManager.updateThread(threadId, { status });
+          await this.emitWS(threadId, 'agent:status', { status, waitingReason: 'question' });
         } else if (block.name === 'ExitPlanMode') {
           log.info('ExitPlanMode detected — transitioning to waiting', {
-            ...this.threadCtx(threadId),
+            ...(await this.threadCtx(threadId)),
             previousPendingInput: this.state.pendingUserInput.get(threadId) ?? 'none',
           });
           this.state.pendingUserInput.set(threadId, 'plan');
-          const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
+          const currentStatus = (await this.threadManager.getThread(threadId))?.status ?? 'running';
           const { status } = transitionStatus(
             threadId,
             { type: 'WAIT' },
@@ -333,14 +347,14 @@ export class AgentMessageHandler {
             from: currentStatus,
             to: status,
           });
-          this.threadManager.updateThread(threadId, { status });
-          this.emitWS(threadId, 'agent:status', { status, waitingReason: 'plan' });
+          await this.threadManager.updateThread(threadId, { status });
+          await this.emitWS(threadId, 'agent:status', { status, waitingReason: 'plan' });
         } else {
           if (this.state.pendingUserInput.has(threadId)) {
             log.warn(
               'BUG-HUNT: Clearing pendingUserInput due to non-interactive tool call — may cause plan/question auto-continue',
               {
-                ...this.threadCtx(threadId),
+                ...(await this.threadCtx(threadId)),
                 tool: block.name,
                 wasPending: this.state.pendingUserInput.get(threadId),
               },
@@ -358,13 +372,16 @@ export class AgentMessageHandler {
 
   // ── Tool result handling ───────────────────────────────────────
 
-  private handleToolResults(threadId: string, msg: CLIMessage & { type: 'user' }): void {
+  private async handleToolResults(
+    threadId: string,
+    msg: CLIMessage & { type: 'user' },
+  ): Promise<void> {
     const seen = this.state.processedToolUseIds.get(threadId);
     if (!seen || !msg.message.content) return;
 
     const resultBlocks = msg.message.content.filter((b: any) => b.type === 'tool_result');
     log.info('user message (tool_results)', {
-      ...this.threadCtx(threadId),
+      ...(await this.threadCtx(threadId)),
       resultCount: String(resultBlocks.length),
       toolUseIds: resultBlocks.map((b: any) => b.tool_use_id).join(','),
     });
@@ -376,7 +393,7 @@ export class AgentMessageHandler {
           const decodedOutput = decodeUnicodeEscapes(block.content);
 
           log.info(`tool_result: ${toolCallId}`, {
-            ...this.threadCtx(threadId),
+            ...(await this.threadCtx(threadId)),
             toolCallId,
             chars: String(decodedOutput.length),
           });
@@ -388,7 +405,7 @@ export class AgentMessageHandler {
           });
 
           // Look up the tool call once for all checks below
-          const tc = this.threadManager.getToolCall(toolCallId);
+          const tc = await this.threadManager.getToolCall(toolCallId);
 
           // For interactive tools (ExitPlanMode / AskUserQuestion): when the thread
           // is still "waiting" and pendingUserInput is set, the tool_result is an
@@ -399,13 +416,13 @@ export class AgentMessageHandler {
 
           if (isAutoDenial) {
             log.info(`Skipping auto-denial tool_result for ${tc!.name}`, {
-              ...this.threadCtx(threadId),
+              ...(await this.threadCtx(threadId)),
               toolCallId,
               autoDenialOutput: decodedOutput.slice(0, 100),
             });
           } else {
-            this.threadManager.updateToolCallOutput(toolCallId, decodedOutput);
-            this.emitWS(threadId, 'agent:tool_output', {
+            await this.threadManager.updateToolCallOutput(toolCallId, decodedOutput);
+            await this.emitWS(threadId, 'agent:tool_output', {
               toolCallId,
               output: decodedOutput,
             });
@@ -415,7 +432,7 @@ export class AgentMessageHandler {
           // AND it's NOT an auto-denial (the SDK processed the user's actual answer)
           if (isInteractive && !isAutoDenial) {
             log.info(`${tc!.name} tool_result received — clearing pendingUserInput`, {
-              ...this.threadCtx(threadId),
+              ...(await this.threadCtx(threadId)),
               toolCallId: toolCallId ?? '',
               wasPending: this.state.pendingUserInput.get(threadId) ?? 'none',
             });
@@ -437,7 +454,7 @@ export class AgentMessageHandler {
             // A tool succeeded without permission denial — the agent moved on,
             // so clear the stale permission request to avoid a false WAIT at result time.
             log.debug('Clearing stale pendingPermissionRequest after successful tool result', {
-              ...this.threadCtx(threadId),
+              ...(await this.threadCtx(threadId)),
               tool: tc?.name ?? 'unknown',
               wasPermission: this.state.pendingPermissionRequest.get(threadId)?.toolName ?? '',
             });
@@ -447,9 +464,9 @@ export class AgentMessageHandler {
           // Emit git:changed event for file-modifying tools
           const FILE_MODIFYING_TOOLS = new Set(['Write', 'Edit', 'Bash', 'NotebookEdit']);
           if (tc?.name && FILE_MODIFYING_TOOLS.has(tc.name) && !permissionDeniedMatch) {
-            const thread = this.threadManager.getThread(threadId);
+            const thread = await this.threadManager.getThread(threadId);
             if (thread) {
-              const project = this.getProject(thread.projectId);
+              const project = await this.getProject(thread.projectId);
               threadEventBus.emit('git:changed', {
                 threadId,
                 projectId: thread.projectId,
@@ -467,14 +484,17 @@ export class AgentMessageHandler {
 
   // ── Result handling ────────────────────────────────────────────
 
-  private handleResult(threadId: string, msg: CLIMessage & { type: 'result' }): void {
+  private async handleResult(
+    threadId: string,
+    msg: CLIMessage & { type: 'result' },
+  ): Promise<void> {
     if (this.state.resultReceived.has(threadId)) {
       log.debug('Ignoring duplicate result', { namespace: 'agent', threadId });
       return;
     }
 
     log.info('Agent completed', {
-      ...this.threadCtx(threadId),
+      ...(await this.threadCtx(threadId)),
       status: msg.subtype,
       cost: String(msg.total_cost_usd ?? 0),
       durationMs: String(msg.duration_ms ?? 0),
@@ -488,7 +508,7 @@ export class AgentMessageHandler {
     const permReq = this.state.pendingPermissionRequest.get(threadId);
 
     log.debug('handleResult state snapshot', {
-      ...this.threadCtx(threadId),
+      ...(await this.threadCtx(threadId)),
       pendingUserInput: waitingReason ?? 'none',
       pendingPermission: permReq ? permReq.toolName : 'none',
     });
@@ -498,7 +518,7 @@ export class AgentMessageHandler {
     }
 
     const isWaitingForUser = !!waitingReason;
-    const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
+    const currentStatus = (await this.threadManager.getThread(threadId))?.status ?? 'running';
 
     // Determine the machine event based on the result
     const resultEvent = isWaitingForUser
@@ -515,7 +535,7 @@ export class AgentMessageHandler {
     );
 
     log.info('handleResult final transition', {
-      ...this.threadCtx(threadId),
+      ...(await this.threadCtx(threadId)),
       eventType: resultEvent.type,
       from: currentStatus,
       to: finalStatus,
@@ -525,7 +545,7 @@ export class AgentMessageHandler {
 
     this.state.pendingUserInput.delete(threadId);
 
-    this.threadManager.updateThread(threadId, {
+    await this.threadManager.updateThread(threadId, {
       status: finalStatus,
       cost: msg.total_cost_usd,
       ...(finalStatus !== 'waiting' ? { completedAt: new Date().toISOString() } : {}),
@@ -533,10 +553,10 @@ export class AgentMessageHandler {
 
     // Auto-transition stage to 'review' when agent completes/fails
     if (finalStatus !== 'waiting') {
-      const threadForStage = this.threadManager.getThread(threadId);
+      const threadForStage = await this.threadManager.getThread(threadId);
       if (threadForStage && threadForStage.stage === 'in_progress') {
-        this.threadManager.updateThread(threadId, { stage: 'review' });
-        const project = this.getProject(threadForStage.projectId);
+        await this.threadManager.updateThread(threadId, { stage: 'review' });
+        const project = await this.getProject(threadForStage.projectId);
         threadEventBus.emit('thread:stage-changed', {
           threadId,
           projectId: threadForStage.projectId,
@@ -549,9 +569,9 @@ export class AgentMessageHandler {
       }
 
       // Emit agent:completed
-      const t = this.threadManager.getThread(threadId);
+      const t = await this.threadManager.getThread(threadId);
       if (t) {
-        const proj = this.getProject(t.projectId);
+        const proj = await this.getProject(t.projectId);
         threadEventBus.emit('agent:completed', {
           threadId,
           projectId: t.projectId,
@@ -564,7 +584,7 @@ export class AgentMessageHandler {
       }
     }
 
-    const threadWithStage = this.threadManager.getThread(threadId);
+    const threadWithStage = await this.threadManager.getThread(threadId);
 
     // Build the error text from the result or errors array
     const errorText =
@@ -574,7 +594,7 @@ export class AgentMessageHandler {
           : (msg.errors?.[0] ?? undefined)
         : undefined;
 
-    this.emitWS(threadId, 'agent:result', {
+    await this.emitWS(threadId, 'agent:result', {
       result: msg.result ? decodeUnicodeEscapes(msg.result) : msg.result,
       cost: msg.total_cost_usd,
       duration: msg.duration_ms,
@@ -596,10 +616,10 @@ export class AgentMessageHandler {
   // ── Git status emission ────────────────────────────────────────
 
   async emitGitStatus(threadId: string): Promise<void> {
-    const thread = this.threadManager.getThread(threadId);
+    const thread = await this.threadManager.getThread(threadId);
     if (!thread?.worktreePath || thread.mode !== 'worktree') return;
 
-    const project = this.getProject(thread.projectId);
+    const project = await this.getProject(thread.projectId);
     if (!project) return;
 
     const summaryResult = await getStatusSummary(
@@ -616,7 +636,7 @@ export class AgentMessageHandler {
         ? `tid:${threadId}`
         : thread.projectId;
 
-    this.emitWS(threadId, 'git:status', {
+    await this.emitWS(threadId, 'git:status', {
       statuses: [
         {
           threadId,

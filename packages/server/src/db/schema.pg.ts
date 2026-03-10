@@ -2,6 +2,8 @@
  * @domain subdomain: Shared Kernel
  * @domain type: published-language
  * @domain layer: infrastructure
+ *
+ * PostgreSQL schema — mirrors schema.sqlite.ts with pgTable equivalents.
  */
 
 import {
@@ -11,20 +13,20 @@ import {
   DEFAULT_THREAD_MODE,
   DEFAULT_PERMISSION_MODE,
 } from '@funny/shared/models';
-import { sqliteTable, text, real, integer, primaryKey } from 'drizzle-orm/sqlite-core';
+import { pgTable, text, real, integer, primaryKey } from 'drizzle-orm/pg-core';
 
-export const projects = sqliteTable('projects', {
+export const projects = pgTable('projects', {
   id: text('id').primaryKey(),
   name: text('name').notNull(),
   path: text('path').notNull(),
   color: text('color'),
   followUpMode: text('follow_up_mode').notNull().default(DEFAULT_FOLLOW_UP_MODE),
-  defaultProvider: text('default_provider'), // nullable — null means "use global default"
+  defaultProvider: text('default_provider'),
   defaultModel: text('default_model'),
   defaultMode: text('default_mode'),
   defaultPermissionMode: text('default_permission_mode'),
   defaultBranch: text('default_branch'),
-  urls: text('urls'), // JSON-encoded string[] of URL patterns for Chrome extension auto-detection
+  urls: text('urls'),
   systemPrompt: text('system_prompt'),
   launcherUrl: text('launcher_url'),
   userId: text('user_id').notNull().default('__local__'),
@@ -32,18 +34,18 @@ export const projects = sqliteTable('projects', {
   createdAt: text('created_at').notNull(),
 });
 
-export const threads = sqliteTable('threads', {
+export const threads = pgTable('threads', {
   id: text('id').primaryKey(),
   projectId: text('project_id')
     .notNull()
     .references(() => projects.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull().default('__local__'),
-  createdBy: text('created_by'), // Username, external agent ID, or pipeline/automation name
+  createdBy: text('created_by'),
   title: text('title').notNull(),
-  mode: text('mode').notNull(), // 'local' | 'worktree'
+  mode: text('mode').notNull(),
   provider: text('provider').notNull().default(DEFAULT_PROVIDER),
   permissionMode: text('permission_mode').notNull().default(DEFAULT_PERMISSION_MODE),
-  status: text('status').notNull().default('pending'), // 'pending' | 'running' | 'waiting' | 'completed' | 'failed' | 'stopped' | 'interrupted'
+  status: text('status').notNull().default('pending'),
   branch: text('branch'),
   baseBranch: text('base_branch'),
   worktreePath: text('worktree_path'),
@@ -51,36 +53,36 @@ export const threads = sqliteTable('threads', {
   cost: real('cost').notNull().default(0),
   archived: integer('archived').notNull().default(0),
   pinned: integer('pinned').notNull().default(0),
-  stage: text('stage').notNull().default('backlog'), // 'backlog' | 'planning' | 'in_progress' | 'review' | 'done'
+  stage: text('stage').notNull().default('backlog'),
   model: text('model').notNull().default(DEFAULT_MODEL),
   initialPrompt: text('initial_prompt'),
-  source: text('source').notNull().default('web'), // 'web' | 'chrome_extension' | 'api' | 'automation' | 'ingest'
+  source: text('source').notNull().default('web'),
   externalRequestId: text('external_request_id'),
   parentThreadId: text('parent_thread_id'),
-  runtime: text('runtime').notNull().default('local'), // 'local' | 'remote'
+  runtime: text('runtime').notNull().default('local'),
   containerUrl: text('container_url'),
   containerName: text('container_name'),
-  initTools: text('init_tools'), // JSON-encoded string[] of available tools
-  initCwd: text('init_cwd'), // Working directory reported by agent
+  initTools: text('init_tools'),
+  initCwd: text('init_cwd'),
   createdAt: text('created_at').notNull(),
   completedAt: text('completed_at'),
 });
 
-export const messages = sqliteTable('messages', {
+export const messages = pgTable('messages', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')
     .notNull()
     .references(() => threads.id, { onDelete: 'cascade' }),
-  role: text('role').notNull(), // 'user' | 'assistant' | 'system'
+  role: text('role').notNull(),
   content: text('content').notNull(),
-  images: text('images'), // JSON-encoded ImageAttachment[]
-  model: text('model'), // Claude model used for this message (user messages only)
-  permissionMode: text('permission_mode'), // Permission mode used for this message (user messages only)
-  author: text('author'), // Who produced this message: 'user', 'assistant', 'agent:tests', 'orchestrator', etc.
+  images: text('images'),
+  model: text('model'),
+  permissionMode: text('permission_mode'),
+  author: text('author'),
   timestamp: text('timestamp').notNull(),
 });
 
-export const startupCommands = sqliteTable('startup_commands', {
+export const startupCommands = pgTable('startup_commands', {
   id: text('id').primaryKey(),
   projectId: text('project_id')
     .notNull()
@@ -93,10 +95,7 @@ export const startupCommands = sqliteTable('startup_commands', {
   createdAt: text('created_at').notNull(),
 });
 
-// project_hooks table removed — hooks are now managed via .funny.json + Husky.
-// The table remains in the DB for existing installs (migration 028) but is no longer used.
-
-export const toolCalls = sqliteTable('tool_calls', {
+export const toolCalls = pgTable('tool_calls', {
   id: text('id').primaryKey(),
   messageId: text('message_id')
     .notNull()
@@ -104,10 +103,10 @@ export const toolCalls = sqliteTable('tool_calls', {
   name: text('name').notNull(),
   input: text('input'),
   output: text('output'),
-  author: text('author'), // Agent name that executed this tool call (for pipeline threads)
+  author: text('author'),
 });
 
-export const automations = sqliteTable('automations', {
+export const automations = pgTable('automations', {
   id: text('id').primaryKey(),
   projectId: text('project_id')
     .notNull()
@@ -129,7 +128,7 @@ export const automations = sqliteTable('automations', {
   updatedAt: text('updated_at').notNull(),
 });
 
-export const automationRuns = sqliteTable('automation_runs', {
+export const automationRuns = pgTable('automation_runs', {
   id: text('id').primaryKey(),
   automationId: text('automation_id')
     .notNull()
@@ -145,7 +144,7 @@ export const automationRuns = sqliteTable('automation_runs', {
   completedAt: text('completed_at'),
 });
 
-export const userProfiles = sqliteTable('user_profiles', {
+export const userProfiles = pgTable('user_profiles', {
   id: text('id').primaryKey(),
   userId: text('user_id').notNull().unique(),
   gitName: text('git_name'),
@@ -155,34 +154,34 @@ export const userProfiles = sqliteTable('user_profiles', {
   defaultEditor: text('default_editor'),
   useInternalEditor: integer('use_internal_editor'),
   terminalShell: text('terminal_shell'),
-  toolPermissions: text('tool_permissions'), // JSON-encoded Record<string, ToolPermission>
+  toolPermissions: text('tool_permissions'),
   theme: text('theme'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
 
-export const stageHistory = sqliteTable('stage_history', {
+export const stageHistory = pgTable('stage_history', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')
     .notNull()
     .references(() => threads.id, { onDelete: 'cascade' }),
-  fromStage: text('from_stage'), // null for initial entry
+  fromStage: text('from_stage'),
   toStage: text('to_stage').notNull(),
   changedAt: text('changed_at').notNull(),
 });
 
-export const threadComments = sqliteTable('thread_comments', {
+export const threadComments = pgTable('thread_comments', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')
     .notNull()
     .references(() => threads.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull(),
-  source: text('source').notNull().default('user'), // 'user' | 'system' | 'agent'
+  source: text('source').notNull().default('user'),
   content: text('content').notNull(),
   createdAt: text('created_at').notNull(),
 });
 
-export const messageQueue = sqliteTable('message_queue', {
+export const messageQueue = pgTable('message_queue', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')
     .notNull()
@@ -199,7 +198,7 @@ export const messageQueue = sqliteTable('message_queue', {
   createdAt: text('created_at').notNull(),
 });
 
-export const mcpOauthTokens = sqliteTable('mcp_oauth_tokens', {
+export const mcpOauthTokens = pgTable('mcp_oauth_tokens', {
   id: text('id').primaryKey(),
   serverName: text('server_name').notNull(),
   projectPath: text('project_path').notNull(),
@@ -216,7 +215,7 @@ export const mcpOauthTokens = sqliteTable('mcp_oauth_tokens', {
   updatedAt: text('updated_at').notNull(),
 });
 
-export const pipelines = sqliteTable('pipelines', {
+export const pipelines = pgTable('pipelines', {
   id: text('id').primaryKey(),
   projectId: text('project_id')
     .notNull()
@@ -238,7 +237,7 @@ export const pipelines = sqliteTable('pipelines', {
   updatedAt: text('updated_at').notNull(),
 });
 
-export const pipelineRuns = sqliteTable('pipeline_runs', {
+export const pipelineRuns = pgTable('pipeline_runs', {
   id: text('id').primaryKey(),
   pipelineId: text('pipeline_id')
     .notNull()
@@ -246,13 +245,13 @@ export const pipelineRuns = sqliteTable('pipeline_runs', {
   threadId: text('thread_id')
     .notNull()
     .references(() => threads.id, { onDelete: 'cascade' }),
-  status: text('status').notNull().default('running'), // running | reviewing | fixing | completed | failed | skipped
-  currentStage: text('current_stage').notNull().default('reviewer'), // reviewer | corrector
+  status: text('status').notNull().default('running'),
+  currentStage: text('current_stage').notNull().default('reviewer'),
   iteration: integer('iteration').notNull().default(0),
   maxIterations: integer('max_iterations').notNull().default(10),
   commitSha: text('commit_sha'),
-  verdict: text('verdict'), // pass | fail
-  findings: text('findings'), // JSON-encoded findings from reviewer
+  verdict: text('verdict'),
+  findings: text('findings'),
   reviewerThreadId: text('reviewer_thread_id'),
   fixerThreadId: text('fixer_thread_id'),
   precommitIteration: integer('precommit_iteration'),
@@ -262,7 +261,7 @@ export const pipelineRuns = sqliteTable('pipeline_runs', {
   completedAt: text('completed_at'),
 });
 
-export const teamProjects = sqliteTable(
+export const teamProjects = pgTable(
   'team_projects',
   {
     teamId: text('team_id').notNull(),
@@ -274,12 +273,12 @@ export const teamProjects = sqliteTable(
   (table) => [primaryKey({ columns: [table.teamId, table.projectId] })],
 );
 
-export const threadEvents = sqliteTable('thread_events', {
+export const threadEvents = pgTable('thread_events', {
   id: text('id').primaryKey(),
   threadId: text('thread_id')
     .notNull()
     .references(() => threads.id, { onDelete: 'cascade' }),
-  eventType: text('event_type').notNull(), // 'git:status' | 'git:commit' | 'git:push' | 'git:merge' | etc.
-  data: text('data').notNull(), // JSON-encoded event data
+  eventType: text('event_type').notNull(),
+  data: text('data').notNull(),
   createdAt: text('created_at').notNull(),
 });

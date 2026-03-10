@@ -52,54 +52,74 @@ export class AgentRunner {
 
     // Subscribe to orchestrator events — bridge to DB + WebSocket
     this.orchestrator.on('agent:message', (threadId: string, msg: any) => {
-      this.messageHandler.handle(threadId, msg);
-      metric('agent.messages', 1, { type: 'sum', attributes: { threadId } });
+      void (async () => {
+        await this.messageHandler.handle(threadId, msg);
+        metric('agent.messages', 1, { type: 'sum', attributes: { threadId } });
+      })();
     });
 
     this.orchestrator.on('agent:error', (threadId: string, err: Error) => {
-      log.error('Agent error', { namespace: 'agent', threadId, error: err.message });
-      this.endRunSpan(threadId, 'error', err.message);
-      const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
-      const { status } = transitionStatus(
-        threadId,
-        { type: 'FAIL', error: err.message },
-        currentStatus as ThreadStatus,
-      );
-      this.threadManager.updateThread(threadId, { status, completedAt: new Date().toISOString() });
-      this.emitWS(threadId, 'agent:error', { error: err.message });
-      this.emitWS(threadId, 'agent:status', { status });
-      this.emitAgentCompleted(threadId, status as 'completed' | 'failed' | 'stopped');
+      void (async () => {
+        log.error('Agent error', { namespace: 'agent', threadId, error: err.message });
+        this.endRunSpan(threadId, 'error', err.message);
+        const thread = await this.threadManager.getThread(threadId);
+        const currentStatus = thread?.status ?? 'running';
+        const { status } = transitionStatus(
+          threadId,
+          { type: 'FAIL', error: err.message },
+          currentStatus as ThreadStatus,
+        );
+        await this.threadManager.updateThread(threadId, {
+          status,
+          completedAt: new Date().toISOString(),
+        });
+        await this.emitWS(threadId, 'agent:error', { error: err.message });
+        await this.emitWS(threadId, 'agent:status', { status });
+        await this.emitAgentCompleted(threadId, status as 'completed' | 'failed' | 'stopped');
+      })();
     });
 
     this.orchestrator.on('agent:unexpected-exit', (threadId: string) => {
-      log.error('Agent exited unexpectedly', { namespace: 'agent', threadId });
-      this.endRunSpan(threadId, 'error', 'unexpected exit');
-      const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
-      const { status } = transitionStatus(
-        threadId,
-        { type: 'FAIL' },
-        currentStatus as ThreadStatus,
-      );
-      this.threadManager.updateThread(threadId, { status, completedAt: new Date().toISOString() });
-      this.emitWS(threadId, 'agent:error', {
-        error: 'Agent process exited unexpectedly without a result',
-      });
-      this.emitWS(threadId, 'agent:status', { status });
-      this.emitAgentCompleted(threadId, status as 'completed' | 'failed' | 'stopped');
+      void (async () => {
+        log.error('Agent exited unexpectedly', { namespace: 'agent', threadId });
+        this.endRunSpan(threadId, 'error', 'unexpected exit');
+        const thread = await this.threadManager.getThread(threadId);
+        const currentStatus = thread?.status ?? 'running';
+        const { status } = transitionStatus(
+          threadId,
+          { type: 'FAIL' },
+          currentStatus as ThreadStatus,
+        );
+        await this.threadManager.updateThread(threadId, {
+          status,
+          completedAt: new Date().toISOString(),
+        });
+        await this.emitWS(threadId, 'agent:error', {
+          error: 'Agent process exited unexpectedly without a result',
+        });
+        await this.emitWS(threadId, 'agent:status', { status });
+        await this.emitAgentCompleted(threadId, status as 'completed' | 'failed' | 'stopped');
+      })();
     });
 
     this.orchestrator.on('agent:stopped', (threadId: string) => {
-      log.info('Agent stopped', { namespace: 'agent', threadId });
-      this.endRunSpan(threadId, 'ok');
-      const currentStatus = this.threadManager.getThread(threadId)?.status ?? 'running';
-      const { status } = transitionStatus(
-        threadId,
-        { type: 'STOP' },
-        currentStatus as ThreadStatus,
-      );
-      this.threadManager.updateThread(threadId, { status, completedAt: new Date().toISOString() });
-      this.emitWS(threadId, 'agent:status', { status });
-      this.emitAgentCompleted(threadId, 'stopped');
+      void (async () => {
+        log.info('Agent stopped', { namespace: 'agent', threadId });
+        this.endRunSpan(threadId, 'ok');
+        const thread = await this.threadManager.getThread(threadId);
+        const currentStatus = thread?.status ?? 'running';
+        const { status } = transitionStatus(
+          threadId,
+          { type: 'STOP' },
+          currentStatus as ThreadStatus,
+        );
+        await this.threadManager.updateThread(threadId, {
+          status,
+          completedAt: new Date().toISOString(),
+        });
+        await this.emitWS(threadId, 'agent:status', { status });
+        await this.emitAgentCompleted(threadId, 'stopped');
+      })();
     });
 
     // End run span on natural completion (emitted from message handler)
@@ -115,8 +135,10 @@ export class AgentRunner {
     });
 
     this.orchestrator.on('agent:session-cleared', (threadId: string) => {
-      log.warn('Clearing stale sessionId after resume failure', { namespace: 'agent', threadId });
-      this.threadManager.updateThread(threadId, { sessionId: null });
+      void (async () => {
+        log.warn('Clearing stale sessionId after resume failure', { namespace: 'agent', threadId });
+        await this.threadManager.updateThread(threadId, { sessionId: null });
+      })();
     });
 
     // Adopt surviving agent processes from a previous --watch restart.
@@ -124,6 +146,7 @@ export class AgentRunner {
     const surviving = (globalThis as any).__funnyActiveAgents as Map<string, any> | undefined;
     if (surviving?.size) {
       let adopted = 0;
+      const markInterrupted: Promise<void>[] = [];
       for (const [threadId, proc] of surviving) {
         if (!proc.exited) {
           this.orchestrator.adoptProcess(threadId, proc);
@@ -135,14 +158,21 @@ export class AgentRunner {
             namespace: 'agent',
             threadId,
           });
-          const t = this.threadManager.getThread(threadId);
-          if (t && (t.status === 'running' || t.status === 'waiting')) {
-            this.threadManager.updateThread(threadId, {
-              status: 'interrupted',
-              completedAt: new Date().toISOString(),
-            });
-          }
+          markInterrupted.push(
+            (async () => {
+              const t = await this.threadManager.getThread(threadId);
+              if (t && (t.status === 'running' || t.status === 'waiting')) {
+                await this.threadManager.updateThread(threadId, {
+                  status: 'interrupted',
+                  completedAt: new Date().toISOString(),
+                });
+              }
+            })(),
+          );
         }
+      }
+      if (markInterrupted.length > 0) {
+        Promise.allSettled(markInterrupted).catch(() => {});
       }
       if (adopted > 0) {
         log.info(`Adopted ${adopted} surviving agent(s) from previous instance`, {
@@ -164,9 +194,9 @@ export class AgentRunner {
     metric('agents.running', this.runSpans.size, { type: 'gauge' });
   }
 
-  private emitWS(threadId: string, type: WSEvent['type'], data: unknown): void {
+  private async emitWS(threadId: string, type: WSEvent['type'], data: unknown): Promise<void> {
     const event = { type, threadId, data } as WSEvent;
-    const thread = this.threadManager.getThread(threadId);
+    const thread = await this.threadManager.getThread(threadId);
     const userId = thread?.userId;
     if (userId) {
       this.wsBroker.emitToUser(userId, event);
@@ -180,10 +210,13 @@ export class AgentRunner {
    * (e.g. git-status refresh) fire for stops/errors/unexpected exits,
    * not just natural completions from the NDJSON stream.
    */
-  private emitAgentCompleted(threadId: string, status: 'completed' | 'failed' | 'stopped'): void {
-    const thread = this.threadManager.getThread(threadId);
+  private async emitAgentCompleted(
+    threadId: string,
+    status: 'completed' | 'failed' | 'stopped',
+  ): Promise<void> {
+    const thread = await this.threadManager.getThread(threadId);
     if (!thread) return;
-    const project = thread.projectId ? pm.getProject(thread.projectId) : undefined;
+    const project = thread.projectId ? await pm.getProject(thread.projectId) : undefined;
     threadEventBus.emit('agent:completed', {
       threadId,
       projectId: thread.projectId,
@@ -229,7 +262,7 @@ export class AgentRunner {
     // The machine picks the right event based on the current state, giving us
     // a `resumeReason` that tells us WHY we're entering `running` — so we can
     // choose the correct system prefix for the Claude session resume.
-    const currentThread = this.threadManager.getThread(threadId);
+    const currentThread = await this.threadManager.getThread(threadId);
     const currentStatus = (currentThread?.status ?? 'pending') as ThreadStatus;
     const startEvent = this.pickStartEvent(currentStatus);
 
@@ -249,11 +282,11 @@ export class AgentRunner {
     );
 
     // Update thread status + provider in DB
-    this.threadManager.updateThread(threadId, { status: newStatus, provider });
+    await this.threadManager.updateThread(threadId, { status: newStatus, provider });
 
     // Save user message in DB (skip when a draft message already exists, e.g. idle threads)
     if (!skipMessageInsert) {
-      this.threadManager.insertMessage({
+      await this.threadManager.insertMessage({
         threadId,
         role: 'user',
         content: prompt,
@@ -264,23 +297,23 @@ export class AgentRunner {
     }
 
     // Read session ID from DB for resume
-    const thread = this.threadManager.getThread(threadId);
+    const thread = await this.threadManager.getThread(threadId);
 
     // Check if this thread needs context recovery (post-merge, session exists but worktree gone)
-    const needsRecovery = needsContextRecovery(threadId);
+    const needsRecovery = await needsContextRecovery(threadId);
     let effectivePrompt = prompt;
     let effectiveSessionId = thread?.sessionId ?? undefined;
 
     if (needsRecovery) {
       log.info('Thread needs context recovery (post-merge)', { namespace: 'agent', threadId });
       // Build conversation history from DB
-      const context = buildThreadContext(threadId);
+      const context = await buildThreadContext(threadId);
       if (context) {
         // Prepend context to the user's new message
         effectivePrompt = `${context}\n\nUSER (new message):\n${prompt}`;
       }
       // Clear sessionId to force a fresh session with the full context
-      this.threadManager.updateThread(threadId, { sessionId: null });
+      await this.threadManager.updateThread(threadId, { sessionId: null });
       effectiveSessionId = undefined;
     }
 
@@ -289,7 +322,7 @@ export class AgentRunner {
     const resumePrefix = getResumeSystemPrefix(resumeReason, isPostMerge);
 
     // Inject project-level system prompt
-    const project = thread?.projectId ? pm.getProject(thread.projectId) : undefined;
+    const project = thread?.projectId ? await pm.getProject(thread.projectId) : undefined;
     const projectSystemPrompt = project?.systemPrompt;
 
     // For fresh starts: prepend project system prompt to the user's message.
@@ -323,10 +356,10 @@ export class AgentRunner {
     // Sync the DB and notify the client so the PromptInput dropdown updates.
     const isPlanResume = thread?.sessionId && permissionMode === 'plan';
     if (isPlanResume) {
-      this.threadManager.updateThread(threadId, { permissionMode: 'autoEdit' });
+      await this.threadManager.updateThread(threadId, { permissionMode: 'autoEdit' });
     }
 
-    this.emitWS(threadId, 'agent:status', {
+    await this.emitWS(threadId, 'agent:status', {
       status: 'running',
       ...(isPlanResume ? { permissionMode: 'autoEdit' as PermissionMode } : {}),
     });
@@ -373,14 +406,14 @@ export class AgentRunner {
         threadId,
         error: err.message,
       });
-      this.threadManager.updateThread(threadId, {
+      await this.threadManager.updateThread(threadId, {
         status: 'failed',
         completedAt: new Date().toISOString(),
       });
-      this.emitWS(threadId, 'agent:error', {
+      await this.emitWS(threadId, 'agent:error', {
         error: err.message || `Failed to start ${provider} agent process`,
       });
-      this.emitWS(threadId, 'agent:status', { status: 'failed' });
+      await this.emitWS(threadId, 'agent:status', { status: 'failed' });
       throw err;
     }
   }
@@ -410,7 +443,7 @@ export class AgentRunner {
   }
 
   async stopAgent(threadId: string): Promise<void> {
-    const thread = this.threadManager.getThread(threadId);
+    const thread = await this.threadManager.getThread(threadId);
     if (thread?.provider === 'external') return;
     await this.orchestrator.stopAgent(threadId);
   }

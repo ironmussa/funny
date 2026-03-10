@@ -129,17 +129,17 @@ function onGitChange(projectId: string): void {
 
   pw.debounceTimer = setTimeout(() => {
     pw.debounceTimer = null;
-    emitForAllThreads(projectId, pw);
+    void emitForAllThreads(projectId, pw);
   }, DEBOUNCE_MS);
 }
 
 /** Emit `git:changed` for every non-archived thread in this project */
-function emitForAllThreads(projectId: string, pw: ProjectWatcher): void {
-  const project = getProject(projectId);
+async function emitForAllThreads(projectId: string, pw: ProjectWatcher): Promise<void> {
+  const project = await getProject(projectId);
   if (!project) return;
 
   // Query all active threads for this project once
-  const threads = listThreads({ projectId, userId: '__local__', includeArchived: false });
+  const threads = await listThreads({ projectId, userId: '__local__', includeArchived: false });
   const threadMap = new Map(threads.map((t) => [t.id, t]));
 
   let emitted = 0;
@@ -193,12 +193,12 @@ export function closeAllWatchers(): void {
  * After a restart, the in-memory projectWatchers map is empty so external git
  * changes would go unnoticed for all pre-existing threads.
  */
-export function rehydrateWatchers(): void {
-  const projects = listProjects('__local__');
+export async function rehydrateWatchers(): Promise<void> {
+  const projects = await listProjects('__local__');
   let total = 0;
 
   for (const project of projects) {
-    const threads = listThreads({
+    const threads = await listThreads({
       projectId: project.id,
       userId: '__local__',
       includeArchived: false,

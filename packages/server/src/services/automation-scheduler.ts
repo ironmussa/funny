@@ -44,7 +44,7 @@ export async function triggerAutomationRun(automation: {
   permissionMode: string;
   baseBranch: string | null;
 }): Promise<void> {
-  const project = pm.getProject(automation.projectId);
+  const project = await pm.getProject(automation.projectId);
   if (!project) {
     log.warn('Project not found for automation', {
       namespace: 'automation',
@@ -63,7 +63,7 @@ export async function triggerAutomationRun(automation: {
   const branch = branchResult.isOk() ? branchResult.value : null;
 
   // Automations always run in local mode (no worktree) and read-only
-  tm.createThread({
+  await tm.createThread({
     id: threadId,
     projectId: automation.projectId,
     title: `[Auto] ${automation.name} - ${new Date().toLocaleDateString()}`,
@@ -80,7 +80,7 @@ export async function triggerAutomationRun(automation: {
   });
 
   // Create the automation run record
-  am.createRun({
+  await am.createRun({
     id: runId,
     automationId: automation.id,
     threadId,
@@ -90,7 +90,7 @@ export async function triggerAutomationRun(automation: {
   });
 
   // Update automation last run time
-  am.updateAutomation(automation.id, { lastRunAt: now });
+  void am.updateAutomation(automation.id, { lastRunAt: now });
 
   // Emit WS event — look up project userId for per-user filtering
   const runStartEvent = {
@@ -115,13 +115,13 @@ export async function triggerAutomationRun(automation: {
     AUTOMATION_DISALLOWED_TOOLS,
     undefined, // allowedTools
     ((automation as any).provider as AgentProvider) || 'claude',
-  ).catch((err) => {
+  ).catch(async (err) => {
     log.error('Agent error for automation', {
       namespace: 'automation',
       automationId: automation.id,
       error: err,
     });
-    am.updateRun(runId, {
+    await am.updateRun(runId, {
       status: 'failed',
       completedAt: new Date().toISOString(),
     });
@@ -151,7 +151,7 @@ function scheduleJob(automation: {
   try {
     const job = new Cron(automation.schedule, { name: automation.id }, async () => {
       // Re-fetch the automation to get latest state (it may have been disabled)
-      const current = am.getAutomation(automation.id);
+      const current = await am.getAutomation(automation.id);
       if (!current || !current.enabled) {
         unscheduleJob(automation.id);
         return;
@@ -220,22 +220,22 @@ export function onAutomationDeleted(automationId: string): void {
 // ── Check completed runs ─────────────────────────────────────────
 
 async function checkCompletedRuns(): Promise<void> {
-  const runningRuns = am.listRunningRuns();
+  const runningRuns = await am.listRunningRuns();
   for (const run of runningRuns) {
-    const thread = tm.getThread(run.threadId);
+    const thread = await tm.getThread(run.threadId);
     if (!thread) continue;
 
     if (['completed', 'failed', 'stopped'].includes(thread.status)) {
       const hasFindings = thread.status === 'completed';
 
       // Generate a summary from the last assistant message
-      const threadData = tm.getThreadWithMessages(run.threadId);
+      const threadData = await tm.getThreadWithMessages(run.threadId);
       const lastAssistantMsg = threadData?.messages
         ?.filter((m: any) => m.role === 'assistant')
         ?.pop();
       const summary = lastAssistantMsg?.content?.slice(0, 500) || 'No summary available';
 
-      am.updateRun(run.id, {
+      await am.updateRun(run.id, {
         status: thread.status === 'completed' ? 'completed' : 'failed',
         hasFindings: hasFindings ? 1 : 0,
         summary,
@@ -260,7 +260,7 @@ async function checkCompletedRuns(): Promise<void> {
       }
 
       if (!hasFindings) {
-        am.updateRun(run.id, { triageStatus: 'dismissed' });
+        await am.updateRun(run.id, { triageStatus: 'dismissed' });
         const dismissEvent = {
           type: 'automation:run_updated' as const,
           threadId: run.threadId,
@@ -281,19 +281,19 @@ async function checkCompletedRuns(): Promise<void> {
 // ── Worktree cleanup ─────────────────────────────────────────────
 
 async function cleanupOldRuns(automationId: string): Promise<void> {
-  const automation = am.getAutomation(automationId);
+  const automation = await am.getAutomation(automationId);
   if (!automation) return;
 
-  const runs = am.listRuns(automationId);
+  const runs = await am.listRuns(automationId);
   const reviewedRuns = runs.filter((r) => r.triageStatus !== 'pending' && r.status !== 'running');
 
   if (reviewedRuns.length > automation.maxRunHistory) {
     const toRemove = reviewedRuns.slice(automation.maxRunHistory);
     for (const run of toRemove) {
-      tm.updateThread(run.threadId, { archived: 1 });
-      am.updateRun(run.id, { status: 'archived' });
+      await tm.updateThread(run.threadId, { archived: 1 });
+      await am.updateRun(run.id, { status: 'archived' });
 
-      const thread = tm.getThread(run.threadId);
+      const thread = await tm.getThread(run.threadId);
       const archiveEvent = {
         type: 'thread:updated' as const,
         threadId: run.threadId,
@@ -317,16 +317,16 @@ async function cleanupOldRuns(automationId: string): Promise<void> {
 
 // ── Lifecycle ────────────────────────────────────────────────────
 
-export function startScheduler(): void {
+export async function startScheduler(): Promise<void> {
   // Schedule cron jobs for all enabled automations
-  const automations = am.listAutomations();
+  const automations = await am.listAutomations();
   for (const automation of automations) {
     scheduleJob(automation);
   }
 
   // Start polling for completed runs
-  checkCompletedRuns();
-  completedRunsTimer = setInterval(checkCompletedRuns, COMPLETED_RUNS_POLL_MS);
+  void checkCompletedRuns();
+  completedRunsTimer = setInterval(() => void checkCompletedRuns(), COMPLETED_RUNS_POLL_MS);
 
   log.info(`Scheduler started`, {
     namespace: 'automation',

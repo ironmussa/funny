@@ -92,7 +92,7 @@ export function registerAllHandlers(ctx: HandlerServiceContext): void {
   for (const handler of allHandlers) {
     const wrappedListener = async (payload: any) => {
       try {
-        if (handler.filter && !handler.filter(payload, ctx)) {
+        if (handler.filter && !(await handler.filter(payload, ctx))) {
           return;
         }
         await handler.action(payload, ctx);

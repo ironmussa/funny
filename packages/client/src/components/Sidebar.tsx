@@ -6,14 +6,18 @@ import {
   FolderPlus,
   Settings,
   LayoutGrid,
+  LogOut,
+  MoreVertical,
   Search,
   PanelLeftClose,
+  User,
 } from 'lucide-react';
 import { useState, useCallback, useEffect, useRef, useMemo, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -23,6 +27,13 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import {
   Sidebar,
@@ -43,6 +54,7 @@ import { useUIStore } from '@/stores/ui-store';
 
 import { GeneralSettingsDialog } from './GeneralSettingsDialog';
 import { IssuesDialog } from './IssuesDialog';
+import { OrgSwitcher } from './OrgSwitcher';
 import { SettingsPanel } from './SettingsPanel';
 import { AutomationInboxButton } from './sidebar/AutomationInboxButton';
 import { ProjectItem } from './sidebar/ProjectItem';
@@ -465,6 +477,9 @@ export function AppSidebar() {
         </div>
       </SidebarHeader>
 
+      {/* Organization switcher (multi-user mode only) */}
+      <OrgSwitcher />
+
       {/* Active threads section (own scroll) */}
       <div className="flex max-h-[40%] min-h-[5rem] shrink-0 flex-col contain-paint">
         <div className="flex items-center justify-between px-4 pb-2 pt-4">
@@ -554,24 +569,53 @@ export function AppSidebar() {
         <div className="px-1">
           <AutomationInboxButton />
         </div>
-        <div className="flex items-center justify-between px-1">
+        <div className="flex items-center gap-2 px-1">
           {authMode === 'multi' && authUser ? (
-            <span className="truncate text-sm text-sidebar-foreground">{authUser.displayName}</span>
+            <>
+              <Avatar size="sm">
+                <AvatarFallback className="text-xs">
+                  {authUser.displayName
+                    ?.split(' ')
+                    .map((n) => n[0])
+                    .join('')
+                    .slice(0, 2)
+                    .toUpperCase() || <User className="h-3.5 w-3.5" />}
+                </AvatarFallback>
+              </Avatar>
+              <div className="min-w-0 flex-1">
+                <p className="truncate text-sm font-medium text-sidebar-foreground">
+                  {authUser.displayName}
+                </p>
+                <p className="truncate text-xs text-muted-foreground">@{authUser.username}</p>
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    data-testid="sidebar-user-menu"
+                    className="h-7 w-7 shrink-0 text-muted-foreground"
+                  >
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent side="top" align="end" className="w-48">
+                  <DropdownMenuItem
+                    data-testid="sidebar-user-settings"
+                    onClick={() => setGeneralSettingsOpen(true)}
+                  >
+                    <Settings className="h-3.5 w-3.5" />
+                    {t('settings.title')}
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem data-testid="sidebar-logout" onClick={logout}>
+                    <LogOut className="h-3.5 w-3.5" />
+                    {t('auth.logout')}
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </>
           ) : (
-            <div />
-          )}
-          <div className="flex items-center gap-1">
-            {authMode === 'multi' && authUser && (
-              <Button
-                variant="ghost"
-                size="sm"
-                data-testid="sidebar-logout"
-                onClick={logout}
-                className="text-xs text-muted-foreground"
-              >
-                {t('auth.logout')}
-              </Button>
-            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -579,14 +623,14 @@ export function AppSidebar() {
                   size="icon-xs"
                   data-testid="sidebar-settings"
                   onClick={() => setGeneralSettingsOpen(true)}
-                  className="h-7 w-7 text-muted-foreground"
+                  className="ml-auto h-7 w-7 text-muted-foreground"
                 >
                   <Settings className="h-4 w-4" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">{t('settings.title')}</TooltipContent>
             </Tooltip>
-          </div>
+          )}
         </div>
       </SidebarFooter>
 

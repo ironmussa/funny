@@ -12,9 +12,13 @@ import { resolve } from 'path';
 
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { admin, username } from 'better-auth/plugins';
+import { admin, username, organization } from 'better-auth/plugins';
+import { createAccessControl } from 'better-auth/plugins/access';
+import { sql } from 'drizzle-orm';
+import pg from 'pg';
 
-import { db } from '../db/index.js';
+import { getDatabaseUrl } from '../db/db-mode.js';
+import { db, dbMode } from '../db/index.js';
 import { DATA_DIR } from './data-dir.js';
 import { log } from './logger.js';
 
@@ -32,8 +36,57 @@ function getOrCreateSecret(): string {
   return secret;
 }
 
+// ── Access Control ──────────────────────────────────────────────
+
+const statement = {
+  project: ['create', 'update', 'delete'],
+  thread: ['create', 'start', 'stop', 'delete'],
+  git: ['commit', 'push', 'create-pr'],
+  member: ['create', 'update', 'delete'],
+  invitation: ['create', 'cancel'],
+} as const;
+
+export const ac = createAccessControl(statement);
+
+const viewer = ac.newRole({
+  project: [],
+  thread: [],
+  git: [],
+  member: [],
+  invitation: [],
+});
+
+const member = ac.newRole({
+  project: ['create'],
+  thread: ['create', 'start', 'stop'],
+  git: ['commit', 'push', 'create-pr'],
+  member: [],
+  invitation: [],
+});
+
+const adminRole = ac.newRole({
+  project: ['create', 'update', 'delete'],
+  thread: ['create', 'start', 'stop', 'delete'],
+  git: ['commit', 'push', 'create-pr'],
+  member: ['create', 'update', 'delete'],
+  invitation: ['create', 'cancel'],
+});
+
+const owner = ac.newRole({
+  project: ['create', 'update', 'delete'],
+  thread: ['create', 'start', 'stop', 'delete'],
+  git: ['commit', 'push', 'create-pr'],
+  member: ['create', 'update', 'delete'],
+  invitation: ['create', 'cancel'],
+});
+
+// ── Auth Instance ───────────────────────────────────────────────
+
+const authPool =
+  dbMode === 'postgres' ? new pg.Pool({ connectionString: getDatabaseUrl()! }) : null;
+
 export const auth = betterAuth({
-  database: drizzleAdapter(db, { provider: 'sqlite' }),
+  database: dbMode === 'postgres' ? authPool! : drizzleAdapter(db, { provider: 'sqlite' }),
   basePath: '/api/auth',
   secret: getOrCreateSecret(),
   emailAndPassword: {
@@ -47,7 +100,44 @@ export const auth = betterAuth({
       maxAge: 5 * 60, // 5 minutes
     },
   },
-  plugins: [username(), admin()],
+  plugins: [
+    username(),
+    admin(),
+    organization({
+      allowUserToCreateOrganization: true,
+      organizationLimit: 50,
+      membershipLimit: 100,
+      creatorRole: 'owner',
+      ac,
+      roles: { owner, admin: adminRole, member, viewer },
+      schema: {
+        organization: {
+          fields: {
+            anthropicApiKey: {
+              type: 'string',
+              required: false,
+              input: true,
+            },
+            defaultModel: {
+              type: 'string',
+              required: false,
+              input: true,
+            },
+            defaultMode: {
+              type: 'string',
+              required: false,
+              input: true,
+            },
+            defaultPermissionMode: {
+              type: 'string',
+              required: false,
+              input: true,
+            },
+          },
+        },
+      },
+    }),
+  ],
 });
 
 /**
@@ -55,20 +145,29 @@ export const auth = betterAuth({
  * Only called when AUTH_MODE=multi.
  */
 export async function initBetterAuth(): Promise<void> {
+  // Ensure Better Auth tables exist (user, session, account, organization, etc.)
   try {
-    const { users } = await auth.api.listUsers({ query: { limit: 1 } });
-    if (users.length === 0) {
-      // Generate a random password instead of using a hardcoded default
-      const password = randomBytes(16).toString('hex');
-      await auth.api.createUser({
-        body: {
-          email: 'admin@local.host',
-          password,
-          name: 'Admin',
-          username: 'admin',
-          role: 'admin',
-        },
-      } as any);
+    const ctx = await auth.$context;
+    await ctx.runMigrations();
+  } catch (err) {
+    log.error('Failed to run Better Auth migrations', { namespace: 'auth', error: err });
+    throw err;
+  }
+
+  try {
+    const password = 'admin';
+    // Use admin plugin's createUser to bypass disableSignUp restriction
+    const result = await auth.api.createUser({
+      body: {
+        email: 'admin@local.host',
+        password,
+        name: 'Admin',
+        role: 'admin',
+        data: { username: 'admin' },
+      },
+    } as any);
+
+    if ((result as any)?.user) {
       log.info('Created default admin account', {
         namespace: 'auth',
         username: 'admin',
@@ -76,7 +175,11 @@ export async function initBetterAuth(): Promise<void> {
         important: 'Change this password immediately!',
       });
     }
-  } catch (err) {
+  } catch (err: any) {
+    // "User already exists" is expected after first boot
+    if (err?.message?.includes('already') || err?.body?.message?.includes('already')) {
+      return;
+    }
     log.error('Failed to initialize Better Auth', { namespace: 'auth', error: err });
   }
 }
@@ -87,10 +190,9 @@ export async function initBetterAuth(): Promise<void> {
  */
 export function assignLegacyData(userId: string): void {
   try {
-    const sqlite = (db as any).$client;
-    sqlite.run(`UPDATE projects SET user_id = ? WHERE user_id = '__local__'`, [userId]);
-    sqlite.run(`UPDATE threads SET user_id = ? WHERE user_id = '__local__'`, [userId]);
-    sqlite.run(`UPDATE automations SET user_id = ? WHERE user_id = '__local__'`, [userId]);
+    db.run(sql`UPDATE projects SET user_id = ${userId} WHERE user_id = '__local__'`);
+    db.run(sql`UPDATE threads SET user_id = ${userId} WHERE user_id = '__local__'`);
+    db.run(sql`UPDATE automations SET user_id = ${userId} WHERE user_id = '__local__'`);
   } catch (err) {
     log.warn('Failed to assign legacy data', { namespace: 'auth', error: err });
   }

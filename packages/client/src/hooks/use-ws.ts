@@ -312,6 +312,8 @@ function handleMessage(e: MessageEvent) {
           toast.error('Workflow failed', {
             description: data.title || 'The git operation failed',
           });
+          // Clean up after a delay so the user can see the failed state
+          setTimeout(() => store.finishCommit(threadId), 5000);
         }
       });
 

@@ -27,11 +27,11 @@ function checkOwnership(thread: { userId: string }, userId: string): Result<void
 }
 
 /** Get a thread by ID or return Err(NOT_FOUND). Verifies ownership in multi-user mode. */
-export function requireThread(
+export async function requireThread(
   id: string,
   userId?: string,
-): Result<ReturnType<typeof tm.getThread> & {}, DomainError> {
-  const thread = tm.getThread(id);
+): Promise<Result<Awaited<ReturnType<typeof tm.getThread>> & {}, DomainError>> {
+  const thread = await tm.getThread(id);
   if (!thread) return err(notFound('Thread not found'));
   if (userId) {
     const ownerCheck = checkOwnership(thread, userId);
@@ -41,11 +41,11 @@ export function requireThread(
 }
 
 /** Get a thread with messages by ID or return Err(NOT_FOUND). Verifies ownership in multi-user mode. */
-export function requireThreadWithMessages(
+export async function requireThreadWithMessages(
   id: string,
   userId?: string,
-): Result<NonNullable<ReturnType<typeof tm.getThreadWithMessages>>, DomainError> {
-  const result = tm.getThreadWithMessages(id);
+): Promise<Result<NonNullable<Awaited<ReturnType<typeof tm.getThreadWithMessages>>>, DomainError>> {
+  const result = await tm.getThreadWithMessages(id);
   if (!result) return err(notFound('Thread not found'));
   if (userId) {
     const ownerCheck = checkOwnership(result, userId);
@@ -55,11 +55,11 @@ export function requireThreadWithMessages(
 }
 
 /** Get a project by ID or return Err(NOT_FOUND). Verifies ownership in multi-user mode. */
-export function requireProject(
+export async function requireProject(
   id: string,
   userId?: string,
-): Result<NonNullable<ReturnType<typeof pm.getProject>>, DomainError> {
-  const project = pm.getProject(id);
+): Promise<Result<NonNullable<Awaited<ReturnType<typeof pm.getProject>>>, DomainError>> {
+  const project = await pm.getProject(id);
   if (!project) return err(notFound('Project not found'));
   if (userId) {
     const ownerCheck = checkOwnership(project, userId);
@@ -73,11 +73,15 @@ export function requireProject(
  * Returns worktreePath if set, otherwise the project path.
  * Verifies ownership in multi-user mode.
  */
-export function requireThreadCwd(threadId: string, userId?: string): Result<string, DomainError> {
-  return requireThread(threadId, userId).andThen((thread) => {
-    if (thread.worktreePath) return ok(thread.worktreePath);
-    const project = pm.getProject(thread.projectId);
-    if (!project) return err(notFound('Project not found'));
-    return ok(project.path);
-  });
+export async function requireThreadCwd(
+  threadId: string,
+  userId?: string,
+): Promise<Result<string, DomainError>> {
+  const threadResult = await requireThread(threadId, userId);
+  if (threadResult.isErr()) return err(threadResult.error);
+  const thread = threadResult.value;
+  if (thread.worktreePath) return ok(thread.worktreePath);
+  const project = await pm.getProject(thread.projectId);
+  if (!project) return err(notFound('Project not found'));
+  return ok(project.path);
 }

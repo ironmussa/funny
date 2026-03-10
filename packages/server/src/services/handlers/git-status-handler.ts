@@ -35,7 +35,7 @@ export const gitStatusHandler: EventHandler<'git:changed'> = {
       threadId,
       setTimeout(() => {
         pendingTimers.delete(threadId);
-        emitGitStatus(event, ctx);
+        void emitGitStatus(event, ctx);
       }, DEBOUNCE_MS),
     );
   },
@@ -48,10 +48,10 @@ async function emitGitStatus(event: GitChangedEvent, ctx: HandlerServiceContext)
   const effectiveCwd = worktreePath ?? cwd;
   if (!effectiveCwd) return;
 
-  const thread = ctx.getThread(threadId);
+  const thread = await ctx.getThread(threadId);
   if (!thread) return;
 
-  const project = ctx.getProject(thread.projectId);
+  const project = await ctx.getProject(thread.projectId);
   if (!project) return;
 
   ctx.log(`Emitting git status for thread ${threadId} (debounced, tool: ${event.toolName})`);

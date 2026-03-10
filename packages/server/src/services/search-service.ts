@@ -11,7 +11,7 @@
 import { eq, and, like } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 
-import { db, schema } from '../db/index.js';
+import { db, dbAll, dbMode, schema } from '../db/index.js';
 
 /** Escape SQL LIKE wildcards so user input is treated as literal text */
 function escapeLike(value: string): string {
@@ -31,18 +31,21 @@ function escapeFts5Query(value: string): string {
 /** Search for thread IDs whose messages contain the given query string.
  *  Uses FTS5 full-text index for fast search. Falls back to LIKE if FTS fails.
  *  Returns a Map of threadId → snippet for matching threads. */
-export function searchThreadIdsByContent(opts: {
+export async function searchThreadIdsByContent(opts: {
   query: string;
   projectId?: string;
   userId: string;
-}): Map<string, string> {
+}): Promise<Map<string, string>> {
   const { query, projectId, userId } = opts;
   if (!query.trim()) return new Map();
 
   try {
+    if (dbMode === 'postgres') {
+      return searchViaTsvector(query, projectId, userId);
+    }
     return searchViaFts5(query, projectId, userId);
   } catch {
-    return searchViaLike(query, projectId, userId);
+    return await searchViaLike(query, projectId, userId);
   }
 }
 
@@ -79,12 +82,51 @@ function searchViaFts5(
   return result;
 }
 
-/** Slow fallback: LIKE-based search (used if FTS table doesn't exist yet) */
-function searchViaLike(
+/** PostgreSQL path: tsvector/tsquery search with ts_headline for snippets. */
+function searchViaTsvector(
   query: string,
   projectId: string | undefined,
   userId: string,
 ): Map<string, string> {
+  // Escape single quotes and build tsquery from whitespace-separated terms
+  const tsQuery = query
+    .trim()
+    .split(/\s+/)
+    .map((t) => t.replace(/'/g, "''"))
+    .join(' & ');
+
+  let stmt = sql`
+    SELECT m.thread_id AS "threadId",
+           ts_headline('english', m.content, to_tsquery('english', ${tsQuery}),
+                       'StartSel=, StopSel=, MaxFragments=1, MaxWords=30') AS snippet
+    FROM messages AS m
+    JOIN threads AS t ON t.id = m.thread_id
+    WHERE m.search_vector @@ to_tsquery('english', ${tsQuery})
+  `;
+
+  if (userId !== '__local__') {
+    stmt = sql`${stmt} AND t.user_id = ${userId}`;
+  }
+  if (projectId) {
+    stmt = sql`${stmt} AND t.project_id = ${projectId}`;
+  }
+
+  stmt = sql`${stmt} GROUP BY m.thread_id, m.content, m.search_vector`;
+
+  const rows = db.all<{ threadId: string; snippet: string }>(stmt);
+  const result = new Map<string, string>();
+  for (const row of rows) {
+    result.set(row.threadId, row.snippet.replace(/\n/g, ' '));
+  }
+  return result;
+}
+
+/** Slow fallback: LIKE-based search (used if FTS table doesn't exist yet) */
+async function searchViaLike(
+  query: string,
+  projectId: string | undefined,
+  userId: string,
+): Promise<Map<string, string>> {
   const safeQuery = escapeLike(query.trim());
 
   const filters: ReturnType<typeof eq>[] = [like(schema.messages.content, `%${safeQuery}%`)];
@@ -96,12 +138,13 @@ function searchViaLike(
     filters.push(eq(schema.threads.projectId, projectId));
   }
 
-  const rows = db
-    .select({ threadId: schema.messages.threadId, content: schema.messages.content })
-    .from(schema.messages)
-    .innerJoin(schema.threads, eq(schema.messages.threadId, schema.threads.id))
-    .where(and(...filters))
-    .all();
+  const rows = await dbAll(
+    db
+      .select({ threadId: schema.messages.threadId, content: schema.messages.content })
+      .from(schema.messages)
+      .innerJoin(schema.threads, eq(schema.messages.threadId, schema.threads.id))
+      .where(and(...filters)),
+  );
 
   const result = new Map<string, string>();
   const queryLower = query.trim().toLowerCase();

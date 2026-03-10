@@ -167,16 +167,14 @@ const ModelSelect = memo(function ModelSelect({
 const ContextUsage = memo(function ContextUsage({
   provider,
   model,
-  tokenOffset,
   cumulativeTokens,
 }: {
   provider: string;
   model: string;
-  tokenOffset: number;
   cumulativeTokens: number;
 }) {
   const maxTokens = getContextWindow(provider, model);
-  const cumulative = tokenOffset + cumulativeTokens;
+  const cumulative = cumulativeTokens;
   const pct = maxTokens > 0 ? Math.min(100, (cumulative / maxTokens) * 100) : 0;
   const tokenK = Math.round(cumulative / 1000);
   const colorClass =
@@ -315,7 +313,6 @@ export const PromptInput = memo(function PromptInput({
   const activeThreadBaseBranch = useThreadStore((s) => s.activeThread?.baseBranch);
   // Select primitive values instead of the contextUsage object to avoid
   // re-renders when the object reference changes but values stay the same.
-  const contextTokenOffset = useThreadStore((s) => s.activeThread?.contextUsage?.tokenOffset ?? 0);
   const contextCumulativeTokens = useThreadStore(
     (s) => s.activeThread?.contextUsage?.cumulativeInputTokens ?? 0,
   );
@@ -1511,7 +1508,6 @@ export const PromptInput = memo(function PromptInput({
                   <ContextUsage
                     provider={activeThreadProvider ?? provider ?? DEFAULT_PROVIDER}
                     model={activeThreadModel ?? model ?? DEFAULT_MODEL}
-                    tokenOffset={contextTokenOffset}
                     cumulativeTokens={contextCumulativeTokens}
                   />
                 )}

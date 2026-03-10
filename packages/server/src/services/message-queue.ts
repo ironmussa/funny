@@ -9,7 +9,7 @@
 import { eq, asc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
-import { db, schema } from '../db/index.js';
+import { db, dbAll, dbGet, dbRun, schema } from '../db/index.js';
 import { log } from '../lib/logger.js';
 
 export interface QueueEntry {
@@ -28,7 +28,7 @@ export interface QueueEntry {
 }
 
 /** Add a message to the queue for a thread. */
-export function enqueue(
+export async function enqueue(
   threadId: string,
   entry: {
     content: string;
@@ -40,13 +40,11 @@ export function enqueue(
     disallowedTools?: string;
     fileReferences?: string;
   },
-): QueueEntry {
-  const existing = db
-    .select()
-    .from(schema.messageQueue)
-    .where(eq(schema.messageQueue.threadId, threadId))
-    .all();
-  const maxOrder = existing.length > 0 ? Math.max(...existing.map((e) => e.sortOrder)) : -1;
+): Promise<QueueEntry> {
+  const existing = await dbAll(
+    db.select().from(schema.messageQueue).where(eq(schema.messageQueue.threadId, threadId)),
+  );
+  const maxOrder = existing.length > 0 ? Math.max(...existing.map((e: any) => e.sortOrder)) : -1;
 
   const row: QueueEntry = {
     id: nanoid(),
@@ -63,82 +61,78 @@ export function enqueue(
     createdAt: new Date().toISOString(),
   };
 
-  db.insert(schema.messageQueue).values(row).run();
+  await dbRun(db.insert(schema.messageQueue).values(row));
   log.info('Message queued', { namespace: 'queue', threadId, messageId: row.id });
   return row;
 }
 
 /** Peek at the next message in the queue without removing it. */
-export function peek(threadId: string): QueueEntry | null {
-  const row = db
-    .select()
-    .from(schema.messageQueue)
-    .where(eq(schema.messageQueue.threadId, threadId))
-    .orderBy(asc(schema.messageQueue.sortOrder))
-    .limit(1)
-    .get();
+export async function peek(threadId: string): Promise<QueueEntry | null> {
+  const row = await dbGet(
+    db
+      .select()
+      .from(schema.messageQueue)
+      .where(eq(schema.messageQueue.threadId, threadId))
+      .orderBy(asc(schema.messageQueue.sortOrder))
+      .limit(1),
+  );
   return (row as QueueEntry) ?? null;
 }
 
 /** Remove and return the next message from the queue. */
-export function dequeue(threadId: string): QueueEntry | null {
-  const row = peek(threadId);
+export async function dequeue(threadId: string): Promise<QueueEntry | null> {
+  const row = await peek(threadId);
   if (!row) return null;
-  db.delete(schema.messageQueue).where(eq(schema.messageQueue.id, row.id)).run();
+  await dbRun(db.delete(schema.messageQueue).where(eq(schema.messageQueue.id, row.id)));
   log.info('Message dequeued', { namespace: 'queue', threadId, messageId: row.id });
   return row;
 }
 
 /** Remove a specific queued message by ID. */
-export function cancel(messageId: string): boolean {
-  const row = db
-    .select()
-    .from(schema.messageQueue)
-    .where(eq(schema.messageQueue.id, messageId))
-    .get();
+export async function cancel(messageId: string): Promise<boolean> {
+  const row = await dbGet(
+    db.select().from(schema.messageQueue).where(eq(schema.messageQueue.id, messageId)),
+  );
   if (!row) return false;
-  db.delete(schema.messageQueue).where(eq(schema.messageQueue.id, messageId)).run();
+  await dbRun(db.delete(schema.messageQueue).where(eq(schema.messageQueue.id, messageId)));
   log.info('Queued message cancelled', { namespace: 'queue', messageId });
   return true;
 }
 
 /** Update a specific queued message by ID. */
-export function update(messageId: string, content: string): QueueEntry | null {
-  const row = db
-    .select()
-    .from(schema.messageQueue)
-    .where(eq(schema.messageQueue.id, messageId))
-    .get();
+export async function update(messageId: string, content: string): Promise<QueueEntry | null> {
+  const row = await dbGet(
+    db.select().from(schema.messageQueue).where(eq(schema.messageQueue.id, messageId)),
+  );
   if (!row) return null;
 
-  db.update(schema.messageQueue)
-    .set({ content })
-    .where(eq(schema.messageQueue.id, messageId))
-    .run();
+  await dbRun(
+    db.update(schema.messageQueue).set({ content }).where(eq(schema.messageQueue.id, messageId)),
+  );
   log.info('Queued message updated', { namespace: 'queue', messageId });
   return { ...(row as QueueEntry), content };
 }
 
 /** List all queued messages for a thread. */
-export function listQueue(threadId: string): QueueEntry[] {
-  return db
-    .select()
-    .from(schema.messageQueue)
-    .where(eq(schema.messageQueue.threadId, threadId))
-    .orderBy(asc(schema.messageQueue.sortOrder))
-    .all() as QueueEntry[];
+export async function listQueue(threadId: string): Promise<QueueEntry[]> {
+  return dbAll(
+    db
+      .select()
+      .from(schema.messageQueue)
+      .where(eq(schema.messageQueue.threadId, threadId))
+      .orderBy(asc(schema.messageQueue.sortOrder)),
+  ) as Promise<QueueEntry[]>;
 }
 
 /** Count queued messages for a thread. */
-export function queueCount(threadId: string): number {
-  return db
-    .select()
-    .from(schema.messageQueue)
-    .where(eq(schema.messageQueue.threadId, threadId))
-    .all().length;
+export async function queueCount(threadId: string): Promise<number> {
+  const rows = await dbAll(
+    db.select().from(schema.messageQueue).where(eq(schema.messageQueue.threadId, threadId)),
+  );
+  return rows.length;
 }
 
 /** Clear all queued messages for a thread. */
-export function clearQueue(threadId: string): void {
-  db.delete(schema.messageQueue).where(eq(schema.messageQueue.threadId, threadId)).run();
+export async function clearQueue(threadId: string): Promise<void> {
+  await dbRun(db.delete(schema.messageQueue).where(eq(schema.messageQueue.threadId, threadId)));
 }

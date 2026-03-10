@@ -33,8 +33,9 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
 
+import { initPostgres } from './db/index.js';
 import { autoMigrate } from './db/migrate.js';
-import { getAuthMode } from './lib/auth-mode.js';
+import { getAuthMode, validateAuthDbCompat } from './lib/auth-mode.js';
 import { log } from './lib/logger.js';
 import './db/index.js'; // triggers self-registration with shutdownManager
 import { authMiddleware } from './middleware/auth.js';
@@ -55,6 +56,8 @@ import pluginRoutes from './routes/plugins.js';
 import { profileRoutes } from './routes/profile.js';
 import { projectRoutes } from './routes/projects.js';
 import skillsRoutes from './routes/skills.js';
+import { teamProjectRoutes } from './routes/team-projects.js';
+import { teamSettingsRoutes } from './routes/team-settings.js';
 import { threadRoutes } from './routes/threads.js';
 import { worktreeRoutes } from './routes/worktrees.js';
 import { startAgent } from './services/agent-runner.js';
@@ -89,6 +92,9 @@ const host = process.env.HOST || '127.0.0.1';
 const clientPort = Number(process.env.CLIENT_PORT) || 5173;
 const corsOrigin = process.env.CORS_ORIGIN;
 const authMode = getAuthMode();
+
+// Fail fast: multi-user mode requires PostgreSQL
+validateAuthDbCompat();
 
 const app = new Hono();
 
@@ -212,6 +218,8 @@ app.route('/api/pipelines', pipelineRoutes);
 app.route('/api/profile', profileRoutes);
 app.route('/api/github', githubRoutes);
 app.route('/api/analytics', analyticsRoutes);
+app.route('/api/team-projects', teamProjectRoutes);
+app.route('/api/team-settings', teamSettingsRoutes);
 
 // Serve static files from client build (only if dist exists)
 if (existsSync(clientDistDir)) {
@@ -228,9 +236,12 @@ if (existsSync(clientDistDir)) {
   });
 }
 
+// Initialize PostgreSQL if needed (no-op in SQLite mode)
+await initPostgres();
+
 // Auto-create tables on startup, then start server
-autoMigrate();
-startScheduler();
+await autoMigrate();
+void startScheduler();
 
 // Build handler service context from existing singletons
 const handlerCtx: HandlerServiceContext = {
@@ -283,14 +294,14 @@ if (prev) {
 // remain running seamlessly. Only on a true cold start (no prev instance)
 // do we need to mark stale threads.
 if (!prev) {
-  markStaleThreadsInterrupted();
-  markStaleExternalThreadsStopped();
+  await markStaleThreadsInterrupted();
+  await markStaleExternalThreadsStopped();
 }
 
 // Re-register existing threads with the git file watcher so external git
 // changes (stage, commit, branch switch) trigger status updates even after
 // a server restart where the in-memory watcher registry was lost.
-rehydrateWatchers();
+void rehydrateWatchers();
 
 // Periodic sweep: stop external threads that haven't received events in 10 minutes
 startExternalThreadSweep();
@@ -309,7 +320,7 @@ const server = Bun.serve({
         if (!token || !validateToken(token)) {
           return new Response('Unauthorized', { status: 401 });
         }
-        if (server.upgrade(req, { data: { userId: '__local__' } })) return;
+        if (server.upgrade(req, { data: { userId: '__local__', organizationId: null } })) return;
       } else {
         // Multi mode: validate session from cookies
         const { auth } = await import('./lib/auth.js');
@@ -317,7 +328,8 @@ const server = Bun.serve({
         if (!session) {
           return new Response('Unauthorized', { status: 401 });
         }
-        if (server.upgrade(req, { data: { userId: session.user.id } })) return;
+        const organizationId = (session.session as any).activeOrganizationId ?? null;
+        if (server.upgrade(req, { data: { userId: session.user.id, organizationId } })) return;
       }
       return new Response('WebSocket upgrade failed', { status: 400 });
     }
@@ -327,12 +339,13 @@ const server = Bun.serve({
   websocket: {
     open(ws: any) {
       const userId = ws.data?.userId ?? '__local__';
-      wsBroker.addClient(ws, userId);
+      const organizationId = ws.data?.organizationId ?? null;
+      wsBroker.addClient(ws, userId, organizationId);
     },
     close(ws: any) {
       wsBroker.removeClient(ws);
     },
-    message(ws: any, msg: any) {
+    async message(ws: any, msg: any) {
       try {
         const parsed = JSON.parse(msg.toString());
         const { type, data } = parsed;
@@ -341,7 +354,7 @@ const server = Bun.serve({
         switch (type) {
           case 'pty:spawn': {
             // Validate that cwd is within a registered project for this user
-            const userProjects = pm.listProjects(userId);
+            const userProjects = await pm.listProjects(userId);
             const resolvedCwd = resolve(data.cwd);
             const isAllowed = userProjects.some((p: any) => {
               const projectPath = resolve(p.path);
@@ -444,8 +457,8 @@ async function shutdown() {
 
   clearTimeout(forceExit);
 }
-process.on('SIGINT', shutdown);
-process.on('SIGTERM', shutdown);
+process.on('SIGINT', () => void shutdown());
+process.on('SIGTERM', () => void shutdown());
 
 // Catch unhandled errors so a stray rejection doesn't silently kill the server (exit 255).
 process.on('uncaughtException', (err) => {

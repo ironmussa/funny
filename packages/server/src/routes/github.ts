@@ -15,7 +15,7 @@ import { resolve, isAbsolute, join } from 'path';
 
 import { getRemoteUrl } from '@funny/core/git';
 import type { GitHubRepo, GitHubIssue, WSCloneProgressData } from '@funny/shared';
-import { badRequest, internal } from '@funny/shared/errors';
+import { badRequest, conflict, internal } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { err } from 'neverthrow';
 
@@ -64,7 +64,7 @@ export const githubRoutes = new Hono<HonoEnv>();
 
 githubRoutes.get('/status', async (c) => {
   const userId = c.get('userId') as string;
-  const token = profileService.getGithubToken(userId);
+  const token = await profileService.getGithubToken(userId);
   if (!token) {
     return c.json({ connected: false });
   }
@@ -183,7 +183,7 @@ githubRoutes.post('/oauth/poll', async (c) => {
 
     if (data.access_token) {
       // Store the token encrypted in the user's profile
-      profileService.updateProfile(userId, { githubToken: data.access_token });
+      await profileService.updateProfile(userId, { githubToken: data.access_token });
       return c.json({ status: 'success', scopes: data.scope });
     }
 
@@ -195,9 +195,9 @@ githubRoutes.post('/oauth/poll', async (c) => {
 
 // ── DELETE /oauth/disconnect — clear GitHub token ──────────
 
-githubRoutes.delete('/oauth/disconnect', (c) => {
+githubRoutes.delete('/oauth/disconnect', async (c) => {
   const userId = c.get('userId') as string;
-  profileService.updateProfile(userId, { githubToken: null });
+  await profileService.updateProfile(userId, { githubToken: null });
   return c.json({ ok: true });
 });
 
@@ -205,7 +205,7 @@ githubRoutes.delete('/oauth/disconnect', (c) => {
 
 githubRoutes.get('/user', async (c) => {
   const userId = c.get('userId') as string;
-  const token = profileService.getGithubToken(userId);
+  const token = await profileService.getGithubToken(userId);
   if (!token) {
     return c.json({ error: 'Not connected to GitHub' }, 401);
   }
@@ -223,7 +223,7 @@ githubRoutes.get('/user', async (c) => {
 
 githubRoutes.get('/repos', async (c) => {
   const userId = c.get('userId') as string;
-  const token = profileService.getGithubToken(userId);
+  const token = await profileService.getGithubToken(userId);
   if (!token) {
     return c.json({ error: 'Not connected to GitHub' }, 401);
   }
@@ -313,8 +313,16 @@ githubRoutes.post('/clone', async (c) => {
     return resultToResponse(c, err(badRequest(`Directory already exists: ${clonePath}`)));
   }
 
+  // Check for duplicate project name before cloning
+  if (await pm.projectNameExists(repoName, userId)) {
+    return resultToResponse(
+      c,
+      err(conflict(`A project with this name already exists: ${repoName}`)),
+    );
+  }
+
   // Inject token into clone URL for private repo access
-  const token = profileService.getGithubToken(userId);
+  const token = await profileService.getGithubToken(userId);
   let authenticatedUrl = cloneUrl;
   if (token && cloneUrl.startsWith('https://github.com/')) {
     authenticatedUrl = cloneUrl.replace(
@@ -393,7 +401,7 @@ githubRoutes.post('/clone', async (c) => {
   }
 
   // Create the project
-  const result = pm.createProject(repoName, clonePath, userId);
+  const result = await pm.createProject(repoName, clonePath, userId);
   if (result.isErr()) {
     return resultToResponse(c, result);
   }
@@ -410,7 +418,7 @@ githubRoutes.get('/issues', async (c) => {
     return c.json({ error: 'projectId is required' }, 400);
   }
 
-  const project = pm.getProject(projectId);
+  const project = await pm.getProject(projectId);
   if (!project) {
     return c.json({ error: 'Project not found' }, 404);
   }
@@ -432,7 +440,7 @@ githubRoutes.get('/issues', async (c) => {
 
   try {
     const apiPath = `/repos/${parsed.owner}/${parsed.repo}/issues?state=${state}&page=${page}&per_page=${perPage}&sort=created&direction=desc`;
-    const token = profileService.getGithubToken(userId);
+    const token = await profileService.getGithubToken(userId);
 
     let res: Response;
     if (token) {

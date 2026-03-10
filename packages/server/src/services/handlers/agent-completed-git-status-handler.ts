@@ -17,10 +17,10 @@ export const agentCompletedGitStatusHandler: EventHandler<'agent:completed'> = {
   async action(event: AgentCompletedEvent, ctx) {
     const { threadId, userId, worktreePath, cwd } = event;
 
-    const thread = ctx.getThread(threadId);
+    const thread = await ctx.getThread(threadId);
     if (!thread) return;
 
-    const project = ctx.getProject(thread.projectId);
+    const project = await ctx.getProject(thread.projectId);
     if (!project) return;
 
     const effectiveCwd = worktreePath ?? cwd;

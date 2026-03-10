@@ -21,7 +21,7 @@ worktreeRoutes.get('/', async (c) => {
   const projectId = c.req.query('projectId');
   if (!projectId) return resultToResponse(c, err(badRequest('projectId is required')));
 
-  const projectResult = requireProject(projectId);
+  const projectResult = await requireProject(projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const worktreesResult = await listWorktrees(projectResult.value.path);
@@ -36,7 +36,7 @@ worktreeRoutes.post('/', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
   const { projectId, branchName, baseBranch } = parsed.value;
 
-  const projectResult = requireProject(projectId);
+  const projectResult = await requireProject(projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const wtResult = await createWorktree(projectResult.value.path, branchName, baseBranch);
@@ -51,7 +51,7 @@ worktreeRoutes.delete('/', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
   const { projectId, worktreePath } = parsed.value;
 
-  const projectResult = requireProject(projectId);
+  const projectResult = await requireProject(projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   await removeWorktree(projectResult.value.path, worktreePath);

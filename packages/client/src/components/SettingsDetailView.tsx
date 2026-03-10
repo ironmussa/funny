@@ -51,6 +51,9 @@ import { PipelineSettings } from './PipelineSettings';
 import { ProjectConfigSettings } from './ProjectConfigSettings';
 import { ProjectHooksSettings } from './ProjectHooksSettings';
 import { BranchPicker } from './SearchablePicker';
+import { TeamInvitations } from './settings/TeamInvitations';
+import { TeamMembers } from './settings/TeamMembers';
+import { TeamSettings } from './settings/TeamSettings';
 import { UserManagement } from './settings/UserManagement';
 import { settingsLabelKeys, type SettingsItemId } from './SettingsPanel';
 import { SkillsSettings } from './SkillsSettings';
@@ -637,7 +640,7 @@ function GeneralSettings() {
                   },
                 ]}
                 placeholder={t('settings.gitDefault', 'Git default')}
-                triggerClassName="flex h-9 items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-sm hover:bg-accent/50"
+                triggerClassName="flex h-9 items-center justify-between gap-2 rounded-md border border-input bg-background px-3 text-xs hover:bg-accent/50"
                 side="bottom"
                 align="end"
                 showCopy={false}
@@ -774,6 +777,12 @@ export function SettingsDetailView() {
             <PipelineSettings />
           ) : page === 'archived-threads' ? (
             <ArchivedThreadsSettings />
+          ) : page === 'team-settings' ? (
+            <TeamSettings />
+          ) : page === 'team-members' ? (
+            <TeamMembers />
+          ) : page === 'team-invitations' ? (
+            <TeamInvitations />
           ) : page === 'users' ? (
             <UserManagement />
           ) : (

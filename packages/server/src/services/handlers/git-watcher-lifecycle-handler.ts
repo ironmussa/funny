@@ -18,9 +18,9 @@ export const gitWatcherStartHandler: EventHandler<'thread:created'> = {
   name: 'git-watcher-start-on-thread-created',
   event: 'thread:created',
 
-  action(event: ThreadCreatedEvent, ctx) {
+  async action(event: ThreadCreatedEvent, ctx) {
     // Always use the project path (where .git/ lives), not the worktree path
-    const project = ctx.getProject(event.projectId);
+    const project = await ctx.getProject(event.projectId);
     if (!project) return;
     startWatching(event.projectId, project.path, event.threadId);
   },

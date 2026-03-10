@@ -142,7 +142,9 @@ export const ThreadItem = memo(function ThreadItem({
   const hasGitIconOnly = showGitIcon && !hasDiffStats && GitIcon;
   const hasSnippet = !!thread.lastAssistantMessage;
   const showLaunching = isBusy && !hasSnippet;
-  const hasSecondRow = !!subtitle || hasDiffStats || hasGitIconOnly || hasSnippet || showLaunching;
+  const hasMetadataRow = !!subtitle || hasDiffStats || hasGitIconOnly;
+  const hasSnippetRow = hasSnippet || showLaunching;
+  const hasSecondRow = hasMetadataRow || hasSnippetRow;
 
   return (
     <div
@@ -240,10 +242,9 @@ export const ThreadItem = memo(function ThreadItem({
           )}
         </div>
 
-        {/* Row 2: Project chip → Git status → Snippet */}
-        {hasSecondRow && (
+        {/* Row 2: Project chip + Git status */}
+        {hasMetadataRow && (
           <div className="flex min-w-0 items-center gap-1.5 pl-5">
-            {/* 1. Project chip */}
             {subtitle && (
               <ProjectChip
                 name={subtitle}
@@ -252,7 +253,6 @@ export const ThreadItem = memo(function ThreadItem({
                 className="flex-shrink-0"
               />
             )}
-            {/* 2. Git status */}
             {hasDiffStats ? (
               <DiffStats
                 linesAdded={gitStatus.linesAdded}
@@ -270,7 +270,11 @@ export const ThreadItem = memo(function ThreadItem({
                 </TooltipContent>
               </Tooltip>
             ) : null}
-            {/* 3. Last agent message snippet or launching indicator */}
+          </div>
+        )}
+        {/* Row 3: Last agent message snippet or launching indicator */}
+        {hasSnippetRow && (
+          <div className="flex min-w-0 items-center pl-5">
             {hasSnippet ? (
               <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground/50">
                 {thread.lastAssistantMessage}

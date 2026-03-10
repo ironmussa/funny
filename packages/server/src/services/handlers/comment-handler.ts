@@ -15,7 +15,7 @@ export const commentHandler: EventHandler<'agent:completed'> = {
   name: 'comment-on-completion',
   event: 'agent:completed',
 
-  action(event: AgentCompletedEvent, ctx) {
+  async action(event: AgentCompletedEvent, ctx) {
     const { threadId, userId, status, cost } = event;
 
     let content: string;
@@ -33,6 +33,6 @@ export const commentHandler: EventHandler<'agent:completed'> = {
         return;
     }
 
-    ctx.insertComment({ threadId, userId, source: 'system', content });
+    await ctx.insertComment({ threadId, userId, source: 'system', content });
   },
 };

@@ -31,9 +31,9 @@ pipelineRoutes.get('/project/:projectId', (c) => {
 
 // ── Get a single pipeline ───────────────────────────────────
 
-pipelineRoutes.get('/:id', (c) => {
+pipelineRoutes.get('/:id', async (c) => {
   const { id } = c.req.param();
-  const pipeline = getPipelineById(id);
+  const pipeline = await getPipelineById(id);
   if (!pipeline) return c.json({ error: 'Pipeline not found' }, 404);
   return c.json(pipeline);
 });
@@ -74,7 +74,7 @@ pipelineRoutes.patch('/:id', async (c) => {
   const { id } = c.req.param();
   const body = await c.req.json();
 
-  const existing = getPipelineById(id);
+  const existing = await getPipelineById(id);
   if (!existing) return c.json({ error: 'Pipeline not found' }, 404);
 
   const updates: Record<string, unknown> = {};
@@ -95,18 +95,18 @@ pipelineRoutes.patch('/:id', async (c) => {
   if (body.commitMessagePrompt !== undefined)
     updates.commitMessagePrompt = body.commitMessagePrompt || null;
 
-  updatePipeline(id, updates);
-  return c.json(getPipelineById(id));
+  await updatePipeline(id, updates);
+  return c.json(await getPipelineById(id));
 });
 
 // ── Delete a pipeline ───────────────────────────────────────
 
-pipelineRoutes.delete('/:id', (c) => {
+pipelineRoutes.delete('/:id', async (c) => {
   const { id } = c.req.param();
-  const existing = getPipelineById(id);
+  const existing = await getPipelineById(id);
   if (!existing) return c.json({ error: 'Pipeline not found' }, 404);
 
-  deletePipeline(id);
+  await deletePipeline(id);
   return c.json({ ok: true });
 });
 

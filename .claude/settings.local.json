@@ -15,10 +15,18 @@
       "Bash(fnm:*)",
       "mcp__chrome-devtools__new_page",
       "mcp__chrome-devtools__performance_start_trace",
-      "mcp__plugin_claude-mem_mcp-search__search"
+      "mcp__plugin_claude-mem_mcp-search__search",
+      "mcp__coplay-mcp__list_unity_project_roots",
+      "mcp__coplay-mcp__create_game_object",
+      "mcp__coplay-mcp__create_material",
+      "mcp__coplay-mcp__assign_material"
     ]
   },
   "enableAllProjectMcpServers": true,
-  "enabledMcpjsonServers": ["chrome-devtools"],
-  "disabledMcpjsonServers": ["supabase"]
+  "enabledMcpjsonServers": [
+    "chrome-devtools"
+  ],
+  "disabledMcpjsonServers": [
+    "supabase"
+  ]
 }

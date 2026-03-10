@@ -26,6 +26,49 @@ export interface UpdateUserRequest {
   password?: string;
 }
 
+// ─── Teams / Organizations ───────────────────────────────
+
+export type TeamRole = 'owner' | 'admin' | 'member' | 'viewer';
+
+export interface Organization {
+  id: string;
+  name: string;
+  slug: string;
+  logo?: string | null;
+  metadata?: string | null;
+  anthropicApiKey?: string | null; // Encrypted at rest
+  defaultModel?: string | null;
+  defaultMode?: string | null;
+  defaultPermissionMode?: string | null;
+  createdAt: string;
+}
+
+export interface TeamMember {
+  id: string;
+  userId: string;
+  organizationId: string;
+  role: TeamRole;
+  username?: string;
+  displayName?: string;
+  email?: string;
+  createdAt: string;
+}
+
+export interface Invitation {
+  id: string;
+  email: string;
+  organizationId: string;
+  role: TeamRole;
+  status: 'pending' | 'accepted' | 'rejected' | 'cancelled';
+  inviterId: string;
+  expiresAt: string;
+}
+
+export interface TeamProject {
+  teamId: string;
+  projectId: string;
+}
+
 // ─── User Profile (Git Identity) ─────────────────────────
 
 export interface UserProfile {
@@ -504,7 +547,23 @@ export type WSEvent =
   | { type: 'clone:progress'; threadId: string; data: WSCloneProgressData }
   | { type: 'pipeline:run_started'; threadId: string; data: WSPipelineRunStartedData }
   | { type: 'pipeline:stage_update'; threadId: string; data: WSPipelineStageUpdateData }
-  | { type: 'pipeline:run_completed'; threadId: string; data: WSPipelineRunCompletedData };
+  | { type: 'pipeline:run_completed'; threadId: string; data: WSPipelineRunCompletedData }
+  | { type: 'org:member_added'; threadId: ''; data: WSOrgMemberData }
+  | { type: 'org:member_removed'; threadId: ''; data: WSOrgMemberData }
+  | { type: 'org:invitation_received'; threadId: ''; data: WSOrgInvitationData };
+
+export interface WSOrgMemberData {
+  organizationId: string;
+  userId: string;
+  role: TeamRole;
+}
+
+export interface WSOrgInvitationData {
+  invitationId: string;
+  organizationId: string;
+  organizationName: string;
+  role: TeamRole;
+}
 
 export interface WSWorktreeSetupCompleteData {
   branch: string;

@@ -7,9 +7,9 @@
  * @domain depends: Database, StageHistory, CommentRepository
  */
 
-import { eq, and, or, ne, like, desc, count as drizzleCount, sql } from 'drizzle-orm';
+import { eq, and, or, ne, like, desc, inArray, count as drizzleCount, sql } from 'drizzle-orm';
 
-import { db, sqlite, schema } from '../db/index.js';
+import { db, sqlite, schema, dbAll, dbGet, dbRun } from '../db/index.js';
 import { log } from '../lib/logger.js';
 import { getCommentCounts } from './comment-repository.js';
 import { recordStageChange } from './stage-history.js';
@@ -23,15 +23,33 @@ function escapeLike(value: string): string {
 }
 
 /** List threads, optionally filtered by projectId, userId, and archive status */
-export function listThreads(opts: {
+export async function listThreads(opts: {
   projectId?: string;
   userId: string;
   includeArchived?: boolean;
+  organizationId?: string | null;
 }) {
-  const { projectId, userId, includeArchived } = opts;
+  const { projectId, userId, includeArchived, organizationId } = opts;
   const filters: ReturnType<typeof eq>[] = [];
 
-  if (userId !== '__local__') {
+  if (organizationId) {
+    // Org mode: show all threads for org-associated projects
+    const orgProjectIds = (
+      await dbAll(
+        db
+          .select({ projectId: schema.teamProjects.projectId })
+          .from(schema.teamProjects)
+          .where(eq(schema.teamProjects.teamId, organizationId)),
+      )
+    ).map((r: any) => r.projectId);
+
+    if (orgProjectIds.length > 0) {
+      filters.push(inArray(schema.threads.projectId, orgProjectIds));
+    } else {
+      // No projects in this org — return empty
+      return [];
+    }
+  } else if (userId !== '__local__') {
     filters.push(eq(schema.threads.userId, userId));
   }
   if (projectId) {
@@ -43,18 +61,19 @@ export function listThreads(opts: {
 
   const condition = filters.length > 0 ? and(...filters) : undefined;
   const completionTime = sql`COALESCE(${schema.threads.completedAt}, ${schema.threads.createdAt})`;
-  const threads = db
-    .select()
-    .from(schema.threads)
-    .where(condition)
-    .orderBy(desc(schema.threads.pinned), desc(completionTime))
-    .all();
+  const threads = await dbAll(
+    db
+      .select()
+      .from(schema.threads)
+      .where(condition)
+      .orderBy(desc(schema.threads.pinned), desc(completionTime)),
+  );
 
   if (threads.length > 0) {
-    const ids = threads.map((t) => t.id);
-    const counts = getCommentCounts(ids);
+    const ids = threads.map((t: any) => t.id);
+    const counts = await getCommentCounts(ids);
     const snippets = getLastAssistantSnippets(ids);
-    return threads.map((t) => ({
+    return threads.map((t: any) => ({
       ...t,
       commentCount: counts.get(t.id) ?? 0,
       lastAssistantMessage: snippets.get(t.id),
@@ -64,7 +83,7 @@ export function listThreads(opts: {
 }
 
 /** List archived threads with pagination and search */
-export function listArchivedThreads(opts: {
+export async function listArchivedThreads(opts: {
   page: number;
   limit: number;
   search: string;
@@ -92,48 +111,45 @@ export function listArchivedThreads(opts: {
 
   const conditions = and(...filters);
 
-  const [{ total }] = db
-    .select({ total: drizzleCount() })
-    .from(schema.threads)
-    .where(conditions!)
-    .all();
+  const [{ total }] = await dbAll(
+    db.select({ total: drizzleCount() }).from(schema.threads).where(conditions!),
+  );
 
   const completionTime = sql`COALESCE(${schema.threads.completedAt}, ${schema.threads.createdAt})`;
-  const threads = db
-    .select()
-    .from(schema.threads)
-    .where(conditions!)
-    .orderBy(desc(completionTime))
-    .limit(limit)
-    .offset(offset)
-    .all();
+  const threads = await dbAll(
+    db
+      .select()
+      .from(schema.threads)
+      .where(conditions!)
+      .orderBy(desc(completionTime))
+      .limit(limit)
+      .offset(offset),
+  );
 
   return { threads, total };
 }
 
 /** Get a single thread by ID */
-export function getThread(id: string) {
-  return db.select().from(schema.threads).where(eq(schema.threads.id, id)).get();
+export async function getThread(id: string) {
+  return dbGet(db.select().from(schema.threads).where(eq(schema.threads.id, id)));
 }
 
 /** Get a thread by its external request ID (used by ingest mapper) */
-export function getThreadByExternalRequestId(requestId: string) {
-  return db
-    .select()
-    .from(schema.threads)
-    .where(eq(schema.threads.externalRequestId, requestId))
-    .get();
+export async function getThreadByExternalRequestId(requestId: string) {
+  return dbGet(
+    db.select().from(schema.threads).where(eq(schema.threads.externalRequestId, requestId)),
+  );
 }
 
 /** Insert a new thread */
-export function createThread(data: typeof schema.threads.$inferInsert) {
-  db.insert(schema.threads).values(data).run();
+export async function createThread(data: typeof schema.threads.$inferInsert) {
+  await dbRun(db.insert(schema.threads).values(data));
   const initialStage = data.stage ?? 'backlog';
-  recordStageChange(data.id, null, initialStage);
+  await recordStageChange(data.id, null, initialStage);
 }
 
 /** Update thread fields by ID */
-export function updateThread(
+export async function updateThread(
   id: string,
   updates: Partial<{
     status: string;
@@ -155,39 +171,41 @@ export function updateThread(
   }>,
 ) {
   if (updates.stage !== undefined) {
-    const currentThread = db
-      .select({ stage: schema.threads.stage })
-      .from(schema.threads)
-      .where(eq(schema.threads.id, id))
-      .get();
+    const currentThread = await dbGet<{ stage: string }>(
+      db
+        .select({ stage: schema.threads.stage })
+        .from(schema.threads)
+        .where(eq(schema.threads.id, id)),
+    );
 
     if (currentThread && currentThread.stage !== updates.stage) {
-      recordStageChange(id, currentThread.stage, updates.stage);
+      await recordStageChange(id, currentThread.stage, updates.stage);
     }
   }
 
   if (updates.archived !== undefined) {
-    const currentThread = db
-      .select({ stage: schema.threads.stage, archived: schema.threads.archived })
-      .from(schema.threads)
-      .where(eq(schema.threads.id, id))
-      .get();
+    const currentThread = await dbGet<{ stage: string; archived: number }>(
+      db
+        .select({ stage: schema.threads.stage, archived: schema.threads.archived })
+        .from(schema.threads)
+        .where(eq(schema.threads.id, id)),
+    );
 
     if (currentThread) {
       if (updates.archived === 1 && currentThread.archived === 0) {
-        recordStageChange(id, currentThread.stage, 'archived');
+        await recordStageChange(id, currentThread.stage, 'archived');
       } else if (updates.archived === 0 && currentThread.archived === 1) {
-        recordStageChange(id, 'archived', updates.stage ?? currentThread.stage);
+        await recordStageChange(id, 'archived', updates.stage ?? currentThread.stage);
       }
     }
   }
 
-  db.update(schema.threads).set(updates).where(eq(schema.threads.id, id)).run();
+  await dbRun(db.update(schema.threads).set(updates).where(eq(schema.threads.id, id)));
 }
 
 /** Delete a thread (cascade deletes messages + tool_calls) */
-export function deleteThread(id: string) {
-  db.delete(schema.threads).where(eq(schema.threads.id, id)).run();
+export async function deleteThread(id: string) {
+  await dbRun(db.delete(schema.threads).where(eq(schema.threads.id, id)));
 }
 
 /**
@@ -196,6 +214,11 @@ export function deleteThread(id: string) {
  */
 function getLastAssistantSnippets(threadIds: string[]): Map<string, string> {
   if (threadIds.length === 0) return new Map();
+
+  if (!sqlite) {
+    // TODO(team-version task 4.3): implement Postgres-compatible path
+    return new Map();
+  }
 
   const placeholders = threadIds.map(() => '?').join(',');
   const rows = sqlite
@@ -221,23 +244,23 @@ function getLastAssistantSnippets(threadIds: string[]): Map<string, string> {
 }
 
 /** Mark stale (running/waiting) threads as interrupted. Called on server startup. */
-export function markStaleThreadsInterrupted(): void {
+export async function markStaleThreadsInterrupted(): Promise<void> {
   const staleCondition = and(
     or(eq(schema.threads.status, 'running'), eq(schema.threads.status, 'waiting')),
     ne(schema.threads.provider, 'external'),
   );
 
-  const stale = db
-    .select({ id: schema.threads.id })
-    .from(schema.threads)
-    .where(staleCondition)
-    .all();
+  const stale = await dbAll(
+    db.select({ id: schema.threads.id }).from(schema.threads).where(staleCondition),
+  );
 
   if (stale.length > 0) {
-    db.update(schema.threads)
-      .set({ status: 'interrupted', completedAt: new Date().toISOString() })
-      .where(staleCondition)
-      .run();
+    await dbRun(
+      db
+        .update(schema.threads)
+        .set({ status: 'interrupted', completedAt: new Date().toISOString() })
+        .where(staleCondition),
+    );
     log.info(`Marked ${stale.length} stale thread(s) as interrupted`, {
       namespace: 'thread-manager',
       count: stale.length,
@@ -246,7 +269,7 @@ export function markStaleThreadsInterrupted(): void {
 }
 
 /** Mark stale external threads (running/pending) as stopped. Called on server startup. */
-export function markStaleExternalThreadsStopped(): void {
+export async function markStaleExternalThreadsStopped(): Promise<void> {
   const staleCondition = and(
     or(
       eq(schema.threads.status, 'running'),
@@ -256,17 +279,17 @@ export function markStaleExternalThreadsStopped(): void {
     eq(schema.threads.provider, 'external'),
   );
 
-  const stale = db
-    .select({ id: schema.threads.id })
-    .from(schema.threads)
-    .where(staleCondition)
-    .all();
+  const stale = await dbAll(
+    db.select({ id: schema.threads.id }).from(schema.threads).where(staleCondition),
+  );
 
   if (stale.length > 0) {
-    db.update(schema.threads)
-      .set({ status: 'stopped', completedAt: new Date().toISOString() })
-      .where(staleCondition)
-      .run();
+    await dbRun(
+      db
+        .update(schema.threads)
+        .set({ status: 'stopped', completedAt: new Date().toISOString() })
+        .where(staleCondition),
+    );
     log.info(`Marked ${stale.length} stale external thread(s) as stopped`, {
       namespace: 'thread-manager',
       count: stale.length,

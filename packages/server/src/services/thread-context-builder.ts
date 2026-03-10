@@ -15,8 +15,8 @@ import * as tm from './thread-manager.js';
  * Returns a string that can be prepended to the user's new message
  * to provide full context when the session cannot be resumed.
  */
-export function buildThreadContext(threadId: string): string | null {
-  const threadData = tm.getThreadWithMessages(threadId);
+export async function buildThreadContext(threadId: string): Promise<string | null> {
+  const threadData = await tm.getThreadWithMessages(threadId);
   if (!threadData || !threadData.messages.length) {
     return null;
   }
@@ -86,8 +86,8 @@ export function buildThreadContext(threadId: string): string | null {
  * Check if a thread needs context recovery (has sessionId but no valid resume path).
  * This happens when a worktree was merged and cleaned up.
  */
-export function needsContextRecovery(threadId: string): boolean {
-  const thread = tm.getThread(threadId);
+export async function needsContextRecovery(threadId: string): Promise<boolean> {
+  const thread = await tm.getThread(threadId);
   if (!thread || !thread.sessionId) {
     return false;
   }

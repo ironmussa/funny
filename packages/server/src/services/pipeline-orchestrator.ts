@@ -28,7 +28,7 @@ import { runPipeline, type PipelineStateChange } from '@funny/shared/pipeline-en
 import { eq } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
-import { db } from '../db/index.js';
+import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import { pipelineRuns, pipelines } from '../db/schema.js';
 import { log } from '../lib/logger.js';
 import type { GitPipelineContext } from './git-pipelines.js';
@@ -84,14 +84,14 @@ function toPipelineConfig(row: PipelineRow): PipelineConfig {
   };
 }
 
-export function getPipelineForProject(projectId: string): PipelineConfig | null {
-  const rows = db.select().from(pipelines).where(eq(pipelines.projectId, projectId)).all();
-  const row = rows.find((r) => r.enabled);
+export async function getPipelineForProject(projectId: string): Promise<PipelineConfig | null> {
+  const rows = await dbAll(db.select().from(pipelines).where(eq(pipelines.projectId, projectId)));
+  const row = rows.find((r: any) => r.enabled);
   if (!row) return null;
   return toPipelineConfig(row);
 }
 
-export function createPipeline(data: {
+export async function createPipeline(data: {
   projectId: string;
   userId: string;
   name: string;
@@ -105,11 +105,11 @@ export function createPipeline(data: {
   correctorPrompt?: string;
   precommitFixerPrompt?: string;
   commitMessagePrompt?: string;
-}): string {
+}): Promise<string> {
   const id = nanoid();
   const now = new Date().toISOString();
-  db.insert(pipelines)
-    .values({
+  await dbRun(
+    db.insert(pipelines).values({
       id,
       projectId: data.projectId,
       userId: data.userId,
@@ -127,39 +127,39 @@ export function createPipeline(data: {
       commitMessagePrompt: data.commitMessagePrompt || null,
       createdAt: now,
       updatedAt: now,
-    })
-    .run();
+    }),
+  );
   return id;
 }
 
-export function getPipelineById(id: string) {
-  return db.select().from(pipelines).where(eq(pipelines.id, id)).get();
+export async function getPipelineById(id: string) {
+  return dbGet(db.select().from(pipelines).where(eq(pipelines.id, id)));
 }
 
-export function getPipelinesByProject(projectId: string) {
-  return db.select().from(pipelines).where(eq(pipelines.projectId, projectId)).all();
+export async function getPipelinesByProject(projectId: string) {
+  return dbAll(db.select().from(pipelines).where(eq(pipelines.projectId, projectId)));
 }
 
-export function updatePipeline(id: string, updates: Record<string, unknown>) {
+export async function updatePipeline(id: string, updates: Record<string, unknown>) {
   const data = { ...updates, updatedAt: new Date().toISOString() };
-  db.update(pipelines).set(data).where(eq(pipelines.id, id)).run();
+  await dbRun(db.update(pipelines).set(data).where(eq(pipelines.id, id)));
 }
 
-export function deletePipeline(id: string) {
-  db.delete(pipelines).where(eq(pipelines.id, id)).run();
+export async function deletePipeline(id: string) {
+  await dbRun(db.delete(pipelines).where(eq(pipelines.id, id)));
 }
 
 // ── Pipeline Run Repository ─────────────────────────────────
 
-function createRun(data: {
+async function createRun(data: {
   pipelineId: string;
   threadId: string;
   maxIterations: number;
   commitSha?: string;
-}): string {
+}): Promise<string> {
   const id = nanoid();
-  db.insert(pipelineRuns)
-    .values({
+  await dbRun(
+    db.insert(pipelineRuns).values({
       id,
       pipelineId: data.pipelineId,
       threadId: data.threadId,
@@ -169,21 +169,21 @@ function createRun(data: {
       maxIterations: data.maxIterations,
       commitSha: data.commitSha,
       createdAt: new Date().toISOString(),
-    })
-    .run();
+    }),
+  );
   return id;
 }
 
-function updateRun(id: string, updates: Record<string, unknown>) {
-  db.update(pipelineRuns).set(updates).where(eq(pipelineRuns.id, id)).run();
+async function updateRun(id: string, updates: Record<string, unknown>) {
+  await dbRun(db.update(pipelineRuns).set(updates).where(eq(pipelineRuns.id, id)));
 }
 
-export function getRunById(id: string) {
-  return db.select().from(pipelineRuns).where(eq(pipelineRuns.id, id)).get();
+export async function getRunById(id: string) {
+  return dbGet(db.select().from(pipelineRuns).where(eq(pipelineRuns.id, id)));
 }
 
-export function getRunsForThread(threadId: string) {
-  return db.select().from(pipelineRuns).where(eq(pipelineRuns.threadId, threadId)).all();
+export async function getRunsForThread(threadId: string) {
+  return dbAll(db.select().from(pipelineRuns).where(eq(pipelineRuns.threadId, threadId)));
 }
 
 // ── WS emission helpers ─────────────────────────────────────
@@ -250,7 +250,7 @@ export async function startPipelineRun(opts: {
     return;
   }
 
-  const runId = createRun({
+  const runId = await createRun({
     pipelineId: pipeline.id,
     threadId,
     maxIterations: pipeline.maxIterations,
@@ -313,14 +313,14 @@ export async function startPipelineRun(opts: {
   };
 
   // State change callback — persist to DB + emit WS
-  const onStateChange = (change: PipelineStateChange<GitPipelineContext>) => {
+  const onStateChange = async (change: PipelineStateChange<GitPipelineContext>) => {
     const { kind, nodeName, ctx } = change;
 
     if (kind === 'entering' || kind === 'completed') {
       const dbStatus = nodeToRunStatus(nodeName, kind);
       const dbStage = nodeToStageType(nodeName);
 
-      updateRun(runId, {
+      await updateRun(runId, {
         status: dbStatus,
         currentStage: dbStage,
         iteration: ctx.iteration,
@@ -361,7 +361,7 @@ export async function startPipelineRun(opts: {
         terminalStatus = 'failed';
       }
 
-      updateRun(runId, {
+      await updateRun(runId, {
         status: terminalStatus,
         iteration: ctx.iteration,
         commitSha: ctx.commitSha,
@@ -397,7 +397,7 @@ export async function startPipelineRun(opts: {
   // Fire-and-forget
   runPipeline(reviewFixSubPipeline, initialCtx, {
     signal: abortController.signal,
-    onStateChange,
+    onStateChange: (change) => void onStateChange(change),
     maxIterations: pipeline.maxIterations,
   })
     .catch((err) => {
@@ -427,10 +427,10 @@ export async function cleanupReviewerThread(
   reviewerThreadId: string,
   projectId: string,
 ): Promise<void> {
-  const reviewerThread = tm.getThread(reviewerThreadId);
+  const reviewerThread = await tm.getThread(reviewerThreadId);
   if (!reviewerThread) return;
 
-  const project = pm.getProject(projectId);
+  const project = await pm.getProject(projectId);
   if (!project) return;
 
   if (reviewerThread.worktreePath && reviewerThread.mode === 'worktree') {
@@ -451,7 +451,7 @@ export async function cleanupReviewerThread(
     }
   }
 
-  tm.updateThread(reviewerThreadId, {
+  await tm.updateThread(reviewerThreadId, {
     archived: 1,
     worktreePath: null,
     branch: null,

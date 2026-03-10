@@ -11,6 +11,8 @@ import {
   Archive,
   Users,
   Workflow,
+  Building2,
+  UserPlus,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -42,7 +44,12 @@ const baseSettingsItems = [
 ] as const;
 
 export const settingsItems = baseSettingsItems;
-export type SettingsItemId = (typeof baseSettingsItems)[number]['id'] | 'users';
+export type SettingsItemId =
+  | (typeof baseSettingsItems)[number]['id']
+  | 'users'
+  | 'team-settings'
+  | 'team-members'
+  | 'team-invitations';
 
 export const settingsLabelKeys: Record<string, string> = {
   general: 'settings.general',
@@ -56,6 +63,9 @@ export const settingsLabelKeys: Record<string, string> = {
   pipelines: 'settings.pipelines',
   'archived-threads': 'settings.archivedThreads',
   users: 'users.title',
+  'team-settings': 'Team Settings',
+  'team-members': 'Members',
+  'team-invitations': 'Invitations',
 };
 
 export function SettingsPanel() {
@@ -72,6 +82,11 @@ export function SettingsPanel() {
   const items: Array<{ id: string; label: string; icon: typeof Settings }> = selectedProjectId
     ? [...baseSettingsItems].filter((item) => item.id !== 'archived-threads')
     : [...baseSettingsItems];
+  if (authMode === 'multi') {
+    items.push({ id: 'team-settings', label: 'Team Settings', icon: Building2 });
+    items.push({ id: 'team-members', label: 'Members', icon: Users });
+    items.push({ id: 'team-invitations', label: 'Invitations', icon: UserPlus });
+  }
   if (authMode === 'multi' && authUser?.role === 'admin') {
     items.push({ id: 'users', label: 'Users', icon: Users });
   }

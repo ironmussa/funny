@@ -86,22 +86,28 @@ function handleServiceError(c: any, error: unknown) {
 // ── GET routes (query-only, already thin) ────────────────────────
 
 // GET /api/threads?projectId=xxx&includeArchived=true
-threadRoutes.get('/', (c) => {
+threadRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
   const projectId = c.req.query('projectId');
   const includeArchived = c.req.query('includeArchived') === 'true';
-  const threads = tm.listThreads({ projectId: projectId || undefined, userId, includeArchived });
+  const threads = await tm.listThreads({
+    projectId: projectId || undefined,
+    userId,
+    includeArchived,
+    organizationId: orgId,
+  });
   return c.json(threads);
 });
 
 // GET /api/threads/archived?page=1&limit=100&search=xxx
-threadRoutes.get('/archived', (c) => {
+threadRoutes.get('/archived', async (c) => {
   const userId = c.get('userId') as string;
   const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
   const limit = Math.min(1000, Math.max(1, parseInt(c.req.query('limit') || '100', 10)));
   const search = c.req.query('search')?.trim() || '';
 
-  const { threads, total } = tm.listArchivedThreads({ page, limit, search, userId });
+  const { threads, total } = await tm.listArchivedThreads({ page, limit, search, userId });
   return c.json({ threads, total, page, limit });
 });
 
@@ -120,25 +126,25 @@ threadRoutes.get('/search/content', (c) => {
 });
 
 // GET /api/threads/:id?messageLimit=50
-threadRoutes.get('/:id', (c) => {
+threadRoutes.get('/:id', async (c) => {
   const userId = c.get('userId') as string;
-  const threadResult = requireThreadWithMessages(c.req.param('id'), userId);
+  const threadResult = await requireThreadWithMessages(c.req.param('id'), userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   return c.json(threadResult.value);
 });
 
 // GET /api/threads/:id/messages?cursor=<ISO>&limit=50
-threadRoutes.get('/:id/messages', (c) => {
+threadRoutes.get('/:id/messages', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const threadResult = requireThread(id, userId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const cursor = c.req.query('cursor');
   const limitParam = c.req.query('limit');
   const limit = Math.min(200, Math.max(1, parseInt(limitParam || '50', 10)));
 
-  const result = tm.getThreadMessages({ threadId: id, cursor: cursor || undefined, limit });
+  const result = await tm.getThreadMessages({ threadId: id, cursor: cursor || undefined, limit });
   return c.json(result);
 });
 
@@ -146,7 +152,7 @@ threadRoutes.get('/:id/messages', (c) => {
 threadRoutes.get('/:id/events', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const threadResult = requireThread(id, userId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const events = await getThreadEvents(id);
@@ -202,7 +208,7 @@ threadRoutes.post('/:id/message', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
   const userId = c.get('userId') as string;
-  const threadResult = requireThread(id, userId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const span = requestSpan(c, 'thread.send_message', { threadId: id });
@@ -221,7 +227,7 @@ threadRoutes.post('/:id/message', async (c) => {
 threadRoutes.post('/:id/stop', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const threadResult = requireThread(id, userId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {
@@ -240,7 +246,7 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
   const parsed = validate(approveToolSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const threadResult = requireThread(id, userId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {
@@ -262,7 +268,7 @@ threadRoutes.patch('/:id', async (c) => {
   const parsed = validate(updateThreadSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const threadResult = requireThread(id, userId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {
@@ -276,20 +282,20 @@ threadRoutes.patch('/:id', async (c) => {
 // ── Message Queue ────────────────────────────────────────────────
 
 // GET /api/threads/:id/queue
-threadRoutes.get('/:id/queue', (c) => {
+threadRoutes.get('/:id/queue', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const threadResult = requireThread(id, userId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
-  return c.json(mq.listQueue(id));
+  return c.json(await mq.listQueue(id));
 });
 
 // DELETE /api/threads/:id/queue/:messageId
-threadRoutes.delete('/:id/queue/:messageId', (c) => {
+threadRoutes.delete('/:id/queue/:messageId', async (c) => {
   const id = c.req.param('id');
   const messageId = c.req.param('messageId');
   const userId = c.get('userId') as string;
-  const threadResult = requireThread(id, userId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {
@@ -309,7 +315,7 @@ threadRoutes.patch('/:id/queue/:messageId', async (c) => {
   const parsed = validate(updateQueuedMessageSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const threadResult = requireThread(id, userId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {
@@ -327,39 +333,39 @@ threadRoutes.patch('/:id/queue/:messageId', async (c) => {
 // ── Thread Comments ──────────────────────────────────────────────
 
 // GET /api/threads/:id/comments
-threadRoutes.get('/:id/comments', (c) => {
+threadRoutes.get('/:id/comments', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const threadResult = requireThread(id, userId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
-  return c.json(tm.listComments(id));
+  return c.json(await tm.listComments(id));
 });
 
 // POST /api/threads/:id/comments
 threadRoutes.post('/:id/comments', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const threadResult = requireThread(id, userId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const { content } = await c.req.json();
   if (!content || typeof content !== 'string') {
     return c.json({ error: 'content is required' }, 400);
   }
-  const comment = tm.insertComment({ threadId: id, userId, source: 'user', content });
+  const comment = await tm.insertComment({ threadId: id, userId, source: 'user', content });
   return c.json(comment, 201);
 });
 
 // DELETE /api/threads/:id/comments/:commentId
-threadRoutes.delete('/:id/comments/:commentId', (c) => {
+threadRoutes.delete('/:id/comments/:commentId', async (c) => {
   const id = c.req.param('id');
   const commentId = c.req.param('commentId');
   const userId = c.get('userId') as string;
-  const threadResult = requireThread(id, userId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {
-    deleteCommentService(id, commentId);
+    await deleteCommentService(id, commentId);
     return c.json({ ok: true });
   } catch (error) {
     return handleServiceError(c, error);
@@ -370,7 +376,7 @@ threadRoutes.delete('/:id/comments/:commentId', (c) => {
 threadRoutes.delete('/:id', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const threadResult = requireThread(id, userId);
+  const threadResult = await requireThread(id, userId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {

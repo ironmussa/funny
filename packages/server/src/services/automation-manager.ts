@@ -11,7 +11,7 @@ import { DEFAULT_MODEL, DEFAULT_THREAD_MODE, DEFAULT_PERMISSION_MODE } from '@fu
 import { eq, and, or, desc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
-import { db, schema } from '../db/index.js';
+import { db, schema, dbAll, dbGet, dbRun } from '../db/index.js';
 
 // Lazy import to avoid circular dependency (scheduler imports us)
 let schedulerHooks: {
@@ -34,7 +34,7 @@ async function getSchedulerHooks() {
 
 // ── Automation CRUD ──────────────────────────────────────────────
 
-export function listAutomations(projectId?: string, userId?: string) {
+export async function listAutomations(projectId?: string, userId?: string) {
   const filters: ReturnType<typeof eq>[] = [];
 
   if (projectId) {
@@ -46,16 +46,17 @@ export function listAutomations(projectId?: string, userId?: string) {
   }
 
   const condition = filters.length > 0 ? and(...filters) : undefined;
-  return db
-    .select()
-    .from(schema.automations)
-    .where(condition)
-    .orderBy(desc(schema.automations.createdAt))
-    .all();
+  return dbAll(
+    db
+      .select()
+      .from(schema.automations)
+      .where(condition)
+      .orderBy(desc(schema.automations.createdAt)),
+  );
 }
 
-export function getAutomation(id: string) {
-  return db.select().from(schema.automations).where(eq(schema.automations.id, id)).get();
+export async function getAutomation(id: string) {
+  return dbGet(db.select().from(schema.automations).where(eq(schema.automations.id, id)));
 }
 
 export async function createAutomation(data: {
@@ -70,8 +71,8 @@ export async function createAutomation(data: {
   const id = nanoid();
   const now = new Date().toISOString();
 
-  db.insert(schema.automations)
-    .values({
+  await dbRun(
+    db.insert(schema.automations).values({
       id,
       projectId: data.projectId,
       userId: data.userId || '__local__',
@@ -86,10 +87,10 @@ export async function createAutomation(data: {
       maxRunHistory: 20,
       createdAt: now,
       updatedAt: now,
-    })
-    .run();
+    }),
+  );
 
-  const automation = getAutomation(id)!;
+  const automation = (await getAutomation(id))!;
 
   // Notify scheduler to create a cron job
   const hooks = await getSchedulerHooks();
@@ -100,10 +101,10 @@ export async function createAutomation(data: {
 
 export async function updateAutomation(id: string, updates: Record<string, any>) {
   updates.updatedAt = new Date().toISOString();
-  db.update(schema.automations).set(updates).where(eq(schema.automations.id, id)).run();
+  await dbRun(db.update(schema.automations).set(updates).where(eq(schema.automations.id, id)));
 
   // Notify scheduler to reschedule the cron job
-  const automation = getAutomation(id);
+  const automation = await getAutomation(id);
   if (automation) {
     const hooks = await getSchedulerHooks();
     hooks.onAutomationUpdated(automation);
@@ -115,12 +116,12 @@ export async function deleteAutomation(id: string) {
   const hooks = await getSchedulerHooks();
   hooks.onAutomationDeleted(id);
 
-  db.delete(schema.automations).where(eq(schema.automations.id, id)).run();
+  await dbRun(db.delete(schema.automations).where(eq(schema.automations.id, id)));
 }
 
 // ── Run CRUD ─────────────────────────────────────────────────────
 
-export function createRun(data: {
+export async function createRun(data: {
   id: string;
   automationId: string;
   threadId: string;
@@ -128,45 +129,44 @@ export function createRun(data: {
   triageStatus: string;
   startedAt: string;
 }) {
-  db.insert(schema.automationRuns).values(data).run();
+  await dbRun(db.insert(schema.automationRuns).values(data));
 }
 
-export function updateRun(id: string, updates: Record<string, any>) {
-  db.update(schema.automationRuns).set(updates).where(eq(schema.automationRuns.id, id)).run();
+export async function updateRun(id: string, updates: Record<string, any>) {
+  await dbRun(
+    db.update(schema.automationRuns).set(updates).where(eq(schema.automationRuns.id, id)),
+  );
 }
 
-export function listRuns(automationId: string) {
-  return db
-    .select()
-    .from(schema.automationRuns)
-    .where(eq(schema.automationRuns.automationId, automationId))
-    .orderBy(desc(schema.automationRuns.startedAt))
-    .all();
+export async function listRuns(automationId: string) {
+  return dbAll(
+    db
+      .select()
+      .from(schema.automationRuns)
+      .where(eq(schema.automationRuns.automationId, automationId))
+      .orderBy(desc(schema.automationRuns.startedAt)),
+  );
 }
 
-export function listRunningRuns() {
-  return db
-    .select()
-    .from(schema.automationRuns)
-    .where(eq(schema.automationRuns.status, 'running'))
-    .all();
+export async function listRunningRuns() {
+  return dbAll(
+    db.select().from(schema.automationRuns).where(eq(schema.automationRuns.status, 'running')),
+  );
 }
 
-export function getRunByThreadId(threadId: string) {
-  return db
-    .select()
-    .from(schema.automationRuns)
-    .where(eq(schema.automationRuns.threadId, threadId))
-    .get();
+export async function getRunByThreadId(threadId: string) {
+  return dbGet(
+    db.select().from(schema.automationRuns).where(eq(schema.automationRuns.threadId, threadId)),
+  );
 }
 
 /** Get pending-review runs, optionally filtered by project */
-export function listPendingReviewRuns(projectId?: string) {
+export async function listPendingReviewRuns(projectId?: string) {
   return listInboxRuns({ projectId, triageStatus: 'pending' });
 }
 
 /** Get inbox runs with flexible filtering */
-export function listInboxRuns(options?: { projectId?: string; triageStatus?: string }) {
+export async function listInboxRuns(options?: { projectId?: string; triageStatus?: string }) {
   const conditions = [
     or(eq(schema.automationRuns.status, 'completed'), eq(schema.automationRuns.status, 'failed')),
   ];
@@ -181,16 +181,17 @@ export function listInboxRuns(options?: { projectId?: string; triageStatus?: str
     conditions.push(eq(schema.automations.projectId, options.projectId));
   }
 
-  return db
-    .select({
-      run: schema.automationRuns,
-      automation: schema.automations,
-      thread: schema.threads,
-    })
-    .from(schema.automationRuns)
-    .innerJoin(schema.automations, eq(schema.automationRuns.automationId, schema.automations.id))
-    .innerJoin(schema.threads, eq(schema.automationRuns.threadId, schema.threads.id))
-    .where(and(...conditions))
-    .orderBy(desc(schema.automationRuns.completedAt))
-    .all();
+  return dbAll(
+    db
+      .select({
+        run: schema.automationRuns,
+        automation: schema.automations,
+        thread: schema.threads,
+      })
+      .from(schema.automationRuns)
+      .innerJoin(schema.automations, eq(schema.automationRuns.automationId, schema.automations.id))
+      .innerJoin(schema.threads, eq(schema.automationRuns.threadId, schema.threads.id))
+      .where(and(...conditions))
+      .orderBy(desc(schema.automationRuns.completedAt)),
+  );
 }

@@ -47,11 +47,11 @@ import { wsBroker } from './ws-broker.js';
  * In local mode, uses the '__local__' profile for GitHub token support.
  * In multi-user mode, uses the authenticated user's profile.
  */
-export function resolveIdentity(userId: string): GitIdentityOptions | undefined {
+export async function resolveIdentity(userId: string): Promise<GitIdentityOptions | undefined> {
   const effectiveUserId =
     getAuthMode() === 'local' || userId === '__local__' ? '__local__' : userId;
-  const author = getGitIdentity(effectiveUserId) ?? undefined;
-  const githubToken = getGithubToken(effectiveUserId) ?? undefined;
+  const author = (await getGitIdentity(effectiveUserId)) ?? undefined;
+  const githubToken = (await getGithubToken(effectiveUserId)) ?? undefined;
   if (!author && !githubToken) return undefined;
   return { author, githubToken };
 }
@@ -65,8 +65,8 @@ export function validateFilePaths(cwd: string, paths: string[]): Result<void, Do
   return ok(undefined);
 }
 
-function getProjectId(threadId: string): string {
-  return tm.getThread(threadId)?.projectId ?? '';
+async function getProjectId(threadId: string): Promise<string> {
+  return (await tm.getThread(threadId))?.projectId ?? '';
 }
 
 // ── Thread-scoped git operations ────────────────────────────────
@@ -78,11 +78,11 @@ export function stage(
   paths: string[],
   workflowId?: string,
 ): ResultAsync<void, DomainError> {
-  return gitStage(cwd, paths).map(() => {
+  return gitStage(cwd, paths).map(async () => {
     threadEventBus.emit('git:staged', {
       threadId,
       userId,
-      projectId: getProjectId(threadId),
+      projectId: await getProjectId(threadId),
       paths,
       cwd,
       workflowId,
@@ -98,11 +98,11 @@ export function unstage(
   paths: string[],
   workflowId?: string,
 ): ResultAsync<void, DomainError> {
-  return gitUnstage(cwd, paths).map(() => {
+  return gitUnstage(cwd, paths).map(async () => {
     threadEventBus.emit('git:unstaged', {
       threadId,
       userId,
-      projectId: getProjectId(threadId),
+      projectId: await getProjectId(threadId),
       paths,
       cwd,
       workflowId,
@@ -118,11 +118,11 @@ export function revert(
   paths: string[],
   workflowId?: string,
 ): ResultAsync<void, DomainError> {
-  return gitRevert(cwd, paths).map(() => {
+  return gitRevert(cwd, paths).map(async () => {
     threadEventBus.emit('git:reverted', {
       threadId,
       userId,
-      projectId: getProjectId(threadId),
+      projectId: await getProjectId(threadId),
       paths,
       cwd,
       workflowId,
@@ -140,28 +140,29 @@ export function commitChanges(
   noVerify?: boolean,
   workflowId?: string,
 ): ResultAsync<string, DomainError> {
-  const identity = resolveIdentity(userId);
-  return gitCommit(cwd, message, identity, amend, noVerify).andThen((output) => {
-    // Capture the SHA of the newly created commit (non-critical)
-    return ResultAsync.fromSafePromise(
-      gitRead(['rev-parse', 'HEAD'], { cwd, reject: false })
-        .then((shaResult) => (shaResult.exitCode === 0 ? shaResult.stdout.trim() : undefined))
-        .catch(() => undefined),
-    ).map((commitSha) => {
-      threadEventBus.emit('git:committed', {
-        threadId,
-        userId,
-        projectId: getProjectId(threadId),
-        message,
-        amend,
-        cwd,
-        commitSha,
-        workflowId,
+  return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) =>
+    gitCommit(cwd, message, identity, amend, noVerify).andThen((output) => {
+      // Capture the SHA of the newly created commit (non-critical)
+      return ResultAsync.fromSafePromise(
+        gitRead(['rev-parse', 'HEAD'], { cwd, reject: false })
+          .then((shaResult) => (shaResult.exitCode === 0 ? shaResult.stdout.trim() : undefined))
+          .catch(() => undefined),
+      ).map(async (commitSha) => {
+        threadEventBus.emit('git:committed', {
+          threadId,
+          userId,
+          projectId: await getProjectId(threadId),
+          message,
+          amend,
+          cwd,
+          commitSha,
+          workflowId,
+        });
+        invalidateStatusCache(cwd);
+        return output;
       });
-      invalidateStatusCache(cwd);
-      return output;
-    });
-  });
+    }),
+  );
 }
 
 export function pushChanges(
@@ -170,18 +171,19 @@ export function pushChanges(
   cwd: string,
   workflowId?: string,
 ): ResultAsync<string, DomainError> {
-  const identity = resolveIdentity(userId);
-  return gitPush(cwd, identity).map((output) => {
-    threadEventBus.emit('git:pushed', {
-      threadId,
-      userId,
-      projectId: getProjectId(threadId),
-      cwd,
-      workflowId,
-    });
-    invalidateStatusCache(cwd);
-    return output;
-  });
+  return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) =>
+    gitPush(cwd, identity).map(async (output) => {
+      threadEventBus.emit('git:pushed', {
+        threadId,
+        userId,
+        projectId: await getProjectId(threadId),
+        cwd,
+        workflowId,
+      });
+      invalidateStatusCache(cwd);
+      return output;
+    }),
+  );
 }
 
 export function pullChanges(
@@ -189,18 +191,19 @@ export function pullChanges(
   userId: string,
   cwd: string,
 ): ResultAsync<string, DomainError> {
-  const identity = resolveIdentity(userId);
-  return gitPull(cwd, identity).map((output) => {
-    threadEventBus.emit('git:pulled', {
-      threadId,
-      userId,
-      projectId: getProjectId(threadId),
-      cwd,
-      output,
-    });
-    invalidateStatusCache(cwd);
-    return output;
-  });
+  return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) =>
+    gitPull(cwd, identity).map(async (output) => {
+      threadEventBus.emit('git:pulled', {
+        threadId,
+        userId,
+        projectId: await getProjectId(threadId),
+        cwd,
+        output,
+      });
+      invalidateStatusCache(cwd);
+      return output;
+    }),
+  );
 }
 
 export function stashChanges(
@@ -208,11 +211,11 @@ export function stashChanges(
   userId: string,
   cwd: string,
 ): ResultAsync<string, DomainError> {
-  return gitStash(cwd).map((output) => {
+  return gitStash(cwd).map(async (output) => {
     threadEventBus.emit('git:stashed', {
       threadId,
       userId,
-      projectId: getProjectId(threadId),
+      projectId: await getProjectId(threadId),
       cwd,
       output,
     });
@@ -226,11 +229,11 @@ export function popStash(
   userId: string,
   cwd: string,
 ): ResultAsync<string, DomainError> {
-  return gitStashPop(cwd).map((output) => {
+  return gitStashPop(cwd).map(async (output) => {
     threadEventBus.emit('git:stash-popped', {
       threadId,
       userId,
-      projectId: getProjectId(threadId),
+      projectId: await getProjectId(threadId),
       cwd,
       output,
     });
@@ -244,11 +247,11 @@ export function softReset(
   userId: string,
   cwd: string,
 ): ResultAsync<string, DomainError> {
-  return gitResetSoft(cwd).map((output) => {
+  return gitResetSoft(cwd).map(async (output) => {
     threadEventBus.emit('git:reset-soft', {
       threadId,
       userId,
-      projectId: getProjectId(threadId),
+      projectId: await getProjectId(threadId),
       cwd,
       output,
     });
@@ -268,97 +271,114 @@ export interface MergeParams {
 }
 
 export function merge(params: MergeParams): ResultAsync<string, DomainError> {
-  const thread = tm.getThread(params.threadId);
-  if (!thread || thread.mode !== 'worktree' || !thread.branch) {
-    return errAsync(badRequest('Merge is only available for worktree threads'));
-  }
+  return ResultAsync.fromSafePromise(
+    (async () => {
+      const thread = await tm.getThread(params.threadId);
+      if (!thread || thread.mode !== 'worktree' || !thread.branch) {
+        return { err: badRequest('Merge is only available for worktree threads') } as const;
+      }
 
-  const project = pm.getProject(thread.projectId);
-  if (!project) return errAsync(notFound('Project not found'));
+      const project = await pm.getProject(thread.projectId);
+      if (!project) return { err: notFound('Project not found') } as const;
 
-  const targetBranch = params.targetBranch || thread.baseBranch;
-  if (!targetBranch) {
-    return errAsync(badRequest('No target branch specified and no baseBranch set on thread'));
-  }
+      return { thread, project } as const;
+    })(),
+  ).andThen((lookup) => {
+    if ('err' in lookup) return errAsync(lookup.err);
+    const { thread, project } = lookup;
 
-  const identity = resolveIdentity(params.userId);
-  return gitMerge(
-    project.path,
-    thread.branch,
-    targetBranch,
-    identity,
-    thread.worktreePath ?? undefined,
-  ).andThen((mergeOutput) => {
-    threadEventBus.emit('git:merged', {
-      threadId: params.threadId,
-      userId: params.userId,
-      projectId: thread.projectId,
-      sourceBranch: thread.branch!,
-      targetBranch,
-      output: mergeOutput,
-    });
+    const targetBranch = params.targetBranch || thread.baseBranch;
+    if (!targetBranch) {
+      return errAsync(badRequest('No target branch specified and no baseBranch set on thread'));
+    }
 
-    return ResultAsync.fromSafePromise(
-      (async () => {
-        if (params.push) {
-          const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
-          const pushResult = await git(['push', 'origin', targetBranch], project.path, env);
-          if (pushResult.isErr()) {
-            return err<string, DomainError>(
-              internal(`Merge succeeded but push failed: ${pushResult.error.message}`),
-            );
-          }
-        }
+    return ResultAsync.fromSafePromise(resolveIdentity(params.userId)).andThen((identity) =>
+      gitMerge(
+        project.path,
+        thread.branch,
+        targetBranch,
+        identity,
+        thread.worktreePath ?? undefined,
+      ).andThen((mergeOutput) => {
+        threadEventBus.emit('git:merged', {
+          threadId: params.threadId,
+          userId: params.userId,
+          projectId: thread.projectId,
+          sourceBranch: thread.branch!,
+          targetBranch,
+          output: mergeOutput,
+        });
 
-        if (params.cleanup && thread.worktreePath) {
-          await removeWorktree(project.path, thread.worktreePath).catch((e) =>
-            log.warn('Worktree directory could not be removed (will be orphaned)', {
-              namespace: 'git',
-              worktreePath: thread.worktreePath,
-              error: String(e),
-            }),
-          );
+        return ResultAsync.fromSafePromise(
+          (async () => {
+            if (params.push) {
+              const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
+              const pushResult = await git(['push', 'origin', targetBranch], project.path, env);
+              if (pushResult.isErr()) {
+                return err<string, DomainError>(
+                  internal(`Merge succeeded but push failed: ${pushResult.error.message}`),
+                );
+              }
+            }
 
-          await removeBranch(project.path, thread.branch!).catch((e) =>
-            log.warn('Failed to remove branch after merge', { namespace: 'git', error: String(e) }),
-          );
-          tm.updateThread(params.threadId, { worktreePath: null, branch: null, mode: 'local' });
+            if (params.cleanup && thread.worktreePath) {
+              await removeWorktree(project.path, thread.worktreePath).catch((e) =>
+                log.warn('Worktree directory could not be removed (will be orphaned)', {
+                  namespace: 'git',
+                  worktreePath: thread.worktreePath,
+                  error: String(e),
+                }),
+              );
 
-          // Calculate actual unpushed commits on the target branch after merge
-          let unpushedCommitCount = 0;
-          const countResult = await git(
-            ['rev-list', '--count', `origin/${targetBranch}..${targetBranch}`],
-            project.path,
-          );
-          if (countResult.isOk()) {
-            unpushedCommitCount = parseInt(countResult.value.trim(), 10) || 0;
-          }
+              await removeBranch(project.path, thread.branch!).catch((e) =>
+                log.warn('Failed to remove branch after merge', {
+                  namespace: 'git',
+                  error: String(e),
+                }),
+              );
+              await tm.updateThread(params.threadId, {
+                worktreePath: null,
+                branch: null,
+                mode: 'local',
+              });
 
-          wsBroker.emitToUser(params.userId, {
-            type: 'git:status',
-            threadId: params.threadId,
-            data: {
-              statuses: [
-                {
-                  threadId: params.threadId,
-                  branchKey: `tid:${params.threadId}`,
-                  state: 'merged' as const,
-                  dirtyFileCount: 0,
-                  unpushedCommitCount,
-                  hasRemoteBranch: unpushedCommitCount > 0,
-                  isMergedIntoBase: true,
-                  linesAdded: 0,
-                  linesDeleted: 0,
+              // Calculate actual unpushed commits on the target branch after merge
+              let unpushedCommitCount = 0;
+              const countResult = await git(
+                ['rev-list', '--count', `origin/${targetBranch}..${targetBranch}`],
+                project.path,
+              );
+              if (countResult.isOk()) {
+                unpushedCommitCount = parseInt(countResult.value.trim(), 10) || 0;
+              }
+
+              wsBroker.emitToUser(params.userId, {
+                type: 'git:status',
+                threadId: params.threadId,
+                data: {
+                  statuses: [
+                    {
+                      threadId: params.threadId,
+                      branchKey: `tid:${params.threadId}`,
+                      state: 'merged' as const,
+                      dirtyFileCount: 0,
+                      unpushedCommitCount,
+                      hasRemoteBranch: unpushedCommitCount > 0,
+                      isMergedIntoBase: true,
+                      linesAdded: 0,
+                      linesDeleted: 0,
+                    },
+                  ],
                 },
-              ],
-            },
-          });
-        }
+              });
+            }
 
-        invalidateStatusCache(thread.worktreePath ?? project.path);
-        return ok<string, DomainError>(mergeOutput);
-      })(),
-    ).andThen((r) => r);
+            invalidateStatusCache(thread.worktreePath ?? project.path);
+            return ok<string, DomainError>(mergeOutput);
+          })(),
+        ).andThen((r) => r);
+      }),
+    );
   });
 }
 
@@ -373,33 +393,35 @@ export interface CreatePRParams {
 }
 
 export function createPullRequest(params: CreatePRParams): ResultAsync<string, DomainError> {
-  const thread = tm.getThread(params.threadId);
-  const identity = resolveIdentity(params.userId);
-  return gitCreatePR(
-    params.cwd,
-    params.title,
-    params.body,
-    thread?.baseBranch ?? undefined,
-    identity,
-  ).andThen((prUrl) => {
-    const prData = { title: params.title, url: prUrl };
-    return ResultAsync.fromSafePromise(
-      saveThreadEvent(params.threadId, 'git:pr_created', prData).then(() => {
-        wsBroker.emitToUser(params.userId, {
-          type: 'thread:event',
-          threadId: params.threadId,
-          data: {
-            event: {
-              id: crypto.randomUUID(),
+  return ResultAsync.fromSafePromise(tm.getThread(params.threadId)).andThen((thread) =>
+    ResultAsync.fromSafePromise(resolveIdentity(params.userId)).andThen((identity) =>
+      gitCreatePR(
+        params.cwd,
+        params.title,
+        params.body,
+        thread?.baseBranch ?? undefined,
+        identity,
+      ).andThen((prUrl) => {
+        const prData = { title: params.title, url: prUrl };
+        return ResultAsync.fromSafePromise(
+          saveThreadEvent(params.threadId, 'git:pr_created', prData).then(() => {
+            wsBroker.emitToUser(params.userId, {
+              type: 'thread:event',
               threadId: params.threadId,
-              type: 'git:pr_created',
-              data: JSON.stringify(prData),
-              createdAt: new Date().toISOString(),
-            },
-          },
-        });
-        return prUrl;
+              data: {
+                event: {
+                  id: crypto.randomUUID(),
+                  threadId: params.threadId,
+                  type: 'git:pr_created',
+                  data: JSON.stringify(prData),
+                  createdAt: new Date().toISOString(),
+                },
+              },
+            });
+            return prUrl;
+          }),
+        );
       }),
-    );
-  });
+    ),
+  );
 }

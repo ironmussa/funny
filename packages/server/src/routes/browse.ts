@@ -22,13 +22,13 @@ const app = new Hono<HonoEnv>();
  * Check if a path is within an allowed directory.
  * Scoped to the requesting user's projects in multi-user mode.
  */
-function isPathAllowed(targetPath: string, userId: string): boolean {
+async function isPathAllowed(targetPath: string, userId: string): Promise<boolean> {
   const normalizedTarget = normalize(resolve(targetPath));
 
   const home = normalize(resolve(homedir()));
   if (normalizedTarget.startsWith(home)) return true;
 
-  const projects = pm.listProjects(userId);
+  const projects = await pm.listProjects(userId);
   for (const project of projects) {
     const projectPath = normalize(resolve(project.path));
     if (normalizedTarget.startsWith(projectPath)) return true;
@@ -39,8 +39,8 @@ function isPathAllowed(targetPath: string, userId: string): boolean {
 }
 
 /** Return 403 response if path is not in an allowed directory */
-function checkAllowedPath(path: string, userId: string): Response | null {
-  if (!isPathAllowed(path, userId)) {
+async function checkAllowedPath(path: string, userId: string): Promise<Response | null> {
+  if (!(await isPathAllowed(path, userId))) {
     return new Response(
       JSON.stringify({ error: 'Access denied: path is outside allowed directories' }),
       {
@@ -84,13 +84,13 @@ app.get('/roots', (c) => {
 });
 
 // List subdirectories of a given path
-app.get('/list', (c) => {
+app.get('/list', async (c) => {
   const dirPathOrRes = checkRequired(c.req.query('path'), 'path query parameter');
   if (dirPathOrRes instanceof Response) return dirPathOrRes;
   const dirPath = dirPathOrRes;
   const userId = c.get('userId') as string;
 
-  const denied = checkAllowedPath(dirPath, userId);
+  const denied = await checkAllowedPath(dirPath, userId);
   if (denied) return denied;
 
   try {
@@ -131,7 +131,7 @@ app.get('/repo-name', async (c) => {
   const dirPath = dirPathOrRes;
   const userId = c.get('userId') as string;
 
-  const denied = checkAllowedPath(dirPath, userId);
+  const denied = await checkAllowedPath(dirPath, userId);
   if (denied) return denied;
 
   const remoteResult = await getRemoteUrl(dirPath);
@@ -151,7 +151,7 @@ app.get('/remote-url', async (c) => {
   const dirPath = dirPathOrRes;
   const userId = c.get('userId') as string;
 
-  const denied = checkAllowedPath(dirPath, userId);
+  const denied = await checkAllowedPath(dirPath, userId);
   if (denied) return denied;
 
   const remoteResult = await getRemoteUrl(dirPath);
@@ -168,7 +168,7 @@ app.post('/git-init', async (c) => {
   if (!dirPath) return c.json({ error: 'path is required' }, 400);
   const userId = c.get('userId') as string;
 
-  const denied = checkAllowedPath(dirPath, userId);
+  const denied = await checkAllowedPath(dirPath, userId);
   if (denied) return denied;
 
   const result = await initRepo(dirPath);
@@ -182,7 +182,7 @@ app.post('/open-directory', async (c) => {
   if (!dirPath) return c.json({ error: 'path is required' }, 400);
   const userId = c.get('userId') as string;
 
-  const denied = checkAllowedPath(dirPath, userId);
+  const denied = await checkAllowedPath(dirPath, userId);
   if (denied) return denied;
 
   // Normalize and resolve the path to its absolute form
@@ -231,7 +231,7 @@ app.post('/open-in-editor', async (c) => {
   if (!editor) return c.json({ error: 'editor is required' }, 400);
   const userId = c.get('userId') as string;
 
-  const denied = checkAllowedPath(dirPath, userId);
+  const denied = await checkAllowedPath(dirPath, userId);
   if (denied) return denied;
 
   const editorCommands: Record<string, { cmd: string; args: string[] }> = {
@@ -265,7 +265,7 @@ app.post('/open-terminal', async (c) => {
   if (!dirPath) return c.json({ error: 'path is required' }, 400);
   const userId = c.get('userId') as string;
 
-  const denied = checkAllowedPath(dirPath, userId);
+  const denied = await checkAllowedPath(dirPath, userId);
   if (denied) return denied;
 
   // Normalize and resolve the path to its absolute form
@@ -315,7 +315,7 @@ app.get('/files', async (c) => {
   const dirPath = dirPathOrRes;
   const userId = c.get('userId') as string;
 
-  const denied = checkAllowedPath(dirPath, userId);
+  const denied = await checkAllowedPath(dirPath, userId);
   if (denied) return denied;
 
   const query = c.req.query('query') || '';

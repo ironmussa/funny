@@ -521,12 +521,8 @@ export function handleWSCompactBoundary(
     activeThread: {
       ...activeThread,
       compactionEvents: [...(activeThread.compactionEvents ?? []), data],
-      contextUsage: {
-        cumulativeInputTokens: 0,
-        lastInputTokens: 0,
-        lastOutputTokens: 0,
-        tokenOffset: (activeThread.contextUsage?.tokenOffset ?? 0) + data.preTokens,
-      },
+      // After compaction, the next assistant message's input_tokens will
+      // naturally reflect the post-compaction context size — no reset needed.
     },
   });
 }
@@ -552,7 +548,6 @@ export function handleWSContextUsage(
         cumulativeInputTokens: data.cumulativeInputTokens,
         lastInputTokens: data.inputTokens,
         lastOutputTokens: data.outputTokens,
-        tokenOffset: activeThread.contextUsage?.tokenOffset ?? 0,
       },
     },
   });

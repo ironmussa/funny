@@ -21,7 +21,7 @@ export const pipelineTriggerHandler: EventHandler<'git:committed'> = {
   action: async (event) => {
     const { threadId, userId, projectId, cwd, commitSha, isPipelineCommit, pipelineRunId } = event;
 
-    const pipeline = getPipelineForProject(projectId);
+    const pipeline = await getPipelineForProject(projectId);
     if (!pipeline) return; // No pipeline configured for this project
 
     // Skip if a commit workflow is already running for this thread/project —

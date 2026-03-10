@@ -187,7 +187,7 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
 
   // Emit workflow:started thread event (only for thread-scoped operations)
   if (params.threadId) {
-    emitWorkflowEvent(params.userId, params.threadId, 'workflow:started', {
+    void emitWorkflowEvent(params.userId, params.threadId, 'workflow:started', {
       workflowId,
       action: params.action,
       title: TITLES[params.action],
@@ -199,12 +199,12 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
     maxIterations: pipelineConfig?.maxIterations,
   };
 
-  runPipeline(pipeline, initialCtx, pipelineOpts)
+  void runPipeline(pipeline, initialCtx, pipelineOpts)
     .then((result) => {
       if (result.outcome === 'completed') {
         emit('completed');
         if (params.threadId) {
-          emitWorkflowEvent(params.userId, params.threadId, 'workflow:completed', {
+          void emitWorkflowEvent(params.userId, params.threadId, 'workflow:completed', {
             workflowId,
             action: params.action,
             status: 'completed',
@@ -213,7 +213,7 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
       } else {
         emit('failed');
         if (params.threadId) {
-          emitWorkflowEvent(params.userId, params.threadId, 'workflow:completed', {
+          void emitWorkflowEvent(params.userId, params.threadId, 'workflow:completed', {
             workflowId,
             action: params.action,
             status: 'failed',
@@ -230,7 +230,7 @@ export function executeWorkflow(params: WorkflowParams): { workflowId: string } 
       });
       emit('failed');
       if (params.threadId) {
-        emitWorkflowEvent(params.userId, params.threadId, 'workflow:completed', {
+        void emitWorkflowEvent(params.userId, params.threadId, 'workflow:completed', {
           workflowId,
           action: params.action,
           status: 'failed',

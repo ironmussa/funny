@@ -143,7 +143,7 @@ export interface CreateIdleThreadParams {
 }
 
 export async function createIdleThread(params: CreateIdleThreadParams) {
-  const project = pm.getProject(params.projectId);
+  const project = await pm.getProject(params.projectId);
   if (!project) throw new ThreadServiceError('Project not found', 404);
 
   const threadId = nanoid();
@@ -181,13 +181,12 @@ export async function createIdleThread(params: CreateIdleThreadParams) {
     initialPrompt: params.prompt,
     cost: 0,
     createdAt: new Date().toISOString(),
-    createdBy: params.userId,
   };
 
-  tm.createThread(thread);
+  await tm.createThread(thread);
 
   if (params.prompt) {
-    tm.insertMessage({
+    await tm.insertMessage({
       threadId,
       role: 'user',
       content: params.prompt,
@@ -232,7 +231,7 @@ export interface CreateAndStartThreadParams {
 }
 
 export async function createAndStartThread(params: CreateAndStartThreadParams) {
-  const project = pm.getProject(params.projectId);
+  const project = await pm.getProject(params.projectId);
   if (!project) throw new ThreadServiceError('Project not found', 404);
 
   const threadId = nanoid();
@@ -283,10 +282,9 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
       parentThreadId: params.parentThreadId,
       cost: 0,
       createdAt: new Date().toISOString(),
-      createdBy: params.userId,
     };
 
-    tm.createThread(thread);
+    await tm.createThread(thread);
 
     if (params.prompt) {
       // Augment prompt with file contents so the stored message includes <referenced-files> XML
@@ -295,7 +293,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
         params.fileReferences,
         project.path,
       );
-      tm.insertMessage({
+      await tm.insertMessage({
         threadId,
         role: 'user',
         content: storedContent,
@@ -314,7 +312,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
     });
 
     // Background: create worktree, run post-create commands, start agent
-    (async () => {
+    void (async () => {
       try {
         const wtResult = await createWorktree(
           project.path,
@@ -323,7 +321,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
           emitSetupProgress,
         );
         if (wtResult.isErr()) {
-          tm.updateThread(threadId, { status: 'failed' });
+          await tm.updateThread(threadId, { status: 'failed' });
           emitThreadUpdated(params.userId, threadId, { status: 'failed' });
           return;
         }
@@ -339,7 +337,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
         }
 
         // Update thread with worktree info and transition to pending
-        tm.updateThread(threadId, { worktreePath: wtPath, status: 'pending' });
+        await tm.updateThread(threadId, { worktreePath: wtPath, status: 'pending' });
         wsBroker.emitToUser(params.userId, {
           type: 'worktree:setup_complete',
           threadId,
@@ -375,12 +373,12 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
           );
         } catch (err: any) {
           log.error('Failed to start agent after worktree setup', { threadId, error: err });
-          tm.updateThread(threadId, { status: 'failed' });
+          await tm.updateThread(threadId, { status: 'failed' });
           emitThreadUpdated(params.userId, threadId, { status: 'failed' });
         }
       } catch (err) {
         log.error('Background worktree setup failed', { threadId, error: String(err) });
-        tm.updateThread(threadId, { status: 'failed' });
+        await tm.updateThread(threadId, { status: 'failed' });
         emitThreadUpdated(params.userId, threadId, { status: 'failed' });
       }
     })();
@@ -426,10 +424,9 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
       parentThreadId: params.parentThreadId,
       cost: 0,
       createdAt: new Date().toISOString(),
-      createdBy: params.userId,
     };
 
-    tm.createThread(thread);
+    await tm.createThread(thread);
 
     if (params.prompt) {
       const storedContent = await augmentPromptWithFiles(
@@ -437,7 +434,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
         params.fileReferences,
         project.path,
       );
-      tm.insertMessage({
+      await tm.insertMessage({
         threadId,
         role: 'user',
         content: storedContent,
@@ -456,11 +453,11 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
     });
 
     // Background: checkout branch, then start agent
-    (async () => {
+    void (async () => {
       try {
         await checkoutBranchWithProgress(project.path, resolvedBaseBranch!, emitSetupProgress);
 
-        tm.updateThread(threadId, { status: 'pending' });
+        await tm.updateThread(threadId, { status: 'pending' });
         wsBroker.emitToUser(params.userId, {
           type: 'worktree:setup_complete',
           threadId,
@@ -491,7 +488,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
         );
       } catch (err: any) {
         log.error('Failed to checkout branch and start agent', { threadId, error: err });
-        tm.updateThread(threadId, { status: 'failed' });
+        await tm.updateThread(threadId, { status: 'failed' });
         emitThreadUpdated(params.userId, threadId, { status: 'failed' });
       }
     })();
@@ -518,10 +515,9 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
     parentThreadId: params.parentThreadId,
     cost: 0,
     createdAt: new Date().toISOString(),
-    createdBy: params.userId,
   };
 
-  tm.createThread(thread);
+  await tm.createThread(thread);
 
   const cwd = worktreePath ?? project.path;
 
@@ -545,11 +541,11 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
     }
 
     const branch = threadBranch || 'main';
-    const githubToken = getGithubToken(params.userId);
+    const githubToken = await getGithubToken(params.userId);
 
     // Launch container in background
-    (async () => {
-      tm.updateThread(threadId, { status: 'setting_up' });
+    void (async () => {
+      await tm.updateThread(threadId, { status: 'setting_up' });
       emitThreadUpdated(params.userId, threadId, { status: 'setting_up' });
 
       const result = await launchContainer({
@@ -562,13 +558,13 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
 
       if (result.isErr()) {
         log.error('Failed to launch container', { threadId, error: result.error.message });
-        tm.updateThread(threadId, { status: 'failed' });
+        await tm.updateThread(threadId, { status: 'failed' });
         emitThreadUpdated(params.userId, threadId, { status: 'failed' });
         return;
       }
 
       const { containerUrl, containerName } = result.value;
-      tm.updateThread(threadId, {
+      await tm.updateThread(threadId, {
         containerUrl,
         containerName,
         status: 'running',
@@ -650,7 +646,7 @@ export interface SendMessageResult {
 }
 
 export async function sendMessage(params: SendMessageParams): Promise<SendMessageResult> {
-  const thread = tm.getThread(params.threadId);
+  const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
   log.info('sendMessage called', {
@@ -664,7 +660,7 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
     contentPreview: params.content.slice(0, 120),
   });
 
-  const cwd = thread.worktreePath ?? pm.getProject(thread.projectId)?.path;
+  const cwd = thread.worktreePath ?? (await pm.getProject(thread.projectId))?.path;
   if (!cwd) throw new ThreadServiceError('Project path not found', 404);
 
   const effectiveProvider = (params.provider ||
@@ -687,7 +683,7 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
     updates.baseBranch = params.baseBranch;
   }
   if (Object.keys(updates).length > 0) {
-    tm.updateThread(params.threadId, updates);
+    await tm.updateThread(params.threadId, updates);
   }
 
   // Auto-move idle backlog threads to in_progress when a message is sent
@@ -698,15 +694,15 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
       stageUpdates.title = params.content.slice(0, 200);
       stageUpdates.initialPrompt = params.content;
     }
-    tm.updateThread(params.threadId, stageUpdates);
+    await tm.updateThread(params.threadId, stageUpdates);
 
-    const { messages: draftMessages } = tm.getThreadMessages({
+    const { messages: draftMessages } = await tm.getThreadMessages({
       threadId: params.threadId,
       limit: 1,
     });
     const draftMsg = draftMessages[0];
     if (draftMsg && draftMsg.role === 'user') {
-      tm.updateMessage(draftMsg.id, {
+      await tm.updateMessage(draftMsg.id, {
         content: params.content,
         images: params.images?.length ? JSON.stringify(params.images) : null,
       });
@@ -716,7 +712,7 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
 
   // If the thread was waiting for user input, persist the answer in tool call output
   if (thread.status === 'waiting') {
-    const pendingTC = tm.findLastUnansweredInteractiveToolCall(params.threadId);
+    const pendingTC = await tm.findLastUnansweredInteractiveToolCall(params.threadId);
     log.info('sendMessage: thread is waiting, resolving tool call', {
       namespace: 'thread-service',
       threadId: params.threadId,
@@ -726,7 +722,7 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
       pendingToolCallName: pendingTC?.name ?? 'none',
     });
     if (pendingTC) {
-      tm.updateToolCallOutput(pendingTC.id, params.content);
+      await tm.updateToolCallOutput(pendingTC.id, params.content);
     }
   }
 
@@ -735,7 +731,7 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
 
   // Check if the agent is running and the project uses queue mode
   const agentRunning = isAgentRunning(params.threadId);
-  const project = pm.getProject(thread.projectId);
+  const project = await pm.getProject(thread.projectId);
   const followUpMode = project?.followUpMode || DEFAULT_FOLLOW_UP_MODE;
 
   // When the thread is waiting for user input (plan acceptance, question answer),
@@ -758,7 +754,7 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
     !threadIsTerminal &&
     (followUpMode === 'queue' || params.forceQueue)
   ) {
-    const queued = mq.enqueue(params.threadId, {
+    const queued = await mq.enqueue(params.threadId, {
       content: augmentedContent,
       provider: effectiveProvider,
       model: effectiveModel,
@@ -769,7 +765,7 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
       fileReferences: params.fileReferences ? JSON.stringify(params.fileReferences) : undefined,
     });
 
-    tm.insertMessage({
+    await tm.insertMessage({
       threadId: params.threadId,
       role: 'user',
       content: augmentedContent,
@@ -778,8 +774,8 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
       permissionMode: effectivePermission,
     });
 
-    const qCount = mq.queueCount(params.threadId);
-    const nextMsg = mq.peek(params.threadId);
+    const qCount = await mq.queueCount(params.threadId);
+    const nextMsg = await mq.peek(params.threadId);
     const queueEvent = {
       type: 'thread:queue_update' as const,
       threadId: params.threadId,
@@ -800,9 +796,12 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
 
   // When sending to an idle thread that had a draft, update draft with augmented content
   if (hasDraftMessage) {
-    const { messages: draftMsgs } = tm.getThreadMessages({ threadId: params.threadId, limit: 1 });
+    const { messages: draftMsgs } = await tm.getThreadMessages({
+      threadId: params.threadId,
+      limit: 1,
+    });
     if (draftMsgs[0]) {
-      tm.updateMessage(draftMsgs[0].id, { content: augmentedContent });
+      await tm.updateMessage(draftMsgs[0].id, { content: augmentedContent });
     }
   }
 
@@ -835,10 +834,10 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
 // ── Stop Thread ─────────────────────────────────────────────────
 
 export async function stopThread(threadId: string): Promise<void> {
-  const thread = tm.getThread(threadId);
+  const thread = await tm.getThread(threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
   if (thread.provider === 'external') {
-    cleanupExternalThread(threadId);
+    await cleanupExternalThread(threadId);
     return;
   }
   await stopAgent(threadId);
@@ -856,10 +855,10 @@ export interface ApproveToolParams {
 }
 
 export async function approveToolCall(params: ApproveToolParams): Promise<void> {
-  const thread = tm.getThread(params.threadId);
+  const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
-  const cwd = thread.worktreePath ?? pm.getProject(thread.projectId)?.path;
+  const cwd = thread.worktreePath ?? (await pm.getProject(thread.projectId))?.path;
   if (!cwd) throw new ThreadServiceError('Project path not found', 404);
 
   const tools = params.allowedTools
@@ -925,7 +924,7 @@ export interface UpdateThreadParams {
 }
 
 export async function updateThread(params: UpdateThreadParams) {
-  const thread = tm.getThread(params.threadId);
+  const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
   const updates: Record<string, any> = {};
@@ -951,7 +950,7 @@ export async function updateThread(params: UpdateThreadParams) {
     thread.mode === 'worktree' &&
     thread.provider !== 'external'
   ) {
-    const project = pm.getProject(thread.projectId);
+    const project = await pm.getProject(thread.projectId);
     if (project) {
       await stopCommandsByCwd(thread.worktreePath).catch(() => {});
       await removeWorktree(project.path, thread.worktreePath).catch((e) => {
@@ -965,16 +964,16 @@ export async function updateThread(params: UpdateThreadParams) {
     }
     updates.worktreePath = null;
     updates.branch = null;
-    mq.clearQueue(params.threadId);
+    await mq.clearQueue(params.threadId);
     cleanupThreadState(params.threadId);
   }
 
   if (Object.keys(updates).length > 0) {
-    tm.updateThread(params.threadId, updates);
+    await tm.updateThread(params.threadId, updates);
   }
 
   // Emit stage-changed events
-  const project = pm.getProject(thread.projectId);
+  const project = await pm.getProject(thread.projectId);
   const eventCtx = {
     threadId: params.threadId,
     projectId: thread.projectId,
@@ -1003,26 +1002,26 @@ export async function updateThread(params: UpdateThreadParams) {
     }
   }
 
-  return tm.getThread(params.threadId);
+  return await tm.getThread(params.threadId);
 }
 
 // ── Auto-start idle thread ──────────────────────────────────────
 
 async function autoStartIdleThread(
   threadId: string,
-  thread: NonNullable<ReturnType<typeof tm.getThread>>,
-  project: NonNullable<ReturnType<typeof pm.getProject>>,
+  thread: NonNullable<Awaited<ReturnType<typeof tm.getThread>>>,
+  project: NonNullable<Awaited<ReturnType<typeof pm.getProject>>>,
 ): Promise<void> {
   const needsWorktreeSetup = thread.mode === 'worktree' && !thread.worktreePath && thread.branch;
 
   if (needsWorktreeSetup) {
     // Deferred worktree setup: create worktree first, then start agent
-    tm.updateThread(threadId, { status: 'setting_up' });
+    await tm.updateThread(threadId, { status: 'setting_up' });
     const emitSetupProgress = createSetupProgressEmitter(thread.userId, threadId);
     emitThreadUpdated(thread.userId, threadId, { status: 'setting_up', stage: 'in_progress' });
 
     // Background: create worktree, run post-create, then start agent
-    (async () => {
+    void (async () => {
       try {
         const wtResult = await createWorktree(
           project.path,
@@ -1031,7 +1030,7 @@ async function autoStartIdleThread(
           emitSetupProgress,
         );
         if (wtResult.isErr()) {
-          tm.updateThread(threadId, { status: 'failed' });
+          await tm.updateThread(threadId, { status: 'failed' });
           emitThreadUpdated(thread.userId, threadId, { status: 'failed' });
           return;
         }
@@ -1047,7 +1046,7 @@ async function autoStartIdleThread(
         }
 
         // Update thread with worktree info
-        tm.updateThread(threadId, { worktreePath: wtPath, status: 'pending' });
+        await tm.updateThread(threadId, { worktreePath: wtPath, status: 'pending' });
         wsBroker.emitToUser(thread.userId, {
           type: 'worktree:setup_complete',
           threadId,
@@ -1060,7 +1059,7 @@ async function autoStartIdleThread(
         });
 
         // Start agent
-        const { messages: draftMessages } = tm.getThreadMessages({ threadId, limit: 1 });
+        const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });
         const draftMsg = draftMessages[0];
         const draftImages = draftMsg?.images ? JSON.parse(draftMsg.images as string) : undefined;
         await startAgent(
@@ -1082,7 +1081,10 @@ async function autoStartIdleThread(
           threadId,
           error: err,
         });
-        tm.updateThread(threadId, { status: 'failed', completedAt: new Date().toISOString() });
+        await tm.updateThread(threadId, {
+          status: 'failed',
+          completedAt: new Date().toISOString(),
+        });
         emitAgentFailed(thread.userId, threadId);
       }
     })();
@@ -1098,15 +1100,15 @@ async function autoStartIdleThread(
       thread.baseBranch !== thread.branch;
 
     if (needsCheckout) {
-      tm.updateThread(threadId, { status: 'setting_up' });
+      await tm.updateThread(threadId, { status: 'setting_up' });
       const emitProgress = createSetupProgressEmitter(thread.userId, threadId);
       emitThreadUpdated(thread.userId, threadId, { status: 'setting_up', stage: 'in_progress' });
 
-      (async () => {
+      void (async () => {
         try {
           await checkoutBranchWithProgress(project.path, thread.baseBranch!, emitProgress);
 
-          tm.updateThread(threadId, { status: 'pending', branch: thread.baseBranch });
+          await tm.updateThread(threadId, { status: 'pending', branch: thread.baseBranch });
           wsBroker.emitToUser(thread.userId, {
             type: 'worktree:setup_complete',
             threadId,
@@ -1117,7 +1119,7 @@ async function autoStartIdleThread(
             branch: thread.baseBranch,
           });
 
-          const { messages: draftMessages } = tm.getThreadMessages({ threadId, limit: 1 });
+          const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });
           const draftMsg = draftMessages[0];
           const draftImages = draftMsg?.images ? JSON.parse(draftMsg.images as string) : undefined;
           await startAgent(
@@ -1139,14 +1141,17 @@ async function autoStartIdleThread(
             threadId,
             error: err,
           });
-          tm.updateThread(threadId, { status: 'failed', completedAt: new Date().toISOString() });
+          await tm.updateThread(threadId, {
+            status: 'failed',
+            completedAt: new Date().toISOString(),
+          });
           emitAgentFailed(thread.userId, threadId);
         }
       })();
       return;
     }
 
-    const { messages: draftMessages } = tm.getThreadMessages({ threadId, limit: 1 });
+    const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });
     const draftMsg = draftMessages[0];
     const draftImages = draftMsg?.images ? JSON.parse(draftMsg.images as string) : undefined;
     startAgent(
@@ -1161,13 +1166,13 @@ async function autoStartIdleThread(
       (thread.provider || project.defaultProvider || DEFAULT_PROVIDER) as AgentProvider,
       undefined,
       !!draftMsg,
-    ).catch((err) => {
+    ).catch(async (err) => {
       log.error('Failed to auto-start agent for idle thread', {
         namespace: 'agent',
         threadId,
         error: err,
       });
-      tm.updateThread(threadId, { status: 'failed', completedAt: new Date().toISOString() });
+      await tm.updateThread(threadId, { status: 'failed', completedAt: new Date().toISOString() });
       emitAgentFailed(thread.userId, threadId);
     });
   }
@@ -1176,7 +1181,7 @@ async function autoStartIdleThread(
 // ── Delete Thread ───────────────────────────────────────────────
 
 export async function deleteThread(threadId: string): Promise<void> {
-  const thread = tm.getThread(threadId);
+  const thread = await tm.getThread(threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
   threadEventBus.emit('thread:deleted', {
@@ -1198,7 +1203,7 @@ export async function deleteThread(threadId: string): Promise<void> {
   if (thread.worktreePath && thread.mode === 'worktree' && thread.provider !== 'external') {
     await stopCommandsByCwd(thread.worktreePath).catch(() => {});
 
-    const project = pm.getProject(thread.projectId);
+    const project = await pm.getProject(thread.projectId);
     if (project) {
       await removeWorktree(project.path, thread.worktreePath).catch((e) => {
         log.warn('Failed to remove worktree', { namespace: 'cleanup', error: String(e) });
@@ -1213,7 +1218,7 @@ export async function deleteThread(threadId: string): Promise<void> {
 
   // Stop container for remote threads (best-effort)
   if (thread.containerName && thread.runtime === 'remote') {
-    const project = pm.getProject(thread.projectId);
+    const project = await pm.getProject(thread.projectId);
     if (project?.launcherUrl) {
       stopContainer({ containerName: thread.containerName, launcherUrl: project.launcherUrl })
         .then(() => {})
@@ -1223,20 +1228,23 @@ export async function deleteThread(threadId: string): Promise<void> {
     }
   }
 
-  mq.clearQueue(threadId);
+  await mq.clearQueue(threadId);
   cleanupThreadState(threadId);
-  tm.deleteThread(threadId);
+  await tm.deleteThread(threadId);
 }
 
 // ── Queue Operations ────────────────────────────────────────────
 
-export function cancelQueuedMessage(threadId: string, messageId: string): { queuedCount: number } {
-  const cancelled = mq.cancel(messageId);
+export async function cancelQueuedMessage(
+  threadId: string,
+  messageId: string,
+): Promise<{ queuedCount: number }> {
+  const cancelled = await mq.cancel(messageId);
   if (!cancelled) throw new ThreadServiceError('Queued message not found', 404);
 
-  const thread = tm.getThread(threadId);
-  const qCount = mq.queueCount(threadId);
-  const nextMsg = mq.peek(threadId);
+  const thread = await tm.getThread(threadId);
+  const qCount = await mq.queueCount(threadId);
+  const nextMsg = await mq.peek(threadId);
 
   const queueEvent = {
     type: 'thread:queue_update' as const,
@@ -1252,17 +1260,17 @@ export function cancelQueuedMessage(threadId: string, messageId: string): { queu
   return { queuedCount: qCount };
 }
 
-export function updateQueuedMessage(
+export async function updateQueuedMessage(
   threadId: string,
   messageId: string,
   content: string,
-): { queuedCount: number; queuedMessage: mq.QueueEntry } {
-  const queuedMessage = mq.update(messageId, content);
+): Promise<{ queuedCount: number; queuedMessage: mq.QueueEntry }> {
+  const queuedMessage = await mq.update(messageId, content);
   if (!queuedMessage) throw new ThreadServiceError('Queued message not found', 404);
 
-  const thread = tm.getThread(threadId);
-  const qCount = mq.queueCount(threadId);
-  const nextMsg = mq.peek(threadId);
+  const thread = await tm.getThread(threadId);
+  const qCount = await mq.queueCount(threadId);
+  const nextMsg = await mq.peek(threadId);
 
   const queueEvent = {
     type: 'thread:queue_update' as const,
@@ -1280,11 +1288,11 @@ export function updateQueuedMessage(
 
 // ── Comment Operations ──────────────────────────────────────────
 
-export function deleteComment(threadId: string, commentId: string): void {
-  const thread = tm.getThread(threadId);
+export async function deleteComment(threadId: string, commentId: string): Promise<void> {
+  const thread = await tm.getThread(threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
-  tm.deleteComment(commentId);
+  await tm.deleteComment(commentId);
 
   const event = {
     type: 'thread:comment_deleted' as const,

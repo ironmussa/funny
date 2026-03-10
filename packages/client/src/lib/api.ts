@@ -94,44 +94,6 @@ export function getAuthMode() {
 
 // ── Request helper ──────────────────────────────────────
 
-/**
- * Make a request to a specific thread's server.
- * For remote threads, routes to the container's Funny server.
- * For local threads, uses the default local server.
- */
-function requestForThread<T>(
-  path: string,
-  thread: { runtime?: string; containerUrl?: string } | undefined,
-  init?: RequestInit,
-): ResultAsync<T, DomainError> {
-  const base = getBaseUrlForThread(thread);
-  if (base !== BASE) {
-    // Direct request to remote container (skip circuit breaker, no auth)
-    return ResultAsync.fromPromise(
-      fetch(`${base}${path}`, {
-        ...init,
-        headers: {
-          'Content-Type': 'application/json',
-          ...(init?.headers as Record<string, string>),
-        },
-      }).then(async (res) => {
-        if (!res.ok) {
-          const body = await res.json().catch(() => ({}));
-          throw internal(body.error || `HTTP ${res.status}`);
-        }
-        return res.json() as Promise<T>;
-      }),
-      (error): DomainError => {
-        if (typeof error === 'object' && error !== null && 'type' in error) {
-          return error as DomainError;
-        }
-        return internal(String(error));
-      },
-    );
-  }
-  return request<T>(path, init);
-}
-
 function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
@@ -953,4 +915,39 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ path, content }),
     }),
+
+  // Team / Organization
+  getTeamSettings: () =>
+    request<{
+      id: string;
+      name: string;
+      slug: string;
+      logo: string | null;
+      hasApiKey: boolean;
+      defaultModel: string | null;
+      defaultMode: string | null;
+      defaultPermissionMode: string | null;
+    }>('/team-settings'),
+  updateTeamApiKey: (apiKey: string | null) =>
+    request<{ ok: boolean; hasApiKey: boolean }>('/team-settings/api-key', {
+      method: 'PUT',
+      body: JSON.stringify({ apiKey }),
+    }),
+  updateTeamDefaults: (data: {
+    defaultModel?: string | null;
+    defaultMode?: string | null;
+    defaultPermissionMode?: string | null;
+  }) =>
+    request<{ ok: boolean }>('/team-settings/defaults', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  listTeamProjects: () => request<import('@funny/shared').Project[]>('/team-projects'),
+  addTeamProject: (projectId: string) =>
+    request<{ ok: boolean }>('/team-projects', {
+      method: 'POST',
+      body: JSON.stringify({ projectId }),
+    }),
+  removeTeamProject: (projectId: string) =>
+    request<{ ok: boolean }>(`/team-projects/${projectId}`, { method: 'DELETE' }),
 };

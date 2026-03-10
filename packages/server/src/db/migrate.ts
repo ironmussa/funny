@@ -3,22 +3,51 @@
  * @domain type: adapter
  * @domain layer: infrastructure
  * @domain depends: Database
+ *
+ * Dual-dialect migration system — works with both SQLite and PostgreSQL.
+ * SQLite migrations are synchronous (db.run/db.get).
+ * PostgreSQL migrations are async (db.execute returns a Promise).
  */
 
 import { sql } from 'drizzle-orm';
 
 import { log } from '../lib/logger.js';
-import { db } from './index.js';
+import { db, dbMode } from './index.js';
+
+const isPg = dbMode === 'postgres';
+
+// ── Dialect-aware query helpers ─────────────────────────────────
+// SQLite Drizzle: db.run() / db.get() (synchronous)
+// PG Drizzle:     db.execute() (async, returns Promise)
+
+async function exec(query: ReturnType<typeof sql> | ReturnType<typeof sql.raw>): Promise<void> {
+  if (isPg) {
+    await (db as any).execute(query);
+  } else {
+    (db as any).run(query);
+  }
+}
+
+async function queryOne<T>(
+  query: ReturnType<typeof sql> | ReturnType<typeof sql.raw>,
+): Promise<T | undefined> {
+  if (isPg) {
+    const rows = await (db as any).execute(query);
+    return rows?.[0] as T | undefined;
+  } else {
+    return (db as any).get<T>(query);
+  }
+}
 
 // ── Migration tracking ──────────────────────────────────────────
 
 interface Migration {
   name: string;
-  up: () => void;
+  up: () => Promise<void>;
 }
 
-function ensureMigrationTable() {
-  db.run(sql`
+async function ensureMigrationTable() {
+  await exec(sql`
     CREATE TABLE IF NOT EXISTS _migrations (
       name TEXT PRIMARY KEY,
       applied_at TEXT NOT NULL
@@ -26,22 +55,30 @@ function ensureMigrationTable() {
   `);
 }
 
-function hasRun(name: string): boolean {
-  const row = db.get<{ name: string }>(sql`SELECT name FROM _migrations WHERE name = ${name}`);
+async function hasRun(name: string): Promise<boolean> {
+  const row = await queryOne<{ name: string }>(
+    sql`SELECT name FROM _migrations WHERE name = ${name}`,
+  );
   return !!row;
 }
 
-function markRun(name: string) {
-  db.run(
+async function markRun(name: string) {
+  await exec(
     sql`INSERT INTO _migrations (name, applied_at) VALUES (${name}, ${new Date().toISOString()})`,
   );
 }
 
 /** Helper to safely add a column (idempotent) */
-function addColumn(table: string, column: string, type: string, dflt?: string) {
+async function addColumn(table: string, column: string, type: string, dflt?: string) {
   try {
     const defaultClause = dflt !== undefined ? ` DEFAULT ${dflt}` : '';
-    db.run(sql.raw(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}${defaultClause}`));
+    if (isPg) {
+      await exec(
+        sql.raw(`ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${type}${defaultClause}`),
+      );
+    } else {
+      await exec(sql.raw(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}${defaultClause}`));
+    }
   } catch {
     // Column already exists
   }
@@ -53,8 +90,8 @@ function addColumn(table: string, column: string, type: string, dflt?: string) {
 const migrations: Migration[] = [
   {
     name: '001_initial_tables',
-    up() {
-      db.run(sql`
+    async up() {
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS projects (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
@@ -63,7 +100,7 @@ const migrations: Migration[] = [
         )
       `);
 
-      db.run(sql`
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS threads (
           id TEXT PRIMARY KEY,
           project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -79,7 +116,7 @@ const migrations: Migration[] = [
         )
       `);
 
-      db.run(sql`
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS messages (
           id TEXT PRIMARY KEY,
           thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
@@ -89,7 +126,7 @@ const migrations: Migration[] = [
         )
       `);
 
-      db.run(sql`
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS tool_calls (
           id TEXT PRIMARY KEY,
           message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
@@ -103,26 +140,26 @@ const migrations: Migration[] = [
 
   {
     name: '002_thread_extras',
-    up() {
-      addColumn('threads', 'archived', 'INTEGER NOT NULL', '0');
-      addColumn('threads', 'permission_mode', 'TEXT NOT NULL', "'autoEdit'");
-      addColumn('threads', 'base_branch', 'TEXT');
+    async up() {
+      await addColumn('threads', 'archived', 'INTEGER NOT NULL', '0');
+      await addColumn('threads', 'permission_mode', 'TEXT NOT NULL', "'autoEdit'");
+      await addColumn('threads', 'base_branch', 'TEXT');
     },
   },
 
   {
     name: '003_message_extras',
-    up() {
-      addColumn('messages', 'images', 'TEXT');
-      addColumn('messages', 'model', 'TEXT');
-      addColumn('messages', 'permission_mode', 'TEXT');
+    async up() {
+      await addColumn('messages', 'images', 'TEXT');
+      await addColumn('messages', 'model', 'TEXT');
+      await addColumn('messages', 'permission_mode', 'TEXT');
     },
   },
 
   {
     name: '004_startup_commands',
-    up() {
-      db.run(sql`
+    async up() {
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS startup_commands (
           id TEXT PRIMARY KEY,
           project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -132,17 +169,17 @@ const migrations: Migration[] = [
           created_at TEXT NOT NULL
         )
       `);
-      addColumn('startup_commands', 'port', 'INTEGER');
-      addColumn('startup_commands', 'port_env_var', 'TEXT');
+      await addColumn('startup_commands', 'port', 'INTEGER');
+      await addColumn('startup_commands', 'port_env_var', 'TEXT');
     },
   },
 
   {
     name: '005_automations',
-    up() {
-      addColumn('threads', 'automation_id', 'TEXT');
+    async up() {
+      await addColumn('threads', 'automation_id', 'TEXT');
 
-      db.run(sql`
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS automations (
           id TEXT PRIMARY KEY,
           project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -162,7 +199,7 @@ const migrations: Migration[] = [
         )
       `);
 
-      db.run(sql`
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS automation_runs (
           id TEXT PRIMARY KEY,
           automation_id TEXT NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
@@ -180,8 +217,8 @@ const migrations: Migration[] = [
 
   {
     name: '006_mcp_oauth',
-    up() {
-      db.run(sql`
+    async up() {
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS mcp_oauth_tokens (
           id TEXT PRIMARY KEY,
           server_name TEXT NOT NULL,
@@ -204,12 +241,12 @@ const migrations: Migration[] = [
 
   {
     name: '007_multi_user',
-    up() {
-      addColumn('projects', 'user_id', 'TEXT NOT NULL', "'__local__'");
-      addColumn('threads', 'user_id', 'TEXT NOT NULL', "'__local__'");
-      addColumn('automations', 'user_id', 'TEXT NOT NULL', "'__local__'");
+    async up() {
+      await addColumn('projects', 'user_id', 'TEXT NOT NULL', "'__local__'");
+      await addColumn('threads', 'user_id', 'TEXT NOT NULL', "'__local__'");
+      await addColumn('automations', 'user_id', 'TEXT NOT NULL', "'__local__'");
 
-      db.run(sql`
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS user_profiles (
           id TEXT PRIMARY KEY,
           user_id TEXT NOT NULL UNIQUE,
@@ -225,11 +262,11 @@ const migrations: Migration[] = [
 
   {
     name: '008_kanban_and_stage_history',
-    up() {
-      addColumn('threads', 'pinned', 'INTEGER NOT NULL', '0');
-      addColumn('threads', 'stage', 'TEXT NOT NULL', "'backlog'");
+    async up() {
+      await addColumn('threads', 'pinned', 'INTEGER NOT NULL', '0');
+      await addColumn('threads', 'stage', 'TEXT NOT NULL', "'backlog'");
 
-      db.run(sql`
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS stage_history (
           id TEXT PRIMARY KEY,
           thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
@@ -239,66 +276,80 @@ const migrations: Migration[] = [
         )
       `);
 
-      // Backfill stages based on current status
-      db.run(
+      await exec(
         sql`UPDATE threads SET stage = 'in_progress' WHERE status IN ('running', 'waiting') AND stage = 'backlog'`,
       );
-      db.run(
+      await exec(
         sql`UPDATE threads SET stage = 'review' WHERE status IN ('completed', 'failed', 'stopped', 'interrupted') AND stage = 'backlog'`,
       );
 
-      // Backfill stage_history for threads without history
-      db.run(sql`
-        INSERT INTO stage_history (id, thread_id, from_stage, to_stage, changed_at)
-        SELECT
-          lower(hex(randomblob(16))),
-          t.id,
-          NULL,
-          t.stage,
-          t.created_at
-        FROM threads t
-        WHERE NOT EXISTS (
-          SELECT 1 FROM stage_history sh WHERE sh.thread_id = t.id
-        )
-      `);
+      if (isPg) {
+        await exec(sql`
+          INSERT INTO stage_history (id, thread_id, from_stage, to_stage, changed_at)
+          SELECT
+            md5(random()::text),
+            t.id,
+            NULL,
+            t.stage,
+            t.created_at
+          FROM threads t
+          WHERE NOT EXISTS (
+            SELECT 1 FROM stage_history sh WHERE sh.thread_id = t.id
+          )
+        `);
+      } else {
+        await exec(sql`
+          INSERT INTO stage_history (id, thread_id, from_stage, to_stage, changed_at)
+          SELECT
+            lower(hex(randomblob(16))),
+            t.id,
+            NULL,
+            t.stage,
+            t.created_at
+          FROM threads t
+          WHERE NOT EXISTS (
+            SELECT 1 FROM stage_history sh WHERE sh.thread_id = t.id
+          )
+        `);
+      }
     },
   },
 
   {
     name: '009_project_extras',
-    up() {
-      addColumn('projects', 'sort_order', 'INTEGER NOT NULL', '0');
-      addColumn('projects', 'color', 'TEXT');
+    async up() {
+      await addColumn('projects', 'sort_order', 'INTEGER NOT NULL', '0');
+      await addColumn('projects', 'color', 'TEXT');
     },
   },
 
   {
     name: '010_idle_threads',
-    up() {
-      addColumn('threads', 'initial_prompt', 'TEXT');
-      addColumn('threads', 'model', 'TEXT NOT NULL', "'sonnet'");
+    async up() {
+      await addColumn('threads', 'initial_prompt', 'TEXT');
+      await addColumn('threads', 'model', 'TEXT NOT NULL', "'sonnet'");
     },
   },
 
   {
     name: '011_multi_provider',
-    up() {
-      addColumn('threads', 'provider', 'TEXT NOT NULL', "'claude'");
-      addColumn('automations', 'provider', 'TEXT NOT NULL', "'claude'");
+    async up() {
+      await addColumn('threads', 'provider', 'TEXT NOT NULL', "'claude'");
+      await addColumn('automations', 'provider', 'TEXT NOT NULL', "'claude'");
     },
   },
 
   {
     name: '012_external_threads',
-    up() {
-      addColumn('threads', 'external_request_id', 'TEXT');
+    async up() {
+      await addColumn('threads', 'external_request_id', 'TEXT');
     },
   },
 
   {
     name: '013_thread_comments',
-    up() {
-      db.run(sql`
+    async up() {
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS thread_comments (
           id TEXT PRIMARY KEY,
           thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
@@ -313,24 +364,24 @@ const migrations: Migration[] = [
 
   {
     name: '014_init_info',
-    up() {
-      addColumn('threads', 'init_tools', 'TEXT');
-      addColumn('threads', 'init_cwd', 'TEXT');
+    async up() {
+      await addColumn('threads', 'init_tools', 'TEXT');
+      await addColumn('threads', 'init_cwd', 'TEXT');
     },
   },
 
   {
     name: '015_indexes',
-    up() {
-      db.run(sql`
+    async up() {
+      await exec(sql`
         CREATE INDEX IF NOT EXISTS idx_messages_thread_timestamp
         ON messages (thread_id, timestamp)
       `);
-      db.run(sql`
+      await exec(sql`
         CREATE INDEX IF NOT EXISTS idx_threads_project_id
         ON threads (project_id)
       `);
-      db.run(sql`
+      await exec(sql`
         CREATE INDEX IF NOT EXISTS idx_threads_user_archived
         ON threads (user_id, archived)
       `);
@@ -339,42 +390,84 @@ const migrations: Migration[] = [
 
   {
     name: '016_fts5_search',
-    up() {
-      // FTS5 virtual table for message content search
-      db.run(sql`
-        CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts
-        USING fts5(content, content=messages, content_rowid=rowid)
-      `);
+    async up() {
+      if (isPg) {
+        await addColumn('messages', 'search_vector', 'TSVECTOR');
 
-      // Triggers to keep FTS index in sync
-      db.run(sql`
-        CREATE TRIGGER IF NOT EXISTS messages_fts_insert
-        AFTER INSERT ON messages BEGIN
-          INSERT INTO messages_fts(rowid, content) VALUES (NEW.rowid, NEW.content);
-        END
-      `);
-      db.run(sql`
-        CREATE TRIGGER IF NOT EXISTS messages_fts_delete
-        AFTER DELETE ON messages BEGIN
-          INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', OLD.rowid, OLD.content);
-        END
-      `);
-      db.run(sql`
-        CREATE TRIGGER IF NOT EXISTS messages_fts_update
-        AFTER UPDATE ON messages BEGIN
-          INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', OLD.rowid, OLD.content);
-          INSERT INTO messages_fts(rowid, content) VALUES (NEW.rowid, NEW.content);
-        END
-      `);
+        await exec(sql`
+          CREATE INDEX IF NOT EXISTS idx_messages_search_vector
+          ON messages USING GIN (search_vector)
+        `);
 
-      // Backfill FTS index for existing messages
-      const ftsCount = db.get<{ count: number }>(sql`SELECT COUNT(*) as count FROM messages_fts`);
-      if (ftsCount && ftsCount.count === 0) {
-        const msgCount = db.get<{ count: number }>(sql`SELECT COUNT(*) as count FROM messages`);
-        if (msgCount && msgCount.count > 0) {
-          log.info(`Backfilling FTS index for ${msgCount.count} messages`, { namespace: 'db' });
-          db.run(sql`INSERT INTO messages_fts(rowid, content) SELECT rowid, content FROM messages`);
-          log.info('FTS backfill complete', { namespace: 'db' });
+        await exec(
+          sql.raw(`
+          CREATE OR REPLACE FUNCTION messages_search_vector_update() RETURNS trigger AS $$
+          BEGIN
+            NEW.search_vector := to_tsvector('english', COALESCE(NEW.content, ''));
+            RETURN NEW;
+          END
+          $$ LANGUAGE plpgsql
+        `),
+        );
+
+        await exec(
+          sql.raw(`
+          DROP TRIGGER IF EXISTS messages_search_vector_trigger ON messages
+        `),
+        );
+        await exec(
+          sql.raw(`
+          CREATE TRIGGER messages_search_vector_trigger
+          BEFORE INSERT OR UPDATE ON messages
+          FOR EACH ROW EXECUTE FUNCTION messages_search_vector_update()
+        `),
+        );
+
+        await exec(sql`
+          UPDATE messages
+          SET search_vector = to_tsvector('english', COALESCE(content, ''))
+          WHERE search_vector IS NULL
+        `);
+      } else {
+        await exec(sql`
+          CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts
+          USING fts5(content, content=messages, content_rowid=rowid)
+        `);
+
+        await exec(sql`
+          CREATE TRIGGER IF NOT EXISTS messages_fts_insert
+          AFTER INSERT ON messages BEGIN
+            INSERT INTO messages_fts(rowid, content) VALUES (NEW.rowid, NEW.content);
+          END
+        `);
+        await exec(sql`
+          CREATE TRIGGER IF NOT EXISTS messages_fts_delete
+          AFTER DELETE ON messages BEGIN
+            INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', OLD.rowid, OLD.content);
+          END
+        `);
+        await exec(sql`
+          CREATE TRIGGER IF NOT EXISTS messages_fts_update
+          AFTER UPDATE ON messages BEGIN
+            INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', OLD.rowid, OLD.content);
+            INSERT INTO messages_fts(rowid, content) VALUES (NEW.rowid, NEW.content);
+          END
+        `);
+
+        const ftsCount = await queryOne<{ count: number }>(
+          sql`SELECT COUNT(*) as count FROM messages_fts`,
+        );
+        if (ftsCount && ftsCount.count === 0) {
+          const msgCount = await queryOne<{ count: number }>(
+            sql`SELECT COUNT(*) as count FROM messages`,
+          );
+          if (msgCount && msgCount.count > 0) {
+            log.info(`Backfilling FTS index for ${msgCount.count} messages`, { namespace: 'db' });
+            await exec(
+              sql`INSERT INTO messages_fts(rowid, content) SELECT rowid, content FROM messages`,
+            );
+            log.info('FTS backfill complete', { namespace: 'db' });
+          }
         }
       }
     },
@@ -382,10 +475,10 @@ const migrations: Migration[] = [
 
   {
     name: '017_follow_up_mode',
-    up() {
-      addColumn('projects', 'follow_up_mode', 'TEXT NOT NULL', "'interrupt'");
+    async up() {
+      await addColumn('projects', 'follow_up_mode', 'TEXT NOT NULL', "'interrupt'");
 
-      db.run(sql`
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS message_queue (
           id TEXT PRIMARY KEY,
           thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
@@ -402,7 +495,7 @@ const migrations: Migration[] = [
         )
       `);
 
-      db.run(sql`
+      await exec(sql`
         CREATE INDEX IF NOT EXISTS idx_message_queue_thread
         ON message_queue (thread_id, sort_order)
       `);
@@ -411,47 +504,47 @@ const migrations: Migration[] = [
 
   {
     name: '018_thread_source',
-    up() {
-      addColumn('threads', 'source', 'TEXT NOT NULL', "'web'");
+    async up() {
+      await addColumn('threads', 'source', 'TEXT NOT NULL', "'web'");
     },
   },
 
   {
     name: '019_parent_thread_id',
-    up() {
-      addColumn('threads', 'parent_thread_id', 'TEXT');
+    async up() {
+      await addColumn('threads', 'parent_thread_id', 'TEXT');
     },
   },
 
   {
     name: '020_project_defaults',
-    up() {
-      addColumn('projects', 'default_provider', 'TEXT');
-      addColumn('projects', 'default_model', 'TEXT');
-      addColumn('projects', 'default_mode', 'TEXT');
-      addColumn('projects', 'default_permission_mode', 'TEXT');
+    async up() {
+      await addColumn('projects', 'default_provider', 'TEXT');
+      await addColumn('projects', 'default_model', 'TEXT');
+      await addColumn('projects', 'default_mode', 'TEXT');
+      await addColumn('projects', 'default_permission_mode', 'TEXT');
     },
   },
 
   {
     name: '021_thread_created_by',
-    up() {
-      addColumn('threads', 'created_by', 'TEXT');
+    async up() {
+      await addColumn('threads', 'created_by', 'TEXT');
     },
   },
 
   {
     name: '022_message_and_tool_call_author',
-    up() {
-      addColumn('messages', 'author', 'TEXT');
-      addColumn('tool_calls', 'author', 'TEXT');
+    async up() {
+      await addColumn('messages', 'author', 'TEXT');
+      await addColumn('tool_calls', 'author', 'TEXT');
     },
   },
 
   {
     name: '023_thread_events',
-    up() {
-      db.run(sql`
+    async up() {
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS thread_events (
           id TEXT PRIMARY KEY,
           thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
@@ -461,7 +554,7 @@ const migrations: Migration[] = [
         )
       `);
 
-      db.run(sql`
+      await exec(sql`
         CREATE INDEX IF NOT EXISTS idx_thread_events_thread_timestamp
         ON thread_events (thread_id, timestamp)
       `);
@@ -470,22 +563,19 @@ const migrations: Migration[] = [
 
   {
     name: '024_fix_thread_events_columns',
-    up() {
-      // Rename columns created by 023 to match Drizzle schema.
-      // SQLite 3.25+ supports ALTER TABLE RENAME COLUMN.
+    async up() {
       try {
-        db.run(sql`ALTER TABLE thread_events RENAME COLUMN payload TO data`);
+        await exec(sql`ALTER TABLE thread_events RENAME COLUMN payload TO data`);
       } catch {
         // Column may already be named 'data' on fresh installs
       }
       try {
-        db.run(sql`ALTER TABLE thread_events RENAME COLUMN timestamp TO created_at`);
+        await exec(sql`ALTER TABLE thread_events RENAME COLUMN timestamp TO created_at`);
       } catch {
         // Column may already be named 'created_at' on fresh installs
       }
-      // Recreate index with correct column name
-      db.run(sql`DROP INDEX IF EXISTS idx_thread_events_thread_timestamp`);
-      db.run(sql`
+      await exec(sql`DROP INDEX IF EXISTS idx_thread_events_thread_timestamp`);
+      await exec(sql`
         CREATE INDEX IF NOT EXISTS idx_thread_events_thread_created
         ON thread_events (thread_id, created_at)
       `);
@@ -494,33 +584,33 @@ const migrations: Migration[] = [
 
   {
     name: '025_project_urls',
-    up() {
-      addColumn('projects', 'urls', 'TEXT');
+    async up() {
+      await addColumn('projects', 'urls', 'TEXT');
     },
   },
 
   {
     name: '026_setup_completed',
-    up() {
-      addColumn('user_profiles', 'setup_completed', 'INTEGER NOT NULL', '0');
+    async up() {
+      await addColumn('user_profiles', 'setup_completed', 'INTEGER NOT NULL', '0');
     },
   },
 
   {
     name: '027_user_settings',
-    up() {
-      addColumn('user_profiles', 'default_editor', 'TEXT');
-      addColumn('user_profiles', 'use_internal_editor', 'INTEGER');
-      addColumn('user_profiles', 'terminal_shell', 'TEXT');
-      addColumn('user_profiles', 'tool_permissions', 'TEXT');
-      addColumn('user_profiles', 'theme', 'TEXT');
+    async up() {
+      await addColumn('user_profiles', 'default_editor', 'TEXT');
+      await addColumn('user_profiles', 'use_internal_editor', 'INTEGER');
+      await addColumn('user_profiles', 'terminal_shell', 'TEXT');
+      await addColumn('user_profiles', 'tool_permissions', 'TEXT');
+      await addColumn('user_profiles', 'theme', 'TEXT');
     },
   },
 
   {
     name: '028_project_hooks',
-    up() {
-      db.run(sql`
+    async up() {
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS project_hooks (
           id TEXT PRIMARY KEY,
           project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -537,14 +627,14 @@ const migrations: Migration[] = [
 
   {
     name: '029_project_default_branch',
-    up() {
-      addColumn('projects', 'default_branch', 'TEXT');
+    async up() {
+      await addColumn('projects', 'default_branch', 'TEXT');
     },
   },
   {
     name: '030_pipelines',
-    up() {
-      db.run(sql`
+    async up() {
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS pipelines (
           id TEXT PRIMARY KEY,
           project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -562,7 +652,7 @@ const migrations: Migration[] = [
         )
       `);
 
-      db.run(sql`
+      await exec(sql`
         CREATE TABLE IF NOT EXISTS pipeline_runs (
           id TEXT PRIMARY KEY,
           pipeline_id TEXT NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
@@ -583,11 +673,11 @@ const migrations: Migration[] = [
         )
       `);
 
-      db.run(sql`
+      await exec(sql`
         CREATE INDEX IF NOT EXISTS idx_pipeline_runs_pipeline
         ON pipeline_runs (pipeline_id)
       `);
-      db.run(sql`
+      await exec(sql`
         CREATE INDEX IF NOT EXISTS idx_pipeline_runs_thread
         ON pipeline_runs (thread_id)
       `);
@@ -595,32 +685,54 @@ const migrations: Migration[] = [
   },
   {
     name: '031_pipeline_reviewer_thread',
-    up() {
-      addColumn('pipeline_runs', 'reviewer_thread_id', 'TEXT');
+    async up() {
+      await addColumn('pipeline_runs', 'reviewer_thread_id', 'TEXT');
     },
   },
   {
     name: '032_project_system_prompt',
-    up() {
-      addColumn('projects', 'system_prompt', 'TEXT');
+    async up() {
+      await addColumn('projects', 'system_prompt', 'TEXT');
     },
   },
   {
     name: '033_pipeline_custom_prompts',
-    up() {
-      addColumn('pipelines', 'reviewer_prompt', 'TEXT');
-      addColumn('pipelines', 'corrector_prompt', 'TEXT');
-      addColumn('pipelines', 'precommit_fixer_prompt', 'TEXT');
-      addColumn('pipelines', 'commit_message_prompt', 'TEXT');
+    async up() {
+      await addColumn('pipelines', 'reviewer_prompt', 'TEXT');
+      await addColumn('pipelines', 'corrector_prompt', 'TEXT');
+      await addColumn('pipelines', 'precommit_fixer_prompt', 'TEXT');
+      await addColumn('pipelines', 'commit_message_prompt', 'TEXT');
     },
   },
   {
     name: '034_podman_remote_runtime',
-    up() {
-      addColumn('projects', 'launcher_url', 'TEXT');
-      addColumn('threads', 'runtime', 'TEXT NOT NULL', "'local'");
-      addColumn('threads', 'container_url', 'TEXT');
-      addColumn('threads', 'container_name', 'TEXT');
+    async up() {
+      await addColumn('projects', 'launcher_url', 'TEXT');
+      await addColumn('threads', 'runtime', 'TEXT NOT NULL', "'local'");
+      await addColumn('threads', 'container_url', 'TEXT');
+      await addColumn('threads', 'container_name', 'TEXT');
+    },
+  },
+  {
+    name: '035_team_projects',
+    async up() {
+      await exec(sql`
+        CREATE TABLE IF NOT EXISTS team_projects (
+          team_id TEXT NOT NULL,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (team_id, project_id)
+        )
+      `);
+
+      await exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_team_projects_team
+        ON team_projects (team_id)
+      `);
+      await exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_team_projects_project
+        ON team_projects (project_id)
+      `);
     },
   },
 ];
@@ -633,16 +745,16 @@ const migrations: Migration[] = [
  * Existing databases (pre-migration-tracking) are handled gracefully
  * because each migration uses CREATE TABLE IF NOT EXISTS / addColumn.
  */
-export function autoMigrate() {
-  ensureMigrationTable();
+export async function autoMigrate() {
+  await ensureMigrationTable();
 
   let applied = 0;
   for (const migration of migrations) {
-    if (hasRun(migration.name)) continue;
+    if (await hasRun(migration.name)) continue;
 
     try {
-      migration.up();
-      markRun(migration.name);
+      await migration.up();
+      await markRun(migration.name);
       applied++;
     } catch (err) {
       log.error(`Migration ${migration.name} failed`, { namespace: 'db', error: err });

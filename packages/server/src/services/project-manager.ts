@@ -13,11 +13,11 @@ import { isGitRepoSync } from '@funny/core/git';
 import type { Project, FollowUpMode } from '@funny/shared';
 import { badRequest, notFound, conflict, internal, type DomainError } from '@funny/shared/errors';
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
-import { eq, and, asc } from 'drizzle-orm';
+import { eq, and, asc, inArray } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { ok, err, type Result } from 'neverthrow';
 
-import { db, schema } from '../db/index.js';
+import { db, schema, dbAll, dbGet, dbRun } from '../db/index.js';
 import { createPipeline } from './pipeline-orchestrator.js';
 
 type ProjectRow = typeof schema.projects.$inferSelect;
@@ -62,34 +62,76 @@ function toProject(row: ProjectRow): Project {
  * List projects. In local mode (userId='__local__'), returns all projects.
  * In multi mode, filters by userId.
  */
-export function listProjects(userId: string): Project[] {
+export async function listProjects(userId: string): Promise<Project[]> {
   if (userId === '__local__') {
-    return db
-      .select()
-      .from(schema.projects)
-      .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt))
-      .all()
-      .map(toProject);
+    return (
+      await dbAll(
+        db
+          .select()
+          .from(schema.projects)
+          .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt)),
+      )
+    ).map(toProject);
   }
-  return db
-    .select()
-    .from(schema.projects)
-    .where(eq(schema.projects.userId, userId))
-    .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt))
-    .all()
-    .map(toProject);
+  return (
+    await dbAll(
+      db
+        .select()
+        .from(schema.projects)
+        .where(eq(schema.projects.userId, userId))
+        .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt)),
+    )
+  ).map(toProject);
 }
 
-export function getProject(id: string): Project | undefined {
-  const row = db.select().from(schema.projects).where(eq(schema.projects.id, id)).get();
+/**
+ * List projects associated with an organization via the team_projects join table.
+ */
+export async function listProjectsByOrg(orgId: string): Promise<Project[]> {
+  const teamProjectRows = await dbAll(
+    db
+      .select({ projectId: schema.teamProjects.projectId })
+      .from(schema.teamProjects)
+      .where(eq(schema.teamProjects.teamId, orgId)),
+  );
+
+  if (teamProjectRows.length === 0) return [];
+
+  const projectIds = teamProjectRows.map((r: any) => r.projectId);
+  return (
+    await dbAll(
+      db
+        .select()
+        .from(schema.projects)
+        .where(inArray(schema.projects.id, projectIds))
+        .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt)),
+    )
+  ).map(toProject);
+}
+
+export async function getProject(id: string): Promise<Project | undefined> {
+  const row = await dbGet(db.select().from(schema.projects).where(eq(schema.projects.id, id)));
   return row ? toProject(row) : undefined;
 }
 
-export function createProject(
+export async function projectNameExists(name: string, userId: string): Promise<boolean> {
+  const existing =
+    userId === '__local__'
+      ? await dbGet(db.select().from(schema.projects).where(eq(schema.projects.name, name)))
+      : await dbGet(
+          db
+            .select()
+            .from(schema.projects)
+            .where(and(eq(schema.projects.name, name), eq(schema.projects.userId, userId))),
+        );
+  return !!existing;
+}
+
+export async function createProject(
   name: string,
   rawPath: string,
   userId: string,
-): Result<Project, DomainError> {
+): Promise<Result<Project, DomainError>> {
   if (!isAbsolute(rawPath)) {
     return err(badRequest('Project path must be absolute'));
   }
@@ -102,12 +144,13 @@ export function createProject(
   // Check for duplicate path (scoped to user in multi mode)
   const existingPath =
     userId === '__local__'
-      ? db.select().from(schema.projects).where(eq(schema.projects.path, path)).get()
-      : db
-          .select()
-          .from(schema.projects)
-          .where(and(eq(schema.projects.path, path), eq(schema.projects.userId, userId)))
-          .get();
+      ? await dbGet(db.select().from(schema.projects).where(eq(schema.projects.path, path)))
+      : await dbGet(
+          db
+            .select()
+            .from(schema.projects)
+            .where(and(eq(schema.projects.path, path), eq(schema.projects.userId, userId))),
+        );
   if (existingPath) {
     return err(conflict(`A project with this path already exists: ${path}`));
   }
@@ -115,12 +158,13 @@ export function createProject(
   // Check for duplicate name (scoped to user in multi mode)
   const existingName =
     userId === '__local__'
-      ? db.select().from(schema.projects).where(eq(schema.projects.name, name)).get()
-      : db
-          .select()
-          .from(schema.projects)
-          .where(and(eq(schema.projects.name, name), eq(schema.projects.userId, userId)))
-          .get();
+      ? await dbGet(db.select().from(schema.projects).where(eq(schema.projects.name, name)))
+      : await dbGet(
+          db
+            .select()
+            .from(schema.projects)
+            .where(and(eq(schema.projects.name, name), eq(schema.projects.userId, userId))),
+        );
   if (existingName) {
     return err(conflict(`A project with this name already exists: ${name}`));
   }
@@ -128,8 +172,8 @@ export function createProject(
   // Get existing project count to assign sortOrder
   const existing =
     userId === '__local__'
-      ? db.select().from(schema.projects).all()
-      : db.select().from(schema.projects).where(eq(schema.projects.userId, userId)).all();
+      ? await dbAll(db.select().from(schema.projects))
+      : await dbAll(db.select().from(schema.projects).where(eq(schema.projects.userId, userId)));
 
   const project: Project = {
     id: nanoid(),
@@ -149,10 +193,10 @@ export function createProject(
     createdAt: project.createdAt,
   };
 
-  db.insert(schema.projects).values(projectRow).run();
+  await dbRun(db.insert(schema.projects).values(projectRow));
 
   // Auto-create a default pipeline so review triggers on every commit
-  createPipeline({
+  void createPipeline({
     projectId: project.id,
     userId,
     name: 'Default Pipeline',
@@ -161,11 +205,11 @@ export function createProject(
   return ok(project);
 }
 
-export function renameProject(id: string, name: string): Result<Project, DomainError> {
+export function renameProject(id: string, name: string): Promise<Result<Project, DomainError>> {
   return updateProject(id, { name });
 }
 
-export function updateProject(
+export async function updateProject(
   id: string,
   fields: {
     name?: string;
@@ -180,19 +224,17 @@ export function updateProject(
     systemPrompt?: string | null;
     launcherUrl?: string | null;
   },
-): Result<Project, DomainError> {
-  const project = db.select().from(schema.projects).where(eq(schema.projects.id, id)).get();
+): Promise<Result<Project, DomainError>> {
+  const project = await dbGet(db.select().from(schema.projects).where(eq(schema.projects.id, id)));
   if (!project) {
     return err(notFound('Project not found'));
   }
 
   // Validate name uniqueness if name is being updated
   if (fields.name !== undefined) {
-    const existingName = db
-      .select()
-      .from(schema.projects)
-      .where(eq(schema.projects.name, fields.name))
-      .get();
+    const existingName = await dbGet(
+      db.select().from(schema.projects).where(eq(schema.projects.name, fields.name)),
+    );
     if (existingName && existingName.id !== id) {
       return err(conflict(`A project with this name already exists: ${fields.name}`));
     }
@@ -213,26 +255,31 @@ export function updateProject(
   if (fields.systemPrompt !== undefined) updateData.systemPrompt = fields.systemPrompt;
   if (fields.launcherUrl !== undefined) updateData.launcherUrl = fields.launcherUrl;
 
-  db.update(schema.projects).set(updateData).where(eq(schema.projects.id, id)).run();
+  await dbRun(db.update(schema.projects).set(updateData).where(eq(schema.projects.id, id)));
   return ok(toProject({ ...project, ...updateData } as ProjectRow));
 }
 
-export function deleteProject(id: string): void {
-  db.delete(schema.projects).where(eq(schema.projects.id, id)).run();
+export async function deleteProject(id: string): Promise<void> {
+  await dbRun(db.delete(schema.projects).where(eq(schema.projects.id, id)));
 }
 
-export function reorderProjects(userId: string, projectIds: string[]): Result<void, DomainError> {
+export async function reorderProjects(
+  userId: string,
+  projectIds: string[],
+): Promise<Result<void, DomainError>> {
   try {
-    db.transaction((tx) => {
+    await db.transaction(async (tx) => {
       for (let i = 0; i < projectIds.length; i++) {
-        tx.update(schema.projects)
-          .set({ sortOrder: i })
-          .where(
-            userId === '__local__'
-              ? eq(schema.projects.id, projectIds[i])
-              : and(eq(schema.projects.id, projectIds[i]), eq(schema.projects.userId, userId)),
-          )
-          .run();
+        await dbRun(
+          tx
+            .update(schema.projects)
+            .set({ sortOrder: i })
+            .where(
+              userId === '__local__'
+                ? eq(schema.projects.id, projectIds[i])
+                : and(eq(schema.projects.id, projectIds[i]), eq(schema.projects.userId, userId)),
+            ),
+        );
       }
     });
     return ok(undefined);

@@ -70,11 +70,23 @@ export function CloneRepoView() {
   // Clone progress from WebSocket
   const [clonePhase, setClonePhase] = useState('');
   const [clonePercent, setClonePercent] = useState<number | undefined>(undefined);
+  const [phaseChanged, setPhaseChanged] = useState(false);
+  const prevPhaseRef = useRef('');
 
   useEffect(() => {
     const handler = (e: Event) => {
       const data = (e as CustomEvent).detail;
-      if (data.phase) setClonePhase(data.phase);
+      if (data.phase) {
+        const newPhase = data.phase.replace(/:.*$/, '').trim();
+        const oldPhase = prevPhaseRef.current;
+        if (newPhase !== oldPhase) {
+          setPhaseChanged(true);
+          prevPhaseRef.current = newPhase;
+          // Re-enable transition on next frame so only the reset is instant
+          requestAnimationFrame(() => setPhaseChanged(false));
+        }
+        setClonePhase(data.phase);
+      }
       if (data.percent !== undefined) setClonePercent(data.percent);
     };
     window.addEventListener('clone:progress', handler);
@@ -527,6 +539,14 @@ export function CloneRepoView() {
           )}
         </div>
 
+        {/* Project name */}
+        <div>
+          <label className="mb-1.5 block text-sm font-medium">
+            {t('github.clone.projectName')}
+          </label>
+          <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} />
+        </div>
+
         {/* Destination path */}
         <div>
           <label className="mb-1.5 block text-sm font-medium">
@@ -543,14 +563,6 @@ export function CloneRepoView() {
               <FolderOpen className="h-4 w-4" />
             </Button>
           </div>
-        </div>
-
-        {/* Project name */}
-        <div>
-          <label className="mb-1.5 block text-sm font-medium">
-            {t('github.clone.projectName')}
-          </label>
-          <Input value={projectName} onChange={(e) => setProjectName(e.target.value)} />
         </div>
 
         {/* Actions */}
@@ -582,6 +594,14 @@ export function CloneRepoView() {
 
   // Cloning state
   if (view === 'cloning') {
+    // Extract phase name and title-case it: "receiving objects" → "Receiving Objects"
+    const phaseName = clonePhase
+      ? clonePhase
+          .replace(/:.*$/, '')
+          .trim()
+          .replace(/\b\w/g, (c) => c.toUpperCase())
+      : '';
+
     return (
       <div className="flex flex-col items-center gap-4 py-12">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
@@ -589,25 +609,26 @@ export function CloneRepoView() {
           {t('github.clone.cloning', { repo: selectedRepo?.full_name })}
         </p>
 
-        {/* Progress bar */}
-        {clonePercent !== undefined && (
-          <div className="w-full max-w-xs">
-            <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
-              <div
-                className="h-full rounded-full bg-primary transition-all duration-300"
-                style={{ width: `${clonePercent}%` }}
-              />
-            </div>
-            <p className="mt-1 text-right text-xs text-muted-foreground">{clonePercent}%</p>
-          </div>
-        )}
-
-        {/* Phase text */}
-        {clonePhase && (
-          <p className="max-w-sm truncate text-xs text-muted-foreground" title={clonePhase}>
-            {clonePhase}
-          </p>
-        )}
+        {/* Progress bar with phase label */}
+        <div className="w-full max-w-xs">
+          {phaseName && (
+            <p className="mb-1 text-xs font-medium text-muted-foreground">{phaseName}</p>
+          )}
+          {clonePercent !== undefined && (
+            <>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-muted">
+                <div
+                  className={cn(
+                    'h-full rounded-full bg-primary',
+                    phaseChanged ? '' : 'transition-all duration-300',
+                  )}
+                  style={{ width: `${clonePercent}%` }}
+                />
+              </div>
+              <p className="mt-1 text-right text-xs text-muted-foreground">{clonePercent}%</p>
+            </>
+          )}
+        </div>
       </div>
     );
   }

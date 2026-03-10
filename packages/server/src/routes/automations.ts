@@ -22,10 +22,10 @@ import {
 export const automationRoutes = new Hono<HonoEnv>();
 
 // GET /api/automations/inbox?projectId=xxx&triageStatus=xxx — must be before /:id to avoid conflict
-automationRoutes.get('/inbox', (c) => {
+automationRoutes.get('/inbox', async (c) => {
   const projectId = c.req.query('projectId');
   const triageStatus = c.req.query('triageStatus');
-  const items = am.listInboxRuns({
+  const items = await am.listInboxRuns({
     projectId: projectId || undefined,
     triageStatus: triageStatus || undefined,
   });
@@ -33,16 +33,16 @@ automationRoutes.get('/inbox', (c) => {
 });
 
 // GET /api/automations?projectId=xxx
-automationRoutes.get('/', (c) => {
+automationRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.query('projectId');
-  const automations = am.listAutomations(projectId || undefined, userId);
+  const automations = await am.listAutomations(projectId || undefined, userId);
   return c.json(automations);
 });
 
 // GET /api/automations/:id
-automationRoutes.get('/:id', (c) => {
-  const automation = am.getAutomation(c.req.param('id'));
+automationRoutes.get('/:id', async (c) => {
+  const automation = await am.getAutomation(c.req.param('id'));
   if (!automation) return c.json({ error: 'Not found' }, 404);
   return c.json(automation);
 });
@@ -53,7 +53,7 @@ automationRoutes.post('/', async (c) => {
   const parsed = validate(createAutomationSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const project = pm.getProject(parsed.value.projectId);
+  const project = await pm.getProject(parsed.value.projectId);
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
   const userId = c.get('userId') as string;
@@ -64,7 +64,7 @@ automationRoutes.post('/', async (c) => {
 // PATCH /api/automations/:id
 automationRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id');
-  const existing = am.getAutomation(id);
+  const existing = await am.getAutomation(id);
   if (!existing) return c.json({ error: 'Not found' }, 404);
 
   const raw = await c.req.json();
@@ -83,23 +83,23 @@ automationRoutes.patch('/:id', async (c) => {
   }
 
   if (Object.keys(updates).length > 0) {
-    am.updateAutomation(id, updates);
+    await am.updateAutomation(id, updates);
   }
 
-  return c.json(am.getAutomation(id));
+  return c.json(await am.getAutomation(id));
 });
 
 // DELETE /api/automations/:id
-automationRoutes.delete('/:id', (c) => {
-  const existing = am.getAutomation(c.req.param('id'));
+automationRoutes.delete('/:id', async (c) => {
+  const existing = await am.getAutomation(c.req.param('id'));
   if (!existing) return c.json({ error: 'Not found' }, 404);
-  am.deleteAutomation(c.req.param('id'));
+  await am.deleteAutomation(c.req.param('id'));
   return c.json({ ok: true });
 });
 
 // POST /api/automations/:id/trigger — manual trigger
 automationRoutes.post('/:id/trigger', async (c) => {
-  const automation = am.getAutomation(c.req.param('id'));
+  const automation = await am.getAutomation(c.req.param('id'));
   if (!automation) return c.json({ error: 'Not found' }, 404);
 
   const { triggerAutomationRun } = await import('../services/automation-scheduler.js');
@@ -111,8 +111,8 @@ automationRoutes.post('/:id/trigger', async (c) => {
 // ── Runs ─────────────────────────────────────────────────────────
 
 // GET /api/automations/:id/runs
-automationRoutes.get('/:id/runs', (c) => {
-  const runs = am.listRuns(c.req.param('id'));
+automationRoutes.get('/:id/runs', async (c) => {
+  const runs = await am.listRuns(c.req.param('id'));
   return c.json(runs);
 });
 
@@ -123,6 +123,6 @@ automationRoutes.patch('/runs/:runId/triage', async (c) => {
   const parsed = validate(updateRunTriageSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  am.updateRun(runId, { triageStatus: parsed.value.triageStatus });
+  await am.updateRun(runId, { triageStatus: parsed.value.triageStatus });
   return c.json({ ok: true });
 });

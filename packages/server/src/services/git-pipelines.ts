@@ -323,7 +323,7 @@ async function commitNode(ctx: GitPipelineContext): Promise<GitPipelineContext> 
         throw new Error(errorMsg);
       }
     } else {
-      const identity = resolveIdentity(ctx.userId);
+      const identity = await resolveIdentity(ctx.userId);
       const result = await gitCommit(ctx.cwd, ctx.message!, identity, isAmend, noVerify);
       if (result.isErr()) {
         const e = result.error;
@@ -400,7 +400,7 @@ async function reviewNode(
     throw new Error('Review requires threadId and projectId');
   }
 
-  const parentThread = tm.getThread(ctx.threadId);
+  const parentThread = await tm.getThread(ctx.threadId);
   const baseBranch = parentThread?.branch || undefined;
   const prompt = buildReviewerPrompt(ctx.commitSha ?? undefined, ctx.reviewerPrompt);
 
@@ -429,7 +429,7 @@ async function reviewNode(
   await waitForAgentCompletion(reviewerThread.id, signal);
 
   // Parse verdict from the last assistant message
-  const reviewerWithMessages = tm.getThreadWithMessages(reviewerThread.id);
+  const reviewerWithMessages = await tm.getThreadWithMessages(reviewerThread.id);
   const lastAssistantMsg = reviewerWithMessages?.messages
     ? [...reviewerWithMessages.messages].reverse().find((m) => m.role === 'assistant')
     : null;
@@ -496,7 +496,7 @@ async function fixNode(ctx: GitPipelineContext, signal: AbortSignal): Promise<Gi
   await waitForAgentCompletion(correctorThread.id, signal);
 
   // Check if the corrector made changes
-  const correctorThreadData = tm.getThread(correctorThread.id);
+  const correctorThreadData = await tm.getThread(correctorThread.id);
   const correctorCwd = correctorThreadData?.worktreePath || correctorThreadData?.initCwd;
 
   if (!correctorCwd) {
@@ -554,9 +554,9 @@ async function fixNode(ctx: GitPipelineContext, signal: AbortSignal): Promise<Gi
 }
 
 async function applyPatchNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
-  const parentThread = ctx.threadId ? tm.getThread(ctx.threadId) : null;
+  const parentThread = ctx.threadId ? await tm.getThread(ctx.threadId) : null;
   const parentCwd = parentThread?.worktreePath || parentThread?.initCwd;
-  const project = ctx.projectId ? pm.getProject(ctx.projectId) : null;
+  const project = ctx.projectId ? await pm.getProject(ctx.projectId) : null;
   const targetCwd = parentCwd || project?.path || ctx.cwd;
 
   if (!ctx.patchDiff) throw new Error('No patch diff available');
@@ -578,9 +578,9 @@ async function applyPatchNode(ctx: GitPipelineContext): Promise<GitPipelineConte
 async function commitFixNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
   if (!ctx.threadId) throw new Error('Commit-fix requires threadId');
 
-  const parentThread = tm.getThread(ctx.threadId);
+  const parentThread = await tm.getThread(ctx.threadId);
   const parentCwd = parentThread?.worktreePath || parentThread?.initCwd;
-  const project = ctx.projectId ? pm.getProject(ctx.projectId) : null;
+  const project = ctx.projectId ? await pm.getProject(ctx.projectId) : null;
   const targetCwd = parentCwd || project?.path || ctx.cwd;
 
   const commitMessage = `fix: address review findings (iteration ${ctx.iteration})`;
@@ -655,7 +655,7 @@ async function pushNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
         throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
       }
     } else {
-      const identity = resolveIdentity(ctx.userId);
+      const identity = await resolveIdentity(ctx.userId);
       const result = await gitPush(ctx.cwd, identity);
       if (result.isErr()) {
         const e = result.error;

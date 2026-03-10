@@ -83,8 +83,6 @@ export interface ContextUsage {
   cumulativeInputTokens: number;
   lastInputTokens: number;
   lastOutputTokens: number;
-  /** Accumulated tokens from before compaction(s) so the counter doesn't reset */
-  tokenOffset: number;
 }
 
 export interface ThreadWithMessages extends Thread {
@@ -361,9 +359,6 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         };
       });
 
-    // Calculate tokenOffset from all compaction events (accumulated pre-compaction tokens)
-    const tokenOffset = compactionEvents.reduce((acc, e) => acc + e.preTokens, 0);
-
     // Merge stored setup progress for setting_up threads
     const storedSetupProgress =
       thread.status === 'setting_up' ? get().setupProgressByThread[threadId] : undefined;
@@ -379,10 +374,6 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         pendingPermission,
         setupProgress: storedSetupProgress,
         compactionEvents: compactionEvents.length > 0 ? compactionEvents : undefined,
-        contextUsage:
-          tokenOffset > 0
-            ? { cumulativeInputTokens: 0, lastInputTokens: 0, lastOutputTokens: 0, tokenOffset }
-            : undefined,
       },
     });
     useProjectStore.setState({ selectedProjectId: projectId });
@@ -787,8 +778,6 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
           timestamp: data.timestamp ?? e.createdAt,
         };
       });
-    const refreshedTokenOffset = persistedCompaction.reduce((acc, e) => acc + e.preTokens, 0);
-
     // Clear waitingReason/pendingPermission if server status is no longer waiting
     // (handles case where agent:result WS event was lost during disconnect)
     const isServerWaiting = thread.status === 'waiting';
@@ -811,17 +800,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         threadEvents,
         compactionEvents:
           persistedCompaction.length > 0 ? persistedCompaction : activeThread.compactionEvents,
-        contextUsage:
-          refreshedTokenOffset > 0
-            ? {
-                ...(activeThread.contextUsage ?? {
-                  cumulativeInputTokens: 0,
-                  lastInputTokens: 0,
-                  lastOutputTokens: 0,
-                }),
-                tokenOffset: refreshedTokenOffset,
-              }
-            : activeThread.contextUsage,
+        contextUsage: activeThread.contextUsage,
         waitingReason: isServerWaiting ? activeThread.waitingReason : undefined,
         pendingPermission: isServerWaiting ? activeThread.pendingPermission : undefined,
       },

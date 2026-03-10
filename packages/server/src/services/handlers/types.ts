@@ -42,12 +42,17 @@ interface HandlerProject {
  */
 export interface HandlerServiceContext {
   // Thread operations
-  getThread(id: string): HandlerThread | undefined;
-  updateThread(id: string, updates: Record<string, any>): void;
-  insertComment(data: { threadId: string; userId: string; source: string; content: string }): any;
+  getThread(id: string): HandlerThread | undefined | Promise<HandlerThread | undefined>;
+  updateThread(id: string, updates: Record<string, any>): void | Promise<void>;
+  insertComment(data: {
+    threadId: string;
+    userId: string;
+    source: string;
+    content: string;
+  }): any | Promise<any>;
 
   // Project operations
-  getProject(id: string): HandlerProject | undefined;
+  getProject(id: string): HandlerProject | undefined | Promise<HandlerProject | undefined>;
 
   // WebSocket
   emitToUser(userId: string, event: any): void;
@@ -79,9 +84,9 @@ export interface HandlerServiceContext {
   saveThreadEvent(threadId: string, type: string, data: Record<string, unknown>): Promise<void>;
 
   // Message queue
-  dequeueMessage(threadId: string): QueueEntry | null;
-  queueCount(threadId: string): number;
-  peekMessage(threadId: string): QueueEntry | null;
+  dequeueMessage(threadId: string): QueueEntry | null | Promise<QueueEntry | null>;
+  queueCount(threadId: string): number | Promise<number>;
+  peekMessage(threadId: string): QueueEntry | null | Promise<QueueEntry | null>;
 
   // Logging
   log(message: string): void;
@@ -103,7 +108,10 @@ export interface EventHandler<K extends keyof ThreadEventMap = keyof ThreadEvent
   event: K;
 
   /** Optional predicate — return true to run the action. If omitted, action always runs. */
-  filter?: (payload: Parameters<ThreadEventMap[K]>[0], ctx: HandlerServiceContext) => boolean;
+  filter?: (
+    payload: Parameters<ThreadEventMap[K]>[0],
+    ctx: HandlerServiceContext,
+  ) => boolean | Promise<boolean>;
 
   /** The action to perform. Receives the typed event payload and the service context. */
   action: (

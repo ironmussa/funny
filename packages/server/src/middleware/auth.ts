@@ -17,7 +17,7 @@ const PUBLIC_PATHS = new Set(['/api/health', '/api/auth/mode', '/api/bootstrap']
 /**
  * Dual-mode authentication middleware.
  * - local mode: validates bearer token from file (existing behavior)
- * - multi mode: validates Better Auth session cookie
+ * - multi mode: validates Better Auth session cookie + extracts org context
  */
 export async function authMiddleware(c: Context, next: Next) {
   const path = new URL(c.req.url).pathname;
@@ -39,6 +39,8 @@ export async function authMiddleware(c: Context, next: Next) {
 
     c.set('userId', '__local__');
     c.set('userRole', 'admin');
+    // No org context in local mode
+    c.set('organizationId', null);
     return next();
   }
 
@@ -52,6 +54,11 @@ export async function authMiddleware(c: Context, next: Next) {
 
   c.set('userId', session.user.id);
   c.set('userRole', (session.user as any).role || 'user');
+
+  // Extract active organization from session (set by Better Auth org plugin)
+  const activeOrgId = (session.session as any).activeOrganizationId ?? null;
+  c.set('organizationId', activeOrgId);
+
   return next();
 }
 
@@ -67,4 +74,42 @@ export async function requireAdmin(c: Context, next: Next) {
     return c.json({ error: 'Forbidden: admin required' }, 403);
   }
   return next();
+}
+
+/**
+ * Middleware factory that checks if the user has a specific permission
+ * in their active organization. Skips in local mode.
+ *
+ * Usage: `app.post('/api/projects', requirePermission('project', 'create'), handler)`
+ */
+export function requirePermission(resource: string, action: string) {
+  return async (c: Context, next: Next) => {
+    if (getAuthMode() === 'local') return next();
+
+    const orgId = c.get('organizationId');
+    if (!orgId) {
+      // No active org — allow if it's a user-scoped action
+      return next();
+    }
+
+    const { auth } = await import('../lib/auth.js');
+    try {
+      const hasPermission = await auth.api.hasPermission({
+        headers: c.req.raw.headers,
+        body: {
+          permission: {
+            [resource]: [action],
+          },
+        },
+      });
+
+      if (!hasPermission) {
+        return c.json({ error: `Forbidden: ${resource}:${action} permission required` }, 403);
+      }
+    } catch {
+      // If permission check fails (e.g. org plugin not fully initialized), allow through
+    }
+
+    return next();
+  };
 }

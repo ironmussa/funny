@@ -28,7 +28,7 @@ export const StickyUserMessage = memo(function StickyUserMessage({
       <div className="pointer-events-auto mx-auto min-w-[320px] max-w-3xl">
         <button
           onClick={onScrollTo}
-          className="flex w-full cursor-pointer items-start gap-2 rounded-b-lg border border-t-0 bg-foreground/95 px-3 py-2 text-left text-background shadow-lg backdrop-blur-sm transition-colors hover:bg-foreground"
+          className="flex w-full cursor-pointer items-start gap-2 rounded-b-lg border border-t-0 bg-foreground/95 px-3 py-2 text-left font-['Noto_Sans'] text-background shadow-lg backdrop-blur-sm transition-colors hover:bg-foreground"
         >
           <User className="mt-0.5 h-3 w-3 flex-shrink-0 text-background/60" />
           <div className="min-w-0 flex-1">
@@ -37,7 +37,7 @@ export const StickyUserMessage = memo(function StickyUserMessage({
                 {files.map((item) => (
                   <span
                     key={`${item.type}:${item.path}`}
-                    className="inline-flex items-center gap-1 rounded bg-background/20 px-1.5 py-0.5 font-mono text-xs text-background/70"
+                    className="inline-flex items-center gap-1 rounded bg-background/20 px-1.5 py-0.5 font-sans text-xs text-background/70"
                     title={item.path}
                   >
                     {item.type === 'folder' ? (
@@ -50,9 +50,9 @@ export const StickyUserMessage = memo(function StickyUserMessage({
                 ))}
               </div>
             )}
-            <pre className="line-clamp-5 whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-background">
+            <p className="line-clamp-5 whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-background">
               {cleanContent.trim()}
-            </pre>
+            </p>
             {images && images.length > 0 && (
               <div className="mt-1.5 flex gap-1.5">
                 {images.map((img, idx) => (

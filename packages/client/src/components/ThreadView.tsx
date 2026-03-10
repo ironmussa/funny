@@ -440,7 +440,7 @@ const McpToolGroup = memo(function McpToolGroup({
   );
 }, mcpToolGroupAreEqual);
 
-const COLLAPSED_MAX_H = 128; // px – roughly 8 lines of text
+const COLLAPSED_MAX_H = 48; // px – roughly 8 lines of text
 
 function UserMessageContent({ content }: { content: string }) {
   const { t } = useTranslation();
@@ -850,8 +850,19 @@ const MemoizedMessageList = memo(
         }
 
         if (item.type === 'toolcall' || item.type === 'toolcall-group') {
+          // Don't use contentVisibility:auto for interactive cards (AskUserQuestion, ExitPlanMode)
+          // — the browser may skip rendering them when off-screen, preventing user interaction.
+          const toolName = item.type === 'toolcall' ? item.tc.name : item.name;
+          const isInteractive = toolName === 'AskUserQuestion' || toolName === 'ExitPlanMode';
           return (
-            <div key={key} style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' }}>
+            <div
+              key={key}
+              style={
+                isInteractive
+                  ? undefined
+                  : { contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' }
+              }
+            >
               {renderToolItem(item)}
             </div>
           );
@@ -897,7 +908,6 @@ const MemoizedMessageList = memo(
     const renderUserMessage = useCallback(
       (item: Extract<RenderItem, { type: 'message' }>) => {
         const msg = item.msg;
-        const key = getItemKey(item);
         return (
           <div className="sticky top-0 z-20 pb-3 pt-3">
             <div
@@ -1234,6 +1244,7 @@ export function ThreadView() {
     [activeThread?.messages],
   );
   const prevUserMessageCountRef = useRef(userMessageCount);
+  const prevWaitingReasonRef = useRef(activeThread?.waitingReason);
 
   const scrollFingerprint = [
     activeThread?.messages?.length,
@@ -1350,12 +1361,29 @@ export function ThreadView() {
     const hasNewUserMessage = userMessageCount > prevUserMessageCountRef.current;
     prevUserMessageCountRef.current = userMessageCount;
 
+    // Detect when waitingReason transitions to 'question' or 'permission'
+    // — the agent is asking something and the user needs to see the widget.
+    const curWaiting = activeThread?.waitingReason;
+    const prevWaiting = prevWaitingReasonRef.current;
+    prevWaitingReasonRef.current = curWaiting;
+    const needsAttention =
+      (curWaiting === 'question' || curWaiting === 'permission') && curWaiting !== prevWaiting;
+
     // Re-pin only when switching threads or when the user sent a new prompt.
     // Otherwise leave scroll position alone so the user can browse freely.
     if (isNewThread || hasNewUserMessage) {
       requestAnimationFrame(() => {
         pinUserMessageToTop(null, hasNewUserMessage && !isNewThread);
       });
+    } else if (needsAttention) {
+      // Auto-scroll to bottom to reveal AskUserQuestion / permission card
+      const viewport = scrollViewportRef.current;
+      if (viewport) {
+        userHasScrolledUp.current = false;
+        requestAnimationFrame(() => {
+          viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
+        });
+      }
     } else if (!userHasScrolledUp.current) {
       // Sticky bottom: if the user is at the bottom and new agent content arrives,
       // keep them at the bottom so they can follow along in real time.
@@ -1373,7 +1401,13 @@ export function ThreadView() {
         });
       }
     }
-  }, [activeThread?.id, pinUserMessageToTop, scrollFingerprint, userMessageCount]);
+  }, [
+    activeThread?.id,
+    activeThread?.waitingReason,
+    pinUserMessageToTop,
+    scrollFingerprint,
+    userMessageCount,
+  ]);
 
   // Preserve scroll position when older messages are prepended
   const firstMessageId = selectFirstMessage(activeThread)?.id ?? null;
@@ -1964,34 +1998,32 @@ export function ThreadView() {
             </div>
 
             {/* Input — sticky at bottom */}
-            {!(activeThread.status === 'waiting' && activeThread.waitingReason === 'question') && (
-              <div ref={inputDockRef} className="sticky bottom-0 z-30 bg-background">
-                {/* Scroll to bottom button — visibility managed via DOM ref to avoid re-renders */}
-                <div ref={scrollDownRef} className="relative" style={{ display: 'none' }}>
-                  <button
-                    onClick={scrollToBottom}
-                    data-testid="scroll-to-bottom"
-                    aria-label={t('thread.scrollToBottom', 'Scroll to bottom')}
-                    className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-muted-foreground/40 bg-secondary px-3 py-1.5 text-xs text-muted-foreground shadow-md transition-colors hover:bg-muted"
-                  >
-                    <ArrowDown className="h-3 w-3" />
-                    {t('thread.scrollToBottom', 'Scroll to bottom')}
-                  </button>
-                </div>
-                <PromptInput
-                  onSubmit={handleSend}
-                  onStop={handleStop}
-                  loading={sending}
-                  running={isRunning && !isExternal}
-                  threadId={activeThread.id}
-                  isQueueMode={isQueueMode}
-                  queuedCount={(activeThread as any).queuedCount ?? 0}
-                  queuedNextMessage={(activeThread as any).queuedNextMessage}
-                  setPromptRef={setPromptRef}
-                  placeholder={t('thread.nextPrompt')}
-                />
+            <div ref={inputDockRef} className="sticky bottom-0 z-30 bg-background">
+              {/* Scroll to bottom button — visibility managed via DOM ref to avoid re-renders */}
+              <div ref={scrollDownRef} className="relative" style={{ display: 'none' }}>
+                <button
+                  onClick={scrollToBottom}
+                  data-testid="scroll-to-bottom"
+                  aria-label={t('thread.scrollToBottom', 'Scroll to bottom')}
+                  className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-muted-foreground/40 bg-secondary px-3 py-1.5 text-xs text-muted-foreground shadow-md transition-colors hover:bg-muted"
+                >
+                  <ArrowDown className="h-3 w-3" />
+                  {t('thread.scrollToBottom', 'Scroll to bottom')}
+                </button>
               </div>
-            )}
+              <PromptInput
+                onSubmit={handleSend}
+                onStop={handleStop}
+                loading={sending}
+                running={isRunning && !isExternal}
+                threadId={activeThread.id}
+                isQueueMode={isQueueMode}
+                queuedCount={(activeThread as any).queuedCount ?? 0}
+                queuedNextMessage={(activeThread as any).queuedNextMessage}
+                setPromptRef={setPromptRef}
+                placeholder={t('thread.nextPrompt')}
+              />
+            </div>
           </div>
         </div>
 

@@ -12,8 +12,8 @@ import { useAuthStore } from './stores/auth-store';
 import { useSettingsStore } from './stores/settings-store';
 import '@fontsource/geist-sans/latin.css';
 import '@fontsource/geist-mono/latin.css';
-import '@fontsource/ibm-plex-sans/latin.css';
-import '@fontsource/ibm-plex-mono/latin.css';
+import '@fontsource/noto-sans/latin.css';
+import '@fontsource/jetbrains-mono/latin.css';
 import './globals.css';
 import './i18n/config';
 

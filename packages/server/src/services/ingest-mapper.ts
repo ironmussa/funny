@@ -126,9 +126,9 @@ function decodeUnicodeEscapes(str: string): string {
  * Resolve a project from a worktree/working path by checking if any project's
  * path is a prefix of the given path.
  */
-function resolveProjectId(workingPath: string): string | null {
+async function resolveProjectId(workingPath: string): Promise<string | null> {
   const normalised = workingPath.replace(/\\/g, '/').toLowerCase();
-  const projects = pm.listProjects('__local__');
+  const projects = await pm.listProjects('__local__');
 
   // First pass: exact prefix match (project path is prefix of working path)
   for (const project of projects) {
@@ -174,7 +174,7 @@ function parseOwnerRepo(remoteUrl: string): string | null {
  */
 async function resolveProjectByRepo(repoFullName: string): Promise<string | null> {
   const target = repoFullName.toLowerCase();
-  const projects = pm.listProjects('__local__');
+  const projects = await pm.listProjects('__local__');
 
   for (const project of projects) {
     const result = await getRemoteUrl(project.path);
@@ -191,12 +191,12 @@ async function resolveProjectByRepo(repoFullName: string): Promise<string | null
  * Look up or restore the in-memory state for a request_id.
  * Falls back to a DB lookup so the mapper survives server restarts.
  */
-function getState(requestId: string): ExternalThreadState | null {
+async function getState(requestId: string): Promise<ExternalThreadState | null> {
   const cached = threadStates.get(requestId);
   if (cached) return cached;
 
   // Fallback: look up thread by externalRequestId via repository
-  const row = tm.getThreadByExternalRequestId(requestId);
+  const row = await tm.getThreadByExternalRequestId(requestId);
 
   if (row) {
     const state: ExternalThreadState = {
@@ -216,12 +216,12 @@ function getState(requestId: string): ExternalThreadState | null {
  * Look up thread state by direct thread ID.
  * Allows sending events to threads created from the UI (not via ingest).
  */
-function getStateByThreadId(threadId: string): ExternalThreadState | null {
+async function getStateByThreadId(threadId: string): Promise<ExternalThreadState | null> {
   const cacheKey = `__thread:${threadId}`;
   const cached = threadStates.get(cacheKey);
   if (cached) return cached;
 
-  const row = tm.getThread(threadId);
+  const row = await tm.getThread(threadId);
   if (row) {
     const state: ExternalThreadState = {
       threadId: row.id,
@@ -240,8 +240,10 @@ function getStateByThreadId(threadId: string): ExternalThreadState | null {
  * Resolve thread state from an event — tries thread_id first (direct),
  * then falls back to request_id (externalRequestId lookup).
  */
-function resolveState(event: IngestEvent): ExternalThreadState | null {
-  const state = event.thread_id ? getStateByThreadId(event.thread_id) : getState(event.request_id);
+async function resolveState(event: IngestEvent): Promise<ExternalThreadState | null> {
+  const state = event.thread_id
+    ? await getStateByThreadId(event.thread_id)
+    : await getState(event.request_id);
   if (state) state.lastEventAt = Date.now();
   return state;
 }
@@ -270,16 +272,16 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
 
   // If thread_id is provided, link to an existing thread instead of creating one
   if (event.thread_id) {
-    const existing = getStateByThreadId(event.thread_id);
+    const existing = await getStateByThreadId(event.thread_id);
     if (existing) {
       // Link request_id to the existing thread for future lookups
       if (request_id) {
-        tm.updateThread(existing.threadId, { provider: 'external' });
+        await tm.updateThread(existing.threadId, { provider: 'external' });
         threadStates.set(request_id, existing);
       }
       const prompt = (data.prompt as string) ?? (metadata?.prompt as string);
       if (prompt) {
-        tm.insertMessage({ threadId: existing.threadId, role: 'user', content: prompt });
+        await tm.insertMessage({ threadId: existing.threadId, role: 'user', content: prompt });
         emitWS(existing, {
           type: 'agent:message',
           threadId: existing.threadId,
@@ -302,7 +304,7 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
   }
 
   // Prevent duplicate thread creation
-  if (getState(request_id)) {
+  if (await getState(request_id)) {
     return;
   }
 
@@ -310,7 +312,7 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
   let projectId: string | null =
     (data.projectId as string) ??
     (metadata?.projectId as string) ??
-    (data.worktree_path ? resolveProjectId(data.worktree_path as string) : null);
+    (data.worktree_path ? await resolveProjectId(data.worktree_path as string) : null);
 
   // Fallback: resolve by GitHub owner/repo (e.g. from standalone reviewbot)
   if (!projectId && data.repo_full_name) {
@@ -331,7 +333,7 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
     (data.branch ? `Pipeline: ${data.branch}` : `External: ${request_id.slice(0, 8)}`);
   // Resolve branch: prefer explicit value from event, fall back to current branch
   // so local-mode threads share branchKey with siblings on the same branch.
-  const project = pm.getProject(projectId);
+  const project = await pm.getProject(projectId);
   let branch = (data.branch as string) ?? null;
   if (!branch && project) {
     const branchResult = await getCurrentBranch(project.path);
@@ -342,7 +344,7 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
   // createdBy: allow external caller to specify agent/pipeline name, otherwise mark as "external"
   const createdBy = (metadata?.createdBy as string) ?? (data.created_by as string) ?? 'external';
 
-  tm.createThread({
+  await tm.createThread({
     id: threadId,
     projectId,
     userId,
@@ -369,7 +371,7 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
   // Insert initial prompt as user message if provided
   const prompt = (data.prompt as string) ?? (metadata?.prompt as string);
   if (prompt) {
-    tm.insertMessage({ threadId, role: 'user', content: prompt });
+    await tm.insertMessage({ threadId, role: 'user', content: prompt });
   }
 
   emitWS(state, { type: 'thread:created', threadId, data: { projectId, title, source: 'ingest' } });
@@ -382,31 +384,31 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
  * pipeline.started — just update DB status. The CLI system.init message
  * (via onCLIMessage → handleCLISystem) handles the WebSocket emissions.
  */
-function onStarted(event: IngestEvent): void {
-  const state = resolveState(event);
+async function onStarted(event: IngestEvent): Promise<void> {
+  const state = await resolveState(event);
   if (!state) return;
-  tm.updateThread(state.threadId, { status: 'running' });
+  await tm.updateThread(state.threadId, { status: 'running' });
 }
 
 /**
  * pipeline.completed — FALLBACK finalization.
  * If handleCLIResult already processed the result CLI message, skip.
  */
-function onCompleted(event: IngestEvent): void {
+async function onCompleted(event: IngestEvent): Promise<void> {
   const stateKey = resolveStateKey(event);
 
   // Check if CLI result already handled this
   const cliState = cliStates.get(stateKey);
   if (cliState?.resultHandled) return;
 
-  const state = resolveState(event);
+  const state = await resolveState(event);
   if (!state) return;
 
   // If the event carries an error_message (e.g. non-fatal warning from agent),
   // insert it as a visible chat message before completing the thread.
   const errorMessage = event.data.error_message as string | undefined;
   if (errorMessage) {
-    const msgId = tm.insertMessage({
+    const msgId = await tm.insertMessage({
       threadId: state.threadId,
       role: 'assistant',
       content: errorMessage,
@@ -423,7 +425,7 @@ function onCompleted(event: IngestEvent): void {
   const durationMs =
     (event.data.duration_ms as number) ?? (event.data.duration as number) ?? undefined;
 
-  tm.updateThread(state.threadId, {
+  await tm.updateThread(state.threadId, {
     status: 'completed',
     stage: 'review',
     completedAt: now,
@@ -450,21 +452,21 @@ function onCompleted(event: IngestEvent): void {
  * pipeline.failed — FALLBACK finalization.
  * If handleCLIResult already processed the result CLI message, skip.
  */
-function onFailed(event: IngestEvent): void {
+async function onFailed(event: IngestEvent): Promise<void> {
   const stateKey = resolveStateKey(event);
 
   // Check if CLI result already handled this
   const cliState = cliStates.get(stateKey);
   if (cliState?.resultHandled) return;
 
-  const state = resolveState(event);
+  const state = await resolveState(event);
   if (!state) return;
 
   // If the event carries an error_message, insert it as a visible chat message before failing.
   const errorMessage =
     (event.data.error_message as string) ?? (event.data.error as string) ?? undefined;
   if (errorMessage) {
-    const msgId = tm.insertMessage({
+    const msgId = await tm.insertMessage({
       threadId: state.threadId,
       role: 'assistant',
       content: `Error: ${errorMessage}`,
@@ -482,7 +484,7 @@ function onFailed(event: IngestEvent): void {
   const durationMs =
     (event.data.duration_ms as number) ?? (event.data.duration as number) ?? undefined;
 
-  tm.updateThread(state.threadId, {
+  await tm.updateThread(state.threadId, {
     status: 'failed',
     completedAt: now,
     ...(costUsd ? { cost: costUsd } : {}),
@@ -504,13 +506,13 @@ function onFailed(event: IngestEvent): void {
   threadStates.delete(stateKey);
 }
 
-function onStopped(event: IngestEvent): void {
+async function onStopped(event: IngestEvent): Promise<void> {
   const stateKey = resolveStateKey(event);
-  const state = resolveState(event);
+  const state = await resolveState(event);
   if (!state) return;
 
   const now = new Date().toISOString();
-  tm.updateThread(state.threadId, { status: 'stopped', completedAt: now });
+  await tm.updateThread(state.threadId, { status: 'stopped', completedAt: now });
 
   emitWS(state, { type: 'agent:status', threadId: state.threadId, data: { status: 'stopped' } });
 
@@ -520,8 +522,8 @@ function onStopped(event: IngestEvent): void {
 
 // ── CLI Message handler (mirrors agent-message-handler.ts) ───
 
-function onCLIMessage(event: IngestEvent): void {
-  const threadState = resolveState(event);
+async function onCLIMessage(event: IngestEvent): Promise<void> {
+  const threadState = await resolveState(event);
   if (!threadState) return;
 
   const msg = event.data.cli_message as any;
@@ -534,27 +536,27 @@ function onCLIMessage(event: IngestEvent): void {
 
   switch (msg.type) {
     case 'system':
-      handleCLISystem(threadState, cliState, msg);
+      await handleCLISystem(threadState, cliState, msg);
       break;
     case 'assistant':
-      handleCLIAssistant(threadState, cliState, msg, author);
+      await handleCLIAssistant(threadState, cliState, msg, author);
       break;
     case 'user':
-      handleCLIToolResults(threadState, cliState, msg);
+      await handleCLIToolResults(threadState, cliState, msg);
       break;
     case 'result':
-      handleCLIResult(threadState, cliState, msg, stateKey);
+      await handleCLIResult(threadState, cliState, msg, stateKey);
       break;
   }
 }
 
-function handleCLISystem(
+async function handleCLISystem(
   threadState: ExternalThreadState,
   _cliState: CLIMessageState,
   msg: any,
-): void {
+): Promise<void> {
   if (msg.subtype === 'init') {
-    tm.updateThread(threadState.threadId, {
+    await tm.updateThread(threadState.threadId, {
       sessionId: msg.session_id,
       status: 'running',
       initTools: JSON.stringify(msg.tools ?? []),
@@ -578,12 +580,12 @@ function handleCLISystem(
   }
 }
 
-function handleCLIAssistant(
+async function handleCLIAssistant(
   threadState: ExternalThreadState,
   cliState: CLIMessageState,
   msg: any,
   author?: string,
-): void {
+): Promise<void> {
   const { threadId } = threadState;
   const cliMsgId = msg.message?.id;
   if (!cliMsgId || !msg.message?.content) return;
@@ -599,9 +601,9 @@ function handleCLIAssistant(
   if (textContent) {
     let msgId = cliState.currentAssistantMsgId || cliState.cliToDbMsgId.get(cliMsgId);
     if (msgId) {
-      tm.updateMessage(msgId, textContent);
+      await tm.updateMessage(msgId, textContent);
     } else {
-      msgId = tm.insertMessage({ threadId, role: 'assistant', content: textContent, author });
+      msgId = await tm.insertMessage({ threadId, role: 'assistant', content: textContent, author });
     }
     cliState.currentAssistantMsgId = msgId;
     cliState.cliToDbMsgId.set(cliMsgId, msgId);
@@ -624,7 +626,7 @@ function handleCLIAssistant(
     // Ensure there's a parent assistant message
     let parentMsgId = cliState.currentAssistantMsgId || cliState.cliToDbMsgId.get(cliMsgId);
     if (!parentMsgId) {
-      parentMsgId = tm.insertMessage({ threadId, role: 'assistant', content: '', author });
+      parentMsgId = await tm.insertMessage({ threadId, role: 'assistant', content: '', author });
       emitWS(threadState, {
         type: 'agent:message',
         threadId,
@@ -636,12 +638,12 @@ function handleCLIAssistant(
 
     // Check DB for existing duplicate
     const inputJson = JSON.stringify(block.input);
-    const existingTC = tm.findToolCall(parentMsgId, block.name, inputJson);
+    const existingTC = await tm.findToolCall(parentMsgId, block.name, inputJson);
 
     if (existingTC) {
       cliState.processedToolUseIds.set(block.id, existingTC.id);
     } else {
-      const toolCallId = tm.insertToolCall({
+      const toolCallId = await tm.insertToolCall({
         messageId: parentMsgId,
         name: block.name,
         input: inputJson,
@@ -667,11 +669,11 @@ function handleCLIAssistant(
   }
 }
 
-function handleCLIToolResults(
+async function handleCLIToolResults(
   threadState: ExternalThreadState,
   cliState: CLIMessageState,
   msg: any,
-): void {
+): Promise<void> {
   if (!msg.message?.content) return;
 
   for (const block of msg.message.content) {
@@ -680,7 +682,7 @@ function handleCLIToolResults(
     const toolCallId = cliState.processedToolUseIds.get(block.tool_use_id);
     if (toolCallId && block.content) {
       const decodedOutput = decodeUnicodeEscapes(block.content);
-      tm.updateToolCallOutput(toolCallId, decodedOutput);
+      await tm.updateToolCallOutput(toolCallId, decodedOutput);
 
       emitWS(threadState, {
         type: 'agent:tool_output',
@@ -691,19 +693,19 @@ function handleCLIToolResults(
   }
 }
 
-function handleCLIResult(
+async function handleCLIResult(
   threadState: ExternalThreadState,
   cliState: CLIMessageState,
   msg: any,
   _requestId: string,
-): void {
+): Promise<void> {
   // Mark as handled so onCompleted/onFailed don't duplicate
   cliState.resultHandled = true;
 
   const finalStatus = msg.subtype === 'success' ? 'completed' : 'failed';
   const now = new Date().toISOString();
 
-  tm.updateThread(threadState.threadId, {
+  await tm.updateThread(threadState.threadId, {
     status: finalStatus,
     cost: msg.total_cost_usd ?? 0,
     completedAt: now,
@@ -729,8 +731,8 @@ function handleCLIResult(
 
 // ── Legacy simple message handler ────────────────────────────
 
-function onMessage(event: IngestEvent): void {
-  const state = resolveState(event);
+async function onMessage(event: IngestEvent): Promise<void> {
+  const state = await resolveState(event);
   if (!state) return;
 
   const content =
@@ -740,7 +742,7 @@ function onMessage(event: IngestEvent): void {
     JSON.stringify(event.data);
   const role = (event.data.role as string) ?? 'assistant';
 
-  const msgId = tm.insertMessage({ threadId: state.threadId, role, content });
+  const msgId = await tm.insertMessage({ threadId: state.threadId, role, content });
   emitWS(state, {
     type: 'agent:message',
     threadId: state.threadId,
@@ -750,8 +752,8 @@ function onMessage(event: IngestEvent): void {
 
 // ── Workflow event handler ────────────────────────────────────
 
-function onWorkflowEvent(event: IngestEvent): void {
-  const state = resolveState(event);
+async function onWorkflowEvent(event: IngestEvent): Promise<void> {
+  const state = await resolveState(event);
   if (!state) return;
 
   const { event_type, data } = event;
@@ -823,12 +825,12 @@ let sweepTimer: ReturnType<typeof setInterval> | null = null;
  * Clean up in-memory state for a single external thread.
  * Transitions it to `stopped` in the DB and emits a WS event.
  */
-export function cleanupExternalThread(threadId: string): void {
+export async function cleanupExternalThread(threadId: string): Promise<void> {
   // Find the entry in threadStates that matches this threadId
   for (const [key, state] of threadStates) {
     if (state.threadId === threadId) {
       const now = new Date().toISOString();
-      tm.updateThread(threadId, { status: 'stopped', completedAt: now });
+      await tm.updateThread(threadId, { status: 'stopped', completedAt: now });
       emitWS(state, { type: 'agent:status', threadId, data: { status: 'stopped' } });
       threadStates.delete(key);
       cliStates.delete(key);
@@ -838,7 +840,7 @@ export function cleanupExternalThread(threadId: string): void {
   }
 
   // Fallback: no in-memory state, just update DB
-  tm.updateThread(threadId, { status: 'stopped', completedAt: new Date().toISOString() });
+  await tm.updateThread(threadId, { status: 'stopped', completedAt: new Date().toISOString() });
   log.info('Cleaned up external thread (no in-memory state)', { namespace: 'ingest', threadId });
 }
 
@@ -846,7 +848,7 @@ export function cleanupExternalThread(threadId: string): void {
  * Sweep all in-memory external thread states and stop any that haven't
  * received an event in the last STALE_TTL_MS.
  */
-export function sweepStaleExternalThreads(): void {
+export async function sweepStaleExternalThreads(): Promise<void> {
   const now = Date.now();
   const stale: Array<{ key: string; state: ExternalThreadState }> = [];
 
@@ -858,7 +860,7 @@ export function sweepStaleExternalThreads(): void {
 
   for (const { key, state } of stale) {
     const isoNow = new Date().toISOString();
-    tm.updateThread(state.threadId, { status: 'stopped', completedAt: isoNow });
+    await tm.updateThread(state.threadId, { status: 'stopped', completedAt: isoNow });
     emitWS(state, { type: 'agent:status', threadId: state.threadId, data: { status: 'stopped' } });
     threadStates.delete(key);
     cliStates.delete(key);
@@ -877,7 +879,7 @@ export function sweepStaleExternalThreads(): void {
 /** Start the periodic sweep timer. Called once at server startup. */
 export function startExternalThreadSweep(): void {
   if (sweepTimer) return;
-  sweepTimer = setInterval(sweepStaleExternalThreads, SWEEP_INTERVAL_MS);
+  sweepTimer = setInterval(() => void sweepStaleExternalThreads(), SWEEP_INTERVAL_MS);
   log.info(
     `External thread sweep started (interval=${SWEEP_INTERVAL_MS}ms, ttl=${STALE_TTL_MS}ms)`,
     { namespace: 'ingest' },
@@ -903,8 +905,8 @@ shutdownManager.register(
  * Creates a parent assistant message (if needed), inserts a tool_call
  * record in the DB, and emits WebSocket events.
  */
-function onSessionToolCall(event: IngestEvent): void {
-  const state = resolveState(event);
+async function onSessionToolCall(event: IngestEvent): Promise<void> {
+  const state = await resolveState(event);
   if (!state) return;
 
   const threadId = state.threadId;
@@ -919,7 +921,7 @@ function onSessionToolCall(event: IngestEvent): void {
 
   let parentMsgId = cliState.currentAssistantMsgId;
   if (!parentMsgId) {
-    parentMsgId = tm.insertMessage({ threadId, role: 'assistant', content: '' });
+    parentMsgId = await tm.insertMessage({ threadId, role: 'assistant', content: '' });
     emitWS(state, {
       type: 'agent:message',
       threadId,
@@ -929,7 +931,7 @@ function onSessionToolCall(event: IngestEvent): void {
   }
 
   const inputJson = JSON.stringify(toolInput);
-  const dbToolCallId = tm.insertToolCall({
+  const dbToolCallId = await tm.insertToolCall({
     messageId: parentMsgId,
     name: toolName,
     input: inputJson,
@@ -957,8 +959,8 @@ function onSessionToolCall(event: IngestEvent): void {
  * Handle a session.tool_result event from the planner agent.
  * Updates the matching tool_call record with the result output.
  */
-function onSessionToolResult(event: IngestEvent): void {
-  const state = resolveState(event);
+async function onSessionToolResult(event: IngestEvent): Promise<void> {
+  const state = await resolveState(event);
   if (!state) return;
 
   const data = event.data;
@@ -969,7 +971,7 @@ function onSessionToolResult(event: IngestEvent): void {
   const dbToolCallId = cliState.processedToolUseIds.get(agentToolCallId);
 
   if (dbToolCallId) {
-    tm.updateToolCallOutput(dbToolCallId, output);
+    await tm.updateToolCallOutput(dbToolCallId, output);
 
     emitWS(state, {
       type: 'agent:tool_output',
@@ -999,8 +1001,8 @@ function resolveCliState(requestId: string): CLIMessageState {
 
 // ── Branch set handler ──────────────────────────────────────
 
-function onBranchSet(event: IngestEvent): void {
-  const state = resolveState(event);
+async function onBranchSet(event: IngestEvent): Promise<void> {
+  const state = await resolveState(event);
   if (!state) return;
 
   const branch = event.data.branch as string | undefined;
@@ -1012,7 +1014,7 @@ function onBranchSet(event: IngestEvent): void {
   if (branch) updates.branch = branch;
   if (worktreePath) updates.worktreePath = worktreePath;
 
-  tm.updateThread(state.threadId, updates as any);
+  await tm.updateThread(state.threadId, updates as any);
 
   emitWS(state, {
     type: 'thread:updated',
@@ -1034,7 +1036,7 @@ export interface IngestResult {
 export async function handleIngestEvent(event: IngestEvent): Promise<IngestResult> {
   // Route workflow events to dedicated handler before suffix-based routing
   if (event.event_type.startsWith('workflow.')) {
-    onWorkflowEvent(event);
+    await onWorkflowEvent(event);
     return {};
   }
 
@@ -1044,45 +1046,45 @@ export async function handleIngestEvent(event: IngestEvent): Promise<IngestResul
     case 'accepted':
       return { threadId: await onAccepted(event) };
     case 'started':
-      onStarted(event);
+      await onStarted(event);
       return {};
     case 'completed':
-      onCompleted(event);
+      await onCompleted(event);
       return {};
     case 'failed':
-      onFailed(event);
+      await onFailed(event);
       return {};
     case 'stopped':
-      onStopped(event);
+      await onStopped(event);
       return {};
     case 'cli_message':
-      onCLIMessage(event);
+      await onCLIMessage(event);
       return {};
     case 'message':
-      onMessage(event);
+      await onMessage(event);
       return {};
     case 'tool_call':
-      onSessionToolCall(event);
+      await onSessionToolCall(event);
       return {};
     case 'tool_result':
-      onSessionToolResult(event);
+      await onSessionToolResult(event);
       return {};
     case 'branch_set':
-      onBranchSet(event);
+      await onBranchSet(event);
       return {};
     default:
       // Silently ignore pipeline lifecycle events that are already
       // handled by cli_message (containers.ready, tier_classified, etc.)
       if (SILENT_EVENT_TYPES.has(event.event_type)) return {};
       // For truly unknown events from other sources, render as system message
-      const state = resolveState(event);
+      const state = await resolveState(event);
       if (!state) return {};
       const detail =
         (event.data.message as string) ??
         (event.data.detail as string) ??
         JSON.stringify(event.data);
       const content = `[${event.event_type}] ${detail}`;
-      const msgId = tm.insertMessage({ threadId: state.threadId, role: 'system', content });
+      const msgId = await tm.insertMessage({ threadId: state.threadId, role: 'system', content });
       emitWS(state, {
         type: 'agent:message',
         threadId: state.threadId,

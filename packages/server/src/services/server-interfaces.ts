@@ -16,9 +16,19 @@ import type { WSEvent } from '@funny/shared';
 // ── Thread query / mutation ────────────────────────────────────
 
 export interface IThreadQuery {
-  getThread(id: string): { sessionId: string | null; [key: string]: any } | undefined;
-  updateThread(id: string, updates: Record<string, any>): void;
-  getThreadWithMessages(id: string): { messages: any[]; [key: string]: any } | null;
+  getThread(
+    id: string,
+  ):
+    | { sessionId: string | null; [key: string]: any }
+    | undefined
+    | Promise<{ sessionId: string | null; [key: string]: any } | undefined>;
+  updateThread(id: string, updates: Record<string, any>): void | Promise<void>;
+  getThreadWithMessages(
+    id: string,
+  ):
+    | { messages: any[]; [key: string]: any }
+    | null
+    | Promise<{ messages: any[]; [key: string]: any } | null>;
 }
 
 // ── Message repository ──────────────────────────────────────────
@@ -32,8 +42,8 @@ export interface IMessageRepository {
     model?: string | null;
     permissionMode?: string | null;
     author?: string | null;
-  }): string;
-  updateMessage(id: string, content: string): void;
+  }): string | Promise<string>;
+  updateMessage(id: string, content: string): void | Promise<void>;
 }
 
 // ── Tool call repository ────────────────────────────────────────
@@ -44,12 +54,21 @@ export interface IToolCallRepository {
     name: string;
     input: string;
     author?: string | null;
-  }): string;
-  updateToolCallOutput(id: string, output: string): void;
-  findToolCall(messageId: string, name: string, input: string): { id: string } | undefined;
+  }): string | Promise<string>;
+  updateToolCallOutput(id: string, output: string): void | Promise<void>;
+  findToolCall(
+    messageId: string,
+    name: string,
+    input: string,
+  ): { id: string } | undefined | Promise<{ id: string } | undefined>;
   getToolCall(
     id: string,
-  ): { id: string; name: string; input: string | null; output?: string | null } | undefined;
+  ):
+    | { id: string; name: string; input: string | null; output?: string | null }
+    | undefined
+    | Promise<
+        { id: string; name: string; input: string | null; output?: string | null } | undefined
+      >;
 }
 
 // ── Combined interface (backward-compatible) ────────────────────

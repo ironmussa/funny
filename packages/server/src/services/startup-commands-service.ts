@@ -9,25 +9,27 @@
 import { eq, asc } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
-import { db, schema } from '../db/index.js';
+import { db, dbAll, dbGet, dbRun, schema } from '../db/index.js';
 
 /** List startup commands for a project, ordered by sortOrder */
-export function listCommands(projectId: string) {
-  return db
-    .select()
-    .from(schema.startupCommands)
-    .where(eq(schema.startupCommands.projectId, projectId))
-    .orderBy(asc(schema.startupCommands.sortOrder))
-    .all();
+export async function listCommands(projectId: string) {
+  return dbAll(
+    db
+      .select()
+      .from(schema.startupCommands)
+      .where(eq(schema.startupCommands.projectId, projectId))
+      .orderBy(asc(schema.startupCommands.sortOrder)),
+  );
 }
 
 /** Create a startup command */
-export function createCommand(data: { projectId: string; label: string; command: string }) {
-  const existing = db
-    .select()
-    .from(schema.startupCommands)
-    .where(eq(schema.startupCommands.projectId, data.projectId))
-    .all();
+export async function createCommand(data: { projectId: string; label: string; command: string }) {
+  const existing = await dbAll(
+    db
+      .select()
+      .from(schema.startupCommands)
+      .where(eq(schema.startupCommands.projectId, data.projectId)),
+  );
 
   const entry = {
     id: nanoid(),
@@ -40,12 +42,12 @@ export function createCommand(data: { projectId: string; label: string; command:
     createdAt: new Date().toISOString(),
   };
 
-  db.insert(schema.startupCommands).values(entry).run();
+  await dbRun(db.insert(schema.startupCommands).values(entry));
   return entry;
 }
 
 /** Update a startup command */
-export function updateCommand(
+export async function updateCommand(
   cmdId: string,
   data: {
     label: string;
@@ -54,23 +56,27 @@ export function updateCommand(
     portEnvVar?: string;
   },
 ) {
-  db.update(schema.startupCommands)
-    .set({
-      label: data.label,
-      command: data.command,
-      port: data.port ?? null,
-      portEnvVar: data.portEnvVar ?? null,
-    })
-    .where(eq(schema.startupCommands.id, cmdId))
-    .run();
+  await dbRun(
+    db
+      .update(schema.startupCommands)
+      .set({
+        label: data.label,
+        command: data.command,
+        port: data.port ?? null,
+        portEnvVar: data.portEnvVar ?? null,
+      })
+      .where(eq(schema.startupCommands.id, cmdId)),
+  );
 }
 
 /** Delete a startup command */
-export function deleteCommand(cmdId: string) {
-  db.delete(schema.startupCommands).where(eq(schema.startupCommands.id, cmdId)).run();
+export async function deleteCommand(cmdId: string) {
+  await dbRun(db.delete(schema.startupCommands).where(eq(schema.startupCommands.id, cmdId)));
 }
 
 /** Get a single command by ID */
-export function getCommand(cmdId: string) {
-  return db.select().from(schema.startupCommands).where(eq(schema.startupCommands.id, cmdId)).get();
+export async function getCommand(cmdId: string) {
+  return dbGet(
+    db.select().from(schema.startupCommands).where(eq(schema.startupCommands.id, cmdId)),
+  );
 }

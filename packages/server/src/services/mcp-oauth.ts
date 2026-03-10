@@ -9,7 +9,7 @@ import { randomBytes, createHash } from 'crypto';
 
 import { eq, and } from 'drizzle-orm';
 
-import { db, schema } from '../db/index.js';
+import { db, schema, dbRun } from '../db/index.js';
 import { encrypt } from '../lib/crypto.js';
 import { log } from '../lib/logger.js';
 import { addMcpServer, removeMcpServer } from './mcp-service.js';
@@ -303,17 +303,19 @@ export async function handleOAuthCallback(
       : undefined;
 
     // Upsert: delete existing, then insert
-    db.delete(schema.mcpOauthTokens)
-      .where(
-        and(
-          eq(schema.mcpOauthTokens.serverName, pending.serverName),
-          eq(schema.mcpOauthTokens.projectPath, pending.projectPath),
+    await dbRun(
+      db
+        .delete(schema.mcpOauthTokens)
+        .where(
+          and(
+            eq(schema.mcpOauthTokens.serverName, pending.serverName),
+            eq(schema.mcpOauthTokens.projectPath, pending.projectPath),
+          ),
         ),
-      )
-      .run();
+    );
 
-    db.insert(schema.mcpOauthTokens)
-      .values({
+    await dbRun(
+      db.insert(schema.mcpOauthTokens).values({
         id,
         serverName: pending.serverName,
         projectPath: pending.projectPath,
@@ -328,8 +330,8 @@ export async function handleOAuthCallback(
         clientSecret: pending.clientSecret ? encrypt(pending.clientSecret) : null,
         createdAt: now,
         updatedAt: now,
-      })
-      .run();
+      }),
+    );
 
     // Update Claude CLI config: remove and re-add with Authorization header
     await removeMcpServer({ name: pending.serverName, projectPath: pending.projectPath });

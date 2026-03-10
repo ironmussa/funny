@@ -209,7 +209,13 @@ export function ThreadList({ onArchiveThread, onDeleteThread }: ThreadListProps)
     [onDeleteThread],
   );
 
-  if (threads.length === 0) return null;
+  if (threads.length === 0) {
+    return (
+      <p data-testid="activity-no-threads" className="px-2 py-2 text-xs text-muted-foreground">
+        {_t('sidebar.noThreads')}
+      </p>
+    );
+  }
 
   return (
     <div className="min-w-0 space-y-0.5">

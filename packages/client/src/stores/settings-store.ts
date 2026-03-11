@@ -7,7 +7,14 @@ export type Editor = 'cursor' | 'vscode' | 'windsurf' | 'zed' | 'sublime' | 'vim
 export type ThreadMode = 'local' | 'worktree';
 export type ClaudeModel = 'haiku' | 'sonnet' | 'opus';
 export type PermissionMode = 'plan' | 'autoEdit' | 'confirmEdit' | 'ask';
-export type TerminalShell = 'default' | 'git-bash' | 'powershell' | 'cmd' | 'wsl';
+/** Shell ID — now dynamic, detected from the system. */
+export type TerminalShell = string;
+
+export interface DetectedShell {
+  id: string;
+  label: string;
+  path: string;
+}
 
 const editorLabels: Record<Editor, string> = {
   cursor: 'Cursor',
@@ -18,12 +25,9 @@ const editorLabels: Record<Editor, string> = {
   vim: 'Vim',
 };
 
-const shellLabels: Record<TerminalShell, string> = {
+/** @deprecated Use availableShells from the store instead. Kept for backward compat. */
+const shellLabels: Record<string, string> = {
   default: 'settings.shellDefault',
-  'git-bash': 'Git Bash',
-  powershell: 'PowerShell',
-  cmd: 'CMD',
-  wsl: 'WSL',
 };
 
 export const ALL_STANDARD_TOOLS = [
@@ -62,12 +66,15 @@ interface SettingsState {
   defaultEditor: Editor;
   useInternalEditor: boolean;
   terminalShell: TerminalShell;
+  availableShells: DetectedShell[];
+  _shellsLoaded: boolean;
   toolPermissions: Record<string, ToolPermission>;
   _initialized: boolean;
   initializeFromProfile: (profile: UserProfile) => void;
   setDefaultEditor: (editor: Editor) => void;
   setUseInternalEditor: (use: boolean) => void;
   setTerminalShell: (shell: TerminalShell) => void;
+  fetchAvailableShells: () => Promise<void>;
   setToolPermission: (toolName: string, permission: ToolPermission) => void;
   resetToolPermissions: () => void;
 }
@@ -95,10 +102,12 @@ export function deriveToolLists(permissions: Record<string, ToolPermission>): {
   return { allowedTools, disallowedTools };
 }
 
-export const useSettingsStore = create<SettingsState>()((set) => ({
+export const useSettingsStore = create<SettingsState>()((set, get) => ({
   defaultEditor: 'cursor',
   useInternalEditor: false,
-  terminalShell: 'git-bash' as TerminalShell,
+  terminalShell: 'default' as TerminalShell,
+  availableShells: [],
+  _shellsLoaded: false,
   toolPermissions: { ...DEFAULT_TOOL_PERMISSIONS },
   _initialized: false,
 
@@ -106,7 +115,7 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
     set({
       defaultEditor: (profile.defaultEditor as Editor) ?? 'cursor',
       useInternalEditor: profile.useInternalEditor ?? false,
-      terminalShell: (profile.terminalShell as TerminalShell) ?? 'git-bash',
+      terminalShell: (profile.terminalShell as TerminalShell) ?? 'default',
       toolPermissions: (profile.toolPermissions as Record<string, ToolPermission>) ?? {
         ...DEFAULT_TOOL_PERMISSIONS,
       },
@@ -125,6 +134,13 @@ export const useSettingsStore = create<SettingsState>()((set) => ({
   setTerminalShell: (shell) => {
     set({ terminalShell: shell });
     syncToServer({ terminalShell: shell });
+  },
+  fetchAvailableShells: async () => {
+    if (get()._shellsLoaded) return;
+    const result = await api.getAvailableShells();
+    if (result.isOk()) {
+      set({ availableShells: result.value.shells, _shellsLoaded: true });
+    }
   },
   setToolPermission: (toolName, permission) =>
     set((state) => {

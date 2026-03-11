@@ -66,6 +66,8 @@ export {
   type WorktreeInfo,
 } from './worktree.js';
 
+export { getWeaveStatus, ensureWeaveConfigured } from './weave.js';
+
 export {
   fetchPRReviews,
   checkPRApprovalStatus,

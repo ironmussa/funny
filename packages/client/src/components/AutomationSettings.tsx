@@ -174,7 +174,7 @@ export function AutomationSettings() {
         <Button
           variant="outline"
           size="sm"
-          className="h-7 gap-1.5 text-xs"
+          className="settings-btn-sm gap-1.5"
           onClick={openCreateDialog}
         >
           <Plus className="h-3.5 w-3.5" />
@@ -401,7 +401,7 @@ export function AutomationSettings() {
                 </Select>
                 {!SCHEDULE_PRESETS.some((p) => p.value === form.schedule) && (
                   <Input
-                    className="mt-1.5 settings-form-input font-mono text-xs"
+                    className="settings-form-input mt-1.5 font-mono text-xs"
                     placeholder="*/30 * * * *"
                     value={form.schedule}
                     onChange={(e) => setForm((f) => ({ ...f, schedule: e.target.value }))}

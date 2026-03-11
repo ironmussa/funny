@@ -40,6 +40,14 @@ pub fn pty_spawn(
     rows: u16,
     cols: u16,
 ) -> Result<(), String> {
+    // Check if terminal already exists (idempotency)
+    {
+        let instances = state.instances.lock().map_err(|e| e.to_string())?;
+        if instances.contains_key(&id) {
+            return Ok(());
+        }
+    }
+
     let pty_system = native_pty_system();
 
     let pair = pty_system

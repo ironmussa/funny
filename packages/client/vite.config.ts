@@ -35,6 +35,7 @@ export default defineConfig(({ mode }) => {
             syntax: ['shiki'],
             monaco: ['@monaco-editor/react'],
             mermaid: ['mermaid'],
+            tiptap: ['@tiptap/react', '@tiptap/core'],
           },
         },
       },

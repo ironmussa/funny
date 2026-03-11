@@ -30,6 +30,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { colorFromName } from '@/components/ui/project-chip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
@@ -268,7 +269,7 @@ const ThreadColumn = memo(function ThreadColumn({ threadId }: { threadId: string
       }
       setSending(false);
     },
-    [sending, threadId, thread],
+    [sending, threadId, thread, t],
   );
 
   const handleStop = useCallback(async () => {
@@ -645,7 +646,7 @@ export function LiveColumnsView() {
                     >
                       <span
                         className="h-2 w-2 shrink-0 rounded-full"
-                        style={{ backgroundColor: p.color || '#3b82f6' }}
+                        style={{ backgroundColor: p.color || colorFromName(p.name) }}
                       />
                       <span className="truncate">{p.name}</span>
                     </button>
@@ -744,7 +745,7 @@ export function LiveColumnsView() {
                   >
                     <span
                       className="h-2 w-2 shrink-0 rounded-full"
-                      style={{ backgroundColor: p.color || '#3b82f6' }}
+                      style={{ backgroundColor: p.color || colorFromName(p.name) }}
                     />
                     <span className="truncate">{p.name}</span>
                   </button>

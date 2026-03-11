@@ -358,6 +358,46 @@ function handleMessage(e: MessageEvent) {
       toast.error(data.error ?? 'Failed to create terminal');
       break;
     }
+    case 'pty:sessions': {
+      if (data.sessions && data.sessions.length > 0) {
+        // Projects may not be loaded yet (race with loadProjects).
+        // Store pending sessions and attempt restoration; if projects are
+        // empty, subscribe and retry once they arrive.
+        import('@/stores/project-store').then(({ useProjectStore }) => {
+          const tryRestore = () => {
+            const projects = useProjectStore.getState().projects;
+            const termStore = useTerminalStore.getState();
+            termStore.restoreTabs(
+              data.sessions,
+              projects.map((p: any) => ({ id: p.id, path: p.path })),
+            );
+            termStore.markSessionsChecked();
+          };
+
+          const projects = useProjectStore.getState().projects;
+          if (projects.length > 0) {
+            tryRestore();
+          } else {
+            // Projects not loaded yet — subscribe and restore when they arrive
+            const unsub = useProjectStore.subscribe((state) => {
+              if (state.projects.length > 0) {
+                unsub();
+                tryRestore();
+              }
+            });
+            // Safety timeout: if projects never load within 10s, restore anyway
+            setTimeout(() => {
+              unsub();
+              tryRestore();
+            }, 10000);
+          }
+        });
+      } else {
+        // No sessions on server — mark checked so tabs can show their true state
+        useTerminalStore.getState().markSessionsChecked();
+      }
+      break;
+    }
     case 'thread:queue_update': {
       useThreadStore.getState().handleWSQueueUpdate(threadId, data);
       break;
@@ -488,6 +528,14 @@ function setupWS(ws: WebSocket) {
     // while disconnected (e.g. agent:result emitted when 0 clients were connected)
     useThreadStore.getState().refreshAllLoadedThreads();
     _wasConnected = true;
+
+    // Reset sessions-checked flag so persisted tabs don't show "(exited)" prematurely
+    useTerminalStore.getState().resetSessionsChecked();
+
+    // Ask server for any persistent PTY sessions (tmux) to restore
+    try {
+      ws.send(JSON.stringify({ type: 'pty:list', data: {} }));
+    } catch {}
   };
 
   ws.onmessage = handleMessage;

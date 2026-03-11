@@ -710,18 +710,24 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
     }
   }
 
-  // If the thread was waiting for user input, persist the answer in tool call output
-  if (thread.status === 'waiting') {
+  // Persist the user's answer in the tool call output.
+  // Always attempt this (not just when status === 'waiting') because the thread
+  // status may have already transitioned away from 'waiting' by the time the
+  // user's response arrives — e.g. due to interruption or race conditions.
+  // Without this, the tool call output stays NULL and the UI re-shows
+  // accept/reject buttons on refresh.
+  {
     const pendingTC = await tm.findLastUnansweredInteractiveToolCall(params.threadId);
-    log.info('sendMessage: thread is waiting, resolving tool call', {
-      namespace: 'thread-service',
-      threadId: params.threadId,
-      userId: thread.userId ?? 'unknown',
-      projectId: thread.projectId,
-      pendingToolCallId: pendingTC?.id ?? 'none',
-      pendingToolCallName: pendingTC?.name ?? 'none',
-    });
     if (pendingTC) {
+      log.info('sendMessage: resolving unanswered interactive tool call', {
+        namespace: 'thread-service',
+        threadId: params.threadId,
+        userId: thread.userId ?? 'unknown',
+        projectId: thread.projectId,
+        threadStatus: thread.status,
+        pendingToolCallId: pendingTC.id,
+        pendingToolCallName: pendingTC.name,
+      });
       await tm.updateToolCallOutput(pendingTC.id, params.content);
     }
   }

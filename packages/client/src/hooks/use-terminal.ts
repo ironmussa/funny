@@ -23,6 +23,37 @@ export function useTerminal({ id, cwd, containerRef }: UseTerminalOptions) {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
 
+  const getCssVar = (name: string) => {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+    return raw ? `hsl(${raw})` : '#1b1b1b';
+  };
+
+  const getRawCssVar = (name: string) =>
+    getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+
+  const getTerminalTheme = () => ({
+    background: getCssVar('--background'),
+    foreground: getCssVar('--foreground'),
+    cursor: getCssVar('--foreground'),
+    selectionBackground: getRawCssVar('--terminal-selection') || '#264f78',
+    black: getRawCssVar('--terminal-black'),
+    red: getRawCssVar('--terminal-red'),
+    green: getRawCssVar('--terminal-green'),
+    yellow: getRawCssVar('--terminal-yellow'),
+    blue: getRawCssVar('--terminal-blue'),
+    magenta: getRawCssVar('--terminal-magenta'),
+    cyan: getRawCssVar('--terminal-cyan'),
+    white: getRawCssVar('--terminal-white'),
+    brightBlack: getRawCssVar('--terminal-bright-black'),
+    brightRed: getRawCssVar('--terminal-bright-red'),
+    brightGreen: getRawCssVar('--terminal-bright-green'),
+    brightYellow: getRawCssVar('--terminal-bright-yellow'),
+    brightBlue: getRawCssVar('--terminal-bright-blue'),
+    brightMagenta: getRawCssVar('--terminal-bright-magenta'),
+    brightCyan: getRawCssVar('--terminal-bright-cyan'),
+    brightWhite: getRawCssVar('--terminal-bright-white'),
+  });
+
   useEffect(() => {
     if (!containerRef.current || !isTauri) return;
 
@@ -30,12 +61,7 @@ export function useTerminal({ id, cwd, containerRef }: UseTerminalOptions) {
       cursorBlink: true,
       fontSize: 13,
       fontFamily: 'Menlo, Monaco, Consolas, "Courier New", monospace',
-      theme: {
-        background: '#09090b',
-        foreground: '#fafafa',
-        cursor: '#fafafa',
-        selectionBackground: '#264f78',
-      },
+      theme: getTerminalTheme(),
       convertEol: true,
       scrollback: 5000,
     });
@@ -118,6 +144,22 @@ export function useTerminal({ id, cwd, containerRef }: UseTerminalOptions) {
       cleanup?.();
     };
   }, [id, cwd]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Handle theme changes (responds to general app theme mutations)
+  useEffect(() => {
+    const observer = new MutationObserver(() => {
+      if (terminalRef.current) {
+        terminalRef.current.options.theme = getTerminalTheme();
+      }
+    });
+
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class'],
+    });
+
+    return () => observer.disconnect();
+  }, []);
 
   return { terminalRef, fitAddonRef };
 }

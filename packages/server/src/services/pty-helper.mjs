@@ -48,7 +48,7 @@ function handleMessage(msg) {
 
 /** Resolve the shell identifier to an executable path and args. */
 function resolveShell(shellId) {
-  if (!shellId) {
+  if (!shellId || shellId === 'default') {
     return { exe: isWindows ? 'powershell.exe' : process.env.SHELL || 'bash', args: [] };
   }
 
@@ -62,12 +62,16 @@ function resolveShell(shellId) {
     }
     case 'powershell':
       return { exe: 'powershell.exe', args: [] };
+    case 'pwsh':
+      return { exe: 'pwsh.exe', args: [] };
     case 'cmd':
       return { exe: 'cmd.exe', args: [] };
     case 'wsl':
       return { exe: 'wsl.exe', args: [] };
     default:
-      return { exe: isWindows ? 'powershell.exe' : process.env.SHELL || 'bash', args: [] };
+      // Try using the shellId directly — the shell detector may have
+      // sent a known binary name (e.g. 'bash', 'zsh', 'fish')
+      return { exe: shellId, args: [] };
   }
 }
 

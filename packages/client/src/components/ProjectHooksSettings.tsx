@@ -473,11 +473,20 @@ export function ProjectHooksSettings() {
                     />
                   </div>
                   <div className="flex items-center justify-end gap-2 pt-1">
-                    <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={cancelEdit}>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="settings-btn-sm"
+                      onClick={cancelEdit}
+                    >
                       <X className="mr-1 h-3.5 w-3.5" />
                       {t('common.cancel')}
                     </Button>
-                    <Button size="sm" className="h-7 text-xs" onClick={() => handleUpdate(hook)}>
+                    <Button
+                      size="sm"
+                      className="settings-btn-sm"
+                      onClick={() => handleUpdate(hook)}
+                    >
                       <Check className="mr-1 h-3.5 w-3.5" />
                       {t('common.save')}
                     </Button>
@@ -534,11 +543,11 @@ export function ProjectHooksSettings() {
             <ShellEditor value={command} onChange={setCommand} testId="hooks-command-input" />
           </div>
           <div className="flex items-center justify-end gap-2 pt-1">
-            <Button variant="ghost" size="sm" className="h-7 text-xs" onClick={cancelEdit}>
+            <Button variant="ghost" size="sm" className="settings-btn-sm" onClick={cancelEdit}>
               <X className="mr-1 h-3.5 w-3.5" />
               {t('common.cancel')}
             </Button>
-            <Button size="sm" className="h-7 text-xs" onClick={handleAdd}>
+            <Button size="sm" className="settings-btn-sm" onClick={handleAdd}>
               <Check className="mr-1 h-3.5 w-3.5" />
               {t('hooks.addHook')}
             </Button>

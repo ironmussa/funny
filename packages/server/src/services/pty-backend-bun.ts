@@ -12,6 +12,7 @@ import type { Subprocess } from 'bun';
 
 import { log } from '../lib/logger.js';
 import type { PtyBackend, PtyBackendCallbacks } from './pty-backend.js';
+import { detectShells } from './shell-detector.js';
 
 interface PtySession {
   proc: Subprocess;
@@ -21,9 +22,15 @@ function resolveShell(shellId?: string): { exe: string; args: string[] } {
   if (!shellId || shellId === 'default') {
     return { exe: process.env.SHELL || 'bash', args: [] };
   }
-  // On POSIX, only 'default' is really used — the others are Windows shells.
-  // But handle them gracefully just in case.
-  return { exe: process.env.SHELL || 'bash', args: [] };
+
+  // Look up the shell by its detected ID
+  const detected = detectShells().find((s) => s.id === shellId);
+  if (detected) {
+    return { exe: detected.path, args: [] };
+  }
+
+  // Fallback: try using shellId directly as an executable name
+  return { exe: shellId, args: [] };
 }
 
 export class BunPtyBackend implements PtyBackend {
@@ -92,7 +99,8 @@ export class BunPtyBackend implements PtyBackend {
     const session = this.sessions.get(id);
     if (session) {
       try {
-        session.proc.stdin?.write(data);
+        // In terminal mode, proc.stdin is null — use proc.terminal.write() instead
+        (session.proc as any).terminal?.write(data);
       } catch (err: any) {
         log.error('Failed to write to Bun PTY', {
           namespace: 'pty-bun',
@@ -107,8 +115,8 @@ export class BunPtyBackend implements PtyBackend {
     const session = this.sessions.get(id);
     if (session) {
       try {
-        // Bun's terminal subprocess exposes resize on the subprocess itself
-        (session.proc as any).resize?.({ cols, rows });
+        // In terminal mode, resize is on proc.terminal
+        (session.proc as any).terminal?.resize(cols, rows);
       } catch (err: any) {
         log.error('Failed to resize Bun PTY', {
           namespace: 'pty-bun',
@@ -132,7 +140,7 @@ export class BunPtyBackend implements PtyBackend {
   }
 
   killAll(): void {
-    for (const [id, session] of this.sessions) {
+    for (const [_id, session] of this.sessions) {
       try {
         session.proc.kill();
       } catch {}

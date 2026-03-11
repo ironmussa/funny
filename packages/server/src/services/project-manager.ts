@@ -9,7 +9,7 @@
 
 import { resolve, isAbsolute } from 'path';
 
-import { isGitRepoSync } from '@funny/core/git';
+import { isGitRepoSync, ensureWeaveConfigured } from '@funny/core/git';
 import type { Project, FollowUpMode } from '@funny/shared';
 import { badRequest, notFound, conflict, internal, type DomainError } from '@funny/shared/errors';
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
@@ -175,11 +175,25 @@ export async function createProject(
       ? await dbAll(db.select().from(schema.projects))
       : await dbAll(db.select().from(schema.projects).where(eq(schema.projects.userId, userId)));
 
+  // Auto-assign a color from the palette, cycling based on existing project count
+  const PALETTE = [
+    '#7CB9E8', // pastel blue
+    '#F4A4A4', // pastel red
+    '#A8D5A2', // pastel green
+    '#F9D98C', // pastel amber
+    '#C3A6E0', // pastel violet
+    '#F2A6C8', // pastel pink
+    '#89D4CF', // pastel teal
+    '#F9B97C', // pastel orange
+  ];
+  const autoColor = PALETTE[existing.length % PALETTE.length];
+
   const project: Project = {
     id: nanoid(),
     name,
     path,
     userId,
+    color: autoColor,
     sortOrder: existing.length,
     createdAt: new Date().toISOString(),
   };
@@ -188,12 +202,16 @@ export async function createProject(
     id: project.id,
     name: project.name,
     path: project.path,
+    color: project.color ?? null,
     userId: project.userId,
     sortOrder: project.sortOrder,
     createdAt: project.createdAt,
   };
 
   await dbRun(db.insert(schema.projects).values(projectRow));
+
+  // Auto-configure Weave semantic merge driver (fire-and-forget)
+  void ensureWeaveConfigured(project.path);
 
   // Auto-create a default pipeline so review triggers on every commit
   void createPipeline({

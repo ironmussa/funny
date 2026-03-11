@@ -16,7 +16,7 @@ import { getActiveWS } from '@/hooks/use-ws';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
-import { type TerminalShell, shellLabels, useSettingsStore } from '@/stores/settings-store';
+import { type TerminalShell, useSettingsStore } from '@/stores/settings-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -28,12 +28,33 @@ function getCssVar(name: string): string {
   return raw ? `hsl(${raw})` : '#1b1b1b';
 }
 
+/** Resolve a CSS variable that holds a raw hex value. */
+function getRawCssVar(name: string): string {
+  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
 function getTerminalTheme() {
   return {
     background: getCssVar('--background'),
     foreground: getCssVar('--foreground'),
     cursor: getCssVar('--foreground'),
-    selectionBackground: '#264f78',
+    selectionBackground: getRawCssVar('--terminal-selection') || '#264f78',
+    black: getRawCssVar('--terminal-black'),
+    red: getRawCssVar('--terminal-red'),
+    green: getRawCssVar('--terminal-green'),
+    yellow: getRawCssVar('--terminal-yellow'),
+    blue: getRawCssVar('--terminal-blue'),
+    magenta: getRawCssVar('--terminal-magenta'),
+    cyan: getRawCssVar('--terminal-cyan'),
+    white: getRawCssVar('--terminal-white'),
+    brightBlack: getRawCssVar('--terminal-bright-black'),
+    brightRed: getRawCssVar('--terminal-bright-red'),
+    brightGreen: getRawCssVar('--terminal-bright-green'),
+    brightYellow: getRawCssVar('--terminal-bright-yellow'),
+    brightBlue: getRawCssVar('--terminal-bright-blue'),
+    brightMagenta: getRawCssVar('--terminal-bright-magenta'),
+    brightCyan: getRawCssVar('--terminal-bright-cyan'),
+    brightWhite: getRawCssVar('--terminal-bright-white'),
   };
 }
 
@@ -103,6 +124,7 @@ function TauriTerminalTabContent({
 
       const unlistenData = await listen<{ data: string }>(`pty:data:${id}`, (event) => {
         terminal.write(event.payload.data);
+        useTerminalStore.getState().markAlive(id);
       });
 
       const unlistenExit = await listen(`pty:exit:${id}`, () => {
@@ -146,7 +168,9 @@ function TauriTerminalTabContent({
     };
   }, [id, cwd]);
 
-  return <div ref={containerRef} className={cn('w-full h-full', !active && 'hidden')} />;
+  return (
+    <div ref={containerRef} className={cn('w-full h-full bg-background', !active && 'hidden')} />
+  );
 }
 
 /** Web PTY tab — uses xterm.js over WebSocket */
@@ -155,20 +179,35 @@ function WebTerminalTabContent({
   cwd,
   active,
   panelVisible,
-  shell: shellOverride,
+  shell,
+  restored,
+  projectId,
+  label,
 }: {
   id: string;
   cwd: string;
   active: boolean;
   panelVisible: boolean;
   shell?: TerminalShell;
+  restored?: boolean;
+  projectId?: string;
+  label?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<{ terminal: any; fitAddon: any } | null>(null);
   const registerPtyCallback = useTerminalStore((s) => s.registerPtyCallback);
   const unregisterPtyCallback = useTerminalStore((s) => s.unregisterPtyCallback);
   const tabError = useTerminalStore((s) => s.tabs.find((t) => t.id === id)?.error);
+  const sessionsChecked = useTerminalStore((s) => s.sessionsChecked);
   const [loading, setLoading] = useState(true);
+  const [termReady, setTermReady] = useState(false);
+  // Track whether we already sent a spawn/restore for this tab to avoid duplicates
+  const spawnedRef = useRef(false);
+  // Capture whether this tab was freshly created (alive on mount) vs loaded from persistence.
+  // Uses getState() to avoid subscribing to alive changes (we only need the initial value).
+  const [wasAliveOnMount] = useState(
+    () => useTerminalStore.getState().tabs.find((t) => t.id === id)?.alive ?? false,
+  );
   useThemeSync(termRef);
 
   useEffect(() => {
@@ -202,13 +241,25 @@ function WebTerminalTabContent({
       terminal.loadAddon(webLinksAddon);
       terminal.open(containerRef.current);
       termRef.current = { terminal, fitAddon };
-      requestAnimationFrame(() => {
-        fitAddon.fit();
-        terminal.focus();
+
+      // Wait for the terminal to settle dimensions before spawning the PTY.
+      // Without this, the shell starts outputting before xterm.js has correct
+      // dimensions, causing garbled characters on initial render.
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          fitAddon.fit();
+          terminal.focus();
+          resolve();
+        });
       });
 
+      if (cancelled || !containerRef.current) return;
+
       registerPtyCallback(id, (data: string) => {
-        if (!cancelled) setLoading(false);
+        if (!cancelled) {
+          setLoading(false);
+          useTerminalStore.getState().markAlive(id);
+        }
         terminal.write(data);
       });
 
@@ -226,24 +277,6 @@ function WebTerminalTabContent({
         }
       });
 
-      const dims = fitAddon.proposeDimensions();
-      const shell = shellOverride ?? useSettingsStore.getState().terminalShell;
-      const ws = getActiveWS();
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        ws.send(
-          JSON.stringify({
-            type: 'pty:spawn',
-            data: {
-              id,
-              cwd,
-              rows: dims?.rows ?? 24,
-              cols: dims?.cols ?? 80,
-              ...(shell !== 'default' && { shell }),
-            },
-          }),
-        );
-      }
-
       // Debounce resize to avoid rapid reflows that cause screen jumping
       let resizeRaf: number | null = null;
       const resizeObserver = new ResizeObserver(() => {
@@ -258,6 +291,8 @@ function WebTerminalTabContent({
       });
       resizeObserver.observe(containerRef.current!);
 
+      if (!cancelled) setTermReady(true);
+
       cleanup = () => {
         if (resizeRaf) cancelAnimationFrame(resizeRaf);
         resizeObserver.disconnect();
@@ -266,19 +301,67 @@ function WebTerminalTabContent({
         onResizeDisposable.dispose();
         termRef.current = null;
         terminal.dispose();
-
-        const ws = getActiveWS();
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'pty:kill', data: { id } }));
-        }
+        // NOTE: Do NOT send pty:kill here. Component unmount happens on page
+        // reload too, which would destroy persistent (tmux) sessions. The kill
+        // is sent explicitly when the user closes the tab via handleCloseTab.
       };
     })();
 
     return () => {
       cancelled = true;
+      spawnedRef.current = false;
+      setTermReady(false);
       cleanup?.();
     };
   }, [id, cwd, registerPtyCallback, unregisterPtyCallback]);
+
+  // Separate effect for spawn/restore decision — waits for sessionsChecked
+  // so that tabs loaded from localStorage don't prematurely spawn a new PTY
+  // before the server confirms whether the session still exists.
+  useEffect(() => {
+    if (spawnedRef.current) return;
+    if (!termReady || !termRef.current) return;
+
+    const { fitAddon } = termRef.current;
+    const dims = fitAddon.proposeDimensions();
+    const ws = getActiveWS();
+
+    if (restored) {
+      // Restored tab: server confirmed the session exists.
+      // Sync terminal dimensions and request the current pane content.
+      spawnedRef.current = true;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: 'pty:resize',
+            data: { id, cols: dims?.cols ?? 80, rows: dims?.rows ?? 24 },
+          }),
+        );
+        ws.send(JSON.stringify({ type: 'pty:restore', data: { id } }));
+      }
+      setLoading(false);
+    } else if (wasAliveOnMount || sessionsChecked) {
+      // Either a freshly created tab (alive on mount) or the session list
+      // was checked and this tab was NOT found — spawn a new PTY.
+      spawnedRef.current = true;
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        ws.send(
+          JSON.stringify({
+            type: 'pty:spawn',
+            data: {
+              id,
+              cwd,
+              projectId,
+              label,
+              rows: dims?.rows ?? 24,
+              cols: dims?.cols ?? 80,
+              ...(shell !== 'default' && { shell }),
+            },
+          }),
+        );
+      }
+    }
+  }, [termReady, restored, sessionsChecked, wasAliveOnMount, id, cwd, projectId, label, shell]);
 
   useEffect(() => {
     if (active && panelVisible && termRef.current) {
@@ -295,7 +378,7 @@ function WebTerminalTabContent({
 
   return (
     <div className={cn('relative w-full h-full', !active && 'hidden')}>
-      <div ref={containerRef} className="h-full w-full" />
+      <div ref={containerRef} className="h-full w-full bg-background" />
       {tabError ? (
         <div className="absolute inset-0 flex items-center justify-center bg-background">
           <div className="flex items-center gap-2 text-xs text-destructive">
@@ -341,8 +424,9 @@ function CommandTabContent({
       }),
     [],
   );
+
   const htmlOutput = useMemo(
-    () => ansiConverter.toHtml(output || 'Waiting for output...'),
+    () => (output ? ansiConverter.toHtml(output) : 'Waiting for output...'),
     [ansiConverter, output],
   );
 
@@ -391,24 +475,40 @@ const PANEL_HEIGHT = 300;
 
 export function TerminalPanel() {
   const { t } = useTranslation();
-  const { tabs, activeTabId, panelVisible, addTab, removeTab, setActiveTab, togglePanel } =
-    useTerminalStore(
-      useShallow((s) => ({
-        tabs: s.tabs,
-        activeTabId: s.activeTabId,
-        panelVisible: s.panelVisible,
-        addTab: s.addTab,
-        removeTab: s.removeTab,
-        setActiveTab: s.setActiveTab,
-        togglePanel: s.togglePanel,
-      })),
-    );
+  const {
+    tabs,
+    activeTabId,
+    panelVisible,
+    sessionsChecked,
+    addTab,
+    removeTab,
+    setActiveTab,
+    togglePanel,
+  } = useTerminalStore(
+    useShallow((s) => ({
+      tabs: s.tabs,
+      activeTabId: s.activeTabId,
+      panelVisible: s.panelVisible,
+      sessionsChecked: s.sessionsChecked,
+      addTab: s.addTab,
+      removeTab: s.removeTab,
+      setActiveTab: s.setActiveTab,
+      togglePanel: s.togglePanel,
+    })),
+  );
   const projects = useProjectStore((s) => s.projects);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const activeThreadWorktreePath = useThreadStore((s) => s.activeThread?.worktreePath);
+  const availableShells = useSettingsStore((s) => s.availableShells);
+  const fetchAvailableShells = useSettingsStore((s) => s.fetchAvailableShells);
+
+  useEffect(() => {
+    fetchAvailableShells();
+  }, [fetchAvailableShells]);
 
   const [dragging, setDragging] = useState(false);
   const [panelHeight, setPanelHeight] = useState(PANEL_HEIGHT);
+  const [dropdownOpen, setDropdownOpen] = useState(false);
 
   const visibleTabs = useMemo(
     () => tabs.filter((t) => t.projectId === selectedProjectId),
@@ -452,7 +552,8 @@ export function TerminalPanel() {
       const project = projects.find((p) => p.id === selectedProjectId);
       const cwd = activeThreadWorktreePath || project?.path || 'C:\\';
       const id = crypto.randomUUID();
-      const shellName = shell === 'default' ? 'Terminal' : shellLabels[shell];
+      const detected = availableShells.find((s) => s.id === shell);
+      const shellName = detected?.label ?? 'Terminal';
       const sameShellCount = visibleTabs.filter((t) => (t.shell ?? 'default') === shell).length;
       const label = `${shellName} ${sameShellCount + 1}`;
       addTab({
@@ -465,14 +566,22 @@ export function TerminalPanel() {
         shell,
       });
     },
-    [projects, selectedProjectId, visibleTabs, addTab, activeThreadWorktreePath],
+    [projects, selectedProjectId, visibleTabs, addTab, activeThreadWorktreePath, availableShells],
   );
 
   const handleCloseTab = useCallback(
-    (id: string) => {
-      removeTab(id);
+    (tabId: string) => {
+      const tab = tabs.find((t) => t.id === tabId);
+      // Send pty:kill for interactive PTY tabs (user explicitly closing)
+      if (tab?.type === 'pty') {
+        const ws = getActiveWS();
+        if (ws && ws.readyState === WebSocket.OPEN) {
+          ws.send(JSON.stringify({ type: 'pty:kill', data: { id: tabId } }));
+        }
+      }
+      removeTab(tabId);
     },
-    [removeTab],
+    [tabs, removeTab],
   );
 
   return (
@@ -514,7 +623,7 @@ export function TerminalPanel() {
                 )}
               >
                 <span>{tab.label}</span>
-                {!tab.alive && (
+                {!tab.alive && (sessionsChecked || !tab.type || tab.type !== 'pty') && (
                   <span className="text-xs text-status-pending">{t('terminal.exited')}</span>
                 )}
                 <X
@@ -528,8 +637,8 @@ export function TerminalPanel() {
             ))}
           </div>
 
-          <DropdownMenu>
-            <Tooltip>
+          <DropdownMenu onOpenChange={setDropdownOpen}>
+            <Tooltip open={dropdownOpen ? false : undefined}>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon-xs">
@@ -540,13 +649,20 @@ export function TerminalPanel() {
               <TooltipContent>{t('terminal.newTerminal')}</TooltipContent>
             </Tooltip>
             <DropdownMenuContent align="start" side="top">
-              {(Object.keys(shellLabels) as TerminalShell[])
-                .filter((key) => key !== 'default')
-                .map((shell) => (
-                  <DropdownMenuItem key={shell} onClick={() => handleNewTerminal(shell)}>
-                    {shellLabels[shell]}
-                  </DropdownMenuItem>
-                ))}
+              {availableShells.map((shell) => (
+                <DropdownMenuItem
+                  key={shell.id}
+                  onClick={() => handleNewTerminal(shell.id)}
+                  data-testid={`terminal-new-${shell.id}`}
+                >
+                  {shell.label}
+                </DropdownMenuItem>
+              ))}
+              {availableShells.length === 0 && (
+                <DropdownMenuItem onClick={() => handleNewTerminal('default')}>
+                  {t('settings.shellDefault')}
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -561,7 +677,7 @@ export function TerminalPanel() {
         </div>
 
         {/* Terminal content area */}
-        <div className="min-h-0 flex-1 overflow-hidden bg-background pl-2 pt-5">
+        <div className="min-h-0 flex-1 overflow-hidden bg-background">
           {visibleTabs.length === 0 ? (
             <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
               {t('terminal.noProcesses')}
@@ -584,6 +700,9 @@ export function TerminalPanel() {
                   active={tab.id === effectiveActiveTabId}
                   panelVisible={panelVisible}
                   shell={tab.shell}
+                  restored={tab.restored}
+                  projectId={tab.projectId}
+                  label={tab.label}
                 />
               ) : isTauri ? (
                 <TauriTerminalTabContent

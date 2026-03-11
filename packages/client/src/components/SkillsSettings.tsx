@@ -17,6 +17,7 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
+import { colorFromName } from '@/components/ui/project-chip';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
@@ -37,7 +38,10 @@ function InstalledSkillCard({
   removing: boolean;
 }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-card px-3 py-2.5">
+    <div
+      className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-card px-3 py-2.5"
+      style={{ borderLeftWidth: 3, borderLeftColor: colorFromName(skill.name) }}
+    >
       <div className="flex min-w-0 items-center gap-3">
         <Sparkles className="h-4 w-4 flex-shrink-0 text-status-warning" />
         <div className="min-w-0">
@@ -100,7 +104,10 @@ function RecommendedSkillCard({
   const { t } = useTranslation();
 
   return (
-    <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-card px-3 py-2.5">
+    <div
+      className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-card px-3 py-2.5"
+      style={{ borderLeftWidth: 3, borderLeftColor: colorFromName(skill.name) }}
+    >
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <span className="text-sm font-medium">{skill.name}</span>
@@ -113,7 +120,7 @@ function RecommendedSkillCard({
         size="sm"
         onClick={onInstall}
         disabled={installed || installing}
-        className="h-7 flex-shrink-0 text-xs"
+        className="settings-btn-sm flex-shrink-0"
       >
         {installing ? (
           <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -148,7 +155,10 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
 
   return (
     <Collapsible open={open} onOpenChange={setOpen}>
-      <div className="rounded-md border border-border/50 bg-card">
+      <div
+        className="rounded-md border border-border/50 bg-card"
+        style={{ borderLeftWidth: 3, borderLeftColor: colorFromName(plugin.name) }}
+      >
         <CollapsibleTrigger asChild>
           <button
             className="flex w-full items-center justify-between gap-3 rounded-md px-3 py-2.5 text-left transition-colors hover:bg-muted/30"
@@ -345,7 +355,7 @@ export function SkillsSettings() {
             variant="ghost"
             size="sm"
             onClick={() => setShowCustom(!showCustom)}
-            className="h-6 px-2 text-xs"
+            className="settings-btn-sm px-2"
           >
             {showCustom ? (
               <ChevronUp className="mr-1 h-3 w-3" />

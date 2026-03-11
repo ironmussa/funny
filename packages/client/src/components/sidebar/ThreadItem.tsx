@@ -122,7 +122,6 @@ export const ThreadItem = memo(function ThreadItem({
   const hasMetadataRow = !!subtitle || hasDiffStats || hasGitIconOnly;
   const hasSnippetRow = hasSnippet || showLaunching;
   const hasSecondRow = hasMetadataRow || hasSnippetRow;
-  const hasRow2 = hasMetadataRow || hasSnippetRow;
 
   return (
     <div
@@ -149,15 +148,13 @@ export const ThreadItem = memo(function ThreadItem({
               <span
                 className={cn(
                   'absolute inset-0 flex items-center justify-center text-muted-foreground',
-                  onPin && !isBusy && 'group-hover/thread:hidden',
+                  onPin && 'group-hover/thread:hidden',
                 )}
               >
                 <Pin className="h-3.5 w-3.5" />
               </span>
             ) : (
-              <span
-                className={cn('absolute inset-0', onPin && !isBusy && 'group-hover/thread:hidden')}
-              >
+              <span className={cn('absolute inset-0', onPin && 'group-hover/thread:hidden')}>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <StatusIcon className={cn('h-3.5 w-3.5', statusIconClassName)} />
@@ -168,7 +165,7 @@ export const ThreadItem = memo(function ThreadItem({
                 </Tooltip>
               </span>
             )}
-            {onPin && !isBusy && (
+            {onPin && (
               <span
                 className="absolute inset-0 hidden cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground group-hover/thread:flex"
                 onClick={(e) => {

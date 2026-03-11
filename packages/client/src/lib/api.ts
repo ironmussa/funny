@@ -606,6 +606,15 @@ export const api = {
       body: JSON.stringify(config),
     }),
 
+  // Weave Semantic Merge
+  getWeaveStatus: (projectId: string) =>
+    request<import('@funny/shared').WeaveStatus>(`/projects/${projectId}/weave/status`),
+  configureWeave: (projectId: string) =>
+    request<{ ok: boolean; status: import('@funny/shared').WeaveStatus }>(
+      `/projects/${projectId}/weave/configure`,
+      { method: 'POST' },
+    ),
+
   // Project Hooks (Husky-backed)
   listHooks: (projectId: string, hookType?: HookType) =>
     request<ProjectHook[]>(
@@ -889,6 +898,12 @@ export const api = {
         version: string | null;
       };
     }>('/setup/status'),
+
+  // System
+  getAvailableShells: () =>
+    request<{
+      shells: Array<{ id: string; label: string; path: string }>;
+    }>('/system/shells'),
 
   // Profile
   getProfile: () => request<import('@funny/shared').UserProfile>('/profile'),

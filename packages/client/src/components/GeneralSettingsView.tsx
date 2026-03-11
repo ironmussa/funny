@@ -30,7 +30,6 @@ import { cn } from '@/lib/utils';
 import {
   useSettingsStore,
   editorLabels,
-  shellLabels,
   type Editor,
   type TerminalShell,
 } from '@/stores/settings-store';
@@ -146,17 +145,21 @@ export function GeneralSettingsView() {
     defaultEditor,
     useInternalEditor,
     terminalShell,
+    availableShells,
     setDefaultEditor,
     setUseInternalEditor,
     setTerminalShell,
+    fetchAvailableShells,
   } = useSettingsStore(
     useShallow((s) => ({
       defaultEditor: s.defaultEditor,
       useInternalEditor: s.useInternalEditor,
       terminalShell: s.terminalShell,
+      availableShells: s.availableShells,
       setDefaultEditor: s.setDefaultEditor,
       setUseInternalEditor: s.setUseInternalEditor,
       setTerminalShell: s.setTerminalShell,
+      fetchAvailableShells: s.fetchAvailableShells,
     })),
   );
   const { theme, setTheme } = useTheme();
@@ -197,7 +200,8 @@ export function GeneralSettingsView() {
         setSmtpSource(result.value.source);
       }
     });
-  }, []);
+    fetchAvailableShells();
+  }, [fetchAvailableShells]);
 
   // Auto-save handlers
   const handleEditorChange = useCallback(
@@ -343,7 +347,7 @@ export function GeneralSettingsView() {
       </Sidebar>
 
       {/* Right content area */}
-      <div className="min-h-0 flex-1 overflow-y-auto p-6 max-w-2xl">
+      <div className="min-h-0 max-w-2xl flex-1 overflow-y-auto p-6">
         {activePreferencesPage === 'general' && (
           <>
             <h3 className="settings-section-header">{t('settings.general')}</h3>
@@ -379,10 +383,7 @@ export function GeneralSettingsView() {
 
               <SettingRow title={t('settings.language')} description={t('settings.languageDesc')}>
                 <Select value={i18n.language} onValueChange={handleLanguageChange}>
-                  <SelectTrigger
-                    className="w-[140px]"
-                    data-testid="preferences-language-select"
-                  >
+                  <SelectTrigger className="w-[140px]" data-testid="preferences-language-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
@@ -400,17 +401,16 @@ export function GeneralSettingsView() {
                 description={t('settings.terminalShellDesc')}
               >
                 <Select value={terminalShell} onValueChange={handleShellChange}>
-                  <SelectTrigger className="w-[140px]" data-testid="preferences-shell-select">
+                  <SelectTrigger className="w-[160px]" data-testid="preferences-shell-select">
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    {(Object.entries(shellLabels) as [TerminalShell, string][]).map(
-                      ([value, label]) => (
-                        <SelectItem key={value} value={value}>
-                          {label.startsWith('settings.') ? t(label) : label}
-                        </SelectItem>
-                      ),
-                    )}
+                    <SelectItem value="default">{t('settings.shellDefault')}</SelectItem>
+                    {availableShells.map((shell) => (
+                      <SelectItem key={shell.id} value={shell.id}>
+                        {shell.label}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </SettingRow>

@@ -6,7 +6,14 @@
  * @domain depends: ProjectManager, ProjectHooksService, StartupCommandsService, CommandRunner
  */
 
-import { listBranches, getDefaultBranch, getCurrentBranch, git } from '@funny/core/git';
+import {
+  listBranches,
+  getDefaultBranch,
+  getCurrentBranch,
+  git,
+  getWeaveStatus,
+  ensureWeaveConfigured,
+} from '@funny/core/git';
 import { Hono } from 'hono';
 import { err } from 'neverthrow';
 
@@ -393,4 +400,29 @@ projectRoutes.delete('/:id/hooks/:hookType/:index', async (c) => {
     const message = e instanceof Error ? e.message : 'Delete failed';
     return c.json({ error: message }, 404);
   }
+});
+
+// ─── Weave Semantic Merge ────────────────────────────────
+
+// GET /api/projects/:id/weave/status
+projectRoutes.get('/:id/weave/status', async (c) => {
+  const projectId = c.req.param('id');
+  const userId = c.get('userId');
+  const projectResult = await requireProject(projectId, userId);
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+
+  const result = await getWeaveStatus(projectResult.value.path);
+  return resultToResponse(c, result);
+});
+
+// POST /api/projects/:id/weave/configure
+projectRoutes.post('/:id/weave/configure', async (c) => {
+  const projectId = c.req.param('id');
+  const userId = c.get('userId');
+  const projectResult = await requireProject(projectId, userId);
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+
+  const result = await ensureWeaveConfigured(projectResult.value.path);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ ok: true, status: result.value });
 });

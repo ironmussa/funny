@@ -361,7 +361,7 @@ export function ProjectConfigSettings() {
           <Button
             variant="outline"
             size="sm"
-            className="mt-3 h-7 gap-1.5 text-xs"
+            className="settings-btn-sm mt-3 gap-1.5"
             onClick={() => setAddingGroup(true)}
             data-testid="port-group-add"
           >

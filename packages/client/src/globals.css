@@ -74,6 +74,25 @@
     /* Git diff colors — always green/red regardless of theme */
     --diff-added: 142 40% 45%;
     --diff-removed: 0 45% 55%;
+
+    /* Terminal ANSI colors (light default) */
+    --terminal-black: #000000;
+    --terminal-red: #cd3131;
+    --terminal-green: #00bc00;
+    --terminal-yellow: #949800;
+    --terminal-blue: #0451a5;
+    --terminal-magenta: #bc05bc;
+    --terminal-cyan: #0598bc;
+    --terminal-white: #555555;
+    --terminal-bright-black: #666666;
+    --terminal-bright-red: #cd3131;
+    --terminal-bright-green: #14ce14;
+    --terminal-bright-yellow: #e5e510;
+    --terminal-bright-blue: #0451a5;
+    --terminal-bright-magenta: #bc05bc;
+    --terminal-bright-cyan: #0598bc;
+    --terminal-bright-white: #a5a5a5;
+    --terminal-selection: #264f78;
   }
 
   .dark {
@@ -118,6 +137,25 @@
 
     --diff-added: 142 40% 45%;
     --diff-removed: 0 45% 55%;
+
+    /* Terminal ANSI colors (dark default) */
+    --terminal-black: #000000;
+    --terminal-red: #ef4444;
+    --terminal-green: #22c55e;
+    --terminal-yellow: #eab308;
+    --terminal-blue: #3b82f6;
+    --terminal-magenta: #a855f7;
+    --terminal-cyan: #06b6d4;
+    --terminal-white: #fafafa;
+    --terminal-bright-black: #71717a;
+    --terminal-bright-red: #f87171;
+    --terminal-bright-green: #4ade80;
+    --terminal-bright-yellow: #facc15;
+    --terminal-bright-blue: #60a5fa;
+    --terminal-bright-magenta: #c084fc;
+    --terminal-bright-cyan: #22d3ee;
+    --terminal-bright-white: #ffffff;
+    --terminal-selection: #264f78;
   }
 
   /* ── One Dark Pro ─────────────────────────────────────────── */
@@ -162,6 +200,25 @@
 
     --diff-added: 142 40% 45%;
     --diff-removed: 0 45% 55%;
+
+    /* Terminal ANSI — One Dark */
+    --terminal-black: #282c34;
+    --terminal-red: #e06c75;
+    --terminal-green: #98c379;
+    --terminal-yellow: #e5c07b;
+    --terminal-blue: #61afef;
+    --terminal-magenta: #c678dd;
+    --terminal-cyan: #56b6c2;
+    --terminal-white: #abb2bf;
+    --terminal-bright-black: #5c6370;
+    --terminal-bright-red: #e06c75;
+    --terminal-bright-green: #98c379;
+    --terminal-bright-yellow: #e5c07b;
+    --terminal-bright-blue: #61afef;
+    --terminal-bright-magenta: #c678dd;
+    --terminal-bright-cyan: #56b6c2;
+    --terminal-bright-white: #ffffff;
+    --terminal-selection: #3e4451;
   }
 
   /* ── Dracula ──────────────────────────────────────────────── */
@@ -206,6 +263,25 @@
 
     --diff-added: 142 40% 45%;
     --diff-removed: 0 45% 55%;
+
+    /* Terminal ANSI — Dracula */
+    --terminal-black: #21222c;
+    --terminal-red: #ff5555;
+    --terminal-green: #50fa7b;
+    --terminal-yellow: #f1fa8c;
+    --terminal-blue: #bd93f9;
+    --terminal-magenta: #ff79c6;
+    --terminal-cyan: #8be9fd;
+    --terminal-white: #f8f8f2;
+    --terminal-bright-black: #6272a4;
+    --terminal-bright-red: #ff6e6e;
+    --terminal-bright-green: #69ff94;
+    --terminal-bright-yellow: #ffffa5;
+    --terminal-bright-blue: #d6acff;
+    --terminal-bright-magenta: #ff92df;
+    --terminal-bright-cyan: #a4ffff;
+    --terminal-bright-white: #ffffff;
+    --terminal-selection: #44475a;
   }
 
   /* ── GitHub Dark ──────────────────────────────────────────── */
@@ -250,6 +326,25 @@
 
     --diff-added: 142 40% 45%;
     --diff-removed: 0 45% 55%;
+
+    /* Terminal ANSI — GitHub Dark */
+    --terminal-black: #484f58;
+    --terminal-red: #ff7b72;
+    --terminal-green: #3fb950;
+    --terminal-yellow: #d29922;
+    --terminal-blue: #58a6ff;
+    --terminal-magenta: #bc8cff;
+    --terminal-cyan: #39c5cf;
+    --terminal-white: #b1bac4;
+    --terminal-bright-black: #6e7681;
+    --terminal-bright-red: #ffa198;
+    --terminal-bright-green: #56d364;
+    --terminal-bright-yellow: #e3b341;
+    --terminal-bright-blue: #79c0ff;
+    --terminal-bright-magenta: #d2a8ff;
+    --terminal-bright-cyan: #56d4dd;
+    --terminal-bright-white: #f0f6fc;
+    --terminal-selection: #264f78;
   }
 
   /* ── Night Owl ────────────────────────────────────────────── */
@@ -294,6 +389,25 @@
 
     --diff-added: 142 40% 45%;
     --diff-removed: 0 45% 55%;
+
+    /* Terminal ANSI — Night Owl */
+    --terminal-black: #011627;
+    --terminal-red: #ef5350;
+    --terminal-green: #22da6e;
+    --terminal-yellow: #addb67;
+    --terminal-blue: #82aaff;
+    --terminal-magenta: #c792ea;
+    --terminal-cyan: #21c7a8;
+    --terminal-white: #d6deeb;
+    --terminal-bright-black: #575656;
+    --terminal-bright-red: #ef5350;
+    --terminal-bright-green: #22da6e;
+    --terminal-bright-yellow: #ffeb95;
+    --terminal-bright-blue: #82aaff;
+    --terminal-bright-magenta: #c792ea;
+    --terminal-bright-cyan: #7fdbca;
+    --terminal-bright-white: #ffffff;
+    --terminal-selection: #1d3b53;
   }
 
   /* ── Monochrome (Black & White) ───────────────────────────── */
@@ -338,6 +452,25 @@
 
     --diff-added: 142 40% 45%;
     --diff-removed: 0 45% 55%;
+
+    /* Terminal ANSI — Monochrome Light */
+    --terminal-black: #000000;
+    --terminal-red: #4d4d4d;
+    --terminal-green: #333333;
+    --terminal-yellow: #5a5a5a;
+    --terminal-blue: #404040;
+    --terminal-magenta: #4d4d4d;
+    --terminal-cyan: #333333;
+    --terminal-white: #808080;
+    --terminal-bright-black: #666666;
+    --terminal-bright-red: #333333;
+    --terminal-bright-green: #1a1a1a;
+    --terminal-bright-yellow: #4d4d4d;
+    --terminal-bright-blue: #2d2d2d;
+    --terminal-bright-magenta: #404040;
+    --terminal-bright-cyan: #262626;
+    --terminal-bright-white: #000000;
+    --terminal-selection: #cccccc;
   }
 
   /* ── Monochrome Dark (Black & White) ─────────────────────── */
@@ -383,6 +516,25 @@
 
     --diff-added: 142 40% 45%;
     --diff-removed: 0 45% 55%;
+
+    /* Terminal ANSI — Monochrome Dark */
+    --terminal-black: #121212;
+    --terminal-red: #b3b3b3;
+    --terminal-green: #cccccc;
+    --terminal-yellow: #a6a6a6;
+    --terminal-blue: #bfbfbf;
+    --terminal-magenta: #b3b3b3;
+    --terminal-cyan: #cccccc;
+    --terminal-white: #ededed;
+    --terminal-bright-black: #666666;
+    --terminal-bright-red: #d9d9d9;
+    --terminal-bright-green: #e6e6e6;
+    --terminal-bright-yellow: #cccccc;
+    --terminal-bright-blue: #d9d9d9;
+    --terminal-bright-magenta: #d9d9d9;
+    --terminal-bright-cyan: #e6e6e6;
+    --terminal-bright-white: #ffffff;
+    --terminal-selection: #333333;
   }
 
   /* ── Catppuccin Mocha ─────────────────────────────────────── */
@@ -427,6 +579,25 @@
 
     --diff-added: 142 40% 45%;
     --diff-removed: 0 45% 55%;
+
+    /* Terminal ANSI — Catppuccin Mocha */
+    --terminal-black: #45475a;
+    --terminal-red: #f38ba8;
+    --terminal-green: #a6e3a1;
+    --terminal-yellow: #f9e2af;
+    --terminal-blue: #89b4fa;
+    --terminal-magenta: #cba6f7;
+    --terminal-cyan: #94e2d5;
+    --terminal-white: #bac2de;
+    --terminal-bright-black: #585b70;
+    --terminal-bright-red: #f38ba8;
+    --terminal-bright-green: #a6e3a1;
+    --terminal-bright-yellow: #f9e2af;
+    --terminal-bright-blue: #89b4fa;
+    --terminal-bright-magenta: #cba6f7;
+    --terminal-bright-cyan: #94e2d5;
+    --terminal-bright-white: #a6adc8;
+    --terminal-selection: #45475a;
   }
 }
 
@@ -618,8 +789,13 @@
   }
 
   .xterm-viewport::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--muted-foreground) / 0.25);
+    background-color: transparent;
     border-radius: 3px;
+    transition: background-color 0.2s;
+  }
+
+  .xterm-viewport:hover::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.25);
   }
 
   .xterm-viewport::-webkit-scrollbar-thumb:hover {
@@ -713,6 +889,82 @@
   .settings-item-card {
     @apply rounded-lg border border-border/50 bg-card px-3 py-2.5 transition-colors hover:bg-accent/30;
   }
+}
+
+/* ── TipTap prompt editor ─────────────────────────────────────── */
+
+/* Hide the default ProseMirror focus outline */
+.tiptap-prompt-editor .tiptap:focus {
+  outline: none;
+}
+
+/* Placeholder */
+.tiptap-prompt-editor .tiptap p.is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: hsl(var(--muted-foreground));
+  pointer-events: none;
+  height: 0;
+}
+
+/* Inline chip — file mention (@) */
+.tiptap-prompt-editor .file-mention {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  border-radius: 0.25rem;
+  padding: 0.0625rem 0.375rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  vertical-align: baseline;
+  background: hsl(var(--muted) / 0.6);
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  cursor: default;
+  user-select: all;
+}
+
+.tiptap-prompt-editor .file-mention::before {
+  content: '';
+  display: inline-block;
+  width: 0.875rem;
+  height: 0.875rem;
+  flex-shrink: 0;
+  background-color: currentColor;
+  /* Lucide FolderOpen as mask so it inherits the text color */
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2'%3E%3C/path%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='24' height='24' viewBox='0 0 24 24' fill='none' stroke='black' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 14 1.5-2.9A2 2 0 0 1 9.24 10H20a2 2 0 0 1 1.94 2.5l-1.54 6a2 2 0 0 1-1.95 1.5H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h3.9a2 2 0 0 1 1.69.9l.81 1.2a2 2 0 0 0 1.67.9H18a2 2 0 0 1 2 2v2'%3E%3C/path%3E%3C/svg%3E");
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-position: center;
+  mask-position: center;
+}
+
+/* Inline chip — slash command (/) */
+.tiptap-prompt-editor .slash-command {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.125rem;
+  border-radius: 0.25rem;
+  padding: 0.0625rem 0.375rem;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  line-height: 1.25rem;
+  vertical-align: baseline;
+  background: hsl(var(--muted) / 0.6);
+  color: hsl(var(--foreground));
+  white-space: nowrap;
+  cursor: default;
+  user-select: all;
+}
+
+.tiptap-prompt-editor .slash-command::before {
+  content: '/';
+  font-weight: 600;
+  opacity: 0.5;
 }
 
 @layer utilities {

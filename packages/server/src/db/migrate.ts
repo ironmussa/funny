@@ -748,6 +748,31 @@ const migrations: Migration[] = [
       `);
     },
   },
+
+  {
+    name: '037_pty_sessions',
+    async up() {
+      await exec(sql`
+        CREATE TABLE IF NOT EXISTS pty_sessions (
+          id TEXT PRIMARY KEY,
+          tmux_session TEXT NOT NULL UNIQUE,
+          user_id TEXT NOT NULL DEFAULT '__local__',
+          cwd TEXT NOT NULL,
+          shell TEXT,
+          cols INTEGER NOT NULL DEFAULT 80,
+          rows INTEGER NOT NULL DEFAULT 24,
+          created_at TEXT NOT NULL
+        )
+      `);
+    },
+  },
+  {
+    name: '038_pty_sessions_metadata',
+    async up() {
+      await addColumn('pty_sessions', 'project_id', 'TEXT');
+      await addColumn('pty_sessions', 'label', 'TEXT');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

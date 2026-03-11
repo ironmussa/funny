@@ -227,7 +227,14 @@ export function App() {
         </div>
 
         <Suspense>
-          <TerminalPanel />
+          {!(
+            generalSettingsOpen ||
+            settingsOpen ||
+            analyticsOpen ||
+            liveColumnsOpen ||
+            automationInboxOpen ||
+            addProjectOpen
+          ) && <TerminalPanel />}
         </Suspense>
       </SidebarInset>
 

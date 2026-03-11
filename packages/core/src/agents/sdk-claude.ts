@@ -292,12 +292,14 @@ export class SDKClaudeProcess extends BaseAgentProcess {
         }
         return null;
 
-      case 'assistant':
+      case 'assistant': {
+        const rawMsg = (sdkMsg as any).message;
         return {
           type: 'assistant',
-          message: (sdkMsg as any).message,
+          message: rawMsg,
           parent_tool_use_id: (sdkMsg as any).parent_tool_use_id,
         };
+      }
 
       case 'user': {
         const raw = sdkMsg as any;

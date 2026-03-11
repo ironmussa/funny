@@ -555,6 +555,7 @@ const MemoizedMessageList = memo(
       threadEvents?: import('@funny/shared').ThreadEvent[];
       compactionEvents?: import('@/stores/thread-store').CompactionEvent[];
       threadId: string;
+      threadStatus?: string;
       knownIds: Set<string>;
       prefersReducedMotion: boolean | null;
       snapshotMap: Map<string, number>;
@@ -568,6 +569,7 @@ const MemoizedMessageList = memo(
       threadEvents,
       compactionEvents,
       threadId,
+      threadStatus,
       knownIds: _knownIds,
       prefersReducedMotion: _prefersReducedMotion,
       snapshotMap,
@@ -710,7 +712,8 @@ const MemoizedMessageList = memo(
                 output={tc.output}
                 planText={tc._planText}
                 onRespond={
-                  tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode'
+                  (tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode') &&
+                  threadStatus === 'waiting'
                     ? (answer: string) => {
                         tvLog.info('onRespond (single)', {
                           toolName: tc.name,
@@ -751,7 +754,8 @@ const MemoizedMessageList = memo(
                 name={ti.name}
                 calls={ti.calls}
                 onRespond={
-                  ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode'
+                  (ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode') &&
+                  threadStatus === 'waiting'
                     ? (answer: string) => {
                         tvLog.info('onRespond (group)', {
                           toolName: ti.name,
@@ -776,7 +780,7 @@ const MemoizedMessageList = memo(
         }
         return null;
       },
-      [snapshotMap, threadId, onSend],
+      [snapshotMap, threadId, threadStatus, onSend],
     );
 
     // Group items into sections: each section starts with a user message
@@ -1845,6 +1849,7 @@ export function ThreadView() {
                 threadEvents={stableThreadEvents}
                 compactionEvents={stableCompactionEvents}
                 threadId={activeThread.id}
+                threadStatus={activeThread.status}
                 knownIds={knownIdsRef.current}
                 prefersReducedMotion={prefersReducedMotion}
                 snapshotMap={snapshotMap}

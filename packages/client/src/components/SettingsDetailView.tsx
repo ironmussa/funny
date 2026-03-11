@@ -325,8 +325,8 @@ function ProjectUrlPatterns({
             />
             <Button
               variant="ghost"
-              size="icon"
-              className="h-8 w-8 shrink-0"
+              size="icon-sm"
+              className="shrink-0"
               onClick={() => {
                 const next = urls.filter((_, idx) => idx !== i);
                 save(next);
@@ -339,7 +339,7 @@ function ProjectUrlPatterns({
         <Button
           variant="outline"
           size="sm"
-          className="h-7 text-xs"
+          className="settings-btn-sm"
           onClick={() => setUrls([...urls, ''])}
           data-testid="settings-url-pattern-add"
         >
@@ -445,6 +445,117 @@ function LauncherUrlSetting({
         className="h-8 w-[240px] font-mono text-xs"
         data-testid="settings-launcher-url"
       />
+    </SettingRow>
+  );
+}
+
+/* ── Weave semantic merge status ── */
+function WeaveStatusSetting({ projectId }: { projectId: string }) {
+  const [status, setStatus] = useState<import('@funny/shared').WeaveStatus | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [configuring, setConfiguring] = useState(false);
+  const { t } = useTranslation();
+
+  const fetchStatus = useCallback(async () => {
+    setLoading(true);
+    const result = await api.getWeaveStatus(projectId);
+    if (result.isOk()) {
+      setStatus(result.value);
+    } else {
+      setStatus(null);
+    }
+    setLoading(false);
+  }, [projectId]);
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
+
+  const handleConfigure = async () => {
+    setConfiguring(true);
+    const result = await api.configureWeave(projectId);
+    if (result.isOk()) {
+      setStatus(result.value.status);
+      toast.success(t('settings.weaveConfigured', 'Weave semantic merge configured'));
+    } else {
+      toast.error(t('settings.weaveConfigureFailed', 'Failed to configure Weave'));
+    }
+    setConfiguring(false);
+  };
+
+  if (loading) {
+    return (
+      <SettingRow
+        title={t('settings.weaveTitle', 'Semantic Merge (Weave)')}
+        description={t(
+          'settings.weaveDesc',
+          'Reduces false merge conflicts using semantic analysis',
+        )}
+      >
+        <div className="h-8 w-[140px] animate-pulse rounded-md bg-muted" />
+      </SettingRow>
+    );
+  }
+
+  if (!status || status.status === 'not-installed') {
+    return (
+      <SettingRow
+        title={t('settings.weaveTitle', 'Semantic Merge (Weave)')}
+        description={t(
+          'settings.weaveDesc',
+          'Reduces false merge conflicts using semantic analysis',
+        )}
+      >
+        <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <span data-testid="settings-weave-status">
+            {t('settings.weaveNotInstalled', 'weave-driver not found')}
+          </span>
+          <a
+            href="https://github.com/Ataraxy-Labs/weave"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="text-xs text-blue-500 hover:underline"
+            data-testid="settings-weave-install-link"
+          >
+            {t('settings.weaveInstall', 'Install')}
+          </a>
+        </div>
+      </SettingRow>
+    );
+  }
+
+  return (
+    <SettingRow
+      title={t('settings.weaveTitle', 'Semantic Merge (Weave)')}
+      description={t('settings.weaveDesc', 'Reduces false merge conflicts using semantic analysis')}
+    >
+      <div className="flex items-center gap-3">
+        <span
+          data-testid="settings-weave-status"
+          className={cn(
+            'text-xs',
+            status.status === 'active' ? 'text-green-500' : 'text-muted-foreground',
+          )}
+        >
+          {status.status === 'active'
+            ? t('settings.weaveActive', 'Active')
+            : t('settings.weaveUnconfigured', 'Not configured')}
+        </span>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={handleConfigure}
+          disabled={configuring}
+          className="settings-btn-sm"
+          data-testid="settings-weave-configure"
+        >
+          {configuring
+            ? t('settings.weaveConfiguring', 'Configuring...')
+            : status.status === 'active'
+              ? t('settings.weaveReconfigure', 'Reconfigure')
+              : t('settings.weaveConfigure', 'Configure')}
+        </Button>
+      </div>
     </SettingRow>
   );
 }
@@ -662,6 +773,7 @@ function GeneralSettings() {
               currentUrl={selectedProject.launcherUrl}
               onSave={saveProject}
             />
+            <WeaveStatusSetting projectId={selectedProject.id} />
           </div>
         </>
       )}
@@ -737,21 +849,23 @@ export function SettingsDetailView() {
     <div className="flex h-full min-h-0 flex-1 flex-col">
       {/* Page header */}
       <div className="border-b border-border px-4 py-2">
-        <Breadcrumb>
-          <BreadcrumbList>
-            {selectedProject && (
+        <div className="flex min-h-8 items-center">
+          <Breadcrumb>
+            <BreadcrumbList>
+              {selectedProject && (
+                <BreadcrumbItem>
+                  <BreadcrumbLink className="cursor-default truncate text-sm">
+                    {selectedProject.name}
+                  </BreadcrumbLink>
+                </BreadcrumbItem>
+              )}
+              {selectedProject && <BreadcrumbSeparator />}
               <BreadcrumbItem>
-                <BreadcrumbLink className="cursor-default truncate text-sm">
-                  {selectedProject.name}
-                </BreadcrumbLink>
+                <BreadcrumbPage className="truncate text-sm">{label}</BreadcrumbPage>
               </BreadcrumbItem>
-            )}
-            {selectedProject && <BreadcrumbSeparator />}
-            <BreadcrumbItem>
-              <BreadcrumbPage className="truncate text-sm">{label}</BreadcrumbPage>
-            </BreadcrumbItem>
-          </BreadcrumbList>
-        </Breadcrumb>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
       </div>
 
       {/* Page content */}

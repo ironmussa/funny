@@ -208,7 +208,7 @@ function RecommendedServerCard({
         size="sm"
         onClick={onInstall}
         disabled={installed || installing}
-        className="h-7 flex-shrink-0 text-xs"
+        className="settings-btn-sm flex-shrink-0"
       >
         {installing ? (
           <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -437,7 +437,7 @@ export function McpServerSettings() {
             variant="ghost"
             size="sm"
             onClick={() => setShowAddForm(!showAddForm)}
-            className="h-6 px-2 text-xs"
+            className="settings-btn-sm px-2"
           >
             {showAddForm ? (
               <ChevronUp className="mr-1 h-3 w-3" />
@@ -518,7 +518,7 @@ export function McpServerSettings() {
                 size="sm"
                 onClick={handleAddCustom}
                 disabled={!addName || adding}
-                className="h-7 text-xs"
+                className="settings-btn-sm"
               >
                 {adding ? (
                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />

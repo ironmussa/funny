@@ -135,6 +135,13 @@ app.get('/api/health', (c) => {
   return c.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Available shells endpoint — returns shells installed on this system
+app.get('/api/system/shells', (c) => {
+  const { detectShells } =
+    require('./services/shell-detector.js') as typeof import('./services/shell-detector.js');
+  return c.json({ shells: detectShells() });
+});
+
 // Setup status endpoint — multi-provider detection
 app.get('/api/setup/status', async (c) => {
   resetProviderCache();
@@ -308,6 +315,9 @@ void rehydrateWatchers();
 // Periodic sweep: stop external threads that haven't received events in 10 minutes
 startExternalThreadSweep();
 
+// Reattach to persisted PTY sessions (tmux backend only)
+ptyManager.reattachSessions();
+
 const server = Bun.serve({
   port,
   hostname: host,
@@ -388,7 +398,16 @@ const server = Bun.serve({
               } catch {}
               break;
             }
-            ptyManager.spawnPty(data.id, data.cwd, data.cols, data.rows, userId, data.shell);
+            ptyManager.spawnPty(
+              data.id,
+              data.cwd,
+              data.cols,
+              data.rows,
+              userId,
+              data.shell,
+              data.projectId,
+              data.label,
+            );
             break;
           }
           case 'pty:write':
@@ -400,6 +419,43 @@ const server = Bun.serve({
           case 'pty:kill':
             ptyManager.killPty(data.id);
             break;
+          case 'pty:restore': {
+            // Capture current tmux pane content and send it back to the client
+            const captured = ptyManager.capturePane(data.id);
+            if (captured) {
+              try {
+                ws.send(
+                  JSON.stringify({
+                    type: 'pty:data',
+                    threadId: '',
+                    data: { ptyId: data.id, data: captured },
+                  }),
+                );
+              } catch {}
+            }
+            break;
+          }
+          case 'pty:list': {
+            const sessions = ptyManager.listActiveSessions(userId);
+            try {
+              ws.send(
+                JSON.stringify({
+                  type: 'pty:sessions',
+                  threadId: '',
+                  data: {
+                    sessions: sessions.map((s) => ({
+                      ptyId: s.ptyId,
+                      cwd: s.cwd,
+                      projectId: s.projectId,
+                      label: s.label,
+                      shell: s.shell,
+                    })),
+                  },
+                }),
+              );
+            } catch {}
+            break;
+          }
           default:
             log.warn(`Unknown message type: ${type}`, { namespace: 'ws' });
         }

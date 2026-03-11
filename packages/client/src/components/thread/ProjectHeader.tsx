@@ -573,7 +573,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                         `/kanban?project=${activeThreadProjectId}&highlight=${activeThreadId}`,
                       );
                     }}
-                    className="h-7 w-7 text-muted-foreground"
+                    className="h-8 w-8 text-muted-foreground"
                   >
                     <Columns3 className="h-4 w-4" />
                   </Button>

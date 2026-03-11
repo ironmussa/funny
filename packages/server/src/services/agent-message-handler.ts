@@ -210,16 +210,41 @@ export class AgentMessageHandler {
     }
 
     // Emit per-message context usage if available.
-    // usage.input_tokens from the Anthropic API represents the TOTAL input
-    // tokens for this API call (system prompt + full conversation history),
-    // so it directly reflects how full the context window is — no accumulation needed.
-    const usage = msg.message.usage;
+    // With prompt caching, the Anthropic API splits input tokens across:
+    //   input_tokens — uncached (new) tokens only (often very small, e.g. 1-4)
+    //   cache_read_input_tokens — tokens served from cache (the bulk)
+    //   cache_creation_input_tokens — tokens being cached for the first time
+    // The total = input_tokens + cache_read + cache_creation represents the
+    // **full context window size** for this API call, not an incremental addition.
+    // So we use the latest totalInputTokens directly as the context window usage
+    // rather than accumulating across messages (which would vastly overcount).
+    const usage = msg.message.usage as Record<string, unknown> | undefined;
     if (usage) {
-      this.state.cumulativeInputTokens.set(threadId, usage.input_tokens);
+      const inputTokens = (usage.input_tokens as number) ?? 0;
+      const cacheRead = (usage.cache_read_input_tokens as number) ?? 0;
+      const cacheCreation = (usage.cache_creation_input_tokens as number) ?? 0;
+      const outputTokens = (usage.output_tokens as number) ?? 0;
+      const totalInputTokens = inputTokens + cacheRead + cacheCreation;
+
+      log.info('Assistant message usage (DEBUG)', {
+        namespace: 'agent',
+        threadId,
+        rawUsageKeys: Object.keys(usage).join(','),
+        rawUsage: JSON.stringify(usage),
+        inputTokens,
+        cacheRead,
+        cacheCreation,
+        totalInputTokens,
+        outputTokens,
+      });
+
+      // Each API response reports the full context window size (not a delta),
+      // so just store the latest value instead of accumulating.
+      this.state.cumulativeInputTokens.set(threadId, totalInputTokens);
       await this.emitWS(threadId, 'agent:context_usage', {
-        inputTokens: usage.input_tokens,
-        outputTokens: usage.output_tokens,
-        cumulativeInputTokens: usage.input_tokens,
+        inputTokens: totalInputTokens,
+        outputTokens,
+        cumulativeInputTokens: totalInputTokens,
       });
     } else {
       log.debug('No usage data in assistant message', { namespace: 'agent', threadId });

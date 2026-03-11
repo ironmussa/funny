@@ -15,11 +15,10 @@ import { toast } from 'sonner';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DiffStats } from '@/components/DiffStats';
 import { SlideUpPrompt } from '@/components/SlideUpPrompt';
-import { Button } from '@/components/ui/button';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { ProjectChip } from '@/components/ui/project-chip';
+import { ProjectChip, colorFromName } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { stageConfig, statusConfig, timeAgo } from '@/lib/thread-utils';
@@ -319,7 +318,7 @@ function AddThreadButton({
               >
                 <span
                   className="h-2 w-2 shrink-0 rounded-full"
-                  style={{ backgroundColor: p.color || '#3b82f6' }}
+                  style={{ backgroundColor: p.color || colorFromName(p.name) }}
                 />
                 <span className="truncate">{p.name}</span>
               </button>

@@ -12,10 +12,8 @@ import {
   Loader2,
   Paperclip,
   X,
-  Zap,
   GitBranch,
   Inbox,
-  FileText,
   Globe,
   Github,
   FolderOpen,
@@ -34,7 +32,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
-// Textarea import available if needed
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { getContextWindow, getUnifiedModelOptions, parseUnifiedModel } from '@/lib/providers';
@@ -44,6 +41,9 @@ import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 import { ImageLightbox } from './ImageLightbox';
+import type { PromptEditorHandle } from './prompt-editor/PromptEditor';
+import { PromptEditor } from './prompt-editor/PromptEditor';
+import { serializeEditorContent } from './prompt-editor/serialize';
 import { BranchPicker } from './SearchablePicker';
 
 // ── Lightweight Popover-based selectors ──────────────────────────
@@ -271,12 +271,15 @@ export const PromptInput = memo(function PromptInput({
   const defaultPermissionMode = effectiveProject?.defaultPermissionMode ?? DEFAULT_PERMISSION_MODE;
   const defaultThreadMode = effectiveProject?.defaultMode ?? DEFAULT_THREAD_MODE;
 
-  const [prompt, setPrompt] = useState(initialPromptProp ?? '');
+  // ── TipTap editor ref ──
+  const editorRef = useRef<PromptEditorHandle>(null);
 
-  // Expose setPrompt to parent via ref
+  // Expose setPrompt to parent via ref (adapts to editor API)
   useEffect(() => {
     if (setPromptRef) {
-      setPromptRef.current = setPrompt;
+      setPromptRef.current = (text: string) => {
+        editorRef.current?.setContent(text);
+      };
       return () => {
         setPromptRef.current = null;
       };
@@ -334,11 +337,6 @@ export const PromptInput = memo(function PromptInput({
   const [editingQueuedMessageId, setEditingQueuedMessageId] = useState<string | null>(null);
   const [editingQueuedMessageContent, setEditingQueuedMessageContent] = useState('');
 
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const textareaCallbackRef = useCallback((node: HTMLTextAreaElement | null) => {
-    textareaRef.current = node;
-    node?.focus();
-  }, []);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -346,53 +344,28 @@ export const PromptInput = memo(function PromptInput({
   // Track whether handleSubmit cleared the prompt so the unmount cleanup
   // doesn't accidentally save the stale value back into the draft store.
   const hasSubmittedRef = useRef(false);
+  // Track whether the editor is empty (updated via onChange)
+  const [editorEmpty, setEditorEmpty] = useState(true);
 
   // Load initial prompt/images when props change (e.g. navigating to a backlog thread)
   useEffect(() => {
-    if (initialPromptProp) setPrompt(initialPromptProp);
+    if (initialPromptProp) editorRef.current?.setContent(initialPromptProp);
     if (initialImagesProp?.length) setImages(initialImagesProp);
   }, [initialPromptProp, initialImagesProp]);
-
-  // Slash-command state
-  const [skills, setSkills] = useState<Skill[]>([]);
-  const [skillsLoaded, setSkillsLoaded] = useState(false);
-  const [showSlashMenu, setShowSlashMenu] = useState(false);
-  const [slashFilter, setSlashFilter] = useState('');
-  const [slashIndex, setSlashIndex] = useState(0);
-  const slashMenuRef = useRef<HTMLDivElement>(null);
-
-  // File mention state
-  const [showMentionMenu, setShowMentionMenu] = useState(false);
-  const [mentionFilter, setMentionFilter] = useState('');
-  const [mentionIndex, setMentionIndex] = useState(0);
-  const [mentionItems, setMentionItems] = useState<
-    Array<{ path: string; type: 'file' | 'folder' }>
-  >([]);
-  const [mentionLoading, setMentionLoading] = useState(false);
-  const [mentionTruncated, setMentionTruncated] = useState(false);
-  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
-  const [selectedFileTypes, setSelectedFileTypes] = useState<Record<string, 'file' | 'folder'>>({});
-  const mentionMenuRef = useRef<HTMLDivElement>(null);
-  const mentionStartPosRef = useRef<number>(-1);
-  const loadFilesTimeoutRef = useRef<ReturnType<typeof setTimeout>>(undefined);
 
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const effectiveThreadId = threadIdProp ?? selectedThreadId;
 
   // Draft persistence across thread switches
-  const { setPromptDraft, clearPromptDraft } = useDraftStore();
+  const { setEditorDraft, clearPromptDraft } = useDraftStore();
   // Initialize to null so the mount effect always restores the draft for the current thread
   const prevThreadIdRef = useRef<string | null | undefined>(null);
 
   // Keep refs in sync so unmount cleanup can read the latest values
-  const promptRef = useRef(prompt);
   const imagesRef = useRef(images);
-  const selectedFilesRef = useRef(selectedFiles);
   const threadIdRef = useRef(effectiveThreadId);
-  promptRef.current = prompt;
   imagesRef.current = images;
-  selectedFilesRef.current = selectedFiles;
   threadIdRef.current = effectiveThreadId;
 
   // Save draft when switching away from a thread, restore when switching to a new one
@@ -402,38 +375,48 @@ export const PromptInput = memo(function PromptInput({
 
     // Save draft for the thread we're leaving
     if (prevId && prevId !== effectiveThreadId) {
-      const currentPrompt = textareaRef.current?.value ?? promptRef.current;
-      setPromptDraft(prevId, currentPrompt, imagesRef.current, selectedFilesRef.current);
+      const editorJSON = editorRef.current?.getJSON();
+      if (editorJSON) {
+        setEditorDraft(prevId, editorJSON, imagesRef.current);
+      }
     }
 
     // Restore draft for the thread we're entering
     if (effectiveThreadId && effectiveThreadId !== prevId) {
       const draft = useDraftStore.getState().drafts[effectiveThreadId];
-      setPrompt(draft?.prompt ?? initialPromptProp ?? '');
+      if (draft?.editorContent) {
+        editorRef.current?.setContent(draft.editorContent);
+      } else if (draft?.prompt) {
+        // Legacy fallback: restore string-based draft
+        editorRef.current?.setContent(draft.prompt);
+      } else if (initialPromptProp) {
+        editorRef.current?.setContent(initialPromptProp);
+      } else {
+        editorRef.current?.clear();
+      }
       setImages(draft?.images ?? initialImagesProp ?? []);
-      setSelectedFiles(draft?.selectedFiles ?? []);
     } else if (!effectiveThreadId) {
-      setPrompt('');
+      editorRef.current?.clear();
       setImages([]);
-      setSelectedFiles([]);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only save/restore drafts on thread switch; prompt/images/selectedFiles are read via refs to avoid re-runs on every keystroke
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only save/restore drafts on thread switch
   }, [effectiveThreadId]);
 
   // Save draft when the component unmounts (e.g. navigating to AllThreadsView)
   useEffect(() => {
+    const editorRefCurrent = editorRef.current;
+    const imagesRefCurrent = imagesRef.current;
     return () => {
-      // Skip saving draft if the prompt was just submitted — the draft was
-      // already cleared in handleSubmit and promptRef may still hold the
-      // stale pre-submit value because React batches state updates.
       if (hasSubmittedRef.current) return;
       const threadId = threadIdRef.current;
       if (threadId) {
-        const currentPrompt = textareaRef.current?.value ?? promptRef.current;
-        setPromptDraft(threadId, currentPrompt, imagesRef.current, selectedFilesRef.current);
+        const editorJSON = editorRefCurrent?.getJSON();
+        if (editorJSON) {
+          setEditorDraft(threadId, editorJSON, imagesRefCurrent);
+        }
       }
     };
-  }, [setPromptDraft]);
+  }, [setEditorDraft]);
 
   // Derive project path and manage cwd override
   const effectiveProjectIdForPath = propProjectId || selectedProjectId;
@@ -452,12 +435,6 @@ export const PromptInput = memo(function PromptInput({
   useEffect(() => {
     setCwdOverride(null);
   }, [selectedProjectId, effectiveThreadId]);
-
-  // Reset skills cache when project changes
-  useEffect(() => {
-    setSkillsLoaded(false);
-    setSkills([]);
-  }, [selectedProjectId]);
 
   // Sync mode with active thread's permission mode when thread changes
   useEffect(() => {
@@ -493,8 +470,6 @@ export const PromptInput = memo(function PromptInput({
           const data = result.value;
           setNewThreadBranches(data.branches);
           setGitCurrentBranch(data.currentBranch);
-          // Local mode: prioritize currentBranch (the branch actually checked out)
-          // Worktree mode: prioritize project defaultBranch > git defaultBranch
           if (!createWorktree && data.currentBranch && data.branches.includes(data.currentBranch)) {
             setSelectedBranch(data.currentBranch);
           } else if (projectDefaultBranch && data.branches.includes(projectDefaultBranch)) {
@@ -553,7 +528,6 @@ export const PromptInput = memo(function PromptInput({
         if (result.isOk()) {
           const data = result.value;
           setFollowUpBranches(data.branches);
-          // Default to baseBranch (worktree source), then project defaultBranch, then git defaultBranch, then currentBranch
           const proj = projects.find((p) => p.id === selectedProjectId);
           if (activeThreadBaseBranch) {
             setFollowUpSelectedBranch(activeThreadBaseBranch);
@@ -576,15 +550,21 @@ export const PromptInput = memo(function PromptInput({
     // eslint-disable-next-line react-hooks/exhaustive-deps -- projects is stable from store; adding it would loop
   }, [isNewThread, selectedProjectId, activeThreadBaseBranch]);
 
-  // Fetch skills once when the menu first opens
-  const loadSkills = useCallback(async () => {
-    if (skillsLoaded) return;
-    const projectPath = selectedProjectId
+  // ── Skills loader for slash commands ──
+  const skillsCacheRef = useRef<Skill[] | null>(null);
+
+  // Reset skills cache when project changes
+  useEffect(() => {
+    skillsCacheRef.current = null;
+  }, [selectedProjectId]);
+
+  const loadSkillsForEditor = useCallback(async (): Promise<Skill[]> => {
+    if (skillsCacheRef.current) return skillsCacheRef.current;
+    const path = selectedProjectId
       ? projects.find((p) => p.id === selectedProjectId)?.path
       : undefined;
-    const result = await api.listSkills(projectPath);
+    const result = await api.listSkills(path);
     if (result.isOk()) {
-      // Deduplicate: if a skill exists at both global and project scope, keep only the project-level one
       const allSkills = result.value.skills ?? [];
       const deduped = new Map<string, Skill>();
       for (const skill of allSkills) {
@@ -593,140 +573,16 @@ export const PromptInput = memo(function PromptInput({
           deduped.set(skill.name, skill);
         }
       }
-      setSkills(Array.from(deduped.values()));
+      skillsCacheRef.current = Array.from(deduped.values());
     } else {
-      setSkills([]);
+      skillsCacheRef.current = [];
     }
-    setSkillsLoaded(true);
-  }, [skillsLoaded, selectedProjectId, projects]);
+    return skillsCacheRef.current;
+  }, [selectedProjectId, projects]);
 
-  // Filtered skills based on what user typed after /
-  const filteredSkills = skills.filter((s) =>
-    s.name.toLowerCase().includes(slashFilter.toLowerCase()),
-  );
-
-  // Slash-command start position ref (like mentionStartPosRef)
-  const slashStartPosRef = useRef<number>(-1);
-
-  // Detect slash command trigger at cursor position
-  const handleSlashDetection = useCallback(
-    (value: string, cursorPos: number) => {
-      const textBeforeCursor = value.slice(0, cursorPos);
-      // Match a `/` preceded by start-of-string or whitespace, followed by non-space chars
-      const match = textBeforeCursor.match(/(^|[\s])\/(\S*)$/);
-      if (match) {
-        setSlashFilter(match[2]);
-        setShowSlashMenu(true);
-        setSlashIndex(0);
-        slashStartPosRef.current = cursorPos - match[2].length - 1; // -1 for the `/`
-        loadSkills();
-      } else {
-        setShowSlashMenu(false);
-      }
-    },
-    [loadSkills],
-  );
-
-  // Scroll selected item into view
+  // Focus editor when switching threads or when running/loading changes
   useEffect(() => {
-    if (!showSlashMenu || !slashMenuRef.current) return;
-    const activeItem = slashMenuRef.current.children[slashIndex] as HTMLElement | undefined;
-    activeItem?.scrollIntoView({ block: 'nearest' });
-  }, [slashIndex, showSlashMenu]);
-
-  const selectSkill = useCallback(
-    (skill: Skill) => {
-      const startPos = slashStartPosRef.current;
-      setPrompt((prev) => {
-        const before = prev.slice(0, startPos);
-        // Skip past the `/` + whatever the user typed as filter
-        const afterSlash = prev.slice(startPos + 1 + slashFilter.length);
-        return `${before}/${skill.name} ${afterSlash}`;
-      });
-      setShowSlashMenu(false);
-      textareaRef.current?.focus();
-    },
-    [slashFilter],
-  );
-
-  // Load files for @ mention with debounce
-  const loadFiles = useCallback(
-    (query: string) => {
-      if (loadFilesTimeoutRef.current) clearTimeout(loadFilesTimeoutRef.current);
-      loadFilesTimeoutRef.current = setTimeout(async () => {
-        const path = cwdOverride || threadCwd;
-        if (!path) return;
-        setMentionLoading(true);
-        const result = await api.browseFiles(path, query || undefined);
-        if (result.isOk()) {
-          // Normalize: server may return objects { path, type } or legacy strings
-          const items = result.value.files.map((f) =>
-            typeof f === 'string' ? { path: f, type: 'file' as const } : f,
-          );
-          setMentionItems(items);
-          setMentionTruncated(result.value.truncated);
-        }
-        setMentionLoading(false);
-      }, 150);
-    },
-    [cwdOverride, threadCwd],
-  );
-
-  // Handle @ mention trigger detection
-  const handleMentionDetection = useCallback(
-    (value: string, cursorPos: number) => {
-      const textBeforeCursor = value.slice(0, cursorPos);
-      const mentionMatch = textBeforeCursor.match(/@([^\s@]*)$/);
-      if (mentionMatch) {
-        const query = mentionMatch[1];
-        setMentionFilter(query);
-        setShowMentionMenu(true);
-        setMentionIndex(0);
-        mentionStartPosRef.current = cursorPos - mentionMatch[0].length;
-        loadFiles(query);
-      } else {
-        setShowMentionMenu(false);
-      }
-    },
-    [loadFiles],
-  );
-
-  // Select a file/folder from the mention menu (rerender-functional-setstate)
-  const selectMentionFile = useCallback(
-    (filePath: string, itemType: 'file' | 'folder' = 'file') => {
-      const startPos = mentionStartPosRef.current;
-      // Remove the @mention text — the file/folder is shown as a chip instead
-      setPrompt((prev) => {
-        const before = prev.slice(0, startPos);
-        const afterCursor = prev.slice(startPos + mentionFilter.length + 1); // +1 for @
-        // Collapse extra whitespace left behind
-        return before + afterCursor.replace(/^\s+/, before.length > 0 ? ' ' : '');
-      });
-      setSelectedFiles((prev) => (prev.includes(filePath) ? prev : [...prev, filePath]));
-      setSelectedFileTypes((prev) => ({ ...prev, [filePath]: itemType }));
-      setShowMentionMenu(false);
-      textareaRef.current?.focus();
-    },
-    [mentionFilter],
-  );
-
-  // Scroll mention menu selection into view
-  useEffect(() => {
-    if (!showMentionMenu || !mentionMenuRef.current) return;
-    const activeItem = mentionMenuRef.current.children[mentionIndex] as HTMLElement | undefined;
-    activeItem?.scrollIntoView({ block: 'nearest' });
-  }, [mentionIndex, showMentionMenu]);
-
-  // Focus and reset popup state when switching threads
-  useEffect(() => {
-    textareaRef.current?.focus();
-    setShowMentionMenu(false);
-    setShowSlashMenu(false);
-    setMentionFilter('');
-    setSlashFilter('');
-    setMentionIndex(0);
-    setSlashIndex(0);
-    setMentionItems([]);
+    editorRef.current?.focus();
   }, [effectiveThreadId]);
 
   useEffect(() => {
@@ -767,11 +623,11 @@ export const PromptInput = memo(function PromptInput({
   }, [effectiveThreadId, queuedCount]);
 
   useEffect(() => {
-    if (!running) textareaRef.current?.focus();
+    if (!running) editorRef.current?.focus();
   }, [running]);
 
   useEffect(() => {
-    if (!loading) textareaRef.current?.focus();
+    if (!loading) editorRef.current?.focus();
   }, [loading]);
 
   const handleQueueEditStart = useCallback((message: QueuedMessage) => {
@@ -842,35 +698,20 @@ export const PromptInput = memo(function PromptInput({
     [editingQueuedMessageId, effectiveThreadId],
   );
 
-  // Auto-resize textarea up to 35vh.  Wrapped in rAF so multiple keystrokes
-  // within a single frame batch into one resize (avoids repeated forced reflows).
-  const resizeRafRef = useRef(0);
-  const resizeTextarea = useCallback(() => {
-    cancelAnimationFrame(resizeRafRef.current);
-    resizeRafRef.current = requestAnimationFrame(() => {
-      const ta = textareaRef.current;
-      if (!ta) return;
-      ta.style.height = 'auto';
-      const maxHeight = window.innerHeight * 0.35;
-      ta.style.height = `${Math.min(ta.scrollHeight, maxHeight)}px`;
-      ta.style.overflowY = ta.scrollHeight > maxHeight ? 'auto' : 'hidden';
-    });
-  }, []);
-
-  // Cleanup rAF on unmount
-  useEffect(() => () => cancelAnimationFrame(resizeRafRef.current), []);
-
-  // Resize on initial mount and when prompt changes externally (e.g. draft restore)
-  useEffect(() => {
-    resizeTextarea();
-  }, [prompt, resizeTextarea]);
-
-  const handleSubmit = async () => {
+  const handleSubmit = useCallback(async () => {
     if (loading) return;
-    if (!prompt.trim() && images.length === 0) {
+
+    // Serialize editor content to extract text + file references
+    const editorJSON = editorRef.current?.getJSON();
+    const isEmpty = editorRef.current?.isEmpty() ?? true;
+    if (isEmpty && images.length === 0) {
       toast.warning(t('prompt.emptyPrompt', 'Please enter a prompt before sending'));
       return;
     }
+
+    const serialized = editorJSON
+      ? serializeEditorContent(editorJSON)
+      : { text: '', fileReferences: [] };
 
     // Pre-flight checkout validation for local mode with a different branch
     if (
@@ -897,19 +738,16 @@ export const PromptInput = memo(function PromptInput({
     }
 
     // Capture current values and clear immediately for responsive UX
-    const submittedPrompt = prompt;
+    const submittedPrompt = serialized.text;
     const submittedImages = images.length > 0 ? images : undefined;
     const submittedFiles =
-      selectedFiles.length > 0
-        ? selectedFiles.map((p) => ({ path: p, type: selectedFileTypes[p] || ('file' as const) }))
-        : undefined;
-    setPrompt('');
+      serialized.fileReferences.length > 0 ? serialized.fileReferences : undefined;
+    editorRef.current?.clear();
     setImages([]);
-    setSelectedFiles([]);
-    setSelectedFileTypes({});
+    setEditorEmpty(true);
     hasSubmittedRef.current = true;
     if (effectiveThreadId) clearPromptDraft(effectiveThreadId);
-    textareaRef.current?.focus();
+    editorRef.current?.focus();
 
     const result = await onSubmit(
       submittedPrompt,
@@ -938,114 +776,53 @@ export const PromptInput = memo(function PromptInput({
     if (result === false) {
       // Restore on failure
       hasSubmittedRef.current = false;
-      setPrompt(submittedPrompt);
+      if (editorJSON) editorRef.current?.setContent(editorJSON);
       setImages(submittedImages ?? []);
-      setSelectedFiles(submittedFiles?.map((f) => f.path) ?? []);
     }
-  };
+  }, [
+    loading,
+    images,
+    t,
+    isNewThread,
+    createWorktree,
+    effectiveProjectId,
+    selectedBranch,
+    gitCurrentBranch,
+    effectiveThreadId,
+    clearPromptDraft,
+    onSubmit,
+    provider,
+    model,
+    mode,
+    runtime,
+    sendToBacklog,
+    createWorktreeForFollowUp,
+    followUpSelectedBranch,
+    cwdOverride,
+  ]);
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    // Delete last chip on Backspace when cursor is at position 0 and textarea is empty
-    if (e.key === 'Backspace' && selectedFiles.length > 0 && !showMentionMenu && !showSlashMenu) {
-      const cursorPos = textareaRef.current?.selectionStart ?? 0;
-      if (cursorPos === 0 && !prompt) {
-        e.preventDefault();
-        const lastFile = selectedFiles[selectedFiles.length - 1];
-        setSelectedFiles((prev) => prev.slice(0, -1));
-        setSelectedFileTypes((prev) => {
-          const next = { ...prev };
-          delete next[lastFile];
-          return next;
-        });
-        return;
-      }
-    }
-
-    // Handle @ mention menu navigation
-    if (showMentionMenu && mentionItems.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setMentionIndex((i) => (i + 1) % mentionItems.length);
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setMentionIndex((i) => (i - 1 + mentionItems.length) % mentionItems.length);
-        return;
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
-        const item = mentionItems[mentionIndex];
-        selectMentionFile(item.path, item.type);
-        return;
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setShowMentionMenu(false);
-        return;
-      }
-    }
-
-    // Handle slash menu navigation
-    if (showSlashMenu && filteredSkills.length > 0) {
-      if (e.key === 'ArrowDown') {
-        e.preventDefault();
-        setSlashIndex((i) => (i + 1) % filteredSkills.length);
-        return;
-      }
-      if (e.key === 'ArrowUp') {
-        e.preventDefault();
-        setSlashIndex((i) => (i - 1 + filteredSkills.length) % filteredSkills.length);
-        return;
-      }
-      if (e.key === 'Enter' || e.key === 'Tab') {
-        e.preventDefault();
-        selectSkill(filteredSkills[slashIndex]);
-        return;
-      }
-      if (e.key === 'Escape') {
-        e.preventDefault();
-        setShowSlashMenu(false);
-        return;
-      }
-    }
-
-    // Shift+Tab: cycle through modes (plan → autoEdit → confirmEdit → plan)
-    if (e.key === 'Tab' && e.shiftKey) {
-      e.preventDefault();
-      setMode((current) => {
-        const idx = modes.findIndex((m) => m.value === current);
-        return modes[(idx + 1) % modes.length].value;
-      });
-      return;
-    }
-
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSubmit();
-    }
-  };
-
-  const handlePaste = async (e: React.ClipboardEvent) => {
+  const handleEditorPaste = useCallback(async (e: ClipboardEvent) => {
     const items = e.clipboardData?.items;
     if (!items) return;
 
     for (const item of Array.from(items)) {
       if (item.type.startsWith('image/')) {
-        e.preventDefault();
         const file = item.getAsFile();
         if (file) {
           await addImageFile(file);
         }
       }
     }
-  };
+  }, []);
+
+  const handleEditorChange = useCallback(() => {
+    setEditorEmpty(editorRef.current?.isEmpty() ?? true);
+  }, []);
 
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
 
-    // Check if dragged items include files
     if (e.dataTransfer.types.includes('Files')) {
       setIsDragging(true);
     }
@@ -1055,7 +832,6 @@ export const PromptInput = memo(function PromptInput({
     e.preventDefault();
     e.stopPropagation();
 
-    // Only set to false if we're leaving the textarea container itself
     if (e.currentTarget === e.target) {
       setIsDragging(false);
     }
@@ -1072,24 +848,10 @@ export const PromptInput = memo(function PromptInput({
     if (!items) return;
 
     for (const item of Array.from(items)) {
-      // Handle images
       if (item.type.startsWith('image/')) {
         const file = item.getAsFile();
         if (file) {
           await addImageFile(file);
-        }
-      }
-      // Handle file paths (from file explorer)
-      else if (item.kind === 'file') {
-        const file = item.getAsFile();
-        if (file) {
-          // Get relative path if possible, or use absolute path
-          const filePath = (file as any).path || file.name;
-
-          // Add to selected files if not already added (shown as chip, not in prompt text)
-          if (!selectedFiles.includes(filePath)) {
-            setSelectedFiles((prev) => [...prev, filePath]);
-          }
         }
       }
     }
@@ -1103,15 +865,12 @@ export const PromptInput = memo(function PromptInput({
       if (file.type.startsWith('image/')) {
         await addImageFile(file);
       } else {
-        // Non-image files go as chips (same as drag-and-drop)
+        // Non-image files: insert as file mention chip in the editor
         const filePath = (file as any).path || file.name;
-        if (!selectedFiles.includes(filePath)) {
-          setSelectedFiles((prev) => [...prev, filePath]);
-        }
+        editorRef.current?.insertFileMention(filePath, 'file');
       }
     }
 
-    // Reset input
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -1147,6 +906,12 @@ export const PromptInput = memo(function PromptInput({
   };
 
   const defaultPlaceholder = placeholder ?? t('thread.describeTaskDefault');
+
+  const editorPlaceholder = running
+    ? isQueueMode
+      ? t('thread.typeToQueue')
+      : t('thread.typeToInterrupt')
+    : defaultPlaceholder;
 
   return (
     <div className="border-border px-4 py-3">
@@ -1320,7 +1085,7 @@ export const PromptInput = memo(function PromptInput({
           </div>
         )}
 
-        {/* Textarea + bottom toolbar */}
+        {/* Editor + bottom toolbar */}
         <div
           className={cn(
             'relative rounded-md border bg-input/80',
@@ -1332,161 +1097,20 @@ export const PromptInput = memo(function PromptInput({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
-          {/* File/folder mention dropdown */}
-          {showMentionMenu && (
-            <div
-              ref={mentionMenuRef}
-              className="absolute bottom-full left-0 z-50 mb-1 max-h-52 w-full overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md"
-            >
-              {mentionLoading && mentionItems.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-muted-foreground">
-                  {t('prompt.loadingFiles', 'Loading files\u2026')}
-                </div>
-              ) : mentionItems.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-muted-foreground">
-                  {t('prompt.noFilesMatch', 'No files match')}
-                </div>
-              ) : (
-                <>
-                  {mentionItems.map((item, i) => (
-                    <button
-                      key={`${item.type}:${item.path}`}
-                      data-testid={`mention-item-${item.path}`}
-                      className={cn(
-                        'w-full flex items-center gap-2 px-3 py-1.5 text-left text-sm hover:bg-accent transition-colors',
-                        i === mentionIndex && 'bg-accent',
-                        selectedFiles.includes(item.path) && 'text-primary',
-                      )}
-                      onMouseDown={(e) => {
-                        e.preventDefault();
-                        selectMentionFile(item.path, item.type);
-                      }}
-                      onMouseEnter={() => setMentionIndex(i)}
-                    >
-                      {item.type === 'folder' ? (
-                        <FolderOpen className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      ) : (
-                        <FileText className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
-                      )}
-                      <span className="truncate font-mono text-xs">{item.path}</span>
-                    </button>
-                  ))}
-                  {mentionTruncated && (
-                    <div className="border-t border-border px-3 py-1.5 text-xs text-muted-foreground">
-                      {t('prompt.moreFilesHint', 'Type to narrow results\u2026')}
-                    </div>
-                  )}
-                </>
-              )}
-            </div>
-          )}
-          {/* Slash command dropdown */}
-          {showSlashMenu && (
-            <div
-              ref={slashMenuRef}
-              className="absolute bottom-full left-0 z-50 mb-1 max-h-52 w-full overflow-y-auto rounded-md border border-border bg-popover text-popover-foreground shadow-md"
-            >
-              {filteredSkills.length === 0 ? (
-                <div className="px-3 py-2 text-xs text-muted-foreground">
-                  {skillsLoaded ? t('skills.noSkillsFound') : t('prompt.loadingSkills')}
-                </div>
-              ) : (
-                filteredSkills.map((skill, i) => (
-                  <button
-                    key={skill.name}
-                    className={cn(
-                      'w-full flex items-start gap-2 px-3 py-2 text-left text-sm hover:bg-accent transition-colors',
-                      i === slashIndex && 'bg-accent',
-                    )}
-                    onMouseDown={(e) => {
-                      e.preventDefault(); // prevent textarea blur
-                      selectSkill(skill);
-                    }}
-                    onMouseEnter={() => setSlashIndex(i)}
-                  >
-                    <Zap className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
-                    <div className="min-w-0">
-                      <div className="font-mono text-xs font-medium">/{skill.name}</div>
-                      {skill.description && (
-                        <div className="truncate text-xs text-muted-foreground">
-                          {skill.description}
-                        </div>
-                      )}
-                    </div>
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-          {/* Textarea */}
+          {/* TipTap Editor */}
           {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-          <div
-            className="px-3 pt-2"
-            onClick={() => textareaRef.current?.focus()}
-          >
-            <textarea
-              ref={textareaCallbackRef}
-              data-testid="prompt-textarea"
-              aria-label={t('prompt.messageLabel', 'Message')}
-              className="w-full resize-none bg-transparent text-sm text-foreground placeholder:text-muted-foreground focus:outline-none"
-              style={{ minHeight: '1.5rem' }}
-              placeholder={
-                running
-                  ? isQueueMode
-                    ? t('thread.typeToQueue')
-                    : t('thread.typeToInterrupt')
-                  : defaultPlaceholder
-              }
-              value={prompt}
-              onChange={(e) => {
-                const value = e.target.value;
-                const cursorPos = e.target.selectionStart ?? value.length;
-                setPrompt(value);
-                resizeTextarea();
-                handleMentionDetection(value, cursorPos);
-                handleSlashDetection(value, cursorPos);
-              }}
-              onKeyDown={handleKeyDown}
-              onPaste={handlePaste}
-              rows={1}
+          <div className="px-3 pt-2" onClick={() => editorRef.current?.focus()}>
+            <PromptEditor
+              ref={editorRef}
+              placeholder={editorPlaceholder}
               disabled={loading}
+              onSubmit={handleSubmit}
+              onChange={handleEditorChange}
+              onPaste={handleEditorPaste}
+              cwd={effectiveCwd}
+              loadSkills={loadSkillsForEditor}
             />
           </div>
-          {/* File chips below textarea */}
-          {selectedFiles.length > 0 && (
-            <div className="flex flex-wrap gap-1 px-3 pb-1">
-              {selectedFiles.map((file) => (
-                <span
-                  key={file}
-                  data-testid={`selected-file-${file}`}
-                  className="inline-flex shrink-0 items-center gap-1 rounded-md border border-border/60 bg-muted/60 px-2 py-0.5 font-mono text-xs text-foreground/80"
-                  title={file}
-                >
-                  {selectedFileTypes[file] === 'folder' ? (
-                    <FolderOpen className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  ) : (
-                    <FileText className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  )}
-                  {file.split('/').pop()}
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setSelectedFiles((prev) => prev.filter((f) => f !== file));
-                      setSelectedFileTypes((prev) => {
-                        const next = { ...prev };
-                        delete next[file];
-                        return next;
-                      });
-                    }}
-                    aria-label={t('prompt.removeFile', 'Remove file')}
-                    className="ml-0.5 rounded-sm hover:text-destructive"
-                  >
-                    <X className="h-3 w-3" />
-                  </button>
-                </span>
-              ))}
-            </div>
-          )}
           {/* Bottom toolbar */}
           <input
             ref={fileInputRef}
@@ -1527,7 +1151,7 @@ export const PromptInput = memo(function PromptInput({
                   onChange={setUnifiedModel}
                   groups={unifiedModelGroups}
                 />
-                {running && !prompt.trim() ? (
+                {running && editorEmpty ? (
                   <Button
                     data-testid="prompt-stop"
                     onClick={onStop}

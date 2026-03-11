@@ -264,6 +264,7 @@ export function ReviewPane() {
   });
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [loadError, setLoadError] = useState(false);
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const [fileSearch, setFileSearch] = useState('');
   const [checkedFiles, setCheckedFiles] = useState<Set<string>>(new Set());
@@ -460,6 +461,7 @@ export function ReviewPane() {
   const refresh = async () => {
     if (!hasGitContext) return;
     setLoading(true);
+    setLoadError(false);
 
     // Fire git status refresh in parallel (don't await — it updates its own store)
     if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId);
@@ -521,6 +523,7 @@ export function ReviewPane() {
       }
     } else {
       console.error('Failed to load diff summary:', result.error);
+      setLoadError(true);
     }
     setLoading(false);
   };
@@ -570,6 +573,7 @@ export function ReviewPane() {
     setCheckedFiles(new Set());
     setFileSearch('');
     setHasRebaseConflict(false);
+    setLoadError(false);
     setSelectedAction('commit');
 
     // Restore commit title/body from draft store
@@ -1339,6 +1343,21 @@ export function ReviewPane() {
             <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
               <Loader2 className="h-3.5 w-3.5 animate-spin" />
               {t('review.loading', 'Loading changes\u2026')}
+            </div>
+          ) : loadError ? (
+            <div className="flex flex-col items-center gap-2 p-4 text-xs text-muted-foreground">
+              <AlertTriangle className="h-4 w-4 text-status-error" />
+              <p>{t('review.loadFailed', 'Failed to load changes')}</p>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={refresh}
+                className="mt-1 gap-1.5"
+                data-testid="review-retry"
+              >
+                <RotateCcw className="h-3 w-3" />
+                {t('common.retry', 'Retry')}
+              </Button>
             </div>
           ) : summaries.length === 0 ? (
             <p className="p-3 text-xs text-muted-foreground">{t('review.noChanges')}</p>

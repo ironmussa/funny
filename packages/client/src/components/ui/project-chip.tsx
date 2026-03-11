@@ -1,6 +1,24 @@
 import { cn } from '@/lib/utils';
 
-const DEFAULT_COLOR = '#3b82f6';
+const PALETTE = [
+  '#7CB9E8', // pastel blue
+  '#F4A4A4', // pastel red
+  '#A8D5A2', // pastel green
+  '#F9D98C', // pastel amber
+  '#C3A6E0', // pastel violet
+  '#F2A6C8', // pastel pink
+  '#89D4CF', // pastel teal
+  '#F9B97C', // pastel orange
+];
+
+/** Pick a deterministic color from the palette based on a string hash. */
+export function colorFromName(name: string): string {
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = (hash * 31 + name.charCodeAt(i)) | 0;
+  }
+  return PALETTE[Math.abs(hash) % PALETTE.length];
+}
 
 /** Parse a hex color (#RGB or #RRGGBB) into [r, g, b] (0-255). */
 function hexToRgb(hex: string): [number, number, number] {
@@ -34,7 +52,7 @@ interface ProjectChipProps {
 }
 
 export function ProjectChip({ name, color, size = 'default', className }: ProjectChipProps) {
-  const c = color || DEFAULT_COLOR;
+  const c = color || colorFromName(name);
   return (
     <span
       className={cn(

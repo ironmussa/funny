@@ -208,7 +208,7 @@ function RecommendedServerCard({
         size="sm"
         onClick={onInstall}
         disabled={installed || installing}
-        className="settings-btn-sm flex-shrink-0"
+        className="flex-shrink-0"
       >
         {installing ? (
           <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -437,7 +437,7 @@ export function McpServerSettings() {
             variant="ghost"
             size="sm"
             onClick={() => setShowAddForm(!showAddForm)}
-            className="settings-btn-sm px-2"
+            className="px-2"
           >
             {showAddForm ? (
               <ChevronUp className="mr-1 h-3 w-3" />
@@ -514,12 +514,7 @@ export function McpServerSettings() {
             )}
 
             <div className="flex justify-end">
-              <Button
-                size="sm"
-                onClick={handleAddCustom}
-                disabled={!addName || adding}
-                className="settings-btn-sm"
-              >
+              <Button size="sm" onClick={handleAddCustom} disabled={!addName || adding}>
                 {adding ? (
                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                 ) : (

@@ -106,6 +106,8 @@ export interface ThreadState {
   activeThread: ThreadWithMessages | null;
   /** Setup progress keyed by threadId — survives thread switches */
   setupProgressByThread: Record<string, import('@/components/GitProgressModal').GitProgressStep[]>;
+  /** Context usage keyed by threadId — survives thread switches */
+  contextUsageByThread: Record<string, ContextUsage>;
 
   loadThreadsForProject: (projectId: string) => Promise<void>;
   selectThread: (threadId: string | null) => Promise<void>;
@@ -234,6 +236,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   selectedThreadId: null,
   activeThread: null,
   setupProgressByThread: {},
+  contextUsageByThread: {},
 
   loadThreadsForProject: async (projectId: string) => {
     // Deduplicate concurrent loads for the same project
@@ -363,6 +366,9 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const storedSetupProgress =
       thread.status === 'setting_up' ? get().setupProgressByThread[threadId] : undefined;
 
+    // Restore cached context usage so the bar survives thread switches
+    const storedContextUsage = get().contextUsageByThread[threadId];
+
     set({
       activeThread: {
         ...thread,
@@ -373,6 +379,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         waitingReason,
         pendingPermission,
         setupProgress: storedSetupProgress,
+        contextUsage: storedContextUsage,
         compactionEvents: compactionEvents.length > 0 ? compactionEvents : undefined,
       },
     });

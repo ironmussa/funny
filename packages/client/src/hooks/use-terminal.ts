@@ -36,6 +36,9 @@ export function useTerminal({ id, cwd, containerRef }: UseTerminalOptions) {
     foreground: getCssVar('--foreground'),
     cursor: getCssVar('--foreground'),
     selectionBackground: getRawCssVar('--terminal-selection') || '#264f78',
+    scrollbarSliderBackground: `hsl(${getComputedStyle(document.documentElement).getPropertyValue('--muted-foreground').trim()} / 0.25)`,
+    scrollbarSliderHoverBackground: `hsl(${getComputedStyle(document.documentElement).getPropertyValue('--muted-foreground').trim()} / 0.4)`,
+    scrollbarSliderActiveBackground: `hsl(${getComputedStyle(document.documentElement).getPropertyValue('--muted-foreground').trim()} / 0.5)`,
     black: getRawCssVar('--terminal-black'),
     red: getRawCssVar('--terminal-red'),
     green: getRawCssVar('--terminal-green'),
@@ -72,6 +75,8 @@ export function useTerminal({ id, cwd, containerRef }: UseTerminalOptions) {
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
     terminal.open(containerRef.current);
+    // Re-apply theme after terminal is attached to DOM
+    terminal.options.theme = getTerminalTheme();
 
     // Small delay to let the container settle before first fit
     requestAnimationFrame(() => {

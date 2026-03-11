@@ -87,17 +87,20 @@ export function SearchablePicker({
     setHighlightIndex(-1);
   }, [search]);
 
-  // Scroll selected item into view when popover opens
+  // Re-measure virtualizer and scroll selected item into view when popover opens
   useEffect(() => {
-    if (open && !search) {
-      const selectedIndex = filtered.findIndex((item) => item.isSelected);
-      if (selectedIndex >= 0) {
-        requestAnimationFrame(() => {
-          rowVirtualizer.scrollToIndex(selectedIndex, { align: 'center' });
-        });
-      }
+    if (open) {
+      requestAnimationFrame(() => {
+        rowVirtualizer.measure();
+        if (!search) {
+          const selectedIndex = filtered.findIndex((item) => item.isSelected);
+          if (selectedIndex >= 0) {
+            rowVirtualizer.scrollToIndex(selectedIndex, { align: 'center' });
+          }
+        }
+      });
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only scroll into view on open
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-measure on open
   }, [open]);
 
   const scrollToIndex = useCallback(

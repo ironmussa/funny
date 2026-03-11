@@ -469,13 +469,13 @@ function UserMessageContent({ content }: { content: string }) {
         {content}
       </pre>
       {isOverflowing && !expanded && (
-        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-foreground to-transparent" />
+        <div className="pointer-events-none absolute bottom-6 left-0 right-0 h-10 bg-gradient-to-t from-foreground to-transparent" />
       )}
       {isOverflowing && (
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="mt-1 flex items-center gap-1 text-[11px] text-background/60 transition-colors hover:text-background/90"
+          className="mt-1 flex items-center gap-1 text-[11px] text-background font-medium transition-colors hover:text-background/80"
         >
           {expanded ? (
             <>
@@ -516,13 +516,18 @@ interface MemoizedMessageListHandle {
 }
 
 /** Custom comparator for MemoizedMessageList — avoids re-renders when only
- *  unrelated activeThread properties changed (status, cost, contextUsage, etc.). */
+ *  unrelated activeThread properties changed (cost, contextUsage, etc.).
+ *  NOTE: threadStatus IS included because tool cards like AskUserQuestion and
+ *  ExitPlanMode conditionally render the "Respond" button based on whether the
+ *  thread is in 'waiting' status. Without this, the button won't appear when
+ *  agent:status arrives after the tool_call event. */
 function messageListAreEqual(
   prev: {
     messages: any[];
     threadEvents?: any[];
     compactionEvents?: any[];
     threadId: string;
+    threadStatus?: string;
     knownIds: Set<string>;
     prefersReducedMotion: boolean | null;
     snapshotMap: Map<string, number>;
@@ -537,6 +542,7 @@ function messageListAreEqual(
     prev.threadEvents === next.threadEvents &&
     prev.compactionEvents === next.compactionEvents &&
     prev.threadId === next.threadId &&
+    prev.threadStatus === next.threadStatus &&
     prev.snapshotMap === next.snapshotMap &&
     prev.onSend === next.onSend &&
     prev.onOpenLightbox === next.onOpenLightbox &&
@@ -976,9 +982,7 @@ const MemoizedMessageList = memo(
                         ))}
                       </div>
                     )}
-                    <div className="line-clamp-2">
-                      <UserMessageContent content={cleanContent.trim()} />
-                    </div>
+                    <UserMessageContent content={cleanContent.trim()} />
                     <div className="mt-1.5 flex items-center justify-between">
                       <div className="flex gap-1">
                         {msg.model && (

@@ -339,7 +339,6 @@ function ProjectUrlPatterns({
         <Button
           variant="outline"
           size="sm"
-          className="settings-btn-sm"
           onClick={() => setUrls([...urls, ''])}
           data-testid="settings-url-pattern-add"
         >
@@ -546,7 +545,6 @@ function WeaveStatusSetting({ projectId }: { projectId: string }) {
           variant="outline"
           onClick={handleConfigure}
           disabled={configuring}
-          className="settings-btn-sm"
           data-testid="settings-weave-configure"
         >
           {configuring

@@ -1219,7 +1219,7 @@ export const PromptInput = memo(function PromptInput({
                     checked={createWorktree}
                     onCheckedChange={setCreateWorktree}
                     tabIndex={-1}
-                    className="h-4 w-7 data-[state=checked]:bg-primary data-[state=unchecked]:bg-input [&>span]:h-3 [&>span]:w-3 [&>span]:data-[state=checked]:translate-x-3"
+                    size="xs"
                   />
                   <span>{t('thread.mode.worktree')}</span>
                 </label>

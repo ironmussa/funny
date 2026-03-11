@@ -39,9 +39,18 @@ export interface PtyBackend {
 
   /**
    * Reattach to an existing session that survived a server restart.
-   * Only implemented by persistent backends (e.g. tmux).
+   * For tmux: reattaches to the tmux session.
+   * For headless-xterm: restores serialized terminal state and spawns a fresh PTY.
    */
-  reattach?(id: string, tmuxSession: string, cols: number, rows: number): void;
+  reattach?(
+    id: string,
+    tmuxSession: string,
+    cols: number,
+    rows: number,
+    restoredState?: string,
+    cwd?: string,
+    shell?: string,
+  ): void;
 
   /**
    * Detach all attach processes without killing the underlying sessions.

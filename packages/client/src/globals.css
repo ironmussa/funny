@@ -453,23 +453,23 @@
     --diff-added: 142 40% 45%;
     --diff-removed: 0 45% 55%;
 
-    /* Terminal ANSI — Monochrome Light */
+    /* Terminal ANSI — Monochrome Light (colorful terminal for readability) */
     --terminal-black: #000000;
-    --terminal-red: #4d4d4d;
-    --terminal-green: #333333;
-    --terminal-yellow: #5a5a5a;
-    --terminal-blue: #404040;
-    --terminal-magenta: #4d4d4d;
-    --terminal-cyan: #333333;
-    --terminal-white: #808080;
+    --terminal-red: #cd3131;
+    --terminal-green: #00bc00;
+    --terminal-yellow: #949800;
+    --terminal-blue: #0451a5;
+    --terminal-magenta: #bc05bc;
+    --terminal-cyan: #0598bc;
+    --terminal-white: #555555;
     --terminal-bright-black: #666666;
-    --terminal-bright-red: #333333;
-    --terminal-bright-green: #1a1a1a;
-    --terminal-bright-yellow: #4d4d4d;
-    --terminal-bright-blue: #2d2d2d;
-    --terminal-bright-magenta: #404040;
-    --terminal-bright-cyan: #262626;
-    --terminal-bright-white: #000000;
+    --terminal-bright-red: #cd3131;
+    --terminal-bright-green: #14ce14;
+    --terminal-bright-yellow: #e5e510;
+    --terminal-bright-blue: #0451a5;
+    --terminal-bright-magenta: #bc05bc;
+    --terminal-bright-cyan: #0598bc;
+    --terminal-bright-white: #a5a5a5;
     --terminal-selection: #cccccc;
   }
 
@@ -517,24 +517,24 @@
     --diff-added: 142 40% 45%;
     --diff-removed: 0 45% 55%;
 
-    /* Terminal ANSI — Monochrome Dark */
-    --terminal-black: #121212;
-    --terminal-red: #b3b3b3;
-    --terminal-green: #cccccc;
-    --terminal-yellow: #a6a6a6;
-    --terminal-blue: #bfbfbf;
-    --terminal-magenta: #b3b3b3;
-    --terminal-cyan: #cccccc;
-    --terminal-white: #ededed;
-    --terminal-bright-black: #666666;
-    --terminal-bright-red: #d9d9d9;
-    --terminal-bright-green: #e6e6e6;
-    --terminal-bright-yellow: #cccccc;
-    --terminal-bright-blue: #d9d9d9;
-    --terminal-bright-magenta: #d9d9d9;
-    --terminal-bright-cyan: #e6e6e6;
+    /* Terminal ANSI — Monochrome Dark (colorful terminal for readability) */
+    --terminal-black: #1a1a1a;
+    --terminal-red: #ef4444;
+    --terminal-green: #22c55e;
+    --terminal-yellow: #eab308;
+    --terminal-blue: #3b82f6;
+    --terminal-magenta: #a855f7;
+    --terminal-cyan: #06b6d4;
+    --terminal-white: #e8e8e8;
+    --terminal-bright-black: #6a6a6a;
+    --terminal-bright-red: #f87171;
+    --terminal-bright-green: #4ade80;
+    --terminal-bright-yellow: #facc15;
+    --terminal-bright-blue: #60a5fa;
+    --terminal-bright-magenta: #c084fc;
+    --terminal-bright-cyan: #22d3ee;
     --terminal-bright-white: #ffffff;
-    --terminal-selection: #333333;
+    --terminal-selection: #444444;
   }
 
   /* ── Catppuccin Mocha ─────────────────────────────────────── */
@@ -784,22 +784,33 @@
     padding: 0;
   }
 
+  /* Hide xterm's native viewport scrollbar — the custom VS Code-style scrollbar is used instead */
+  .xterm-viewport {
+    scrollbar-width: none; /* Firefox */
+  }
+
   .xterm-viewport::-webkit-scrollbar {
-    width: 6px;
+    display: none; /* Chrome/Safari/Edge */
   }
 
-  .xterm-viewport::-webkit-scrollbar-thumb {
-    background-color: transparent;
+  /* Make xterm's VS Code-style scrollbar thin (6px) to match the rest of the app */
+  .xterm .xterm-scrollable-element > .scrollbar > .slider {
     border-radius: 3px;
-    transition: background-color 0.2s;
   }
 
-  .xterm-viewport:hover::-webkit-scrollbar-thumb {
-    background-color: hsl(var(--muted-foreground) / 0.25);
+  .xterm .xterm-scrollable-element > .scrollbar.vertical {
+    width: 6px !important;
+    right: 0;
   }
 
-  .xterm-viewport::-webkit-scrollbar-thumb:hover {
-    background-color: hsl(var(--muted-foreground) / 0.4);
+  .xterm .xterm-scrollable-element > .scrollbar.vertical > .slider {
+    width: 6px !important;
+    left: 0 !important;
+  }
+
+  /* Remove the top shadow decoration from xterm scrollbar */
+  .xterm .xterm-scrollable-element > .shadow {
+    display: none !important;
   }
 }
 
@@ -870,11 +881,6 @@
     @apply h-auto py-1.5 text-sm;
   }
 
-  /* Small action button */
-  .settings-btn-sm {
-    @apply h-7 text-xs;
-  }
-
   /* Form label */
   .settings-label {
     @apply mb-1 block text-xs text-muted-foreground;
@@ -913,11 +919,11 @@
   align-items: center;
   gap: 0.25rem;
   border-radius: 0.25rem;
-  padding: 0.0625rem 0.375rem;
+  padding: 0 0.375rem;
   font-family: var(--font-mono);
   font-size: 0.75rem;
-  line-height: 1.25rem;
-  vertical-align: baseline;
+  line-height: 1.25;
+  vertical-align: middle;
   background: hsl(var(--muted) / 0.6);
   color: hsl(var(--foreground));
   white-space: nowrap;
@@ -928,8 +934,8 @@
 .tiptap-prompt-editor .file-mention::before {
   content: '';
   display: inline-block;
-  width: 0.875rem;
-  height: 0.875rem;
+  width: 0.75rem;
+  height: 0.75rem;
   flex-shrink: 0;
   background-color: currentColor;
   /* Lucide FolderOpen as mask so it inherits the text color */
@@ -949,11 +955,11 @@
   align-items: center;
   gap: 0.125rem;
   border-radius: 0.25rem;
-  padding: 0.0625rem 0.375rem;
+  padding: 0 0.375rem;
   font-family: var(--font-mono);
   font-size: 0.75rem;
-  line-height: 1.25rem;
-  vertical-align: baseline;
+  line-height: 1.25;
+  vertical-align: middle;
   background: hsl(var(--muted) / 0.6);
   color: hsl(var(--foreground));
   white-space: nowrap;
@@ -962,9 +968,7 @@
 }
 
 .tiptap-prompt-editor .slash-command::before {
-  content: '/';
-  font-weight: 600;
-  opacity: 0.5;
+  content: '';
 }
 
 @layer utilities {

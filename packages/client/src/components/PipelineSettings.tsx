@@ -176,6 +176,7 @@ export function PipelineSettings() {
             checked={!!pipeline.precommitFixEnabled}
             onCheckedChange={(v) => saveField({ precommitFixEnabled: v })}
             data-testid="pipeline-precommit-toggle"
+            size="xs"
           />
         </div>
         {!!pipeline.precommitFixEnabled && (
@@ -217,6 +218,7 @@ export function PipelineSettings() {
             checked={!!pipeline.enabled}
             onCheckedChange={(v) => saveField({ enabled: v })}
             data-testid="pipeline-review-toggle"
+            size="xs"
           />
         </div>
         {!!pipeline.enabled && (

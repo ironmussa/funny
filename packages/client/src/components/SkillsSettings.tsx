@@ -120,7 +120,7 @@ function RecommendedSkillCard({
         size="sm"
         onClick={onInstall}
         disabled={installed || installing}
-        className="settings-btn-sm flex-shrink-0"
+        className="flex-shrink-0"
       >
         {installing ? (
           <Loader2 className="mr-1 h-3 w-3 animate-spin" />
@@ -355,7 +355,7 @@ export function SkillsSettings() {
             variant="ghost"
             size="sm"
             onClick={() => setShowCustom(!showCustom)}
-            className="settings-btn-sm px-2"
+            className="px-2"
           >
             {showCustom ? (
               <ChevronUp className="mr-1 h-3 w-3" />

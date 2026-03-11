@@ -148,7 +148,7 @@ export function StartupCommandsSettings() {
         <Button
           variant="outline"
           size="sm"
-          className="settings-btn-sm gap-1.5"
+          className="gap-1.5"
           onClick={() => {
             cancelEdit();
             setAdding(true);
@@ -202,11 +202,11 @@ export function StartupCommandsSettings() {
                 </div>
               </div>
               <div className="flex items-center justify-end gap-2 pt-1">
-                <Button variant="ghost" size="sm" className="settings-btn-sm" onClick={cancelEdit}>
+                <Button variant="ghost" size="sm" onClick={cancelEdit}>
                   <X className="mr-1 h-3.5 w-3.5" />
                   {t('common.cancel')}
                 </Button>
-                <Button size="sm" className="settings-btn-sm" onClick={() => handleUpdate(cmd.id)}>
+                <Button size="sm" onClick={() => handleUpdate(cmd.id)}>
                   <Check className="mr-1 h-3.5 w-3.5" />
                   {t('common.save')}
                 </Button>
@@ -321,11 +321,11 @@ export function StartupCommandsSettings() {
             </div>
           </div>
           <div className="flex items-center justify-end gap-2 pt-1">
-            <Button variant="ghost" size="sm" className="settings-btn-sm" onClick={cancelEdit}>
+            <Button variant="ghost" size="sm" onClick={cancelEdit}>
               <X className="mr-1 h-3.5 w-3.5" />
               {t('common.cancel')}
             </Button>
-            <Button size="sm" className="settings-btn-sm" onClick={handleAdd}>
+            <Button size="sm" onClick={handleAdd}>
               <Check className="mr-1 h-3.5 w-3.5" />
               {t('startup.addCommand')}
             </Button>

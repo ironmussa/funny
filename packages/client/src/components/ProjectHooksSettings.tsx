@@ -182,7 +182,7 @@ function HookItem({
                 checked={hook.enabled}
                 onCheckedChange={() => onToggleEnabled(hook)}
                 data-testid={`hook-toggle-${key}`}
-                className=""
+                size="xs"
               />
             </div>
           </TooltipTrigger>
@@ -404,7 +404,7 @@ export function ProjectHooksSettings() {
         <Button
           variant="outline"
           size="sm"
-          className="settings-btn-sm gap-1.5"
+          className="gap-1.5"
           data-testid="hooks-add"
           onClick={() => {
             cancelEdit();
@@ -473,20 +473,11 @@ export function ProjectHooksSettings() {
                     />
                   </div>
                   <div className="flex items-center justify-end gap-2 pt-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="settings-btn-sm"
-                      onClick={cancelEdit}
-                    >
+                    <Button variant="ghost" size="sm" onClick={cancelEdit}>
                       <X className="mr-1 h-3.5 w-3.5" />
                       {t('common.cancel')}
                     </Button>
-                    <Button
-                      size="sm"
-                      className="settings-btn-sm"
-                      onClick={() => handleUpdate(hook)}
-                    >
+                    <Button size="sm" onClick={() => handleUpdate(hook)}>
                       <Check className="mr-1 h-3.5 w-3.5" />
                       {t('common.save')}
                     </Button>
@@ -543,11 +534,11 @@ export function ProjectHooksSettings() {
             <ShellEditor value={command} onChange={setCommand} testId="hooks-command-input" />
           </div>
           <div className="flex items-center justify-end gap-2 pt-1">
-            <Button variant="ghost" size="sm" className="settings-btn-sm" onClick={cancelEdit}>
+            <Button variant="ghost" size="sm" onClick={cancelEdit}>
               <X className="mr-1 h-3.5 w-3.5" />
               {t('common.cancel')}
             </Button>
-            <Button size="sm" className="settings-btn-sm" onClick={handleAdd}>
+            <Button size="sm" onClick={handleAdd}>
               <Check className="mr-1 h-3.5 w-3.5" />
               {t('hooks.addHook')}
             </Button>

@@ -773,6 +773,12 @@ const migrations: Migration[] = [
       await addColumn('pty_sessions', 'label', 'TEXT');
     },
   },
+  {
+    name: '039_pty_sessions_terminal_state',
+    async up() {
+      await addColumn('pty_sessions', 'terminal_state', 'TEXT');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

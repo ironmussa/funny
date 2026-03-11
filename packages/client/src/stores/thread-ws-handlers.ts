@@ -535,22 +535,25 @@ export function handleWSContextUsage(
   threadId: string,
   data: { inputTokens: number; outputTokens: number; cumulativeInputTokens: number },
 ): void {
-  const { activeThread, selectedThreadId } = get();
-  if (activeThread?.id !== threadId) {
-    if (selectedThreadId === threadId) bufferWSEvent(threadId, 'context_usage', data);
-    return;
+  const { activeThread, selectedThreadId, contextUsageByThread } = get();
+  const usage = {
+    cumulativeInputTokens: data.cumulativeInputTokens,
+    lastInputTokens: data.inputTokens,
+    lastOutputTokens: data.outputTokens,
+  };
+
+  // Always persist to the map so it survives thread switches
+  const updates: Partial<import('./thread-store').ThreadState> = {
+    contextUsageByThread: { ...contextUsageByThread, [threadId]: usage },
+  };
+
+  if (activeThread?.id === threadId) {
+    updates.activeThread = { ...activeThread, contextUsage: usage };
+  } else if (selectedThreadId === threadId) {
+    bufferWSEvent(threadId, 'context_usage', data);
   }
 
-  set({
-    activeThread: {
-      ...activeThread,
-      contextUsage: {
-        cumulativeInputTokens: data.cumulativeInputTokens,
-        lastInputTokens: data.inputTokens,
-        lastOutputTokens: data.outputTokens,
-      },
-    },
-  });
+  set(updates as any);
 }
 
 // ── Toast helper ────────────────────────────────────────────────

@@ -171,12 +171,7 @@ export function AutomationSettings() {
     <div className="space-y-4">
       {/* Header */}
       <div className="flex items-center justify-end">
-        <Button
-          variant="outline"
-          size="sm"
-          className="settings-btn-sm gap-1.5"
-          onClick={openCreateDialog}
-        >
+        <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
           <Plus className="h-3.5 w-3.5" />
           Create
         </Button>

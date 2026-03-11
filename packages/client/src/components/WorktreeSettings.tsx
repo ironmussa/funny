@@ -191,7 +191,7 @@ export function WorktreeSettings() {
             variant="ghost"
             size="sm"
             onClick={() => setShowCreate(!showCreate)}
-            className="h-6 px-2 text-xs"
+            className="px-2"
           >
             {showCreate ? (
               <ChevronUp className="mr-1 h-3 w-3" />
@@ -245,7 +245,7 @@ export function WorktreeSettings() {
                 size="sm"
                 onClick={handleCreate}
                 disabled={!branchName.trim() || creating}
-                className="h-8 w-full text-xs"
+                className="w-full"
               >
                 {creating ? (
                   <Loader2 className="mr-1 h-3 w-3 animate-spin" />

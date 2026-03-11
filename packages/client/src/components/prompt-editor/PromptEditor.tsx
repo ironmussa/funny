@@ -498,6 +498,16 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       // Slash commands (/ trigger)
       Mention.extend({
         name: 'slashCommand',
+        renderHTML({ node, HTMLAttributes }) {
+          return [
+            'span',
+            {
+              ...HTMLAttributes,
+              class: 'slash-command',
+            },
+            node.attrs.label || node.attrs.id,
+          ];
+        },
       }).configure({
         HTMLAttributes: { class: 'slash-command' },
         suggestion: slashSuggestion(),

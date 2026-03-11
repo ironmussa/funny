@@ -39,6 +39,9 @@ function getTerminalTheme() {
     foreground: getCssVar('--foreground'),
     cursor: getCssVar('--foreground'),
     selectionBackground: getRawCssVar('--terminal-selection') || '#264f78',
+    scrollbarSliderBackground: `hsl(${getComputedStyle(document.documentElement).getPropertyValue('--muted-foreground').trim()} / 0.25)`,
+    scrollbarSliderHoverBackground: `hsl(${getComputedStyle(document.documentElement).getPropertyValue('--muted-foreground').trim()} / 0.4)`,
+    scrollbarSliderActiveBackground: `hsl(${getComputedStyle(document.documentElement).getPropertyValue('--muted-foreground').trim()} / 0.5)`,
     black: getRawCssVar('--terminal-black'),
     red: getRawCssVar('--terminal-red'),
     green: getRawCssVar('--terminal-green'),
@@ -58,15 +61,22 @@ function getTerminalTheme() {
   };
 }
 
-/** Watch for theme changes on <html> class and call back with updated xterm theme. */
+/** Watch for theme changes on <html> class and call back with updated xterm theme.
+ *  Also applies the theme immediately on mount to catch any race with CSS loading. */
 function useThemeSync(termRef: React.RefObject<{ terminal: any } | null>) {
   useEffect(() => {
-    const observer = new MutationObserver(() => {
+    const applyTheme = () => {
       if (termRef.current?.terminal) {
         termRef.current.terminal.options.theme = getTerminalTheme();
       }
+    };
+    // Apply immediately in case terminal was created before CSS vars were ready
+    applyTheme();
+    const observer = new MutationObserver(applyTheme);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'style'],
     });
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class'] });
     return () => observer.disconnect();
   }, [termRef]);
 }
@@ -116,6 +126,8 @@ function TauriTerminalTabContent({
       terminal.loadAddon(webLinksAddon);
       terminal.open(containerRef.current);
       termRef.current = { terminal, fitAddon };
+      // Re-apply theme after terminal is attached to DOM
+      terminal.options.theme = getTerminalTheme();
       requestAnimationFrame(() => fitAddon.fit());
 
       const { invoke } = await import('@tauri-apps/api/core');
@@ -242,6 +254,10 @@ function WebTerminalTabContent({
       terminal.open(containerRef.current);
       termRef.current = { terminal, fitAddon };
 
+      // Re-apply theme after terminal is attached to DOM, in case CSS vars
+      // weren't computed yet when the Terminal was constructed.
+      terminal.options.theme = getTerminalTheme();
+
       // Wait for the terminal to settle dimensions before spawning the PTY.
       // Without this, the shell starts outputting before xterm.js has correct
       // dimensions, causing garbled characters on initial render.
@@ -318,12 +334,26 @@ function WebTerminalTabContent({
   // Separate effect for spawn/restore decision — waits for sessionsChecked
   // so that tabs loaded from localStorage don't prematurely spawn a new PTY
   // before the server confirms whether the session still exists.
+  // Also waits for panelVisible so we don't propose dimensions while the
+  // container is hidden/collapsed (which yields tiny values like 11x6).
   useEffect(() => {
     if (spawnedRef.current) return;
     if (!termReady || !termRef.current) return;
+    // Don't spawn while the panel is hidden — dimensions will be wrong
+    if (!panelVisible) return;
 
     const { fitAddon } = termRef.current;
+    // Re-fit now that the panel is visible, then read correct dimensions
+    fitAddon.fit();
     const dims = fitAddon.proposeDimensions();
+
+    // Guard against unreasonably small dimensions (container still animating)
+    const cols = dims?.cols ?? 80;
+    const rows = dims?.rows ?? 24;
+    const MIN_COLS = 20;
+    const MIN_ROWS = 4;
+    if (cols < MIN_COLS || rows < MIN_ROWS) return;
+
     const ws = getActiveWS();
 
     if (restored) {
@@ -334,7 +364,7 @@ function WebTerminalTabContent({
         ws.send(
           JSON.stringify({
             type: 'pty:resize',
-            data: { id, cols: dims?.cols ?? 80, rows: dims?.rows ?? 24 },
+            data: { id, cols, rows },
           }),
         );
         ws.send(JSON.stringify({ type: 'pty:restore', data: { id } }));
@@ -353,31 +383,61 @@ function WebTerminalTabContent({
               cwd,
               projectId,
               label,
-              rows: dims?.rows ?? 24,
-              cols: dims?.cols ?? 80,
+              rows,
+              cols,
               ...(shell !== 'default' && { shell }),
             },
           }),
         );
       }
     }
-  }, [termReady, restored, sessionsChecked, wasAliveOnMount, id, cwd, projectId, label, shell]);
+  }, [
+    termReady,
+    panelVisible,
+    restored,
+    sessionsChecked,
+    wasAliveOnMount,
+    id,
+    cwd,
+    projectId,
+    label,
+    shell,
+  ]);
 
   useEffect(() => {
     if (active && panelVisible && termRef.current) {
       const { terminal, fitAddon } = termRef.current;
-      requestAnimationFrame(() => {
+      // Wait for the panel expand animation (200ms) to finish, then fit.
+      // This ensures we measure the final container size, not a mid-animation value.
+      const timer = setTimeout(() => {
+        // Re-sync xterm theme with current CSS variables
+        terminal.options.theme = getTerminalTheme();
         fitAddon.fit();
+        // Force-send a resize in case fit() didn't trigger onResize
+        // (e.g. when dimensions match the stale cached value in xterm).
+        const dims = fitAddon.proposeDimensions();
+        if (dims && dims.cols > 0 && dims.rows > 0) {
+          const ws = getActiveWS();
+          if (ws && ws.readyState === WebSocket.OPEN) {
+            ws.send(
+              JSON.stringify({
+                type: 'pty:resize',
+                data: { id, cols: dims.cols, rows: dims.rows },
+              }),
+            );
+          }
+        }
         terminal.refresh(0, terminal.rows - 1);
         terminal.focus();
-      });
+      }, 220);
+      return () => clearTimeout(timer);
     }
-  }, [active, panelVisible]);
+  }, [active, panelVisible, id]);
 
   const { t } = useTranslation();
 
   return (
-    <div className={cn('relative w-full h-full', !active && 'hidden')}>
+    <div className={cn('relative w-full h-full ', !active && 'hidden')}>
       <div ref={containerRef} className="h-full w-full bg-background" />
       {tabError ? (
         <div className="absolute inset-0 flex items-center justify-center bg-background">
@@ -677,13 +737,13 @@ export function TerminalPanel() {
         </div>
 
         {/* Terminal content area */}
-        <div className="min-h-0 flex-1 overflow-hidden bg-background">
+        <div className="min-h-0 flex-1 overflow-hidden bg-background m-2">
           {visibleTabs.length === 0 ? (
             <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
               {t('terminal.noProcesses')}
             </div>
           ) : (
-            tabs.map((tab) =>
+            visibleTabs.map((tab) =>
               tab.commandId ? (
                 <CommandTabContent
                   key={tab.id}

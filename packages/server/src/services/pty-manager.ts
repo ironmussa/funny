@@ -6,8 +6,8 @@
  * @domain depends: WSBroker, ShutdownManager
  *
  * Manages interactive PTY sessions. Selects the best backend at startup:
- *   0. tmux (persistent — sessions survive restarts)
- *   1. Bun native terminal (Linux/macOS — zero dependencies)
+ *   0. Headless xterm.js (Linux/macOS — full state tracking via @xterm/headless)
+ *   1. Bun native terminal (Linux/macOS — zero dependencies, fallback)
  *   2. node-pty via helper process (Windows — requires node-pty package)
  *   3. Null fallback (reports error to client)
  */
@@ -20,22 +20,27 @@ import { wsBroker } from './ws-broker.js';
 // ── Backend selection ───────────────────────────────────────────────
 
 function selectBackend(): PtyBackend {
-  // 0. Try tmux (persistent sessions across restarts)
+  // 0. Try headless xterm.js backend (POSIX only) — preferred because it
+  //    keeps full terminal state (scrollback, colors, cursor) in memory via
+  //    @xterm/headless + @xterm/addon-serialize for perfect reconnect restore.
   if (process.platform !== 'win32') {
     try {
-      const { TmuxPtyBackend } =
-        require('./pty-backend-tmux.js') as typeof import('./pty-backend-tmux.js');
-      const backend = new TmuxPtyBackend();
+      const { HeadlessPtyBackend } =
+        require('./pty-backend-headless.js') as typeof import('./pty-backend-headless.js');
+      const backend = new HeadlessPtyBackend();
       if (backend.available) {
-        log.info('PTY backend selected: tmux (persistent)', { namespace: 'pty-manager' });
+        log.info('PTY backend selected: headless-xterm', { namespace: 'pty-manager' });
         return backend;
       }
-    } catch {
-      // tmux not available
+    } catch (err: any) {
+      log.warn('Headless xterm backend failed to load, falling back', {
+        namespace: 'pty-manager',
+        error: err?.message,
+      });
     }
   }
 
-  // 1. Try Bun native (POSIX only)
+  // 1. Try Bun native (POSIX only) — fallback without headless state tracking
   if (process.platform !== 'win32') {
     const { BunPtyBackend } =
       require('./pty-backend-bun.js') as typeof import('./pty-backend-bun.js');
@@ -202,13 +207,14 @@ function savePtySession(
   shell: string | undefined,
   cols: number,
   rows: number,
+  terminalState?: string | null,
 ): void {
   if (!sqlite) return;
   try {
     sqlite
       .prepare(
-        `INSERT OR REPLACE INTO pty_sessions (id, tmux_session, user_id, cwd, project_id, label, shell, cols, rows, created_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT OR REPLACE INTO pty_sessions (id, tmux_session, user_id, cwd, project_id, label, shell, cols, rows, terminal_state, created_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -220,6 +226,7 @@ function savePtySession(
         shell ?? null,
         cols,
         rows,
+        terminalState ?? null,
         new Date().toISOString(),
       );
   } catch (err: any) {
@@ -252,6 +259,7 @@ interface PtySessionRow {
   shell: string | null;
   cols: number;
   rows: number;
+  terminal_state: string | null;
 }
 
 function loadPtySessions(): PtySessionRow[] {
@@ -295,7 +303,26 @@ export function spawnPty(
   label?: string,
 ): void {
   if (activeSessions.has(id)) {
-    log.info('PTY already spawned, skipping spawn', { namespace: 'pty-manager', ptyId: id });
+    log.info('PTY already spawned — sending restore instead', {
+      namespace: 'pty-manager',
+      ptyId: id,
+    });
+    // The client tried to spawn but the session already exists (e.g. browser refresh).
+    // Auto-restore: send the serialized terminal content back to the client.
+    const content = capturePane(id);
+    if (content) {
+      const session = activeSessions.get(id)!;
+      const event = {
+        type: 'pty:data' as const,
+        threadId: '',
+        data: { ptyId: id, data: content },
+      };
+      if (session.userId && session.userId !== '__local__') {
+        wsBroker.emitToUser(session.userId, event);
+      } else {
+        wsBroker.emit(event);
+      }
+    }
     return;
   }
 
@@ -363,27 +390,15 @@ export function killAllPtys(): void {
 export function listActiveSessions(
   userId: string,
 ): Array<{ ptyId: string; cwd: string; projectId?: string; label?: string; shell?: string }> {
-  if (backend.persistent) {
-    const rows = loadPtySessionsForUser(userId);
-    return rows.map((r) => ({
-      ptyId: r.id,
-      cwd: r.cwd,
-      projectId: r.project_id ?? undefined,
-      label: r.label ?? undefined,
-      shell: r.shell ?? undefined,
-    }));
-  }
-  // Non-persistent backend: return in-memory sessions
-  const result: Array<{
-    ptyId: string;
-    cwd: string;
-    projectId?: string;
-    label?: string;
-    shell?: string;
-  }> = [];
+  // Always include in-memory sessions (running PTYs)
+  const result = new Map<
+    string,
+    { ptyId: string; cwd: string; projectId?: string; label?: string; shell?: string }
+  >();
+
   for (const [id, meta] of activeSessions) {
     if (meta.userId === userId) {
-      result.push({
+      result.set(id, {
         ptyId: id,
         cwd: meta.cwd,
         projectId: meta.projectId,
@@ -392,12 +407,30 @@ export function listActiveSessions(
       });
     }
   }
-  return result;
+
+  // For persistent backends, also include DB sessions (e.g. restored after server restart)
+  if (backend.persistent) {
+    const rows = loadPtySessionsForUser(userId);
+    for (const r of rows) {
+      if (!result.has(r.id)) {
+        result.set(r.id, {
+          ptyId: r.id,
+          cwd: r.cwd,
+          projectId: r.project_id ?? undefined,
+          label: r.label ?? undefined,
+          shell: r.shell ?? undefined,
+        });
+      }
+    }
+  }
+
+  return Array.from(result.values());
 }
 
 /**
  * Reattach to all persisted PTY sessions on server startup.
- * Only works when the tmux backend is active.
+ * For tmux: reattaches to existing tmux sessions.
+ * For headless-xterm: restores serialized terminal state and spawns fresh PTYs.
  */
 export function reattachSessions(): void {
   if (!backend.persistent || !backend.reattach) {
@@ -425,7 +458,15 @@ export function reattachSessions(): void {
       shell: row.shell ?? undefined,
     });
 
-    backend.reattach(row.id, row.tmux_session, row.cols, row.rows);
+    backend.reattach(
+      row.id,
+      row.tmux_session,
+      row.cols,
+      row.rows,
+      row.terminal_state ?? undefined,
+      row.cwd,
+      row.shell ?? undefined,
+    );
   }
 }
 
@@ -436,11 +477,35 @@ export const isPersistent = backend.persistent ?? false;
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 
 if (backend.persistent && backend.detachAll) {
-  // Persistent backend: detach attach processes but keep tmux sessions alive
+  // Persistent backend: serialize terminal state to DB, then detach/kill processes
   const detachAll = backend.detachAll.bind(backend);
   shutdownManager.register(
     'pty-manager',
     () => {
+      // For headless-xterm: serialize all terminal states to DB before killing
+      if ('serializeAll' in backend && typeof (backend as any).serializeAll === 'function') {
+        const states = (backend as any).serializeAll() as Map<string, string>;
+        for (const [id, state] of states) {
+          const meta = activeSessions.get(id);
+          if (meta) {
+            savePtySession(
+              id,
+              meta.tmuxSession ?? `headless-${id}`,
+              meta.userId,
+              meta.cwd,
+              meta.projectId,
+              meta.label,
+              meta.shell,
+              80, // cols — will be resized on reconnect
+              24, // rows
+              state,
+            );
+          }
+        }
+        log.info(`Serialized ${states.size} terminal session(s) to DB`, {
+          namespace: 'pty-manager',
+        });
+      }
       detachAll();
       activeSessions.clear();
     },

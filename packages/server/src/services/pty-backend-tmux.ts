@@ -17,17 +17,6 @@ import { detectShells } from './shell-detector.js';
 
 const TMUX_PREFIX = 'funny-';
 
-/**
- * Regex to strip alternate-screen enter/exit escape sequences.
- * tmux attach sends these to switch the outer terminal into alt-screen mode,
- * which disables xterm.js native scrollback.  By filtering them out, xterm.js
- * keeps its own scrollback buffer and mouse-wheel scrolling works normally.
- *
- * Matches: \e[?1049h, \e[?1049l, \e[?1047h, \e[?1047l, \e[?47h, \e[?47l
- */
-// eslint-disable-next-line no-control-regex
-const ALT_SCREEN_RE = /\x1b\[\?(?:1049|1047|47)[hl]/g;
-
 interface TmuxSession {
   /** The attach process that pipes tmux output to our callbacks */
   attachProc: Subprocess;
@@ -131,6 +120,10 @@ export class TmuxPtyBackend implements PtyBackend {
         Bun.spawnSync([this.tmuxPath, 'set-option', '-t', tmuxName, 'history-limit', '10000']);
         // Hide the tmux status bar — the app has its own tab UI.
         Bun.spawnSync([this.tmuxPath, 'set-option', '-t', tmuxName, 'status', 'off']);
+        // Disable mouse mode — let xterm.js handle scrollback natively.
+        // Without this, tmux intercepts mouse-wheel events and scrolls its
+        // own internal buffer instead of letting xterm.js scroll.
+        Bun.spawnSync([this.tmuxPath, 'set-option', '-t', tmuxName, 'mouse', 'off']);
       }
 
       // Verify the session was registered before attempting to attach
@@ -172,9 +165,10 @@ export class TmuxPtyBackend implements PtyBackend {
         return;
       }
 
-      // Ensure history-limit and status bar are configured for reattached sessions.
+      // Ensure session options are configured for reattached sessions.
       Bun.spawnSync([this.tmuxPath, 'set-option', '-t', tmuxSession, 'history-limit', '10000']);
       Bun.spawnSync([this.tmuxPath, 'set-option', '-t', tmuxSession, 'status', 'off']);
+      Bun.spawnSync([this.tmuxPath, 'set-option', '-t', tmuxSession, 'mouse', 'off']);
 
       this.attachToSession(id, tmuxSession, cols, rows);
       log.info('Reattached to tmux session', {
@@ -284,8 +278,9 @@ export class TmuxPtyBackend implements PtyBackend {
 
     try {
       // Capture the full scrollback history plus visible pane content.
-      // -p prints to stdout, -e includes escape sequences, -t targets the session.
-      // -S - starts from the beginning of the scrollback buffer.
+      // -p prints to stdout, -e includes escape sequences (colors etc.),
+      // -t targets the session, -S - starts from the beginning of the
+      // scrollback buffer.
       const result = Bun.spawnSync([
         this.tmuxPath,
         'capture-pane',
@@ -341,13 +336,7 @@ export class TmuxPtyBackend implements PtyBackend {
         cols: cols || 80,
         rows: rows || 24,
         data(_terminal, data) {
-          // Strip alternate-screen sequences so xterm.js keeps its
-          // native scrollback buffer instead of switching to alt-screen.
-          const raw = data.toString();
-          const filtered = raw.replace(ALT_SCREEN_RE, '');
-          if (filtered.length > 0) {
-            callbacks.onData(id, filtered);
-          }
+          callbacks.onData(id, data.toString());
         },
         exit(_terminal, exitCode) {
           if (isShuttingDown()) return;

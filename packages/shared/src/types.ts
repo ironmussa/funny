@@ -77,6 +77,7 @@ export interface UserProfile {
   gitName: string | null;
   gitEmail: string | null;
   hasGithubToken: boolean;
+  hasAssemblyaiKey: boolean;
   setupCompleted: boolean;
   defaultEditor: string | null;
   useInternalEditor: boolean | null;
@@ -91,6 +92,7 @@ export interface UpdateProfileRequest {
   gitName?: string;
   gitEmail?: string;
   githubToken?: string | null;
+  assemblyaiApiKey?: string | null;
   setupCompleted?: boolean;
   defaultEditor?: string;
   useInternalEditor?: boolean;

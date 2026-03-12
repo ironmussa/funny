@@ -790,6 +790,74 @@ const migrations: Migration[] = [
       await addColumn('pipelines', 'test_fixer_prompt', 'TEXT');
     },
   },
+  {
+    name: '041_runners',
+    async up() {
+      await exec(sql`
+        CREATE TABLE IF NOT EXISTS runners (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          hostname TEXT NOT NULL,
+          token TEXT NOT NULL UNIQUE,
+          status TEXT NOT NULL DEFAULT 'offline',
+          project_paths TEXT NOT NULL DEFAULT '[]',
+          active_thread_ids TEXT NOT NULL DEFAULT '[]',
+          registered_at TEXT NOT NULL,
+          last_heartbeat_at TEXT NOT NULL
+        )
+      `);
+
+      await exec(sql`
+        CREATE TABLE IF NOT EXISTS runner_tasks (
+          id TEXT PRIMARY KEY,
+          runner_id TEXT NOT NULL REFERENCES runners(id) ON DELETE CASCADE,
+          type TEXT NOT NULL,
+          thread_id TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          result_data TEXT,
+          result_error TEXT,
+          created_at TEXT NOT NULL,
+          completed_at TEXT
+        )
+      `);
+
+      await exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_runner_tasks_runner_status
+        ON runner_tasks (runner_id, status)
+      `);
+    },
+  },
+  {
+    name: '042_runner_project_assignments',
+    async up() {
+      // Replace project_paths with os + workspace on runners table
+      await addColumn('runners', 'os', 'TEXT NOT NULL', "'unknown'");
+      await addColumn('runners', 'workspace', 'TEXT');
+
+      // Create assignment table: admin assigns projects to runners with local paths
+      await exec(sql`
+        CREATE TABLE IF NOT EXISTS runner_project_assignments (
+          runner_id TEXT NOT NULL REFERENCES runners(id) ON DELETE CASCADE,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          local_path TEXT NOT NULL,
+          assigned_at TEXT NOT NULL,
+          PRIMARY KEY (runner_id, project_id)
+        )
+      `);
+
+      await exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_runner_assignments_project
+        ON runner_project_assignments (project_id)
+      `);
+    },
+  },
+  {
+    name: '043_assemblyai_api_key',
+    async up() {
+      await addColumn('user_profiles', 'assemblyai_api_key', 'TEXT');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

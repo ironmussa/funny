@@ -41,6 +41,8 @@ export interface PromptEditorHandle {
   isEmpty(): boolean;
   /** Insert a file mention node at the current cursor position */
   insertFileMention(path: string, fileType: 'file' | 'folder'): void;
+  /** Insert plain text at the current cursor position */
+  insertText(text: string): void;
 }
 
 interface PromptEditorProps {
@@ -610,6 +612,10 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
             { type: 'text', text: ' ' },
           ])
           .run();
+      },
+      insertText: (text: string) => {
+        if (!editor) return;
+        editor.chain().focus().insertContent(text).run();
       },
     }),
     [editor],

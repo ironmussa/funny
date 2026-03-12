@@ -56,6 +56,7 @@ import { pipelineRoutes } from './routes/pipelines.js';
 import pluginRoutes from './routes/plugins.js';
 import { profileRoutes } from './routes/profile.js';
 import { projectRoutes } from './routes/projects.js';
+import { runnerRoutes } from './routes/runners.js';
 import { settingsRoutes } from './routes/settings.js';
 import skillsRoutes from './routes/skills.js';
 import { teamProjectRoutes } from './routes/team-projects.js';
@@ -73,12 +74,14 @@ import { startExternalThreadSweep } from './services/ingest-mapper.js';
 import * as mq from './services/message-queue.js';
 import * as pm from './services/project-manager.js';
 import * as ptyManager from './services/pty-manager.js';
+import * as runnerMgr from './services/runner-manager.js';
 import { saveThreadEvent } from './services/thread-event-service.js';
 import {
   markStaleThreadsInterrupted,
   markStaleExternalThreadsStopped,
 } from './services/thread-manager.js';
 import * as tm from './services/thread-manager.js';
+import { handleTranscribeWs } from './services/transcribe-stream.js';
 import { wsBroker } from './services/ws-broker.js';
 import { resetBinaryCache } from './utils/claude-binary.js';
 import {
@@ -233,6 +236,7 @@ app.route('/api/team-projects', teamProjectRoutes);
 app.route('/api/team-settings', teamSettingsRoutes);
 app.route('/api/tests', testRoutes);
 app.route('/api/projects', memoryRoutes);
+app.route('/api/runners', runnerRoutes);
 
 // Serve static files from client build (only if dist exists)
 if (existsSync(clientDistDir)) {
@@ -329,6 +333,29 @@ const server = Bun.serve({
   async fetch(req: Request, server: any) {
     // Handle WebSocket upgrade
     const url = new URL(req.url);
+    // Runner WebSocket — local runners connect here to stream agent events
+    if (url.pathname === '/ws/runner') {
+      if (server.upgrade(req, { data: { isRunner: true } })) return;
+      return new Response('WebSocket upgrade failed', { status: 400 });
+    }
+    // Transcription WebSocket — real-time speech-to-text via AssemblyAI
+    if (url.pathname === '/ws/transcribe') {
+      let userId = '__local__';
+      if (authMode === 'local') {
+        const token = url.searchParams.get('token');
+        if (!token || !validateToken(token)) {
+          return new Response('Unauthorized', { status: 401 });
+        }
+      } else {
+        const { auth } = await import('./lib/auth.js');
+        const session = await auth.api.getSession({ headers: req.headers });
+        if (!session) return new Response('Unauthorized', { status: 401 });
+        userId = session.user.id;
+      }
+      if (server.upgrade(req, { data: { isTranscribe: true, userId } })) return;
+      return new Response('WebSocket upgrade failed', { status: 400 });
+    }
+    // Browser WebSocket — UI clients connect here
     if (url.pathname === '/ws') {
       if (authMode === 'local') {
         // Local mode: validate token from query param
@@ -354,17 +381,93 @@ const server = Bun.serve({
   },
   websocket: {
     open(ws: any) {
+      if (ws.data?.isTranscribe) {
+        handleTranscribeWs(ws, ws.data.userId);
+        return;
+      }
+      if (ws.data?.isRunner) {
+        // Runner connection — don't add to normal client pool
+        return;
+      }
       const userId = ws.data?.userId ?? '__local__';
       const organizationId = ws.data?.organizationId ?? null;
       wsBroker.addClient(ws, userId, organizationId);
     },
     close(ws: any) {
+      if (ws.data?.isTranscribe) {
+        // Close the upstream AssemblyAI WebSocket
+        const assemblyWs = ws.data?.assemblyWs;
+        if (assemblyWs && assemblyWs.readyState === 1 /* OPEN */) {
+          try {
+            assemblyWs.send(JSON.stringify({ type: 'Terminate' }));
+          } catch {}
+          assemblyWs.close();
+        }
+        return;
+      }
+      if (ws.data?.isRunner) {
+        // Runner disconnected
+        const runnerId = ws.data?.runnerId;
+        if (runnerId) {
+          log.info('Runner WebSocket disconnected', { namespace: 'runner', runnerId });
+        }
+        return;
+      }
       wsBroker.removeClient(ws);
     },
     async message(ws: any, msg: any) {
       try {
+        // Handle transcribe WebSocket messages — forward raw audio to AssemblyAI
+        if (ws.data?.isTranscribe) {
+          const assemblyWs = ws.data?.assemblyWs;
+          if (!assemblyWs || assemblyWs.readyState !== 1 /* OPEN */) return;
+          // Forward binary audio directly; ignore string messages
+          if (typeof msg !== 'string') {
+            assemblyWs.send(msg);
+          }
+          return;
+        }
+
         const parsed = JSON.parse(msg.toString());
         const { type, data } = parsed;
+
+        // Handle runner WebSocket messages
+        if (ws.data?.isRunner) {
+          switch (type) {
+            case 'runner:auth': {
+              const runnerId = await runnerMgr.authenticateRunner(parsed.token);
+              if (runnerId) {
+                ws.data.runnerId = runnerId;
+                ws.data.authenticated = true;
+                ws.send(JSON.stringify({ type: 'central:auth_ok' }));
+                log.info('Runner WebSocket authenticated', { namespace: 'runner', runnerId });
+              } else {
+                ws.close(4001, 'Invalid runner token');
+              }
+              break;
+            }
+            case 'runner:agent_event': {
+              if (!ws.data.authenticated) break;
+              // Relay agent event from runner to browser clients
+              const event = parsed.event;
+              if (event) {
+                // Find the thread's userId to route the event
+                const thread = await tm.getThread(event.threadId);
+                if (thread?.userId) {
+                  wsBroker.emitToUser(thread.userId, event);
+                } else {
+                  wsBroker.emit(event);
+                }
+              }
+              break;
+            }
+            case 'runner:ping':
+              ws.send(JSON.stringify({ type: 'central:pong' }));
+              break;
+          }
+          return;
+        }
+
         const userId = ws.data?.userId ?? '__local__';
 
         switch (type) {

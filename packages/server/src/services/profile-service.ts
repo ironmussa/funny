@@ -26,6 +26,7 @@ export async function getProfile(userId: string): Promise<UserProfile | null> {
     gitName: row.gitName,
     gitEmail: row.gitEmail,
     hasGithubToken: !!row.githubToken,
+    hasAssemblyaiKey: !!row.assemblyaiApiKey,
     setupCompleted: !!row.setupCompleted,
     defaultEditor: row.defaultEditor ?? null,
     useInternalEditor: row.useInternalEditor != null ? !!row.useInternalEditor : null,
@@ -47,6 +48,18 @@ export async function getGithubToken(userId: string): Promise<string | null> {
   );
   if (!row?.githubToken) return null;
   return decrypt(row.githubToken);
+}
+
+/** Retrieve the raw AssemblyAI API key (server-only, never return to client). */
+export async function getAssemblyaiApiKey(userId: string): Promise<string | null> {
+  const row = await dbGet(
+    db
+      .select({ assemblyaiApiKey: schema.userProfiles.assemblyaiApiKey })
+      .from(schema.userProfiles)
+      .where(eq(schema.userProfiles.userId, userId)),
+  );
+  if (!row?.assemblyaiApiKey) return null;
+  return decrypt(row.assemblyaiApiKey);
 }
 
 /** Retrieve git author info for --author flag. Returns null if either field is missing. */
@@ -88,12 +101,14 @@ export async function updateProfile(
   );
 
   const encryptedToken = data.githubToken ? encrypt(data.githubToken) : null;
+  const encryptedAssemblyaiKey = data.assemblyaiApiKey ? encrypt(data.assemblyaiApiKey) : null;
 
   if (existing) {
     const updates: Record<string, any> = { updatedAt: now };
     if (data.gitName !== undefined) updates.gitName = data.gitName || null;
     if (data.gitEmail !== undefined) updates.gitEmail = data.gitEmail || null;
     if (data.githubToken !== undefined) updates.githubToken = encryptedToken;
+    if (data.assemblyaiApiKey !== undefined) updates.assemblyaiApiKey = encryptedAssemblyaiKey;
     if (data.setupCompleted !== undefined) updates.setupCompleted = data.setupCompleted ? 1 : 0;
     if (data.defaultEditor !== undefined) updates.defaultEditor = data.defaultEditor;
     if (data.useInternalEditor !== undefined)
@@ -113,6 +128,7 @@ export async function updateProfile(
         gitName: data.gitName || null,
         gitEmail: data.gitEmail || null,
         githubToken: encryptedToken,
+        assemblyaiApiKey: encryptedAssemblyaiKey,
         setupCompleted: data.setupCompleted ? 1 : 0,
         defaultEditor: data.defaultEditor ?? null,
         useInternalEditor: data.useInternalEditor != null ? (data.useInternalEditor ? 1 : 0) : null,

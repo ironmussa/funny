@@ -128,6 +128,16 @@ const config: Config = {
             opacity: '0',
           },
         },
+        'mic-wave': {
+          '0%': {
+            transform: 'scale(0.8)',
+            opacity: '0.8',
+          },
+          '100%': {
+            transform: 'scale(1.6)',
+            opacity: '0',
+          },
+        },
       },
       animation: {
         'fade-in': 'fade-in 150ms ease-out',
@@ -135,6 +145,8 @@ const config: Config = {
         'scale-in': 'scale-in 150ms ease-out',
         'slide-in-right': 'slide-in-right 200ms ease-out',
         'slide-down': 'slide-down 150ms ease-out',
+        'mic-wave': 'mic-wave 1.5s ease-out infinite',
+        'mic-wave-delayed': 'mic-wave 1.5s ease-out 0.4s infinite',
       },
     },
   },

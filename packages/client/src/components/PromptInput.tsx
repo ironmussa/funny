@@ -11,6 +11,8 @@ import {
   Square,
   Loader2,
   Paperclip,
+  Mic,
+  MicOff,
   X,
   GitBranch,
   Inbox,
@@ -33,6 +35,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDictation } from '@/hooks/use-dictation';
 import { api } from '@/lib/api';
 import { getUnifiedModelOptions, parseUnifiedModel } from '@/lib/providers';
 import { cn } from '@/lib/utils';
@@ -312,6 +315,50 @@ export const PromptInput = memo(function PromptInput({
   const hasSubmittedRef = useRef(false);
   // Track whether the editor is empty (updated via onChange)
   const [editorEmpty, setEditorEmpty] = useState(true);
+
+  // ── Dictation (real-time voice-to-text via AssemblyAI) ──
+  const [hasAssemblyaiKey, setHasAssemblyaiKey] = useState(false);
+  // Track the partial transcript text so we can show it as a preview
+  const partialTextRef = useRef('');
+
+  // Check if AssemblyAI key is configured
+  useEffect(() => {
+    api.getProfile().then((result) => {
+      if (result.isOk() && result.value) {
+        setHasAssemblyaiKey(result.value.hasAssemblyaiKey);
+      }
+    });
+  }, []);
+
+  const handlePartialTranscript = useCallback((text: string) => {
+    partialTextRef.current = text;
+    // Update placeholder-like preview in the editor
+    // We replace the partial region each time; the final callback commits it
+  }, []);
+
+  const handleFinalTranscript = useCallback((text: string) => {
+    if (text) {
+      editorRef.current?.insertText(text + ' ');
+    }
+    partialTextRef.current = '';
+  }, []);
+
+  const handleDictationError = useCallback(
+    (message: string) => {
+      toast.error(message || t('prompt.micPermissionDenied', 'Microphone access denied'));
+    },
+    [t],
+  );
+
+  const {
+    isRecording,
+    isConnecting: isTranscribing,
+    toggle: toggleRecording,
+  } = useDictation({
+    onPartial: handlePartialTranscript,
+    onFinal: handleFinalTranscript,
+    onError: handleDictationError,
+  });
 
   // Load initial prompt/images when props change (e.g. navigating to a backlog thread)
   useEffect(() => {
@@ -1118,6 +1165,44 @@ export const PromptInput = memo(function PromptInput({
                   onChange={setUnifiedModel}
                   groups={unifiedModelGroups}
                 />
+                {hasAssemblyaiKey && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        data-testid="prompt-dictate"
+                        onClick={toggleRecording}
+                        variant="ghost"
+                        size="icon-sm"
+                        tabIndex={-1}
+                        aria-label={
+                          isRecording
+                            ? t('prompt.stopDictation', 'Stop dictation')
+                            : t('prompt.startDictation', 'Start dictation')
+                        }
+                        disabled={loading || isTranscribing}
+                        className={cn(
+                          'text-muted-foreground hover:text-foreground',
+                          isRecording && 'text-destructive hover:text-destructive',
+                        )}
+                      >
+                        {isTranscribing ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : isRecording ? (
+                          <MicOff className="h-3.5 w-3.5" />
+                        ) : (
+                          <Mic className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {isTranscribing
+                        ? t('prompt.transcribing', 'Transcribing...')
+                        : isRecording
+                          ? t('prompt.stopDictation', 'Stop dictation')
+                          : t('prompt.startDictation', 'Voice dictation')}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 {running && editorEmpty ? (
                   <Button
                     data-testid="prompt-stop"

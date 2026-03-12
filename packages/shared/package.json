@@ -11,7 +11,8 @@
     "./models": "./src/models.ts",
     "./thread-machine": "./src/thread-machine.ts",
     "./pipeline-engine": "./src/pipeline-engine.ts",
-    "./prompts": "./src/prompts/index.ts"
+    "./prompts": "./src/prompts/index.ts",
+    "./runner-protocol": "./src/runner-protocol.ts"
   },
   "scripts": {
     "test": "bun test"

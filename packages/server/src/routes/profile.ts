@@ -22,6 +22,7 @@ profileRoutes.get('/', async (c) => {
       gitName: null,
       gitEmail: null,
       hasGithubToken: false,
+      hasAssemblyaiKey: false,
       setupCompleted: false,
       defaultEditor: null,
       useInternalEditor: null,
@@ -42,6 +43,8 @@ profileRoutes.put('/', async (c) => {
   if (typeof raw.gitEmail === 'string') data.gitEmail = raw.gitEmail;
   if (raw.githubToken === null || typeof raw.githubToken === 'string')
     data.githubToken = raw.githubToken;
+  if (raw.assemblyaiApiKey === null || typeof raw.assemblyaiApiKey === 'string')
+    data.assemblyaiApiKey = raw.assemblyaiApiKey;
   if (typeof raw.setupCompleted === 'boolean') data.setupCompleted = raw.setupCompleted;
   if (typeof raw.defaultEditor === 'string') data.defaultEditor = raw.defaultEditor;
   if (typeof raw.useInternalEditor === 'boolean') data.useInternalEditor = raw.useInternalEditor;

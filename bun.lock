@@ -302,6 +302,29 @@
         "@types/bun": "^1.3.8",
       },
     },
+    "packages/runner": {
+      "name": "@funny/runner",
+      "version": "0.1.0",
+      "bin": {
+        "funny-runner": "./bin/funny-runner.js",
+      },
+      "dependencies": {
+        "@funny/core": "*",
+        "@funny/shared": "*",
+        "hono": "^4.11.9",
+        "nanoid": "^5.0.9",
+        "neverthrow": "^8.2.0",
+        "zod": "^4.3.6",
+      },
+      "devDependencies": {
+        "@types/bun": "^1.3.8",
+        "typescript": "^5.8.2",
+      },
+      "optionalDependencies": {
+        "@openai/codex-sdk": "^0.101.0",
+        "node-pty": "^1.1.0",
+      },
+    },
     "packages/server": {
       "name": "@ironmussa/funny-server",
       "version": "0.1.0",
@@ -315,6 +338,7 @@
         "@funny/memory": "*",
         "@xterm/addon-serialize": "^0.14.0",
         "@xterm/headless": "^6.0.0",
+        "assemblyai": "^4.26.1",
         "better-auth": "^1.4.18",
         "croner": "^10.0.1",
         "drizzle-orm": "^0.45.1",
@@ -327,6 +351,7 @@
         "winston": "^3.19.0",
         "winston-daily-rotate-file": "^5.0.0",
         "winston-transport": "^4.9.0",
+        "ws": "^8.19.0",
         "xstate": "^5.28.0",
         "zod": "^4.3.6",
       },
@@ -336,6 +361,7 @@
         "@types/bun": "^1.3.8",
         "@types/nodemailer": "^7.0.11",
         "@types/pg": "^8.18.0",
+        "@types/ws": "^8.18.1",
         "@typescript-eslint/eslint-plugin": "^8.57.0",
         "@typescript-eslint/parser": "^8.57.0",
         "drizzle-kit": "^0.31.9",
@@ -633,6 +659,8 @@
     "@funny/podman-chrome-streaming": ["@funny/podman-chrome-streaming@workspace:packages/podman-chrome-streaming"],
 
     "@funny/reviewbot": ["@funny/reviewbot@workspace:packages/reviewbot"],
+
+    "@funny/runner": ["@funny/runner@workspace:packages/runner"],
 
     "@funny/shared": ["@funny/shared@workspace:packages/shared"],
 
@@ -1549,6 +1577,8 @@
     "aria-hidden": ["aria-hidden@1.2.6", "", { "dependencies": { "tslib": "^2.0.0" } }, "sha512-ik3ZgC9dY/lYVVM++OISsaYDeg1tb0VtP5uL3ouh1koGOaUMDPpbFIei4JkFimWUFPn90sbMNMXQAIVOlnYKJA=="],
 
     "aria-query": ["aria-query@5.3.2", "", {}, "sha512-COROpnaoap1E2F000S62r6A60uHZnmlvomhfyT2DlTcrY1OrBKn2UhH7qn5wTC9zMvD0AY7csdPSNwKP+7WiQw=="],
+
+    "assemblyai": ["assemblyai@4.26.1", "", { "dependencies": { "ws": "^8.18.0" } }, "sha512-ORD3JnoouwH1N0Dr/oURElR+0evUCcNrGuS6kDNEkDWu7QFu7dPskuPTRq0HKaHmGYhNIqNwFn23BychkpY7Sw=="],
 
     "assertion-error": ["assertion-error@2.0.1", "", {}, "sha512-Izi8RQcffqCeNVgFigKli1ssklIbpHnCYc6AknXGYoB6grJqyeby7jv12JUQgmTAnIDnbck1uxksT4dzN3PWBA=="],
 

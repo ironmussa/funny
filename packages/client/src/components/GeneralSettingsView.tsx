@@ -1,5 +1,14 @@
 import type { UserProfile } from '@funny/shared';
-import { ArrowLeft, Check, Github, Mail, Palette, Send, SlidersHorizontal } from 'lucide-react';
+import {
+  ArrowLeft,
+  Check,
+  Github,
+  Mail,
+  Mic,
+  Palette,
+  Send,
+  SlidersHorizontal,
+} from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useState, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -37,12 +46,13 @@ import { useUIStore } from '@/stores/ui-store';
 
 import { SettingRow } from './settings/SettingRow';
 
-type GeneralPage = 'general' | 'appearance' | 'github' | 'email';
+type GeneralPage = 'general' | 'appearance' | 'github' | 'speech' | 'email';
 
 const NAV_ITEMS: Array<{ id: GeneralPage; label: string; icon: typeof SlidersHorizontal }> = [
   { id: 'general', label: 'settings.general', icon: SlidersHorizontal },
   { id: 'appearance', label: 'settings.appearance', icon: Palette },
   { id: 'github', label: 'GitHub', icon: Github },
+  { id: 'speech', label: 'Speech', icon: Mic },
   { id: 'email', label: 'Email (SMTP)', icon: Mail },
 ];
 
@@ -171,6 +181,11 @@ export function GeneralSettingsView() {
   const [hasGithubToken, setHasGithubToken] = useState(false);
   const [tokenSaving, setTokenSaving] = useState(false);
 
+  // AssemblyAI state
+  const [assemblyaiKey, setAssemblyaiKey] = useState('');
+  const [hasAssemblyaiKey, setHasAssemblyaiKey] = useState(false);
+  const [assemblyaiSaving, setAssemblyaiSaving] = useState(false);
+
   // SMTP state
   const [smtpHost, setSmtpHost] = useState('');
   const [smtpPort, setSmtpPort] = useState('587');
@@ -186,10 +201,13 @@ export function GeneralSettingsView() {
   useEffect(() => {
     api.getProfile().then((result) => {
       if (result.isOk() && result.value) {
-        setHasGithubToken((result.value as UserProfile).hasGithubToken);
+        const profile = result.value as UserProfile;
+        setHasGithubToken(profile.hasGithubToken);
+        setHasAssemblyaiKey(profile.hasAssemblyaiKey);
       }
     });
     setGithubToken('');
+    setAssemblyaiKey('');
     api.getSmtpSettings().then((result) => {
       if (result.isOk()) {
         setSmtpHost(result.value.host);
@@ -269,6 +287,32 @@ export function GeneralSettingsView() {
       toast.success(t('profile.tokenCleared'));
     }
     setTokenSaving(false);
+  }, [t]);
+
+  // AssemblyAI key handlers
+  const handleSaveAssemblyaiKey = useCallback(async () => {
+    if (!assemblyaiKey) return;
+    setAssemblyaiSaving(true);
+    const result = await api.updateProfile({ assemblyaiApiKey: assemblyaiKey });
+    if (result.isOk()) {
+      setHasAssemblyaiKey(result.value.hasAssemblyaiKey);
+      setAssemblyaiKey('');
+      toast.success(t('profile.tokenSaved'));
+    } else {
+      toast.error(t('profile.saveFailed'));
+    }
+    setAssemblyaiSaving(false);
+  }, [assemblyaiKey, t]);
+
+  const handleClearAssemblyaiKey = useCallback(async () => {
+    setAssemblyaiSaving(true);
+    const result = await api.updateProfile({ assemblyaiApiKey: null });
+    if (result.isOk()) {
+      setHasAssemblyaiKey(false);
+      setAssemblyaiKey('');
+      toast.success(t('profile.tokenCleared'));
+    }
+    setAssemblyaiSaving(false);
   }, [t]);
 
   // SMTP handlers
@@ -470,6 +514,64 @@ export function GeneralSettingsView() {
                       onClick={handleClearToken}
                       disabled={tokenSaving}
                       data-testid="preferences-clear-token"
+                    >
+                      {t('profile.clearToken')}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </>
+        )}
+
+        {activePreferencesPage === 'speech' && (
+          <>
+            <h3 className="settings-section-header">Speech</h3>
+            <p className="px-1 pb-3 text-xs text-muted-foreground">
+              Configure an AssemblyAI API key to enable voice dictation in the prompt input.
+            </p>
+            <div className="settings-card">
+              <div className="px-4 py-3.5">
+                <p className="settings-row-title">AssemblyAI API Key</p>
+                <p className="settings-row-desc mb-2">
+                  Get your key at{' '}
+                  <a
+                    href="https://www.assemblyai.com/dashboard/signup"
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-primary hover:underline"
+                  >
+                    assemblyai.com
+                  </a>
+                  . The key is encrypted at rest.
+                </p>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="password"
+                    value={assemblyaiKey}
+                    onChange={(e) => setAssemblyaiKey(e.target.value)}
+                    data-testid="preferences-assemblyai-key"
+                    placeholder={
+                      hasAssemblyaiKey ? t('profile.tokenSaved') : 'Enter your AssemblyAI API key'
+                    }
+                    className="text-sm"
+                  />
+                  <Button
+                    size="sm"
+                    onClick={handleSaveAssemblyaiKey}
+                    disabled={!assemblyaiKey || assemblyaiSaving}
+                    data-testid="preferences-save-assemblyai-key"
+                  >
+                    {assemblyaiSaving ? t('common.saving') : t('common.save')}
+                  </Button>
+                  {hasAssemblyaiKey && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="shrink-0 text-xs text-destructive hover:text-destructive"
+                      onClick={handleClearAssemblyaiKey}
+                      disabled={assemblyaiSaving}
+                      data-testid="preferences-clear-assemblyai-key"
                     >
                       {t('profile.clearToken')}
                     </Button>

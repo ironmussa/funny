@@ -51,6 +51,7 @@ import { gitRoutes, invalidateGitStatusCacheByProject } from './routes/git.js';
 import { githubRoutes } from './routes/github.js';
 import { ingestRoutes } from './routes/ingest.js';
 import mcpRoutes from './routes/mcp.js';
+import { memoryRoutes } from './routes/memory.js';
 import { pipelineRoutes } from './routes/pipelines.js';
 import pluginRoutes from './routes/plugins.js';
 import { profileRoutes } from './routes/profile.js';
@@ -231,6 +232,7 @@ app.route('/api/settings', settingsRoutes);
 app.route('/api/team-projects', teamProjectRoutes);
 app.route('/api/team-settings', teamSettingsRoutes);
 app.route('/api/tests', testRoutes);
+app.route('/api/projects', memoryRoutes);
 
 // Serve static files from client build (only if dist exists)
 if (existsSync(clientDistDir)) {
@@ -475,6 +477,10 @@ import { shutdownManager, ShutdownPhase } from './services/shutdown-manager.js';
 
 // Phase 0: release the port immediately
 shutdownManager.register('http-server', () => server.stop(true), ShutdownPhase.SERVER);
+
+// Flush Paisley Park access tracking before shutdown
+import { destroyAllInstances } from '@funny/memory';
+shutdownManager.register('memory-shutdown', () => destroyAllInstances(), ShutdownPhase.SERVICES);
 
 // Phase 3: Windows tree kill + exit (only on hard shutdown)
 shutdownManager.register(

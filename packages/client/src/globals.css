@@ -924,8 +924,9 @@
   font-size: 0.75rem;
   line-height: 1.25;
   vertical-align: middle;
-  background: hsl(var(--muted) / 0.6);
+  background: hsl(var(--muted));
   color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
   white-space: nowrap;
   cursor: default;
   user-select: all;
@@ -960,8 +961,9 @@
   font-size: 0.75rem;
   line-height: 1.25;
   vertical-align: middle;
-  background: hsl(var(--muted) / 0.6);
+  background: hsl(var(--muted));
   color: hsl(var(--foreground));
+  border: 1px solid hsl(var(--border));
   white-space: nowrap;
   cursor: default;
   user-select: all;

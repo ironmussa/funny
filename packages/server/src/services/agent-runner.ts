@@ -10,6 +10,8 @@
 import { setLogSink } from '@funny/core';
 import { AgentOrchestrator, defaultProcessFactory } from '@funny/core/agents';
 import type { IAgentProcessFactory } from '@funny/core/agents';
+import { setMemoryLogSink } from '@funny/memory';
+import { getPaisleyPark } from '@funny/memory';
 import type {
   WSEvent,
   AgentProvider,
@@ -331,11 +333,38 @@ export class AgentRunner {
       effectivePrompt = `[PROJECT INSTRUCTIONS]\n${projectSystemPrompt}\n[/PROJECT INSTRUCTIONS]\n\n${effectivePrompt}`;
     }
 
+    // Paisley Park: recall project memory for context injection
+    let memoryContext: string | undefined;
+    if (project && !effectiveSessionId) {
+      try {
+        const pp = getPaisleyPark(project.id, project.name);
+        const recallResult = await pp.recall(prompt, {
+          limit: Number(process.env.MEMORY_RECALL_LIMIT) || 10,
+          scope: 'all',
+        });
+        if (recallResult.isOk() && recallResult.value.formattedContext) {
+          memoryContext = recallResult.value.formattedContext;
+          log.debug('Memory context injected', {
+            namespace: 'memory',
+            threadId,
+            factCount: recallResult.value.totalFound,
+          });
+        }
+      } catch (e) {
+        log.warn('Memory recall failed, proceeding without context', {
+          namespace: 'memory',
+          threadId,
+          error: String(e),
+        });
+      }
+    }
+
     const systemPrefix =
       [
         projectSystemPrompt
           ? `[PROJECT INSTRUCTIONS]\n${projectSystemPrompt}\n[/PROJECT INSTRUCTIONS]`
           : undefined,
+        memoryContext,
         resumePrefix,
       ]
         .filter(Boolean)
@@ -491,6 +520,11 @@ export const extractActiveAgents = defaultRunner.extractActiveAgents.bind(defaul
 // ── Bridge core debug logs to Winston/OTLP ──────────────────
 setLogSink((level, namespace, message, data) => {
   const meta: Record<string, unknown> = { namespace: `core:${namespace}`, ...data };
+  log[level](message, meta);
+});
+
+setMemoryLogSink((level, namespace, message, data) => {
+  const meta: Record<string, unknown> = { namespace: `memory:${namespace}`, ...data };
   log[level](message, meta);
 });
 

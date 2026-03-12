@@ -1,0 +1,29 @@
+{
+  "name": "@funny/memory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "bun test",
+    "mcp:memory": "bun src/mcp/server.ts"
+  },
+  "dependencies": {
+    "@funny/shared": "*",
+    "@modelcontextprotocol/sdk": "^1.27.1",
+    "gray-matter": "^4.0.3",
+    "neverthrow": "^8.2.0",
+    "zod": "^4.3.6"
+  },
+  "optionalDependencies": {
+    "sqlite-vec": "^0.1.7-alpha.2"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.8",
+    "typescript": "^5.8.2"
+  }
+}

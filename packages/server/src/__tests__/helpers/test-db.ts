@@ -237,6 +237,12 @@ export function createTestDb() {
       corrector_prompt TEXT,
       precommit_fixer_prompt TEXT,
       commit_message_prompt TEXT,
+      test_enabled INTEGER NOT NULL DEFAULT 0,
+      test_command TEXT,
+      test_fix_enabled INTEGER NOT NULL DEFAULT 0,
+      test_fix_model TEXT NOT NULL DEFAULT 'sonnet',
+      test_fix_max_iterations INTEGER NOT NULL DEFAULT 3,
+      test_fixer_prompt TEXT,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     )

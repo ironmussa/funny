@@ -90,6 +90,7 @@ export const auth = betterAuth({
   database: dbMode === 'postgres' ? authPool! : drizzleAdapter(db, { provider: 'sqlite' }),
   basePath: '/api/auth',
   secret: getOrCreateSecret(),
+  trustedOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],
   emailAndPassword: {
     enabled: true,
     disableSignUp: true,

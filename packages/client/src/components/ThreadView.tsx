@@ -38,6 +38,7 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useTodoSnapshots } from '@/hooks/use-todo-panel';
 import { api } from '@/lib/api';
@@ -164,18 +165,12 @@ export const MessageContent = memo(function MessageContent({ content }: { conten
 });
 
 export function CopyButton({ content }: { content: string }) {
-  const [copied, setCopied] = useState(false);
-
-  const handleCopy = () => {
-    navigator.clipboard.writeText(content);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
+  const [copied, copy] = useCopyToClipboard();
 
   return (
     <button
-      onClick={handleCopy}
-      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover:opacity-100"
+      onClick={() => copy(content)}
+      className="shrink-0 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-muted hover:text-foreground group-hover/msg:opacity-100"
       aria-label="Copy message"
       data-testid="message-copy"
     >
@@ -475,7 +470,7 @@ function UserMessageContent({ content }: { content: string }) {
         <button
           type="button"
           onClick={() => setExpanded(!expanded)}
-          className="mt-1 flex items-center gap-1 text-[11px] text-background font-medium transition-colors hover:text-background/80"
+          className="mt-1 flex items-center gap-1 text-[11px] font-medium text-background transition-colors hover:text-background/80"
         >
           {expanded ? (
             <>
@@ -828,7 +823,7 @@ const MemoizedMessageList = memo(
             <div
               key={key}
               style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 60px' }}
-              className="group relative w-full text-sm text-foreground"
+              className="group/msg relative w-full text-sm text-foreground"
             >
               <div className="break-words text-sm leading-relaxed">
                 <div className="flex items-start gap-2">

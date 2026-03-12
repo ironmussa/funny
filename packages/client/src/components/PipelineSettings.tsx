@@ -90,6 +90,13 @@ export function PipelineSettings() {
   const [pipeline, setPipeline] = useState<Pipeline | null>(null);
   const [loading, setLoading] = useState(true);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pendingUpdatesRef = useRef<Record<string, unknown>>({});
+  const pipelineIdRef = useRef<string | null>(null);
+
+  // Keep the pipeline ID ref in sync
+  useEffect(() => {
+    pipelineIdRef.current = pipeline?.id ?? null;
+  }, [pipeline?.id]);
 
   const loadPipeline = useCallback(async () => {
     if (!selectedProjectId) return;
@@ -116,22 +123,44 @@ export function PipelineSettings() {
     loadPipeline();
   }, [loadPipeline]);
 
-  // Auto-save helper: debounced update
+  // Flush pending updates to the server
+  const flushUpdates = useCallback(async () => {
+    const id = pipelineIdRef.current;
+    const updates = { ...pendingUpdatesRef.current };
+    if (!id || Object.keys(updates).length === 0) return;
+    pendingUpdatesRef.current = {};
+    const result = await api.updatePipeline(id, updates);
+    if (result.isErr()) {
+      toast.error('Failed to save pipeline setting');
+      loadPipeline(); // Revert on error
+    }
+  }, [loadPipeline]);
+
+  // Clean up: flush pending saves on unmount
+  useEffect(() => {
+    return () => {
+      clearTimeout(saveTimerRef.current);
+      // Fire-and-forget flush of any pending updates
+      const id = pipelineIdRef.current;
+      const updates = { ...pendingUpdatesRef.current };
+      if (id && Object.keys(updates).length > 0) {
+        api.updatePipeline(id, updates);
+      }
+    };
+  }, []);
+
+  // Auto-save helper: accumulates updates and debounces the API call
   const saveField = useCallback(
     (updates: Record<string, unknown>) => {
-      if (!pipeline) return;
+      if (!pipelineIdRef.current) return;
       // Optimistic update
       setPipeline((prev) => (prev ? { ...prev, ...updates } : prev));
+      // Accumulate updates so rapid changes to different fields aren't lost
+      Object.assign(pendingUpdatesRef.current, updates);
       clearTimeout(saveTimerRef.current);
-      saveTimerRef.current = setTimeout(async () => {
-        const result = await api.updatePipeline(pipeline.id, updates);
-        if (result.isErr()) {
-          toast.error('Failed to save pipeline setting');
-          loadPipeline(); // Revert on error
-        }
-      }, 400);
+      saveTimerRef.current = setTimeout(flushUpdates, 400);
     },
-    [pipeline, loadPipeline],
+    [flushUpdates],
   );
 
   // Save prompt on blur
@@ -255,7 +284,7 @@ export function PipelineSettings() {
       {/* Custom Prompts section */}
       <Collapsible>
         <div className="settings-card mb-0">
-          <CollapsibleTrigger className="flex w-full items-center justify-between bg-muted/30 px-3 py-2 hover:bg-muted/50 transition-colors">
+          <CollapsibleTrigger className="flex w-full items-center justify-between bg-muted/30 px-3 py-2 transition-colors hover:bg-muted/50">
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Custom Prompts
             </p>

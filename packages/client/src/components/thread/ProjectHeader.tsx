@@ -51,6 +51,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
@@ -115,8 +116,8 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
   const pinThread = useThreadStore((s) => s.pinThread);
   const timelineVisible = useUIStore((s) => s.timelineVisible);
   const setTimelineVisible = useUIStore((s) => s.setTimelineVisible);
-  const [copiedText, setCopiedText] = useState(false);
-  const [copiedTools, setCopiedTools] = useState(false);
+  const [copiedText, copyText] = useCopyToClipboard();
+  const [copiedTools, copyTools] = useCopyToClipboard();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const isWorktree = threadMode === 'worktree' && !!threadBranch;
@@ -135,19 +136,19 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
     navigate(`/projects/${projId}`);
   }, [navigate, t]);
 
-  const handleCopy = useCallback((includeToolCalls: boolean) => {
-    const messages = useThreadStore.getState().activeThread?.messages;
-    if (!messages?.length) return;
-    const md = threadToMarkdown(messages, includeToolCalls);
-    navigator.clipboard.writeText(md);
-    if (includeToolCalls) {
-      setCopiedTools(true);
-      setTimeout(() => setCopiedTools(false), 2000);
-    } else {
-      setCopiedText(true);
-      setTimeout(() => setCopiedText(false), 2000);
-    }
-  }, []);
+  const handleCopy = useCallback(
+    (includeToolCalls: boolean) => {
+      const messages = useThreadStore.getState().activeThread?.messages;
+      if (!messages?.length) return;
+      const md = threadToMarkdown(messages, includeToolCalls);
+      if (includeToolCalls) {
+        copyTools(md);
+      } else {
+        copyText(md);
+      }
+    },
+    [copyText, copyTools],
+  );
 
   return (
     <>
@@ -661,7 +662,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                     }
                   }}
                   data-testid="header-toggle-terminal"
-                  className={terminalPanelVisible ? 'text-primary' : 'text-muted-foreground'}
+                  className={terminalPanelVisible ? 'text-foreground' : 'text-muted-foreground'}
                 >
                   <Terminal className="h-4 w-4" />
                 </Button>
@@ -674,7 +675,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                   variant="ghost"
                   onClick={() => startTransition(() => setReviewPaneOpen(!reviewPaneOpen))}
                   data-testid="header-toggle-review"
-                  className={`${showGitStats ? 'h-8 px-2' : 'h-8 w-8'} ${reviewPaneOpen ? 'text-primary' : 'text-muted-foreground'}`}
+                  className={`${showGitStats ? 'h-8 px-2' : 'h-8 w-8'} ${reviewPaneOpen ? 'text-foreground' : 'text-muted-foreground'}`}
                 >
                   {showGitStats ? (
                     <DiffStats

@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
@@ -48,7 +49,7 @@ export function CloneRepoView() {
   const [userCode, setUserCode] = useState('');
   const [verificationUri, setVerificationUri] = useState('');
   const [_pollInterval, setPollInterval] = useState(5);
-  const [codeCopied, setCodeCopied] = useState(false);
+  const [codeCopied, copyCode] = useCopyToClipboard();
   const pollTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // Repos state
@@ -250,12 +251,6 @@ export function CloneRepoView() {
 
   // ── Copy user code ─────────────────────────────
 
-  const copyCode = () => {
-    navigator.clipboard.writeText(userCode);
-    setCodeCopied(true);
-    setTimeout(() => setCodeCopied(false), 2000);
-  };
-
   // ── Select repo for cloning ────────────────────
 
   const selectRepo = (repo: GitHubRepo) => {
@@ -384,7 +379,7 @@ export function CloneRepoView() {
           <code className="rounded-md bg-muted px-4 py-2 font-mono text-2xl font-bold tracking-widest">
             {userCode}
           </code>
-          <Button variant="outline" size="sm" onClick={copyCode}>
+          <Button variant="outline" size="sm" onClick={() => copyCode(userCode)}>
             {codeCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           </Button>
         </div>

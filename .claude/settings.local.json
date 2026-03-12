@@ -19,7 +19,8 @@
       "mcp__coplay-mcp__list_unity_project_roots",
       "mcp__coplay-mcp__create_game_object",
       "mcp__coplay-mcp__create_material",
-      "mcp__coplay-mcp__assign_material"
+      "mcp__coplay-mcp__assign_material",
+      "WebSearch"
     ]
   },
   "enableAllProjectMcpServers": true,

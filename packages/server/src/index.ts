@@ -14,9 +14,23 @@
  * - Access local filesystem repos
  */
 
+import { existsSync } from 'fs';
+import { join, resolve } from 'path';
+
 import { Hono } from 'hono';
+import { serveStatic } from 'hono/bun';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+
+import type { ServerEnv } from './lib/types.js';
+
+/** Data attached to each WebSocket connection. */
+type WSData = {
+  type: 'browser' | 'runner';
+  req?: Request;
+  userId?: string;
+  runnerId?: string;
+};
 
 import { initDatabase } from './db/index.js';
 import { autoMigrate } from './db/migrate.js';
@@ -42,7 +56,7 @@ await initBetterAuth();
 
 // ── App ─────────────────────────────────────────────────
 
-const app = new Hono();
+const app = new Hono<ServerEnv>();
 
 // Middleware
 const corsOrigins = process.env.CORS_ORIGIN
@@ -74,8 +88,39 @@ app.get('/api/auth/mode', (c) => {
   return c.json({ mode: 'multi' }); // Central always runs in multi mode
 });
 
+// Bootstrap endpoint — tells the client this is a multi-user server
+app.get('/api/bootstrap', (c) => {
+  return c.json({ mode: 'multi' });
+});
+
+// Setup status — central server doesn't run agents locally, always "ready"
+app.get('/api/setup/status', (c) => {
+  return c.json({
+    providers: {},
+    claudeCli: { available: true, path: null, error: null, version: null },
+    agentSdk: { available: true },
+  });
+});
+
 // Proxy catch-all: forward everything else to the appropriate runner
 app.all('/api/*', proxyToRunner);
+
+// Serve static files from client build (only if dist exists)
+const clientDistDir = resolve(import.meta.dir, '..', '..', 'client', 'dist');
+
+if (existsSync(clientDistDir)) {
+  app.use('/*', serveStatic({ root: clientDistDir }));
+  // SPA fallback: serve index.html for all non-API routes
+  app.get('*', async (c) => {
+    return c.html(await Bun.file(join(clientDistDir, 'index.html')).text());
+  });
+  log.info('Serving static files', { namespace: 'server', dir: clientDistDir });
+} else {
+  log.info('Client build not found — static serving disabled', {
+    namespace: 'server',
+    dir: clientDistDir,
+  });
+}
 
 // ── Server ──────────────────────────────────────────────
 
@@ -92,7 +137,7 @@ const server = Bun.serve({
     if (url.pathname === '/ws' && req.headers.get('upgrade') === 'websocket') {
       // Browser client WebSocket — authenticate via session cookie
       const upgraded = server.upgrade(req, {
-        data: { type: 'browser' as const, req },
+        data: { type: 'browser', req } as any,
       });
       return upgraded ? undefined : new Response('WebSocket upgrade failed', { status: 500 });
     }
@@ -100,7 +145,7 @@ const server = Bun.serve({
     if (url.pathname === '/ws/runner' && req.headers.get('upgrade') === 'websocket') {
       // Runner WebSocket — authenticated after connection via first message
       const upgraded = server.upgrade(req, {
-        data: { type: 'runner' as const },
+        data: { type: 'runner' } as any,
       });
       return upgraded ? undefined : new Response('WebSocket upgrade failed', { status: 500 });
     }
@@ -108,8 +153,8 @@ const server = Bun.serve({
     return app.fetch(req, { IP: server.requestIP(req) });
   },
   websocket: {
-    async open(ws: any) {
-      const wsData = ws.data as { type: 'browser' | 'runner'; req?: Request };
+    async open(ws) {
+      const wsData = ws.data as unknown as WSData;
 
       if (wsData.type === 'browser' && wsData.req) {
         // Authenticate browser via session cookie
@@ -118,14 +163,14 @@ const server = Bun.serve({
           ws.close(4001, 'Unauthorized');
           return;
         }
-        ws.data.userId = session.user.id;
+        (ws.data as any).userId = session.user.id;
         wsRelay.addBrowserClient(session.user.id, ws);
       }
       // Runner auth happens on first message (runner:auth)
     },
 
-    message(ws: any, message: string | Buffer) {
-      const wsData = ws.data as { type: string; userId?: string; runnerId?: string };
+    message(ws, message) {
+      const wsData = ws.data as unknown as WSData;
 
       try {
         const data = JSON.parse(typeof message === 'string' ? message : message.toString());
@@ -136,7 +181,7 @@ const server = Bun.serve({
             // Authenticate runner
             rm.authenticateRunner(data.token).then((runnerId) => {
               if (runnerId) {
-                ws.data.runnerId = runnerId;
+                (ws.data as any).runnerId = runnerId;
                 wsRelay.addRunnerClient(runnerId, ws);
                 ws.send(JSON.stringify({ type: 'runner:auth_ok', runnerId }));
               } else {
@@ -167,29 +212,32 @@ const server = Bun.serve({
           }
         }
 
-        if (wsData.type === 'browser' && wsData.userId) {
+        if (wsData.type === 'browser' && (wsData as any).userId) {
           // Forward browser messages (PTY, etc.) to the appropriate runner
-          // The message format from the browser: { type: 'pty:spawn', data: { ... } }
-          // We need to find which runner to send it to
-
-          // For PTY messages, use projectId from the data to resolve the runner
+          const userId = (wsData as any).userId as string;
           const innerType = data.type as string;
           if (innerType?.startsWith('pty:')) {
-            // PTY messages carry project context in data.projectId or we resolve from data
             const projectId = data.data?.projectId;
             if (projectId) {
+              // Route by project assignment
               rm.findRunnerForProject(projectId)
                 .then((result) => {
                   if (result) {
                     wsRelay.forwardBrowserMessageToRunner(
                       result.runner.runnerId,
-                      wsData.userId!,
+                      userId,
                       undefined,
                       data,
                     );
                   }
                 })
                 .catch(() => {});
+            } else {
+              // No projectId (e.g. pty:list) — forward to any connected runner
+              const runnerId = wsRelay.getAnyConnectedRunnerId();
+              if (runnerId) {
+                wsRelay.forwardBrowserMessageToRunner(runnerId, userId, undefined, data);
+              }
             }
           }
         }
@@ -198,14 +246,14 @@ const server = Bun.serve({
       }
     },
 
-    close(ws: any) {
-      const wsData = ws.data as { type: string; userId?: string; runnerId?: string };
+    close(ws) {
+      const d = ws.data as any;
 
-      if (wsData.type === 'browser' && wsData.userId) {
-        wsRelay.removeBrowserClient(wsData.userId, ws);
+      if (d.type === 'browser' && d.userId) {
+        wsRelay.removeBrowserClient(d.userId, ws);
       }
-      if (wsData.type === 'runner' && wsData.runnerId) {
-        wsRelay.removeRunnerClient(wsData.runnerId);
+      if (d.type === 'runner' && d.runnerId) {
+        wsRelay.removeRunnerClient(d.runnerId);
       }
     },
   },

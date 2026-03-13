@@ -46,6 +46,11 @@ export const db: AppDatabase = new Proxy({} as AppDatabase, {
 
 export { schema };
 
+/** The raw SQL client for use with adapters that need it (e.g. Better Auth). */
+export function getRawClient(): SQL | null {
+  return _pgClient;
+}
+
 export async function closeDatabase(): Promise<void> {
   if (_pgClient) {
     try {

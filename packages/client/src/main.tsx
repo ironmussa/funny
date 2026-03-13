@@ -105,7 +105,7 @@ function AuthGate() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canCheckSetup, initializeFromProfile, setTheme]);
 
-  if (isLoading || setupCompleted === null) {
+  if (isLoading) {
     return <AppShellSkeleton />;
   }
 
@@ -116,6 +116,11 @@ function AuthGate() {
         <LoginPage />
       </Suspense>
     );
+  }
+
+  // Wait for setup status to load
+  if (setupCompleted === null) {
+    return <AppShellSkeleton />;
   }
 
   // Setup not completed -> show setup wizard

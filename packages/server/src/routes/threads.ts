@@ -9,11 +9,12 @@
 import { Hono } from 'hono';
 
 import { log } from '../lib/logger.js';
+import type { ServerEnv } from '../lib/types.js';
 import { findRunnerForProject, getRunnerHttpUrl } from '../services/runner-manager.js';
 import * as runnerResolver from '../services/runner-resolver.js';
 import * as threadRegistry from '../services/thread-registry.js';
 
-export const threadRoutes = new Hono();
+export const threadRoutes = new Hono<ServerEnv>();
 
 /**
  * POST /api/threads — Create a new thread.

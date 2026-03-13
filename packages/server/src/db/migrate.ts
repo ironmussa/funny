@@ -190,6 +190,11 @@ const migrations: Migration[] = [
         )
       `);
 
+      // Add runner_id if the table already existed without it
+      await exec(sql`
+        ALTER TABLE threads ADD COLUMN IF NOT EXISTS runner_id TEXT REFERENCES runners(id) ON DELETE SET NULL
+      `);
+
       await exec(sql`
         CREATE INDEX IF NOT EXISTS idx_threads_project
         ON threads (project_id)

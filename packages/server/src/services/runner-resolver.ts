@@ -8,7 +8,7 @@
  * 3. Fall back to null if no runner can be determined
  */
 
-import { eq } from 'drizzle-orm';
+import { eq, ne } from 'drizzle-orm';
 
 import { db } from '../db/index.js';
 import { runnerProjectAssignments, runners } from '../db/schema.js';
@@ -17,6 +17,9 @@ import { getRunnerForThread } from './thread-registry.js';
 
 // In-memory cache: threadId → { runnerId, httpUrl }
 const threadRunnerCache = new Map<string, { runnerId: string; httpUrl: string }>();
+
+// Fallback: if a default runner URL is configured, use it when no runner is registered
+const DEFAULT_RUNNER_URL = process.env.DEFAULT_RUNNER_URL || null;
 
 /**
  * Resolve which runner should handle a request, returning its httpUrl.
@@ -38,7 +41,8 @@ export async function resolveRunnerUrl(
 
   // Strategy 2: Project-based resolution
   if (projectId) {
-    return await resolveByProject(projectId);
+    const url = await resolveByProject(projectId);
+    if (url) return url;
   }
 
   // Strategy 3: Thread registry DB lookup (fallback when cache misses)
@@ -52,7 +56,10 @@ export async function resolveRunnerUrl(
     log.warn('No runner found for thread', { namespace: 'proxy', threadId });
   }
 
-  return null;
+  // Strategy 4: Fallback to any online runner (or DEFAULT_RUNNER_URL)
+  // In a typical deployment there is a single Runtime instance. This ensures
+  // all routes can reach it even without project/thread-specific assignments.
+  return await resolveAnyOnlineRunner();
 }
 
 /**
@@ -111,6 +118,24 @@ function extractThreadId(path: string): string | null {
   const gitMatch = path.match(/\/api\/git\/([^/]+)/);
   if (gitMatch && gitMatch[1] !== 'project' && gitMatch[1] !== 'status') {
     return gitMatch[1];
+  }
+
+  return null;
+}
+
+async function resolveAnyOnlineRunner(): Promise<string | null> {
+  const onlineRunners = await db
+    .select({ httpUrl: runners.httpUrl })
+    .from(runners)
+    .where(ne(runners.status, 'offline'));
+
+  const withUrl = onlineRunners.filter((r) => r.httpUrl);
+  if (withUrl.length > 0) return withUrl[0].httpUrl!;
+
+  // Fallback to configured default runner URL (useful for dev when runtime hasn't registered yet)
+  if (DEFAULT_RUNNER_URL) {
+    log.debug('Using DEFAULT_RUNNER_URL fallback', { namespace: 'proxy', url: DEFAULT_RUNNER_URL });
+    return DEFAULT_RUNNER_URL;
   }
 
   return null;

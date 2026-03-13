@@ -18,10 +18,11 @@
 
 import { hostname } from 'os';
 
-import type { WSEvent } from '@funny/shared';
+import type { Project, WSEvent } from '@funny/shared';
 import type { RunnerRegisterResponse, RunnerTask } from '@funny/shared/runner-protocol';
 
 import { log } from '../lib/logger.js';
+import { listProjects } from './project-manager.js';
 import { wsBroker } from './ws-broker.js';
 
 export type BrowserWSHandler = (
@@ -149,21 +150,67 @@ async function pollTasks(): Promise<void> {
   }
 }
 
-// ── Project Sync ─────────────────────────────────────────
+// ── Project Assignment ───────────────────────────────────
 
-export async function syncTeamProjects(): Promise<any[]> {
+/**
+ * Assign all local projects to this runner on the central server.
+ * This populates the server's runnerProjectAssignments table so it
+ * can route requests by projectId to this runner.
+ */
+async function assignLocalProjects(): Promise<void> {
+  if (!state.runnerId) return;
+
   try {
-    const res = await centralFetch('/api/projects');
-    if (!res.ok) return [];
+    // Query all local projects (using '__local__' to get all in local DB)
+    const projects = await listProjects('__local__');
 
-    const { projects } = (await res.json()) as { projects: any[] };
-    log.info('Synced team projects', {
+    for (const project of projects) {
+      try {
+        await centralFetch(`/api/runners/${state.runnerId}/projects`, {
+          method: 'POST',
+          body: JSON.stringify({
+            projectId: project.id,
+            localPath: project.path,
+          }),
+        });
+      } catch {
+        // Individual assignment failures are non-fatal
+      }
+    }
+
+    log.info('Assigned local projects to runner', {
       namespace: 'team',
       count: projects.length,
     });
-    return projects;
+  } catch (err) {
+    log.warn('Failed to assign local projects', {
+      namespace: 'team',
+      error: err as any,
+    });
+  }
+}
+
+/**
+ * Assign a single project to this runner on the central server.
+ * Called when a new project is created on the Runtime.
+ */
+export async function assignProjectToRunner(project: Project): Promise<void> {
+  if (!state.runnerId) return;
+
+  try {
+    await centralFetch(`/api/runners/${state.runnerId}/projects`, {
+      method: 'POST',
+      body: JSON.stringify({
+        projectId: project.id,
+        localPath: project.path,
+      }),
+    });
+    log.info('Assigned new project to runner', {
+      namespace: 'team',
+      projectId: project.id,
+    });
   } catch {
-    return [];
+    // Non-fatal
   }
 }
 
@@ -306,8 +353,8 @@ export async function initTeamMode(serverUrl: string): Promise<void> {
   // Subscribe to local wsBroker events and forward to central server
   state.unsubscribeBroker = wsBroker.onEvent(forwardEventToCentral);
 
-  // Sync team projects
-  await syncTeamProjects();
+  // Assign local projects to this runner on the server
+  await assignLocalProjects();
 
   log.info('Team mode initialized', { namespace: 'team', runnerId: state.runnerId });
 }

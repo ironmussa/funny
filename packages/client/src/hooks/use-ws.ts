@@ -604,7 +604,15 @@ function teardown() {
     activeWS.onmessage = null;
     activeWS.onclose = null;
     activeWS.onerror = null;
-    activeWS.close();
+    // If the socket is still CONNECTING, defer close until it opens to avoid
+    // the browser warning "WebSocket is closed before the connection is
+    // established". The nulled-out handlers prevent any event processing.
+    if (activeWS.readyState === WebSocket.CONNECTING) {
+      const pending = activeWS;
+      pending.onopen = () => pending.close();
+    } else {
+      activeWS.close();
+    }
     activeWS = null;
   }
   _wasConnected = false;

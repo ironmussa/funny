@@ -29,20 +29,18 @@ export async function authMiddleware(c: Context, next: Next) {
   // Public endpoints — always allowed
   if (PUBLIC_PATHS.has(path)) return next();
 
-  // Team mode: requests proxied from the central server carry X-Runner-Auth + X-Forwarded-User
-  if (isTeamModeActive()) {
-    const runnerAuth = c.req.header('X-Runner-Auth');
-    if (runnerAuth === RUNNER_AUTH_SECRET) {
-      const forwardedUser = c.req.header('X-Forwarded-User');
-      if (!forwardedUser) return c.json({ error: 'Unauthorized: missing X-Forwarded-User' }, 401);
+  // Proxied requests from the central server carry X-Runner-Auth + X-Forwarded-User.
+  // Check this regardless of isTeamModeActive() — the server may be proxying via
+  // DEFAULT_RUNNER_URL before the runtime has formally registered.
+  const runnerAuth = c.req.header('X-Runner-Auth');
+  if (runnerAuth === RUNNER_AUTH_SECRET) {
+    const forwardedUser = c.req.header('X-Forwarded-User');
+    if (!forwardedUser) return c.json({ error: 'Unauthorized: missing X-Forwarded-User' }, 401);
 
-      c.set('userId', forwardedUser);
-      c.set('userRole', 'user');
-      c.set('organizationId', c.req.header('X-Forwarded-Org') || null);
-      return next();
-    }
-    // If X-Runner-Auth is missing/wrong, fall through to normal auth
-    // (allows direct local access for debugging)
+    c.set('userId', forwardedUser);
+    c.set('userRole', 'user');
+    c.set('organizationId', c.req.header('X-Forwarded-Org') || null);
+    return next();
   }
 
   if (getAuthMode() === 'local') {

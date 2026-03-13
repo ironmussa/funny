@@ -8,11 +8,17 @@
 import type { Context, Next } from 'hono';
 
 import { auth } from '../lib/auth.js';
+import type { ServerEnv } from '../lib/types.js';
 import * as rm from '../services/runner-manager.js';
 
-const PUBLIC_PATHS = new Set(['/api/health', '/api/auth/mode']);
+const PUBLIC_PATHS = new Set([
+  '/api/health',
+  '/api/auth/mode',
+  '/api/bootstrap',
+  '/api/setup/status',
+]);
 
-export async function authMiddleware(c: Context, next: Next) {
+export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
   const path = new URL(c.req.url).pathname;
 
   // Public endpoints
@@ -47,7 +53,7 @@ export async function authMiddleware(c: Context, next: Next) {
   return next();
 }
 
-export async function requireAdmin(c: Context, next: Next) {
+export async function requireAdmin(c: Context<ServerEnv>, next: Next) {
   const role = c.get('userRole');
   if (role !== 'admin') {
     return c.json({ error: 'Forbidden: admin required' }, 403);

@@ -123,6 +123,15 @@ export function forwardBrowserMessageToRunner(
 }
 
 /**
+ * Get the ID of any connected runner.
+ * Used as a fallback when no project/thread context is available.
+ */
+export function getAnyConnectedRunnerId(): string | null {
+  const first = runnerClients.keys().next();
+  return first.done ? null : first.value;
+}
+
+/**
  * Get stats about connected clients.
  */
 export function getRelayStats(): {

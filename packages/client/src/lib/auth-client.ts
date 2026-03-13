@@ -2,8 +2,13 @@ import { usernameClient, adminClient, organizationClient } from 'better-auth/cli
 import { createAuthClient } from 'better-auth/react';
 
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
+const serverUrl = import.meta.env.VITE_SERVER_URL as string | undefined;
 const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
-const baseURL = isTauri ? `http://localhost:${serverPort}` : '';
+const baseURL = serverUrl
+  ? serverUrl.replace(/\/+$/, '')
+  : isTauri
+    ? `http://localhost:${serverPort}`
+    : '';
 
 export const authClient = createAuthClient({
   baseURL,

@@ -7,7 +7,7 @@
  * Captures microphone audio at 16kHz PCM16 and streams it via WebSocket.
  */
 
-import type { Result } from 'neverthrow';
+import { Result } from 'neverthrow';
 import { useCallback, useRef, useState } from 'react';
 
 import { api } from '@/lib/api';

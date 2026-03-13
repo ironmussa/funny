@@ -1,85 +1,38 @@
 /**
  * Project + membership routes for the central server.
- * This is the source of truth for team projects.
+ *
+ * Project CRUD (list, create, get, update, delete) is proxied to the runner
+ * since the Runtime owns the project schema. The Server only manages
+ * team-specific data (membership, local paths).
  */
 
 import { Hono } from 'hono';
 
+import type { ServerEnv } from '../lib/types.js';
+import { proxyToRunner } from '../middleware/proxy.js';
 import * as pm from '../services/project-manager.js';
 
-export const projectRoutes = new Hono();
+export const projectRoutes = new Hono<ServerEnv>();
 
-// ── Project CRUD ─────────────────────────────────────────
+// ── Project CRUD — proxied to runner ─────────────────────
 
-/** List all projects the authenticated user is a member of */
-projectRoutes.get('/', async (c) => {
-  const userId = c.get('userId') as string;
-  const projects = await pm.listProjectsForUser(userId);
-  return c.json({ projects });
-});
+/** List all projects — proxied to the runner */
+projectRoutes.get('/', proxyToRunner);
 
-/** Create a new project */
-projectRoutes.post('/', async (c) => {
-  const userId = c.get('userId') as string;
-  const body = await c.req.json<{
-    name: string;
-    repoUrl: string;
-    description?: string;
-    organizationId?: string;
-  }>();
+/** Create a new project — proxied to the runner */
+projectRoutes.post('/', proxyToRunner);
 
-  if (!body.name || !body.repoUrl) {
-    return c.json({ error: 'Missing required fields: name, repoUrl' }, 400);
-  }
+/** Get a single project — proxied to the runner */
+projectRoutes.get('/:id', proxyToRunner);
 
-  const project = await pm.createProject(userId, body);
-  return c.json(project, 201);
-});
+/** Update a project — proxied to the runner */
+projectRoutes.put('/:id', proxyToRunner);
 
-/** Get a single project */
-projectRoutes.get('/:id', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.param('id');
+/** Delete a project — proxied to the runner */
+projectRoutes.delete('/:id', proxyToRunner);
 
-  if (!(await pm.isProjectMember(projectId, userId))) {
-    return c.json({ error: 'Not a member of this project' }, 403);
-  }
-
-  const project = await pm.getProject(projectId);
-  if (!project) return c.json({ error: 'Project not found' }, 404);
-  return c.json(project);
-});
-
-/** Update a project */
-projectRoutes.put('/:id', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.param('id');
-
-  if (!(await pm.isProjectMember(projectId, userId))) {
-    return c.json({ error: 'Not a member of this project' }, 403);
-  }
-
-  const body = await c.req.json<{ name?: string; repoUrl?: string; description?: string }>();
-  const updated = await pm.updateProject(projectId, body);
-  if (!updated) return c.json({ error: 'Project not found' }, 404);
-  return c.json(updated);
-});
-
-/** Delete a project */
-projectRoutes.delete('/:id', async (c) => {
-  const userId = c.get('userId') as string;
-  const projectId = c.req.param('id');
-
-  // Only project admins can delete
-  const members = await pm.listMembers(projectId);
-  const userMember = members.find((m) => m.userId === userId);
-  if (!userMember || userMember.role !== 'admin') {
-    return c.json({ error: 'Only project admins can delete projects' }, 403);
-  }
-
-  await pm.deleteProject(projectId);
-  return c.json({ ok: true });
-});
+/** Get project branches — proxied to the runner */
+projectRoutes.get('/:id/branches', proxyToRunner);
 
 // ── Membership ───────────────────────────────────────────
 

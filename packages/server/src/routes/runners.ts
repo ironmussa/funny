@@ -10,9 +10,10 @@ import type {
 } from '@funny/shared/runner-protocol';
 import { Hono } from 'hono';
 
+import type { ServerEnv } from '../lib/types.js';
 import * as rm from '../services/runner-manager.js';
 
-export const runnerRoutes = new Hono();
+export const runnerRoutes = new Hono<ServerEnv>();
 
 // ── Registration ────────────────────────────────────────
 

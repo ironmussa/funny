@@ -14,6 +14,7 @@
 import type { Context } from 'hono';
 
 import { log } from '../lib/logger.js';
+import type { ServerEnv } from '../lib/types.js';
 import { resolveRunnerUrl } from '../services/runner-resolver.js';
 
 const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET || 'funny-server-proxy';
@@ -22,7 +23,7 @@ const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET || 'funny-server-proxy
  * Hono handler that proxies the request to the appropriate runner.
  * Used as a catch-all: `app.all('/api/*', proxyToRunner)`
  */
-export async function proxyToRunner(c: Context): Promise<Response> {
+export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
   const userId = c.get('userId') as string | undefined;
   if (!userId) {
     return c.json({ error: 'Unauthorized' }, 401);

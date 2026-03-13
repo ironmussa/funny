@@ -23,6 +23,7 @@ import * as pc from '../services/project-config-service.js';
 import * as ph from '../services/project-hooks-service.js';
 import * as pm from '../services/project-manager.js';
 import * as sc from '../services/startup-commands-service.js';
+import { assignProjectToRunner } from '../services/team-client.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resultToResponse } from '../utils/result-response.js';
 import { requireProject } from '../utils/route-helpers.js';
@@ -106,6 +107,12 @@ projectRoutes.post('/', async (c) => {
   }
 
   const result = await pm.createProject(name, path, userId);
+
+  // If in team mode, assign the new project to this runner on the central server
+  if (result.isOk()) {
+    void assignProjectToRunner(result.value);
+  }
+
   return resultToResponse(c, result, 201);
 });
 

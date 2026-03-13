@@ -27,6 +27,7 @@
     "dev": "concurrently --kill-others \"bun run --cwd packages/runtime dev\" \"bun run --cwd packages/client dev\"",
     "dev:debug": "concurrently --kill-others \"bun run --env-file .env.debug --cwd packages/runtime dev\" \"bun run --cwd packages/client dev\"",
     "dev:test": "concurrently --kill-others \"bun run --cwd packages/runtime dev:test\" \"bun run --cwd packages/client dev:test\"",
+    "dev:server": "bun run --cwd packages/server dev",
     "dev:runtime": "bun run --cwd packages/runtime dev",
     "dev:server:debug": "bun run --env-file .env.debug --cwd packages/runtime dev",
     "start:server:debug": "bun run --cwd packages/runtime build && bun run --env-file .env.debug packages/runtime/dist/index.js",

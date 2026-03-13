@@ -46,7 +46,7 @@ export default defineConfig(({ mode }) => {
       },
     },
     server: {
-      host: env.VITE_HOST || '127.0.0.1',
+      host: env.VITE_HOST || 'localhost',
       port: clientPort,
       allowedHosts: true,
       proxy: {

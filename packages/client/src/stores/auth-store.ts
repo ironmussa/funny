@@ -5,8 +5,13 @@ import { setAuthToken, setAuthMode } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
+const serverUrl = import.meta.env.VITE_SERVER_URL as string | undefined;
 const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
-const BASE = isTauri ? `http://localhost:${serverPort}/api` : '/api';
+const BASE = serverUrl
+  ? `${serverUrl.replace(/\/+$/, '')}/api`
+  : isTauri
+    ? `http://localhost:${serverPort}/api`
+    : '/api';
 
 // Start bootstrap fetch eagerly at module load time (before React mounts)
 // so the response is likely already available when initialize() is called.

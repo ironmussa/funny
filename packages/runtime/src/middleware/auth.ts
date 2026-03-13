@@ -12,7 +12,7 @@ import { getAuthMode } from '../lib/auth-mode.js';
 import { validateToken } from '../services/auth-service.js';
 import { isTeamModeActive } from '../services/team-client.js';
 
-const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET || 'funny-server-proxy';
+const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET;
 
 /** Paths that skip authentication entirely */
 const PUBLIC_PATHS = new Set(['/api/health', '/api/auth/mode', '/api/bootstrap']);

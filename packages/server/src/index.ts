@@ -50,6 +50,11 @@ import * as wsRelay from './services/ws-relay.js';
 
 // ── Init ────────────────────────────────────────────────
 
+if (!process.env.RUNNER_AUTH_SECRET) {
+  log.error('RUNNER_AUTH_SECRET is required. Set it in your .env file.', { namespace: 'server' });
+  process.exit(1);
+}
+
 await initDatabase();
 await autoMigrate();
 await initBetterAuth();

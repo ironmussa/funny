@@ -17,7 +17,7 @@ import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import { resolveRunnerUrl } from '../services/runner-resolver.js';
 
-const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET || 'funny-server-proxy';
+const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET;
 
 /**
  * Hono handler that proxies the request to the appropriate runner.

@@ -24,6 +24,8 @@ export interface RunnerInfo {
   os: string;
   /** Optional base directory where repos live (for admin reference) */
   workspace?: string;
+  /** HTTP base URL where this runner accepts requests (e.g. "http://192.168.1.5:3001") */
+  httpUrl?: string;
   status: RunnerStatus;
   activeThreadCount: number;
   /** Project IDs assigned to this runner by the admin */
@@ -43,6 +45,8 @@ export interface RunnerRegisterRequest {
   os: string;
   /** Optional base workspace directory where repos live */
   workspace?: string;
+  /** HTTP base URL where this runner accepts proxied requests (e.g. "http://192.168.1.5:3001") */
+  httpUrl: string;
 }
 
 export interface RunnerRegisterResponse {
@@ -197,7 +201,11 @@ export interface UnassignProjectRequest {
 // The runner connects to the central server via WebSocket to
 // stream real-time agent events (messages, tool calls, status changes).
 
-export type RunnerWSMessage = RunnerWSAuth | RunnerWSAgentEvent | RunnerWSPing;
+export type RunnerWSMessage =
+  | RunnerWSAuth
+  | RunnerWSAgentEvent
+  | RunnerWSBrowserRelay
+  | RunnerWSPing;
 
 export interface RunnerWSAuth {
   type: 'runner:auth';
@@ -208,7 +216,15 @@ export interface RunnerWSAuth {
 export interface RunnerWSAgentEvent {
   type: 'runner:agent_event';
   threadId: string;
+  userId?: string;
   event: WSEvent;
+}
+
+/** Runner → Server: relay a WS response back to a specific browser user */
+export interface RunnerWSBrowserRelay {
+  type: 'runner:browser_relay';
+  userId: string;
+  data: unknown;
 }
 
 export interface RunnerWSPing {
@@ -216,7 +232,11 @@ export interface RunnerWSPing {
 }
 
 // Messages from Central Server → Runner via WebSocket
-export type CentralWSMessage = CentralWSAuthOk | CentralWSPong | CentralWSCommand;
+export type CentralWSMessage =
+  | CentralWSAuthOk
+  | CentralWSPong
+  | CentralWSCommand
+  | CentralWSBrowserMessage;
 
 export interface CentralWSAuthOk {
   type: 'central:auth_ok';
@@ -229,6 +249,14 @@ export interface CentralWSPong {
 export interface CentralWSCommand {
   type: 'central:command';
   task: RunnerTask;
+}
+
+/** Server → Runner: forward a browser WS message for local handling */
+export interface CentralWSBrowserMessage {
+  type: 'central:browser_ws';
+  userId: string;
+  organizationId?: string;
+  data: unknown;
 }
 
 // ─── Pending Tasks Response ─────────────────────────────

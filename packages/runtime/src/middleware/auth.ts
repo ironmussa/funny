@@ -10,6 +10,9 @@ import type { Context, Next } from 'hono';
 
 import { getAuthMode } from '../lib/auth-mode.js';
 import { validateToken } from '../services/auth-service.js';
+import { isTeamModeActive } from '../services/team-client.js';
+
+const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET || 'funny-server-proxy';
 
 /** Paths that skip authentication entirely */
 const PUBLIC_PATHS = new Set(['/api/health', '/api/auth/mode', '/api/bootstrap']);
@@ -18,12 +21,29 @@ const PUBLIC_PATHS = new Set(['/api/health', '/api/auth/mode', '/api/bootstrap']
  * Dual-mode authentication middleware.
  * - local mode: validates bearer token from file (existing behavior)
  * - multi mode: validates Better Auth session cookie + extracts org context
+ * - team mode (proxied): trusts X-Forwarded-User from the central server
  */
 export async function authMiddleware(c: Context, next: Next) {
   const path = new URL(c.req.url).pathname;
 
   // Public endpoints — always allowed
   if (PUBLIC_PATHS.has(path)) return next();
+
+  // Team mode: requests proxied from the central server carry X-Runner-Auth + X-Forwarded-User
+  if (isTeamModeActive()) {
+    const runnerAuth = c.req.header('X-Runner-Auth');
+    if (runnerAuth === RUNNER_AUTH_SECRET) {
+      const forwardedUser = c.req.header('X-Forwarded-User');
+      if (!forwardedUser) return c.json({ error: 'Unauthorized: missing X-Forwarded-User' }, 401);
+
+      c.set('userId', forwardedUser);
+      c.set('userRole', 'user');
+      c.set('organizationId', c.req.header('X-Forwarded-Org') || null);
+      return next();
+    }
+    // If X-Runner-Auth is missing/wrong, fall through to normal auth
+    // (allows direct local access for debugging)
+  }
 
   if (getAuthMode() === 'local') {
     // Local mode: existing bearer token auth

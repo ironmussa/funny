@@ -18,7 +18,7 @@ import { nanoid } from 'nanoid';
 import { ok, err, type Result } from 'neverthrow';
 
 import { db, schema, dbAll, dbGet, dbRun } from '../db/index.js';
-import { createPipeline } from './pipeline-orchestrator.js';
+import { createPipeline } from './pipeline-manager.js';
 
 type ProjectRow = typeof schema.projects.$inferSelect;
 
@@ -107,6 +107,21 @@ export async function listProjectsByOrg(orgId: string): Promise<Project[]> {
         .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt)),
     )
   ).map(toProject);
+}
+
+/**
+ * Check if a project is associated with an organization via the team_projects join table.
+ */
+export async function isProjectInOrg(projectId: string, orgId: string): Promise<boolean> {
+  const row = await dbGet(
+    db
+      .select()
+      .from(schema.teamProjects)
+      .where(
+        and(eq(schema.teamProjects.teamId, orgId), eq(schema.teamProjects.projectId, projectId)),
+      ),
+  );
+  return !!row;
 }
 
 export async function getProject(id: string): Promise<Project | undefined> {

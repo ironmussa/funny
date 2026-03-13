@@ -11,6 +11,7 @@
  * 5. Proxy Turn transcripts from AssemblyAI → client
  */
 
+import { type Result, ok, err } from 'neverthrow';
 import WebSocket from 'ws';
 
 import { log } from '../lib/logger.js';
@@ -38,6 +39,25 @@ async function createTemporaryToken(apiKey: string): Promise<string> {
   }
   const data = await res.json();
   return data.token;
+}
+
+/**
+ * Create a temporary AssemblyAI token for direct browser→AssemblyAI connections.
+ * The API key never leaves the server — only the short-lived token is returned.
+ */
+export async function createTranscribeToken(userId: string): Promise<Result<string, string>> {
+  const apiKey = await getAssemblyaiApiKey(userId);
+  if (!apiKey) {
+    return err('AssemblyAI API key not configured');
+  }
+  try {
+    const token = await createTemporaryToken(apiKey);
+    return ok(token);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    log.error('Failed to create transcribe token', { namespace: 'transcribe', error: message });
+    return err(message);
+  }
 }
 
 /**
@@ -85,6 +105,12 @@ export async function handleTranscribeWs(clientWs: any, userId: string) {
         } else if (data.type === 'Turn') {
           const transcript = data.transcript || '';
           const isFinal = data.end_of_turn === true;
+          log.debug('AssemblyAI Turn', {
+            namespace: 'transcribe',
+            isFinal: String(isFinal),
+            textLength: String(transcript.length),
+            text: transcript.slice(0, 80),
+          });
           if (transcript) {
             clientWs.send(
               JSON.stringify({

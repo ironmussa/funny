@@ -57,12 +57,12 @@ bun run db:studio
 ### Monorepo Structure (Bun workspaces)
 
 - **`packages/shared`** — TypeScript types only (no runtime code). Exports from `src/types.ts`. Contains interfaces for Project, Thread, Message, ToolCall, FileDiff, WebSocket events, and API request/response types.
-- **`packages/server`** — Hono HTTP server with the Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`). Runs on port 3001 via `bun --watch`.
+- **`packages/runtime`** — Hono HTTP server with the Claude Agent SDK (`@anthropic-ai/claude-agent-sdk`). Runs on port 3001 via `bun --watch`.
 - **`packages/client`** — React 19 + Vite SPA. Runs on port 5173 with a proxy to the server at `/api`.
 
 ### Server Architecture
 
-**Entry point:** `packages/server/src/index.ts` — Hono app with CORS, logger middleware, and route groups mounted under `/api`. WebSocket upgrade at `/ws`.
+**Entry point:** `packages/runtime/src/index.ts` — Hono app with CORS, logger middleware, and route groups mounted under `/api`. WebSocket upgrade at `/ws`.
 
 **Database:** SQLite via `bun:sqlite` (Bun's native SQLite driver) + Drizzle ORM. DB file lives at `~/.funny/data.db`. Tables are auto-created on startup via `db/migrate.ts` (raw SQL, not Drizzle migrations). Schema in `db/schema.ts` defines: `projects`, `threads`, `messages`, `tool_calls`.
 
@@ -162,9 +162,9 @@ In local mode, this feature is inactive — git operations use the machine's def
 
 ### Auth Architecture
 
-- `packages/server/src/lib/auth-mode.ts` — Reads `AUTH_MODE` env var
-- `packages/server/src/lib/auth.ts` — Better Auth instance (only loaded in multi mode)
-- `packages/server/src/middleware/auth.ts` — Dual-mode middleware (bearer token vs session cookie)
+- `packages/runtime/src/lib/auth-mode.ts` — Reads `AUTH_MODE` env var
+- `packages/runtime/src/lib/auth.ts` — Better Auth instance (only loaded in multi mode)
+- `packages/runtime/src/middleware/auth.ts` — Dual-mode middleware (bearer token vs session cookie)
 - `packages/client/src/stores/auth-store.ts` — Client auth state (mode detection, login, logout)
 - `packages/client/src/lib/auth-client.ts` — Better Auth client with username + admin plugins
 
@@ -174,7 +174,7 @@ In local mode, this feature is inactive — git operations use the machine's def
 
 ```bash
 # Type check a specific package
-cd packages/server && bun --check src/index.ts
+cd packages/runtime && bun --check src/index.ts
 
 # Or use bunx to check files
 bunx tsc --noEmit
@@ -216,7 +216,7 @@ To verify your changes compile correctly, use build or type-check commands inste
 bun run build
 
 # Type-check a specific file
-bun --check packages/server/src/index.ts
+bun --check packages/runtime/src/index.ts
 
 # Type-check the whole project
 bunx tsc --noEmit

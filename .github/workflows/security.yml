@@ -44,7 +44,7 @@ jobs:
       - name: NPM Security Audit
         run: |
           # Run audit in each workspace
-          cd packages/server && npm audit --audit-level=moderate || true
+          cd packages/runtime && npm audit --audit-level=moderate || true
           cd ../client && npm audit --audit-level=moderate || true
           cd ../..
         continue-on-error: true

@@ -1,5 +1,5 @@
 {
-  "envFiles": ["packages/server/.env", "packages/client/.env"],
+  "envFiles": ["packages/runtime/.env", "packages/client/.env"],
   "portGroups": [
     {
       "name": "server",

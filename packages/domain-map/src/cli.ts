@@ -150,33 +150,33 @@ Options:
   --help, -h                Show this help
 
 Examples:
-  bun packages/domain-map/src/cli.ts packages/server/src
+  bun packages/domain-map/src/cli.ts packages/runtime/src
   bun packages/domain-map/src/cli.ts --format json packages/
-  bun packages/domain-map/src/cli.ts --subdomain "Git Operations" --subdomain "Agent Execution" packages/server/src
-  bun packages/domain-map/src/cli.ts --type handler --type domain-service packages/server/src
-  bun packages/domain-map/src/cli.ts --events-only --direction TB packages/server/src
+  bun packages/domain-map/src/cli.ts --subdomain "Git Operations" --subdomain "Agent Execution" packages/runtime/src
+  bun packages/domain-map/src/cli.ts --type handler --type domain-service packages/runtime/src
+  bun packages/domain-map/src/cli.ts --events-only --direction TB packages/runtime/src
 
   # Event-driven views:
-  bun packages/domain-map/src/cli.ts --format sequence packages/server/src
-  bun packages/domain-map/src/cli.ts --format sequence --scenario agent packages/server/src
-  bun packages/domain-map/src/cli.ts --format sequence --show-bus packages/server/src
-  bun packages/domain-map/src/cli.ts --format catalog packages/server/src
+  bun packages/domain-map/src/cli.ts --format sequence packages/runtime/src
+  bun packages/domain-map/src/cli.ts --format sequence --scenario agent packages/runtime/src
+  bun packages/domain-map/src/cli.ts --format sequence --show-bus packages/runtime/src
+  bun packages/domain-map/src/cli.ts --format catalog packages/runtime/src
 
   # File inventory (which files implement each subdomain):
-  bun packages/domain-map/src/cli.ts --format inventory packages/server/src
-  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format inventory packages/server/src
+  bun packages/domain-map/src/cli.ts --format inventory packages/runtime/src
+  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format inventory packages/runtime/src
 
   # Architecture explorer (unified view):
-  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format explorer packages/server/src
+  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format explorer packages/runtime/src
 
   # Strategic views (with domain.yaml):
-  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format context-map packages/server/src
-  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --validate packages/server/src
+  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format context-map packages/runtime/src
+  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --validate packages/runtime/src
 
   # 2-way sync:
-  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --sync packages/server/src
-  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --sync yaml-to-code packages/server/src
-  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --sync --write packages/server/src
+  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --sync packages/runtime/src
+  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --sync yaml-to-code packages/runtime/src
+  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --sync --write packages/runtime/src
 `);
 }
 

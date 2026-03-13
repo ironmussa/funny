@@ -8,6 +8,11 @@ export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '');
   const clientPort = Number(env.VITE_PORT) || 5173;
   const serverPort = Number(env.VITE_SERVER_PORT) || 3001;
+  const serverUrl = env.VITE_SERVER_URL; // e.g. "https://funny-server.example.com"
+  const proxyTarget = serverUrl || `http://localhost:${serverPort}`;
+  const wsProxyTarget = serverUrl
+    ? serverUrl.replace(/^http/, 'ws')
+    : `ws://localhost:${serverPort}`;
 
   return {
     plugins: [
@@ -46,7 +51,7 @@ export default defineConfig(({ mode }) => {
       allowedHosts: true,
       proxy: {
         '/api': {
-          target: `http://localhost:${serverPort}`,
+          target: proxyTarget,
           changeOrigin: true,
           // Timeout stale connections after 60s — must be generous enough for
           // slow git operations (commit with pre-commit hooks, push, PR creation).
@@ -54,7 +59,7 @@ export default defineConfig(({ mode }) => {
           timeout: 60_000,
         },
         '/ws': {
-          target: `ws://localhost:${serverPort}`,
+          target: wsProxyTarget,
           ws: true,
         },
       },

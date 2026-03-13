@@ -65,7 +65,7 @@ export async function startFunnyServer({
     env.GH_TOKEN = credentials.token;
   }
 
-  console.log(`[funny-server] Starting @ironmussa/funny-server on port ${config.funnyPort}`);
+  console.log(`[funny-server] Starting @ironmussa/funny-runtime on port ${config.funnyPort}`);
   console.log(`[funny-server]   bin:   ${serverBin}`);
   console.log(`[funny-server]   cwd:   ${workspacePath}`);
   console.log(`[funny-server]   data:  ${config.funnyDataDir}`);

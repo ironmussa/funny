@@ -17,17 +17,17 @@ If neither is configured, invitations still work (stored in DB) but no email is 
 
 ### 1. Install nodemailer
 ```bash
-cd packages/server && bun add nodemailer && bun add -d @types/nodemailer
+cd packages/runtime && bun add nodemailer && bun add -d @types/nodemailer
 ```
 
-### 2. Create `packages/server/src/lib/email.ts` — Email service
+### 2. Create `packages/runtime/src/lib/email.ts` — Email service
 - Export `sendEmail(to, subject, html)` function
 - Export `getSmtpConfig(orgId?)` that resolves SMTP settings (org override > env vars)
 - Export `isEmailConfigured(orgId?)` to check if SMTP is available
 - Use nodemailer `createTransport()` with the resolved config
 - Log a warning (not error) when no SMTP config is found
 
-### 3. Add SMTP fields to Better Auth org schema in `packages/server/src/lib/auth.ts`
+### 3. Add SMTP fields to Better Auth org schema in `packages/runtime/src/lib/auth.ts`
 Add 4 new optional fields to the `organization.schema.fields`:
 - `smtpHost` (string, optional)
 - `smtpPort` (string, optional)
@@ -44,7 +44,7 @@ The email body should include:
 - Their assigned role
 - A link to accept: `{APP_URL}/invite/{invitationId}` (or just the login page with a note)
 
-### 5. Add SMTP routes to `packages/server/src/routes/team-settings.ts`
+### 5. Add SMTP routes to `packages/runtime/src/routes/team-settings.ts`
 - `GET /api/team-settings/smtp` — returns `{ host, port, user, from, hasPassword }` (never returns the actual password)
 - `PUT /api/team-settings/smtp` — saves SMTP config (encrypts password)
 - `POST /api/team-settings/smtp/test` — sends a test email to the current user's email
@@ -71,10 +71,10 @@ bun run build
 ```
 
 ## Files Modified
-- `packages/server/package.json` — add nodemailer dependency
-- `packages/server/src/lib/auth.ts` — add org schema fields + sendInvitationEmail callback
-- `packages/server/src/lib/email.ts` — **NEW** email service
-- `packages/server/src/routes/team-settings.ts` — add SMTP endpoints
+- `packages/runtime/package.json` — add nodemailer dependency
+- `packages/runtime/src/lib/auth.ts` — add org schema fields + sendInvitationEmail callback
+- `packages/runtime/src/lib/email.ts` — **NEW** email service
+- `packages/runtime/src/routes/team-settings.ts` — add SMTP endpoints
 - `packages/client/src/lib/api.ts` — add SMTP API methods
 - `packages/client/src/components/settings/TeamSettings.tsx` — add SMTP settings UI
 

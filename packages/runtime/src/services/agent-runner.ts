@@ -265,6 +265,11 @@ export class AgentRunner {
     // a `resumeReason` that tells us WHY we're entering `running` — so we can
     // choose the correct system prefix for the Claude session resume.
     const currentThread = await this.threadManager.getThread(threadId);
+
+    // Pre-cache userId so emitWS doesn't hit the DB on every streaming event
+    if (currentThread?.userId) {
+      this.state.threadUserIds.set(threadId, currentThread.userId);
+    }
     const currentStatus = (currentThread?.status ?? 'pending') as ThreadStatus;
     const startEvent = this.pickStartEvent(currentStatus);
 
@@ -283,8 +288,12 @@ export class AgentRunner {
       currentThread?.cost ?? 0,
     );
 
-    // Update thread status + provider in DB
-    await this.threadManager.updateThread(threadId, { status: newStatus, provider });
+    // Update thread status + provider in DB, reset completedAt when restarting
+    await this.threadManager.updateThread(threadId, {
+      status: newStatus,
+      provider,
+      completedAt: null,
+    });
 
     // Save user message in DB (skip when a draft message already exists, e.g. idle threads)
     if (!skipMessageInsert) {

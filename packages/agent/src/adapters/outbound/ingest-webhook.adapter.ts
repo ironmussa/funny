@@ -2,7 +2,7 @@
  * IngestWebhookAdapter — forwards all EventBus events to the main
  * server's ingest webhook endpoint so they appear in the UI.
  *
- * Uses @funny/funny-client under the hood for HTTP communication.
+ * Uses @funny/sdk under the hood for HTTP communication.
  *
  * Env vars:
  *   INGEST_WEBHOOK_URL    — Base URL of the funny server (default: http://localhost:3001)
@@ -13,7 +13,7 @@
  * in EventBus still retains it on disk).
  */
 
-import { FunnyClient, FunnyClientError } from '@funny/funny-client';
+import { FunnyClient, FunnyClientError } from '@funny/sdk';
 
 import type { PipelineEvent } from '../../core/types.js';
 import type { EventBus } from '../../infrastructure/event-bus.js';

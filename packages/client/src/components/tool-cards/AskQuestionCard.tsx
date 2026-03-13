@@ -99,6 +99,14 @@ export function AskQuestionCard({
     return parseOutputToSelections(output!, questions);
   }, [alreadyAnswered, output, questions]);
 
+  // When output exists but nothing could be parsed back into selections,
+  // show the raw answer text as a fallback (e.g. user typed directly in chat input).
+  const rawAnswerFallback = useMemo(() => {
+    if (!alreadyAnswered) return null;
+    if (restoredState && restoredState.selections.size > 0) return null;
+    return output!;
+  }, [alreadyAnswered, restoredState, output]);
+
   const [activeTab, setActiveTab] = useState(0);
   const [selections, setSelections] = useState<Map<number, Set<number>>>(
     () => restoredState?.selections ?? new Map(),
@@ -234,55 +242,96 @@ export function AskQuestionCard({
 
       {/* Tabs */}
       <div className="border-t border-border/40">
-        {questions.length > 1 && (
-          <div className="flex gap-0 border-b border-border/40">
-            {questions.map((q, i) => (
-              <button
-                key={q.header}
-                onClick={() => setActiveTab(i)}
-                className={cn(
-                  'px-3 py-1.5 text-sm font-medium transition-colors relative',
-                  i === activeTab
-                    ? 'text-foreground'
-                    : 'text-muted-foreground hover:text-foreground/80',
-                )}
-              >
-                {q.header}
-                {selections.get(i)?.size ? (
-                  <Check className="ml-1 inline h-2.5 w-2.5 text-status-success/80" />
-                ) : null}
-                {i === activeTab && (
-                  <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-primary" />
-                )}
-              </button>
-            ))}
+        {/* Fallback: when output exists but couldn't be parsed into selections, show the raw answer */}
+        {rawAnswerFallback ? (
+          <div className="px-3 py-2">
+            <p className="text-xs leading-relaxed text-foreground">{questions[0]?.question}</p>
+            <div className="mt-1.5 rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-xs text-muted-foreground">
+              {rawAnswerFallback}
+            </div>
           </div>
-        )}
+        ) : (
+          <>
+            {questions.length > 1 && (
+              <div className="flex gap-0 border-b border-border/40">
+                {questions.map((q, i) => (
+                  <button
+                    key={q.header}
+                    onClick={() => setActiveTab(i)}
+                    className={cn(
+                      'px-3 py-1.5 text-sm font-medium transition-colors relative',
+                      i === activeTab
+                        ? 'text-foreground'
+                        : 'text-muted-foreground hover:text-foreground/80',
+                    )}
+                  >
+                    {q.header}
+                    {selections.get(i)?.size ? (
+                      <Check className="ml-1 inline h-2.5 w-2.5 text-status-success/80" />
+                    ) : null}
+                    {i === activeTab && (
+                      <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-primary" />
+                    )}
+                  </button>
+                ))}
+              </div>
+            )}
 
-        {/* Active question */}
-        <div className="space-y-2 px-3 py-2">
-          <p className="text-xs leading-relaxed text-foreground">{activeQ.question}</p>
+            {/* Active question */}
+            <div className="space-y-2 px-3 py-2">
+              <p className="text-xs leading-relaxed text-foreground">{activeQ.question}</p>
 
-          {/* Options — use min-height from the tallest question to prevent layout shift (only when interactive) */}
-          <div
-            className="space-y-1"
-            style={
-              !submitted && maxContentHeight > 0
-                ? { minHeight: `${maxContentHeight}px` }
-                : undefined
-            }
-          >
-            {activeQ.options.map((opt, oi) => {
-              const isSelected = activeSelections.has(oi);
-              return (
+              {/* Options — use min-height from the tallest question to prevent layout shift (only when interactive) */}
+              <div
+                className="space-y-1"
+                style={
+                  !submitted && maxContentHeight > 0
+                    ? { minHeight: `${maxContentHeight}px` }
+                    : undefined
+                }
+              >
+                {activeQ.options.map((opt, oi) => {
+                  const isSelected = activeSelections.has(oi);
+                  return (
+                    <button
+                      key={opt.label}
+                      onClick={() => toggleOption(activeTab, oi, activeQ.multiSelect)}
+                      disabled={submitted}
+                      className={cn(
+                        'flex items-start gap-2 w-full text-left rounded-md px-2.5 py-1.5 transition-colors border',
+                        isSelected
+                          ? 'border-primary/50 bg-primary/10'
+                          : 'border-border/40 bg-background/50 hover:border-border hover:bg-accent/30',
+                        submitted && 'opacity-70 cursor-default',
+                      )}
+                    >
+                      <div
+                        className={cn(
+                          'mt-0.5 flex-shrink-0 h-3.5 w-3.5 rounded-full border-2 flex items-center justify-center',
+                          activeQ.multiSelect && 'rounded-sm',
+                          isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/40',
+                        )}
+                      >
+                        {isSelected && <Check className="h-2 w-2 text-primary-foreground" />}
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-xs font-medium text-foreground">{opt.label}</span>
+                        <p className="text-xs leading-snug text-muted-foreground">
+                          {opt.description}
+                        </p>
+                      </div>
+                    </button>
+                  );
+                })}
+
+                {/* Other option */}
                 <button
-                  key={opt.label}
-                  onClick={() => toggleOption(activeTab, oi, activeQ.multiSelect)}
+                  onClick={() => toggleOption(activeTab, OTHER_INDEX, activeQ.multiSelect)}
                   disabled={submitted}
                   className={cn(
-                    'flex items-start gap-2 w-full text-left rounded-md px-2.5 py-1.5 transition-colors border',
-                    isSelected
-                      ? 'border-primary/50 bg-primary/10'
+                    'flex items-start gap-2 w-full text-left rounded-md px-2.5 py-1.5 transition-all border',
+                    isOtherSelected
+                      ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
                       : 'border-border/40 bg-background/50 hover:border-border hover:bg-accent/30',
                     submitted && 'opacity-70 cursor-default',
                   )}
@@ -291,119 +340,92 @@ export function AskQuestionCard({
                     className={cn(
                       'mt-0.5 flex-shrink-0 h-3.5 w-3.5 rounded-full border-2 flex items-center justify-center',
                       activeQ.multiSelect && 'rounded-sm',
-                      isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/40',
+                      isOtherSelected ? 'border-primary bg-primary' : 'border-muted-foreground/40',
                     )}
                   >
-                    {isSelected && <Check className="h-2 w-2 text-primary-foreground" />}
+                    {isOtherSelected && <Check className="h-2 w-2 text-primary-foreground" />}
                   </div>
-                  <div className="min-w-0">
-                    <span className="text-xs font-medium text-foreground">{opt.label}</span>
-                    <p className="text-xs leading-snug text-muted-foreground">{opt.description}</p>
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <PenLine
+                      className={cn(
+                        'h-3 w-3 flex-shrink-0 transition-colors',
+                        isOtherSelected ? 'text-primary' : 'text-muted-foreground',
+                      )}
+                    />
+                    <span
+                      className={cn(
+                        'text-xs font-medium transition-colors',
+                        isOtherSelected ? 'text-foreground' : 'text-foreground',
+                      )}
+                    >
+                      {t('tools.other')}
+                    </span>
                   </div>
                 </button>
-              );
-            })}
 
-            {/* Other option */}
-            <button
-              onClick={() => toggleOption(activeTab, OTHER_INDEX, activeQ.multiSelect)}
-              disabled={submitted}
-              className={cn(
-                'flex items-start gap-2 w-full text-left rounded-md px-2.5 py-1.5 transition-all border',
-                isOtherSelected
-                  ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
-                  : 'border-border/40 bg-background/50 hover:border-border hover:bg-accent/30',
-                submitted && 'opacity-70 cursor-default',
-              )}
-            >
-              <div
-                className={cn(
-                  'mt-0.5 flex-shrink-0 h-3.5 w-3.5 rounded-full border-2 flex items-center justify-center',
-                  activeQ.multiSelect && 'rounded-sm',
-                  isOtherSelected ? 'border-primary bg-primary' : 'border-muted-foreground/40',
+                {/* Other text input */}
+                {isOtherSelected && !submitted && (
+                  <textarea
+                    ref={otherInputRef}
+                    value={otherText}
+                    onChange={(e) =>
+                      setOtherTexts((prev) => {
+                        const next = new Map(prev);
+                        next.set(activeTab, e.target.value);
+                        return next;
+                      })
+                    }
+                    placeholder={t('tools.otherPlaceholder')}
+                    className="min-h-[60px] w-full resize-none rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
+                    rows={2}
+                  />
                 )}
-              >
-                {isOtherSelected && <Check className="h-2 w-2 text-primary-foreground" />}
-              </div>
-              <div className="flex min-w-0 items-center gap-1.5">
-                <PenLine
-                  className={cn(
-                    'h-3 w-3 flex-shrink-0 transition-colors',
-                    isOtherSelected ? 'text-primary' : 'text-muted-foreground',
-                  )}
-                />
-                <span
-                  className={cn(
-                    'text-xs font-medium transition-colors',
-                    isOtherSelected ? 'text-foreground' : 'text-foreground',
-                  )}
-                >
-                  {t('tools.other')}
-                </span>
-              </div>
-            </button>
-
-            {/* Other text input */}
-            {isOtherSelected && !submitted && (
-              <textarea
-                ref={otherInputRef}
-                value={otherText}
-                onChange={(e) =>
-                  setOtherTexts((prev) => {
-                    const next = new Map(prev);
-                    next.set(activeTab, e.target.value);
-                    return next;
-                  })
-                }
-                placeholder={t('tools.otherPlaceholder')}
-                className="min-h-[60px] w-full resize-none rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
-                rows={2}
-              />
-            )}
-            {isOtherSelected && submitted && otherText.trim() && (
-              <div className="rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-xs text-muted-foreground opacity-70">
-                {otherText}
-              </div>
-            )}
-          </div>
-
-          {/* Action buttons */}
-          {onRespond && !submitted && (
-            <div className="flex items-center pt-1">
-              {/* Continue button for "Other" option — shown when user needs to advance manually */}
-              {isOtherSelected && !isLastTab && (
-                <button
-                  onClick={() => setActiveTab((prev) => prev + 1)}
-                  disabled={!currentTabAnswered}
-                  className={cn(
-                    'flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-                    currentTabAnswered
-                      ? 'bg-primary/15 text-primary hover:bg-primary/25'
-                      : 'bg-muted text-muted-foreground cursor-not-allowed',
-                  )}
-                >
-                  {t('tools.continue')}
-                  <ChevronRight className="h-3 w-3" />
-                </button>
-              )}
-
-              {/* Submit button — bottom-right */}
-              <button
-                onClick={handleSubmit}
-                disabled={!allAnswered}
-                className={cn(
-                  'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ml-auto',
-                  allAnswered
-                    ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                    : 'bg-muted text-muted-foreground cursor-not-allowed',
+                {isOtherSelected && submitted && otherText.trim() && (
+                  <div className="rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-xs text-muted-foreground opacity-70">
+                    {otherText}
+                  </div>
                 )}
-              >
-                <Send className="h-3 w-3" />
-                {t('tools.respond')}
-              </button>
+              </div>
+
+              {/* Action buttons */}
+              {onRespond && !submitted && (
+                <div className="flex items-center pt-1">
+                  {/* Continue button for "Other" option — shown when user needs to advance manually */}
+                  {isOtherSelected && !isLastTab && (
+                    <button
+                      onClick={() => setActiveTab((prev) => prev + 1)}
+                      disabled={!currentTabAnswered}
+                      className={cn(
+                        'flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                        currentTabAnswered
+                          ? 'bg-primary/15 text-primary hover:bg-primary/25'
+                          : 'bg-muted text-muted-foreground cursor-not-allowed',
+                      )}
+                    >
+                      {t('tools.continue')}
+                      <ChevronRight className="h-3 w-3" />
+                    </button>
+                  )}
+
+                  {/* Submit button — bottom-right */}
+                  <button
+                    onClick={handleSubmit}
+                    disabled={!allAnswered}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ml-auto',
+                      allAnswered
+                        ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                        : 'bg-muted text-muted-foreground cursor-not-allowed',
+                    )}
+                  >
+                    <Send className="h-3 w-3" />
+                    {t('tools.respond')}
+                  </button>
+                </div>
+              )}
             </div>
-          )}
-        </div>
+          </>
+        )}
       </div>
     </div>
   );

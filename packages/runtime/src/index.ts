@@ -56,7 +56,6 @@ import { pipelineRoutes } from './routes/pipelines.js';
 import pluginRoutes from './routes/plugins.js';
 import { profileRoutes } from './routes/profile.js';
 import { projectRoutes } from './routes/projects.js';
-import { runnerRoutes } from './routes/runners.js';
 import { settingsRoutes } from './routes/settings.js';
 import skillsRoutes from './routes/skills.js';
 import { teamProjectRoutes } from './routes/team-projects.js';
@@ -74,7 +73,6 @@ import { startExternalThreadSweep } from './services/ingest-mapper.js';
 import * as mq from './services/message-queue.js';
 import * as pm from './services/project-manager.js';
 import * as ptyManager from './services/pty-manager.js';
-import * as runnerMgr from './services/runner-manager.js';
 import { saveThreadEvent } from './services/thread-event-service.js';
 import {
   markStaleThreadsInterrupted,
@@ -236,7 +234,6 @@ app.route('/api/team-projects', teamProjectRoutes);
 app.route('/api/team-settings', teamSettingsRoutes);
 app.route('/api/tests', testRoutes);
 app.route('/api/projects', memoryRoutes);
-app.route('/api/runners', runnerRoutes);
 
 // Serve static files from client build (only if dist exists)
 if (existsSync(clientDistDir)) {
@@ -259,6 +256,83 @@ await initPostgres();
 // Auto-create tables on startup, then start server
 await autoMigrate();
 void startScheduler();
+
+// Initialize team mode if --team flag was used
+if (process.env.TEAM_SERVER_URL) {
+  const { initTeamMode, setBrowserWSHandler } = await import('./services/team-client.js');
+  await initTeamMode(process.env.TEAM_SERVER_URL);
+
+  // Register handler for browser WS messages forwarded through the central server
+  setBrowserWSHandler(async (userId, data, respond) => {
+    const parsed = data as { type: string; data: any };
+    if (!parsed?.type) return;
+
+    switch (parsed.type) {
+      case 'pty:spawn': {
+        const d = parsed.data;
+        // Validate cwd against user projects
+        const userProjects = await pm.listProjects(userId);
+        const resolvedCwd = resolve(d.cwd);
+        const isAllowed = userProjects.some((p: any) => {
+          const projectPath = resolve(p.path);
+          if (resolvedCwd.startsWith(projectPath)) return true;
+          const worktreeBase = resolve(
+            dirname(projectPath),
+            WORKTREE_DIR_NAME,
+            basename(projectPath),
+          );
+          return resolvedCwd.startsWith(worktreeBase);
+        });
+        if (!isAllowed) {
+          respond({
+            type: 'pty:error',
+            data: { ptyId: d.id, error: 'Access denied: directory not in a registered project' },
+          });
+          break;
+        }
+        ptyManager.spawnPty(d.id, d.cwd, d.cols, d.rows, userId, d.shell, d.projectId, d.label);
+        break;
+      }
+      case 'pty:write':
+        ptyManager.writePty(parsed.data.id, parsed.data.data);
+        break;
+      case 'pty:resize':
+        ptyManager.resizePty(parsed.data.id, parsed.data.cols, parsed.data.rows);
+        break;
+      case 'pty:kill':
+        ptyManager.killPty(parsed.data.id);
+        break;
+      case 'pty:restore': {
+        const captured = ptyManager.capturePane(parsed.data.id);
+        if (captured) {
+          respond({
+            type: 'pty:data',
+            threadId: '',
+            data: { ptyId: parsed.data.id, data: captured },
+          });
+        }
+        break;
+      }
+      case 'pty:list': {
+        const sessions = ptyManager.listActiveSessions(userId);
+        respond({
+          type: 'pty:sessions',
+          threadId: '',
+          data: {
+            sessions: sessions.map((s) => ({
+              ptyId: s.ptyId,
+              cwd: s.cwd,
+              projectId: s.projectId,
+              label: s.label,
+              shell: s.shell,
+            })),
+          },
+        });
+        break;
+      }
+    }
+  });
+}
 
 // Build handler service context from existing singletons
 const handlerCtx: HandlerServiceContext = {
@@ -333,11 +407,6 @@ const server = Bun.serve({
   async fetch(req: Request, server: any) {
     // Handle WebSocket upgrade
     const url = new URL(req.url);
-    // Runner WebSocket — local runners connect here to stream agent events
-    if (url.pathname === '/ws/runner') {
-      if (server.upgrade(req, { data: { isRunner: true } })) return;
-      return new Response('WebSocket upgrade failed', { status: 400 });
-    }
     // Transcription WebSocket — real-time speech-to-text via AssemblyAI
     if (url.pathname === '/ws/transcribe') {
       let userId = '__local__';
@@ -385,10 +454,6 @@ const server = Bun.serve({
         handleTranscribeWs(ws, ws.data.userId);
         return;
       }
-      if (ws.data?.isRunner) {
-        // Runner connection — don't add to normal client pool
-        return;
-      }
       const userId = ws.data?.userId ?? '__local__';
       const organizationId = ws.data?.organizationId ?? null;
       wsBroker.addClient(ws, userId, organizationId);
@@ -402,14 +467,6 @@ const server = Bun.serve({
             assemblyWs.send(JSON.stringify({ type: 'Terminate' }));
           } catch {}
           assemblyWs.close();
-        }
-        return;
-      }
-      if (ws.data?.isRunner) {
-        // Runner disconnected
-        const runnerId = ws.data?.runnerId;
-        if (runnerId) {
-          log.info('Runner WebSocket disconnected', { namespace: 'runner', runnerId });
         }
         return;
       }
@@ -430,43 +487,6 @@ const server = Bun.serve({
 
         const parsed = JSON.parse(msg.toString());
         const { type, data } = parsed;
-
-        // Handle runner WebSocket messages
-        if (ws.data?.isRunner) {
-          switch (type) {
-            case 'runner:auth': {
-              const runnerId = await runnerMgr.authenticateRunner(parsed.token);
-              if (runnerId) {
-                ws.data.runnerId = runnerId;
-                ws.data.authenticated = true;
-                ws.send(JSON.stringify({ type: 'central:auth_ok' }));
-                log.info('Runner WebSocket authenticated', { namespace: 'runner', runnerId });
-              } else {
-                ws.close(4001, 'Invalid runner token');
-              }
-              break;
-            }
-            case 'runner:agent_event': {
-              if (!ws.data.authenticated) break;
-              // Relay agent event from runner to browser clients
-              const event = parsed.event;
-              if (event) {
-                // Find the thread's userId to route the event
-                const thread = await tm.getThread(event.threadId);
-                if (thread?.userId) {
-                  wsBroker.emitToUser(thread.userId, event);
-                } else {
-                  wsBroker.emit(event);
-                }
-              }
-              break;
-            }
-            case 'runner:ping':
-              ws.send(JSON.stringify({ type: 'central:pong' }));
-              break;
-          }
-          return;
-        }
 
         const userId = ws.data?.userId ?? '__local__';
 

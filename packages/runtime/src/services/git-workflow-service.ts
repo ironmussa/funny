@@ -10,16 +10,16 @@
  * and runs it. All node logic lives in git-pipelines.ts.
  */
 
+import { runPipeline, type PipelineRunOptions } from '@funny/pipelines';
 import type {
   GitWorkflowAction,
   GitWorkflowProgressStep,
   WSGitWorkflowProgressData,
 } from '@funny/shared';
-import { runPipeline, type PipelineRunOptions } from '@funny/shared/pipeline-engine';
 
 import { log } from '../lib/logger.js';
 import { getActionPipeline, deriveSteps, type GitPipelineContext } from './git-pipelines.js';
-import { getPipelineForProject } from './pipeline-orchestrator.js';
+import { getPipelineForProject } from './pipeline-manager.js';
 import { listHooks } from './project-hooks-service.js';
 import { emitWorkflowEvent } from './workflow-event-helpers.js';
 import { wsBroker } from './ws-broker.js';

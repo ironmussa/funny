@@ -40,7 +40,7 @@ mkdirSync(outDir, { recursive: true });
 console.log(`Building sidecar for ${triple}...`);
 console.log(`Output: ${outFile}`);
 
-execSync(`bun build --compile packages/server/src/index.ts --outfile "${outFile}"`, {
+execSync(`bun build --compile packages/runtime/src/index.ts --outfile "${outFile}"`, {
   stdio: 'inherit',
   cwd: join(__dirname, '..'),
 });

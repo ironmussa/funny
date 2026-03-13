@@ -11,7 +11,7 @@
 
 import { log } from '../../lib/logger.js';
 import { isWorkflowActive } from '../git-workflow-service.js';
-import { getPipelineForProject, startPipelineRun } from '../pipeline-orchestrator.js';
+import { getPipelineForProject, startPipelineRun } from '../pipeline-manager.js';
 import type { EventHandler } from './types.js';
 
 export const pipelineTriggerHandler: EventHandler<'git:committed'> = {

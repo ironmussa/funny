@@ -8,11 +8,20 @@ export type DbMode = 'sqlite' | 'postgres';
 
 /**
  * Returns the database mode based on the `DB_MODE` environment variable.
- * Defaults to 'sqlite' when unset.
+ *
+ * Inference rules:
+ *   1. Explicit `DB_MODE` takes priority
+ *   2. `AUTH_MODE=multi` → infer `postgres`
+ *   3. Default → `sqlite`
  */
 export function getDbMode(): DbMode {
   const raw = process.env.DB_MODE?.toLowerCase();
   if (raw === 'postgres' || raw === 'postgresql') return 'postgres';
+  if (raw === 'sqlite') return 'sqlite';
+
+  // Auto-infer: multi-user mode requires PostgreSQL
+  if (process.env.AUTH_MODE?.toLowerCase() === 'multi') return 'postgres';
+
   return 'sqlite';
 }
 

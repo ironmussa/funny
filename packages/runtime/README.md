@@ -1,4 +1,4 @@
-# @ironmussa/funny-server
+# @ironmussa/funny-runtime
 
 Hono HTTP server that orchestrates Claude Code agents, manages git worktrees, and streams real-time events over WebSocket.
 
@@ -6,10 +6,10 @@ Hono HTTP server that orchestrates Claude Code agents, manages git worktrees, an
 
 ```bash
 # Run directly from npm
-bunx @ironmussa/funny-server
+bunx @ironmussa/funny-runtime
 
 # Or install globally
-bun install -g @ironmussa/funny-server
+bun install -g @ironmussa/funny-runtime
 funny-server
 
 # From monorepo root
@@ -26,7 +26,7 @@ Server runs on **http://localhost:3001** by default.
 This package is built as a self-contained Bun runtime bundle in `dist/`.
 
 ```bash
-cd packages/server
+cd packages/runtime
 bun run build
 npm publish
 ```

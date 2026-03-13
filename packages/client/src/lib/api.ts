@@ -32,8 +32,13 @@ import { startSpan, metric } from '@/lib/telemetry';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
+const serverUrl = import.meta.env.VITE_SERVER_URL as string | undefined;
 const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
-const BASE = isTauri ? `http://localhost:${serverPort}/api` : '/api';
+const BASE = serverUrl
+  ? `${serverUrl.replace(/\/+$/, '')}/api`
+  : isTauri
+    ? `http://localhost:${serverPort}/api`
+    : '/api';
 
 /**
  * Get the API base URL for a thread.
@@ -128,7 +133,7 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
         res = await fetch(`${BASE}${path}`, {
           ...init,
           headers,
-          credentials: authMode === 'multi' ? 'include' : 'same-origin',
+          credentials: authMode === 'multi' || serverUrl ? 'include' : 'same-origin',
         });
       } catch (networkError) {
         // Network error (server down, no connectivity, etc.)
@@ -337,6 +342,11 @@ export const api = {
     }),
   deleteThread: (threadId: string) =>
     request<{ ok: boolean }>(`/threads/${threadId}`, { method: 'DELETE' }),
+  updateToolCallOutput: (threadId: string, toolCallId: string, output: string) =>
+    request<{ ok: boolean }>(`/threads/${threadId}/tool-calls/${toolCallId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ output }),
+    }),
 
   // Queue management
   listQueue: (threadId: string) => request<QueuedMessage[]>(`/threads/${threadId}/queue`),
@@ -925,6 +935,8 @@ export const api = {
       method: 'PUT',
       body: JSON.stringify(data),
     }),
+
+  getTranscribeToken: () => request<{ token: string }>('/profile/transcribe-token'),
 
   isSetupCompleted: () => request<{ setupCompleted: boolean }>('/profile/setup-completed'),
 

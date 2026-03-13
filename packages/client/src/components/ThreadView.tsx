@@ -717,6 +717,10 @@ const MemoizedMessageList = memo(
                         useThreadStore
                           .getState()
                           .handleWSToolOutput(threadId, { toolCallId: tc.id, output: answer });
+                        // Persist the formatted answer directly on the tool call so it
+                        // survives page refreshes (sendMessage also attempts this but
+                        // uses the raw prompt text which may differ from the formatted answer).
+                        api.updateToolCallOutput(threadId, tc.id, answer);
                         onSend(answer, { model: '', mode: '' });
                       }
                     : undefined
@@ -755,6 +759,7 @@ const MemoizedMessageList = memo(
                               toolCallId: call.id,
                               output: answer,
                             });
+                            api.updateToolCallOutput(threadId, call.id, answer);
                           }
                         }
                         onSend(answer, { model: '', mode: '' });

@@ -30,7 +30,6 @@ import {
   stashList,
   resetSoft,
   git,
-  type GitStatusSummary,
 } from '@funny/core/git';
 import { badRequest, internal } from '@funny/shared/errors';
 import { Hono } from 'hono';
@@ -54,7 +53,7 @@ import {
   validateFilePaths,
 } from '../services/git-service.js';
 import { executeWorkflow, isWorkflowActive } from '../services/git-workflow-service.js';
-import { getPipelineForProject } from '../services/pipeline-orchestrator.js';
+import { getPipelineForProject } from '../services/pipeline-manager.js';
 import {
   buildCommitMessagePrompt,
   COMMIT_MESSAGE_SYSTEM_PROMPT,
@@ -121,8 +120,9 @@ async function countUnpushedCommits(projectPath: string, branch: string): Promis
 async function requireProjectCwd(
   projectId: string,
   userId?: string,
+  organizationId?: string,
 ): Promise<import('neverthrow').Result<string, import('@funny/shared/errors').DomainError>> {
-  const projectResult = await requireProject(projectId, userId);
+  const projectResult = await requireProject(projectId, userId, organizationId);
   if (projectResult.isErr()) return projectResult.map(() => '');
   return ok(projectResult.value.path);
 }
@@ -246,7 +246,8 @@ gitRoutes.get('/status', async (c) => {
 // GET /api/git/project/:projectId/status
 gitRoutes.get('/project/:projectId/status', async (c) => {
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   if (!existsSync(cwd)) {
@@ -264,7 +265,8 @@ gitRoutes.get('/project/:projectId/status', async (c) => {
 // GET /api/git/project/:projectId/diff/summary
 gitRoutes.get('/project/:projectId/diff/summary', async (c) => {
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   if (!existsSync(cwd)) {
@@ -287,7 +289,8 @@ gitRoutes.get('/project/:projectId/diff/summary', async (c) => {
 // GET /api/git/project/:projectId/diff/file
 gitRoutes.get('/project/:projectId/diff/file', async (c) => {
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const filePath = c.req.query('path');
@@ -303,7 +306,8 @@ gitRoutes.get('/project/:projectId/diff/file', async (c) => {
 // GET /api/git/project/:projectId/log
 gitRoutes.get('/project/:projectId/log', async (c) => {
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const limitRaw = c.req.query('limit');
   const limit = limitRaw ? Math.min(parseInt(limitRaw, 10) || 20, 100) : 20;
@@ -315,7 +319,8 @@ gitRoutes.get('/project/:projectId/log', async (c) => {
 // GET /api/git/project/:projectId/stash/list
 gitRoutes.get('/project/:projectId/stash/list', async (c) => {
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const result = await stashList(cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
@@ -326,7 +331,8 @@ gitRoutes.get('/project/:projectId/stash/list', async (c) => {
 gitRoutes.post('/project/:projectId/stage', async (c) => {
   const projectId = c.req.param('projectId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(projectId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const raw = await c.req.json().catch(() => ({}));
@@ -344,7 +350,8 @@ gitRoutes.post('/project/:projectId/stage', async (c) => {
 gitRoutes.post('/project/:projectId/unstage', async (c) => {
   const projectId = c.req.param('projectId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(projectId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const raw = await c.req.json().catch(() => ({}));
@@ -362,7 +369,8 @@ gitRoutes.post('/project/:projectId/unstage', async (c) => {
 gitRoutes.post('/project/:projectId/revert', async (c) => {
   const projectId = c.req.param('projectId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(projectId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const raw = await c.req.json().catch(() => ({}));
@@ -380,7 +388,8 @@ gitRoutes.post('/project/:projectId/revert', async (c) => {
 gitRoutes.post('/project/:projectId/commit', async (c) => {
   const projectId = c.req.param('projectId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(projectId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const raw = await c.req.json().catch(() => ({}));
@@ -404,7 +413,8 @@ gitRoutes.post('/project/:projectId/commit', async (c) => {
 gitRoutes.post('/project/:projectId/run-hook-command', async (c) => {
   const projectId = c.req.param('projectId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(projectId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const raw = await c.req.json().catch(() => ({}));
@@ -424,7 +434,8 @@ gitRoutes.post('/project/:projectId/run-hook-command', async (c) => {
 gitRoutes.post('/project/:projectId/push', async (c) => {
   const projectId = c.req.param('projectId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(projectId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const identity = await resolveIdentity(userId);
   const result = await push(cwdResult.value, identity);
@@ -437,7 +448,8 @@ gitRoutes.post('/project/:projectId/push', async (c) => {
 gitRoutes.post('/project/:projectId/pull', async (c) => {
   const projectId = c.req.param('projectId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(projectId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const identity = await resolveIdentity(userId);
   const result = await pull(cwdResult.value, identity);
@@ -450,7 +462,8 @@ gitRoutes.post('/project/:projectId/pull', async (c) => {
 gitRoutes.post('/project/:projectId/stash', async (c) => {
   const projectId = c.req.param('projectId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(projectId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const result = await stash(cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
@@ -462,7 +475,8 @@ gitRoutes.post('/project/:projectId/stash', async (c) => {
 gitRoutes.post('/project/:projectId/stash/pop', async (c) => {
   const projectId = c.req.param('projectId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(projectId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const result = await stashPop(cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
@@ -474,7 +488,8 @@ gitRoutes.post('/project/:projectId/stash/pop', async (c) => {
 gitRoutes.post('/project/:projectId/reset-soft', async (c) => {
   const projectId = c.req.param('projectId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(projectId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const result = await resetSoft(cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
@@ -485,8 +500,9 @@ gitRoutes.post('/project/:projectId/reset-soft', async (c) => {
 // POST /api/git/project/:projectId/generate-commit-message
 gitRoutes.post('/project/:projectId/generate-commit-message', async (c) => {
   const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
   const projectId = c.req.param('projectId');
-  const cwdResult = await requireProjectCwd(projectId, userId);
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -602,7 +618,8 @@ gitRoutes.post('/project/:projectId/generate-commit-message', async (c) => {
 // POST /api/git/project/:projectId/gitignore
 gitRoutes.post('/project/:projectId/gitignore', async (c) => {
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const raw = await c.req.json().catch(() => ({}));
@@ -623,7 +640,8 @@ gitRoutes.post('/project/:projectId/gitignore', async (c) => {
 gitRoutes.get('/:threadId/status', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const threadResult = await requireThread(threadId, userId);
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(threadId, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const thread = threadResult.value;
 
@@ -664,7 +682,8 @@ gitRoutes.get('/:threadId/status', async (c) => {
 // GET /api/git/:threadId/diff/summary
 gitRoutes.get('/:threadId/diff/summary', async (c) => {
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   if (!existsSync(cwd)) {
@@ -687,7 +706,8 @@ gitRoutes.get('/:threadId/diff/summary', async (c) => {
 // GET /api/git/:threadId/diff/file
 gitRoutes.get('/:threadId/diff/file', async (c) => {
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const filePath = c.req.query('path');
@@ -703,7 +723,8 @@ gitRoutes.get('/:threadId/diff/file', async (c) => {
 // GET /api/git/:threadId/diff
 gitRoutes.get('/:threadId/diff', async (c) => {
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   if (!existsSync(cwd)) {
@@ -718,7 +739,8 @@ gitRoutes.get('/:threadId/diff', async (c) => {
 gitRoutes.post('/:threadId/stage', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(threadId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -740,7 +762,8 @@ gitRoutes.post('/:threadId/stage', async (c) => {
 gitRoutes.post('/:threadId/unstage', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(threadId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -762,7 +785,8 @@ gitRoutes.post('/:threadId/unstage', async (c) => {
 gitRoutes.post('/:threadId/revert', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(threadId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -784,7 +808,8 @@ gitRoutes.post('/:threadId/revert', async (c) => {
 gitRoutes.post('/:threadId/commit', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(threadId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -815,7 +840,8 @@ gitRoutes.post('/:threadId/commit', async (c) => {
 gitRoutes.post('/:threadId/run-hook-command', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(threadId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const raw = await c.req.json().catch(() => ({}));
@@ -828,7 +854,7 @@ gitRoutes.post('/:threadId/run-hook-command', async (c) => {
   const projectId = thread?.projectId;
   let hookCwd = cwd;
   if (projectId) {
-    const project = await requireProject(projectId, userId);
+    const project = await requireProject(projectId, userId, orgId);
     if (project.isOk()) hookCwd = project.value.path;
   }
   const hooks = listHooks(hookCwd, 'pre-commit').filter((h) => h.enabled);
@@ -844,7 +870,8 @@ gitRoutes.post('/:threadId/run-hook-command', async (c) => {
 gitRoutes.post('/:threadId/push', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(threadId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const span = requestSpan(c, 'git.push', { threadId });
@@ -862,7 +889,8 @@ gitRoutes.post('/:threadId/push', async (c) => {
 gitRoutes.post('/:threadId/pr', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(threadId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const raw = await c.req.json().catch(() => ({}));
@@ -888,12 +916,13 @@ gitRoutes.post('/:threadId/pr', async (c) => {
 // POST /api/git/:threadId/generate-commit-message
 gitRoutes.post('/:threadId/generate-commit-message', async (c) => {
   const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
   const threadId = c.req.param('threadId');
-  const threadResult = await requireThread(threadId, userId);
+  const threadResult = await requireThread(threadId, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const thread = threadResult.value;
 
-  const cwdResult = await requireThreadCwd(threadId, userId);
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 
@@ -1018,7 +1047,8 @@ gitRoutes.post('/:threadId/generate-commit-message', async (c) => {
 gitRoutes.post('/:threadId/merge', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const threadResult = await requireThread(threadId, userId);
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(threadId, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const raw = await c.req.json().catch(() => ({}));
@@ -1053,11 +1083,12 @@ gitRoutes.post('/:threadId/merge', async (c) => {
 gitRoutes.post('/:threadId/workflow', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const threadResult = await requireThread(threadId, userId);
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(threadId, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const thread = threadResult.value;
 
-  const cwdResult = await requireThreadCwd(threadId, userId);
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const raw = await c.req.json().catch(() => ({}));
@@ -1094,7 +1125,8 @@ gitRoutes.post('/:threadId/workflow', async (c) => {
 gitRoutes.post('/project/:projectId/workflow', async (c) => {
   const projectId = c.req.param('projectId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireProjectCwd(projectId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const raw = await c.req.json().catch(() => ({}));
@@ -1134,12 +1166,13 @@ gitRoutes.post('/project/:projectId/workflow', async (c) => {
 // GET /api/git/:threadId/log
 gitRoutes.get('/:threadId/log', async (c) => {
   const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
   const threadId = c.req.param('threadId');
-  const threadResult = await requireThread(threadId, userId);
+  const threadResult = await requireThread(threadId, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const thread = threadResult.value;
 
-  const cwdResult = await requireThreadCwd(threadId, userId);
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const limitRaw = c.req.query('limit');
@@ -1154,7 +1187,8 @@ gitRoutes.get('/:threadId/log', async (c) => {
 gitRoutes.post('/:threadId/pull', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(threadId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const result = await gitServicePull(threadId, userId, cwdResult.value);
@@ -1167,7 +1201,8 @@ gitRoutes.post('/:threadId/pull', async (c) => {
 gitRoutes.post('/:threadId/stash', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(threadId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const result = await gitServiceStash(threadId, userId, cwdResult.value);
@@ -1180,7 +1215,8 @@ gitRoutes.post('/:threadId/stash', async (c) => {
 gitRoutes.post('/:threadId/stash/pop', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(threadId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const result = await gitServicePopStash(threadId, userId, cwdResult.value);
@@ -1192,7 +1228,8 @@ gitRoutes.post('/:threadId/stash/pop', async (c) => {
 // GET /api/git/:threadId/stash/list
 gitRoutes.get('/:threadId/stash/list', async (c) => {
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const result = await stashList(cwdResult.value);
@@ -1204,7 +1241,8 @@ gitRoutes.get('/:threadId/stash/list', async (c) => {
 gitRoutes.post('/:threadId/reset-soft', async (c) => {
   const threadId = c.req.param('threadId');
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(threadId, userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const result = await gitServiceSoftReset(threadId, userId, cwdResult.value);
@@ -1216,7 +1254,8 @@ gitRoutes.post('/:threadId/reset-soft', async (c) => {
 // POST /api/git/:threadId/gitignore
 gitRoutes.post('/:threadId/gitignore', async (c) => {
   const userId = c.get('userId') as string;
-  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId);
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
 

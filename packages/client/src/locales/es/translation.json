@@ -495,7 +495,7 @@
     "noProject": "Selecciona un proyecto para configurar",
     "envFiles": "Archivos Env",
     "envFilesDescription": "Rutas relativas a archivos .env copiados a los worktrees",
-    "envFilePlaceholder": "packages/server/.env",
+    "envFilePlaceholder": "packages/runtime/.env",
     "portGroups": "Grupos de Puertos",
     "portGroupsDescription": "Grupos de puertos para aislamiento de worktrees — cada grupo recibe un puerto único compartido entre sus variables",
     "addPortGroup": "Agregar grupo de puertos",

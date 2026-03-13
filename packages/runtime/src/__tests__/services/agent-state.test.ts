@@ -240,13 +240,14 @@ describe('AgentStateTracker', () => {
       expect(tracker.cliToDbMsgId.get('thread-1')!.get('cli-msg-1')).toBe('db-msg-1');
     });
 
-    test('does NOT clear pendingPermissionRequest', () => {
+    test('clears pendingPermissionRequest to prevent stale permission WAITs', () => {
       tracker.pendingPermissionRequest.set('thread-1', { toolName: 'Bash', toolUseId: 'tu-1' });
 
       tracker.clearRunState('thread-1');
 
-      // pendingPermissionRequest is not cleared by clearRunState
-      expect(tracker.pendingPermissionRequest.has('thread-1')).toBe(true);
+      // pendingPermissionRequest is cleared to prevent stale permission
+      // requests from a previous run causing false WAIT transitions
+      expect(tracker.pendingPermissionRequest.has('thread-1')).toBe(false);
     });
 
     test('clearRunState on non-existent thread does not throw', () => {

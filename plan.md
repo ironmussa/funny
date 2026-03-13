@@ -1,78 +1,70 @@
-# Plan: Improve Client Code Quality — Render Stability Patterns
+# Plan: Arquitectura Dual-Mode (Local SQLite / Multi PostgreSQL)
 
-## Problem Summary
+## Principio fundamental
 
-The render instability we fixed came from 4 recurring anti-patterns:
+```
+AUTH_MODE=local  → DB_MODE=sqlite  → Todo en SQLite local (~/.funny/data.db)
+AUTH_MODE=multi  → DB_MODE=postgres → Todo en PostgreSQL (DATABASE_URL)
+```
 
-1. **Monolithic store objects** — Every WS event does `set({ activeThread: { ...activeThread, <field> } })`, creating a new `activeThread` reference. Components using `useThreadStore(s => s.activeThread)` re-render on every single update (cost, context_usage, messages, tool outputs, etc.) even if they only care about `status` or `initInfo`.
+**No hay mezcla.** En multi mode, NADA usa SQLite. En local mode, NADA usa PostgreSQL.
 
-2. **Unstable `useNavigate()`** — React Router returns a new function on every route change, invalidating all `useCallback`s that depend on it.
+## Lo que YA funciona en el server
 
-3. **Bare `memo()` with object props** — Default `memo()` uses `===` which always fails when store objects are recreated.
+- `db-mode.ts` detecta `DB_MODE` env var
+- `db/index.ts` hace switch SQLite/PG con compat helpers (`dbAll`, `dbGet`, `dbRun`)
+- `migrate.ts` tiene migraciones dual-dialect
+- `auth.ts` cambia provider `sqlite` ↔ `pg` en Better Auth
+- `auth-mode.ts` valida que `multi` requiere `postgres`
+- Todos los services usan los compat helpers
 
-4. **Conditional callback props** — `onAction={isDisabled ? undefined : handler}` alternates between `undefined` and a function reference.
+## Gaps a cerrar
 
-## Planned Changes
+### Task 1: Sincronizar `schema.pg.ts` con `schema.ts` (server)
+`schema.pg.ts` le faltan items que sí están en `schema.ts`:
+- Tabla `instanceSettings`
+- Campo `assemblyaiApiKey` en `userProfiles`
+- Campos test en `pipelines`: `testEnabled`, `testCommand`, `testFixEnabled`, `testFixModel`, `testFixMaxIterations`, `testFixerPrompt`
 
-### Step 1: Create `useStableNavigate()` hook
+### Task 2: Fix `assignLegacyData()` en `auth.ts` (server)
+Usa `db.run(sql`...`)` directo (sync SQLite API). En PG mode crashea.
+- Cambiar a `await dbRun(sql`...`)`
+- Hacer la función async
+- Actualizar callers
 
-**File:** `packages/client/src/hooks/use-stable-navigate.ts` (new)
+### Task 3: Auto-inferir `DB_MODE` desde `AUTH_MODE` (server)
+En `db-mode.ts`:
+- Si `AUTH_MODE=multi` y `DB_MODE` no está → inferir `postgres`
+- Si `AUTH_MODE=local` y `DB_MODE` no está → inferir `sqlite`
+- Mantener override explícito
 
-A reusable hook that wraps `useNavigate()` in a ref and returns a stable function. This eliminates the `navigateRef` boilerplate we manually added to Sidebar, ThreadList, and ProjectItem, and prevents the pattern from being forgotten in future components.
+### Task 4: Central ya migrado a PostgreSQL only ✅
+Ya hecho en sesión anterior. Solo necesita PG.
 
-Then replace all `navigateRef` patterns in Sidebar.tsx, ThreadList.tsx, and ProjectItem.tsx with this hook.
+### Task 5: Verificar builds
+- `bun run build` en server y central
 
-### Step 2: Create `useStableCallback()` utility
+## Configuración final
 
-**File:** `packages/client/src/hooks/use-stable-callback.ts` (new)
+### Local mode (zero config):
+```env
+# No se necesita nada.
+```
 
-A generic hook for the "ref + useCallback" pattern. Useful for any callback that needs to be referentially stable while always calling the latest closure.
+### Multi mode:
+```env
+# Server (.env)
+AUTH_MODE=multi
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
 
-### Step 3: Refactor Sidebar.tsx, ThreadList.tsx, ProjectItem.tsx to use `useStableNavigate()`
+# Central (.env) — si se usa coordinación de equipos
+DATABASE_URL=postgresql://user:pass@host:5432/dbname
+```
 
-Replace the manual `navigateRef` pattern in all three files with the new hook. This reduces boilerplate and makes the intent clearer.
-
-### Step 4: Consolidate thread visual-equality helpers
-
-**File:** `packages/client/src/lib/shallow-compare.ts` (new)
-
-We have duplicate "visual fields only" comparison logic in ThreadList.tsx, ThreadItem.tsx, and Sidebar.tsx. Consolidate into a single utility with:
-- `threadsVisuallyEqual(a, b)` — compares only render-relevant Thread fields
-- `arraysEqual(a, b, eq)` — shallow array comparison with custom element comparator
-
-Then update ThreadList.tsx, ThreadItem.tsx, Sidebar.tsx, and ProjectItem.tsx to import from this shared module.
-
-### Step 5: Add granular selector hooks for `activeThread`
-
-Instead of restructuring the store (high risk), add targeted selector hooks in `thread-selectors.ts` using `zustand/shallow`:
-- `useActiveInitInfo()`
-- `useActiveThreadStatus()`
-- `useActiveThreadMessages()`
-
-Then update ThreadView.tsx to use `useActiveInitInfo()` instead of `activeThread.initInfo`.
-
-### Step 6: Add render stability documentation
-
-Add a comment block to `thread-store.ts` documenting the 4 rules to follow.
-
-## Files Changed
-
-| File | Change Type |
-|------|------------|
-| `packages/client/src/hooks/use-stable-navigate.ts` | New |
-| `packages/client/src/hooks/use-stable-callback.ts` | New |
-| `packages/client/src/lib/shallow-compare.ts` | New |
-| `packages/client/src/components/Sidebar.tsx` | Refactor |
-| `packages/client/src/components/sidebar/ThreadList.tsx` | Refactor |
-| `packages/client/src/components/sidebar/ProjectItem.tsx` | Refactor |
-| `packages/client/src/components/sidebar/ThreadItem.tsx` | Refactor |
-| `packages/client/src/stores/thread-selectors.ts` | Add selector hooks |
-| `packages/client/src/components/ThreadView.tsx` | Use granular selectors |
-| `packages/client/src/stores/thread-store.ts` | Add doc comments |
-
-## What This Does NOT Change
-
-- Store structure (no normalization) — too risky for one PR
-- WS handler logic — unchanged
-- Server code — unchanged
-- Test files — behavior is unchanged
+## Lo que NO cambia
+- Compat helpers (`dbAll`, `dbGet`, `dbRun`)
+- Sistema de migraciones dual-dialect
+- Services (ya usan compat helpers)
+- Routes (ya son async)
+- WebSocket broker
+- Agent runner

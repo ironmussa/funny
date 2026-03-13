@@ -69,8 +69,15 @@ export class AgentMessageHandler {
 
   private async emitWS(threadId: string, type: WSEvent['type'], data: unknown): Promise<void> {
     const event = { type, threadId, data } as WSEvent;
-    const thread = await this.threadManager.getThread(threadId);
-    const userId = thread?.userId;
+
+    // Fast path: use cached userId to avoid a DB read on every emission
+    let userId = this.state.threadUserIds.get(threadId);
+    if (!userId) {
+      const thread = await this.threadManager.getThread(threadId);
+      userId = thread?.userId;
+      if (userId) this.state.threadUserIds.set(threadId, userId);
+    }
+
     if (userId) {
       this.wsBroker.emitToUser(userId, event);
     } else {
@@ -80,7 +87,8 @@ export class AgentMessageHandler {
 
   async handle(threadId: string, msg: CLIMessage): Promise<void> {
     log.debug('handle() raw message', {
-      ...(await this.threadCtx(threadId)),
+      namespace: 'agent',
+      threadId,
       type: msg.type,
       subtype: (msg as any).subtype,
     });
@@ -179,11 +187,11 @@ export class AgentMessageHandler {
       (b: any) => 'type' in b && b.type === 'tool_use',
     );
     log.info('assistant message', {
-      ...(await this.threadCtx(threadId)),
+      namespace: 'agent',
+      threadId,
       cliMsgId,
       hasText: String(!!textContent),
       textChars: String(textContent.length),
-      textContent: textContent || '',
       toolUseCount: String(toolUseBlocks.length),
       toolNames: toolUseBlocks.map((b: any) => b.name).join(','),
     });
@@ -191,22 +199,29 @@ export class AgentMessageHandler {
     if (textContent) {
       let msgId = this.state.currentAssistantMsgId.get(threadId) || cliMap.get(cliMsgId);
       if (msgId) {
-        await this.threadManager.updateMessage(msgId, textContent);
+        // Existing message: emit WS immediately, persist in background
+        // This gives the user instant feedback while DB writes happen async
+        void this.emitWS(threadId, 'agent:message', {
+          messageId: msgId,
+          role: 'assistant',
+          content: textContent,
+        });
+        void this.threadManager.updateMessage(msgId, textContent);
       } else {
+        // New message: must insert first to get the DB-generated msgId
         msgId = await this.threadManager.insertMessage({
           threadId,
+          role: 'assistant',
+          content: textContent,
+        });
+        await this.emitWS(threadId, 'agent:message', {
+          messageId: msgId,
           role: 'assistant',
           content: textContent,
         });
       }
       this.state.currentAssistantMsgId.set(threadId, msgId);
       cliMap.set(cliMsgId, msgId);
-
-      await this.emitWS(threadId, 'agent:message', {
-        messageId: msgId,
-        role: 'assistant',
-        content: textContent,
-      });
     }
 
     // Emit per-message context usage if available.
@@ -241,7 +256,7 @@ export class AgentMessageHandler {
       // Each API response reports the full context window size (not a delta),
       // so just store the latest value instead of accumulating.
       this.state.cumulativeInputTokens.set(threadId, totalInputTokens);
-      await this.emitWS(threadId, 'agent:context_usage', {
+      void this.emitWS(threadId, 'agent:context_usage', {
         inputTokens: totalInputTokens,
         outputTokens,
         cumulativeInputTokens: totalInputTokens,
@@ -432,17 +447,33 @@ export class AgentMessageHandler {
           // Look up the tool call once for all checks below
           const tc = await this.threadManager.getToolCall(toolCallId);
 
-          // For interactive tools (ExitPlanMode / AskUserQuestion): when the thread
-          // is still "waiting" and pendingUserInput is set, the tool_result is an
-          // auto-denial from the preToolUseHook (e.g. "Exit plan mode?"). Skip storing
-          // it so the tool call remains "unanswered" and the UI keeps showing buttons.
+          // For interactive tools (ExitPlanMode / AskUserQuestion): detect and
+          // discard auto-denial results from the preToolUseHook or SDK timeout.
+          //
+          // Detection layers:
+          // 1. pendingUserInput is set → thread is still waiting for user response
+          // 2. Output matches SDK permission prompt text ("Answer questions?" / "Exit plan mode?")
+          //    → this is the SDK timeout or hook denial, not a real user answer
+          // 3. Tool call already has output in DB → user already answered, this is a stale result
           const isInteractive = tc?.name === 'AskUserQuestion' || tc?.name === 'ExitPlanMode';
-          const isAutoDenial = isInteractive && this.state.pendingUserInput.has(threadId);
+
+          const SDK_PERMISSION_PROMPTS = new Set(['Answer questions?', 'Exit plan mode?']);
+          const isPendingDenial = isInteractive && this.state.pendingUserInput.has(threadId);
+          const isSdkTimeoutPoison =
+            isInteractive && SDK_PERMISSION_PROMPTS.has(decodedOutput.trim());
+          const hasExistingAnswer = isInteractive && !!tc?.output;
+          const isAutoDenial = isPendingDenial || isSdkTimeoutPoison || hasExistingAnswer;
 
           if (isAutoDenial) {
+            const denialReason = isPendingDenial
+              ? 'pendingUserInput'
+              : isSdkTimeoutPoison
+                ? 'sdkTimeoutPoison'
+                : 'existingAnswer';
             log.info(`Skipping auto-denial tool_result for ${tc!.name}`, {
               ...(await this.threadCtx(threadId)),
               toolCallId,
+              denialReason,
               autoDenialOutput: decodedOutput.slice(0, 100),
             });
           } else {
@@ -536,9 +567,14 @@ export class AgentMessageHandler {
       ...(await this.threadCtx(threadId)),
       pendingUserInput: waitingReason ?? 'none',
       pendingPermission: permReq ? permReq.toolName : 'none',
+      resultSubtype: msg.subtype,
     });
 
-    if (!waitingReason && permReq) {
+    // Only treat pendingPermissionRequest as a waiting reason if the agent
+    // did NOT complete successfully. A successful exit means the agent
+    // continued past the permission denial and finished its work — the
+    // permission request is stale and should not block completion.
+    if (!waitingReason && permReq && msg.subtype !== 'success') {
       waitingReason = 'permission';
     }
 

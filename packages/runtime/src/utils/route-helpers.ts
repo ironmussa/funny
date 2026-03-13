@@ -10,6 +10,9 @@
  * All thread-access helpers accept a userId parameter to enforce ownership
  * checks in multi-user mode. In local mode (userId='__local__'), ownership
  * is not enforced since there is only one user.
+ *
+ * An optional organizationId parameter allows team members to access shared
+ * projects via the team_projects join table.
  */
 
 import { notFound, forbidden, type DomainError } from '@funny/shared/errors';
@@ -30,12 +33,20 @@ function checkOwnership(thread: { userId: string }, userId: string): Result<void
 export async function requireThread(
   id: string,
   userId?: string,
+  organizationId?: string,
 ): Promise<Result<Awaited<ReturnType<typeof tm.getThread>> & {}, DomainError>> {
   const thread = await tm.getThread(id);
   if (!thread) return err(notFound('Thread not found'));
   if (userId) {
     const ownerCheck = checkOwnership(thread, userId);
-    if (ownerCheck.isErr()) return err(ownerCheck.error);
+    if (ownerCheck.isErr()) {
+      // Ownership failed — check if the thread's project is shared with the org
+      if (organizationId) {
+        const isTeam = await pm.isProjectInOrg(thread.projectId, organizationId);
+        if (isTeam) return ok(thread);
+      }
+      return err(ownerCheck.error);
+    }
   }
   return ok(thread);
 }
@@ -44,12 +55,19 @@ export async function requireThread(
 export async function requireThreadWithMessages(
   id: string,
   userId?: string,
+  organizationId?: string,
 ): Promise<Result<NonNullable<Awaited<ReturnType<typeof tm.getThreadWithMessages>>>, DomainError>> {
   const result = await tm.getThreadWithMessages(id);
   if (!result) return err(notFound('Thread not found'));
   if (userId) {
     const ownerCheck = checkOwnership(result, userId);
-    if (ownerCheck.isErr()) return err(ownerCheck.error);
+    if (ownerCheck.isErr()) {
+      if (organizationId) {
+        const isTeam = await pm.isProjectInOrg(result.projectId, organizationId);
+        if (isTeam) return ok(result);
+      }
+      return err(ownerCheck.error);
+    }
   }
   return ok(result);
 }
@@ -58,12 +76,19 @@ export async function requireThreadWithMessages(
 export async function requireProject(
   id: string,
   userId?: string,
+  organizationId?: string,
 ): Promise<Result<NonNullable<Awaited<ReturnType<typeof pm.getProject>>>, DomainError>> {
   const project = await pm.getProject(id);
   if (!project) return err(notFound('Project not found'));
   if (userId) {
     const ownerCheck = checkOwnership(project, userId);
-    if (ownerCheck.isErr()) return err(ownerCheck.error);
+    if (ownerCheck.isErr()) {
+      if (organizationId) {
+        const isTeam = await pm.isProjectInOrg(project.id, organizationId);
+        if (isTeam) return ok(project);
+      }
+      return err(ownerCheck.error);
+    }
   }
   return ok(project);
 }
@@ -76,8 +101,9 @@ export async function requireProject(
 export async function requireThreadCwd(
   threadId: string,
   userId?: string,
+  organizationId?: string,
 ): Promise<Result<string, DomainError>> {
-  const threadResult = await requireThread(threadId, userId);
+  const threadResult = await requireThread(threadId, userId, organizationId);
   if (threadResult.isErr()) return err(threadResult.error);
   const thread = threadResult.value;
   if (thread.worktreePath) return ok(thread.worktreePath);

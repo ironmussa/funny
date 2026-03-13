@@ -18,11 +18,16 @@ const PUBLIC_PATHS = new Set([
   '/api/setup/status',
 ]);
 
+const PUBLIC_PREFIXES = ['/api/invite-links/verify/', '/api/invite-links/register'];
+
 export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
   const path = new URL(c.req.url).pathname;
 
   // Public endpoints
   if (PUBLIC_PATHS.has(path)) return next();
+
+  // Public invite-link paths
+  if (PUBLIC_PREFIXES.some((p) => path.startsWith(p))) return next();
 
   // Better Auth handles its own routes
   if (path.startsWith('/api/auth/')) return next();

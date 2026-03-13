@@ -222,6 +222,35 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    name: '008_invite_links',
+    async up() {
+      await exec(sql`
+        CREATE TABLE IF NOT EXISTS invite_links (
+          id TEXT PRIMARY KEY,
+          organization_id TEXT NOT NULL,
+          token TEXT NOT NULL UNIQUE,
+          role TEXT NOT NULL DEFAULT 'member',
+          created_by TEXT NOT NULL,
+          expires_at TEXT,
+          max_uses TEXT,
+          use_count TEXT NOT NULL DEFAULT '0',
+          revoked TEXT NOT NULL DEFAULT '0',
+          created_at TEXT NOT NULL
+        )
+      `);
+
+      await exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_invite_links_token
+        ON invite_links (token)
+      `);
+
+      await exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_invite_links_org
+        ON invite_links (organization_id)
+      `);
+    },
+  },
 ];
 
 export async function autoMigrate() {

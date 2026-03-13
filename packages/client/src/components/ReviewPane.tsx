@@ -1056,125 +1056,6 @@ export function ReviewPane() {
           <h3 className="mr-1 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground">
             {t('review.title')}
           </h3>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={refresh}
-                className="text-muted-foreground"
-                data-testid="review-refresh"
-              >
-                <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">{t('review.refresh')}</TooltipContent>
-          </Tooltip>
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={handlePull}
-                disabled={pullInProgress}
-                className="text-muted-foreground"
-                data-testid="review-pull"
-              >
-                <Download className={cn('h-3.5 w-3.5', pullInProgress && 'animate-pulse')} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="top">{t('review.pull', 'Pull')}</TooltipContent>
-          </Tooltip>
-          <Popover
-            open={logOpen}
-            onOpenChange={(open) => {
-              setLogOpen(open);
-              if (open) handleLoadLog();
-            }}
-          >
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <PopoverTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    className="text-muted-foreground"
-                    data-testid="review-commit-log"
-                  >
-                    <History className="h-3.5 w-3.5" />
-                  </Button>
-                </PopoverTrigger>
-              </TooltipTrigger>
-              <TooltipContent side="top">{t('review.log', 'Commit log')}</TooltipContent>
-            </Tooltip>
-            <PopoverContent align="start" className="max-h-[360px] w-[400px] overflow-auto p-0">
-              {logLoading ? (
-                <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
-                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  {t('review.loadingLog', 'Loading commits\u2026')}
-                </div>
-              ) : logEntries.length === 0 ? (
-                <p className="p-3 text-xs text-muted-foreground">
-                  {t('review.noCommits', 'No commits yet')}
-                </p>
-              ) : (
-                <div className="divide-y divide-border">
-                  {logEntries.map((entry) => (
-                    <div key={entry.hash} className="px-3 py-2 text-xs hover:bg-accent/50">
-                      <div className="flex items-center gap-2">
-                        <code className="font-mono text-[10px] text-primary">
-                          {entry.shortHash}
-                        </code>
-                        <span className="text-muted-foreground">{entry.relativeDate}</span>
-                      </div>
-                      <p className="mt-0.5 truncate text-foreground">{entry.message}</p>
-                      <p className="text-[10px] text-muted-foreground">{entry.author}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </PopoverContent>
-          </Popover>
-          {summaries.length > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handleStash}
-                  disabled={stashInProgress || !!isAgentRunning}
-                  className="text-muted-foreground"
-                  data-testid="review-stash"
-                >
-                  <Archive className={cn('h-3.5 w-3.5', stashInProgress && 'animate-pulse')} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {isAgentRunning
-                  ? t('review.agentRunningTooltip')
-                  : t('review.stash', 'Stash changes')}
-              </TooltipContent>
-            </Tooltip>
-          )}
-          {summaries.length > 0 && (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handleDiscardAll}
-                  disabled={!!actionInProgress || !!isAgentRunning}
-                  className="text-muted-foreground"
-                  data-testid="review-discard-all"
-                >
-                  <Undo2 className="h-3.5 w-3.5" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {isAgentRunning ? t('review.agentRunningTooltip') : t('review.discard', 'Discard')}
-              </TooltipContent>
-            </Tooltip>
-          )}
         </div>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -1275,6 +1156,131 @@ export function ReviewPane() {
               })}
             </div>
           )}
+
+          {/* Toolbar icons */}
+          <div className="flex items-center gap-0.5 border-b border-sidebar-border px-2 py-1">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={refresh}
+                  className="text-muted-foreground"
+                  data-testid="review-refresh"
+                >
+                  <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t('review.refresh')}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handlePull}
+                  disabled={pullInProgress}
+                  className="text-muted-foreground"
+                  data-testid="review-pull"
+                >
+                  <Download className={cn('h-3.5 w-3.5', pullInProgress && 'animate-pulse')} />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">{t('review.pull', 'Pull')}</TooltipContent>
+            </Tooltip>
+            <Popover
+              open={logOpen}
+              onOpenChange={(open) => {
+                setLogOpen(open);
+                if (open) handleLoadLog();
+              }}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <PopoverTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      className="text-muted-foreground"
+                      data-testid="review-commit-log"
+                    >
+                      <History className="h-3.5 w-3.5" />
+                    </Button>
+                  </PopoverTrigger>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t('review.log', 'Commit log')}</TooltipContent>
+              </Tooltip>
+              <PopoverContent align="start" className="max-h-[360px] w-[400px] overflow-auto p-0">
+                {logLoading ? (
+                  <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                    {t('review.loadingLog', 'Loading commits\u2026')}
+                  </div>
+                ) : logEntries.length === 0 ? (
+                  <p className="p-3 text-xs text-muted-foreground">
+                    {t('review.noCommits', 'No commits yet')}
+                  </p>
+                ) : (
+                  <div className="divide-y divide-border">
+                    {logEntries.map((entry) => (
+                      <div key={entry.hash} className="px-3 py-2 text-xs hover:bg-accent/50">
+                        <div className="flex items-center gap-2">
+                          <code className="font-mono text-[10px] text-primary">
+                            {entry.shortHash}
+                          </code>
+                          <span className="text-muted-foreground">{entry.relativeDate}</span>
+                        </div>
+                        <p className="mt-0.5 truncate text-foreground">{entry.message}</p>
+                        <p className="text-[10px] text-muted-foreground">{entry.author}</p>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+            {summaries.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={handleStash}
+                    disabled={stashInProgress || !!isAgentRunning}
+                    className="text-muted-foreground"
+                    data-testid="review-stash"
+                  >
+                    <Archive className={cn('h-3.5 w-3.5', stashInProgress && 'animate-pulse')} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {isAgentRunning
+                    ? t('review.agentRunningTooltip')
+                    : t('review.stash', 'Stash changes')}
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {summaries.length > 0 && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={handleDiscardAll}
+                    disabled={!!actionInProgress || !!isAgentRunning}
+                    className="text-muted-foreground"
+                    data-testid="review-discard-all"
+                  >
+                    <Undo2 className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {isAgentRunning
+                    ? t('review.agentRunningTooltip')
+                    : t('review.discard', 'Discard')}
+                </TooltipContent>
+              </Tooltip>
+            )}
+          </div>
 
           {/* File search */}
           {summaries.length > 0 && (

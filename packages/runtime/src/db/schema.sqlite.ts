@@ -283,3 +283,5 @@ export const threadEvents = sqliteTable('thread_events', {
   data: text('data').notNull(), // JSON-encoded event data
   createdAt: text('created_at').notNull(),
 });
+
+// invite_links table has been moved to packages/server (central server only).

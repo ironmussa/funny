@@ -131,7 +131,8 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
         res = await fetch(`${BASE}${path}`, {
           ...init,
           headers,
-          credentials: authMode === 'multi' || serverUrl ? 'include' : 'same-origin',
+          credentials:
+            authMode === 'multi' || import.meta.env.VITE_SERVER_URL ? 'include' : 'same-origin',
         });
       } catch (networkError) {
         // Network error (server down, no connectivity, etc.)
@@ -1022,4 +1023,55 @@ export const api = {
     }),
   stopTest: (projectId: string) =>
     request<{ ok: boolean }>(`/tests/${projectId}/stop`, { method: 'POST' }),
+
+  // Invite Links
+  listInviteLinks: () =>
+    request<
+      {
+        id: string;
+        token: string;
+        role: string;
+        expiresAt: string | null;
+        maxUses: number | null;
+        useCount: number;
+        createdAt: string;
+      }[]
+    >('/invite-links'),
+  createInviteLink: (data: { role?: string; expiresInDays?: number; maxUses?: number }) =>
+    request<{
+      id: string;
+      token: string;
+      role: string;
+      expiresAt: string | null;
+      maxUses: number | null;
+      useCount: number;
+      createdAt: string;
+    }>('/invite-links', { method: 'POST', body: JSON.stringify(data) }),
+  revokeInviteLink: (id: string) =>
+    request<{ ok: boolean }>(`/invite-links/${id}`, { method: 'DELETE' }),
+  acceptInviteLink: (token: string) =>
+    request<{ ok: boolean; organizationId: string; alreadyMember?: boolean }>(
+      '/invite-links/accept',
+      { method: 'POST', body: JSON.stringify({ token }) },
+    ),
+  /** Verify an invite token (public — no auth required) */
+  verifyInviteLink: (token: string) =>
+    request<{
+      valid: boolean;
+      role: string;
+      organizationName: string;
+      organizationId: string;
+    }>(`/invite-links/verify/${token}`),
+  /** Register a new user via invite token (public — no auth required) */
+  registerViaInvite: (data: {
+    token: string;
+    username: string;
+    password: string;
+    displayName?: string;
+  }) =>
+    request<{
+      ok: boolean;
+      user: { id: string; username: string; displayName: string };
+      organizationId: string;
+    }>('/invite-links/register', { method: 'POST', body: JSON.stringify(data) }),
 };

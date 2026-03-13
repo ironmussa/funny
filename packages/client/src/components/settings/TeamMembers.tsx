@@ -1,5 +1,5 @@
 import type { TeamRole } from '@funny/shared';
-import { Send, UserMinus, X } from 'lucide-react';
+import { Copy, Check, Link, MailWarning, Send, Trash2, UserMinus, X } from 'lucide-react';
 import { useState, useEffect, useCallback } from 'react';
 import { toast } from 'sonner';
 
@@ -14,6 +14,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import { api } from '@/lib/api';
 import { authClient } from '@/lib/auth-client';
 import { useAuthStore } from '@/stores/auth-store';
 
@@ -55,6 +56,16 @@ const INVITE_ROLES: { value: InviteRole; label: string }[] = [
   { value: 'member', label: 'Member' },
 ];
 
+interface InviteLink {
+  id: string;
+  token: string;
+  role: string;
+  expiresAt: string | null;
+  maxUses: number | null;
+  useCount: number;
+  createdAt: string;
+}
+
 export function TeamMembers() {
   const [members, setMembers] = useState<Member[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +77,15 @@ export function TeamMembers() {
   const [inviteEmail, setInviteEmail] = useState('');
   const [inviteRole, setInviteRole] = useState<InviteRole>('member');
   const [sending, setSending] = useState(false);
+
+  // SMTP config state
+  const [smtpConfigured, setSmtpConfigured] = useState<boolean | null>(null);
+
+  // Invite link state
+  const [inviteLinks, setInviteLinks] = useState<InviteLink[]>([]);
+  const [linkRole, setLinkRole] = useState<InviteRole>('member');
+  const [creatingLink, setCreatingLink] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const loadMembers = useCallback(async () => {
     try {
@@ -93,10 +113,28 @@ export function TeamMembers() {
     }
   }, []);
 
+  const loadInviteLinks = useCallback(async () => {
+    const result = await api.listInviteLinks();
+    if (result.isOk()) {
+      setInviteLinks(result.value);
+    }
+  }, []);
+
+  const checkSmtpConfig = useCallback(async () => {
+    const result = await api.getSmtpSettings();
+    if (result.isOk()) {
+      setSmtpConfigured(result.value.configured);
+    } else {
+      setSmtpConfigured(false);
+    }
+  }, []);
+
   useEffect(() => {
     loadMembers();
     loadInvitations();
-  }, [loadMembers, loadInvitations]);
+    loadInviteLinks();
+    checkSmtpConfig();
+  }, [loadMembers, loadInvitations, loadInviteLinks, checkSmtpConfig]);
 
   const handleRoleChange = useCallback(async (memberId: string, newRole: TeamRole) => {
     try {
@@ -143,6 +181,41 @@ export function TeamMembers() {
     }
   }, [inviteEmail, inviteRole, loadInvitations]);
 
+  const handleCreateLink = useCallback(async () => {
+    setCreatingLink(true);
+    try {
+      const result = await api.createInviteLink({ role: linkRole, expiresInDays: 7 });
+      if (result.isOk()) {
+        setInviteLinks((prev) => [result.value, ...prev]);
+        toast.success('Invite link created');
+      } else {
+        toast.error('Failed to create invite link');
+      }
+    } catch {
+      toast.error('Failed to create invite link');
+    } finally {
+      setCreatingLink(false);
+    }
+  }, [linkRole]);
+
+  const handleRevokeLink = useCallback(async (linkId: string) => {
+    const result = await api.revokeInviteLink(linkId);
+    if (result.isOk()) {
+      setInviteLinks((prev) => prev.filter((l) => l.id !== linkId));
+      toast.success('Invite link revoked');
+    } else {
+      toast.error('Failed to revoke invite link');
+    }
+  }, []);
+
+  const handleCopyLink = useCallback((link: InviteLink) => {
+    const url = `${window.location.origin}/invite/${link.token}`;
+    navigator.clipboard.writeText(url);
+    setCopiedId(link.id);
+    toast.success('Link copied to clipboard');
+    setTimeout(() => setCopiedId(null), 2000);
+  }, []);
+
   const handleCancelInvitation = useCallback(async (invitationId: string) => {
     try {
       await authClient.organization.cancelInvitation({ invitationId });
@@ -169,6 +242,18 @@ export function TeamMembers() {
       <h3 className="settings-section-header">Invite Member</h3>
       <div className="settings-card">
         <div className="px-4 py-3.5">
+          {smtpConfigured === false && (
+            <div
+              className="mb-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
+              data-testid="team-invite-smtp-warning"
+            >
+              <MailWarning className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>
+                Email is not configured. Configure SMTP in <strong>Settings &gt; Email</strong> to
+                send invitations, or use an invite link below.
+              </span>
+            </div>
+          )}
           <p className="mb-3 text-xs text-muted-foreground">
             Send an invitation to join this organization.
           </p>
@@ -179,12 +264,17 @@ export function TeamMembers() {
               onChange={(e) => setInviteEmail(e.target.value)}
               placeholder="user@example.com"
               className="flex-1 text-sm"
+              disabled={smtpConfigured === false}
               onKeyDown={(e) => {
-                if (e.key === 'Enter') handleInvite();
+                if (e.key === 'Enter' && smtpConfigured) handleInvite();
               }}
               data-testid="team-invite-email"
             />
-            <Select value={inviteRole} onValueChange={(v) => setInviteRole(v as InviteRole)}>
+            <Select
+              value={inviteRole}
+              onValueChange={(v) => setInviteRole(v as InviteRole)}
+              disabled={smtpConfigured === false}
+            >
               <SelectTrigger className="h-9 w-[100px]" data-testid="team-invite-role">
                 <SelectValue />
               </SelectTrigger>
@@ -199,13 +289,109 @@ export function TeamMembers() {
             <Button
               size="sm"
               onClick={handleInvite}
-              disabled={!inviteEmail.trim() || sending}
+              disabled={!inviteEmail.trim() || sending || smtpConfigured === false}
               data-testid="team-invite-send"
             >
               <Send className="mr-1.5 h-3.5 w-3.5" />
               Invite
             </Button>
           </div>
+        </div>
+      </div>
+
+      {/* Invite link */}
+      <h3 className="settings-section-header">Invite Link</h3>
+      <div className="settings-card">
+        <div className="px-4 py-3.5">
+          <p className="mb-3 text-xs text-muted-foreground">
+            Generate a shareable link to invite people to this organization.
+          </p>
+          <div className="flex items-center gap-2">
+            <Select value={linkRole} onValueChange={(v) => setLinkRole(v as InviteRole)}>
+              <SelectTrigger className="h-9 w-[100px]" data-testid="team-link-role">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {INVITE_ROLES.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button
+              size="sm"
+              onClick={handleCreateLink}
+              disabled={creatingLink}
+              data-testid="team-link-create"
+            >
+              <Link className="mr-1.5 h-3.5 w-3.5" />
+              Generate Link
+            </Button>
+          </div>
+          {inviteLinks.length > 0 && (
+            <div className="mt-3 space-y-2">
+              {inviteLinks.map((link) => {
+                const isExpired = link.expiresAt && new Date(link.expiresAt) < new Date();
+                const isMaxed = link.maxUses !== null && link.useCount >= link.maxUses;
+                const isActive = !isExpired && !isMaxed;
+
+                return (
+                  <div
+                    key={link.id}
+                    className="flex items-center gap-2 rounded-md border border-border/50 px-3 py-2"
+                    data-testid={`team-link-${link.id}`}
+                  >
+                    <div className="min-w-0 flex-1">
+                      <div className="flex items-center gap-2">
+                        <code className="truncate text-xs text-muted-foreground">
+                          {window.location.origin}/invite/{link.token}
+                        </code>
+                        <Badge
+                          variant="secondary"
+                          className={
+                            isActive
+                              ? 'bg-green-500/15 text-green-700 dark:text-green-400'
+                              : 'bg-red-500/15 text-red-700 dark:text-red-400'
+                          }
+                        >
+                          {isExpired ? 'expired' : isMaxed ? 'maxed' : link.role}
+                        </Badge>
+                      </div>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {link.useCount} use{link.useCount !== 1 ? 's' : ''}
+                        {link.expiresAt &&
+                          ` · expires ${new Date(link.expiresAt).toLocaleDateString()}`}
+                      </p>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0"
+                      onClick={() => handleCopyLink(link)}
+                      disabled={!isActive}
+                      data-testid={`team-link-copy-${link.id}`}
+                    >
+                      {copiedId === link.id ? (
+                        <Check className="h-3.5 w-3.5 text-green-500" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                      onClick={() => handleRevokeLink(link.id)}
+                      data-testid={`team-link-revoke-${link.id}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
       </div>
 

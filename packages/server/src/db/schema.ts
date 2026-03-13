@@ -133,3 +133,18 @@ export const instanceSettings = pgTable('instance_settings', {
   value: text('value').notNull(),
   updatedAt: text('updated_at').notNull(),
 });
+
+// ── Invite Links ─────────────────────────────────────────
+
+export const inviteLinks = pgTable('invite_links', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id').notNull(),
+  token: text('token').notNull().unique(),
+  role: text('role').notNull().default('member'),
+  createdBy: text('created_by').notNull(),
+  expiresAt: text('expires_at'),
+  maxUses: text('max_uses'), // stored as text, parsed as number
+  useCount: text('use_count').notNull().default('0'), // stored as text, parsed as number
+  revoked: text('revoked').notNull().default('0'), // '0' or '1'
+  createdAt: text('created_at').notNull(),
+});

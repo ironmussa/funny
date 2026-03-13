@@ -154,7 +154,16 @@ export const auth = betterAuth({
           </div>
         `;
 
-        await sendEmail(email, `You've been invited to join ${orgName} on Funny`, html);
+        const sent = await sendEmail(
+          email,
+          `You've been invited to join ${orgName} on Funny`,
+          html,
+        );
+        if (!sent) {
+          throw new Error(
+            'SMTP is not configured. Configure email settings in Settings before sending invitations.',
+          );
+        }
       },
     }),
   ],

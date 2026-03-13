@@ -40,6 +40,7 @@ import { log } from './lib/logger.js';
 import { authMiddleware } from './middleware/auth.js';
 import { proxyToRunner } from './middleware/proxy.js';
 import { authRoutes } from './routes/auth.js';
+import { inviteLinkPublicRoutes, inviteLinkRoutes } from './routes/invite-links.js';
 import { profileRoutes } from './routes/profile.js';
 import { projectRoutes } from './routes/projects.js';
 import { runnerRoutes } from './routes/runners.js';
@@ -70,6 +71,10 @@ const corsOrigins = process.env.CORS_ORIGIN
 
 app.use('*', cors({ origin: corsOrigins, credentials: true }));
 app.use('*', logger());
+
+// Public invite-link routes (before auth middleware)
+app.route('/api/invite-links', inviteLinkPublicRoutes);
+
 app.use('*', authMiddleware);
 
 // Routes
@@ -78,6 +83,7 @@ app.route('/api/projects', projectRoutes);
 app.route('/api/runners', runnerRoutes);
 app.route('/api/profile', profileRoutes);
 app.route('/api/threads', threadRoutes);
+app.route('/api/invite-links', inviteLinkRoutes);
 
 // Health check
 app.get('/api/health', (c) => {

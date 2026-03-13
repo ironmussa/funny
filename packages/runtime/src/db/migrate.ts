@@ -858,6 +858,12 @@ const migrations: Migration[] = [
       await addColumn('user_profiles', 'assemblyai_api_key', 'TEXT');
     },
   },
+  {
+    // invite_links moved to packages/server (central server only).
+    // Migration kept as no-op so existing databases don't re-run it.
+    name: '044_invite_links',
+    async up() {},
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

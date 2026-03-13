@@ -25,6 +25,9 @@ const MobilePage = lazy(() =>
 const LoginPage = lazy(() =>
   import('./components/LoginPage').then((m) => ({ default: m.LoginPage })),
 );
+const AcceptInvitePage = lazy(() =>
+  import('./components/AcceptInvitePage').then((m) => ({ default: m.AcceptInvitePage })),
+);
 const PreviewBrowser = lazy(() =>
   import('./components/PreviewBrowser').then((m) => ({ default: m.PreviewBrowser })),
 );
@@ -48,6 +51,12 @@ function ResponsiveShell() {
   return <Suspense fallback={<AppShellSkeleton />}>{isMobile ? <MobilePage /> : <App />}</Suspense>;
 }
 
+/** Extract invite token from URL path like /invite/<token> */
+function getInviteToken(): string | null {
+  const match = window.location.pathname.match(/^\/invite\/([^/]+)$/);
+  return match ? match[1] : null;
+}
+
 function AuthGate() {
   const mode = useAuthStore((s) => s.mode);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
@@ -55,6 +64,7 @@ function AuthGate() {
   const initialize = useAuthStore((s) => s.initialize);
   const initializeFromProfile = useSettingsStore((s) => s.initializeFromProfile);
   const { setTheme } = useTheme();
+  const [inviteToken] = useState<string | null>(getInviteToken);
   const [setupCompleted, setSetupCompleted] = useState<boolean | null>(() => {
     // Use cached value so a backend restart doesn't flash the setup wizard
     return localStorage.getItem('funny:setupCompleted') === 'true' ? true : null;
@@ -107,6 +117,16 @@ function AuthGate() {
 
   if (isLoading) {
     return <AppShellSkeleton />;
+  }
+
+  // Invite link: show the accept/register page regardless of auth state.
+  // The AcceptInvitePage handles both registration and login internally.
+  if (inviteToken && mode === 'multi') {
+    return (
+      <Suspense fallback={<AppShellSkeleton />}>
+        <AcceptInvitePage token={inviteToken} />
+      </Suspense>
+    );
   }
 
   // Multi mode and not authenticated -> show login page

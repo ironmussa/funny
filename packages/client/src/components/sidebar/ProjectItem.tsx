@@ -19,6 +19,7 @@ import {
 import { useState, useRef, useEffect, memo, useCallback, useMemo, type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -144,7 +145,13 @@ function projectItemAreEqual(prev: ProjectItemProps, next: ProjectItemProps): bo
   // Compare project by relevant fields only (ignore sortOrder, createdAt changes)
   const pp = prev.project;
   const np = next.project;
-  if (pp.id !== np.id || pp.name !== np.name || pp.path !== np.path || pp.color !== np.color)
+  if (
+    pp.id !== np.id ||
+    pp.name !== np.name ||
+    pp.path !== np.path ||
+    pp.color !== np.color ||
+    pp.isTeamProject !== np.isTeamProject
+  )
     return false;
   return true;
 }
@@ -304,6 +311,15 @@ export const ProjectItem = memo(function ProjectItem({
           >
             <Folder className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
             <span className="truncate text-sm font-medium">{project.name}</span>
+            {project.isTeamProject && (
+              <Badge
+                variant="secondary"
+                className="px-1 py-0 text-[10px] leading-tight shrink-0"
+                data-testid={`project-team-badge-${project.id}`}
+              >
+                Team
+              </Badge>
+            )}
           </span>
         </div>
         <div className="mr-2 flex items-center gap-0.5">

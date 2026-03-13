@@ -297,46 +297,7 @@ export const instanceSettings = sqliteTable('instance_settings', {
   updatedAt: text('updated_at').notNull(),
 });
 
-export const runners = sqliteTable('runners', {
-  id: text('id').primaryKey(),
-  name: text('name').notNull(),
-  hostname: text('hostname').notNull(),
-  token: text('token').notNull().unique(),
-  status: text('status').notNull().default('offline'), // 'online' | 'busy' | 'offline'
-  os: text('os').notNull().default('unknown'),
-  workspace: text('workspace'), // optional base directory where repos live
-  activeThreadIds: text('active_thread_ids').notNull().default('[]'), // JSON-encoded string[]
-  registeredAt: text('registered_at').notNull(),
-  lastHeartbeatAt: text('last_heartbeat_at').notNull(),
-});
-
-export const runnerProjectAssignments = sqliteTable(
-  'runner_project_assignments',
-  {
-    runnerId: text('runner_id')
-      .notNull()
-      .references(() => runners.id, { onDelete: 'cascade' }),
-    projectId: text('project_id')
-      .notNull()
-      .references(() => projects.id, { onDelete: 'cascade' }),
-    /** The local path on the runner machine where this project repo lives */
-    localPath: text('local_path').notNull(),
-    assignedAt: text('assigned_at').notNull(),
-  },
-  (table) => [primaryKey({ columns: [table.runnerId, table.projectId] })],
-);
-
-export const runnerTasks = sqliteTable('runner_tasks', {
-  id: text('id').primaryKey(),
-  runnerId: text('runner_id')
-    .notNull()
-    .references(() => runners.id, { onDelete: 'cascade' }),
-  type: text('type').notNull(), // 'start_agent' | 'stop_agent' | 'send_message' | 'git_operation'
-  threadId: text('thread_id').notNull(),
-  payload: text('payload').notNull(), // JSON-encoded RunnerTaskPayload
-  status: text('status').notNull().default('pending'), // 'pending' | 'running' | 'completed' | 'failed'
-  resultData: text('result_data'), // JSON-encoded result
-  resultError: text('result_error'),
-  createdAt: text('created_at').notNull(),
-  completedAt: text('completed_at'),
-});
+// Runner tables (runners, runner_project_assignments, runner_tasks) have been
+// moved to packages/server. The migrations (041, 042) remain here so that
+// existing databases are not broken — they are no-ops on fresh installs since
+// the central server manages these tables now.

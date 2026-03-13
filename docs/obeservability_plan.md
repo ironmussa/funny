@@ -112,7 +112,7 @@ Via environment variables with sensible defaults:
 
 ## Integration with Server
 
-In `packages/server/src/index.ts`:
+In `packages/runtime/src/index.ts`:
 
 ```typescript
 import { observability } from '@funny/observability';

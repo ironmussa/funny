@@ -247,6 +247,7 @@ export const PromptInput = memo(function PromptInput({
 
   // ── TipTap editor ref ──
   const editorRef = useRef<PromptEditorHandle>(null);
+  const editorContainerRef = useRef<HTMLDivElement>(null);
 
   // Expose setPrompt to parent via ref (adapts to editor API)
   useEffect(() => {
@@ -332,13 +333,14 @@ export const PromptInput = memo(function PromptInput({
 
   const handlePartialTranscript = useCallback((text: string) => {
     partialTextRef.current = text;
-    // Update placeholder-like preview in the editor
-    // We replace the partial region each time; the final callback commits it
+    if (text) {
+      editorRef.current?.setDictationPreview(text);
+    }
   }, []);
 
   const handleFinalTranscript = useCallback((text: string) => {
     if (text) {
-      editorRef.current?.insertText(text + ' ');
+      editorRef.current?.commitDictation(text);
     }
     partialTextRef.current = '';
   }, []);
@@ -353,12 +355,109 @@ export const PromptInput = memo(function PromptInput({
   const {
     isRecording,
     isConnecting: isTranscribing,
+    start: startRecording,
     toggle: toggleRecording,
+    stop: stopRecording,
   } = useDictation({
     onPartial: handlePartialTranscript,
     onFinal: handleFinalTranscript,
     onError: handleDictationError,
   });
+
+  // Push-to-talk: hold Ctrl+Alt to record, release either to stop.
+  // Use refs to avoid re-creating listeners when isRecording/isTranscribing change,
+  // which would reset the pttActive flag and break the keyup handler.
+  const pttActiveRef = useRef(false);
+  const isRecordingRef = useRef(isRecording);
+  const isTranscribingRef = useRef(isTranscribing);
+  const startRecordingRef = useRef(startRecording);
+  const stopRecordingRef = useRef(stopRecording);
+  useEffect(() => {
+    isRecordingRef.current = isRecording;
+  }, [isRecording]);
+  useEffect(() => {
+    isTranscribingRef.current = isTranscribing;
+  }, [isTranscribing]);
+  useEffect(() => {
+    startRecordingRef.current = startRecording;
+  }, [startRecording]);
+  useEffect(() => {
+    stopRecordingRef.current = stopRecording;
+  }, [stopRecording]);
+
+  const pttStopTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+
+  useEffect(() => {
+    if (!hasAssemblyaiKey) return;
+
+    const keysDown = { ctrl: false, alt: false };
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Control') keysDown.ctrl = true;
+      if (e.key === 'Alt') keysDown.alt = true;
+
+      // Only activate PTT when the prompt editor has focus
+      const active = document.activeElement;
+      const inPrompt = active && editorContainerRef.current?.contains(active);
+      if (
+        keysDown.ctrl &&
+        keysDown.alt &&
+        inPrompt &&
+        !pttActiveRef.current &&
+        !isRecordingRef.current &&
+        !isTranscribingRef.current
+      ) {
+        e.preventDefault();
+        // Cancel any pending stop — user pressed the keys again before the grace period expired
+        if (pttStopTimerRef.current) {
+          clearTimeout(pttStopTimerRef.current);
+          pttStopTimerRef.current = undefined;
+        }
+        pttActiveRef.current = true;
+        startRecordingRef.current();
+      }
+    };
+
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Control') keysDown.ctrl = false;
+      if (e.key === 'Alt') keysDown.alt = false;
+
+      if (pttActiveRef.current && (!keysDown.ctrl || !keysDown.alt)) {
+        pttActiveRef.current = false;
+        // Delay stopping the mic by 500ms so the last spoken words are captured
+        pttStopTimerRef.current = setTimeout(() => {
+          pttStopTimerRef.current = undefined;
+          stopRecordingRef.current();
+        }, 500);
+      }
+    };
+
+    const handleBlur = () => {
+      keysDown.ctrl = false;
+      keysDown.alt = false;
+      if (pttActiveRef.current) {
+        pttActiveRef.current = false;
+      }
+      // On blur, stop immediately (no grace period — the window lost focus)
+      if (pttStopTimerRef.current) {
+        clearTimeout(pttStopTimerRef.current);
+        pttStopTimerRef.current = undefined;
+      }
+      stopRecordingRef.current();
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    window.addEventListener('blur', handleBlur);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+      window.removeEventListener('blur', handleBlur);
+      if (pttStopTimerRef.current) {
+        clearTimeout(pttStopTimerRef.current);
+      }
+    };
+  }, [hasAssemblyaiKey]);
 
   // Load initial prompt/images when props change (e.g. navigating to a backlog thread)
   useEffect(() => {
@@ -412,6 +511,8 @@ export const PromptInput = memo(function PromptInput({
       editorRef.current?.clear();
       setImages([]);
     }
+    // Stop dictation when switching threads so the mic doesn't stay open
+    stopRecordingRef.current();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- only save/restore drafts on thread switch
   }, [effectiveThreadId]);
 
@@ -714,6 +815,9 @@ export const PromptInput = memo(function PromptInput({
   const handleSubmit = useCallback(async () => {
     if (loading) return;
 
+    // Stop dictation if active so the mic turns off on send
+    if (isRecording) stopRecording();
+
     // Serialize editor content to extract text + file references
     const editorJSON = editorRef.current?.getJSON();
     const isEmpty = editorRef.current?.isEmpty() ?? true;
@@ -794,6 +898,8 @@ export const PromptInput = memo(function PromptInput({
     }
   }, [
     loading,
+    isRecording,
+    stopRecording,
     images,
     t,
     isNewThread,
@@ -1119,7 +1225,11 @@ export const PromptInput = memo(function PromptInput({
         >
           {/* TipTap Editor */}
           {/* eslint-disable-next-line jsx-a11y/click-events-have-key-events, jsx-a11y/no-static-element-interactions */}
-          <div className="px-3 pt-2" onClick={() => editorRef.current?.focus()}>
+          <div
+            ref={editorContainerRef}
+            className="px-3 pt-2"
+            onClick={() => editorRef.current?.focus()}
+          >
             <PromptEditor
               ref={editorRef}
               placeholder={editorPlaceholder}
@@ -1199,7 +1309,7 @@ export const PromptInput = memo(function PromptInput({
                         ? t('prompt.transcribing', 'Transcribing...')
                         : isRecording
                           ? t('prompt.stopDictation', 'Stop dictation')
-                          : t('prompt.startDictation', 'Voice dictation')}
+                          : t('prompt.startDictationPtt', 'Voice dictation (hold Ctrl+Alt)')}
                     </TooltipContent>
                   </Tooltip>
                 )}

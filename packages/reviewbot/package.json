@@ -15,7 +15,7 @@
   },
   "dependencies": {
     "@funny/core": "*",
-    "@funny/funny-client": "*",
+    "@funny/sdk": "workspace:*",
     "@funny/shared": "*",
     "hono": "^4.11.9",
     "nanoid": "^5.0.9"

@@ -934,12 +934,18 @@ export function getStatusSummary(
   // Fallback: CLI-based implementation
   return ResultAsync.fromPromise(
     (async () => {
-      // Phase 1: two git commands cover what previously took 4
-      //   - `status --porcelain -b` → dirty file count + branch name
-      //   - `diff HEAD --numstat`   → staged + unstaged line stats combined
-      const [statusResult, diffResult] = await Promise.all([
+      // Phase 1: three git commands
+      //   - `status --porcelain -b`              → branch name + tracked dirty files
+      //   - `diff HEAD --numstat`                 → staged + unstaged line stats combined
+      //   - `ls-files --others --exclude-standard` → accurate untracked file count
+      //     (porcelain collapses untracked dirs into one entry; ls-files expands them)
+      const [statusResult, diffResult, untrackedResult] = await Promise.all([
         gitRead(['status', '--porcelain', '-b'], { cwd: worktreeCwd, reject: false }),
         gitRead(['diff', 'HEAD', '--numstat'], { cwd: worktreeCwd, reject: false }),
+        gitRead(['ls-files', '--others', '--exclude-standard'], {
+          cwd: worktreeCwd,
+          reject: false,
+        }),
       ]);
 
       // Parse branch from the first line: "## branch" or "## branch...upstream [ahead N]"
@@ -955,14 +961,24 @@ export function getStatusSummary(
             branch = ref;
           }
         }
-        // All lines after the header are dirty files
+        // Count tracked dirty files (exclude untracked '??' entries — counted separately)
         const fileLines = lines.slice(1).filter(Boolean);
-        dirtyFileCount = fileLines.length;
+        let trackedDirtyCount = 0;
         for (const line of fileLines) {
           if (line.startsWith('?? ')) {
             untrackedPaths.push(unquoteGitPath(line.slice(3)));
+          } else {
+            trackedDirtyCount++;
           }
         }
+
+        // Untracked count: prefer ls-files (expands directories) over porcelain (collapses them)
+        const untrackedFileCount =
+          untrackedResult.exitCode === 0 && untrackedResult.stdout.trim()
+            ? untrackedResult.stdout.trim().split('\n').length
+            : untrackedPaths.length;
+
+        dirtyFileCount = trackedDirtyCount + untrackedFileCount;
       }
 
       // Parse combined line stats (working tree)
@@ -981,8 +997,13 @@ export function getStatusSummary(
       }
 
       // Count lines in untracked files (not covered by git diff HEAD --numstat)
-      if (untrackedPaths.length > 0) {
-        const filesToCount = untrackedPaths.slice(0, MAX_UNTRACKED_TO_COUNT);
+      // Prefer ls-files output (expands directories) over porcelain paths
+      const expandedUntrackedPaths =
+        untrackedResult.exitCode === 0 && untrackedResult.stdout.trim()
+          ? untrackedResult.stdout.trim().split('\n')
+          : untrackedPaths;
+      if (expandedUntrackedPaths.length > 0) {
+        const filesToCount = expandedUntrackedPaths.slice(0, MAX_UNTRACKED_TO_COUNT);
         const counts = await Promise.all(
           filesToCount.map(async (relPath) => {
             try {

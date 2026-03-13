@@ -128,7 +128,8 @@ threadRoutes.get('/search/content', async (c) => {
 // GET /api/threads/:id?messageLimit=50
 threadRoutes.get('/:id', async (c) => {
   const userId = c.get('userId') as string;
-  const threadResult = await requireThreadWithMessages(c.req.param('id'), userId);
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThreadWithMessages(c.req.param('id'), userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   return c.json(threadResult.value);
 });
@@ -137,7 +138,8 @@ threadRoutes.get('/:id', async (c) => {
 threadRoutes.get('/:id/messages', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const threadResult = await requireThread(id, userId);
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const cursor = c.req.query('cursor');
@@ -152,7 +154,8 @@ threadRoutes.get('/:id/messages', async (c) => {
 threadRoutes.get('/:id/events', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const threadResult = await requireThread(id, userId);
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const events = await getThreadEvents(id);
@@ -208,7 +211,8 @@ threadRoutes.post('/:id/message', async (c) => {
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
   const userId = c.get('userId') as string;
-  const threadResult = await requireThread(id, userId);
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const span = requestSpan(c, 'thread.send_message', { threadId: id });
@@ -227,7 +231,8 @@ threadRoutes.post('/:id/message', async (c) => {
 threadRoutes.post('/:id/stop', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const threadResult = await requireThread(id, userId);
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {
@@ -242,11 +247,12 @@ threadRoutes.post('/:id/stop', async (c) => {
 threadRoutes.post('/:id/approve-tool', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
   const raw = await c.req.json();
   const parsed = validate(approveToolSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const threadResult = await requireThread(id, userId);
+  const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {
@@ -258,17 +264,41 @@ threadRoutes.post('/:id/approve-tool', async (c) => {
   }
 });
 
+// PATCH /api/threads/:id/tool-calls/:toolCallId — persist tool call output (e.g. user answer)
+threadRoutes.patch('/:id/tool-calls/:toolCallId', async (c) => {
+  const id = c.req.param('id');
+  const toolCallId = c.req.param('toolCallId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+
+  const threadResult = await requireThread(id, userId, orgId);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+
+  const body = await c.req.json<{ output: string }>();
+  if (!body.output || typeof body.output !== 'string') {
+    return resultToResponse(c, err(badRequest('output is required')));
+  }
+
+  try {
+    await tm.updateToolCallOutput(toolCallId, body.output);
+    return c.json({ ok: true });
+  } catch (error) {
+    return handleServiceError(c, error);
+  }
+});
+
 // ── PATCH / DELETE routes ───────────────────────────────────────
 
 // PATCH /api/threads/:id
 threadRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
   const raw = await c.req.json();
   const parsed = validate(updateThreadSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const threadResult = await requireThread(id, userId);
+  const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {
@@ -285,7 +315,8 @@ threadRoutes.patch('/:id', async (c) => {
 threadRoutes.get('/:id/queue', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const threadResult = await requireThread(id, userId);
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   return c.json(await mq.listQueue(id));
 });
@@ -295,7 +326,8 @@ threadRoutes.delete('/:id/queue/:messageId', async (c) => {
   const id = c.req.param('id');
   const messageId = c.req.param('messageId');
   const userId = c.get('userId') as string;
-  const threadResult = await requireThread(id, userId);
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {
@@ -311,11 +343,12 @@ threadRoutes.patch('/:id/queue/:messageId', async (c) => {
   const id = c.req.param('id');
   const messageId = c.req.param('messageId');
   const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
   const raw = await c.req.json().catch(() => ({}));
   const parsed = validate(updateQueuedMessageSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const threadResult = await requireThread(id, userId);
+  const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {
@@ -336,7 +369,8 @@ threadRoutes.patch('/:id/queue/:messageId', async (c) => {
 threadRoutes.get('/:id/comments', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const threadResult = await requireThread(id, userId);
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   return c.json(await tm.listComments(id));
 });
@@ -345,7 +379,8 @@ threadRoutes.get('/:id/comments', async (c) => {
 threadRoutes.post('/:id/comments', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const threadResult = await requireThread(id, userId);
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   const { content } = await c.req.json();
@@ -361,7 +396,8 @@ threadRoutes.delete('/:id/comments/:commentId', async (c) => {
   const id = c.req.param('id');
   const commentId = c.req.param('commentId');
   const userId = c.get('userId') as string;
-  const threadResult = await requireThread(id, userId);
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {
@@ -376,7 +412,8 @@ threadRoutes.delete('/:id/comments/:commentId', async (c) => {
 threadRoutes.delete('/:id', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const threadResult = await requireThread(id, userId);
+  const orgId = c.get('organizationId');
+  const threadResult = await requireThread(id, userId, orgId);
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
 
   try {

@@ -17,7 +17,7 @@ import {
   getPipelinesByProject,
   getRunsForThread,
   updatePipeline,
-} from '../services/pipeline-orchestrator.js';
+} from '../services/pipeline-manager.js';
 
 export const pipelineRoutes = new Hono();
 

@@ -15,7 +15,7 @@ packages/*/tsconfig.json
 
 # Build artifacts we don't need
 packages/client/node_modules
-packages/server/node_modules
+packages/runtime/node_modules
 packages/shared/node_modules
 node_modules/.cache
 

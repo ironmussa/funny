@@ -53,7 +53,7 @@ vi.mock('../../services/thread-event-bus.js', () => ({
     removeListener: vi.fn(),
   },
 }));
-vi.mock('../../services/pipeline-orchestrator.js', () => ({
+vi.mock('../../services/pipeline-manager.js', () => ({
   getPipelineForProject: vi.fn(() => Promise.resolve(null)),
   startPipelineRun: vi.fn(),
 }));

@@ -150,6 +150,7 @@ export const userProfiles = pgTable('user_profiles', {
   gitName: text('git_name'),
   gitEmail: text('git_email'),
   githubToken: text('github_token'),
+  assemblyaiApiKey: text('assemblyai_api_key'),
   setupCompleted: integer('setup_completed').notNull().default(0),
   defaultEditor: text('default_editor'),
   useInternalEditor: integer('use_internal_editor'),
@@ -278,6 +279,12 @@ export const teamProjects = pgTable(
   },
   (table) => [primaryKey({ columns: [table.teamId, table.projectId] })],
 );
+
+export const instanceSettings = pgTable('instance_settings', {
+  key: text('key').primaryKey(),
+  value: text('value').notNull(),
+  updatedAt: text('updated_at').notNull(),
+});
 
 export const threadEvents = pgTable('thread_events', {
   id: text('id').primaryKey(),

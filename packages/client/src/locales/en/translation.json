@@ -496,7 +496,7 @@
     "noProject": "Select a project to configure",
     "envFiles": "Env Files",
     "envFilesDescription": "Relative paths to .env files copied into worktrees",
-    "envFilePlaceholder": "packages/server/.env",
+    "envFilePlaceholder": "packages/runtime/.env",
     "portGroups": "Port Groups",
     "portGroupsDescription": "Port groups for worktree isolation — each group gets a unique port shared across its env vars",
     "addPortGroup": "Add port group",

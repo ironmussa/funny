@@ -54,10 +54,17 @@ bun start
 
 ## Usage
 
-### Starting the Server
+funny has two modes: **local** (solo, everything on your machine) and **team** (multiple users collaborating via a central server).
+
+### Local Mode (Single User)
+
+This is the default. Everything runs on your machine — UI, database, git operations, and Claude agents.
 
 ```bash
-# Default (port 3001)
+# Quick start (no installation)
+bunx @ironmussa/funny@latest
+
+# Or if installed globally
 funny
 
 # Custom port
@@ -67,21 +74,100 @@ funny --port 8080
 funny --help
 ```
 
+Open `http://localhost:3001` in your browser. That's it.
+
+### Team Mode (Multiple Users)
+
+Team mode lets multiple users collaborate on shared projects. It requires two components:
+
+1. **Central server** (`funny-server`) — Runs on a shared machine. Manages users, projects, memberships, and coordinates runners.
+2. **Local runner** (`funny --team <url>`) — Each team member runs funny locally and connects to the central server.
+
+#### Step 1: Start the central server
+
+On a shared machine (or your own machine if your team is on the same network):
+
+```bash
+# Install
+bun install -g @ironmussa/funny
+
+# Start the central server
+funny-server --port 3002
+```
+
+On first start, a default admin account is created:
+- **Username:** `admin`
+- **Password:** `admin`
+
+The admin can create additional user accounts from the central server's API.
+
+#### Step 2: Each team member connects
+
+Each team member runs funny locally with the `--team` flag:
+
+```bash
+funny --team http://<central-server-ip>:3002
+```
+
+This starts the full funny app locally (UI, git, agents) **and** connects to the central server to:
+- Authenticate and see team projects
+- Sync thread state across the team
+- Receive dispatched tasks from the central server
+
+Each member's git operations and Claude agents run **on their own machine**, in their own local repos. The central server only coordinates — it never touches your filesystem.
+
+#### Team mode architecture
+
+```
+Team member A                    Team member B
+┌──────────────────┐            ┌──────────────────┐
+│ funny --team URL │            │ funny --team URL │
+│ ┌──────────────┐ │            │ ┌──────────────┐ │
+│ │ Local git    │ │            │ │ Local git    │ │
+│ │ Local agents │ │            │ │ Local agents │ │
+│ │ Local SQLite │ │            │ │ Local SQLite │ │
+│ └──────┬───────┘ │            │ └──────┬───────┘ │
+└────────┼─────────┘            └────────┼─────────┘
+         │         ┌──────────┐          │
+         └────────►│ Central  │◄─────────┘
+                   │ Server   │
+                   │ (users,  │
+                   │ projects,│
+                   │ teams)   │
+                   └──────────┘
+```
+
 ### CLI Options
 
-| Option              | Description       | Default     |
-| ------------------- | ----------------- | ----------- |
-| `-p, --port <port>` | Server port       | `3001`      |
-| `-h, --host <host>` | Server host       | `127.0.0.1` |
-| `--help`            | Show help message | -           |
+**funny** (local app)
+
+| Option                | Description                              | Default     |
+| --------------------- | ---------------------------------------- | ----------- |
+| `-p, --port <port>`   | Server port                              | `3001`      |
+| `-h, --host <host>`   | Server host                              | `127.0.0.1` |
+| `--auth-mode <mode>`  | Authentication mode: `local` or `multi`  | `local`     |
+| `--team <url>`        | Connect to a central team server         | -           |
+| `--help`              | Show help message                        | -           |
+
+**funny-server** (team coordination server)
+
+| Option                | Description                              | Default     |
+| --------------------- | ---------------------------------------- | ----------- |
+| `-p, --port <port>`   | Server port                              | `3002`      |
+| `-h, --host <host>`   | Server host                              | `0.0.0.0`   |
+| `--help`              | Show help message                        | -           |
 
 ### Environment Variables
 
-| Variable      | Description                           | Default         |
-| ------------- | ------------------------------------- | --------------- |
-| `PORT`        | Server port                           | `3001`          |
-| `HOST`        | Server hostname                       | `127.0.0.1`     |
-| `CORS_ORIGIN` | Custom CORS origins (comma-separated) | Auto-configured |
+| Variable                 | Description                           | Default         | Used by          |
+| ------------------------ | ------------------------------------- | --------------- | ---------------- |
+| `PORT`                   | Server port                           | `3001` / `3002` | both             |
+| `HOST`                   | Server hostname                       | `127.0.0.1`     | both             |
+| `AUTH_MODE`              | Authentication mode (`local`/`multi`) | `local`         | funny            |
+| `TEAM_SERVER_URL`        | Central server URL (same as `--team`) | -               | funny            |
+| `CORS_ORIGIN`            | Custom CORS origins (comma-separated) | Auto-configured | both             |
+| `FUNNY_CENTRAL_DATA_DIR` | Central server data directory         | `~/.funny-central` | funny-server |
+| `LOG_LEVEL`              | Log level (debug/info/warn/error)     | `info`          | funny-server    |
 
 ## Kanban Board
 
@@ -160,9 +246,12 @@ bun test
 
 ### Monorepo Structure
 
-- **`packages/shared`** — Shared TypeScript types
-- **`packages/server`** — Hono HTTP server with [Claude Agent SDK](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk) (port 3001)
+- **`packages/shared`** — Shared TypeScript types and runner protocol definitions
+- **`packages/core`** — Reusable agent orchestration and git logic
+- **`packages/runtime`** — Hono HTTP server with [Claude Agent SDK](https://www.npmjs.com/package/@anthropic-ai/claude-agent-sdk) (port 3001)
 - **`packages/client`** — React 19 + Vite SPA (port 5173 in dev)
+- **`packages/server`** — Team coordination server (users, projects, memberships, runner management)
+- **`packages/runner`** — Runner module for connecting to the central server
 
 ### Tech Stack
 
@@ -183,12 +272,23 @@ bun test
 
 ## Data Storage
 
-All data is stored in:
+**funny** (local app) stores data in:
 
 ```
 ~/.funny/
 ├── data.db           # SQLite database (projects, threads, messages)
-└── auth-token        # Bearer token for authentication
+├── auth-token        # Bearer token for local auth
+├── auth-secret       # Session secret (multi-user mode)
+└── encryption.key    # AES-256-GCM key for GitHub token encryption
+```
+
+**funny-server** (team server) stores data separately in:
+
+```
+~/.funny-central/
+├── central.db        # SQLite database (users, projects, memberships, runners)
+├── auth-secret       # Session secret
+└── encryption.key    # AES-256-GCM key for token encryption
 ```
 
 ## Git Worktrees

@@ -157,9 +157,9 @@ describe('parseReferencedFiles', () => {
 
     test('handles deep nested paths', () => {
       const content =
-        '<referenced-files>\n<file path="packages/server/src/utils/git-v2.ts" />\n</referenced-files>\nContent';
+        '<referenced-files>\n<file path="packages/runtime/src/utils/git-v2.ts" />\n</referenced-files>\nContent';
       const result = parseReferencedFiles(content);
-      expect(result.files).toEqual([f('packages/server/src/utils/git-v2.ts')]);
+      expect(result.files).toEqual([f('packages/runtime/src/utils/git-v2.ts')]);
     });
 
     test('handles Windows-style paths', () => {

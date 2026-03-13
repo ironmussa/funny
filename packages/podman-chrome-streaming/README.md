@@ -4,7 +4,7 @@
 
 Its main job is:
 
-- start the published `@ironmussa/funny-server` runtime inside the container
+- start the published `@ironmussa/funny-runtime` runtime inside the container
 - prepare a git workspace by `clone` or `mount`
 - support private repo auth with `GIT_TOKEN` or `GIT_TOKEN_FILE`
 - expose a stable port so the Funny client can connect from outside the container
@@ -124,7 +124,7 @@ flowchart LR
 
 | Process | Responsibility | Enabled when |
 |---|---|---|
-| `runtime` | Resolve config, prepare repo, start `@ironmussa/funny-server` | `ENABLE_RUNTIME=true` |
+| `runtime` | Resolve config, prepare repo, start `@ironmussa/funny-runtime` | `ENABLE_RUNTIME=true` |
 | `xvfb` | Virtual display for Chrome | `ENABLE_STREAMING=true` |
 | `chrome` | Chromium with CDP enabled | `ENABLE_STREAMING=true` |
 | `x11vnc` | Exposes the virtual display as VNC | `ENABLE_STREAMING=true` |
@@ -351,7 +351,7 @@ Chrome CDP:    http://localhost:9322
 
 - `podman ps` shows the container as `Up`
 - `http://127.0.0.1:3600/health` returns `200`
-- `http://127.0.0.1:3101/api/projects` may return `401` without auth, which still confirms that `@ironmussa/funny-server` is running
+- `http://127.0.0.1:3101/api/projects` may return `401` without auth, which still confirms that `@ironmussa/funny-runtime` is running
 
 ### Notes
 
@@ -382,7 +382,7 @@ If the client runs separately in dev mode, set `CLIENT_ORIGIN` so the container 
 
 | Variable | Default | Description |
 |---|---|---|
-| `ENABLE_RUNTIME` | `true` | Start repo setup + `@ironmussa/funny-server` |
+| `ENABLE_RUNTIME` | `true` | Start repo setup + `@ironmussa/funny-runtime` |
 | `ENABLE_STREAMING` | `true` | Start Chrome, viewer, noVNC and stream UI |
 
 ### Launcher
@@ -433,7 +433,7 @@ Notes:
 
 | Variable | Default | Description |
 |---|---|---|
-| `FUNNY_PORT` | `3001` | HTTP/WebSocket port for `@ironmussa/funny-server` |
+| `FUNNY_PORT` | `3001` | HTTP/WebSocket port for `@ironmussa/funny-runtime` |
 | `CLIENT_ORIGIN` | `http://localhost:5173` | External Funny client origin |
 | `AUTH_MODE` | `local` | `local` or `multi` |
 | `FUNNY_DATA_DIR` | `/workspace/.funny-data` | Persistent server data path |

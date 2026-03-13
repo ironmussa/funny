@@ -44,10 +44,26 @@ projectRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
 
-  // If an active org is set, return org-scoped projects
   if (orgId) {
-    const projects = await pm.listProjectsByOrg(orgId);
-    return c.json(projects);
+    // Merge user's own projects + team-shared projects, deduped
+    const [userProjects, teamProjects] = await Promise.all([
+      pm.listProjects(userId),
+      pm.listProjectsByOrg(orgId),
+    ]);
+
+    const teamProjectIds = new Set(teamProjects.map((p) => p.id));
+    const merged = [
+      // User's own projects first (annotate those also shared with team)
+      ...userProjects.map((p) => ({
+        ...p,
+        isTeamProject: teamProjectIds.has(p.id),
+      })),
+      // Team projects not owned by this user
+      ...teamProjects
+        .filter((p) => p.userId !== userId)
+        .map((p) => ({ ...p, isTeamProject: true as const })),
+    ];
+    return c.json(merged);
   }
 
   const projects = await pm.listProjects(userId);
@@ -97,7 +113,8 @@ projectRoutes.post('/', async (c) => {
 projectRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-  const projectResult = await requireProject(id, userId);
+  const orgId = c.get('organizationId');
+  const projectResult = await requireProject(id, userId, orgId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const raw = await c.req.json();
@@ -107,10 +124,11 @@ projectRoutes.patch('/:id', async (c) => {
   return resultToResponse(c, result);
 });
 
-// DELETE /api/projects/:id
+// DELETE /api/projects/:id — only the owner can delete
 projectRoutes.delete('/:id', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
+  // Intentionally NO orgId — only the owner should be able to delete a project
   const projectResult = await requireProject(id, userId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
@@ -295,7 +313,8 @@ projectRoutes.get('/:id/commands/:cmdId/status', (c) => {
 projectRoutes.get('/:id/config', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = await requireProject(projectId, userId);
+  const orgId = c.get('organizationId');
+  const projectResult = await requireProject(projectId, userId, orgId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const config = pc.getConfig(projectResult.value.path);
@@ -306,7 +325,8 @@ projectRoutes.get('/:id/config', async (c) => {
 projectRoutes.put('/:id/config', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = await requireProject(projectId, userId);
+  const orgId = c.get('organizationId');
+  const projectResult = await requireProject(projectId, userId, orgId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const body = await c.req.json();
@@ -320,7 +340,8 @@ projectRoutes.put('/:id/config', async (c) => {
 projectRoutes.get('/:id/hooks', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = await requireProject(projectId, userId);
+  const orgId = c.get('organizationId');
+  const projectResult = await requireProject(projectId, userId, orgId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const hookType = c.req.query('hookType') as import('@funny/shared').HookType | undefined;
@@ -332,7 +353,8 @@ projectRoutes.get('/:id/hooks', async (c) => {
 projectRoutes.post('/:id/hooks', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = await requireProject(projectId, userId);
+  const orgId = c.get('organizationId');
+  const projectResult = await requireProject(projectId, userId, orgId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const raw = await c.req.json();
@@ -349,7 +371,8 @@ projectRoutes.post('/:id/hooks', async (c) => {
 projectRoutes.put('/:id/hooks/reorder', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = await requireProject(projectId, userId);
+  const orgId = c.get('organizationId');
+  const projectResult = await requireProject(projectId, userId, orgId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const raw = await c.req.json();
@@ -364,7 +387,8 @@ projectRoutes.put('/:id/hooks/reorder', async (c) => {
 projectRoutes.put('/:id/hooks/:hookType/:index', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = await requireProject(projectId, userId);
+  const orgId = c.get('organizationId');
+  const projectResult = await requireProject(projectId, userId, orgId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const hookType = c.req.param('hookType') as import('@funny/shared').HookType;
@@ -387,7 +411,8 @@ projectRoutes.put('/:id/hooks/:hookType/:index', async (c) => {
 projectRoutes.delete('/:id/hooks/:hookType/:index', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = await requireProject(projectId, userId);
+  const orgId = c.get('organizationId');
+  const projectResult = await requireProject(projectId, userId, orgId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const hookType = c.req.param('hookType') as import('@funny/shared').HookType;
@@ -408,7 +433,8 @@ projectRoutes.delete('/:id/hooks/:hookType/:index', async (c) => {
 projectRoutes.get('/:id/weave/status', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = await requireProject(projectId, userId);
+  const orgId = c.get('organizationId');
+  const projectResult = await requireProject(projectId, userId, orgId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const result = await getWeaveStatus(projectResult.value.path);
@@ -419,7 +445,8 @@ projectRoutes.get('/:id/weave/status', async (c) => {
 projectRoutes.post('/:id/weave/configure', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
-  const projectResult = await requireProject(projectId, userId);
+  const orgId = c.get('organizationId');
+  const projectResult = await requireProject(projectId, userId, orgId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const result = await ensureWeaveConfigured(projectResult.value.path);

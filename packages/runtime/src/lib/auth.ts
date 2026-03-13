@@ -18,7 +18,7 @@ import { sql } from 'drizzle-orm';
 import pg from 'pg';
 
 import { getDatabaseUrl } from '../db/db-mode.js';
-import { db, dbMode } from '../db/index.js';
+import { db, dbMode, dbRun } from '../db/index.js';
 import { DATA_DIR } from './data-dir.js';
 import { sendEmail } from './email.js';
 import { log } from './logger.js';
@@ -208,11 +208,11 @@ export async function initBetterAuth(): Promise<void> {
  * Reassign legacy data (user_id = '__local__') to the given userId.
  * Called on first login in multi mode.
  */
-export function assignLegacyData(userId: string): void {
+export async function assignLegacyData(userId: string): Promise<void> {
   try {
-    db.run(sql`UPDATE projects SET user_id = ${userId} WHERE user_id = '__local__'`);
-    db.run(sql`UPDATE threads SET user_id = ${userId} WHERE user_id = '__local__'`);
-    db.run(sql`UPDATE automations SET user_id = ${userId} WHERE user_id = '__local__'`);
+    await dbRun(sql`UPDATE projects SET user_id = ${userId} WHERE user_id = '__local__'`);
+    await dbRun(sql`UPDATE threads SET user_id = ${userId} WHERE user_id = '__local__'`);
+    await dbRun(sql`UPDATE automations SET user_id = ${userId} WHERE user_id = '__local__'`);
   } catch (err) {
     log.warn('Failed to assign legacy data', { namespace: 'auth', error: err });
   }

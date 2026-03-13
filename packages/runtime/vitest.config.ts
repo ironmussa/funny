@@ -3,6 +3,7 @@ import path from 'path';
 import { defineConfig } from 'vitest/config';
 
 const shared = path.resolve(__dirname, '../shared/src');
+const pipelines = path.resolve(__dirname, '../pipelines/src');
 
 export default defineConfig({
   resolve: {
@@ -10,9 +11,26 @@ export default defineConfig({
       '@funny/shared/errors': path.join(shared, 'errors.ts'),
       '@funny/shared/models': path.join(shared, 'models.ts'),
       '@funny/shared/thread-machine': path.join(shared, 'thread-machine.ts'),
-      '@funny/shared/pipeline-engine': path.join(shared, 'pipeline-engine.ts'),
       '@funny/shared/prompts': path.join(shared, 'prompts/index.ts'),
       '@funny/shared': path.join(shared, 'types.ts'),
+      '@funny/pipelines/engine': path.join(pipelines, 'engine.ts'),
+      '@funny/pipelines/pipelines/code-review.pipeline': path.join(
+        pipelines,
+        'pipelines/code-review.pipeline.ts',
+      ),
+      '@funny/pipelines/pipelines/commit.pipeline': path.join(
+        pipelines,
+        'pipelines/commit.pipeline.ts',
+      ),
+      '@funny/pipelines/pipelines/pre-push.pipeline': path.join(
+        pipelines,
+        'pipelines/pre-push.pipeline.ts',
+      ),
+      '@funny/pipelines/pipelines/code-quality.pipeline': path.join(
+        pipelines,
+        'pipelines/code-quality.pipeline.ts',
+      ),
+      '@funny/pipelines': path.join(pipelines, 'index.ts'),
       // Zod v4 ESM re-exports break Vite SSR transform; use CJS build instead
       zod: path.resolve(__dirname, 'node_modules/zod/index.cjs'),
     },

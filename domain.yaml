@@ -1,10 +1,10 @@
 # domain.yaml — Strategic Domain Design for Funny
-# ================================================
+# ------------------------------------------------
 # This file defines the DDD strategic architecture.
 # Tactical annotations remain in source code (@domain JSDoc tags).
 #
-# Validate: bun packages/domain-map/src/cli.ts --domain-file domain.yaml --validate packages/server/src
-# Diagram:  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format context-map packages/server/src
+# Validate: bun packages/domain-map/src/cli.ts --domain-file domain.yaml --validate packages/runtime/src
+# Diagram:  bun packages/domain-map/src/cli.ts --domain-file domain.yaml --format context-map packages/runtime/src
 
 $schema: "./packages/domain-map/domain-schema.json"
 version: "1.0"

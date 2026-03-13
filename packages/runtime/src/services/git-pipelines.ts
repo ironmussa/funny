@@ -29,13 +29,6 @@ import {
   gitRead,
   gitWrite,
 } from '@funny/core/git';
-import type {
-  AgentModel,
-  GitWorkflowAction,
-  GitWorkflowProgressStep,
-  PipelineVerdict,
-  WSGitWorkflowProgressData,
-} from '@funny/shared';
 import {
   compose,
   definePipeline,
@@ -43,7 +36,14 @@ import {
   subPipeline,
   type PipelineDefinition,
   type PipelineNode,
-} from '@funny/shared/pipeline-engine';
+} from '@funny/pipelines';
+import type {
+  AgentModel,
+  GitWorkflowAction,
+  GitWorkflowProgressStep,
+  PipelineVerdict,
+  WSGitWorkflowProgressData,
+} from '@funny/shared';
 
 import { log } from '../lib/logger.js';
 import {
@@ -55,7 +55,7 @@ import {
   createPullRequest as gitServiceCreatePR,
   resolveIdentity,
 } from './git-service.js';
-import { parseReviewVerdict, cleanupReviewerThread } from './pipeline-orchestrator.js';
+import { parseReviewVerdict, cleanupReviewerThread } from './pipeline-manager.js';
 import {
   buildPrecommitFixerPrompt,
   buildReviewerPrompt,

@@ -2,6 +2,6 @@
   "name": "funny-server-runtime-image",
   "private": true,
   "dependencies": {
-    "@ironmussa/funny-server": "^0.1.0"
+    "@ironmussa/funny-runtime": "^0.1.0"
   }
 }

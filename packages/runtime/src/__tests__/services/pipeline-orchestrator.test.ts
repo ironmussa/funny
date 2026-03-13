@@ -48,7 +48,7 @@ import {
   parseReviewVerdict,
   isHookAutoFixable,
   buildPrecommitFixerPrompt,
-} from '../../services/pipeline-orchestrator.js';
+} from '../../services/pipeline-manager.js';
 
 // ── parseReviewVerdict ──────────────────────────────────────
 

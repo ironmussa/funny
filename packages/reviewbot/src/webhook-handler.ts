@@ -2,10 +2,10 @@
  * Standalone webhook handler for GitHub PR events.
  *
  * Receives GitHub webhooks, runs PRReviewer, and reports results
- * to the funny UI via the Ingest API (@funny/funny-client).
+ * to the funny UI via the Ingest API (@funny/sdk).
  */
 
-import { FunnyClient } from '@funny/funny-client';
+import { FunnyClient } from '@funny/sdk';
 import { nanoid } from 'nanoid';
 
 import { PRReviewer } from './reviewer.js';

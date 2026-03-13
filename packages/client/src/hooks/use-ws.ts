@@ -506,6 +506,21 @@ function connect() {
 
   const mode = getAuthMode();
 
+  const isTauri = !!(window as any).__TAURI_INTERNALS__;
+  const serverUrl = import.meta.env.VITE_SERVER_URL as string | undefined;
+  const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
+
+  // Determine WebSocket base URL
+  let base: string;
+  if (serverUrl) {
+    // Team mode: connect WS to the central server
+    base = `${serverUrl.replace(/\/+$/, '').replace(/^http/, 'ws')}/ws`;
+  } else if (isTauri) {
+    base = `ws://localhost:${serverPort}/ws`;
+  } else {
+    base = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+  }
+
   if (mode === 'local' || !mode) {
     // Local mode: require token
     const token = getAuthToken();
@@ -515,23 +530,12 @@ function connect() {
       return;
     }
 
-    const isTauri = !!(window as any).__TAURI_INTERNALS__;
-    const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
-    const base = isTauri
-      ? `ws://localhost:${serverPort}/ws`
-      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
     const url = `${base}?token=${encodeURIComponent(token)}`;
     const ws = new WebSocket(url);
     activeWS = ws;
     setupWS(ws);
   } else {
     // Multi mode: no token needed, cookies are sent automatically
-    const isTauri = !!(window as any).__TAURI_INTERNALS__;
-    const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
-    const base = isTauri
-      ? `ws://localhost:${serverPort}/ws`
-      : `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
-
     const ws = new WebSocket(base);
     activeWS = ws;
     setupWS(ws);

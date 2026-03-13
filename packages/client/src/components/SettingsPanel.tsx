@@ -12,6 +12,7 @@ import {
   Users,
   Workflow,
   Building2,
+  FolderKanban,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -47,7 +48,9 @@ export type SettingsItemId =
   | (typeof baseSettingsItems)[number]['id']
   | 'users'
   | 'team-settings'
-  | 'team-members';
+  | 'team-members'
+  | 'team-projects'
+  | 'team-invitations';
 
 export const settingsLabelKeys: Record<string, string> = {
   general: 'settings.general',
@@ -63,6 +66,7 @@ export const settingsLabelKeys: Record<string, string> = {
   users: 'users.title',
   'team-settings': 'Team Settings',
   'team-members': 'Members',
+  'team-projects': 'Team Projects',
 };
 
 export function SettingsPanel() {
@@ -81,6 +85,7 @@ export function SettingsPanel() {
     : [...baseSettingsItems];
   if (authMode === 'multi') {
     items.push({ id: 'team-settings', label: 'Team Settings', icon: Building2 });
+    items.push({ id: 'team-projects', label: 'Team Projects', icon: FolderKanban });
     items.push({ id: 'team-members', label: 'Members', icon: Users });
   }
   if (authMode === 'multi' && authUser?.role === 'admin') {

@@ -168,6 +168,7 @@ export interface Project {
   userId: string;
   sortOrder: number;
   createdAt: string;
+  isTeamProject?: boolean;
 }
 
 // ─── Threads ─────────────────────────────────────────────
@@ -1144,7 +1145,7 @@ export interface FunnyPortGroup {
 }
 
 export interface FunnyProjectConfig {
-  /** Relative paths to .env files to copy into worktrees (e.g. "packages/server/.env") */
+  /** Relative paths to .env files to copy into worktrees (e.g. "packages/runtime/.env") */
   envFiles?: string[];
   /** Port groups — each group gets one unique port shared across its envVars */
   portGroups?: FunnyPortGroup[];

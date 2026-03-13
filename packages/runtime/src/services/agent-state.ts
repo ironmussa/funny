@@ -44,6 +44,9 @@ export class AgentStateTracker {
   /** Cumulative input token count per thread (tracks context window usage) */
   readonly cumulativeInputTokens = new Map<string, number>();
 
+  /** Cached userId per thread — avoids DB reads on every WS emission */
+  readonly threadUserIds = new Map<string, string>();
+
   /**
    * Clear stale state when starting a new agent run.
    * processedToolUseIds and cliToDbMsgId are intentionally preserved
@@ -53,6 +56,7 @@ export class AgentStateTracker {
     this.currentAssistantMsgId.delete(threadId);
     this.resultReceived.delete(threadId);
     this.pendingUserInput.delete(threadId);
+    this.pendingPermissionRequest.delete(threadId);
     this.cumulativeInputTokens.delete(threadId);
   }
 
@@ -65,5 +69,6 @@ export class AgentStateTracker {
     this.pendingUserInput.delete(threadId);
     this.pendingPermissionRequest.delete(threadId);
     this.cumulativeInputTokens.delete(threadId);
+    this.threadUserIds.delete(threadId);
   }
 }

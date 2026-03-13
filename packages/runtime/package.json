@@ -1,9 +1,9 @@
 {
-  "name": "@ironmussa/funny-server",
+  "name": "@ironmussa/funny-runtime",
   "version": "0.1.0",
   "private": false,
   "description": "Funny server runtime for agent orchestration, git workflows, and real-time updates.",
-  "homepage": "https://github.com/ironmussa/funny/tree/main/packages/server",
+  "homepage": "https://github.com/ironmussa/funny/tree/main/packages/runtime",
   "bugs": {
     "url": "https://github.com/ironmussa/funny/issues"
   },
@@ -12,7 +12,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/ironmussa/funny.git",
-    "directory": "packages/server"
+    "directory": "packages/runtime"
   },
   "bin": {
     "funny-server": "./bin/funny-server.js"
@@ -68,6 +68,7 @@
   },
   "devDependencies": {
     "@funny/core": "*",
+    "@funny/pipelines": "*",
     "@funny/shared": "*",
     "@types/bun": "^1.3.8",
     "@types/nodemailer": "^7.0.11",

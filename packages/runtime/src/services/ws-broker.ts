@@ -17,8 +17,27 @@ interface ClientInfo {
   organizationId: string | null;
 }
 
+export type WSEventListener = (event: WSEvent, userId?: string) => void;
+
 class WSBroker {
   private clients = new Map<ServerWebSocket<unknown>, ClientInfo>();
+  private listeners: WSEventListener[] = [];
+
+  /** Register a listener that is called on every emitted event (used by team-client for forwarding) */
+  onEvent(listener: WSEventListener): () => void {
+    this.listeners.push(listener);
+    return () => {
+      this.listeners = this.listeners.filter((l) => l !== listener);
+    };
+  }
+
+  private notifyListeners(event: WSEvent, userId?: string): void {
+    for (const listener of this.listeners) {
+      try {
+        listener(event, userId);
+      } catch {}
+    }
+  }
 
   addClient(ws: ServerWebSocket<unknown>, userId: string, organizationId?: string | null): void {
     this.clients.set(ws, { userId, organizationId: organizationId ?? null });
@@ -39,6 +58,8 @@ class WSBroker {
 
   /** Emit to all clients of a specific user */
   emitToUser(userId: string, event: WSEvent): void {
+    this.notifyListeners(event, userId);
+
     const payload = JSON.stringify(event);
     const dead: ServerWebSocket<unknown>[] = [];
     let sent = 0;
@@ -97,6 +118,8 @@ class WSBroker {
 
   /** Emit to all connected clients (broadcast) */
   emit(event: WSEvent): void {
+    this.notifyListeners(event);
+
     const payload = JSON.stringify(event);
     const dead: ServerWebSocket<unknown>[] = [];
     let sent = 0;

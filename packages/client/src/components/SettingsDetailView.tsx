@@ -53,6 +53,7 @@ import { ProjectHooksSettings } from './ProjectHooksSettings';
 import { BranchPicker } from './SearchablePicker';
 import { TeamInvitations } from './settings/TeamInvitations';
 import { TeamMembers } from './settings/TeamMembers';
+import { TeamProjects } from './settings/TeamProjects';
 import { TeamSettings } from './settings/TeamSettings';
 import { UserManagement } from './settings/UserManagement';
 import { settingsLabelKeys, type SettingsItemId } from './SettingsPanel';
@@ -891,6 +892,8 @@ export function SettingsDetailView() {
             <ArchivedThreadsSettings />
           ) : page === 'team-settings' ? (
             <TeamSettings />
+          ) : page === 'team-projects' ? (
+            <TeamProjects />
           ) : page === 'team-members' ? (
             <TeamMembers />
           ) : page === 'team-invitations' ? (

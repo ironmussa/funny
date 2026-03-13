@@ -20,7 +20,7 @@
 
 import { timingSafeEqual } from 'crypto';
 
-import { FunnyClient } from '@funny/funny-client';
+import { FunnyClient } from '@funny/sdk';
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';

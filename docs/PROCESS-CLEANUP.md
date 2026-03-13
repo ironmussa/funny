@@ -9,7 +9,7 @@
 netstat -ano | findstr :3001 | findstr LISTENING
 
 # 3. If you see multiple PIDs or dead PIDs, clean up:
-bun packages/server/src/kill-port.ts
+bun packages/runtime/src/kill-port.ts
 
 # 4. Restart
 bun run dev
@@ -74,13 +74,13 @@ Same pattern already used by:
 
 ### Layer 2: Kill entire process tree on dev reload
 
-**File:** `packages/server/src/dev-watch.ts`
+**File:** `packages/runtime/src/dev-watch.ts`
 
 Replaced `bun --watch` with manual file watching + `taskkill /F /T /PID` on every reload. This kills the server AND all its children, preventing ghost sockets even if Layer 1 misses something (e.g., MCP server processes spawned by the SDK internally without the custom hook).
 
 ### Layer 3: Clean ghost sockets at startup
 
-**File:** `packages/server/src/kill-port.ts` (called from `index.ts:4-6`)
+**File:** `packages/runtime/src/kill-port.ts` (called from `index.ts:4-6`)
 
 Runs before `Bun.serve()` on Windows. Detects ghost sockets by checking if listening PIDs are alive. If ghost PIDs are found, hunts for processes holding inherited handles by scanning all TCP connections on the port.
 
@@ -98,7 +98,7 @@ When the WebSocket connects, resets the HTTP circuit breaker immediately. Withou
 
 ## Architecture: ShutdownManager
 
-All cleanup is centralized in `packages/server/src/services/shutdown-manager.ts` using a registry pattern. Services self-register at import time.
+All cleanup is centralized in `packages/runtime/src/services/shutdown-manager.ts` using a registry pattern. Services self-register at import time.
 
 ```
                     shutdownManager (singleton)
@@ -193,12 +193,12 @@ tail -f ~/.funny/logs/server-2026-02-22.log
 | File                                                  | Role                                               |
 | ----------------------------------------------------- | -------------------------------------------------- |
 | `packages/core/src/agents/sdk-claude.ts`              | Root cause fix: custom spawn with handle isolation |
-| `packages/server/src/services/shutdown-manager.ts`    | Centralized shutdown registry                      |
-| `packages/server/src/kill-port.ts`                    | Pre-startup ghost socket cleanup                   |
-| `packages/server/src/dev-watch.ts`                    | Dev wrapper: file watch + process tree kill        |
+| `packages/runtime/src/services/shutdown-manager.ts`    | Centralized shutdown registry                      |
+| `packages/runtime/src/kill-port.ts`                    | Pre-startup ghost socket cleanup                   |
+| `packages/runtime/src/dev-watch.ts`                    | Dev wrapper: file watch + process tree kill        |
 | `packages/client/vite.config.ts`                      | Proxy timeout (10s) to prevent infinite hangs      |
 | `packages/client/src/hooks/use-ws.ts`                 | WebSocket reconnection + circuit breaker reset     |
 | `packages/client/src/stores/circuit-breaker-store.ts` | HTTP circuit breaker (opens after 3 failures)      |
 | `packages/client/src/stores/auth-store.ts`            | Auth init (`_bootstrapPromise` at module load)     |
-| `packages/server/src/services/pty-manager.ts`         | PTY helper with handle isolation pattern           |
+| `packages/runtime/src/services/pty-manager.ts`         | PTY helper with handle isolation pattern           |
 | `packages/core/src/containers/sandbox-manager.ts`     | Sandbox spawn with same handle isolation pattern   |

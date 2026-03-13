@@ -103,7 +103,7 @@ vi.mock('../../services/git-pipelines.js', () => {
   };
 });
 
-import { startPipelineRun, type PipelineConfig } from '../../services/pipeline-orchestrator.js';
+import { startPipelineRun, type PipelineConfig } from '../../services/pipeline-manager.js';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -209,7 +209,7 @@ describe('Pipeline Orchestration', () => {
 
   describe('Pipeline Engine', () => {
     test('definePipeline and runPipeline work for simple sequential pipeline', async () => {
-      const { definePipeline, node, runPipeline } = await import('@funny/shared/pipeline-engine');
+      const { definePipeline, node, runPipeline } = await import('@funny/pipelines/engine');
 
       const pipeline = definePipeline<{ value: number }>({
         name: 'test',
@@ -225,7 +225,7 @@ describe('Pipeline Orchestration', () => {
     });
 
     test('node with when=false is skipped', async () => {
-      const { definePipeline, node, runPipeline } = await import('@funny/shared/pipeline-engine');
+      const { definePipeline, node, runPipeline } = await import('@funny/pipelines/engine');
 
       const fn = vi.fn(async (ctx: { value: number }) => ({
         ...ctx,
@@ -246,7 +246,7 @@ describe('Pipeline Orchestration', () => {
     });
 
     test('pipeline loop repeats until condition met', async () => {
-      const { definePipeline, node, runPipeline } = await import('@funny/shared/pipeline-engine');
+      const { definePipeline, node, runPipeline } = await import('@funny/pipelines/engine');
 
       const pipeline = definePipeline<{ count: number }>({
         name: 'test-loop',
@@ -262,7 +262,7 @@ describe('Pipeline Orchestration', () => {
     });
 
     test('pipeline respects maxIterations', async () => {
-      const { definePipeline, node, runPipeline } = await import('@funny/shared/pipeline-engine');
+      const { definePipeline, node, runPipeline } = await import('@funny/pipelines/engine');
 
       const pipeline = definePipeline<{ count: number }>({
         name: 'test-max-iter',
@@ -279,7 +279,7 @@ describe('Pipeline Orchestration', () => {
     });
 
     test('pipeline cancellation via AbortSignal', async () => {
-      const { definePipeline, node, runPipeline } = await import('@funny/shared/pipeline-engine');
+      const { definePipeline, node, runPipeline } = await import('@funny/pipelines/engine');
 
       const controller = new AbortController();
 
@@ -307,7 +307,7 @@ describe('Pipeline Orchestration', () => {
     });
 
     test('pipeline onStateChange reports entering, completed, and terminal', async () => {
-      const { definePipeline, node, runPipeline } = await import('@funny/shared/pipeline-engine');
+      const { definePipeline, node, runPipeline } = await import('@funny/pipelines/engine');
 
       const changes: any[] = [];
 
@@ -338,7 +338,7 @@ describe('Pipeline Orchestration', () => {
     });
 
     test('pipeline onStateChange reports error on node failure', async () => {
-      const { definePipeline, node, runPipeline } = await import('@funny/shared/pipeline-engine');
+      const { definePipeline, node, runPipeline } = await import('@funny/pipelines/engine');
 
       const changes: any[] = [];
 
@@ -366,7 +366,7 @@ describe('Pipeline Orchestration', () => {
     });
 
     test('compose merges node arrays into flat list', async () => {
-      const { compose, node } = await import('@funny/shared/pipeline-engine');
+      const { compose, node } = await import('@funny/pipelines/engine');
 
       const group1 = [node<{ v: number }>('a', async (ctx) => ctx)];
       const group2 = [

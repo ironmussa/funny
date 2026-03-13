@@ -386,7 +386,7 @@ export async function executeWithLogging(command: string, args: string[], option
 
 ## Recommended Next Steps
 
-1. ✅ Install `execa`: `npm install execa --workspace=packages/server`
+1. ✅ Install `execa`: `npm install execa --workspace=packages/runtime`
 2. ✅ Create `src/utils/process.ts` with base utilities
 3. ✅ Create `src/utils/git-v2.ts` with async git functions
 4. ✅ Add security validation utilities

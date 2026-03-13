@@ -43,6 +43,10 @@ export interface PromptEditorHandle {
   insertFileMention(path: string, fileType: 'file' | 'folder'): void;
   /** Insert plain text at the current cursor position */
   insertText(text: string): void;
+  /** Show partial dictation text (replaces previous partial) */
+  setDictationPreview(text: string): void;
+  /** Commit the dictation partial as real text and reset tracking */
+  commitDictation(text: string): void;
 }
 
 interface PromptEditorProps {
@@ -224,6 +228,9 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   const [suggestionTruncated, setSuggestionTruncated] = useState(false);
   const [suggestionRect, setSuggestionRect] = useState<(() => DOMRect | null) | null>(null);
   const suggestionCommandRef = useRef<((props: Record<string, unknown>) => void) | null>(null);
+
+  // Dictation partial tracking: [startPos, endPos] in the document
+  const dictationRangeRef = useRef<{ from: number; to: number } | null>(null);
 
   // Debounce timer for file fetching
   const fileTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
@@ -616,6 +623,65 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
       insertText: (text: string) => {
         if (!editor) return;
         editor.chain().focus().insertContent(text).run();
+      },
+      setDictationPreview: (text: string) => {
+        if (!editor) return;
+        const { state } = editor;
+        const range = dictationRangeRef.current;
+
+        // Clamp range to valid document positions
+        const docSize = state.doc.content.size;
+        const safeFrom = range ? Math.min(Math.max(range.from, 0), docSize) : null;
+        const safeTo = range ? Math.min(Math.max(range.to, 0), docSize) : null;
+
+        let insertFrom: number;
+
+        if (safeFrom !== null && safeTo !== null && safeFrom < safeTo) {
+          // Validate that the range still contains text (not nodes that shifted)
+          const slice = state.doc.textBetween(safeFrom, safeTo, '');
+          if (slice.length > 0) {
+            // Replace previous partial with new partial using a single transaction
+            const tr = state.tr.replaceWith(safeFrom, safeTo, state.schema.text(text));
+            editor.view.dispatch(tr);
+            insertFrom = safeFrom;
+          } else {
+            // Range is invalid/empty — just insert at cursor
+            const from = state.selection.from;
+            const tr = state.tr.insertText(text, from);
+            editor.view.dispatch(tr);
+            insertFrom = from;
+          }
+        } else {
+          // First partial — insert at current cursor
+          const from = state.selection.from;
+          const tr = state.tr.insertText(text, from);
+          editor.view.dispatch(tr);
+          insertFrom = from;
+        }
+
+        dictationRangeRef.current = { from: insertFrom, to: insertFrom + text.length };
+      },
+      commitDictation: (text: string) => {
+        if (!editor) return;
+        const { state } = editor;
+        const range = dictationRangeRef.current;
+        const finalText = text + ' ';
+
+        const docSize = state.doc.content.size;
+        const safeFrom = range ? Math.min(Math.max(range.from, 0), docSize) : null;
+        const safeTo = range ? Math.min(Math.max(range.to, 0), docSize) : null;
+
+        if (safeFrom !== null && safeTo !== null && safeFrom < safeTo) {
+          const tr = state.tr.replaceWith(safeFrom, safeTo, state.schema.text(finalText));
+          editor.view.dispatch(tr);
+        } else {
+          // No valid partial range — insert at cursor
+          const from = state.selection.from;
+          const tr = state.tr.insertText(finalText, from);
+          editor.view.dispatch(tr);
+        }
+
+        dictationRangeRef.current = null;
       },
     }),
     [editor],

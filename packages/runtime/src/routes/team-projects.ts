@@ -9,22 +9,20 @@
 import { eq, and } from 'drizzle-orm';
 import { Hono } from 'hono';
 
-import { db, schema, dbAll, dbGet, dbRun } from '../db/index.js';
+import { db, schema, dbGet, dbRun } from '../db/index.js';
 import { requirePermission } from '../middleware/auth.js';
+import * as pm from '../services/project-manager.js';
 import type { HonoEnv } from '../types/hono-env.js';
 
 export const teamProjectRoutes = new Hono<HonoEnv>();
 
-// GET /api/team-projects — list projects associated with the active org
+// GET /api/team-projects — list full Project objects associated with the active org
 teamProjectRoutes.get('/', async (c) => {
   const orgId = c.get('organizationId');
   if (!orgId) return c.json([], 200);
 
-  const rows = await dbAll(
-    db.select().from(schema.teamProjects).where(eq(schema.teamProjects.teamId, orgId)),
-  );
-
-  return c.json(rows);
+  const projects = await pm.listProjectsByOrg(orgId);
+  return c.json(projects.map((p) => ({ ...p, isTeamProject: true })));
 });
 
 // POST /api/team-projects — associate a project with the active org

@@ -591,7 +591,7 @@ The package includes an interactive React SPA for exploring domain graphs visual
 
 ```bash
 # Generate a JSON graph first
-bun packages/domain-map/src/cli.ts --format json --domain-file domain.yaml packages/server/src > architecture.json
+bun packages/domain-map/src/cli.ts --format json --domain-file domain.yaml packages/runtime/src > architecture.json
 
 # Start the viewer dev server (port 5174)
 cd packages/domain-map && bun run viewer:dev

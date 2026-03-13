@@ -34,6 +34,14 @@ export class SDKClaudeProcess extends BaseAgentProcess {
   protected async runProcess(): Promise<void> {
     const promptInput = this.buildPromptInput();
 
+    // Increase API_TIMEOUT_MS so interactive hooks (AskUserQuestion, ExitPlanMode)
+    // don't get killed by the default 600s HTTP timeout while waiting for user input.
+    // 4 hours = 14_400_000ms — enough for any realistic user response time.
+    const sdkEnv = {
+      ...process.env,
+      API_TIMEOUT_MS: process.env.API_TIMEOUT_MS ?? '14400000',
+    };
+
     const sdkOptions: Record<string, any> = {
       pathToClaudeCodeExecutable: resolveSDKCliPath(),
       model: this.options.model,
@@ -43,6 +51,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       allowedTools: this.options.allowedTools,
       disallowedTools: this.options.disallowedTools,
       executable: 'node',
+      env: sdkEnv,
       systemPrompt: { type: 'preset', preset: 'claude_code' },
       tools: { type: 'preset', preset: 'claude_code' },
       settingSources: ['user', 'project'],

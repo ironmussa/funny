@@ -14,15 +14,15 @@ fi
 git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx|js|jsx)$' | xargs -r npx oxlint
 
 # Detect merge conflict markers (exclude hook scripts to avoid self-match)
-CONFLICT_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -v '^\.husky/' | xargs -r grep -l '<<<<<<<\|=======\|>>>>>>>' || true)
+CONFLICT_FILES=$(git diff --cached --name-only --diff-filter=ACM | grep -v '^\.husky/' | xargs -r grep -lE '^<{7} |^={7}$|^>{7} ' || true)
 if [ -n "$CONFLICT_FILES" ]; then
   echo "Merge conflict markers found in:"
   echo "$CONFLICT_FILES"
   exit 1
 fi
 
-# Block console.log and debugger statements (exclude test files and podman-chrome-streaming runtime)
-DEBUG_MATCHES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx)$' | grep -v '__tests__/' | grep -v '\.test\.' | grep -v '\.spec\.' | grep -v 'packages/podman-chrome-streaming/' | grep -v 'dev-watch\.ts' | grep -v 'kill-port\.ts' | xargs -r grep -n 'console\.log\|debugger' || true)
+# Block console.log and debugger statements (exclude test files, CLI tools, build scripts, and loggers)
+DEBUG_MATCHES=$(git diff --cached --name-only --diff-filter=ACM | grep -E '\.(ts|tsx)$' | grep -v '__tests__/' | grep -v '\.test\.' | grep -v '\.spec\.' | grep -v 'packages/podman-chrome-streaming/' | grep -v 'dev-watch\.ts' | grep -v 'kill-port\.ts' | grep -v 'packages/domain-map/' | grep -v 'packages/reviewbot/' | grep -v 'packages/server/build\.ts' | grep -v 'scripts/' | grep -v 'lib/logger\.ts' | xargs -r grep -n 'console\.log\|debugger' || true)
 if [ -n "$DEBUG_MATCHES" ]; then
   echo "Debug statements found:"
   echo "$DEBUG_MATCHES"

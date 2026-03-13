@@ -7,17 +7,27 @@ const meta = {
   component: Input,
   parameters: { layout: 'centered' },
   tags: ['autodocs'],
+  argTypes: {
+    size: {
+      control: 'select',
+      options: ['default', 'xs', 'sm'],
+    },
+  },
 } satisfies Meta<typeof Input>;
 
 export default meta;
 type Story = StoryObj<typeof meta>;
 
 export const Default: Story = {
-  args: {},
+  args: { placeholder: 'Default input' },
 };
 
-export const WithPlaceholder: Story = {
-  args: { placeholder: 'Enter your email...' },
+export const ExtraSmall: Story = {
+  args: { size: 'xs', placeholder: 'Extra small input' },
+};
+
+export const Small: Story = {
+  args: { size: 'sm', placeholder: 'Small input' },
 };
 
 export const Disabled: Story = {
@@ -38,4 +48,15 @@ export const File: Story = {
 
 export const WithValue: Story = {
   args: { defaultValue: 'Hello World' },
+};
+
+export const AllSizes: Story = {
+  args: { placeholder: '' },
+  render: () => (
+    <div className="flex w-64 flex-col gap-3">
+      <Input size="xs" placeholder="Extra small" />
+      <Input size="sm" placeholder="Small" />
+      <Input size="default" placeholder="Default" />
+    </div>
+  ),
 };

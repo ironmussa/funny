@@ -37,7 +37,7 @@ export function BashCard({
   }, [expanded, command, highlight]);
 
   return (
-    <div className="max-w-full overflow-hidden text-sm">
+    <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
       <button
         onClick={() => setExpanded(!expanded)}
         className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs transition-colors hover:bg-accent/30"

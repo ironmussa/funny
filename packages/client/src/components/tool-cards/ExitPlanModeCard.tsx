@@ -1,9 +1,10 @@
-import { FileCode2, CheckCircle2, XCircle, Send } from 'lucide-react';
+import { Check, Copy, FileCode2, CheckCircle2, XCircle, Send } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
@@ -26,7 +27,15 @@ export function ExitPlanModeCard({
     hasPlan: String(!!plan),
   });
   const [input, setInput] = useState('');
+  const [copied, setCopied] = useState(false);
   const alreadyAnswered = !!output;
+
+  const handleCopy = async () => {
+    if (!plan) return;
+    await navigator.clipboard.writeText(plan);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
   const [submitted, setSubmitted] = useState(alreadyAnswered);
   const inputRef = useRef<HTMLInputElement>(null);
 
@@ -59,18 +68,35 @@ export function ExitPlanModeCard({
   };
 
   return (
-    <div className="max-w-full overflow-hidden text-sm">
+    <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
         <FileCode2 className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
         <span className="font-medium text-foreground">{t('tools.plan')}</span>
         {!submitted && (
           <span className="text-muted-foreground">{t('thread.planWaitingForResponse')}</span>
         )}
-        {submitted && (
-          <span className="ml-auto flex-shrink-0 rounded bg-status-success/10 px-1.5 py-0.5 text-xs font-medium text-status-success/80">
-            {t('tools.answered')}
-          </span>
-        )}
+        <span className="ml-auto flex items-center gap-1.5">
+          {submitted && (
+            <span className="flex-shrink-0 rounded bg-status-success/10 px-1.5 py-0.5 text-xs font-medium text-status-success/80">
+              {t('tools.answered')}
+            </span>
+          )}
+          {plan && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-5 w-5"
+              onClick={handleCopy}
+              data-testid="plan-copy-button"
+            >
+              {copied ? (
+                <Check className="h-3 w-3 text-green-500" />
+              ) : (
+                <Copy className="h-3 w-3 text-muted-foreground" />
+              )}
+            </Button>
+          )}
+        </span>
       </div>
 
       {plan && (

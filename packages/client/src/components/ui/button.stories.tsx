@@ -19,7 +19,7 @@ const meta = {
     },
     size: {
       control: 'select',
-      options: ['default', 'sm', 'lg', 'icon', 'icon-xs', 'icon-sm'],
+      options: ['default', 'xs', 'sm', 'lg', 'icon', 'icon-xs', 'icon-sm'],
     },
   },
 } satisfies Meta<typeof Button>;
@@ -49,6 +49,10 @@ export const Ghost: Story = {
 
 export const Link: Story = {
   args: { variant: 'link', children: 'Link' },
+};
+
+export const ExtraSmall: Story = {
+  args: { size: 'xs', children: 'Extra Small' },
 };
 
 export const Small: Story = {
@@ -105,6 +109,7 @@ export const AllVariants: Story = {
 export const AllSizes: Story = {
   render: () => (
     <div className="flex flex-wrap items-center gap-4">
+      <Button size="xs">Extra Small</Button>
       <Button size="sm">Small</Button>
       <Button size="default">Default</Button>
       <Button size="lg">Large</Button>

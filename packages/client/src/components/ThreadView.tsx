@@ -696,7 +696,6 @@ const MemoizedMessageList = memo(
           return (
             <div
               key={tc.id}
-              className="rounded-lg border border-border"
               data-tool-call-id={tc.id}
               {...(snapshotMap.has(tc.id) ? { 'data-todo-snapshot': snapshotMap.get(tc.id) } : {})}
             >
@@ -737,7 +736,6 @@ const MemoizedMessageList = memo(
           return (
             <div
               key={ti.calls[0].id}
-              className="rounded-lg border border-border"
               data-tool-call-id={ti.calls[0].id}
               {...(groupSnapshotIdx >= 0 ? { 'data-todo-snapshot': groupSnapshotIdx } : {})}
             >

@@ -113,7 +113,7 @@ export const ToolCallCard = memo(
       );
 
     return (
-      <div className="max-w-full overflow-hidden text-sm">
+      <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
         <button
           type="button"
           aria-expanded={expanded}

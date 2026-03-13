@@ -1,11 +1,28 @@
-import { MessageCircleQuestion, Check, Send, PenLine, ChevronRight } from 'lucide-react';
-import { useState, useRef, useEffect, useMemo } from 'react';
+import type { Skill } from '@funny/shared';
+import {
+  MessageCircleQuestion,
+  Check,
+  Send,
+  PenLine,
+  ChevronRight,
+  Mic,
+  MicOff,
+  Loader2,
+} from 'lucide-react';
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
+import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
+import { PromptEditor } from '@/components/prompt-editor/PromptEditor';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDictation } from '@/hooks/use-dictation';
+import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
 
-import { getQuestions, type Question } from './utils';
+import { getQuestions, useCurrentProjectPath, type Question } from './utils';
 
 const cardLog = createClientLogger('AskUserQuestion');
 
@@ -115,7 +132,97 @@ export function AskQuestionCard({
   const [otherTexts, setOtherTexts] = useState<Map<number, string>>(
     () => restoredState?.otherTexts ?? new Map(),
   );
-  const otherInputRef = useRef<HTMLTextAreaElement>(null);
+  const otherEditorRef = useRef<PromptEditorHandle>(null);
+  const cwd = useCurrentProjectPath();
+
+  // ── Dictation (real-time voice-to-text via AssemblyAI) ──
+  const [hasAssemblyaiKey, setHasAssemblyaiKey] = useState(false);
+  const partialTextRef = useRef('');
+
+  useEffect(() => {
+    api.getProfile().then((result) => {
+      if (result.isOk() && result.value) {
+        setHasAssemblyaiKey(result.value.hasAssemblyaiKey);
+      }
+    });
+  }, []);
+
+  const handlePartialTranscript = useCallback((text: string) => {
+    partialTextRef.current = text;
+    if (text) otherEditorRef.current?.setDictationPreview(text);
+  }, []);
+
+  const handleFinalTranscript = useCallback((text: string) => {
+    if (text) otherEditorRef.current?.commitDictation(text);
+    partialTextRef.current = '';
+  }, []);
+
+  const handleDictationError = useCallback(
+    (message: string) => {
+      toast.error(message || t('prompt.micPermissionDenied', 'Microphone access denied'));
+    },
+    [t],
+  );
+
+  const {
+    isRecording,
+    isConnecting: isTranscribing,
+    toggle: toggleRecording,
+    stop: stopRecording,
+  } = useDictation({
+    onPartial: handlePartialTranscript,
+    onFinal: handleFinalTranscript,
+    onError: handleDictationError,
+  });
+
+  // ── Skills loader for slash commands ──
+  const skillsCacheRef = useRef<Skill[] | null>(null);
+
+  const loadSkillsForEditor = useCallback(async (): Promise<Skill[]> => {
+    if (skillsCacheRef.current) return skillsCacheRef.current;
+    const result = await api.listSkills(cwd);
+    if (result.isOk()) {
+      const allSkills = result.value.skills ?? [];
+      const deduped = new Map<string, Skill>();
+      for (const skill of allSkills) {
+        const existing = deduped.get(skill.name);
+        if (!existing || skill.scope === 'project') {
+          deduped.set(skill.name, skill);
+        }
+      }
+      skillsCacheRef.current = Array.from(deduped.values());
+    } else {
+      skillsCacheRef.current = [];
+    }
+    return skillsCacheRef.current;
+  }, [cwd]);
+
+  // Reset skills cache when project path changes
+  useEffect(() => {
+    skillsCacheRef.current = null;
+  }, [cwd]);
+
+  // Sync editor content → otherTexts state
+  const handleOtherEditorChange = useCallback(() => {
+    const text = otherEditorRef.current?.getText() ?? '';
+    setOtherTexts((prev) => {
+      const next = new Map(prev);
+      next.set(activeTab, text);
+      return next;
+    });
+  }, [activeTab]);
+
+  // Restore editor content when switching tabs
+  const prevActiveTabRef = useRef(activeTab);
+  useEffect(() => {
+    if (prevActiveTabRef.current !== activeTab) {
+      prevActiveTabRef.current = activeTab;
+      const savedText = otherTexts.get(activeTab) || '';
+      if (otherEditorRef.current) {
+        otherEditorRef.current.setContent(savedText);
+      }
+    }
+  }, [activeTab, otherTexts]);
 
   const toggleOption = (qIndex: number, optIndex: number, multiSelect: boolean) => {
     if (submitted) return;
@@ -143,16 +250,17 @@ export function AskQuestionCard({
     }
   };
 
-  // Focus the textarea when "Other" is selected
+  // Focus the editor when "Other" is selected
   useEffect(() => {
     const activeSelections = selections.get(activeTab);
-    if (activeSelections?.has(OTHER_INDEX) && otherInputRef.current) {
-      otherInputRef.current.focus();
+    if (activeSelections?.has(OTHER_INDEX) && otherEditorRef.current) {
+      otherEditorRef.current.focus();
     }
   }, [selections, activeTab]);
 
   const handleSubmit = () => {
     if (submitted || !onRespond) return;
+    if (isRecording) stopRecording();
     const parts: string[] = [];
     questions.forEach((q, qi) => {
       const selected = selections.get(qi);
@@ -222,7 +330,7 @@ export function AskQuestionCard({
   const isLastTab = activeTab === questions.length - 1;
 
   return (
-    <div className="max-w-full overflow-hidden text-sm">
+    <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
         {!hideLabel && (
@@ -363,22 +471,60 @@ export function AskQuestionCard({
                   </div>
                 </button>
 
-                {/* Other text input */}
+                {/* Other text input — mini PromptEditor with @ mentions, / commands, and mic */}
                 {isOtherSelected && !submitted && (
-                  <textarea
-                    ref={otherInputRef}
-                    value={otherText}
-                    onChange={(e) =>
-                      setOtherTexts((prev) => {
-                        const next = new Map(prev);
-                        next.set(activeTab, e.target.value);
-                        return next;
-                      })
-                    }
-                    placeholder={t('tools.otherPlaceholder')}
-                    className="min-h-[60px] w-full resize-none rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-sm text-foreground placeholder:text-muted-foreground/60 focus:border-primary/50 focus:outline-none focus:ring-1 focus:ring-primary/20"
-                    rows={2}
-                  />
+                  <div className="rounded-md border border-border/40 bg-background/50 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20">
+                    <div className="px-2.5 py-1.5">
+                      <PromptEditor
+                        ref={otherEditorRef}
+                        placeholder={t('tools.otherPlaceholder')}
+                        onChange={handleOtherEditorChange}
+                        cwd={cwd}
+                        loadSkills={loadSkillsForEditor}
+                        className="min-h-[40px] max-h-[120px] overflow-y-auto text-sm"
+                      />
+                    </div>
+                    {hasAssemblyaiKey && (
+                      <div className="flex items-center justify-end border-t border-border/20 px-1.5 py-0.5">
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <Button
+                              data-testid="ask-question-dictate"
+                              onClick={toggleRecording}
+                              variant="ghost"
+                              size="icon-sm"
+                              tabIndex={-1}
+                              aria-label={
+                                isRecording
+                                  ? t('prompt.stopDictation', 'Stop dictation')
+                                  : t('prompt.startDictation', 'Start dictation')
+                              }
+                              disabled={isTranscribing}
+                              className={cn(
+                                'text-muted-foreground hover:text-foreground',
+                                isRecording && 'text-destructive hover:text-destructive',
+                              )}
+                            >
+                              {isTranscribing ? (
+                                <Loader2 className="h-3 w-3 animate-spin" />
+                              ) : isRecording ? (
+                                <MicOff className="h-3 w-3" />
+                              ) : (
+                                <Mic className="h-3 w-3" />
+                              )}
+                            </Button>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {isTranscribing
+                              ? t('prompt.transcribing', 'Transcribing...')
+                              : isRecording
+                                ? t('prompt.stopDictation', 'Stop dictation')
+                                : t('prompt.startDictation', 'Start dictation')}
+                          </TooltipContent>
+                        </Tooltip>
+                      </div>
+                    )}
+                  </div>
                 )}
                 {isOtherSelected && submitted && otherText.trim() && (
                   <div className="rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-xs text-muted-foreground opacity-70">

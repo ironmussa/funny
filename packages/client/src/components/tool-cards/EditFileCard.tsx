@@ -41,7 +41,7 @@ export function EditFileCard({
   }, [filePath, oldString, newString]);
 
   return (
-    <div className="w-full min-w-0 overflow-hidden text-sm">
+    <div className="w-full min-w-0 overflow-hidden rounded-lg border border-border text-sm">
       <div className="flex w-full items-center overflow-hidden">
         <button
           onClick={() => setExpanded(!expanded)}

@@ -12,6 +12,10 @@ const meta = {
       control: 'select',
       options: ['default', 'secondary', 'destructive', 'outline'],
     },
+    size: {
+      control: 'select',
+      options: ['default', 'sm', 'xs'],
+    },
   },
 } satisfies Meta<typeof Badge>;
 
@@ -34,6 +38,10 @@ export const Outline: Story = {
   args: { variant: 'outline', children: 'Outline' },
 };
 
+export const ExtraSmall: Story = {
+  args: { size: 'xs', children: 'Tiny' },
+};
+
 export const AllVariants: Story = {
   render: () => (
     <div className="flex flex-wrap gap-3">
@@ -41,6 +49,20 @@ export const AllVariants: Story = {
       <Badge variant="secondary">Secondary</Badge>
       <Badge variant="destructive">Destructive</Badge>
       <Badge variant="outline">Outline</Badge>
+    </div>
+  ),
+};
+
+export const Small: Story = {
+  args: { size: 'sm', children: 'Small' },
+};
+
+export const AllSizes: Story = {
+  render: () => (
+    <div className="flex flex-wrap items-center gap-3">
+      <Badge size="xs">Extra Small</Badge>
+      <Badge size="sm">Small</Badge>
+      <Badge size="default">Default</Badge>
     </div>
   ),
 };

@@ -8,6 +8,10 @@ const sizeClasses = {
     root: 'h-6 w-11',
     thumb: 'h-5 w-5 data-[state=checked]:translate-x-5',
   },
+  sm: {
+    root: 'h-5 w-9',
+    thumb: 'h-4 w-4 data-[state=checked]:translate-x-4',
+  },
   xs: {
     root: 'h-4 w-7',
     thumb: 'h-3 w-3 data-[state=checked]:translate-x-3',

@@ -81,7 +81,7 @@ export const auth = betterAuth({
     db: kyselyDb,
     type: 'postgres' as const,
   },
-  baseURL: `http://localhost:${PORT}`,
+  baseURL: process.env.BETTER_AUTH_BASE_URL || `http://localhost:${PORT}`,
   basePath: '/api/auth',
   secret: getOrCreateSecret(),
   trustedOrigins: corsOrigins,
@@ -99,7 +99,7 @@ export const auth = betterAuth({
   advanced: {
     defaultCookieAttributes: {
       sameSite: 'lax',
-      secure: false,
+      secure: !!process.env.BETTER_AUTH_BASE_URL?.startsWith('https'),
       path: '/',
     },
   },

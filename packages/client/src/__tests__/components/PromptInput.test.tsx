@@ -28,6 +28,7 @@ vi.mock('@/lib/api', async () => {
       listSkills: vi.fn().mockReturnValue(okAsync({ skills: [] })),
       remoteUrl: vi.fn().mockReturnValue(okAsync({ url: '' })),
       browseFiles: vi.fn().mockReturnValue(okAsync({ entries: [] })),
+      getProfile: vi.fn().mockReturnValue(okAsync({ hasAssemblyaiKey: false })),
       listQueue: vi.fn().mockReturnValue(okAsync([])),
       updateQueuedMessage: vi
         .fn()

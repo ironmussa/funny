@@ -61,8 +61,12 @@ async function centralFetch(path: string, options: RequestInit = {}): Promise<Re
     ...(options.headers as Record<string, string>),
   };
 
+  // Use runner token if available (post-registration), otherwise use shared secret
   if (state.runnerToken) {
     headers['Authorization'] = `Bearer ${state.runnerToken}`;
+  }
+  if (process.env.RUNNER_AUTH_SECRET) {
+    headers['X-Runner-Auth'] = process.env.RUNNER_AUTH_SECRET;
   }
 
   return fetch(`${state.serverUrl}${path}`, { ...options, headers });
@@ -73,7 +77,9 @@ async function centralFetch(path: string, options: RequestInit = {}): Promise<Re
 async function register(): Promise<boolean> {
   try {
     const port = process.env.PORT || '3001';
-    const httpUrl = `http://${hostname()}:${port}`;
+    // Allow explicit override for when runtime and server are on different networks
+    // (e.g. runtime on host, server in container — use host.docker.internal or real IP)
+    const httpUrl = process.env.RUNNER_HTTP_URL || `http://${hostname()}:${port}`;
 
     const res = await centralFetch('/api/runners/register', {
       method: 'POST',
@@ -86,9 +92,14 @@ async function register(): Promise<boolean> {
     });
 
     if (!res.ok) {
+      let body = '';
+      try {
+        body = await res.text();
+      } catch {}
       log.error('Failed to register with central server', {
         namespace: 'team',
         status: res.status,
+        body,
       });
       return false;
     }
@@ -111,6 +122,29 @@ async function register(): Promise<boolean> {
     });
     return false;
   }
+}
+
+/**
+ * Retry registration with exponential backoff.
+ * The central server may not be ready when the runtime starts.
+ */
+async function registerWithRetry(maxAttempts = 10): Promise<boolean> {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const ok = await register();
+    if (ok) return true;
+
+    if (attempt < maxAttempts) {
+      const delay = Math.min(2000 * attempt, 15_000); // 2s, 4s, 6s, ... up to 15s
+      log.warn(
+        `Registration failed, retrying in ${delay / 1000}s (attempt ${attempt}/${maxAttempts})`,
+        {
+          namespace: 'team',
+        },
+      );
+      await new Promise((r) => setTimeout(r, delay));
+    }
+  }
+  return false;
 }
 
 // ── Heartbeat ────────────────────────────────────────────
@@ -305,7 +339,22 @@ function handleBrowserWSMessage(userId: string, data: unknown): void {
  * The server relays it to the appropriate browser client.
  */
 function forwardEventToCentral(event: WSEvent, userId?: string): void {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+    log.warn('Cannot forward event — WS not connected to central', {
+      namespace: 'team',
+      eventType: event.type,
+      threadId: (event as any).threadId,
+    });
+    return;
+  }
+
+  if (!userId) {
+    log.warn('Forwarding event without userId — may be dropped by central', {
+      namespace: 'team',
+      eventType: event.type,
+      threadId: (event as any).threadId,
+    });
+  }
 
   try {
     state.ws.send(
@@ -332,10 +381,16 @@ export async function initTeamMode(serverUrl: string): Promise<void> {
 
   log.info(`Connecting to central server at ${state.serverUrl}`, { namespace: 'team' });
 
-  // Register as a runner
-  const registered = await register();
+  // Subscribe to local wsBroker events early — even before registration succeeds,
+  // so events are forwarded as soon as the WS connection is established.
+  state.unsubscribeBroker = wsBroker.onEvent(forwardEventToCentral);
+
+  // Register as a runner (with retries if the server is not yet available)
+  const registered = await registerWithRetry();
   if (!registered) {
-    log.error('Failed to register with central server — team mode disabled', { namespace: 'team' });
+    log.error('Failed to register with central server after retries — team mode disabled', {
+      namespace: 'team',
+    });
     return;
   }
 
@@ -349,9 +404,6 @@ export async function initTeamMode(serverUrl: string): Promise<void> {
 
   // Connect WebSocket for event streaming
   connectWebSocket();
-
-  // Subscribe to local wsBroker events and forward to central server
-  state.unsubscribeBroker = wsBroker.onEvent(forwardEventToCentral);
 
   // Assign local projects to this runner on the server
   await assignLocalProjects();

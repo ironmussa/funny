@@ -32,7 +32,7 @@ export async function authMiddleware(c: Context, next: Next) {
   // Check this regardless of isTeamModeActive() — the server may be proxying via
   // DEFAULT_RUNNER_URL before the runtime has formally registered.
   const runnerAuth = c.req.header('X-Runner-Auth');
-  if (runnerAuth === RUNNER_AUTH_SECRET) {
+  if (RUNNER_AUTH_SECRET && runnerAuth === RUNNER_AUTH_SECRET) {
     const forwardedUser = c.req.header('X-Forwarded-User');
     if (!forwardedUser) return c.json({ error: 'Unauthorized: missing X-Forwarded-User' }, 401);
 

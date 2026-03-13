@@ -27,7 +27,7 @@ export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
   // Better Auth handles its own routes
   if (path.startsWith('/api/auth/')) return next();
 
-  // Runner auth via bearer token
+  // Runner auth via bearer token (preferred — identifies which runner)
   const authHeader = c.req.header('Authorization');
   if (authHeader?.startsWith('Bearer runner_')) {
     const token = authHeader.slice(7);
@@ -37,6 +37,16 @@ export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
     c.set('runnerId', runnerId);
     c.set('isRunner', true);
     return next();
+  }
+
+  // Runner auth via shared secret (used for registration before a runner token exists)
+  const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET;
+  if (RUNNER_AUTH_SECRET) {
+    const runnerSecret = c.req.header('X-Runner-Auth');
+    if (runnerSecret === RUNNER_AUTH_SECRET) {
+      c.set('isRunner', true);
+      return next();
+    }
   }
 
   // Session auth for browser clients

@@ -92,6 +92,7 @@ const migrations: Migration[] = [
           status TEXT NOT NULL DEFAULT 'offline',
           os TEXT NOT NULL DEFAULT 'unknown',
           workspace TEXT,
+          http_url TEXT,
           active_thread_ids TEXT NOT NULL DEFAULT '[]',
           registered_at TEXT NOT NULL,
           last_heartbeat_at TEXT NOT NULL
@@ -208,6 +209,16 @@ const migrations: Migration[] = [
       await exec(sql`
         CREATE INDEX IF NOT EXISTS idx_threads_user
         ON threads (user_id)
+      `);
+    },
+  },
+  {
+    name: '007_runners_user_id',
+    async up() {
+      // The runners table may have been created by the runtime package (migration 041_runners)
+      // with a different schema (project_paths instead of user_id). Ensure user_id exists.
+      await exec(sql`
+        ALTER TABLE runners ADD COLUMN IF NOT EXISTS user_id TEXT
       `);
     },
   },

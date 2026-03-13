@@ -165,11 +165,17 @@ const server = Bun.serve({
         // Authenticate browser via session cookie
         const session = await auth.api.getSession({ headers: wsData.req.headers });
         if (!session) {
+          log.warn('Browser WS rejected — no valid session', { namespace: 'ws-relay' });
           ws.close(4001, 'Unauthorized');
           return;
         }
         (ws.data as any).userId = session.user.id;
         wsRelay.addBrowserClient(session.user.id, ws);
+        log.info('Browser WS authenticated', {
+          namespace: 'ws-relay',
+          userId: session.user.id,
+          stats: JSON.stringify(wsRelay.getRelayStats()),
+        });
       }
       // Runner auth happens on first message (runner:auth)
     },
@@ -197,7 +203,15 @@ const server = Bun.serve({
           }
 
           // Relay agent events from runner to browser clients
-          if (data.type === 'runner:agent_event' && data.userId) {
+          if (data.type === 'runner:agent_event') {
+            if (!data.userId) {
+              log.warn('runner:agent_event missing userId — event dropped', {
+                namespace: 'ws-relay',
+                eventType: data.event?.type,
+                threadId: data.event?.threadId,
+              });
+              return;
+            }
             wsRelay.relayToUser(data.userId, data.event);
 
             // Update thread status in the registry for status/result events

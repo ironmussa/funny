@@ -10,6 +10,7 @@ import type {
 } from '@funny/shared/runner-protocol';
 import { Hono } from 'hono';
 
+import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import * as rm from '../services/runner-manager.js';
 
@@ -18,16 +19,30 @@ export const runnerRoutes = new Hono<ServerEnv>();
 // ── Registration ────────────────────────────────────────
 
 runnerRoutes.post('/register', async (c) => {
-  const body = await c.req.json<RunnerRegisterRequest>();
+  try {
+    const body = await c.req.json<RunnerRegisterRequest>();
 
-  if (!body.name || !body.hostname || !body.os) {
-    return c.json({ error: 'Missing required fields: name, hostname, os' }, 400);
+    if (!body.name || !body.hostname || !body.os) {
+      return c.json({ error: 'Missing required fields: name, hostname, os' }, 400);
+    }
+
+    // If this is a user-authenticated request, associate runner with user
+    const userId = c.get('userId') as string | undefined;
+    const result = await rm.registerRunner(body, userId);
+    return c.json(result, 201);
+  } catch (err: any) {
+    const message = err?.message || String(err);
+    const cause = err?.cause?.message || err?.cause || '';
+    const code = err?.code || err?.cause?.code || '';
+    log.error('Runner registration failed', {
+      namespace: 'runner',
+      error: message,
+      cause: String(cause),
+      code: String(code),
+      stack: err?.stack?.split('\n').slice(0, 5).join(' | ') || '',
+    });
+    return c.json({ error: `Registration failed: ${message}` }, 500);
   }
-
-  // If this is a user-authenticated request, associate runner with user
-  const userId = c.get('userId') as string | undefined;
-  const result = await rm.registerRunner(body, userId);
-  return c.json(result, 201);
 });
 
 // ── Heartbeat ───────────────────────────────────────────

@@ -164,11 +164,11 @@ const KanbanCard = memo(function KanbanCard({
       </div>
 
       {projectInfo && (
-        <ProjectChip name={projectInfo.name} color={projectInfo.color} className="mb-1" />
+        <ProjectChip name={projectInfo.name} color={projectInfo.color} size="sm" className="mb-1" />
       )}
 
       {displayBranch && (
-        <div className="mb-1.5 flex min-w-0 items-center gap-1" aria-label="Branch information">
+        <div className="mb-1 flex min-w-0 items-center gap-1" aria-label="Branch information">
           <GitBranch className="h-3 w-3 shrink-0 text-muted-foreground" aria-hidden="true" />
           <span className="truncate text-xs text-muted-foreground" title={displayBranch}>
             {displayBranch}

@@ -47,7 +47,7 @@ function contrastText(bgHex: string): string {
 interface ProjectChipProps {
   name: string;
   color?: string;
-  size?: 'sm' | 'default';
+  size?: 'xs' | 'sm' | 'default';
   className?: string;
 }
 
@@ -57,7 +57,11 @@ export function ProjectChip({ name, color, size = 'default', className }: Projec
     <span
       className={cn(
         'rounded inline-block truncate font-medium',
-        size === 'sm' ? 'text-[10px] leading-tight px-1 py-px' : 'text-xs px-1.5 py-0.5',
+        size === 'xs'
+          ? 'text-[9px] leading-tight px-1 py-px'
+          : size === 'sm'
+            ? 'text-[10px] leading-tight px-1 py-px'
+            : 'text-xs px-1.5 py-0.5',
         className,
       )}
       style={{

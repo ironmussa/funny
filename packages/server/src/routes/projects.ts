@@ -12,30 +12,13 @@ import { isAbsolute, resolve } from 'path';
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../lib/types.js';
-import { proxyToRunner } from '../middleware/proxy.js';
 import * as pm from '../services/project-manager.js';
 
 export const projectRoutes = new Hono<ServerEnv>();
 
-// ── Project CRUD — proxied to runner ─────────────────────
-
-/** List all projects — proxied to the runner */
-projectRoutes.get('/', proxyToRunner);
-
-/** Create a new project — proxied to the runner */
-projectRoutes.post('/', proxyToRunner);
-
-/** Get a single project — proxied to the runner */
-projectRoutes.get('/:id', proxyToRunner);
-
-/** Update a project — proxied to the runner */
-projectRoutes.put('/:id', proxyToRunner);
-
-/** Delete a project — proxied to the runner */
-projectRoutes.delete('/:id', proxyToRunner);
-
-/** Get project branches — proxied to the runner */
-projectRoutes.get('/:id/branches', proxyToRunner);
+// Project CRUD (list, create, get, update, delete, branches) is NOT handled here.
+// It falls through to the catch-all in index.ts which forwards to the runtime
+// (in-process for local runner, or via tunnel/HTTP for remote runners).
 
 // ── Membership ───────────────────────────────────────────
 

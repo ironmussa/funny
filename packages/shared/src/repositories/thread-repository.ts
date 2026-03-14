@@ -55,30 +55,23 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
   async function getLastAssistantSnippets(threadIds: string[]): Promise<Map<string, string>> {
     if (threadIds.length === 0) return new Map();
 
-    // Find the max timestamp per thread for non-empty assistant messages
-    const latestTimestamps = await dbAll<{ threadId: string; maxTs: string }>(
-      db
-        .select({
-          threadId: schema.messages.threadId,
-          maxTs: sql<string>`MAX(${schema.messages.timestamp})`,
-        })
-        .from(schema.messages)
-        .where(
-          and(
-            inArray(schema.messages.threadId, threadIds),
-            eq(schema.messages.role, 'assistant'),
-            ne(schema.messages.content, ''),
-          ),
-        )
-        .groupBy(schema.messages.threadId) as any,
-    );
+    // Single JOIN query — avoids large OR expression trees that hit SQLite's depth limit (1000)
+    const latestSq = db
+      .select({
+        threadId: schema.messages.threadId,
+        maxTs: sql<string>`MAX(${schema.messages.timestamp})`.as('max_ts'),
+      })
+      .from(schema.messages)
+      .where(
+        and(
+          inArray(schema.messages.threadId, threadIds),
+          eq(schema.messages.role, 'assistant'),
+          ne(schema.messages.content, ''),
+        ),
+      )
+      .groupBy(schema.messages.threadId)
+      .as('latest');
 
-    if (latestTimestamps.length === 0) return new Map();
-
-    // Fetch the actual content for those messages
-    const conditions = latestTimestamps.map((r) =>
-      and(eq(schema.messages.threadId, r.threadId), eq(schema.messages.timestamp, r.maxTs)),
-    );
     const rows = await dbAll<{ threadId: string; content: string }>(
       db
         .select({
@@ -86,7 +79,13 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
           content: schema.messages.content,
         })
         .from(schema.messages)
-        .where(or(...conditions)!) as any,
+        .innerJoin(
+          latestSq,
+          and(
+            eq(schema.messages.threadId, latestSq.threadId),
+            eq(schema.messages.timestamp, latestSq.maxTs),
+          ),
+        ) as any,
     );
 
     const map = new Map<string, string>();

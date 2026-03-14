@@ -10,6 +10,15 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
 import { getDbMode, getDatabaseUrl } from '@funny/shared/db/db-mode';
+import {
+  user as authUser,
+  session as authSession,
+  account as authAccount,
+  verification as authVerification,
+  organization as authOrganization,
+  member as authMember,
+  invitation as authInvitation,
+} from '@funny/shared/db/schema-sqlite';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin, username, organization } from 'better-auth/plugins';
@@ -74,7 +83,7 @@ const owner = ac.newRole({
 
 const corsOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
-  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+  : ['http://localhost:*', 'http://127.0.0.1:*'];
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
@@ -102,8 +111,19 @@ function buildDatabaseConfig(): any {
     };
   }
 
-  // SQLite mode — use drizzle adapter
-  return drizzleAdapter(db, { provider: 'sqlite' });
+  // SQLite mode — pass schema explicitly so drizzle adapter can locate Better Auth tables
+  return drizzleAdapter(db, {
+    provider: 'sqlite',
+    schema: {
+      user: authUser,
+      session: authSession,
+      account: authAccount,
+      verification: authVerification,
+      organization: authOrganization,
+      member: authMember,
+      invitation: authInvitation,
+    },
+  });
 }
 
 // Lazy init — auth is created on first call to initBetterAuth()
@@ -160,38 +180,51 @@ export async function initBetterAuth(): Promise<void> {
     ],
   });
 
-  try {
-    const ctx = await _auth.$context;
-    await ctx.runMigrations();
-  } catch (err) {
-    log.error('Failed to run Better Auth migrations', { namespace: 'auth', error: err as any });
-    throw err;
+  // runMigrations() only works with the Kysely adapter (PostgreSQL mode).
+  // In SQLite mode, Better Auth tables are created by the server's own migration system.
+  if (getDbMode() === 'postgres') {
+    try {
+      const ctx = await _auth.$context;
+      await ctx.runMigrations();
+    } catch (err) {
+      log.error('Failed to run Better Auth migrations', { namespace: 'auth', error: err as any });
+      throw err;
+    }
   }
 
   try {
-    const password = 'admin';
-    const result = await (_auth.api as any).createUser({
-      body: {
-        email: 'admin@local.host',
-        password,
-        name: 'Admin',
-        role: 'admin',
-        data: { username: 'admin' },
-      },
-    });
+    const ctx = await _auth.$context;
 
-    if ((result as any)?.user) {
-      log.info('Created default admin account', {
+    // Only seed on first run — skip if any users already exist
+    const existingUsers = await ctx.internalAdapter.listUsers(1);
+    if (existingUsers && existingUsers.length > 0) return;
+
+    const email = process.env.ADMIN_EMAIL ?? 'admin@local.host';
+    const username = process.env.ADMIN_USERNAME ?? 'admin';
+    const password = process.env.ADMIN_PASSWORD ?? 'admin';
+
+    const hash = await ctx.password.hash(password);
+    const created = await ctx.internalAdapter.createUser({
+      email,
+      name: 'Admin',
+      emailVerified: 1,
+      role: 'admin',
+      username,
+    });
+    if (created) {
+      await ctx.internalAdapter.linkAccount({
+        userId: created.id,
+        providerId: 'credential',
+        accountId: created.id,
+        password: hash,
+      });
+      log.info('Created default admin account (change the password after first login)', {
         namespace: 'auth',
-        username: 'admin',
-        password,
-        important: 'Change this password immediately!',
+        username,
+        email,
       });
     }
   } catch (err: any) {
-    if (err?.message?.includes('already') || err?.body?.message?.includes('already')) {
-      return;
-    }
-    log.error('Failed to initialize Better Auth', { namespace: 'auth', error: err });
+    log.error('Failed to create default admin account', { namespace: 'auth', error: err });
   }
 }

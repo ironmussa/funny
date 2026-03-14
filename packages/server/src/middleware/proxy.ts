@@ -13,6 +13,7 @@
 
 import type { Context } from 'hono';
 
+import { getLocalRunnerFetch } from '../lib/local-runner.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import { resolveRunner } from '../services/runner-resolver.js';
@@ -22,7 +23,8 @@ const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET!;
 
 /**
  * Hono handler that proxies the request to the appropriate runner.
- * Used as a catch-all: `app.all('/api/*', proxyToRunner)`
+ * In local runner mode, forwards directly to the in-process runtime.
+ * In remote runner mode, uses the WebSocket tunnel or direct HTTP.
  */
 export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
   const userId = c.get('userId') as string | undefined;
@@ -32,9 +34,32 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
 
   const url = new URL(c.req.url);
   const path = url.pathname;
-  const query = Object.fromEntries(url.searchParams.entries());
 
-  // Resolve which runner should handle this request
+  // Local runner: forward directly to the in-process runtime
+  const localFetch = getLocalRunnerFetch();
+  if (localFetch) {
+    const headers = new Headers(c.req.raw.headers);
+    headers.set('X-Forwarded-User', userId);
+    headers.set('X-Forwarded-Role', (c.get('userRole') as string | undefined) || 'user');
+    headers.set('X-Runner-Auth', RUNNER_AUTH_SECRET);
+    const orgId = c.get('organizationId') as string | undefined;
+    if (orgId) headers.set('X-Forwarded-Org', orgId);
+    const orgName = c.get('organizationName') as string | undefined;
+    if (orgName) headers.set('X-Forwarded-Org-Name', orgName);
+
+    return localFetch(
+      new Request(c.req.raw.url, {
+        method: c.req.raw.method,
+        headers,
+        body: c.req.raw.body,
+        // @ts-expect-error -- Bun supports duplex
+        duplex: c.req.raw.body ? 'half' : undefined,
+      }),
+    );
+  }
+
+  // Remote runners: resolve which runner should handle this request
+  const query = Object.fromEntries(url.searchParams.entries());
   const resolved = await resolveRunner(path, query);
 
   if (!resolved) {

@@ -19,7 +19,7 @@ await Bun.build({
     'neverthrow',
     'nodemailer',
     '@funny/podman-chrome-streaming',
-    'playwright-core',
+    'playwright',
   ],
 });
 

@@ -4,22 +4,22 @@
 layout {
     pane split_direction="vertical" {
         pane split_direction="horizontal" size="50%" {
-            pane command="bun" name="runner" close_on_exit=false {
-                args "run" "dev:runtime"
+            pane command="bash" name="runner" close_on_exit=false {
+                args "-c" "bun run dev:runtime; exec bash"
             }
-            pane command="bun" name="client" close_on_exit=false {
-                args "run" "dev:client"
+            pane command="bash" name="client" close_on_exit=false {
+                args "-c" "bun run dev:client; exec bash"
             }
-            pane command="bun" name="server" close_on_exit=false {
-                args "run" "dev:server"
+            pane command="bash" name="server" close_on_exit=false {
+                args "-c" "bun run dev:server; exec bash"
             }
         }
         pane split_direction="horizontal" size="50%" {
             pane command="bash" name="storybook" close_on_exit=false {
-                args "-c" "cd packages/client && bun run storybook"
+                args "-c" "cd packages/client && bun run storybook; exec bash"
             }
             pane command="bash" name="abbacchio" close_on_exit=false {
-                args "-c" "cd ../abbacchio && bun run dev"
+                args "-c" "cd ../abbacchio && bun run dev; exec bash"
             }
         }
     }

@@ -135,21 +135,31 @@ function extractThreadId(path: string): string | null {
 }
 
 async function resolveAnyOnlineRunner(userId?: string): Promise<ResolvedRunner | null> {
-  const condition = userId
-    ? and(ne(runners.status, 'offline'), eq(runners.userId, userId))
-    : ne(runners.status, 'offline');
+  // First try user-scoped runners
+  if (userId) {
+    const userRunners = await db
+      .select({ id: runners.id, httpUrl: runners.httpUrl })
+      .from(runners)
+      .where(and(ne(runners.status, 'offline'), eq(runners.userId, userId)));
 
-  const onlineRunners = await db
-    .select({ id: runners.id, httpUrl: runners.httpUrl })
-    .from(runners)
-    .where(condition);
-
-  if (onlineRunners.length > 0) {
-    return { runnerId: onlineRunners[0].id, httpUrl: onlineRunners[0].httpUrl ?? null };
+    if (userRunners.length > 0) {
+      return { runnerId: userRunners[0].id, httpUrl: userRunners[0].httpUrl ?? null };
+    }
   }
 
-  // Fallback to configured default runner URL (useful for dev, only when no userId scope)
-  if (!userId && DEFAULT_RUNNER_URL) {
+  // Fallback: any online runner (includes runners registered without a userId, e.g. dev mode
+  // runners that authenticated via shared secret without an invite token)
+  const allOnline = await db
+    .select({ id: runners.id, httpUrl: runners.httpUrl })
+    .from(runners)
+    .where(ne(runners.status, 'offline'));
+
+  if (allOnline.length > 0) {
+    return { runnerId: allOnline[0].id, httpUrl: allOnline[0].httpUrl ?? null };
+  }
+
+  // Fallback to configured default runner URL
+  if (DEFAULT_RUNNER_URL) {
     log.debug('Using DEFAULT_RUNNER_URL fallback', { namespace: 'proxy', url: DEFAULT_RUNNER_URL });
     return { runnerId: '__default__', httpUrl: DEFAULT_RUNNER_URL };
   }

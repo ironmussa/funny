@@ -409,4 +409,45 @@ log.info(
   },
 );
 
+// ── Graceful shutdown ────────────────────────────────────
+let shuttingDown = false;
+async function shutdown() {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  log.info('Shutting down…', { namespace: 'server' });
+
+  // Force exit after 5 seconds if graceful shutdown hangs
+  const forceExit = setTimeout(() => {
+    log.warn('Force exit after timeout', { namespace: 'server' });
+    process.exit(1);
+  }, 5000);
+
+  // Stop accepting new connections (don't wait for in-flight)
+  server.stop();
+
+  // Shut down the local runtime (kills child processes, PTY sessions, etc.)
+  if (runtimeApp) {
+    try {
+      await runtimeApp.shutdown?.();
+    } catch {
+      // Best-effort
+    }
+  }
+
+  // Close the server DB connection
+  try {
+    const { closeDatabase } = await import('./db/index.js');
+    await closeDatabase();
+  } catch {
+    // Already closed or not initialized
+  }
+
+  clearTimeout(forceExit);
+  log.info('Shutdown complete', { namespace: 'server' });
+  process.exit(0);
+}
+
+process.on('SIGINT', () => void shutdown());
+process.on('SIGTERM', () => void shutdown());
+
 export { app, server };

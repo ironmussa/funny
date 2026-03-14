@@ -74,6 +74,10 @@ setAuthInstance(authInstance);
 
 log.info('Server DB and auth initialized', { namespace: 'server' });
 
+// Purge stale offline runners from previous sessions
+const { purgeOfflineRunners } = await import('./services/runner-manager.js');
+await purgeOfflineRunners();
+
 // ── Start local runner if enabled ───────────────────────
 if (useLocalRunner) {
   const { createRuntimeApp } = await import('@ironmussa/funny-runtime/app');

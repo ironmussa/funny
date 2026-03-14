@@ -15,7 +15,7 @@ import type {
   AssignProjectRequest,
   UnassignProjectRequest,
 } from '@funny/shared/runner-protocol';
-import { eq, and } from 'drizzle-orm';
+import { eq, and, lt } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import { db } from '../db/index.js';
@@ -30,9 +30,47 @@ export async function registerRunner(
   req: RunnerRegisterRequest,
   userId?: string,
 ): Promise<RunnerRegisterResponse> {
+  const now = new Date().toISOString();
+
+  // Check if a runner with the same hostname+userId already exists — reuse it
+  const existing = await db
+    .select({ id: runners.id, token: runners.token })
+    .from(runners)
+    .where(
+      userId
+        ? and(eq(runners.hostname, req.hostname), eq(runners.userId, userId))
+        : eq(runners.hostname, req.hostname),
+    )
+    .limit(1);
+
+  if (existing.length > 0) {
+    const runnerId = existing[0].id;
+    const token = existing[0].token;
+
+    // Update existing runner — mark online, refresh heartbeat
+    await db
+      .update(runners)
+      .set({
+        name: req.name,
+        status: 'online',
+        os: req.os,
+        httpUrl: req.httpUrl ?? null,
+        lastHeartbeatAt: now,
+      })
+      .where(eq(runners.id, runnerId));
+
+    log.info('Runner reconnected (reusing existing registration)', {
+      namespace: 'runner',
+      runnerId,
+      hostname: req.hostname,
+    });
+
+    return { runnerId, token };
+  }
+
+  // New runner — create fresh registration
   const runnerId = nanoid();
   const token = `runner_${nanoid(32)}`;
-  const now = new Date().toISOString();
 
   await db.insert(runners).values({
     id: runnerId,
@@ -302,8 +340,28 @@ export async function getRunnerHttpUrl(runnerId: string): Promise<string | null>
 }
 
 export async function removeRunner(runnerId: string): Promise<void> {
+  await db.delete(runnerProjectAssignments).where(eq(runnerProjectAssignments.runnerId, runnerId));
   await db.delete(runners).where(eq(runners.id, runnerId));
   log.info('Runner removed', { namespace: 'runner', runnerId });
+}
+
+/** Remove all runners that have been offline longer than the given threshold. */
+export async function purgeOfflineRunners(olderThanMs = 60_000): Promise<number> {
+  const cutoff = new Date(Date.now() - olderThanMs).toISOString();
+  const stale = await db
+    .select({ id: runners.id })
+    .from(runners)
+    .where(and(eq(runners.status, 'offline'), lt(runners.lastHeartbeatAt, cutoff)));
+
+  for (const r of stale) {
+    await db.delete(runnerProjectAssignments).where(eq(runnerProjectAssignments.runnerId, r.id));
+    await db.delete(runners).where(eq(runners.id, r.id));
+  }
+
+  if (stale.length > 0) {
+    log.info(`Purged ${stale.length} stale offline runner(s)`, { namespace: 'runner' });
+  }
+  return stale.length;
 }
 
 /** List only the runners owned by a specific user. */

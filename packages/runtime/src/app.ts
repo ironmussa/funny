@@ -248,16 +248,42 @@ export async function createRuntimeApp(options: RuntimeAppOptions = {}): Promise
 
   // ── init() — database, migrations, auth, handlers ──────────────
   async function init() {
-    if (!options.skipDbInit) {
-      await initPostgres();
-      await autoMigrate();
-    } else if (options.dbConnection) {
-      setConnection(options.dbConnection);
+    const isRunnerMode = !!process.env.TEAM_SERVER_URL;
+
+    // In runner mode, skip DB and auth — the server owns those.
+    // The runner uses RemoteThreadManager to proxy persistence via WebSocket.
+    if (!isRunnerMode) {
+      if (!options.skipDbInit) {
+        await initPostgres();
+        await autoMigrate();
+      } else if (options.dbConnection) {
+        setConnection(options.dbConnection);
+      }
+
+      void startScheduler();
+
+      if (!options.skipAuthSetup) {
+        const { initBetterAuth } = await import('./lib/auth.js');
+        await initBetterAuth();
+        log.info('Auth: Better Auth (local)', { namespace: 'server' });
+      } else {
+        log.info('Auth: forwarded from server', { namespace: 'server' });
+      }
+
+      // Mark stale threads
+      await markStaleThreadsInterrupted();
+      await markStaleExternalThreadsStopped();
+
+      // Re-register watchers
+      void rehydrateWatchers();
+
+      // Periodic sweep for external threads
+      startExternalThreadSweep();
+    } else {
+      log.info('Runner mode — skipping DB, auth, and scheduler', { namespace: 'server' });
     }
 
-    void startScheduler();
-
-    // Register handler registry
+    // Register handler registry (needed in both modes for tunnel:request handling)
     const handlerCtx: HandlerServiceContext = {
       getThread: tm.getThread,
       updateThread: tm.updateThread,
@@ -277,25 +303,7 @@ export async function createRuntimeApp(options: RuntimeAppOptions = {}): Promise
     };
     registerAllHandlers(handlerCtx);
 
-    if (!options.skipAuthSetup) {
-      // When running without the server (e.g. standalone runtime), init Better Auth locally
-      const { initBetterAuth } = await import('./lib/auth.js');
-      await initBetterAuth();
-      log.info('Auth: Better Auth (local)', { namespace: 'server' });
-    } else {
-      log.info('Auth: forwarded from server', { namespace: 'server' });
-    }
     await logProviderStatus();
-
-    // Mark stale threads
-    await markStaleThreadsInterrupted();
-    await markStaleExternalThreadsStopped();
-
-    // Re-register watchers
-    void rehydrateWatchers();
-
-    // Periodic sweep for external threads
-    startExternalThreadSweep();
 
     // Reattach PTY sessions
     ptyManager.reattachSessions();

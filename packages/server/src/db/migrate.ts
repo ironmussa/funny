@@ -1,10 +1,11 @@
 /**
- * Central server migrations (PostgreSQL).
+ * Central server migrations (SQLite and PostgreSQL).
  *
  * Uses the shared migration infrastructure from @funny/shared.
  * Each package defines its own migrations array and calls `runMigrations()`.
  */
 
+import { getDbMode } from '@funny/shared/db/db-mode';
 import {
   type Migration,
   createMigrationContext,
@@ -18,7 +19,7 @@ import { db } from './index.js';
 // Lazily create context — db may not be ready at import time
 let _ctx: ReturnType<typeof createMigrationContext> | null = null;
 function ctx() {
-  if (!_ctx) _ctx = createMigrationContext(db, /* isPg */ true);
+  if (!_ctx) _ctx = createMigrationContext(db, getDbMode() === 'postgres');
   return _ctx;
 }
 
@@ -143,9 +144,7 @@ const migrations: Migration[] = [
   {
     name: '005_runner_http_url',
     async up() {
-      await ctx().exec(sql`
-        ALTER TABLE runners ADD COLUMN IF NOT EXISTS http_url TEXT
-      `);
+      await ctx().addColumn('runners', 'http_url', 'TEXT');
     },
   },
   {
@@ -169,9 +168,7 @@ const migrations: Migration[] = [
       `);
 
       // Add runner_id if the table already existed without it
-      await ctx().exec(sql`
-        ALTER TABLE threads ADD COLUMN IF NOT EXISTS runner_id TEXT REFERENCES runners(id) ON DELETE SET NULL
-      `);
+      await ctx().addColumn('threads', 'runner_id', 'TEXT');
 
       await ctx().exec(sql`
         CREATE INDEX IF NOT EXISTS idx_threads_project
@@ -194,9 +191,7 @@ const migrations: Migration[] = [
     async up() {
       // The runners table may have been created by the runtime package (migration 041_runners)
       // with a different schema (project_paths instead of user_id). Ensure user_id exists.
-      await ctx().exec(sql`
-        ALTER TABLE runners ADD COLUMN IF NOT EXISTS user_id TEXT
-      `);
+      await ctx().addColumn('runners', 'user_id', 'TEXT');
     },
   },
   {
@@ -228,8 +223,437 @@ const migrations: Migration[] = [
       `);
     },
   },
+
+  // ── Migrations to match runtime tables ──────────────────────────
+
+  {
+    name: '009_messages',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS messages (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          role TEXT NOT NULL,
+          content TEXT NOT NULL,
+          timestamp TEXT NOT NULL,
+          images TEXT,
+          model TEXT,
+          permission_mode TEXT,
+          author TEXT
+        )
+      `);
+
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_messages_thread_timestamp
+        ON messages (thread_id, timestamp)
+      `);
+    },
+  },
+
+  {
+    name: '010_messages_search_vector',
+    async up() {
+      // TSVECTOR, GIN indexes, triggers, and plpgsql are PostgreSQL-only features
+      if (!ctx().isPg) return;
+
+      await ctx().addColumn('messages', 'search_vector', 'TSVECTOR');
+
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_messages_search_vector
+        ON messages USING GIN (search_vector)
+      `);
+
+      await ctx().exec(
+        sql.raw(`
+          CREATE OR REPLACE FUNCTION messages_search_vector_update() RETURNS trigger AS $$
+          BEGIN
+            NEW.search_vector := to_tsvector('english', COALESCE(NEW.content, ''));
+            RETURN NEW;
+          END
+          $$ LANGUAGE plpgsql
+        `),
+      );
+
+      await ctx().exec(
+        sql.raw(`DROP TRIGGER IF EXISTS messages_search_vector_trigger ON messages`),
+      );
+      await ctx().exec(
+        sql.raw(`
+          CREATE TRIGGER messages_search_vector_trigger
+          BEFORE INSERT OR UPDATE ON messages
+          FOR EACH ROW EXECUTE FUNCTION messages_search_vector_update()
+        `),
+      );
+
+      await ctx().exec(sql`
+        UPDATE messages
+        SET search_vector = to_tsvector('english', COALESCE(content, ''))
+        WHERE search_vector IS NULL
+      `);
+    },
+  },
+
+  {
+    name: '011_tool_calls',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS tool_calls (
+          id TEXT PRIMARY KEY,
+          message_id TEXT NOT NULL REFERENCES messages(id) ON DELETE CASCADE,
+          name TEXT NOT NULL,
+          input TEXT,
+          output TEXT,
+          author TEXT
+        )
+      `);
+    },
+  },
+
+  {
+    name: '012_startup_commands',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS startup_commands (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          label TEXT NOT NULL,
+          command TEXT NOT NULL,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          port INTEGER,
+          port_env_var TEXT,
+          created_at TEXT NOT NULL
+        )
+      `);
+    },
+  },
+
+  {
+    name: '013_automations',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS automations (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL DEFAULT '__local__',
+          name TEXT NOT NULL,
+          prompt TEXT NOT NULL,
+          schedule TEXT NOT NULL,
+          model TEXT NOT NULL DEFAULT 'sonnet',
+          mode TEXT NOT NULL DEFAULT 'worktree',
+          permission_mode TEXT NOT NULL DEFAULT 'autoEdit',
+          provider TEXT NOT NULL DEFAULT 'claude',
+          base_branch TEXT,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          max_run_history INTEGER NOT NULL DEFAULT 20,
+          last_run_at TEXT,
+          next_run_at TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS automation_runs (
+          id TEXT PRIMARY KEY,
+          automation_id TEXT NOT NULL REFERENCES automations(id) ON DELETE CASCADE,
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          status TEXT NOT NULL DEFAULT 'running',
+          triage_status TEXT NOT NULL DEFAULT 'pending',
+          has_findings INTEGER,
+          summary TEXT,
+          started_at TEXT NOT NULL,
+          completed_at TEXT
+        )
+      `);
+    },
+  },
+
+  {
+    name: '014_mcp_oauth_tokens',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS mcp_oauth_tokens (
+          id TEXT PRIMARY KEY,
+          server_name TEXT NOT NULL,
+          project_path TEXT NOT NULL,
+          server_url TEXT NOT NULL,
+          access_token TEXT NOT NULL,
+          refresh_token TEXT,
+          token_type TEXT NOT NULL DEFAULT 'Bearer',
+          expires_at TEXT,
+          scope TEXT,
+          token_endpoint TEXT,
+          client_id TEXT,
+          client_secret TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+    },
+  },
+
+  {
+    name: '015_thread_comments',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS thread_comments (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL,
+          source TEXT NOT NULL DEFAULT 'user',
+          content TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        )
+      `);
+    },
+  },
+
+  {
+    name: '016_message_queue',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS message_queue (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          content TEXT NOT NULL,
+          provider TEXT,
+          model TEXT,
+          permission_mode TEXT,
+          images TEXT,
+          allowed_tools TEXT,
+          disallowed_tools TEXT,
+          file_references TEXT,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL
+        )
+      `);
+
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_message_queue_thread
+        ON message_queue (thread_id, sort_order)
+      `);
+    },
+  },
+
+  {
+    name: '017_stage_history',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS stage_history (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          from_stage TEXT,
+          to_stage TEXT NOT NULL,
+          changed_at TEXT NOT NULL
+        )
+      `);
+    },
+  },
+
+  {
+    name: '018_pipelines',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS pipelines (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL DEFAULT '__local__',
+          name TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          review_model TEXT NOT NULL DEFAULT 'sonnet',
+          fix_model TEXT NOT NULL DEFAULT 'sonnet',
+          max_iterations INTEGER NOT NULL DEFAULT 10,
+          precommit_fix_enabled INTEGER NOT NULL DEFAULT 0,
+          precommit_fix_model TEXT NOT NULL DEFAULT 'sonnet',
+          precommit_fix_max_iterations INTEGER NOT NULL DEFAULT 3,
+          reviewer_prompt TEXT,
+          corrector_prompt TEXT,
+          precommit_fixer_prompt TEXT,
+          commit_message_prompt TEXT,
+          test_enabled INTEGER NOT NULL DEFAULT 0,
+          test_command TEXT,
+          test_fix_enabled INTEGER NOT NULL DEFAULT 0,
+          test_fix_model TEXT NOT NULL DEFAULT 'sonnet',
+          test_fix_max_iterations INTEGER NOT NULL DEFAULT 3,
+          test_fixer_prompt TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS pipeline_runs (
+          id TEXT PRIMARY KEY,
+          pipeline_id TEXT NOT NULL REFERENCES pipelines(id) ON DELETE CASCADE,
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          status TEXT NOT NULL DEFAULT 'running',
+          current_stage TEXT NOT NULL DEFAULT 'reviewer',
+          iteration INTEGER NOT NULL DEFAULT 0,
+          max_iterations INTEGER NOT NULL DEFAULT 10,
+          commit_sha TEXT,
+          verdict TEXT,
+          findings TEXT,
+          fixer_thread_id TEXT,
+          reviewer_thread_id TEXT,
+          precommit_iteration INTEGER,
+          hook_name TEXT,
+          hook_error TEXT,
+          created_at TEXT NOT NULL,
+          completed_at TEXT
+        )
+      `);
+
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_pipeline_runs_pipeline
+        ON pipeline_runs (pipeline_id)
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_pipeline_runs_thread
+        ON pipeline_runs (thread_id)
+      `);
+    },
+  },
+
+  {
+    name: '019_team_projects',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS team_projects (
+          team_id TEXT NOT NULL,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          created_at TEXT NOT NULL,
+          PRIMARY KEY (team_id, project_id)
+        )
+      `);
+
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_team_projects_team ON team_projects (team_id)
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_team_projects_project ON team_projects (project_id)
+      `);
+    },
+  },
+
+  {
+    name: '020_thread_events',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS thread_events (
+          id TEXT PRIMARY KEY,
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          event_type TEXT NOT NULL,
+          data TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        )
+      `);
+
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_thread_events_thread_created
+        ON thread_events (thread_id, created_at)
+      `);
+    },
+  },
+
+  {
+    name: '021_pty_sessions',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS pty_sessions (
+          id TEXT PRIMARY KEY,
+          tmux_session TEXT NOT NULL UNIQUE,
+          user_id TEXT NOT NULL DEFAULT '__local__',
+          cwd TEXT NOT NULL,
+          shell TEXT,
+          cols INTEGER NOT NULL DEFAULT 80,
+          rows INTEGER NOT NULL DEFAULT 24,
+          project_id TEXT,
+          label TEXT,
+          terminal_state TEXT,
+          created_at TEXT NOT NULL
+        )
+      `);
+    },
+  },
+
+  {
+    name: '022_project_hooks',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS project_hooks (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          hook_type TEXT NOT NULL DEFAULT 'postCommit',
+          label TEXT NOT NULL,
+          command TEXT NOT NULL,
+          enabled INTEGER NOT NULL DEFAULT 1,
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL
+        )
+      `);
+    },
+  },
+
+  // ── Add missing columns to existing server tables ───────────────
+
+  {
+    name: '023_threads_missing_columns',
+    async up() {
+      await ctx().addColumn('threads', 'archived', 'INTEGER NOT NULL', '0');
+      await ctx().addColumn('threads', 'permission_mode', 'TEXT NOT NULL', "'autoEdit'");
+      await ctx().addColumn('threads', 'base_branch', 'TEXT');
+      await ctx().addColumn('threads', 'automation_id', 'TEXT');
+      await ctx().addColumn('threads', 'pinned', 'INTEGER NOT NULL', '0');
+      await ctx().addColumn('threads', 'initial_prompt', 'TEXT');
+      await ctx().addColumn('threads', 'provider', 'TEXT NOT NULL', "'claude'");
+      await ctx().addColumn('threads', 'external_request_id', 'TEXT');
+      await ctx().addColumn('threads', 'init_tools', 'TEXT');
+      await ctx().addColumn('threads', 'init_cwd', 'TEXT');
+      await ctx().addColumn('threads', 'source', 'TEXT NOT NULL', "'web'");
+      await ctx().addColumn('threads', 'parent_thread_id', 'TEXT');
+      await ctx().addColumn('threads', 'created_by', 'TEXT');
+      await ctx().addColumn('threads', 'runtime', 'TEXT NOT NULL', "'local'");
+      await ctx().addColumn('threads', 'container_url', 'TEXT');
+      await ctx().addColumn('threads', 'container_name', 'TEXT');
+      await ctx().addColumn('threads', 'worktree_path', 'TEXT');
+      await ctx().addColumn('threads', 'session_id', 'TEXT');
+      await ctx().addColumn('threads', 'cost', 'REAL NOT NULL', '0');
+    },
+  },
+
+  {
+    name: '024_projects_missing_columns',
+    async up() {
+      await ctx().addColumn('projects', 'path', 'TEXT');
+      await ctx().addColumn('projects', 'user_id', 'TEXT NOT NULL', "'__local__'");
+      await ctx().addColumn('projects', 'sort_order', 'INTEGER NOT NULL', '0');
+      await ctx().addColumn('projects', 'color', 'TEXT');
+      await ctx().addColumn('projects', 'follow_up_mode', 'TEXT NOT NULL', "'interrupt'");
+      await ctx().addColumn('projects', 'default_provider', 'TEXT');
+      await ctx().addColumn('projects', 'default_model', 'TEXT');
+      await ctx().addColumn('projects', 'default_mode', 'TEXT');
+      await ctx().addColumn('projects', 'default_permission_mode', 'TEXT');
+      await ctx().addColumn('projects', 'urls', 'TEXT');
+      await ctx().addColumn('projects', 'default_branch', 'TEXT');
+      await ctx().addColumn('projects', 'system_prompt', 'TEXT');
+      await ctx().addColumn('projects', 'launcher_url', 'TEXT');
+    },
+  },
+
+  {
+    name: '025_user_profiles_missing_columns',
+    async up() {
+      await ctx().addColumn('user_profiles', 'setup_completed', 'INTEGER NOT NULL', '0');
+      await ctx().addColumn('user_profiles', 'default_editor', 'TEXT');
+      await ctx().addColumn('user_profiles', 'use_internal_editor', 'INTEGER');
+      await ctx().addColumn('user_profiles', 'terminal_shell', 'TEXT');
+      await ctx().addColumn('user_profiles', 'tool_permissions', 'TEXT');
+      await ctx().addColumn('user_profiles', 'theme', 'TEXT');
+      await ctx().addColumn('user_profiles', 'assemblyai_api_key', 'TEXT');
+    },
+  },
 ];
 
 export async function autoMigrate() {
-  await runMigrations(db as any, /* isPg */ true, migrations, log, 'central-db');
+  await runMigrations(db as any, getDbMode() === 'postgres', migrations, log, 'central-db');
 }

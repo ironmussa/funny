@@ -61,6 +61,11 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
     forwardedHeaders['X-Forwarded-Org'] = orgId;
   }
 
+  const orgName = c.get('organizationName') as string | undefined;
+  if (orgName) {
+    forwardedHeaders['X-Forwarded-Org-Name'] = orgName;
+  }
+
   const userRole = c.get('userRole') as string | undefined;
   if (userRole) {
     forwardedHeaders['X-Forwarded-Role'] = userRole;

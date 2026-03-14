@@ -1,7 +1,14 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
+import { Send, Mic } from 'lucide-react';
+import { useRef, useState, useCallback } from 'react';
 import { fn } from 'storybook/test';
 
+import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
+import { PromptEditor } from '@/components/prompt-editor/PromptEditor';
 import { PromptInputUI } from '@/components/PromptInputUI';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { cn } from '@/lib/utils';
 
 const defaultModes = [
   { value: 'ask', label: 'Ask' },
@@ -207,5 +214,96 @@ export const WithLauncher: Story = {
     branches: ['main'],
     selectedBranch: 'main',
     onSelectedBranchChange: fn(),
+  },
+};
+
+/* ------------------------------------------------------------------ */
+/*  Minimal — PromptEditor with mic + send only                        */
+/* ------------------------------------------------------------------ */
+
+/** Minimal editor with just mic and send buttons (used in tool cards like Plan, AskQuestion). */
+export const Minimal: StoryObj = {
+  name: 'Minimal (Mic + Send)',
+  render: () => {
+    const editorRef = useRef<PromptEditorHandle>(null);
+    const [hasContent, setHasContent] = useState(false);
+    const [submitted, setSubmitted] = useState<string | null>(null);
+
+    const handleChange = useCallback(() => {
+      const text = (editorRef.current?.getText() ?? '').trim();
+      setHasContent(text.length > 0);
+    }, []);
+
+    const handleSubmit = useCallback(() => {
+      const text = (editorRef.current?.getText() ?? '').trim();
+      if (!text) return;
+      setSubmitted(text);
+      editorRef.current?.clear();
+      setHasContent(false);
+    }, []);
+
+    return (
+      <div className="mx-auto max-w-lg space-y-3">
+        <p className="text-xs text-muted-foreground">
+          Minimal variant used inside tool cards (Plan, AskQuestion). Only mic + send buttons.
+        </p>
+
+        <div className="rounded-md border border-border/40 bg-background/50 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20">
+          <div className="px-2.5 py-1.5">
+            <PromptEditor
+              ref={editorRef}
+              placeholder="Type instructions or feedback..."
+              onSubmit={handleSubmit}
+              onChange={handleChange}
+              className="min-h-[40px] max-h-[120px] overflow-y-auto text-sm"
+            />
+          </div>
+          <div className="flex items-center justify-end gap-1 border-t border-border/20 px-1.5 py-0.5">
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  data-testid="minimal-dictate"
+                  variant="ghost"
+                  size="icon-sm"
+                  tabIndex={-1}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <Mic className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Start dictation</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  data-testid="minimal-send"
+                  onClick={handleSubmit}
+                  variant="ghost"
+                  size="icon-sm"
+                  tabIndex={-1}
+                  disabled={!hasContent}
+                  className={cn(
+                    'text-muted-foreground hover:text-foreground',
+                    hasContent && 'text-primary hover:text-primary',
+                  )}
+                >
+                  <Send className="h-3 w-3" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Send</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+
+        {submitted && (
+          <div className="rounded-md border border-border/40 bg-muted/30 p-3">
+            <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
+              Submitted
+            </div>
+            <pre className="whitespace-pre-wrap text-xs text-foreground">{submitted}</pre>
+          </div>
+        )}
+      </div>
+    );
   },
 };

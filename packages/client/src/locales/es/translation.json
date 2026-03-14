@@ -576,7 +576,8 @@
     "loading": "Cargando...",
     "stop": "Detener",
     "continue": "Continuar",
-    "or": "o"
+    "or": "o",
+    "retry": "Reintentar"
   },
   "editor": {
     "failedToLoad": "No se pudo cargar el archivo",
@@ -770,6 +771,8 @@
     "connected": "Conectado como {{login}}",
     "disconnect": "Desconectar",
     "disconnected": "GitHub desconectado",
+    "connectionError": "Error de Conexión",
+    "connectionErrorDesc": "No se pudo verificar el estado de conexión con GitHub. El servidor puede no estar disponible.",
     "localFolder": "Carpeta Local",
     "cloneFromGithub": "Clonar de GitHub",
     "deviceFlow": {

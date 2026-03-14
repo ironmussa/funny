@@ -58,7 +58,7 @@ const viewer = ac.newRole({
 });
 
 const member = ac.newRole({
-  project: ['create'],
+  project: [],
   thread: ['create', 'start', 'stop'],
   git: ['commit', 'push', 'create-pr'],
   member: [],

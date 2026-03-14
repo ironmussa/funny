@@ -10,6 +10,7 @@
 
 import type { Context, Next } from 'hono';
 
+import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 
 const PUBLIC_PATHS = new Set(['/api/health', '/api/bootstrap', '/api/setup/status']);
@@ -70,7 +71,14 @@ export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
   }
 
   const session = await _auth.api.getSession({ headers: c.req.raw.headers });
-  if (!session) return c.json({ error: 'Unauthorized' }, 401);
+  if (!session) {
+    log.warn('Session validation failed', {
+      namespace: 'auth',
+      path,
+      hasCookie: !!c.req.header('cookie'),
+    });
+    return c.json({ error: 'Unauthorized' }, 401);
+  }
 
   c.set('userId', session.user.id);
   c.set('userRole', (session.user as any).role || 'user');
@@ -78,6 +86,21 @@ export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
 
   const activeOrgId = (session.session as any).activeOrganizationId ?? null;
   c.set('organizationId', activeOrgId);
+
+  // Resolve org name for forwarding to runtime
+  let orgName: string | null = null;
+  if (activeOrgId) {
+    try {
+      const org = await _auth.api.getFullOrganization({
+        headers: c.req.raw.headers,
+        query: { organizationId: activeOrgId },
+      });
+      orgName = org?.name ?? null;
+    } catch {
+      // Org name unavailable
+    }
+  }
+  c.set('organizationName', orgName);
 
   return next();
 }
@@ -88,4 +111,39 @@ export async function requireAdmin(c: Context<ServerEnv>, next: Next) {
     return c.json({ error: 'Forbidden: admin required' }, 403);
   }
   return next();
+}
+
+/**
+ * Middleware factory that checks if the user has a specific permission
+ * in their active organization.
+ */
+export function requirePermission(resource: string, action: string) {
+  return async (c: Context<ServerEnv>, next: Next) => {
+    const orgId = c.get('organizationId');
+    if (!orgId) return next();
+
+    if (!_auth) {
+      const { auth } = await import('../lib/auth.js');
+      _auth = auth;
+    }
+
+    try {
+      const hasPermission = await _auth.api.hasPermission({
+        headers: c.req.raw.headers,
+        body: {
+          permission: {
+            [resource]: [action],
+          },
+        },
+      });
+
+      if (!hasPermission) {
+        return c.json({ error: `Forbidden: ${resource}:${action} permission required` }, 403);
+      }
+    } catch {
+      // If permission check fails, allow through
+    }
+
+    return next();
+  };
 }

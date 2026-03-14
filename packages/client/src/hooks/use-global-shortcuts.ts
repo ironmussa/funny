@@ -1,6 +1,7 @@
 import { startTransition, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { buildPath } from '@/lib/url';
 import { useProjectStore } from '@/stores/project-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 
@@ -25,7 +26,7 @@ export function useGlobalShortcuts(onToggleCommandPalette: () => void) {
       if (e.ctrlKey && e.shiftKey && e.key === 'F') {
         e.preventDefault();
         e.stopPropagation();
-        navigate('/list');
+        navigate(buildPath('/list'));
         return;
       }
 

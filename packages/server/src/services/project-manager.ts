@@ -169,13 +169,56 @@ export async function isProjectMember(projectId: string, userId: string): Promis
   return rows.length > 0;
 }
 
+/**
+ * Set the local path for a member on a project.
+ * Uses upsert logic: creates the project_members record if it doesn't exist (lazy creation),
+ * or updates the localPath if it does.
+ */
 export async function setMemberLocalPath(
   projectId: string,
   userId: string,
   localPath: string,
 ): Promise<void> {
-  await db
-    .update(projectMembers)
-    .set({ localPath })
+  const now = new Date().toISOString();
+
+  // Try to update first (most common case)
+  const existing = await db
+    .select({ userId: projectMembers.userId })
+    .from(projectMembers)
     .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+
+  if (existing.length > 0) {
+    await db
+      .update(projectMembers)
+      .set({ localPath })
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+  } else {
+    // Lazy creation: create the member record with the localPath
+    await db.insert(projectMembers).values({
+      projectId,
+      userId,
+      role: 'member',
+      localPath,
+      joinedAt: now,
+    });
+    log.info('Member record created lazily via local-path assignment', {
+      namespace: 'project',
+      projectId,
+      userId,
+    });
+  }
+}
+
+/**
+ * Get the local path configured by a specific member for a project.
+ */
+export async function getMemberLocalPath(
+  projectId: string,
+  userId: string,
+): Promise<string | null> {
+  const rows = await db
+    .select({ localPath: projectMembers.localPath })
+    .from(projectMembers)
+    .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, userId)));
+  return (rows[0] as { localPath: string | null } | undefined)?.localPath ?? null;
 }

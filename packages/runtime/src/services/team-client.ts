@@ -1,19 +1,20 @@
 /**
- * @domain subdomain: Team Collaboration
+ * @domain subdomain: Runner ↔ Server Communication
  * @domain subdomain-type: supporting
  * @domain type: app-service
  * @domain layer: application
  *
- * Team client — connects this local funny instance to a central team server.
- * Activated when TEAM_SERVER_URL is set (via `funny --team <url>`).
+ * Runner client — connects this runtime instance to the central server.
+ * Activated when TEAM_SERVER_URL is set, which configures this runtime
+ * as a runner that executes agent work on behalf of the server.
  *
  * Responsibilities:
  * - Authenticate with the central server
  * - Register as a runner
  * - Heartbeat (every 15s)
  * - Poll for pending tasks (every 5s)
- * - Sync team projects (on startup + periodically)
- * - Connect WebSocket for agent event streaming
+ * - Assign local projects to the server (on startup + when created)
+ * - Connect WebSocket for agent event streaming and tunneled HTTP requests
  */
 
 import { hostname } from 'os';
@@ -21,9 +22,12 @@ import { hostname } from 'os';
 import type { Project, WSEvent } from '@funny/shared';
 import type {
   CentralWSTunnelRequest,
+  DataInsertMessage,
+  DataInsertToolCall,
   RunnerRegisterResponse,
   RunnerTask,
 } from '@funny/shared/runner-protocol';
+import { nanoid } from 'nanoid';
 
 import { log } from '../lib/logger.js';
 import { listProjects } from './project-manager.js';
@@ -49,6 +53,8 @@ interface TeamClientState {
   browserWSHandler: BrowserWSHandler | null;
   /** Reference to the local Hono app for handling tunnel requests */
   localApp: FetchableApp | null;
+  /** Pending data requests awaiting server responses, keyed by requestId */
+  pendingDataRequests: Map<string, { resolve: (value: any) => void; reject: (err: Error) => void }>;
 }
 
 const state: TeamClientState = {
@@ -61,6 +67,7 @@ const state: TeamClientState = {
   unsubscribeBroker: null,
   browserWSHandler: null,
   localApp: null,
+  pendingDataRequests: new Map(),
 };
 
 // ── HTTP helpers ─────────────────────────────────────────
@@ -106,7 +113,7 @@ async function register(): Promise<boolean> {
         body = await res.text();
       } catch {}
       log.error('Failed to register with central server', {
-        namespace: 'team',
+        namespace: 'runner',
         status: res.status,
         body,
       });
@@ -118,7 +125,7 @@ async function register(): Promise<boolean> {
     state.runnerToken = data.token;
 
     log.info('Registered with central server', {
-      namespace: 'team',
+      namespace: 'runner',
       runnerId: data.runnerId,
       transport: httpUrl ? 'http+tunnel' : 'tunnel-only',
     });
@@ -126,7 +133,7 @@ async function register(): Promise<boolean> {
     return true;
   } catch (err) {
     log.error('Failed to connect to central server', {
-      namespace: 'team',
+      namespace: 'runner',
       error: err as any,
     });
     return false;
@@ -147,7 +154,7 @@ async function registerWithRetry(maxAttempts = 10): Promise<boolean> {
       log.warn(
         `Registration failed, retrying in ${delay / 1000}s (attempt ${attempt}/${maxAttempts})`,
         {
-          namespace: 'team',
+          namespace: 'runner',
         },
       );
       await new Promise((r) => setTimeout(r, delay));
@@ -167,7 +174,7 @@ async function sendHeartbeat(): Promise<void> {
       }),
     });
   } catch (err) {
-    log.warn('Heartbeat failed', { namespace: 'team', error: err as any });
+    log.warn('Heartbeat failed', { namespace: 'runner', error: err as any });
   }
 }
 
@@ -181,7 +188,7 @@ async function pollTasks(): Promise<void> {
     const { tasks } = (await res.json()) as { tasks: RunnerTask[] };
     for (const task of tasks) {
       log.info('Received task from central', {
-        namespace: 'team',
+        namespace: 'runner',
         taskId: task.taskId,
         type: task.type,
         threadId: task.threadId,
@@ -222,12 +229,12 @@ async function assignLocalProjects(): Promise<void> {
     }
 
     log.info('Assigned local projects to runner', {
-      namespace: 'team',
+      namespace: 'runner',
       count: projects.length,
     });
   } catch (err) {
     log.warn('Failed to assign local projects', {
-      namespace: 'team',
+      namespace: 'runner',
       error: err as any,
     });
   }
@@ -249,7 +256,7 @@ export async function assignProjectToRunner(project: Project): Promise<void> {
       }),
     });
     log.info('Assigned new project to runner', {
-      namespace: 'team',
+      namespace: 'runner',
       projectId: project.id,
     });
   } catch {
@@ -268,14 +275,14 @@ function connectWebSocket(): void {
     ws.onopen = () => {
       // Authenticate
       ws.send(JSON.stringify({ type: 'runner:auth', token: state.runnerToken }));
-      log.info('WebSocket connected to central', { namespace: 'team' });
+      log.info('WebSocket connected to central', { namespace: 'runner' });
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data as string);
         if (data.type === 'runner:auth_ok') {
-          log.info('WebSocket authenticated', { namespace: 'team' });
+          log.info('WebSocket authenticated', { namespace: 'runner' });
         }
 
         // Handle browser WS messages forwarded through the central server
@@ -286,7 +293,7 @@ function connectWebSocket(): void {
         // Handle task commands from central
         if (data.type === 'central:command' && data.task) {
           log.info('Received command from central', {
-            namespace: 'team',
+            namespace: 'runner',
             taskId: data.task.taskId,
             type: data.task.type,
           });
@@ -297,11 +304,18 @@ function connectWebSocket(): void {
         if (data.type === 'tunnel:request') {
           handleTunnelRequest(data as CentralWSTunnelRequest);
         }
+
+        // Handle data persistence responses from the server
+        if (data.type?.startsWith('data:') && data.requestId) {
+          handleDataResponse(data);
+        }
       } catch {}
     };
 
     ws.onclose = () => {
-      log.warn('WebSocket disconnected from central, reconnecting in 5s...', { namespace: 'team' });
+      log.warn('WebSocket disconnected from central, reconnecting in 5s...', {
+        namespace: 'runner',
+      });
       state.ws = null;
       setTimeout(connectWebSocket, 5000);
     };
@@ -312,7 +326,7 @@ function connectWebSocket(): void {
 
     state.ws = ws;
   } catch (err) {
-    log.error('Failed to connect WebSocket to central', { namespace: 'team', error: err as any });
+    log.error('Failed to connect WebSocket to central', { namespace: 'runner', error: err as any });
     setTimeout(connectWebSocket, 5000);
   }
 }
@@ -325,7 +339,7 @@ function connectWebSocket(): void {
  */
 function handleBrowserWSMessage(userId: string, data: unknown): void {
   if (!state.browserWSHandler) {
-    log.warn('No browser WS handler registered', { namespace: 'team' });
+    log.warn('No browser WS handler registered', { namespace: 'runner' });
     return;
   }
 
@@ -355,7 +369,7 @@ function handleBrowserWSMessage(userId: string, data: unknown): void {
 function forwardEventToCentral(event: WSEvent, userId?: string): void {
   if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
     log.warn('Cannot forward event — WS not connected to central', {
-      namespace: 'team',
+      namespace: 'runner',
       eventType: event.type,
       threadId: (event as any).threadId,
     });
@@ -364,7 +378,7 @@ function forwardEventToCentral(event: WSEvent, userId?: string): void {
 
   if (!userId) {
     log.warn('Forwarding event without userId — may be dropped by central', {
-      namespace: 'team',
+      namespace: 'runner',
       eventType: event.type,
       threadId: (event as any).threadId,
     });
@@ -392,7 +406,7 @@ function forwardEventToCentral(event: WSEvent, userId?: string): void {
  */
 async function handleTunnelRequest(data: CentralWSTunnelRequest): Promise<void> {
   if (!state.localApp) {
-    log.warn('Received tunnel:request but no local app registered', { namespace: 'team' });
+    log.warn('Received tunnel:request but no local app registered', { namespace: 'runner' });
     sendTunnelResponse(data.requestId, 503, {}, 'Local app not initialized');
     return;
   }
@@ -421,7 +435,7 @@ async function handleTunnelRequest(data: CentralWSTunnelRequest): Promise<void> 
     sendTunnelResponse(data.requestId, response.status, responseHeaders, responseBody);
   } catch (err) {
     log.error('Failed to handle tunnel request', {
-      namespace: 'team',
+      namespace: 'runner',
       requestId: data.requestId,
       path: data.path,
       error: (err as Error).message,
@@ -452,16 +466,206 @@ function sendTunnelResponse(
   }
 }
 
+// ── Data Persistence (Runner → Server) ──────────────────
+
+/** Timeout for data requests awaiting server response (ms) */
+const DATA_REQUEST_TIMEOUT = 15_000;
+
+/**
+ * Handle a data response from the server.
+ * Resolves the pending promise for the matching requestId.
+ */
+function handleDataResponse(data: any): void {
+  const pending = state.pendingDataRequests.get(data.requestId);
+  if (!pending) return;
+
+  state.pendingDataRequests.delete(data.requestId);
+
+  switch (data.type) {
+    case 'data:insert_message_response':
+      pending.resolve({ messageId: data.messageId });
+      break;
+    case 'data:insert_tool_call_response':
+      pending.resolve({ toolCallId: data.toolCallId });
+      break;
+    case 'data:ack':
+      if (data.success) {
+        pending.resolve({ success: true });
+      } else {
+        pending.reject(new Error(data.error ?? 'Server returned error'));
+      }
+      break;
+    case 'data:get_thread_response':
+      pending.resolve(data.thread);
+      break;
+    case 'data:get_tool_call_response':
+      pending.resolve(data.toolCall);
+      break;
+    case 'data:find_tool_call_response':
+      pending.resolve(data.toolCall);
+      break;
+    default:
+      pending.resolve(data);
+  }
+}
+
+/**
+ * Send a data message to the server and wait for a response.
+ * Creates a pending promise keyed by requestId that is resolved
+ * when the server sends the corresponding response.
+ */
+function sendDataMessage(message: Record<string, any>): Promise<any> {
+  return new Promise((resolve, reject) => {
+    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+      reject(new Error('WebSocket not connected to central server'));
+      return;
+    }
+
+    const requestId = message.requestId as string;
+    if (!requestId) {
+      reject(new Error('Data message must have a requestId'));
+      return;
+    }
+
+    // Set up timeout
+    const timer = setTimeout(() => {
+      state.pendingDataRequests.delete(requestId);
+      reject(new Error(`Data request timed out after ${DATA_REQUEST_TIMEOUT}ms (${message.type})`));
+    }, DATA_REQUEST_TIMEOUT);
+
+    state.pendingDataRequests.set(requestId, {
+      resolve: (value: any) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      reject: (err: Error) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    });
+
+    try {
+      state.ws.send(JSON.stringify(message));
+    } catch (err) {
+      clearTimeout(timer);
+      state.pendingDataRequests.delete(requestId);
+      reject(err);
+    }
+  });
+}
+
+/** Insert a message on the server, returns the server-generated messageId */
+export async function remoteInsertMessage(data: DataInsertMessage['payload']): Promise<string> {
+  const requestId = nanoid();
+  const response = await sendDataMessage({
+    type: 'data:insert_message',
+    requestId,
+    payload: data,
+  });
+  return response.messageId;
+}
+
+/** Insert a tool call on the server, returns the server-generated toolCallId */
+export async function remoteInsertToolCall(data: DataInsertToolCall['payload']): Promise<string> {
+  const requestId = nanoid();
+  const response = await sendDataMessage({
+    type: 'data:insert_tool_call',
+    requestId,
+    payload: data,
+  });
+  return response.toolCallId;
+}
+
+/** Update thread fields on the server (fire-and-forget) */
+export async function remoteUpdateThread(
+  threadId: string,
+  updates: Record<string, any>,
+): Promise<void> {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+  try {
+    state.ws.send(
+      JSON.stringify({
+        type: 'data:update_thread',
+        payload: { threadId, updates },
+      }),
+    );
+  } catch {}
+}
+
+/** Update message content on the server (fire-and-forget) */
+export async function remoteUpdateMessage(messageId: string, content: string): Promise<void> {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+  try {
+    state.ws.send(
+      JSON.stringify({
+        type: 'data:update_message',
+        payload: { messageId, content },
+      }),
+    );
+  } catch {}
+}
+
+/** Update tool call output on the server (fire-and-forget) */
+export async function remoteUpdateToolCallOutput(
+  toolCallId: string,
+  output: string,
+): Promise<void> {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+  try {
+    state.ws.send(
+      JSON.stringify({
+        type: 'data:update_tool_call_output',
+        payload: { toolCallId, output },
+      }),
+    );
+  } catch {}
+}
+
+/** Get a thread from the server by ID */
+export async function remoteGetThread(threadId: string): Promise<any> {
+  const requestId = nanoid();
+  return sendDataMessage({
+    type: 'data:get_thread',
+    requestId,
+    threadId,
+  });
+}
+
+/** Get a tool call from the server by ID */
+export async function remoteGetToolCall(toolCallId: string): Promise<any> {
+  const requestId = nanoid();
+  return sendDataMessage({
+    type: 'data:get_tool_call',
+    requestId,
+    toolCallId,
+  });
+}
+
+/** Find a tool call on the server by messageId + name + input (dedup) */
+export async function remoteFindToolCall(
+  messageId: string,
+  name: string,
+  input: string,
+): Promise<any> {
+  const requestId = nanoid();
+  return sendDataMessage({
+    type: 'data:find_tool_call',
+    requestId,
+    payload: { messageId, name, input },
+  });
+}
+
 // ── Lifecycle ────────────────────────────────────────────
 
 /**
- * Initialize team mode — connect to the central server.
- * Called from server/src/index.ts when TEAM_SERVER_URL is set.
+ * Initialize runner mode — connect to the central server.
+ * Called from app.ts init() when TEAM_SERVER_URL is set,
+ * configuring this runtime as a runner for the server.
  */
 export async function initTeamMode(serverUrl: string): Promise<void> {
   state.serverUrl = serverUrl.replace(/\/$/, ''); // Remove trailing slash
 
-  log.info(`Connecting to central server at ${state.serverUrl}`, { namespace: 'team' });
+  log.info(`Connecting to server at ${state.serverUrl}`, { namespace: 'runner' });
 
   // Subscribe to local wsBroker events early — even before registration succeeds,
   // so events are forwarded as soon as the WS connection is established.
@@ -470,8 +674,8 @@ export async function initTeamMode(serverUrl: string): Promise<void> {
   // Register as a runner (with retries if the server is not yet available)
   const registered = await registerWithRetry();
   if (!registered) {
-    log.error('Failed to register with central server after retries — team mode disabled', {
-      namespace: 'team',
+    log.error('Failed to register with central server after retries — runner mode disabled', {
+      namespace: 'runner',
     });
     return;
   }
@@ -490,11 +694,11 @@ export async function initTeamMode(serverUrl: string): Promise<void> {
   // Assign local projects to this runner on the server
   await assignLocalProjects();
 
-  log.info('Team mode initialized', { namespace: 'team', runnerId: state.runnerId });
+  log.info('Runner mode initialized', { namespace: 'runner', runnerId: state.runnerId });
 }
 
 /**
- * Shutdown team mode — clean up connections and timers.
+ * Shutdown runner mode — clean up connections and timers.
  */
 export function shutdownTeamMode(): void {
   if (state.heartbeatTimer) clearInterval(state.heartbeatTimer);
@@ -509,29 +713,35 @@ export function shutdownTeamMode(): void {
   state.runnerId = null;
   state.runnerToken = null;
 
-  log.info('Team mode shutdown', { namespace: 'team' });
+  // Reject any pending data requests
+  for (const [, pending] of state.pendingDataRequests) {
+    pending.reject(new Error('Runner mode shutting down'));
+  }
+  state.pendingDataRequests.clear();
+
+  log.info('Runner mode shutdown', { namespace: 'runner' });
 }
 
-/** Check if team mode is active */
+/** Check if the runner is connected to a server */
 export function isTeamModeActive(): boolean {
   return !!state.runnerId;
 }
 
-/** Get the central server URL (or null if not in team mode) */
+/** Get the central server URL (or null if not connected) */
 export function getTeamServerUrl(): string | null {
   return state.serverUrl || null;
 }
 
 /**
- * Register a handler for browser WS messages forwarded through the central server.
- * Called by runtime's index.ts to handle PTY commands, etc.
+ * Register a handler for browser WS messages forwarded through the server.
+ * Called by runtime's app.ts to handle PTY commands, etc.
  */
 export function setBrowserWSHandler(handler: BrowserWSHandler): void {
   state.browserWSHandler = handler;
 }
 
 /**
- * Register the local Hono app for handling tunneled HTTP requests.
+ * Register the local Hono app for handling tunneled HTTP requests from the server.
  * Called by runtime's app.ts after creating the app, so tunnel:request
  * messages can be forwarded to the app's routes.
  */

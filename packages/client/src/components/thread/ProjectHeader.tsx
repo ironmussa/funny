@@ -56,6 +56,7 @@ import { usePreviewWindow } from '@/hooks/use-preview-window';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
 import { stageConfig } from '@/lib/thread-utils';
+import { buildPath } from '@/lib/url';
 import { useGitStatusStore, useGitStatusForThread } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { editorLabels, type Editor } from '@/stores/settings-store';
@@ -133,7 +134,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
     setDeleteLoading(false);
     setDeleteOpen(false);
     toast.success(t('toast.threadDeleted', { title }));
-    navigate(`/projects/${projId}`);
+    navigate(buildPath(`/projects/${projId}`));
   }, [navigate, t]);
 
   const handleCopy = useCallback(
@@ -492,7 +493,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
     if (kanbanContext.search) params.set('search', kanbanContext.search);
     if (kanbanContext.threadId) params.set('highlight', kanbanContext.threadId);
     const qs = params.toString();
-    navigate(qs ? `/kanban?${qs}` : '/kanban');
+    navigate(buildPath(qs ? `/kanban?${qs}` : '/kanban'));
   }, [kanbanContext, navigate, setReviewPaneOpen]);
 
   return (
@@ -523,7 +524,11 @@ export const ProjectHeader = memo(function ProjectHeader() {
                   variant="ghost"
                   size="icon-sm"
                   onClick={() =>
-                    navigate(`/projects/${activeThreadProjectId}/threads/${activeThreadParentId}`)
+                    navigate(
+                      buildPath(
+                        `/projects/${activeThreadProjectId}/threads/${activeThreadParentId}`,
+                      ),
+                    )
                   }
                   className="shrink-0 text-muted-foreground hover:text-foreground"
                 >
@@ -571,7 +576,9 @@ export const ProjectHeader = memo(function ProjectHeader() {
                     onClick={() => {
                       setReviewPaneOpen(false);
                       navigate(
-                        `/kanban?project=${activeThreadProjectId}&highlight=${activeThreadId}`,
+                        buildPath(
+                          `/kanban?project=${activeThreadProjectId}&highlight=${activeThreadId}`,
+                        ),
                       );
                     }}
                     className="h-8 w-8 text-muted-foreground"

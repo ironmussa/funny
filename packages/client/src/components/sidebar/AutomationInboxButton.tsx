@@ -3,6 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
+import { buildPath } from '@/lib/url';
 import { useAutomationStore } from '@/stores/automation-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -27,9 +28,9 @@ export function AutomationInboxButton() {
     <button
       onClick={() => {
         if (automationInboxOpen) {
-          navigate('/');
+          navigate(buildPath('/'));
         } else {
-          navigate('/inbox');
+          navigate(buildPath('/inbox'));
         }
       }}
       className={`flex w-full items-center gap-2 rounded-md p-2 text-sm transition-colors ${

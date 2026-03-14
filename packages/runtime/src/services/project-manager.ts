@@ -129,7 +129,17 @@ export async function getProject(id: string): Promise<Project | undefined> {
   return row ? toProject(row) : undefined;
 }
 
-export async function projectNameExists(name: string, userId: string): Promise<boolean> {
+export async function projectNameExists(
+  name: string,
+  userId: string,
+  orgId?: string | null,
+): Promise<boolean> {
+  if (orgId) {
+    // Org mode: check if any project in this org has the same name
+    const orgProjects = await listProjectsByOrg(orgId);
+    return orgProjects.some((p) => p.name === name);
+  }
+
   const existing =
     userId === '__local__'
       ? await dbGet(db.select().from(schema.projects).where(eq(schema.projects.name, name)))
@@ -146,6 +156,7 @@ export async function createProject(
   name: string,
   rawPath: string,
   userId: string,
+  orgId?: string | null,
 ): Promise<Result<Project, DomainError>> {
   if (!isAbsolute(rawPath)) {
     return err(badRequest('Project path must be absolute'));
@@ -156,32 +167,42 @@ export async function createProject(
     return err(badRequest(`Not a git repository: ${path}`));
   }
 
-  // Check for duplicate path (scoped to user in multi mode)
-  const existingPath =
-    userId === '__local__'
-      ? await dbGet(db.select().from(schema.projects).where(eq(schema.projects.path, path)))
-      : await dbGet(
-          db
-            .select()
-            .from(schema.projects)
-            .where(and(eq(schema.projects.path, path), eq(schema.projects.userId, userId))),
-        );
-  if (existingPath) {
-    return err(conflict(`A project with this path already exists: ${path}`));
-  }
+  if (orgId) {
+    // Org mode: check duplicates within the org only
+    const orgProjects = await listProjectsByOrg(orgId);
+    if (orgProjects.some((p) => p.path === path)) {
+      return err(conflict(`A project with this path already exists: ${path}`));
+    }
+    if (orgProjects.some((p) => p.name === name)) {
+      return err(conflict(`A project with this name already exists: ${name}`));
+    }
+  } else {
+    // Personal mode: check duplicates within user's own projects
+    const existingPath =
+      userId === '__local__'
+        ? await dbGet(db.select().from(schema.projects).where(eq(schema.projects.path, path)))
+        : await dbGet(
+            db
+              .select()
+              .from(schema.projects)
+              .where(and(eq(schema.projects.path, path), eq(schema.projects.userId, userId))),
+          );
+    if (existingPath) {
+      return err(conflict(`A project with this path already exists: ${path}`));
+    }
 
-  // Check for duplicate name (scoped to user in multi mode)
-  const existingName =
-    userId === '__local__'
-      ? await dbGet(db.select().from(schema.projects).where(eq(schema.projects.name, name)))
-      : await dbGet(
-          db
-            .select()
-            .from(schema.projects)
-            .where(and(eq(schema.projects.name, name), eq(schema.projects.userId, userId))),
-        );
-  if (existingName) {
-    return err(conflict(`A project with this name already exists: ${name}`));
+    const existingName =
+      userId === '__local__'
+        ? await dbGet(db.select().from(schema.projects).where(eq(schema.projects.name, name)))
+        : await dbGet(
+            db
+              .select()
+              .from(schema.projects)
+              .where(and(eq(schema.projects.name, name), eq(schema.projects.userId, userId))),
+          );
+    if (existingName) {
+      return err(conflict(`A project with this name already exists: ${name}`));
+    }
   }
 
   // Get existing project count to assign sortOrder
@@ -292,8 +313,70 @@ export async function updateProject(
   return ok(toProject({ ...project, ...updateData } as ProjectRow));
 }
 
+/**
+ * Associate a project with an organization via the team_projects join table.
+ */
+export async function addProjectToOrg(projectId: string, orgId: string): Promise<void> {
+  await dbRun(
+    db.insert(schema.teamProjects).values({
+      teamId: orgId,
+      projectId,
+      createdAt: new Date().toISOString(),
+    }),
+  );
+}
+
 export async function deleteProject(id: string): Promise<void> {
   await dbRun(db.delete(schema.projects).where(eq(schema.projects.id, id)));
+}
+
+/**
+ * Get the local path configured by a specific member for a project.
+ * Returns null if no member record or localPath is not set.
+ */
+export async function getMemberLocalPath(
+  projectId: string,
+  userId: string,
+): Promise<string | null> {
+  const row = await dbGet(
+    db
+      .select({ localPath: schema.projectMembers.localPath })
+      .from(schema.projectMembers)
+      .where(
+        and(
+          eq(schema.projectMembers.projectId, projectId),
+          eq(schema.projectMembers.userId, userId),
+        ),
+      ),
+  );
+  return (row as { localPath: string | null } | undefined)?.localPath ?? null;
+}
+
+/**
+ * Resolve the correct filesystem path for a user on a project.
+ * Owners use project.path; members use their localPath from project_members.
+ */
+export async function resolveProjectPath(
+  projectId: string,
+  userId: string,
+): Promise<Result<string, DomainError>> {
+  const project = await getProject(projectId);
+  if (!project) return err(notFound('Project not found'));
+
+  // Owner → use project.path directly
+  if (project.userId === userId) return ok(project.path);
+
+  // Member → look up their localPath
+  const localPath = await getMemberLocalPath(projectId, userId);
+  if (!localPath) {
+    return err(
+      badRequest(
+        'Local directory not configured. Please set your working directory for this project first.',
+      ),
+    );
+  }
+
+  return ok(localPath);
 }
 
 export async function reorderProjects(

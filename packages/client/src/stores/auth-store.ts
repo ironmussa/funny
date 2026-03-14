@@ -7,6 +7,10 @@ interface AuthState {
   user: SafeUser | null;
   isAuthenticated: boolean;
   isLoading: boolean;
+  /** Active organization info (set by OrgSwitcher) */
+  activeOrgId: string | null;
+  activeOrgName: string | null;
+  activeOrgSlug: string | null;
 
   /** Check Better Auth session */
   initialize: () => Promise<void>;
@@ -14,12 +18,17 @@ interface AuthState {
   login: (username: string, password: string) => Promise<void>;
   /** Logout */
   logout: () => Promise<void>;
+  /** Set active organization */
+  setActiveOrg: (id: string | null, name: string | null, slug?: string | null) => void;
 }
 
 export const useAuthStore = create<AuthState>((set, _get) => ({
   user: null,
   isAuthenticated: false,
   isLoading: true,
+  activeOrgId: null,
+  activeOrgName: null,
+  activeOrgSlug: null,
 
   initialize: async () => {
     set({ isLoading: true });
@@ -77,6 +86,15 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
     } catch {
       // Ignore errors
     }
-    set({ isAuthenticated: false, user: null });
+    set({
+      isAuthenticated: false,
+      user: null,
+      activeOrgId: null,
+      activeOrgName: null,
+      activeOrgSlug: null,
+    });
   },
+
+  setActiveOrg: (id, name, slug) =>
+    set({ activeOrgId: id, activeOrgName: name, activeOrgSlug: slug ?? null }),
 }));

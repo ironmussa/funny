@@ -158,7 +158,16 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
 
 export const api = {
   // Projects
-  listProjects: () => request<Project[]>('/projects'),
+  listProjects: (orgId?: string | null) => {
+    const params = new URLSearchParams();
+    if (orgId) {
+      params.append('orgId', orgId);
+    } else if (orgId === null) {
+      params.append('personal', 'true');
+    }
+    const qs = params.toString();
+    return request<Project[]>(`/projects${qs ? `?${qs}` : ''}`);
+  },
   createProject: (name: string, path: string) =>
     request<Project>('/projects', { method: 'POST', body: JSON.stringify({ name, path }) }),
   renameProject: (id: string, name: string) =>
@@ -182,6 +191,11 @@ export const api = {
   deleteProject: (id: string) => request<{ ok: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
   reorderProjects: (projectIds: string[]) =>
     request<void>('/projects/reorder', { method: 'PUT', body: JSON.stringify({ projectIds }) }),
+  setProjectLocalPath: (projectId: string, localPath: string) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/local-path`, {
+      method: 'POST',
+      body: JSON.stringify({ localPath }),
+    }),
   listBranches: (projectId: string) =>
     request<{ branches: string[]; defaultBranch: string | null; currentBranch: string | null }>(
       `/projects/${projectId}/branches`,

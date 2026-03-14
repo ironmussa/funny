@@ -6,6 +6,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { timeAgo } from '@/lib/thread-utils';
+import { buildPath } from '@/lib/url';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -114,7 +115,7 @@ export function RecentThreads({
               ) {
                 store.selectThread(thread.id);
               }
-              navigate(`/projects/${thread.projectId}/threads/${thread.id}`);
+              navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
             }}
             onRename={() => onRenameThread(thread.id, thread.projectId, thread.title)}
             onArchive={() =>
@@ -138,7 +139,7 @@ export function RecentThreads({
       })}
       {totalCount > 5 && (
         <ViewAllButton
-          onClick={() => navigate('/list?status=completed,failed,stopped,interrupted')}
+          onClick={() => navigate(buildPath('/list?status=completed,failed,stopped,interrupted'))}
         />
       )}
     </ThreadGroup>

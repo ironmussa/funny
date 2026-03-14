@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/command';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAutomationStore } from '@/stores/automation-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -88,9 +89,9 @@ export function AutomationInboxView() {
   const handleGoToSettings = () => {
     setAutomationInboxOpen(false);
     if (filterProjectId) {
-      navigate(`/projects/${filterProjectId}/settings/automations`);
+      navigate(buildPath(`/projects/${filterProjectId}/settings/automations`));
     } else {
-      navigate('/settings/automations');
+      navigate(buildPath('/settings/automations'));
     }
   };
 
@@ -294,7 +295,7 @@ export function AutomationInboxView() {
                       onClick={(e) => {
                         e.stopPropagation();
                         setAutomationInboxOpen(false);
-                        navigate(`/projects/${thread.projectId}/threads/${thread.id}`);
+                        navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
                       }}
                     >
                       View Thread

@@ -1,13 +1,31 @@
-import { Check, Copy, FileCode2, CheckCircle2, XCircle, Send } from 'lucide-react';
-import { useState, useRef, useEffect } from 'react';
+import type { Skill } from '@funny/shared';
+import {
+  Check,
+  Copy,
+  FileCode2,
+  CheckCircle2,
+  XCircle,
+  Send,
+  Mic,
+  MicOff,
+  Loader2,
+} from 'lucide-react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { toast } from 'sonner';
 
+import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
+import { PromptEditor } from '@/components/prompt-editor/PromptEditor';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useDictation } from '@/hooks/use-dictation';
+import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { cn } from '@/lib/utils';
+
+import { useCurrentProjectPath } from './utils';
 
 const cardLog = createClientLogger('ExitPlanMode');
 
@@ -26,7 +44,6 @@ export function ExitPlanModeCard({
     hasOutput: String(!!output),
     hasPlan: String(!!plan),
   });
-  const [input, setInput] = useState('');
   const [copied, setCopied] = useState(false);
   const alreadyAnswered = !!output;
 
@@ -37,11 +54,77 @@ export function ExitPlanModeCard({
     setTimeout(() => setCopied(false), 2000);
   };
   const [submitted, setSubmitted] = useState(alreadyAnswered);
-  const inputRef = useRef<HTMLInputElement>(null);
+  const editorRef = useRef<PromptEditorHandle>(null);
+  const cwd = useCurrentProjectPath();
+
+  // Skills loader for slash commands
+  const skillsCacheRef = useRef<Skill[] | null>(null);
+  const loadSkillsForEditor = useCallback(async (): Promise<Skill[]> => {
+    if (skillsCacheRef.current) return skillsCacheRef.current;
+    const result = await api.listSkills(cwd);
+    if (result.isOk()) {
+      const allSkills = result.value.skills ?? [];
+      const deduped = new Map<string, Skill>();
+      for (const s of allSkills) deduped.set(s.name, s);
+      skillsCacheRef.current = [...deduped.values()];
+      return skillsCacheRef.current;
+    }
+    return [];
+  }, [cwd]);
+
+  useEffect(() => {
+    skillsCacheRef.current = null;
+  }, [cwd]);
+
+  // ── Dictation (real-time voice-to-text via AssemblyAI) ──
+  const [hasAssemblyaiKey, setHasAssemblyaiKey] = useState(false);
+  const partialTextRef = useRef('');
+
+  useEffect(() => {
+    api.getProfile().then((result) => {
+      if (result.isOk() && result.value) {
+        setHasAssemblyaiKey(result.value.hasAssemblyaiKey);
+      }
+    });
+  }, []);
+
+  const handlePartialTranscript = useCallback((text: string) => {
+    partialTextRef.current = text;
+    if (text) editorRef.current?.setDictationPreview(text);
+  }, []);
+
+  const handleFinalTranscript = useCallback((text: string) => {
+    if (text) editorRef.current?.commitDictation(text);
+    partialTextRef.current = '';
+  }, []);
+
+  const handleDictationError = useCallback(
+    (message: string) => {
+      toast.error(message || t('prompt.micPermissionDenied', 'Microphone access denied'));
+    },
+    [t],
+  );
+
+  const {
+    isRecording,
+    isConnecting: isTranscribing,
+    toggle: toggleRecording,
+  } = useDictation({
+    onPartial: handlePartialTranscript,
+    onFinal: handleFinalTranscript,
+    onError: handleDictationError,
+  });
+
+  // Track if editor has content for send button state
+  const [hasContent, setHasContent] = useState(false);
+  const handleEditorChange = useCallback(() => {
+    const text = (editorRef.current?.getText() ?? '').trim();
+    setHasContent(text.length > 0);
+  }, []);
 
   useEffect(() => {
     if (onRespond && !submitted) {
-      inputRef.current?.focus();
+      editorRef.current?.focus();
     }
   }, [onRespond, submitted]);
 
@@ -60,7 +143,7 @@ export function ExitPlanModeCard({
   };
 
   const handleSubmitInput = () => {
-    const text = input.trim();
+    const text = (editorRef.current?.getText() ?? '').trim();
     if (!text || !onRespond || submitted) return;
     cardLog.info('custom response', { responsePreview: text.slice(0, 200) });
     onRespond(text);
@@ -132,33 +215,77 @@ export function ExitPlanModeCard({
             </button>
           </div>
 
-          <div className="flex gap-2">
-            <Input
-              ref={inputRef}
-              type="text"
-              value={input}
-              onChange={(e) => setInput(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault();
-                  handleSubmitInput();
-                }
-              }}
-              placeholder={t('thread.waitingInputPlaceholder')}
-              className="h-auto flex-1 py-1.5"
-            />
-            <button
-              onClick={handleSubmitInput}
-              disabled={!input.trim()}
-              className={cn(
-                'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-                input.trim()
-                  ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                  : 'bg-muted text-muted-foreground cursor-not-allowed',
+          <div className="rounded-md border border-border/40 bg-background/50 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20">
+            <div className="px-2.5 py-1.5">
+              <PromptEditor
+                ref={editorRef}
+                placeholder={t('thread.waitingInputPlaceholder')}
+                onSubmit={handleSubmitInput}
+                onChange={handleEditorChange}
+                cwd={cwd}
+                loadSkills={loadSkillsForEditor}
+                className="min-h-[40px] max-h-[120px] overflow-y-auto text-sm"
+              />
+            </div>
+            <div className="flex items-center justify-end gap-1 border-t border-border/20 px-1.5 py-0.5">
+              {hasAssemblyaiKey && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      data-testid="plan-dictate"
+                      onClick={toggleRecording}
+                      variant="ghost"
+                      size="icon-sm"
+                      tabIndex={-1}
+                      aria-label={
+                        isRecording
+                          ? t('prompt.stopDictation', 'Stop dictation')
+                          : t('prompt.startDictation', 'Start dictation')
+                      }
+                      disabled={isTranscribing}
+                      className={cn(
+                        'text-muted-foreground hover:text-foreground',
+                        isRecording && 'text-destructive hover:text-destructive',
+                      )}
+                    >
+                      {isTranscribing ? (
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      ) : isRecording ? (
+                        <MicOff className="h-3 w-3" />
+                      ) : (
+                        <Mic className="h-3 w-3" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {isTranscribing
+                      ? t('prompt.transcribing', 'Transcribing...')
+                      : isRecording
+                        ? t('prompt.stopDictation', 'Stop dictation')
+                        : t('prompt.startDictation', 'Start dictation')}
+                  </TooltipContent>
+                </Tooltip>
               )}
-            >
-              <Send className="h-3 w-3" />
-            </button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    data-testid="plan-send-feedback"
+                    onClick={handleSubmitInput}
+                    variant="ghost"
+                    size="icon-sm"
+                    tabIndex={-1}
+                    disabled={!hasContent}
+                    className={cn(
+                      'text-muted-foreground hover:text-foreground',
+                      hasContent && 'text-primary hover:text-primary',
+                    )}
+                  >
+                    <Send className="h-3 w-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('prompt.send', 'Send')}</TooltipContent>
+              </Tooltip>
+            </div>
           </div>
         </div>
       )}

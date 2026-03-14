@@ -18,13 +18,15 @@
     "./db/schema-pg": "./src/db/schema.pg.ts",
     "./db/db-mode": "./src/db/db-mode.ts",
     "./db/connection": "./src/db/connection.ts",
-    "./db/migrate": "./src/db/migrate.ts"
+    "./db/migrate": "./src/db/migrate.ts",
+    "./repositories": "./src/repositories/index.ts"
   },
   "scripts": {
     "test": "bun test"
   },
   "dependencies": {
     "drizzle-orm": "^0.45.1",
+    "nanoid": "^5.1.5",
     "xstate": "^5.28.0"
   }
 }

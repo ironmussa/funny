@@ -26,7 +26,7 @@ import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
 import { shutdownManager, ShutdownPhase } from '../services/shutdown-manager.js';
 
-export type { AppDatabase };
+export type { AppDatabase, DatabaseConnection };
 
 const mode = getDbMode();
 
@@ -68,6 +68,11 @@ export const dbMode = mode;
 /** Get the underlying DatabaseConnection (for sharing with in-process server). */
 export function getConnection(): DatabaseConnection | null {
   return _connection;
+}
+
+/** Set a pre-existing connection (e.g. shared from server when skipDbInit is true). */
+export function setConnection(conn: DatabaseConnection): void {
+  _connection = conn;
 }
 
 // ── Compat helpers ──────────────────────────────────────────────

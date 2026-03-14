@@ -10,8 +10,8 @@ export default defineConfig(({ mode }) => {
   const env = { ...loadEnv(mode, monorepoRoot, ''), ...loadEnv(mode, process.cwd(), '') };
   const clientPort = Number(env.VITE_PORT) || 5173;
   const serverPort = Number(env.VITE_SERVER_PORT) || 3001;
-  const serverTarget = `http://localhost:${serverPort}`;
-  const wsTarget = `ws://localhost:${serverPort}`;
+  const serverTarget = `http://127.0.0.1:${serverPort}`;
+  const wsTarget = `ws://127.0.0.1:${serverPort}`;
 
   return {
     plugins: [

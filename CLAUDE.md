@@ -61,7 +61,7 @@ bun run db:studio
 
 ### Server Architecture
 
-**Entry point:** `packages/runtime/src/index.ts` — Hono app with CORS, logger middleware, and route groups mounted under `/api`. WebSocket upgrade at `/ws`.
+**Entry point:** `packages/server/src/index.ts` — Initializes auth, mounts the runtime in-process, and starts `Bun.serve()` with WebSocket support. The runtime app is created via `packages/runtime/src/app.ts` which builds the Hono app with all routes and middleware under `/api`.
 
 **Database:** SQLite via `bun:sqlite` (Bun's native SQLite driver) + Drizzle ORM. DB file lives at `~/.funny/data.db`. Tables are auto-created on startup via `db/migrate.ts` (raw SQL, not Drizzle migrations). Schema in `db/schema.ts` defines: `projects`, `threads`, `messages`, `tool_calls`.
 
@@ -124,8 +124,19 @@ The admin can create additional users from **Settings > Users** in the UI. Self-
 
 ### Deployment Topologies
 
-- **Standalone** (default): Runtime mounted in-process. Client → Server(:3001, in-process runtime). Single SQLite DB.
-- **Team mode** (`TEAM_SERVER_URL` set): Central server coordinates remote runners. Client → Server(:3002) → Runner(s). Server uses PostgreSQL; runners use SQLite.
+The architecture follows a unified **Server + Runner** model:
+
+- **Server** (`packages/server`) — Handles authentication, serves the client UI, and owns the database. Always mounts the runtime in-process as a local runner. The server is the single entry point for all client requests.
+- **Runner** (`packages/runtime`) — Executes agent work (spawning Claude CLI processes, managing git worktrees, PTY sessions). The runtime mounted in-process by the server acts as the local runner.
+- **Remote runners** (optional, `TEAM_SERVER_URL` set on the runner): Additional runtime instances can connect to the server as remote runners. The server proxies requests to the appropriate runner based on project assignments. Communication uses WebSocket tunneling so runners can work behind NAT.
+
+Data flow: `Client → Server(:3001) → Runner (in-process or remote)`
+
+Configuration:
+- `TEAM_SERVER_URL` — Set on a runner instance to connect it to a remote server
+- `RUNNER_AUTH_SECRET` — Shared secret for runner ↔ server authentication
+- `LOCAL_RUNNER=false` — Set on the server to disable the in-process runner (remote-only mode)
+- `DATABASE_URL` — Optional PostgreSQL connection string (default: SQLite at `~/.funny/data.db`)
 
 ### Per-User Git Identity
 
@@ -144,8 +155,9 @@ Tokens are encrypted at rest using **AES-256-GCM**. The encryption key is auto-g
 
 ### Auth Architecture
 
-- `packages/runtime/src/lib/auth.ts` — Better Auth instance (always initialized on startup)
-- `packages/runtime/src/middleware/auth.ts` — Auth middleware (Runner auth → Team mode → Better Auth session)
+- `packages/runtime/src/lib/auth.ts` — Better Auth instance (initialized by the server on startup)
+- `packages/server/src/middleware/auth.ts` — Server auth middleware (validates sessions, sets user context)
+- `packages/runtime/src/middleware/auth.ts` — Runtime auth middleware (trusts `X-Forwarded-User` headers from server, or validates sessions directly when running standalone)
 - `packages/client/src/stores/auth-store.ts` — Client auth state (session-based login/logout)
 - `packages/client/src/lib/auth-client.ts` — Better Auth client with username + admin plugins
 

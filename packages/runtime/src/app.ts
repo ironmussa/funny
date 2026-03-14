@@ -2,8 +2,10 @@
  * Runtime Hono application factory.
  *
  * Exports `createRuntimeApp()` which builds the Hono app with all routes
- * and middleware, without starting Bun.serve(). This allows the server
- * package to mount the runtime in-process for standalone deployments.
+ * and middleware, without starting Bun.serve(). The server package mounts
+ * this app in-process and handles auth; the runtime receives user identity
+ * via X-Forwarded-User headers. When TEAM_SERVER_URL is set, the runtime
+ * also connects to the central server as a runner.
  */
 
 import { existsSync } from 'fs';
@@ -27,7 +29,7 @@ import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
 
-import { initPostgres } from './db/index.js';
+import { initPostgres, setConnection } from './db/index.js';
 import { autoMigrate } from './db/migrate.js';
 import { log } from './lib/logger.js';
 import './db/index.js'; // triggers self-registration with shutdownManager
@@ -89,6 +91,8 @@ export interface RuntimeAppOptions {
   corsOrigin?: string;
   /** Skip DB init (if caller already initialized DB) */
   skipDbInit?: boolean;
+  /** Pre-existing database connection to share (used with skipDbInit) */
+  dbConnection?: import('@funny/shared/db/connection').DatabaseConnection;
   /** Skip auth setup (if server handles auth) */
   skipAuthSetup?: boolean;
   /** Skip static file serving */
@@ -210,12 +214,6 @@ export async function createRuntimeApp(options: RuntimeAppOptions = {}): Promise
     return c.json({});
   });
 
-  // Mount Better Auth routes (only in standalone mode — server handles auth when mounted)
-  if (!options.skipAuthSetup) {
-    const { auth } = await import('./lib/auth.js');
-    app.on(['POST', 'GET'], '/api/auth/*', (c) => auth.handler(c.req.raw));
-  }
-
   // Mount routes
   app.route('/api/projects', projectRoutes);
   app.route('/api/threads', threadRoutes);
@@ -251,6 +249,8 @@ export async function createRuntimeApp(options: RuntimeAppOptions = {}): Promise
     if (!options.skipDbInit) {
       await initPostgres();
       await autoMigrate();
+    } else if (options.dbConnection) {
+      setConnection(options.dbConnection);
     }
 
     void startScheduler();
@@ -276,9 +276,10 @@ export async function createRuntimeApp(options: RuntimeAppOptions = {}): Promise
     registerAllHandlers(handlerCtx);
 
     if (!options.skipAuthSetup) {
+      // When running without the server (e.g. standalone runtime), init Better Auth locally
       const { initBetterAuth } = await import('./lib/auth.js');
       await initBetterAuth();
-      log.info('Auth: Better Auth (standalone)', { namespace: 'server' });
+      log.info('Auth: Better Auth (local)', { namespace: 'server' });
     } else {
       log.info('Auth: forwarded from server', { namespace: 'server' });
     }
@@ -300,7 +301,7 @@ export async function createRuntimeApp(options: RuntimeAppOptions = {}): Promise
     // Eagerly load native git
     getNativeGit();
 
-    // Team mode init
+    // Runner mode — connect to central server when TEAM_SERVER_URL is set
     if (process.env.TEAM_SERVER_URL) {
       if (!process.env.RUNNER_AUTH_SECRET) {
         log.error('RUNNER_AUTH_SECRET is required when TEAM_SERVER_URL is set.', {

@@ -4,6 +4,7 @@ import {
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { Project, Thread } from '@funny/shared';
 import {
+  AlertTriangle,
   ChevronRight,
   Folder,
   FolderOpenDot,
@@ -19,7 +20,7 @@ import {
 import { useState, useRef, useEffect, memo, useCallback, useMemo, type FC } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { Badge } from '@/components/ui/badge';
+import { SetupProjectDialog } from '@/components/SetupProjectDialog';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
@@ -29,10 +30,11 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
-// Tooltip imports available if needed
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
 import { openDirectoryInEditor } from '@/lib/editor-utils';
+import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -150,7 +152,9 @@ function projectItemAreEqual(prev: ProjectItemProps, next: ProjectItemProps): bo
     pp.name !== np.name ||
     pp.path !== np.path ||
     pp.color !== np.color ||
-    pp.isTeamProject !== np.isTeamProject
+    pp.isTeamProject !== np.isTeamProject ||
+    pp.organizationName !== np.organizationName ||
+    pp.needsSetup !== np.needsSetup
   )
     return false;
   return true;
@@ -177,6 +181,7 @@ export const ProjectItem = memo(function ProjectItem({
   const navigate = useStableNavigate();
   const { t } = useTranslation();
   const [openDropdown, setOpenDropdown] = useState(false);
+  const [setupDialogOpen, setSetupDialogOpen] = useState(false);
   // Pre-compute branchKeys from thread data so we don't depend on threadToBranchKey
   // (which requires a prior fetch per thread to be populated).
   const threadBranchKeys = useMemo(
@@ -311,14 +316,22 @@ export const ProjectItem = memo(function ProjectItem({
           >
             <Folder className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
             <span className="truncate text-sm font-medium">{project.name}</span>
-            {project.isTeamProject && (
-              <Badge
-                variant="secondary"
-                className="px-1 py-0 text-[10px] leading-tight shrink-0"
-                data-testid={`project-team-badge-${project.id}`}
-              >
-                Team
-              </Badge>
+            {project.needsSetup && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    data-testid={`project-needs-setup-${project.id}`}
+                    className="shrink-0"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setSetupDialogOpen(true);
+                    }}
+                  >
+                    <AlertTriangle className="h-3.5 w-3.5 text-status-warning" />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent side="right">Local directory not configured</TooltipContent>
+              </Tooltip>
             )}
           </span>
         </div>
@@ -385,7 +398,7 @@ export const ProjectItem = memo(function ProjectItem({
                   onClick={(e) => {
                     e.stopPropagation();
                     setOpenDropdown(false);
-                    navigate(`/projects/${project.id}/settings/general`);
+                    navigate(buildPath(`/projects/${project.id}/settings/general`));
                   }}
                 >
                   <Settings className="h-3.5 w-3.5" />
@@ -396,7 +409,7 @@ export const ProjectItem = memo(function ProjectItem({
                   onClick={(e) => {
                     e.stopPropagation();
                     setOpenDropdown(false);
-                    navigate(`/projects/${project.id}/analytics`);
+                    navigate(buildPath(`/projects/${project.id}/analytics`));
                   }}
                 >
                   <BarChart3 className="h-3.5 w-3.5" />
@@ -471,6 +484,15 @@ export const ProjectItem = memo(function ProjectItem({
           )}
         </div>
       </CollapsibleContent>
+
+      {project.needsSetup && (
+        <SetupProjectDialog
+          projectId={project.id}
+          projectName={project.name}
+          open={setupDialogOpen}
+          onOpenChange={setSetupDialogOpen}
+        />
+      )}
     </Collapsible>
   );
 }, projectItemAreEqual);

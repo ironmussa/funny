@@ -24,6 +24,7 @@ import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover
 import { ProjectChip } from '@/components/ui/project-chip';
 import { api } from '@/lib/api';
 import { gitSyncStateConfig, getStatusLabels } from '@/lib/thread-utils';
+import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -173,7 +174,7 @@ export function AllThreadsView() {
     const params = buildSearchParams();
     const qs = new URLSearchParams(params).toString();
     const path = mode === 'board' ? '/kanban' : '/list';
-    navigate(qs ? `${path}?${qs}` : path, { replace: true });
+    navigate(buildPath(qs ? `${path}?${qs}` : path), { replace: true });
   };
 
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -419,9 +420,9 @@ export function AllThreadsView() {
           size="icon-xs"
           onClick={() => {
             if (projectFilter) {
-              navigate(`/projects/${projectFilter}`);
+              navigate(buildPath(`/projects/${projectFilter}`));
             } else {
-              navigate('/');
+              navigate(buildPath('/'));
             }
           }}
           className="text-muted-foreground hover:text-foreground"
@@ -754,7 +755,7 @@ export function AllThreadsView() {
               searchEmptyMessage={t('allThreads.noMatch')}
               onThreadClick={(thread) => {
                 startTransition(() => {
-                  navigate(`/projects/${thread.projectId}/threads/${thread.id}`);
+                  navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
                 });
               }}
               paginationLabel={({ total }) =>

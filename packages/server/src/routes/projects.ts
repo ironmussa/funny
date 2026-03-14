@@ -6,6 +6,9 @@
  * team-specific data (membership, local paths).
  */
 
+import { existsSync } from 'fs';
+import { isAbsolute, resolve } from 'path';
+
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../lib/types.js';
@@ -89,7 +92,7 @@ projectRoutes.delete('/:id/members/:userId', async (c) => {
   return c.json({ ok: true });
 });
 
-/** Runner reports local path for a project */
+/** Set local working directory for a shared project (with validation + upsert) */
 projectRoutes.post('/:id/local-path', async (c) => {
   const userId = c.get('userId') as string;
   const projectId = c.req.param('id');
@@ -99,6 +102,18 @@ projectRoutes.post('/:id/local-path', async (c) => {
     return c.json({ error: 'Missing required field: localPath' }, 400);
   }
 
-  await pm.setMemberLocalPath(projectId, userId, body.localPath);
+  // Validate: must be an absolute path
+  if (!isAbsolute(body.localPath)) {
+    return c.json({ error: 'Path must be absolute' }, 400);
+  }
+
+  const resolvedPath = resolve(body.localPath);
+
+  // Validate: must be a git repository (check for .git directory)
+  if (!existsSync(resolve(resolvedPath, '.git'))) {
+    return c.json({ error: 'Path is not a git repository' }, 400);
+  }
+
+  await pm.setMemberLocalPath(projectId, userId, resolvedPath);
   return c.json({ ok: true });
 });

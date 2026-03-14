@@ -1,18 +1,21 @@
 /**
  * Better Auth instance for the central server.
  * Session-based auth with username + admin + organization plugins.
+ *
+ * Supports both SQLite (default/local) and PostgreSQL (team/cloud) modes.
  */
 
 import { randomBytes } from 'crypto';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
+import { getDbMode, getDatabaseUrl } from '@funny/shared/db/db-mode';
 import { betterAuth } from 'better-auth';
+import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin, username, organization } from 'better-auth/plugins';
 import { createAccessControl } from 'better-auth/plugins/access';
-import { Kysely, PostgresDialect } from 'kysely';
-import pg from 'pg';
 
+import { db } from '../db/index.js';
 import { DATA_DIR } from './data-dir.js';
 import { log } from './logger.js';
 
@@ -73,61 +76,92 @@ const corsOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
   : ['http://localhost:5173', 'http://127.0.0.1:5173'];
 
-const PORT = parseInt(process.env.PORT || '3002', 10);
+const PORT = parseInt(process.env.PORT || '3001', 10);
 
-const authPool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+/**
+ * Build the database config for Better Auth based on the detected mode.
+ * - SQLite: uses drizzleAdapter with the shared Drizzle instance
+ * - PostgreSQL: uses pg.Pool with Kysely dialect
+ */
+function buildDatabaseConfig(): any {
+  const mode = getDbMode();
 
-const kyselyDb = new Kysely<any>({
-  dialect: new PostgresDialect({ pool: authPool }),
-});
+  if (mode === 'postgres') {
+    const pg = require('pg') as typeof import('pg');
+    const { Kysely, PostgresDialect } = require('kysely') as typeof import('kysely');
 
-export const auth = betterAuth({
-  database: {
-    db: kyselyDb,
-    type: 'postgres' as const,
+    const Pool = pg.default?.Pool ?? pg.Pool;
+    const authPool = new Pool({ connectionString: getDatabaseUrl()! });
+    const kyselyDb = new Kysely<any>({
+      dialect: new PostgresDialect({ pool: authPool }),
+    });
+
+    return {
+      db: kyselyDb,
+      type: 'postgres' as const,
+    };
+  }
+
+  // SQLite mode — use drizzle adapter
+  return drizzleAdapter(db, { provider: 'sqlite' });
+}
+
+// Lazy init — auth is created on first call to initBetterAuth()
+let _auth: ReturnType<typeof betterAuth> | null = null;
+
+export const auth = new Proxy({} as ReturnType<typeof betterAuth>, {
+  get(_target, prop) {
+    if (!_auth) {
+      throw new Error('Auth not initialized. Call initBetterAuth() at startup.');
+    }
+    return (_auth as any)[prop];
   },
-  baseURL: process.env.BETTER_AUTH_BASE_URL || `http://localhost:${PORT}`,
-  basePath: '/api/auth',
-  secret: getOrCreateSecret(),
-  trustedOrigins: corsOrigins,
-  emailAndPassword: {
-    enabled: true,
-    disableSignUp: true,
-  },
-  session: {
-    expiresIn: 7 * 24 * 60 * 60, // 7 days
-    cookieCache: {
-      enabled: true,
-      maxAge: 5 * 60, // 5 minutes
-    },
-  },
-  advanced: {
-    defaultCookieAttributes: {
-      sameSite: 'lax',
-      secure: !!process.env.BETTER_AUTH_BASE_URL?.startsWith('https'),
-      path: '/',
-    },
-  },
-  plugins: [
-    username(),
-    admin(),
-    organization({
-      allowUserToCreateOrganization: true,
-      organizationLimit: 50,
-      membershipLimit: 100,
-      creatorRole: 'owner',
-      ac,
-      roles: { owner, admin: adminRole, member },
-    }),
-  ],
 });
 
 /**
  * Ensure Better Auth tables exist and create default admin if needed.
  */
 export async function initBetterAuth(): Promise<void> {
+  _auth = betterAuth({
+    database: buildDatabaseConfig(),
+    baseURL: process.env.BETTER_AUTH_BASE_URL || `http://localhost:${PORT}`,
+    basePath: '/api/auth',
+    secret: getOrCreateSecret(),
+    trustedOrigins: corsOrigins,
+    emailAndPassword: {
+      enabled: true,
+      disableSignUp: true,
+    },
+    session: {
+      expiresIn: 7 * 24 * 60 * 60, // 7 days
+      cookieCache: {
+        enabled: true,
+        maxAge: 5 * 60, // 5 minutes
+      },
+    },
+    advanced: {
+      defaultCookieAttributes: {
+        sameSite: 'lax',
+        secure: !!process.env.BETTER_AUTH_BASE_URL?.startsWith('https'),
+        path: '/',
+      },
+    },
+    plugins: [
+      username(),
+      admin(),
+      organization({
+        allowUserToCreateOrganization: true,
+        organizationLimit: 50,
+        membershipLimit: 100,
+        creatorRole: 'owner',
+        ac,
+        roles: { owner, admin: adminRole, member },
+      }),
+    ],
+  });
+
   try {
-    const ctx = await auth.$context;
+    const ctx = await _auth.$context;
     await ctx.runMigrations();
   } catch (err) {
     log.error('Failed to run Better Auth migrations', { namespace: 'auth', error: err as any });
@@ -136,7 +170,7 @@ export async function initBetterAuth(): Promise<void> {
 
   try {
     const password = 'admin';
-    const result = await auth.api.createUser({
+    const result = await (_auth.api as any).createUser({
       body: {
         email: 'admin@local.host',
         password,
@@ -144,7 +178,7 @@ export async function initBetterAuth(): Promise<void> {
         role: 'admin',
         data: { username: 'admin' },
       },
-    } as any);
+    });
 
     if ((result as any)?.user) {
       log.info('Created default admin account', {
@@ -156,19 +190,6 @@ export async function initBetterAuth(): Promise<void> {
     }
   } catch (err: any) {
     if (err?.message?.includes('already') || err?.body?.message?.includes('already')) {
-      // Reset admin password on every startup (remove this block once stable)
-      try {
-        const ctx = await auth.$context;
-        const hashPassword = ctx.password.hash;
-        const hashed = await hashPassword('admin');
-        await authPool.query(
-          `UPDATE account SET password = $1 WHERE "providerId" = 'credential' AND "userId" IN (SELECT id FROM "user" WHERE email = 'admin@local.host')`,
-          [hashed],
-        );
-        log.info('Reset admin password to default', { namespace: 'auth' });
-      } catch (resetErr) {
-        log.warn('Could not reset admin password', { namespace: 'auth', error: resetErr });
-      }
       return;
     }
     log.error('Failed to initialize Better Auth', { namespace: 'auth', error: err });

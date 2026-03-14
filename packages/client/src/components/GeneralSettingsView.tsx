@@ -1,6 +1,7 @@
 import type { UserProfile } from '@funny/shared';
 import {
   ArrowLeft,
+  Building2,
   Check,
   Github,
   Mail,
@@ -35,6 +36,7 @@ import {
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
 import { api } from '@/lib/api';
+import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import {
   useSettingsStore,
@@ -44,9 +46,10 @@ import {
 } from '@/stores/settings-store';
 import { useUIStore } from '@/stores/ui-store';
 
+import { OrganizationManagement } from './settings/OrganizationManagement';
 import { SettingRow } from './settings/SettingRow';
 
-type GeneralPage = 'general' | 'appearance' | 'github' | 'speech' | 'email';
+type GeneralPage = 'general' | 'appearance' | 'github' | 'speech' | 'email' | 'organizations';
 
 const NAV_ITEMS: Array<{ id: GeneralPage; label: string; icon: typeof SlidersHorizontal }> = [
   { id: 'general', label: 'settings.general', icon: SlidersHorizontal },
@@ -54,6 +57,7 @@ const NAV_ITEMS: Array<{ id: GeneralPage; label: string; icon: typeof SlidersHor
   { id: 'github', label: 'GitHub', icon: Github },
   { id: 'speech', label: 'Speech', icon: Mic },
   { id: 'email', label: 'Email (SMTP)', icon: Mail },
+  { id: 'organizations', label: 'Organizations', icon: Building2 },
 ];
 
 function getLanguageName(code: string): string {
@@ -358,7 +362,7 @@ export function GeneralSettingsView() {
               size="icon-xs"
               onClick={() => {
                 useUIStore.getState().setGeneralSettingsOpen(false);
-                navigate('/');
+                navigate(buildPath('/'));
               }}
               className="text-muted-foreground hover:text-foreground"
               data-testid="preferences-back"
@@ -377,7 +381,7 @@ export function GeneralSettingsView() {
                 <SidebarMenuItem key={item.id}>
                   <SidebarMenuButton
                     isActive={activePreferencesPage === item.id}
-                    onClick={() => navigate(`/preferences/${item.id}`)}
+                    onClick={() => navigate(buildPath(`/preferences/${item.id}`))}
                     data-testid={`preferences-nav-${item.id}`}
                   >
                     <Icon className="h-4 w-4" />
@@ -581,6 +585,8 @@ export function GeneralSettingsView() {
             </div>
           </>
         )}
+
+        {activePreferencesPage === 'organizations' && <OrganizationManagement />}
 
         {activePreferencesPage === 'email' && (
           <>

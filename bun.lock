@@ -394,6 +394,7 @@
       "version": "0.1.0",
       "dependencies": {
         "drizzle-orm": "^0.45.1",
+        "nanoid": "^5.1.5",
         "xstate": "^5.28.0",
       },
     },

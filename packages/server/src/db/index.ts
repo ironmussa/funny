@@ -5,6 +5,8 @@
  * In multi mode, defaults to PostgreSQL. In local mode, can use SQLite.
  */
 
+import { resolve } from 'path';
+
 import {
   type AppDatabase,
   type DatabaseConnection,
@@ -16,6 +18,7 @@ import {
 } from '@funny/shared/db/connection';
 import { getDbMode } from '@funny/shared/db/db-mode';
 
+import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
 import * as schema from './schema.js';
 
@@ -26,6 +29,10 @@ let _connection: DatabaseConnection | null = null;
 /**
  * Initialize the database connection.
  * Must be called once at startup before any DB access.
+ *
+ * Auto-detects mode via getDbMode():
+ * - SQLite (default): uses ~/.funny/data.db
+ * - PostgreSQL: uses DATABASE_URL or DB_HOST + DB_USER env vars
  */
 export async function initDatabase(options?: {
   /** Override mode detection */
@@ -44,12 +51,10 @@ export async function initDatabase(options?: {
       log,
     });
   } else {
-    if (!options?.sqlitePath) {
-      throw new Error('SQLite mode requires a path. Provide sqlitePath option.');
-    }
+    const dbPath = options?.sqlitePath ?? resolve(DATA_DIR, 'data.db');
     _connection = createSqliteDatabase({
       mode: 'sqlite',
-      path: options.sqlitePath,
+      path: dbPath,
       log,
     });
   }
@@ -89,6 +94,7 @@ export async function closeDatabase(): Promise<void> {
 }
 
 // Compat helpers
+export const dbMode = getDbMode();
 export const dbAll = _dbAll;
 export const dbGet = _dbGet;
 export const dbRun = _dbRun;

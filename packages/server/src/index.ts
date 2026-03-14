@@ -1,8 +1,10 @@
 /**
- * Universal server entry point.
+ * Unified server entry point.
  *
- * Standalone mode (default): mounts runtime in-process (Client → Server → Runtime, same process).
- * Team mode (TEAM_SERVER_URL set): acts as coordination server, proxies to remote runners.
+ * The server ALWAYS initializes its own DB and mounts its own data routes.
+ * Filesystem/git/agent operations are proxied to a runner.
+ * In local mode (default), an in-process runner is auto-started.
+ * Set LOCAL_RUNNER=false for pure server deployments with remote runners only.
  */
 
 import { existsSync } from 'fs';
@@ -28,8 +30,8 @@ type WSData = {
 import { log } from './lib/logger.js';
 import { authMiddleware, setAuthInstance } from './middleware/auth.js';
 
-const isTeamMode = !!process.env.TEAM_SERVER_URL;
-const isStandalone = !isTeamMode;
+// Whether to start a local in-process runner (default: true)
+const useLocalRunner = process.env.LOCAL_RUNNER !== 'false';
 
 // ── Init ────────────────────────────────────────────────
 
@@ -42,43 +44,44 @@ let runtimeApp: Awaited<
 // (different access control statements, different plugin configurations).
 let authInstance: any;
 
-if (isStandalone) {
-  // ── Standalone: mount runtime in-process ─────────────────
-  if (!process.env.RUNNER_AUTH_SECRET) {
+// Ensure a RUNNER_AUTH_SECRET exists (auto-generate for local mode)
+if (!process.env.RUNNER_AUTH_SECRET) {
+  if (useLocalRunner) {
     const crypto = await import('crypto');
     process.env.RUNNER_AUTH_SECRET = crypto.randomUUID();
+  } else {
+    log.error('RUNNER_AUTH_SECRET is required when LOCAL_RUNNER=false. Set it in your .env file.', {
+      namespace: 'server',
+    });
+    process.exit(1);
   }
+}
 
+// ── Always initialize server DB and auth ────────────────
+const { initDatabase } = await import('./db/index.js');
+const { autoMigrate } = await import('./db/migrate.js');
+const { initBetterAuth, auth } = await import('./lib/auth.js');
+
+await initDatabase();
+await autoMigrate();
+await initBetterAuth();
+authInstance = auth;
+setAuthInstance(authInstance);
+
+log.info('Server DB and auth initialized', { namespace: 'server' });
+
+// ── Start local runner if enabled ───────────────────────
+if (useLocalRunner) {
   const { createRuntimeApp } = await import('@ironmussa/funny-runtime/app');
+  const { getConnection } = await import('./db/index.js');
   runtimeApp = await createRuntimeApp({
     skipStaticServing: true, // Server handles static files
     skipAuthSetup: true, // Server handles all auth (Better Auth)
+    skipDbInit: true, // Server owns the DB now
+    dbConnection: getConnection()!,
   });
   await runtimeApp.init();
-
-  // Initialize Better Auth using the runtime's auth module (supports both SQLite and PG)
-  const runtimeAuth = await import('@ironmussa/funny-runtime/lib/auth');
-  await runtimeAuth.initBetterAuth();
-  authInstance = runtimeAuth.auth;
-  setAuthInstance(authInstance);
-
-  log.info('Runtime mounted in-process (standalone mode)', { namespace: 'server' });
-} else {
-  // ── Team mode: initialize central server DB ─────────────
-  if (!process.env.RUNNER_AUTH_SECRET) {
-    log.error('RUNNER_AUTH_SECRET is required. Set it in your .env file.', { namespace: 'server' });
-    process.exit(1);
-  }
-
-  const { initDatabase } = await import('./db/index.js');
-  const { autoMigrate } = await import('./db/migrate.js');
-  const { initBetterAuth, auth } = await import('./lib/auth.js');
-
-  await initDatabase();
-  await autoMigrate();
-  await initBetterAuth();
-  authInstance = auth;
-  setAuthInstance(authInstance);
+  log.info('Local runner started in-process', { namespace: 'server' });
 }
 
 // ── App ─────────────────────────────────────────────────
@@ -95,12 +98,11 @@ app.use('*', logger());
 
 // Health check (before auth)
 app.get('/api/health', (c) => {
-  if (isStandalone) {
-    return c.json({ status: 'ok', mode: 'standalone', timestamp: new Date().toISOString() });
-  }
-  const wsRelay = require('./services/ws-relay.js') as typeof import('./services/ws-relay.js');
-  const stats = wsRelay.getRelayStats();
-  return c.json({ status: 'ok', service: 'funny-server', mode: 'team', ...stats });
+  return c.json({
+    status: 'ok',
+    mode: useLocalRunner ? 'local' : 'remote-runners',
+    timestamp: new Date().toISOString(),
+  });
 });
 
 // Bootstrap endpoint (public — minimal, no token)
@@ -110,74 +112,99 @@ app.get('/api/bootstrap', (c) => {
   return c.json({});
 });
 
-if (isStandalone) {
-  // ── Standalone routes ─────────────────────────────────────
-  // Better Auth routes (server handles auth for both modes)
-  app.on(['POST', 'GET'], '/api/auth/*', (c) => authInstance.handler(c.req.raw));
+// ── Public routes (before auth middleware) ────────────────
+const { inviteLinkPublicRoutes, inviteLinkRoutes } = await import('./routes/invite-links.js');
+app.route('/api/invite-links', inviteLinkPublicRoutes);
 
-  // Auth middleware for standalone mode
-  app.use('/api/*', authMiddleware);
+// Better Auth routes
+app.on(['POST', 'GET'], '/api/auth/*', (c) => authInstance.handler(c.req.raw));
 
-  // Forward to runtime with user identity headers
+// Auth middleware for all API routes
+app.use('/api/*', authMiddleware);
+
+// ── Server-managed data routes ───────────────────────────
+const { authRoutes } = await import('./routes/auth.js');
+const { projectRoutes } = await import('./routes/projects.js');
+const { runnerRoutes } = await import('./routes/runners.js');
+const { profileRoutes } = await import('./routes/profile.js');
+const { threadRoutes } = await import('./routes/threads.js');
+const { automationRoutes } = await import('./routes/automations.js');
+const { settingsRoutes } = await import('./routes/settings.js');
+const { teamProjectRoutes } = await import('./routes/team-projects.js');
+const { teamSettingsRoutes } = await import('./routes/team-settings.js');
+const { analyticsRoutes } = await import('./routes/analytics.js');
+
+app.route('/api/auth', authRoutes);
+app.route('/api/projects', projectRoutes);
+app.route('/api/runners', runnerRoutes);
+app.route('/api/profile', profileRoutes);
+app.route('/api/threads', threadRoutes);
+app.route('/api/automations', automationRoutes);
+app.route('/api/settings', settingsRoutes);
+app.route('/api/team-projects', teamProjectRoutes);
+app.route('/api/team-settings', teamSettingsRoutes);
+app.route('/api/analytics', analyticsRoutes);
+app.route('/api/invite-links', inviteLinkRoutes);
+
+// Setup status — delegate to local runner if available, otherwise stub
+app.get('/api/setup/status', async (c) => {
   if (runtimeApp) {
-    app.all('*', async (c) => {
-      const userId = c.get('userId') || '';
-      const userRole = c.get('userRole') || 'user';
-      const orgId = c.get('organizationId') || '';
+    // Forward to runtime for real provider detection
+    const userId = c.get('userId') || '';
+    const userRole = c.get('userRole') || 'user';
+    const orgId = c.get('organizationId') || '';
+    const orgName = c.get('organizationName') || '';
 
-      // Create a new request with forwarded user headers
-      const headers = new Headers(c.req.raw.headers);
-      headers.set('X-Forwarded-User', userId);
-      headers.set('X-Forwarded-Role', userRole);
-      if (orgId) headers.set('X-Forwarded-Org', orgId);
+    const headers = new Headers(c.req.raw.headers);
+    headers.set('X-Forwarded-User', userId);
+    headers.set('X-Forwarded-Role', userRole);
+    if (orgId) headers.set('X-Forwarded-Org', orgId);
+    if (orgName) headers.set('X-Forwarded-Org-Name', orgName);
 
-      const forwardedReq = new Request(c.req.raw.url, {
-        method: c.req.raw.method,
-        headers,
-        body: c.req.raw.body,
-        // @ts-expect-error -- Bun supports duplex
-        duplex: c.req.raw.body ? 'half' : undefined,
-      });
-
-      return runtimeApp.app.fetch(forwardedReq);
+    const forwardedReq = new Request(c.req.raw.url, {
+      method: 'GET',
+      headers,
     });
+
+    return runtimeApp.app.fetch(forwardedReq);
   }
-} else {
-  // ── Team mode routes ──────────────────────────────────────
-  const { inviteLinkPublicRoutes, inviteLinkRoutes } = await import('./routes/invite-links.js');
-  const { authRoutes } = await import('./routes/auth.js');
-  const { projectRoutes } = await import('./routes/projects.js');
-  const { runnerRoutes } = await import('./routes/runners.js');
-  const { profileRoutes } = await import('./routes/profile.js');
-  const { threadRoutes } = await import('./routes/threads.js');
-  const { proxyToRunner } = await import('./middleware/proxy.js');
 
-  // Public invite-link routes (before auth middleware)
-  app.route('/api/invite-links', inviteLinkPublicRoutes);
-
-  // Better Auth routes
-  app.on(['POST', 'GET'], '/api/auth/*', (c) => authInstance.handler(c.req.raw));
-
-  app.use('*', authMiddleware);
-
-  // Server-managed routes
-  app.route('/api/auth', authRoutes);
-  app.route('/api/projects', projectRoutes);
-  app.route('/api/runners', runnerRoutes);
-  app.route('/api/profile', profileRoutes);
-  app.route('/api/threads', threadRoutes);
-  app.route('/api/invite-links', inviteLinkRoutes);
-
-  // Setup status — central server doesn't run agents locally
-  app.get('/api/setup/status', (c) => {
-    return c.json({
-      providers: {},
-      claudeCli: { available: true, path: null, error: null, version: null },
-      agentSdk: { available: true },
-    });
+  return c.json({
+    providers: {},
+    claudeCli: { available: true, path: null, error: null, version: null },
+    agentSdk: { available: true },
   });
+});
 
-  // Proxy catch-all: forward everything else to the appropriate runner
+// ── Proxy catch-all: forward remaining API requests to runner ──
+if (useLocalRunner && runtimeApp) {
+  // Local runner: forward directly to in-process runtime
+  const localRuntime = runtimeApp;
+  app.all('/api/*', async (c) => {
+    const userId = c.get('userId') || '';
+    const userRole = c.get('userRole') || 'user';
+    const orgId = c.get('organizationId') || '';
+    const orgName = c.get('organizationName') || '';
+
+    const headers = new Headers(c.req.raw.headers);
+    headers.set('X-Forwarded-User', userId);
+    headers.set('X-Forwarded-Role', userRole);
+    if (orgId) headers.set('X-Forwarded-Org', orgId);
+    if (orgName) headers.set('X-Forwarded-Org-Name', orgName);
+
+    const forwardedReq = new Request(c.req.raw.url, {
+      method: c.req.raw.method,
+      headers,
+      body: c.req.raw.body,
+      // @ts-expect-error -- Bun supports duplex
+      duplex: c.req.raw.body ? 'half' : undefined,
+    });
+
+    return localRuntime.app.fetch(forwardedReq);
+  });
+} else {
+  // Remote runners: proxy via WebSocket tunnel or direct HTTP
+  const { proxyToRunner } = await import('./middleware/proxy.js');
   app.all('/api/*', proxyToRunner);
 }
 
@@ -194,8 +221,8 @@ if (existsSync(clientDistDir)) {
 
 // ── Server ──────────────────────────────────────────────
 
-const PORT = parseInt(process.env.PORT || (isStandalone ? '3001' : '3002'), 10);
-const HOST = process.env.HOST || (isStandalone ? '127.0.0.1' : '0.0.0.0');
+const PORT = parseInt(process.env.PORT || '3001', 10);
+const HOST = process.env.HOST || (useLocalRunner ? '127.0.0.1' : '0.0.0.0');
 
 const server = Bun.serve({
   port: PORT,
@@ -204,8 +231,8 @@ const server = Bun.serve({
   async fetch(req, server) {
     const url = new URL(req.url);
 
-    if (isStandalone && runtimeApp) {
-      // Standalone: handle WS with runtime's auth + handlers
+    if (useLocalRunner && runtimeApp) {
+      // Local runner: handle WS with runtime's auth + handlers
       if (url.pathname === '/ws' || url.pathname === '/ws/transcribe') {
         const wsData = await runtimeApp.authenticateWs(req);
         if (!wsData) return new Response('Unauthorized', { status: 401 });
@@ -213,7 +240,7 @@ const server = Bun.serve({
         return new Response('WebSocket upgrade failed', { status: 400 });
       }
     } else {
-      // Team mode: handle WS for browsers and runners
+      // Remote runners: handle WS for browsers and runners
       if (url.pathname === '/ws' && req.headers.get('upgrade') === 'websocket') {
         const upgraded = server.upgrade(req, {
           data: { type: 'browser', req } as any,
@@ -235,13 +262,13 @@ const server = Bun.serve({
     async open(ws) {
       const wsData = ws.data as unknown as WSData;
 
-      if (isStandalone && runtimeApp) {
-        // Standalone: delegate to runtime WS handler
+      if (useLocalRunner && runtimeApp) {
+        // Local runner: delegate to runtime WS handler
         runtimeApp.websocket.open(ws);
         return;
       }
 
-      // Team mode
+      // Remote runners
       if (wsData.type === 'browser' && wsData.req) {
         const session = await authInstance.api.getSession({ headers: wsData.req.headers });
         if (!session) {
@@ -257,12 +284,12 @@ const server = Bun.serve({
     async message(ws, message) {
       const wsData = ws.data as unknown as WSData;
 
-      if (isStandalone && runtimeApp) {
+      if (useLocalRunner && runtimeApp) {
         await runtimeApp.websocket.message(ws, message);
         return;
       }
 
-      // Team mode relay logic
+      // Remote runner relay logic
       try {
         const data = JSON.parse(typeof message === 'string' ? message : message.toString());
         const rm = await import('./services/runner-manager.js');
@@ -279,6 +306,13 @@ const server = Bun.serve({
             } else {
               ws.close(4001, 'Invalid runner token');
             }
+            return;
+          }
+
+          // Handle data persistence messages from runners
+          if (data.type?.startsWith('data:')) {
+            const { handleDataMessage } = await import('./services/data-handler.js');
+            await handleDataMessage(wsData.runnerId!, data);
             return;
           }
 
@@ -340,7 +374,7 @@ const server = Bun.serve({
     close(ws) {
       const d = ws.data as any;
 
-      if (isStandalone && runtimeApp) {
+      if (useLocalRunner && runtimeApp) {
         runtimeApp.websocket.close(ws);
         return;
       }
@@ -363,7 +397,7 @@ const server = Bun.serve({
 });
 
 log.info(
-  `funny-server running on http://${HOST}:${PORT} (${isStandalone ? 'standalone' : 'team'} mode)`,
+  `funny-server running on http://${HOST}:${PORT} (${useLocalRunner ? 'local runner' : 'remote runners'})`,
   {
     namespace: 'server',
   },

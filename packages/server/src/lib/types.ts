@@ -6,5 +6,6 @@ export type ServerEnv = {
     isRunner: boolean;
     runnerId: string;
     organizationId: string | null;
+    organizationName: string | null;
   };
 };

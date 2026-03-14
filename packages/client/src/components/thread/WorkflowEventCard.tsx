@@ -29,6 +29,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
 import { timeAgo } from '@/lib/thread-utils';
+import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -39,7 +40,7 @@ function useNavigateToThread() {
   return useCallback(
     (threadId: string) => {
       if (projectId) {
-        navigate(`/projects/${projectId}/threads/${threadId}`);
+        navigate(buildPath(`/projects/${projectId}/threads/${threadId}`));
       }
     },
     [navigate, projectId],

@@ -22,6 +22,7 @@ import { ProjectChip, colorFromName } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { stageConfig, statusConfig, timeAgo } from '@/lib/thread-utils';
+import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
@@ -119,7 +120,7 @@ const KanbanCard = memo(function KanbanCard({
         if (!isDragging) {
           startTransition(() => {
             setKanbanContext({ projectId, search, threadId: thread.id });
-            navigate(`/projects/${thread.projectId}/threads/${thread.id}`);
+            navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
           });
         }
       }}
@@ -539,7 +540,7 @@ export function KanbanView({
     setDeleteLoading(false);
     setDeleteConfirm(null);
     toast.success(t('toast.threadDeleted', { title }));
-    if (wasSelected) navigate(`/projects/${threadProjectId}`);
+    if (wasSelected) navigate(buildPath(`/projects/${threadProjectId}`));
   }, [deleteConfirm, selectedThreadId, deleteThread, navigate, t]);
 
   const handleMergeWarningConfirm = useCallback(() => {

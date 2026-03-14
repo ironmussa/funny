@@ -15,6 +15,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
+import { buildPath } from '@/lib/url';
 import { useAppStore } from '@/stores/app-store';
 
 import { CloneRepoView } from './CloneRepoView';
@@ -55,8 +56,8 @@ export function AddProjectView() {
         defaultValue: `Project "${newProjectName}" created`,
       }),
     );
-    navigate('/');
-    navigate(`/projects/${retryResult.value.id}`);
+    navigate(buildPath('/'));
+    navigate(buildPath(`/projects/${retryResult.value.id}`));
     setIsCreating(false);
   };
 
@@ -81,8 +82,8 @@ export function AddProjectView() {
         defaultValue: `Project "${newProjectName}" created`,
       }),
     );
-    navigate('/');
-    navigate(`/projects/${result.value.id}`);
+    navigate(buildPath('/'));
+    navigate(buildPath(`/projects/${result.value.id}`));
     setIsCreating(false);
   };
 
@@ -169,7 +170,7 @@ export function AddProjectView() {
                 data-testid="add-project-cancel"
                 variant="outline"
                 className="flex-1"
-                onClick={() => navigate('/')}
+                onClick={() => navigate(buildPath('/'))}
               >
                 {t('common.cancel', { defaultValue: 'Cancel' })}
               </Button>

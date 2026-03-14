@@ -7,6 +7,7 @@ import type { Thread, MessageRole, ThreadStatus, ImageAttachment } from '@funny/
 import { toast } from 'sonner';
 
 import { createClientLogger } from '@/lib/client-logger';
+import { buildPath } from '@/lib/url';
 
 import {
   transitionThreadStatus,
@@ -593,7 +594,7 @@ function notifyThreadResult(
   const navigate = getNavigate();
   const navigateToThread = () => {
     if (projectId && navigate) {
-      navigate(`/projects/${projectId}/threads/${threadId}`);
+      navigate(buildPath(`/projects/${projectId}/threads/${threadId}`));
       toast.dismiss(`result-${threadId}`);
     }
   };

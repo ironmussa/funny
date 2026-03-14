@@ -9,6 +9,7 @@ export type HonoEnv = {
     userId: string;
     userRole: string;
     organizationId: string | null;
+    organizationName: string | null;
     traceId: string;
     spanId: string;
   };

@@ -22,13 +22,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
+import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { FolderPicker } from './FolderPicker';
 
-type ViewState = 'checking' | 'connect' | 'device-flow' | 'repos' | 'clone-config' | 'cloning';
+type ViewState =
+  | 'checking'
+  | 'connect'
+  | 'error'
+  | 'device-flow'
+  | 'repos'
+  | 'clone-config'
+  | 'cloning';
 
 export function CloneRepoView() {
   const { t } = useTranslation();
@@ -96,11 +104,16 @@ export function CloneRepoView() {
 
   const checkConnection = useCallback(async () => {
     const result = await api.githubStatus();
-    if (result.isOk() && result.value.connected) {
-      await loadGhUser();
-      setView('repos');
+    if (result.isOk()) {
+      if (result.value.connected) {
+        await loadGhUser();
+        setView('repos');
+      } else {
+        setView('connect');
+      }
     } else {
-      setView('connect');
+      // API call itself failed (network error, server down, etc.)
+      setView('error');
     }
   }, []);
 
@@ -111,7 +124,7 @@ export function CloneRepoView() {
 
   // Re-check when general settings dialog closes (user may have added a token)
   useEffect(() => {
-    if (!generalSettingsOpen && view === 'connect') {
+    if (!generalSettingsOpen && (view === 'connect' || view === 'error')) {
       checkConnection();
     }
   }, [generalSettingsOpen, view, checkConnection]);
@@ -279,7 +292,7 @@ export function CloneRepoView() {
     toast.success(t('github.clone.success'));
     await loadProjects();
     setAddProjectOpen(false);
-    navigate(`/projects/${result.value.id}`);
+    navigate(buildPath(`/projects/${result.value.id}`));
   };
 
   // ── Disconnect ─────────────────────────────────
@@ -316,6 +329,37 @@ export function CloneRepoView() {
     );
   }
 
+  // Error state — API call failed (network error, server down, etc.)
+  if (view === 'error') {
+    return (
+      <div className="flex flex-col items-center gap-4 py-8">
+        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+          <Github className="h-6 w-6 text-destructive" />
+        </div>
+        <div className="space-y-1 text-center">
+          <h3 className="font-medium">
+            {t('github.connectionError', { defaultValue: 'Connection Error' })}
+          </h3>
+          <p className="max-w-xs text-sm text-muted-foreground">
+            {t('github.connectionErrorDesc', {
+              defaultValue:
+                'Could not check GitHub connection status. The server may be unavailable.',
+            })}
+          </p>
+        </div>
+        <Button
+          onClick={() => {
+            setView('checking');
+            checkConnection();
+          }}
+          data-testid="clone-repo-retry"
+        >
+          {t('common.retry', { defaultValue: 'Retry' })}
+        </Button>
+      </div>
+    );
+  }
+
   // Connect state
   if (view === 'connect') {
     return (
@@ -340,7 +384,7 @@ export function CloneRepoView() {
           <Button
             variant="outline"
             className="w-full"
-            onClick={() => navigate('/preferences/github')}
+            onClick={() => navigate(buildPath('/preferences/github'))}
           >
             <Settings className="mr-2 h-4 w-4" />
             {t('github.useToken')}

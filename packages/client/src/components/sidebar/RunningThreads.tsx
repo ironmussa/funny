@@ -3,6 +3,7 @@ import { useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { buildPath } from '@/lib/url';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -87,7 +88,7 @@ export function RunningThreads() {
               ) {
                 store.selectThread(thread.id);
               }
-              navigate(`/projects/${thread.projectId}/threads/${thread.id}`);
+              navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
             }}
           />
         );

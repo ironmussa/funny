@@ -3,6 +3,7 @@ import { create } from 'zustand';
 
 import { api } from '@/lib/api';
 
+import { useAuthStore } from './auth-store';
 import { useGitStatusStore } from './git-status-store';
 import { useThreadStore } from './thread-store';
 
@@ -36,6 +37,7 @@ interface ProjectState {
   ) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
   reorderProjects: (projectIds: string[]) => Promise<void>;
+  setProjectLocalPath: (projectId: string, localPath: string) => Promise<boolean>;
 }
 
 let _loadProjectsPromise: Promise<void> | null = null;
@@ -53,9 +55,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
     _loadProjectsPromise = (async () => {
       try {
-        const result = await api.listProjects();
+        const { activeOrgId, activeOrgName } = useAuthStore.getState();
+        const result = await api.listProjects(activeOrgId);
         if (result.isErr()) return;
-        const projects = result.value;
+        // When an org is active, all returned projects belong to that org.
+        // Mark them as team projects with the org name so the sidebar shows badges.
+        const projects = activeOrgId
+          ? result.value.map((p) => ({
+              ...p,
+              isTeamProject: true as const,
+              organizationName: p.organizationName || activeOrgName || undefined,
+            }))
+          : result.value;
         // Set initialized immediately so the sidebar renders project names right away.
         // Threads load in background and fill in progressively.
         set({ projects, initialized: true });
@@ -195,6 +206,18 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       expandedProjects: nextExpanded,
       ...(selectedProjectId === projectId ? { selectedProjectId: null } : {}),
     });
+  },
+
+  setProjectLocalPath: async (projectId, localPath) => {
+    const result = await api.setProjectLocalPath(projectId, localPath);
+    if (result.isErr()) return false;
+    const { projects } = get();
+    set({
+      projects: projects.map((p) =>
+        p.id === projectId ? { ...p, localPath, needsSetup: false } : p,
+      ),
+    });
+    return true;
   },
 
   reorderProjects: async (projectIds) => {

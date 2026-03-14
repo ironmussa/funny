@@ -517,7 +517,16 @@ export class AgentRunner {
 
 // ── Default singleton (backward-compatible exports) ─────────────
 
-const defaultRunner = new AgentRunner(tm, wsBroker, defaultProcessFactory);
+import { createRemoteThreadManager } from './remote-thread-manager.js';
+
+// In team mode, use the remote thread manager that delegates persistence
+// to the central server via WebSocket. In standalone mode, use local DB.
+// Check env var directly to avoid circular import with team-client.ts at init time.
+const threadManager: IThreadManager = process.env.TEAM_SERVER_URL
+  ? createRemoteThreadManager()
+  : tm;
+
+const defaultRunner = new AgentRunner(threadManager, wsBroker, defaultProcessFactory);
 
 export const startAgent = defaultRunner.startAgent.bind(defaultRunner);
 export const stopAgent = defaultRunner.stopAgent.bind(defaultRunner);

@@ -12,6 +12,7 @@ import {
   CommandSeparator,
   CommandItem,
 } from '@/components/ui/command';
+import { buildPath } from '@/lib/url';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -32,13 +33,13 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
     onOpenChange(false);
     startNewThread(projectId);
     useGitStatusStore.getState().fetchForProject(projectId);
-    navigate(`/projects/${projectId}`);
+    navigate(buildPath(`/projects/${projectId}`));
   };
 
   const handleSettingsSelect = (itemId: string) => {
     onOpenChange(false);
     setSettingsOpen(true);
-    navigate(`/settings/${itemId}`);
+    navigate(buildPath(`/settings/${itemId}`));
   };
 
   return (

@@ -14,6 +14,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { timeAgo } from '@/lib/thread-utils';
+import { buildPath } from '@/lib/url';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -172,7 +173,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
         ) {
           store.selectThread(threadId);
         }
-        navigate(`/projects/${projectId}/threads/${threadId}`);
+        navigate(buildPath(`/projects/${projectId}/threads/${threadId}`));
       });
     },
     [navigate],
@@ -234,7 +235,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
       ))}
       {totalCount > 5 && (
         <ViewAllButton
-          onClick={() => navigate('/list?status=completed,failed,stopped,interrupted')}
+          onClick={() => navigate(buildPath('/list?status=completed,failed,stopped,interrupted'))}
         />
       )}
     </div>

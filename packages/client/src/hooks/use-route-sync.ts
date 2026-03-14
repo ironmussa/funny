@@ -1,16 +1,27 @@
 import { useEffect } from 'react';
-import { useLocation, matchPath } from 'react-router-dom';
+import { useLocation, useNavigate, matchPath } from 'react-router-dom';
+import { toast } from 'sonner';
 
 import { settingsItems } from '@/components/SettingsPanel';
+import { authClient } from '@/lib/auth-client';
+import { stripOrgPrefix } from '@/lib/url';
+import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 function parseRoute(pathname: string) {
+  // Strip org prefix: /:orgSlug/... → extract slug and clean path
+  const [orgSlug, cleanPath] = stripOrgPrefix(pathname);
+
+  // Use cleanPath for all route matching below
+  const p = cleanPath;
+
   // Preferences (general settings): /preferences/:pageId
-  const preferencesMatch = matchPath('/preferences/:pageId', pathname);
+  const preferencesMatch = matchPath('/preferences/:pageId', p);
   if (preferencesMatch) {
     return {
+      orgSlug,
       settingsPage: null,
       preferencesPage: preferencesMatch.params.pageId!,
       projectId: null,
@@ -24,9 +35,10 @@ function parseRoute(pathname: string) {
   }
 
   // Project-scoped settings: /projects/:projectId/settings/:pageId
-  const projectSettingsMatch = matchPath('/projects/:projectId/settings/:pageId', pathname);
+  const projectSettingsMatch = matchPath('/projects/:projectId/settings/:pageId', p);
   if (projectSettingsMatch) {
     return {
+      orgSlug,
       settingsPage: projectSettingsMatch.params.pageId!,
       preferencesPage: null,
       projectId: projectSettingsMatch.params.projectId!,
@@ -39,9 +51,10 @@ function parseRoute(pathname: string) {
     };
   }
 
-  const settingsMatch = matchPath('/settings/:pageId', pathname);
+  const settingsMatch = matchPath('/settings/:pageId', p);
   if (settingsMatch) {
     return {
+      orgSlug,
       settingsPage: settingsMatch.params.pageId!,
       preferencesPage: null,
       projectId: null,
@@ -54,9 +67,10 @@ function parseRoute(pathname: string) {
     };
   }
 
-  const threadMatch = matchPath('/projects/:projectId/threads/:threadId', pathname);
+  const threadMatch = matchPath('/projects/:projectId/threads/:threadId', p);
   if (threadMatch) {
     return {
+      orgSlug,
       settingsPage: null,
       projectId: threadMatch.params.projectId!,
       threadId: threadMatch.params.threadId!,
@@ -69,9 +83,10 @@ function parseRoute(pathname: string) {
     };
   }
 
-  const projectMatch = matchPath('/projects/:projectId', pathname);
+  const projectMatch = matchPath('/projects/:projectId', p);
   if (projectMatch) {
     return {
+      orgSlug,
       settingsPage: null,
       preferencesPage: null,
       projectId: projectMatch.params.projectId!,
@@ -85,8 +100,9 @@ function parseRoute(pathname: string) {
   }
 
   // Automation inbox: /inbox
-  if (pathname === '/inbox') {
+  if (p === '/inbox') {
     return {
+      orgSlug,
       settingsPage: null,
       preferencesPage: null,
       projectId: null,
@@ -100,8 +116,9 @@ function parseRoute(pathname: string) {
   }
 
   // List view: /list (with optional ?project=<id> query param)
-  if (pathname === '/list') {
+  if (p === '/list') {
     return {
+      orgSlug,
       settingsPage: null,
       preferencesPage: null,
       projectId: null,
@@ -115,8 +132,9 @@ function parseRoute(pathname: string) {
   }
 
   // Kanban view: /kanban (with optional ?project=<id> query param)
-  if (pathname === '/kanban') {
+  if (p === '/kanban') {
     return {
+      orgSlug,
       settingsPage: null,
       preferencesPage: null,
       projectId: null,
@@ -130,9 +148,10 @@ function parseRoute(pathname: string) {
   }
 
   // Project-scoped analytics: /projects/:projectId/analytics
-  const projectAnalyticsMatch = matchPath('/projects/:projectId/analytics', pathname);
+  const projectAnalyticsMatch = matchPath('/projects/:projectId/analytics', p);
   if (projectAnalyticsMatch) {
     return {
+      orgSlug,
       settingsPage: null,
       preferencesPage: null,
       projectId: projectAnalyticsMatch.params.projectId!,
@@ -146,8 +165,9 @@ function parseRoute(pathname: string) {
   }
 
   // Analytics: /analytics
-  if (pathname === '/analytics') {
+  if (p === '/analytics') {
     return {
+      orgSlug,
       settingsPage: null,
       preferencesPage: null,
       projectId: null,
@@ -161,8 +181,9 @@ function parseRoute(pathname: string) {
   }
 
   // Grid columns: /grid
-  if (pathname === '/grid') {
+  if (p === '/grid') {
     return {
+      orgSlug,
       settingsPage: null,
       preferencesPage: null,
       projectId: null,
@@ -176,8 +197,9 @@ function parseRoute(pathname: string) {
   }
 
   // New project: /new
-  if (pathname === '/new') {
+  if (p === '/new') {
     return {
+      orgSlug,
       settingsPage: null,
       preferencesPage: null,
       projectId: null,
@@ -191,6 +213,7 @@ function parseRoute(pathname: string) {
   }
 
   return {
+    orgSlug,
     settingsPage: null,
     preferencesPage: null,
     projectId: null,
@@ -207,6 +230,7 @@ const validSettingsIds = new Set([...settingsItems.map((i) => i.id), 'users', 't
 
 export function useRouteSync() {
   const location = useLocation();
+  const navigate = useNavigate();
   // Subscribe only to `initialized` from project-store (not the entire app state)
   const initialized = useProjectStore((s) => s.initialized);
 
@@ -215,6 +239,7 @@ export function useRouteSync() {
     if (!initialized) return;
 
     const {
+      orgSlug,
       settingsPage,
       preferencesPage,
       projectId,
@@ -225,6 +250,55 @@ export function useRouteSync() {
       liveColumns,
       addProject,
     } = parseRoute(location.pathname);
+
+    // --- Org auto-switch ---
+    const authState = useAuthStore.getState();
+    const currentSlug = authState.activeOrgSlug;
+
+    if (orgSlug && orgSlug !== currentSlug) {
+      // URL has an org slug that differs from current — auto-switch
+      (async () => {
+        try {
+          const res = await authClient.organization.list();
+          const orgList = res.data ?? [];
+          const targetOrg = orgList.find((o: any) => o.slug === orgSlug);
+          if (!targetOrg) {
+            toast.error(`Organization "${orgSlug}" not found`);
+            navigate('/');
+            return;
+          }
+          await authClient.organization.setActive({ organizationId: targetOrg.id });
+          useAuthStore.getState().setActiveOrg(targetOrg.id, targetOrg.name, targetOrg.slug);
+          // Clear threads and reload projects for the new org
+          useThreadStore.setState({
+            threadsByProject: {},
+            selectedThreadId: null,
+            activeThread: null,
+          });
+          await useProjectStore.getState().loadProjects();
+        } catch (err) {
+          console.error('[useRouteSync] Failed to auto-switch org:', err);
+          toast.error('Failed to switch organization');
+          navigate('/');
+        }
+      })();
+    } else if (!orgSlug && currentSlug) {
+      // URL has no org slug but we have an active org — switch to personal
+      (async () => {
+        try {
+          await authClient.organization.setActive({ organizationId: null as any });
+          useAuthStore.getState().setActiveOrg(null, null, null);
+          useThreadStore.setState({
+            threadsByProject: {},
+            selectedThreadId: null,
+            activeThread: null,
+          });
+          await useProjectStore.getState().loadProjects();
+        } catch (err) {
+          console.error('[useRouteSync] Failed to switch to personal:', err);
+        }
+      })();
+    }
     // Use imperative getState() to avoid subscribing to store changes
     const projectStore = useProjectStore.getState();
     const threadStore = useThreadStore.getState();
@@ -361,5 +435,6 @@ export function useRouteSync() {
       if (threadStore.selectedThreadId != null) threadStore.selectThread(null);
       if (projectStore.selectedProjectId != null) projectStore.selectProject(null);
     }
-  }, [location.pathname, location.search, initialized]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate is stable from useNavigate
+  }, [location.pathname, location.search, initialized, navigate]);
 }

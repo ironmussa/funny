@@ -23,6 +23,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { api } from '@/lib/api';
+import { buildPath } from '@/lib/url';
 import { useAppStore } from '@/stores/app-store';
 
 import { MetricCard } from './analytics/MetricCard';
@@ -101,7 +102,7 @@ export function AnalyticsView() {
         <Button
           variant="ghost"
           size="icon-xs"
-          onClick={() => navigate('/')}
+          onClick={() => navigate(buildPath('/'))}
           className="text-muted-foreground hover:text-foreground"
         >
           <ChevronLeft className="h-4 w-4" />

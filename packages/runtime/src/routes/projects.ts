@@ -18,7 +18,7 @@ import { Hono } from 'hono';
 import { err } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
-import { requireAdmin } from '../middleware/auth.js';
+import { requireAdmin, requirePermission } from '../middleware/auth.js';
 import { isAgentRunning, stopAgent, cleanupThreadState } from '../services/agent-runner.js';
 import { startCommand, stopCommand, isCommandRunning } from '../services/command-runner.js';
 import * as pc from '../services/project-config-service.js';
@@ -46,28 +46,43 @@ export const projectRoutes = new Hono<HonoEnv>();
 // GET /api/projects
 projectRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string;
-  const orgId = c.get('organizationId');
+  const isPersonal = c.req.query('personal') === 'true';
+  const queryOrgId = c.req.query('orgId');
+  const sessionOrgId = c.get('organizationId');
+
+  const orgId = isPersonal ? null : queryOrgId || sessionOrgId;
 
   if (orgId) {
-    // Merge user's own projects + team-shared projects, deduped
-    const [userProjects, teamProjects] = await Promise.all([
-      pm.listProjects(userId),
-      pm.listProjectsByOrg(orgId),
-    ]);
+    // Org mode: only show projects associated with this organization
+    const teamProjects = await pm.listProjectsByOrg(orgId);
 
-    const teamProjectIds = new Set(teamProjects.map((p) => p.id));
-    const merged = [
-      // User's own projects first (annotate those also shared with team)
-      ...userProjects.map((p) => ({
+    // Get the organization name from the forwarded header (set by server auth middleware)
+    const organizationName = c.get('organizationName') || undefined;
+    // For team projects not owned by the user, fetch their localPath
+    const sharedProjects = teamProjects.filter((p) => p.userId !== userId);
+    const localPaths = await Promise.all(
+      sharedProjects.map((p) => pm.getMemberLocalPath(p.id, userId)),
+    );
+    const localPathByProject = new Map(sharedProjects.map((p, i) => [p.id, localPaths[i]]));
+
+    const result = teamProjects.map((p) => {
+      if (p.userId === userId) {
+        return {
+          ...p,
+          isTeamProject: true as const,
+          organizationName,
+        };
+      }
+      const lp = localPathByProject.get(p.id) ?? null;
+      return {
         ...p,
-        isTeamProject: teamProjectIds.has(p.id),
-      })),
-      // Team projects not owned by this user
-      ...teamProjects
-        .filter((p) => p.userId !== userId)
-        .map((p) => ({ ...p, isTeamProject: true as const })),
-    ];
-    return c.json(merged);
+        isTeamProject: true as const,
+        organizationName,
+        localPath: lp ?? undefined,
+        needsSetup: !lp,
+      };
+    });
+    return c.json(result);
   }
 
   const projects = await pm.listProjects(userId);
@@ -92,27 +107,33 @@ projectRoutes.get('/resolve', async (c) => {
   return c.json({ project: null, source: 'none' });
 });
 
-// POST /api/projects
-projectRoutes.post('/', async (c) => {
+// POST /api/projects — requires project:create permission in org context
+projectRoutes.post('/', requirePermission('project', 'create'), async (c) => {
   const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
   const raw = await c.req.json();
   const parsed = validate(createProjectSchema, raw);
   if (parsed.isErr()) return resultToResponse(c, parsed);
   const { name, path } = parsed.value;
 
-  // Early duplicate name check before any further validation
-  const nameExists = await pm.projectNameExists(name, userId);
+  // Early duplicate name check (scoped to org if active, otherwise to user)
+  const nameExists = await pm.projectNameExists(name, userId, orgId);
   if (nameExists) {
     return resultToResponse(
       c,
-      err({ code: 'CONFLICT' as const, message: `A project named "${name}" already exists` }),
+      err({ type: 'CONFLICT' as const, message: `A project named "${name}" already exists` }),
     );
   }
 
-  const result = await pm.createProject(name, path, userId);
+  const result = await pm.createProject(name, path, userId, orgId);
 
-  // If in team mode, assign the new project to this runner on the central server
   if (result.isOk()) {
+    // Associate project with the active organization
+    if (orgId) {
+      await pm.addProjectToOrg(result.value.id, orgId);
+    }
+
+    // If in team mode, assign the new project to this runner on the central server
     void assignProjectToRunner(result.value);
   }
 
@@ -124,7 +145,7 @@ projectRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
-  const projectResult = await requireProject(id, userId, orgId);
+  const projectResult = await requireProject(id, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const raw = await c.req.json();
@@ -344,7 +365,7 @@ projectRoutes.get('/:id/config', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
   const orgId = c.get('organizationId');
-  const projectResult = await requireProject(projectId, userId, orgId);
+  const projectResult = await requireProject(projectId, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const config = pc.getConfig(projectResult.value.path);
@@ -356,7 +377,7 @@ projectRoutes.put('/:id/config', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
   const orgId = c.get('organizationId');
-  const projectResult = await requireProject(projectId, userId, orgId);
+  const projectResult = await requireProject(projectId, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const body = await c.req.json();
@@ -371,7 +392,7 @@ projectRoutes.get('/:id/hooks', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
   const orgId = c.get('organizationId');
-  const projectResult = await requireProject(projectId, userId, orgId);
+  const projectResult = await requireProject(projectId, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const hookType = c.req.query('hookType') as import('@funny/shared').HookType | undefined;
@@ -384,7 +405,7 @@ projectRoutes.post('/:id/hooks', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
   const orgId = c.get('organizationId');
-  const projectResult = await requireProject(projectId, userId, orgId);
+  const projectResult = await requireProject(projectId, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const raw = await c.req.json();
@@ -402,7 +423,7 @@ projectRoutes.put('/:id/hooks/reorder', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
   const orgId = c.get('organizationId');
-  const projectResult = await requireProject(projectId, userId, orgId);
+  const projectResult = await requireProject(projectId, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const raw = await c.req.json();
@@ -418,7 +439,7 @@ projectRoutes.put('/:id/hooks/:hookType/:index', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
   const orgId = c.get('organizationId');
-  const projectResult = await requireProject(projectId, userId, orgId);
+  const projectResult = await requireProject(projectId, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const hookType = c.req.param('hookType') as import('@funny/shared').HookType;
@@ -442,7 +463,7 @@ projectRoutes.delete('/:id/hooks/:hookType/:index', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
   const orgId = c.get('organizationId');
-  const projectResult = await requireProject(projectId, userId, orgId);
+  const projectResult = await requireProject(projectId, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const hookType = c.req.param('hookType') as import('@funny/shared').HookType;
@@ -464,7 +485,7 @@ projectRoutes.get('/:id/weave/status', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
   const orgId = c.get('organizationId');
-  const projectResult = await requireProject(projectId, userId, orgId);
+  const projectResult = await requireProject(projectId, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const result = await getWeaveStatus(projectResult.value.path);
@@ -476,7 +497,7 @@ projectRoutes.post('/:id/weave/configure', async (c) => {
   const projectId = c.req.param('id');
   const userId = c.get('userId');
   const orgId = c.get('organizationId');
-  const projectResult = await requireProject(projectId, userId, orgId);
+  const projectResult = await requireProject(projectId, userId, orgId ?? undefined);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const result = await ensureWeaveConfigured(projectResult.value.path);

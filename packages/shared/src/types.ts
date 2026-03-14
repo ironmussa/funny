@@ -168,6 +168,12 @@ export interface Project {
   sortOrder: number;
   createdAt: string;
   isTeamProject?: boolean;
+  /** Name of the organization this project belongs to (set when listing org projects) */
+  organizationName?: string;
+  /** Per-user local path for shared projects (set by non-owner members) */
+  localPath?: string;
+  /** True when the user needs to configure their local directory for a shared project */
+  needsSetup?: boolean;
 }
 
 // ─── Threads ─────────────────────────────────────────────

@@ -146,6 +146,11 @@ export async function createIdleThread(params: CreateIdleThreadParams) {
   const project = await pm.getProject(params.projectId);
   if (!project) throw new ThreadServiceError('Project not found', 404);
 
+  // Resolve per-user path (owner uses project.path, member uses localPath)
+  const pathResult = await pm.resolveProjectPath(params.projectId, params.userId);
+  if (pathResult.isErr()) throw new ThreadServiceError(pathResult.error.message, 400);
+  const projectPath = pathResult.value;
+
   const threadId = nanoid();
   const resolvedBaseBranch = params.baseBranch?.trim() || undefined;
   let branch: string | undefined;
@@ -157,7 +162,7 @@ export async function createIdleThread(params: CreateIdleThreadParams) {
     branch = `${projectSlug}/${slug}-${threadId.slice(0, 6)}`;
     baseBranch = resolvedBaseBranch;
   } else {
-    const branchResult = await getCurrentBranch(project.path);
+    const branchResult = await getCurrentBranch(projectPath);
     if (branchResult.isOk()) branch = branchResult.value;
     baseBranch = resolvedBaseBranch || branch;
   }
@@ -198,7 +203,7 @@ export async function createIdleThread(params: CreateIdleThreadParams) {
     threadId,
     projectId: params.projectId,
     userId: params.userId,
-    cwd: project.path,
+    cwd: projectPath,
     worktreePath: null,
     stage: thread.stage,
     status: 'idle',
@@ -233,6 +238,11 @@ export interface CreateAndStartThreadParams {
 export async function createAndStartThread(params: CreateAndStartThreadParams) {
   const project = await pm.getProject(params.projectId);
   if (!project) throw new ThreadServiceError('Project not found', 404);
+
+  // Resolve per-user path (owner uses project.path, member uses localPath)
+  const pathResult = await pm.resolveProjectPath(params.projectId, params.userId);
+  if (pathResult.isErr()) throw new ThreadServiceError(pathResult.error.message, 400);
+  const projectPath = pathResult.value;
 
   const threadId = nanoid();
   log.info('createAndStartThread called', {
@@ -291,7 +301,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
       const storedContent = await augmentPromptWithFiles(
         params.prompt,
         params.fileReferences,
-        project.path,
+        projectPath,
       );
       await tm.insertMessage({
         threadId,
@@ -305,7 +315,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
       threadId,
       projectId: params.projectId,
       userId: params.userId,
-      cwd: project.path,
+      cwd: projectPath,
       worktreePath: null,
       stage: 'in_progress' as const,
       status: 'setting_up',
@@ -315,7 +325,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
     void (async () => {
       try {
         const wtResult = await createWorktree(
-          project.path,
+          projectPath,
           branchName,
           resolvedBaseBranch,
           emitSetupProgress,
@@ -328,7 +338,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
         const wtPath = wtResult.value;
 
         try {
-          const setup = await setupWorktree(project.path, wtPath, emitSetupProgress);
+          const setup = await setupWorktree(projectPath, wtPath, emitSetupProgress);
           if (setup.postCreateErrors.length) {
             log.warn('Worktree postCreate errors', { threadId, errors: setup.postCreateErrors });
           }
@@ -349,13 +359,13 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
           worktreePath: wtPath,
         });
 
-        // Start agent — use project.path (not wtPath) because file references
+        // Start agent — use projectPath (not wtPath) because file references
         // were selected from the main repo; untracked/gitignored files won't
         // exist in the freshly created worktree.
         const augmentedPrompt = await augmentPromptWithFiles(
           params.prompt,
           params.fileReferences,
-          project.path,
+          projectPath,
         );
         try {
           await startAgent(
@@ -396,7 +406,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
     const branchResult = await getCurrentBranch(params.worktreePath);
     if (branchResult.isOk()) threadBranch = branchResult.value;
   } else {
-    const branchResult = await getCurrentBranch(project.path);
+    const branchResult = await getCurrentBranch(projectPath);
     if (branchResult.isOk()) {
       threadBranch = branchResult.value;
       needsBranchCheckout = !!(resolvedBaseBranch && resolvedBaseBranch !== threadBranch);
@@ -432,7 +442,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
       const storedContent = await augmentPromptWithFiles(
         params.prompt,
         params.fileReferences,
-        project.path,
+        projectPath,
       );
       await tm.insertMessage({
         threadId,
@@ -446,7 +456,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
       threadId,
       projectId: params.projectId,
       userId: params.userId,
-      cwd: project.path,
+      cwd: projectPath,
       worktreePath: null,
       stage: 'in_progress' as const,
       status: 'setting_up',
@@ -455,7 +465,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
     // Background: checkout branch, then start agent
     void (async () => {
       try {
-        await checkoutBranchWithProgress(project.path, resolvedBaseBranch!, emitSetupProgress);
+        await checkoutBranchWithProgress(projectPath, resolvedBaseBranch!, emitSetupProgress);
 
         await tm.updateThread(threadId, { status: 'pending' });
         wsBroker.emitToUser(params.userId, {
@@ -471,12 +481,12 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
         const augmentedPrompt = await augmentPromptWithFiles(
           params.prompt,
           params.fileReferences,
-          project.path,
+          projectPath,
         );
         await startAgent(
           threadId,
           augmentedPrompt,
-          project.path,
+          projectPath,
           resolvedModel,
           resolvedPermissionMode,
           params.images,
@@ -519,7 +529,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
 
   await tm.createThread(thread);
 
-  const cwd = worktreePath ?? project.path;
+  const cwd = worktreePath ?? projectPath;
 
   threadEventBus.emit('thread:created', {
     threadId,
@@ -660,8 +670,14 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
     contentPreview: params.content.slice(0, 120),
   });
 
-  const cwd = thread.worktreePath ?? (await pm.getProject(thread.projectId))?.path;
-  if (!cwd) throw new ThreadServiceError('Project path not found', 404);
+  let cwd: string;
+  if (thread.worktreePath) {
+    cwd = thread.worktreePath;
+  } else {
+    const pathResult = await pm.resolveProjectPath(thread.projectId, params.userId);
+    if (pathResult.isErr()) throw new ThreadServiceError(pathResult.error.message, 400);
+    cwd = pathResult.value;
+  }
 
   const effectiveProvider = (params.provider ||
     thread.provider ||
@@ -864,8 +880,14 @@ export async function approveToolCall(params: ApproveToolParams): Promise<void> 
   const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
-  const cwd = thread.worktreePath ?? (await pm.getProject(thread.projectId))?.path;
-  if (!cwd) throw new ThreadServiceError('Project path not found', 404);
+  let cwd: string;
+  if (thread.worktreePath) {
+    cwd = thread.worktreePath;
+  } else {
+    const pathResult = await pm.resolveProjectPath(thread.projectId, params.userId);
+    if (pathResult.isErr()) throw new ThreadServiceError(pathResult.error.message, 400);
+    cwd = pathResult.value;
+  }
 
   const tools = params.allowedTools
     ? [...params.allowedTools]
@@ -956,14 +978,15 @@ export async function updateThread(params: UpdateThreadParams) {
     thread.mode === 'worktree' &&
     thread.provider !== 'external'
   ) {
-    const project = await pm.getProject(thread.projectId);
-    if (project) {
+    const archivePathResult = await pm.resolveProjectPath(thread.projectId, thread.userId);
+    const archivePath = archivePathResult.isOk() ? archivePathResult.value : undefined;
+    if (archivePath) {
       await stopCommandsByCwd(thread.worktreePath).catch(() => {});
-      await removeWorktree(project.path, thread.worktreePath).catch((e) => {
+      await removeWorktree(archivePath, thread.worktreePath).catch((e) => {
         log.warn('Failed to remove worktree', { namespace: 'cleanup', error: String(e) });
       });
       if (thread.branch) {
-        await removeBranch(project.path, thread.branch).catch((e) => {
+        await removeBranch(archivePath, thread.branch).catch((e) => {
           log.warn('Failed to remove branch', { namespace: 'cleanup', error: String(e) });
         });
       }
@@ -980,12 +1003,15 @@ export async function updateThread(params: UpdateThreadParams) {
 
   // Emit stage-changed events
   const project = await pm.getProject(thread.projectId);
+  const eventPathResult = await pm.resolveProjectPath(thread.projectId, thread.userId);
+  const eventCwd =
+    thread.worktreePath ?? (eventPathResult.isOk() ? eventPathResult.value : (project?.path ?? ''));
   const eventCtx = {
     threadId: params.threadId,
     projectId: thread.projectId,
     userId: thread.userId,
     worktreePath: thread.worktreePath ?? null,
-    cwd: thread.worktreePath ?? project?.path ?? '',
+    cwd: eventCwd,
   };
   if (params.archived) {
     threadEventBus.emit('thread:stage-changed', {
@@ -1018,6 +1044,20 @@ async function autoStartIdleThread(
   thread: NonNullable<Awaited<ReturnType<typeof tm.getThread>>>,
   project: NonNullable<Awaited<ReturnType<typeof pm.getProject>>>,
 ): Promise<void> {
+  // Resolve per-user path (owner uses project.path, member uses localPath)
+  const pathResult = await pm.resolveProjectPath(project.id, thread.userId);
+  if (pathResult.isErr()) {
+    log.error('Cannot resolve project path for idle thread', {
+      namespace: 'agent',
+      threadId,
+      error: pathResult.error.message,
+    });
+    await tm.updateThread(threadId, { status: 'failed', completedAt: new Date().toISOString() });
+    emitAgentFailed(thread.userId, threadId);
+    return;
+  }
+  const projectPath = pathResult.value;
+
   const needsWorktreeSetup = thread.mode === 'worktree' && !thread.worktreePath && thread.branch;
 
   if (needsWorktreeSetup) {
@@ -1030,7 +1070,7 @@ async function autoStartIdleThread(
     void (async () => {
       try {
         const wtResult = await createWorktree(
-          project.path,
+          projectPath,
           thread.branch!,
           thread.baseBranch || undefined,
           emitSetupProgress,
@@ -1043,7 +1083,7 @@ async function autoStartIdleThread(
         const wtPath = wtResult.value;
 
         try {
-          const setup = await setupWorktree(project.path, wtPath, emitSetupProgress);
+          const setup = await setupWorktree(projectPath, wtPath, emitSetupProgress);
           if (setup.postCreateErrors.length) {
             log.warn('Worktree postCreate errors', { threadId, errors: setup.postCreateErrors });
           }
@@ -1096,7 +1136,7 @@ async function autoStartIdleThread(
     })();
   } else {
     // Worktree already exists or local mode: start agent directly
-    const cwd = thread.worktreePath || project.path;
+    const cwd = thread.worktreePath || projectPath;
 
     // Check if local mode needs branch checkout
     const needsCheckout =
@@ -1112,7 +1152,7 @@ async function autoStartIdleThread(
 
       void (async () => {
         try {
-          await checkoutBranchWithProgress(project.path, thread.baseBranch!, emitProgress);
+          await checkoutBranchWithProgress(projectPath, thread.baseBranch!, emitProgress);
 
           await tm.updateThread(threadId, { status: 'pending', branch: thread.baseBranch });
           wsBroker.emitToUser(thread.userId, {
@@ -1131,7 +1171,7 @@ async function autoStartIdleThread(
           await startAgent(
             threadId,
             thread.initialPrompt!,
-            project.path,
+            projectPath,
             (thread.model || project.defaultModel || DEFAULT_MODEL) as AgentModel,
             (thread.permissionMode || DEFAULT_PERMISSION_MODE) as PermissionMode,
             draftImages,
@@ -1209,13 +1249,14 @@ export async function deleteThread(threadId: string): Promise<void> {
   if (thread.worktreePath && thread.mode === 'worktree' && thread.provider !== 'external') {
     await stopCommandsByCwd(thread.worktreePath).catch(() => {});
 
-    const project = await pm.getProject(thread.projectId);
-    if (project) {
-      await removeWorktree(project.path, thread.worktreePath).catch((e) => {
+    const deletePathResult = await pm.resolveProjectPath(thread.projectId, thread.userId);
+    const deletePath = deletePathResult.isOk() ? deletePathResult.value : undefined;
+    if (deletePath) {
+      await removeWorktree(deletePath, thread.worktreePath).catch((e) => {
         log.warn('Failed to remove worktree', { namespace: 'cleanup', error: String(e) });
       });
       if (thread.branch) {
-        await removeBranch(project.path, thread.branch).catch((e) => {
+        await removeBranch(deletePath, thread.branch).catch((e) => {
           log.warn('Failed to remove branch', { namespace: 'cleanup', error: String(e) });
         });
       }

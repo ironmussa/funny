@@ -64,21 +64,29 @@ export const githubRoutes = new Hono<HonoEnv>();
 
 githubRoutes.get('/status', async (c) => {
   const userId = c.get('userId') as string;
-  const token = await profileService.getGithubToken(userId);
-  if (!token) {
+
+  // First check if a token row exists (without decrypting — decrypt can fail
+  // if the encryption key rotated, but the token is still "configured").
+  const profile = await profileService.getProfile(userId);
+  if (!profile?.hasGithubToken) {
     return c.json({ connected: false });
   }
 
-  try {
-    const res = await githubApiFetch('/user', token);
-    if (!res.ok) {
-      return c.json({ connected: false });
+  // Token is configured — try to fetch login for display, but always report connected.
+  const token = await profileService.getGithubToken(userId);
+  if (token) {
+    try {
+      const res = await githubApiFetch('/user', token);
+      if (res.ok) {
+        const user = (await res.json()) as { login: string };
+        return c.json({ connected: true, login: user.login });
+      }
+    } catch {
+      // Ignore — we still know the token exists
     }
-    const user = (await res.json()) as { login: string };
-    return c.json({ connected: true, login: user.login });
-  } catch {
-    return c.json({ connected: false });
   }
+
+  return c.json({ connected: true });
 });
 
 // ── POST /oauth/device — start Device Flow ─────────────────

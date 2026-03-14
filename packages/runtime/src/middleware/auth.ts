@@ -6,10 +6,10 @@
  * Runtime auth middleware.
  *
  * Two modes of operation:
- * 1. **Standalone** (runtime runs directly): validates Better Auth sessions or
- *    team-mode central server sessions.
- * 2. **Mounted by server** (in-process): trusts X-Forwarded-User headers set by
- *    the server's auth middleware. Use `createForwardedAuthMiddleware()`.
+ * 1. **Forwarded** (mounted by server): trusts X-Forwarded-User headers set by
+ *    the server's auth middleware. This is the primary mode.
+ * 2. **Direct** (runtime runs standalone or as a remote runner): validates
+ *    Better Auth sessions or server sessions via TEAM_SERVER_URL.
  */
 
 import type { Context, Next } from 'hono';
@@ -45,10 +45,11 @@ export async function forwardedAuthMiddleware(c: Context, next: Next) {
   c.set('userId', userId);
   c.set('userRole', c.req.header('X-Forwarded-Role') || 'user');
   c.set('organizationId', c.req.header('X-Forwarded-Org') || null);
+  c.set('organizationName', c.req.header('X-Forwarded-Org-Name') || null);
   return next();
 }
 
-// ── Standalone auth (used when runtime runs its own server) ──────
+// ── Direct auth (used when runtime handles auth itself, e.g. remote runner) ──────
 
 const TEAM_SERVER_URL = process.env.TEAM_SERVER_URL;
 
@@ -60,18 +61,30 @@ const sessionCache = new Map<
 const SESSION_CACHE_TTL = 60_000; // 1 minute
 
 /**
- * Standalone auth middleware — validates sessions directly.
+ * Direct auth middleware — validates sessions without relying on forwarded headers.
  *
  * Priority:
- * 1. Team mode session validation (browser → runtime with central server cookie)
- * 2. Better Auth session (default for all browser requests)
+ * 1. Server session validation (browser → runtime with server cookie, when TEAM_SERVER_URL is set)
+ * 2. Better Auth session (fallback for local sessions)
  */
 export async function authMiddleware(c: Context, next: Next) {
   const path = new URL(c.req.url).pathname;
 
   if (PUBLIC_PATHS.has(path)) return next();
 
-  // ── Team mode — validate with central server ───────────────────
+  // ── Forwarded auth from server via shared secret ──
+  const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET;
+  if (RUNNER_AUTH_SECRET && c.req.header('X-Runner-Auth') === RUNNER_AUTH_SECRET) {
+    const userId = c.req.header('X-Forwarded-User');
+    if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+    c.set('userId', userId);
+    c.set('userRole', c.req.header('X-Forwarded-Role') || 'user');
+    c.set('organizationId', c.req.header('X-Forwarded-Org') || null);
+    c.set('organizationName', c.req.header('X-Forwarded-Org-Name') || null);
+    return next();
+  }
+
+  // ── Server session validation (when connected to a central server) ──
   if (TEAM_SERVER_URL && c.req.header('Cookie')) {
     const cookie = c.req.header('Cookie')!;
     const cacheKey = cookie.slice(0, 128);
@@ -81,6 +94,7 @@ export async function authMiddleware(c: Context, next: Next) {
       c.set('userId', cached.userId);
       c.set('userRole', cached.role);
       c.set('organizationId', cached.orgId);
+      c.set('organizationName', null);
       return next();
     }
 
@@ -102,6 +116,7 @@ export async function authMiddleware(c: Context, next: Next) {
           c.set('userId', entry.userId);
           c.set('userRole', entry.role);
           c.set('organizationId', entry.orgId);
+          c.set('organizationName', null);
           return next();
         }
       }
@@ -125,6 +140,7 @@ export async function authMiddleware(c: Context, next: Next) {
   c.set('userId', session.user.id);
   c.set('userRole', (session.user as any).role || 'user');
   c.set('organizationId', (session.session as any).activeOrganizationId ?? null);
+  c.set('organizationName', null);
 
   return next();
 }

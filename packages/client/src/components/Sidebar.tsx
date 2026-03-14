@@ -46,6 +46,7 @@ import {
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
+import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -194,7 +195,7 @@ export function AppSidebar() {
     setActionLoading(false);
     setArchiveConfirm(null);
     toast.success(t('toast.threadArchived'));
-    if (wasSelected) navigate(`/projects/${projectId}`);
+    if (wasSelected) navigate(buildPath(`/projects/${projectId}`));
   }, [archiveConfirm, archiveThread, t, navigate]);
 
   const handleDeleteThreadConfirm = useCallback(async () => {
@@ -206,7 +207,7 @@ export function AppSidebar() {
     setActionLoading(false);
     setDeleteThreadConfirm(null);
     toast.success(t('toast.threadDeleted', { title }));
-    if (wasSelected) navigate(`/projects/${projectId}`);
+    if (wasSelected) navigate(buildPath(`/projects/${projectId}`));
   }, [deleteThreadConfirm, deleteThread, t, navigate]);
 
   const handleRenameProjectConfirm = useCallback(async () => {
@@ -234,7 +235,7 @@ export function AppSidebar() {
     setDeleteProjectConfirm(null);
     await deleteProject(projectId);
     toast.success(t('toast.projectDeleted', { name }));
-    navigate('/');
+    navigate(buildPath('/'));
   }, [deleteProjectConfirm, deleteProject, t, navigate]);
 
   // ── Stable callbacks for ProjectItem (avoids breaking memo) ──────────
@@ -250,7 +251,7 @@ export function AppSidebar() {
       startTransition(() => {
         useProjectStore.getState().selectProject(projectId);
         useUIStore.getState().setReviewPaneOpen(false);
-        navigate(`/projects/${projectId}`);
+        navigate(buildPath(`/projects/${projectId}`));
       });
       requestAnimationFrame(() => {
         const ta = document.querySelector<HTMLTextAreaElement>('[data-testid="prompt-textarea"]');
@@ -264,7 +265,7 @@ export function AppSidebar() {
     (projectId: string) => {
       startTransition(() => {
         startNewThread(projectId);
-        navigate(`/projects/${projectId}`);
+        navigate(buildPath(`/projects/${projectId}`));
       });
     },
     [startNewThread, navigate],
@@ -288,7 +289,7 @@ export function AppSidebar() {
         ) {
           store.selectThread(threadId);
         }
-        navigate(`/projects/${projectId}/threads/${threadId}`);
+        navigate(buildPath(`/projects/${projectId}/threads/${threadId}`));
       });
     },
     [navigate],
@@ -348,7 +349,7 @@ export function AppSidebar() {
   const handleShowAllThreads = useCallback(
     (projectId: string) => {
       showGlobalSearch();
-      navigate(`/list?project=${projectId}`);
+      navigate(buildPath(`/list?project=${projectId}`));
     },
     [showGlobalSearch, navigate],
   );
@@ -400,7 +401,7 @@ export function AppSidebar() {
                   size="icon-xs"
                   data-testid="sidebar-search"
                   onClick={() => {
-                    navigate('/list');
+                    navigate(buildPath('/list'));
                   }}
                   className="text-muted-foreground"
                 >
@@ -416,7 +417,7 @@ export function AppSidebar() {
                   size="icon-xs"
                   data-testid="sidebar-kanban"
                   onClick={() => {
-                    navigate('/kanban');
+                    navigate(buildPath('/kanban'));
                   }}
                   className="text-muted-foreground"
                 >
@@ -431,7 +432,7 @@ export function AppSidebar() {
                   variant="ghost"
                   size="icon-xs"
                   data-testid="sidebar-grid"
-                  onClick={() => navigate('/grid')}
+                  onClick={() => navigate(buildPath('/grid'))}
                   className="text-muted-foreground"
                 >
                   <LayoutGrid className="h-3.5 w-3.5" />
@@ -445,7 +446,7 @@ export function AppSidebar() {
                   variant="ghost"
                   size="icon-xs"
                   data-testid="sidebar-analytics"
-                  onClick={() => navigate('/analytics')}
+                  onClick={() => navigate(buildPath('/analytics'))}
                   className="text-muted-foreground"
                 >
                   <BarChart3 className="h-3.5 w-3.5" />
@@ -510,7 +511,7 @@ export function AppSidebar() {
               data-testid="sidebar-add-project"
               size="icon"
               className="h-5 w-5 text-muted-foreground hover:text-foreground"
-              onClick={() => navigate('/new')}
+              onClick={() => navigate(buildPath('/new'))}
             >
               <FolderPlus className="h-3.5 w-3.5" />
             </Button>
@@ -530,7 +531,7 @@ export function AppSidebar() {
         {projects.length === 0 && (
           <button
             data-testid="sidebar-no-projects-cta"
-            onClick={() => navigate('/new')}
+            onClick={() => navigate(buildPath('/new'))}
             className="w-full cursor-pointer px-2 py-2 text-left text-xs text-muted-foreground transition-colors hover:text-foreground"
           >
             {t('sidebar.noProjects')}
@@ -599,7 +600,7 @@ export function AppSidebar() {
                 <DropdownMenuContent side="top" align="end" className="w-48">
                   <DropdownMenuItem
                     data-testid="sidebar-user-settings"
-                    onClick={() => navigate('/preferences/general')}
+                    onClick={() => navigate(buildPath('/preferences/general'))}
                   >
                     <Settings className="h-3.5 w-3.5" />
                     {t('settings.title')}
@@ -619,7 +620,7 @@ export function AppSidebar() {
                   variant="ghost"
                   size="icon-xs"
                   data-testid="sidebar-settings"
-                  onClick={() => navigate('/preferences/general')}
+                  onClick={() => navigate(buildPath('/preferences/general'))}
                   className="ml-auto h-7 w-7 text-muted-foreground"
                 >
                   <Settings className="h-4 w-4" />

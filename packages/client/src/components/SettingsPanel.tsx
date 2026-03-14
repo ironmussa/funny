@@ -25,6 +25,7 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
 } from '@/components/ui/sidebar';
+import { buildPath } from '@/lib/url';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -91,7 +92,7 @@ export function SettingsPanel() {
             size="icon-xs"
             onClick={() => {
               setSettingsOpen(false);
-              navigate(selectedProjectId ? `/projects/${selectedProjectId}` : '/');
+              navigate(buildPath(selectedProjectId ? `/projects/${selectedProjectId}` : '/'));
             }}
             className="text-muted-foreground hover:text-foreground"
             data-testid="settings-back"
@@ -111,7 +112,7 @@ export function SettingsPanel() {
               <SidebarMenuItem key={item.id}>
                 <SidebarMenuButton
                   isActive={activeSettingsPage === item.id}
-                  onClick={() => navigate(settingsPath(item.id))}
+                  onClick={() => navigate(buildPath(settingsPath(item.id)))}
                   data-testid={`settings-nav-${item.id}`}
                 >
                   <Icon className="h-4 w-4" />

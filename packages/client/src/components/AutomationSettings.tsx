@@ -21,6 +21,7 @@ import {
 } from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useAutomationStore } from '@/stores/automation-store';
@@ -321,7 +322,9 @@ export function AutomationSettings() {
                         size="sm"
                         className="h-5 px-1.5 text-xs"
                         onClick={() => {
-                          navigate(`/projects/${selectedProjectId}/threads/${run.threadId}`);
+                          navigate(
+                            buildPath(`/projects/${selectedProjectId}/threads/${run.threadId}`),
+                          );
                         }}
                       >
                         View

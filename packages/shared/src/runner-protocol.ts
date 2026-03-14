@@ -207,7 +207,9 @@ export type RunnerWSMessage =
   | RunnerWSAgentEvent
   | RunnerWSBrowserRelay
   | RunnerWSPing
-  | RunnerWSTunnelResponse;
+  | RunnerWSTunnelResponse
+  | RunnerDataMessage
+  | RunnerDataQuery;
 
 export interface RunnerWSAuth {
   type: 'runner:auth';
@@ -248,7 +250,9 @@ export type CentralWSMessage =
   | CentralWSPong
   | CentralWSCommand
   | CentralWSBrowserMessage
-  | CentralWSTunnelRequest;
+  | CentralWSTunnelRequest
+  | ServerDataResponse
+  | ServerDataQueryResponse;
 
 export interface CentralWSAuthOk {
   type: 'central:auth_ok';
@@ -285,4 +289,174 @@ export interface CentralWSTunnelRequest {
 
 export interface PendingTasksResponse {
   tasks: RunnerTask[];
+}
+
+// ─── Data Persistence Protocol ──────────────────────────
+// Runner → Server: stream data for persistence
+// Instead of persisting locally, the runner sends data to the server
+
+export type RunnerDataMessage =
+  | DataInsertMessage
+  | DataInsertToolCall
+  | DataUpdateThread
+  | DataUpdateMessage
+  | DataUpdateToolCallOutput
+  | DataSaveThreadEvent
+  | DataInsertComment;
+
+/** Runner → Server: persist a new message */
+export interface DataInsertMessage {
+  type: 'data:insert_message';
+  requestId: string;
+  payload: {
+    threadId: string;
+    role: string;
+    content: string;
+    images?: string | null;
+    model?: string | null;
+    permissionMode?: string | null;
+    author?: string | null;
+  };
+}
+
+/** Runner → Server: persist a new tool call */
+export interface DataInsertToolCall {
+  type: 'data:insert_tool_call';
+  requestId: string;
+  payload: {
+    messageId: string;
+    name: string;
+    input: string;
+    author?: string | null;
+  };
+}
+
+/** Runner → Server: update thread fields */
+export interface DataUpdateThread {
+  type: 'data:update_thread';
+  payload: {
+    threadId: string;
+    updates: Record<string, any>;
+  };
+}
+
+/** Runner → Server: update message content */
+export interface DataUpdateMessage {
+  type: 'data:update_message';
+  payload: {
+    messageId: string;
+    content: string;
+  };
+}
+
+/** Runner → Server: update tool call output */
+export interface DataUpdateToolCallOutput {
+  type: 'data:update_tool_call_output';
+  payload: {
+    toolCallId: string;
+    output: string;
+  };
+}
+
+/** Runner → Server: save thread event */
+export interface DataSaveThreadEvent {
+  type: 'data:save_thread_event';
+  payload: {
+    threadId: string;
+    eventType: string;
+    data: Record<string, unknown>;
+  };
+}
+
+/** Runner → Server: insert a comment */
+export interface DataInsertComment {
+  type: 'data:insert_comment';
+  payload: {
+    threadId: string;
+    userId: string;
+    source: string;
+    content: string;
+  };
+}
+
+// ─── Data Persistence Responses ─────────────────────────
+// Server → Runner: acknowledge data operations
+
+export type ServerDataResponse = DataInsertMessageResponse | DataInsertToolCallResponse | DataAck;
+
+/** Server → Runner: response with generated ID for inserted message */
+export interface DataInsertMessageResponse {
+  type: 'data:insert_message_response';
+  requestId: string;
+  messageId: string;
+}
+
+/** Server → Runner: response with generated ID for inserted tool call */
+export interface DataInsertToolCallResponse {
+  type: 'data:insert_tool_call_response';
+  requestId: string;
+  toolCallId: string;
+}
+
+/** Server → Runner: generic acknowledgment */
+export interface DataAck {
+  type: 'data:ack';
+  requestId: string;
+  success: boolean;
+  error?: string;
+}
+
+// ─── Data Query Protocol ────────────────────────────────
+// Runner → Server: query data from the server
+// Used when runner needs to read data it doesn't have locally
+
+export type RunnerDataQuery = DataGetThread | DataGetToolCall | DataFindToolCall;
+
+/** Runner → Server: get thread by ID */
+export interface DataGetThread {
+  type: 'data:get_thread';
+  requestId: string;
+  threadId: string;
+}
+
+/** Runner → Server: get tool call by ID */
+export interface DataGetToolCall {
+  type: 'data:get_tool_call';
+  requestId: string;
+  toolCallId: string;
+}
+
+/** Runner → Server: find tool call by messageId + name + input (dedup) */
+export interface DataFindToolCall {
+  type: 'data:find_tool_call';
+  requestId: string;
+  payload: {
+    messageId: string;
+    name: string;
+    input: string;
+  };
+}
+
+// Server → Runner: query responses
+export type ServerDataQueryResponse =
+  | DataGetThreadResponse
+  | DataGetToolCallResponse
+  | DataFindToolCallResponse;
+
+export interface DataGetThreadResponse {
+  type: 'data:get_thread_response';
+  requestId: string;
+  thread: Record<string, any> | null;
+}
+
+export interface DataGetToolCallResponse {
+  type: 'data:get_tool_call_response';
+  requestId: string;
+  toolCall: { id: string; name: string; input: string | null; output?: string | null } | null;
+}
+
+export interface DataFindToolCallResponse {
+  type: 'data:find_tool_call_response';
+  requestId: string;
+  toolCall: { id: string } | null;
 }

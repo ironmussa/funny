@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { api } from '@/lib/api';
+import { buildPath } from '@/lib/url';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -105,7 +106,7 @@ export function NewThreadInput() {
     setCreating(false);
     setReviewPaneOpen(false);
     cancelNewThread();
-    navigate(`/projects/${effectiveProjectId}/threads/${result.value.id}`);
+    navigate(buildPath(`/projects/${effectiveProjectId}/threads/${result.value.id}`));
     return true;
   };
 

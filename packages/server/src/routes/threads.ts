@@ -1,15 +1,23 @@
 /**
  * Thread routes for the central server.
  *
- * Intercepts thread creation and deletion to register/unregister
- * threads in the central DB (for routing and listing).
- * All other thread operations are proxied to the runner.
+ * Data CRUD (list, get, update, delete) is handled natively using the server's DB.
+ * Agent operations (create+start, stop, send message) are proxied to the runner.
  */
 
+import {
+  createThreadRepository,
+  createMessageRepository,
+  createCommentRepository,
+  createStageHistoryRepository,
+} from '@funny/shared/repositories';
 import { Hono } from 'hono';
 
+import { db, dbAll, dbGet, dbRun } from '../db/index.js';
+import * as schema from '../db/schema.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
+import { proxyToRunner } from '../middleware/proxy.js';
 import { findRunnerForProject } from '../services/runner-manager.js';
 import * as runnerResolver from '../services/runner-resolver.js';
 import type { ResolvedRunner } from '../services/runner-resolver.js';
@@ -18,11 +26,24 @@ import { tunnelFetch } from '../services/ws-tunnel.js';
 
 const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET!;
 
-/**
- * Resolve a runner for a project, returning runnerId and optional httpUrl.
- */
+// ── Shared repository instances ──────────────────────────────────
+
+const commentRepo = createCommentRepository({ db, schema: schema as any, dbAll, dbRun });
+const stageHistoryRepo = createStageHistoryRepository({ db, schema: schema as any, dbRun });
+const threadRepo = createThreadRepository({
+  db,
+  schema: schema as any,
+  dbAll,
+  dbGet,
+  dbRun,
+  commentRepo,
+  stageHistoryRepo,
+});
+const messageRepo = createMessageRepository({ db, schema: schema as any, dbAll, dbGet, dbRun });
+
+// ── Runner communication helpers ─────────────────────────────────
+
 async function resolveRunnerForProject(projectId: string): Promise<ResolvedRunner | null> {
-  // Try DB-registered runner first
   const runnerResult = await findRunnerForProject(projectId);
   if (runnerResult) {
     return {
@@ -30,25 +51,18 @@ async function resolveRunnerForProject(projectId: string): Promise<ResolvedRunne
       httpUrl: runnerResult.runner.httpUrl ?? null,
     };
   }
-
-  // Fallback to the resolver (which checks DEFAULT_RUNNER_URL and any online runner)
   return await runnerResolver.resolveRunner('/api/threads', { projectId });
 }
 
-/**
- * Send a request to a runner — tunnel-first, fallback to direct HTTP.
- */
 async function fetchFromRunner(
   resolved: ResolvedRunner,
   path: string,
   opts: { method: string; headers: Record<string, string>; body?: string },
 ): Promise<{ ok: boolean; status: number; body: string }> {
-  // For __default__ runnerId (DEFAULT_RUNNER_URL), always use direct HTTP
   if (resolved.runnerId === '__default__' && resolved.httpUrl) {
     return await directFetch(resolved.httpUrl, path, opts);
   }
 
-  // Try tunnel first
   try {
     const resp = await tunnelFetch(resolved.runnerId, {
       method: opts.method,
@@ -62,7 +76,6 @@ async function fetchFromRunner(
       body: resp.body ?? '',
     };
   } catch (tunnelErr) {
-    // Fallback to direct HTTP if available
     if (resolved.httpUrl) {
       log.warn('Tunnel failed, falling back to direct HTTP', {
         namespace: 'threads',
@@ -101,12 +114,136 @@ function buildForwardHeaders(userId: string, orgId?: string): Record<string, str
 
 export const threadRoutes = new Hono<ServerEnv>();
 
-/**
- * POST /api/threads — Create a new thread.
- * 1. Resolve which runner should handle this project
- * 2. Proxy the creation request to the runner
- * 3. Register the thread in the central DB for routing
- */
+// ── Data CRUD routes (handled natively) ──────────────────────────
+
+// GET /api/threads?projectId=xxx&includeArchived=true
+threadRoutes.get('/', async (c) => {
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const projectId = c.req.query('projectId');
+  const includeArchived = c.req.query('includeArchived') === 'true';
+
+  const threads = await threadRepo.listThreads({
+    projectId: projectId || undefined,
+    userId,
+    includeArchived,
+    organizationId: orgId,
+  });
+
+  return c.json(threads);
+});
+
+// GET /api/threads/archived?page=1&limit=100&search=xxx
+threadRoutes.get('/archived', async (c) => {
+  const userId = c.get('userId') as string;
+  const page = Math.max(1, parseInt(c.req.query('page') || '1', 10));
+  const limit = Math.min(1000, Math.max(1, parseInt(c.req.query('limit') || '100', 10)));
+  const search = c.req.query('search')?.trim() || '';
+
+  const result = await threadRepo.listArchivedThreads({ page, limit, search, userId });
+  return c.json({ ...result, page, limit });
+});
+
+// GET /api/threads/:id — get thread with messages
+threadRoutes.get('/:id', async (c) => {
+  const id = c.req.param('id');
+  const result = await messageRepo.getThreadWithMessages(id);
+  if (!result) return c.json({ error: 'Thread not found' }, 404);
+  return c.json(result);
+});
+
+// GET /api/threads/:id/messages?cursor=<ISO>&limit=50
+threadRoutes.get('/:id/messages', async (c) => {
+  const id = c.req.param('id');
+  const cursor = c.req.query('cursor');
+  const limitParam = c.req.query('limit');
+  const limit = Math.min(200, Math.max(1, parseInt(limitParam || '50', 10)));
+
+  const result = await messageRepo.getThreadMessages({
+    threadId: id,
+    cursor: cursor || undefined,
+    limit,
+  });
+  return c.json(result);
+});
+
+// GET /api/threads/:id/comments
+threadRoutes.get('/:id/comments', async (c) => {
+  const comments = await commentRepo.listComments(c.req.param('id'));
+  return c.json(comments);
+});
+
+// POST /api/threads/:id/comments
+threadRoutes.post('/:id/comments', async (c) => {
+  const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+  const { content } = await c.req.json();
+
+  if (!content || typeof content !== 'string') {
+    return c.json({ error: 'content is required' }, 400);
+  }
+
+  const comment = await commentRepo.insertComment({
+    threadId: id,
+    userId,
+    source: 'user',
+    content,
+  });
+  return c.json(comment, 201);
+});
+
+// DELETE /api/threads/:id/comments/:commentId
+threadRoutes.delete('/:id/comments/:commentId', async (c) => {
+  const commentId = c.req.param('commentId');
+  await commentRepo.deleteComment(commentId);
+  return c.json({ ok: true });
+});
+
+// PATCH /api/threads/:id — update thread data
+threadRoutes.patch('/:id', async (c) => {
+  const id = c.req.param('id');
+  const body = await c.req.json();
+
+  const thread = await threadRepo.getThread(id);
+  if (!thread) return c.json({ error: 'Thread not found' }, 404);
+
+  // Extract only valid update fields
+  const allowedFields = [
+    'title',
+    'status',
+    'stage',
+    'archived',
+    'pinned',
+    'model',
+    'mode',
+    'branch',
+    'baseBranch',
+    'permissionMode',
+    'provider',
+    'worktreePath',
+  ];
+  const updates: Record<string, any> = {};
+  for (const key of allowedFields) {
+    if (body[key] !== undefined) {
+      updates[key] = body[key];
+    }
+  }
+
+  // PostgreSQL integer columns need boolean → integer conversion
+  if (typeof updates.pinned === 'boolean') updates.pinned = updates.pinned ? 1 : 0;
+  if (typeof updates.archived === 'boolean') updates.archived = updates.archived ? 1 : 0;
+
+  if (Object.keys(updates).length > 0) {
+    await threadRepo.updateThread(id, updates);
+  }
+
+  const updated = await threadRepo.getThread(id);
+  return c.json(updated);
+});
+
+// ── Thread creation (proxied to runner, then registered locally) ─
+
+// POST /api/threads — Create a new thread
 threadRoutes.post('/', async (c) => {
   const userId = c.get('userId') as string;
   const body = await c.req.json();
@@ -135,7 +272,6 @@ threadRoutes.post('/', async (c) => {
 
     const threadData = JSON.parse(result.body);
 
-    // Register the thread in the central DB
     const threadId = threadData.id || threadData.thread?.id;
     if (threadId && resolved.runnerId !== '__default__') {
       await threadRegistry.registerThread({
@@ -162,9 +298,7 @@ threadRoutes.post('/', async (c) => {
   }
 });
 
-/**
- * POST /api/threads/idle — Create an idle thread.
- */
+// POST /api/threads/idle — Create an idle thread
 threadRoutes.post('/idle', async (c) => {
   const userId = c.get('userId') as string;
   const body = await c.req.json();
@@ -219,14 +353,42 @@ threadRoutes.post('/idle', async (c) => {
   }
 });
 
-/**
- * DELETE /api/threads/:id — Delete a thread.
- */
+// ── Agent operations (proxied to runner) ─────────────────────────
+
+// POST /api/threads/:id/message — send message to running agent
+threadRoutes.post('/:id/message', proxyToRunner);
+
+// POST /api/threads/:id/stop — stop running agent
+threadRoutes.post('/:id/stop', proxyToRunner);
+
+// POST /api/threads/:id/approve-tool — approve a tool call
+threadRoutes.post('/:id/approve-tool', proxyToRunner);
+
+// PATCH /api/threads/:id/tool-calls/:toolCallId — update tool call output
+threadRoutes.patch('/:id/tool-calls/:toolCallId', proxyToRunner);
+
+// GET /api/threads/:id/events — proxy to runner (event storage may be runner-side)
+threadRoutes.get('/:id/events', proxyToRunner);
+
+// GET /api/threads/:id/queue — proxy to runner (message queue is in-memory on runner)
+threadRoutes.get('/:id/queue', proxyToRunner);
+
+// DELETE /api/threads/:id/queue/:messageId — proxy to runner
+threadRoutes.delete('/:id/queue/:messageId', proxyToRunner);
+
+// PATCH /api/threads/:id/queue/:messageId — proxy to runner
+threadRoutes.patch('/:id/queue/:messageId', proxyToRunner);
+
+// ── Delete thread (native + proxy cleanup) ───────────────────────
+
 threadRoutes.delete('/:id', async (c) => {
   const threadId = c.req.param('id');
   const userId = c.get('userId') as string;
 
-  // Find which runner handles this thread
+  // Delete from local DB
+  await threadRepo.deleteThread(threadId);
+
+  // Find which runner handles this thread and clean up there too
   const runnerInfo = await threadRegistry.getRunnerForThread(threadId);
 
   // Unregister from central DB and cache
@@ -252,3 +414,6 @@ threadRoutes.delete('/:id', async (c) => {
 
   return c.json({ ok: true });
 });
+
+// GET /api/threads/search/content?q=xxx&projectId=xxx — proxy to runner (search logic is runner-side)
+threadRoutes.get('/search/content', proxyToRunner);

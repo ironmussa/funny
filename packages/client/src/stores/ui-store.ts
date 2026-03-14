@@ -155,7 +155,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   startNewThread: (projectId: string, idleOnly?: boolean) => {
     // Block thread creation on shared projects that haven't been set up yet
-    const project = useProjectStore.getState().projects.find((p) => p.id === projectId);
+    const project = useProjectStore.getState().projects?.find((p) => p.id === projectId);
     if (project?.needsSetup) return;
 
     invalidateSelectThread();

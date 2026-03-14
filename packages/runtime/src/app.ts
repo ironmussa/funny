@@ -114,6 +114,8 @@ export interface RuntimeApp {
   authenticateWs(
     req: Request,
   ): Promise<{ userId: string; organizationId: string | null; isTranscribe?: boolean } | null>;
+  /** Graceful shutdown — kills child processes, PTY sessions, closes DB. */
+  shutdown(): Promise<void>;
 }
 
 /**
@@ -425,7 +427,12 @@ export async function createRuntimeApp(options: RuntimeAppOptions = {}): Promise
     },
   };
 
-  return { app, init, websocket, authenticateWs };
+  async function shutdown(): Promise<void> {
+    const { shutdownManager } = await import('./services/shutdown-manager.js');
+    await shutdownManager.run('hard');
+  }
+
+  return { app, init, websocket, authenticateWs, shutdown };
 }
 
 // ── Shared PTY message handler ─────────────────────────────────

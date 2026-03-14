@@ -58,6 +58,7 @@ export default defineConfig({
       'src/__tests__/services/agent-runner.test.ts',
       'src/__tests__/services/agent-runner-class.test.ts',
       'src/__tests__/services/automation-manager.test.ts',
+      'src/__tests__/services/pipeline-db.test.ts',
       // Tests that depend on Bun.spawn / Bun runtime
       'src/__tests__/utils/process.test.ts',
       'src/__tests__/utils/git-v2.test.ts',

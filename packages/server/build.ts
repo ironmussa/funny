@@ -11,7 +11,16 @@ await Bun.build({
   outdir: './dist',
   target: 'bun',
   format: 'esm',
-  external: ['better-auth', 'drizzle-orm', 'hono', 'nanoid', 'neverthrow', 'nodemailer'],
+  external: [
+    'better-auth',
+    'drizzle-orm',
+    'hono',
+    'nanoid',
+    'neverthrow',
+    'nodemailer',
+    '@funny/podman-chrome-streaming',
+    'playwright-core',
+  ],
 });
 
 console.log('✓ Central server built successfully');

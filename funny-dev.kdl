@@ -1,0 +1,26 @@
+// funny-dev.kdl — Zellij layout para el stack de desarrollo de Funny
+// Uso: zellij --layout funny-dev.kdl
+
+layout {
+    pane split_direction="vertical" {
+        pane split_direction="horizontal" size="50%" {
+            pane command="bun" name="runner" close_on_exit=false {
+                args "run" "dev:runtime"
+            }
+            pane command="bun" name="client" close_on_exit=false {
+                args "run" "dev:client"
+            }
+            pane command="bun" name="server" close_on_exit=false {
+                args "run" "dev:server"
+            }
+        }
+        pane split_direction="horizontal" size="50%" {
+            pane command="bash" name="storybook" close_on_exit=false {
+                args "-c" "cd packages/client && bun run storybook"
+            }
+            pane command="bash" name="abbacchio" close_on_exit=false {
+                args "-c" "cd ../abbacchio && bun run dev"
+            }
+        }
+    }
+}

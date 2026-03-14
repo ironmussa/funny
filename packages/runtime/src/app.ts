@@ -29,10 +29,7 @@ import { cors } from 'hono/cors';
 import { logger as honoLogger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
 
-import { initPostgres, setConnection } from './db/index.js';
-import { autoMigrate } from './db/migrate.js';
 import { log } from './lib/logger.js';
-import './db/index.js'; // triggers self-registration with shutdownManager
 import { authMiddleware, forwardedAuthMiddleware } from './middleware/auth.js';
 import { handleError } from './middleware/error-handler.js';
 import { rateLimit } from './middleware/rate-limit.js';
@@ -254,9 +251,12 @@ export async function createRuntimeApp(options: RuntimeAppOptions = {}): Promise
     // The runner uses RemoteThreadManager to proxy persistence via WebSocket.
     if (!isRunnerMode) {
       if (!options.skipDbInit) {
+        const { initPostgres } = await import('./db/index.js');
+        const { autoMigrate } = await import('./db/migrate.js');
         await initPostgres();
         await autoMigrate();
       } else if (options.dbConnection) {
+        const { setConnection } = await import('./db/index.js');
         setConnection(options.dbConnection);
       }
 

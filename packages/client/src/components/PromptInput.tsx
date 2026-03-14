@@ -387,13 +387,27 @@ export const PromptInput = memo(function PromptInput({
   // ── Queue fetching ──
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const effectiveThreadId = threadIdProp ?? selectedThreadId;
+  const lastQueueFetchRef = useRef<{ threadId: string; queuedCount: number } | null>(null);
 
   useEffect(() => {
     if (!effectiveThreadId) {
       setQueuedMessages([]);
       setQueueLoading(false);
+      lastQueueFetchRef.current = null;
       return;
     }
+
+    // Skip if we already fired a fetch for this exact threadId + queuedCount
+    // (prevents StrictMode double-fire from issuing duplicate requests)
+    const key = { threadId: effectiveThreadId, queuedCount };
+    if (
+      lastQueueFetchRef.current &&
+      lastQueueFetchRef.current.threadId === key.threadId &&
+      lastQueueFetchRef.current.queuedCount === key.queuedCount
+    ) {
+      return;
+    }
+    lastQueueFetchRef.current = key;
 
     let cancelled = false;
     setQueueLoading(true);

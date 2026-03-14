@@ -66,7 +66,9 @@ async function emitGitStatus(event: GitChangedEvent, ctx: HandlerServiceContext)
   );
 
   if (summaryResult.isErr()) {
-    ctx.log(`Failed to get git status for thread ${threadId}: ${String(summaryResult.error)}`);
+    ctx.log(
+      `Failed to get git status for thread ${threadId}: [${summaryResult.error.type}] ${summaryResult.error.message}`,
+    );
     return;
   }
 

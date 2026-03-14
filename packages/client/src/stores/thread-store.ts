@@ -51,12 +51,18 @@ import {
   setBufferedInitInfo,
   getAndClearWSBuffer,
   clearWSBuffer,
+  getSelectingThreadId,
+  setSelectingThreadId,
 } from './thread-store-internals';
 import * as wsHandlers from './thread-ws-handlers';
 import { useUIStore } from './ui-store';
 
 // Re-export for external consumers
-export { invalidateSelectThread, setAppNavigate } from './thread-store-internals';
+export {
+  invalidateSelectThread,
+  setAppNavigate,
+  getSelectingThreadId,
+} from './thread-store-internals';
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -264,7 +270,11 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // Short-circuit when already deselected to avoid no-op state churn
     if (!threadId && !get().selectedThreadId && !get().activeThread) return;
 
+    // Skip if already loading this exact thread (prevents StrictMode double-fire)
+    if (threadId && threadId === getSelectingThreadId()) return;
+
     const gen = nextSelectGeneration();
+    setSelectingThreadId(threadId);
     // Keep stale activeThread visible during load to avoid layout shift.
     // Only clear it if switching to null (deselect) or to a different thread.
     const prevActive = get().activeThread;
@@ -275,118 +285,128 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     });
     useUIStore.setState({ newThreadProjectId: null, allThreadsProjectId: null });
 
-    if (!threadId) return;
+    if (!threadId) {
+      setSelectingThreadId(null);
+      return;
+    }
 
-    // Use prefetched data if available (fired at module load time), otherwise fetch now
-    const prefetched = _prefetchCache.get(threadId);
-    _prefetchCache.delete(threadId);
-    const [result, eventsResult] = await Promise.all([
-      prefetched?.threadPromise ?? api.getThread(threadId, 50),
-      prefetched?.eventsPromise ?? api.getThreadEvents(threadId),
-    ]);
+    try {
+      // Use prefetched data if available (fired at module load time), otherwise fetch now
+      const prefetched = _prefetchCache.get(threadId);
+      _prefetchCache.delete(threadId);
+      const [result, eventsResult] = await Promise.all([
+        prefetched?.threadPromise ?? api.getThread(threadId, 50),
+        prefetched?.eventsPromise ?? api.getThreadEvents(threadId),
+      ]);
 
-    if (result.isErr()) {
-      if (getSelectGeneration() === gen) {
-        clearWSBuffer(threadId);
-        set({ selectedThreadId: null, activeThread: null });
+      if (result.isErr()) {
+        if (getSelectGeneration() === gen) {
+          clearWSBuffer(threadId);
+          set({ selectedThreadId: null, activeThread: null });
+        }
+        return;
       }
-      return;
-    }
 
-    const thread = result.value;
+      const thread = result.value;
 
-    if (getSelectGeneration() !== gen) {
-      clearWSBuffer(threadId);
-      return;
-    }
+      if (getSelectGeneration() !== gen) {
+        clearWSBuffer(threadId);
+        return;
+      }
 
-    const projectId = thread.projectId;
+      const projectId = thread.projectId;
 
-    // Ensure project is expanded and threads are loaded
-    const projectStore = useProjectStore.getState();
-    if (!projectStore.expandedProjects.has(projectId)) {
-      const next = new Set(projectStore.expandedProjects);
-      next.add(projectId);
-      useProjectStore.setState({ expandedProjects: next });
-    }
-    if (!get().threadsByProject[projectId]) {
-      get().loadThreadsForProject(projectId);
-    }
+      // Ensure project is expanded and threads are loaded
+      const projectStore = useProjectStore.getState();
+      if (!projectStore.expandedProjects.has(projectId)) {
+        const next = new Set(projectStore.expandedProjects);
+        next.add(projectId);
+        useProjectStore.setState({ expandedProjects: next });
+      }
+      if (!get().threadsByProject[projectId]) {
+        get().loadThreadsForProject(projectId);
+      }
 
-    const buffered = getBufferedInitInfo(threadId);
-    const resultInfo =
-      thread.status === 'completed' || thread.status === 'failed'
-        ? {
-            status: thread.status as 'completed' | 'failed',
-            cost: thread.cost,
-            duration: 0,
-            error: (thread as any).error,
+      const buffered = getBufferedInitInfo(threadId);
+      const resultInfo =
+        thread.status === 'completed' || thread.status === 'failed'
+          ? {
+              status: thread.status as 'completed' | 'failed',
+              cost: thread.cost,
+              duration: 0,
+              error: (thread as any).error,
+            }
+          : undefined;
+
+      // Derive waitingReason and pendingPermission from the last tool call when reloading a waiting thread
+      let waitingReason: WaitingReason | undefined;
+      let pendingPermission: { toolName: string } | undefined;
+      if (thread.status === 'waiting' && thread.messages?.length) {
+        for (let i = thread.messages.length - 1; i >= 0; i--) {
+          const tcs = thread.messages[i].toolCalls;
+          if (tcs?.length) {
+            const lastTC = tcs[tcs.length - 1];
+            if (lastTC.name === 'AskUserQuestion') {
+              waitingReason = 'question';
+            } else if (lastTC.name === 'ExitPlanMode') {
+              waitingReason = 'plan';
+            } else if (
+              lastTC.output &&
+              /permission|hasn't been granted|not in the allowed tools/i.test(lastTC.output)
+            ) {
+              waitingReason = 'permission';
+              pendingPermission = { toolName: lastTC.name };
+            }
+            break;
           }
-        : undefined;
-
-    // Derive waitingReason and pendingPermission from the last tool call when reloading a waiting thread
-    let waitingReason: WaitingReason | undefined;
-    let pendingPermission: { toolName: string } | undefined;
-    if (thread.status === 'waiting' && thread.messages?.length) {
-      for (let i = thread.messages.length - 1; i >= 0; i--) {
-        const tcs = thread.messages[i].toolCalls;
-        if (tcs?.length) {
-          const lastTC = tcs[tcs.length - 1];
-          if (lastTC.name === 'AskUserQuestion') {
-            waitingReason = 'question';
-          } else if (lastTC.name === 'ExitPlanMode') {
-            waitingReason = 'plan';
-          } else if (
-            lastTC.output &&
-            /permission|hasn't been granted|not in the allowed tools/i.test(lastTC.output)
-          ) {
-            waitingReason = 'permission';
-            pendingPermission = { toolName: lastTC.name };
-          }
-          break;
         }
       }
-    }
 
-    const threadEvents = eventsResult.isOk() ? eventsResult.value.events : [];
+      const threadEvents = eventsResult.isOk() ? eventsResult.value.events : [];
 
-    // Reconstruct compactionEvents from persisted thread events so they survive refreshes
-    const compactionEvents: CompactionEvent[] = threadEvents
-      .filter((e) => e.type === 'compact_boundary')
-      .map((e) => {
-        const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
-        return {
-          trigger: data.trigger ?? 'auto',
-          preTokens: data.preTokens ?? 0,
-          timestamp: data.timestamp ?? e.createdAt,
-        };
+      // Reconstruct compactionEvents from persisted thread events so they survive refreshes
+      const compactionEvents: CompactionEvent[] = threadEvents
+        .filter((e) => e.type === 'compact_boundary')
+        .map((e) => {
+          const data = typeof e.data === 'string' ? JSON.parse(e.data) : e.data;
+          return {
+            trigger: data.trigger ?? 'auto',
+            preTokens: data.preTokens ?? 0,
+            timestamp: data.timestamp ?? e.createdAt,
+          };
+        });
+
+      // Merge stored setup progress for setting_up threads
+      const storedSetupProgress =
+        thread.status === 'setting_up' ? get().setupProgressByThread[threadId] : undefined;
+
+      // Restore cached context usage so the bar survives thread switches
+      const storedContextUsage = get().contextUsageByThread[threadId];
+
+      set({
+        activeThread: {
+          ...thread,
+          hasMore: thread.hasMore ?? false,
+          threadEvents,
+          initInfo: thread.initInfo || buffered || undefined,
+          resultInfo,
+          waitingReason,
+          pendingPermission,
+          setupProgress: storedSetupProgress,
+          contextUsage: storedContextUsage,
+          compactionEvents: compactionEvents.length > 0 ? compactionEvents : undefined,
+        },
       });
+      useProjectStore.setState({ selectedProjectId: projectId });
 
-    // Merge stored setup progress for setting_up threads
-    const storedSetupProgress =
-      thread.status === 'setting_up' ? get().setupProgressByThread[threadId] : undefined;
-
-    // Restore cached context usage so the bar survives thread switches
-    const storedContextUsage = get().contextUsageByThread[threadId];
-
-    set({
-      activeThread: {
-        ...thread,
-        hasMore: thread.hasMore ?? false,
-        threadEvents,
-        initInfo: thread.initInfo || buffered || undefined,
-        resultInfo,
-        waitingReason,
-        pendingPermission,
-        setupProgress: storedSetupProgress,
-        contextUsage: storedContextUsage,
-        compactionEvents: compactionEvents.length > 0 ? compactionEvents : undefined,
-      },
-    });
-    useProjectStore.setState({ selectedProjectId: projectId });
-
-    // Replay any WS events that arrived while activeThread was loading
-    flushWSBuffer(threadId, get());
+      // Replay any WS events that arrived while activeThread was loading
+      flushWSBuffer(threadId, get());
+    } finally {
+      // Clear in-flight tracker so future selectThread calls for this thread can proceed
+      if (getSelectingThreadId() === threadId) {
+        setSelectingThreadId(null);
+      }
+    }
   },
 
   archiveThread: async (threadId, projectId) => {

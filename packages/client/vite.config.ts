@@ -1,7 +1,6 @@
 import { resolve } from 'path';
 
 import react from '@vitejs/plugin-react';
-/// <reference types="vitest" />
 import { defineConfig, loadEnv } from 'vite';
 
 export default defineConfig(({ mode }) => {
@@ -14,21 +13,11 @@ export default defineConfig(({ mode }) => {
   const wsTarget = `ws://127.0.0.1:${serverPort}`;
 
   return {
-    plugins: [
-      react({
-        jsxImportSource:
-          mode === 'development' ? '@welldone-software/why-did-you-render' : undefined,
-      }),
-    ],
+    plugins: [react()],
     resolve: {
       alias: {
         '@': resolve(__dirname, './src'),
       },
-    },
-    test: {
-      globals: true,
-      environment: 'jsdom',
-      setupFiles: ['./src/__tests__/setup.ts'],
     },
     build: {
       rollupOptions: {

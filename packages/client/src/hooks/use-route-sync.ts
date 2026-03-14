@@ -7,7 +7,7 @@ import { authClient } from '@/lib/auth-client';
 import { stripOrgPrefix } from '@/lib/url';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
-import { useThreadStore } from '@/stores/thread-store';
+import { useThreadStore, getSelectingThreadId } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 function parseRoute(pathname: string) {
@@ -413,10 +413,14 @@ export function useRouteSync() {
     if (threadId) {
       // Re-select if the thread ID changed, or if the thread ID matches but
       // activeThread failed to load (e.g. due to a race condition or API error).
+      // Skip if selectThread is already in-flight for this thread (prevents
+      // StrictMode double-fire from re-triggering while the first call is loading).
+      const alreadyLoading = getSelectingThreadId() === threadId;
       if (
-        threadId !== threadStore.selectedThreadId ||
-        !threadStore.activeThread ||
-        threadStore.activeThread.id !== threadId
+        !alreadyLoading &&
+        (threadId !== threadStore.selectedThreadId ||
+          !threadStore.activeThread ||
+          threadStore.activeThread.id !== threadId)
       ) {
         threadStore.selectThread(threadId);
       }

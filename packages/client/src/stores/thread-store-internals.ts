@@ -24,6 +24,19 @@ export function invalidateSelectThread(): void {
   selectGeneration++;
 }
 
+// ── In-flight select tracking ───────────────────────────────────
+
+/** The threadId currently being loaded by selectThread (null if idle) */
+let _selectingThreadId: string | null = null;
+
+export function getSelectingThreadId(): string | null {
+  return _selectingThreadId;
+}
+
+export function setSelectingThreadId(threadId: string | null): void {
+  _selectingThreadId = threadId;
+}
+
 // ── Init info buffer ────────────────────────────────────────────
 
 /** Buffer init info that arrives before the thread is active */

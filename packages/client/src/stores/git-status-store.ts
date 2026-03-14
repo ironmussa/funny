@@ -167,14 +167,22 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
     // Resolve branchKey from server mapping or compute client-side from thread data.
     // This ensures threads sharing a branch share the same cooldown key.
     const bk = resolveBranchKey(threadId, get().threadToBranchKey);
-    const cooldownKey = bk || `pending:${threadId}`;
+    const pendingKey = `pending:${threadId}`;
+    const cooldownKey = bk || pendingKey;
 
     if (bk && get()._loadingBranchKeys.has(bk)) return;
-    // Skip if fetched recently (shared cooldown per branch)
+    // Skip if fetched recently (shared cooldown per branch).
+    // Check both the resolved key and the pending key to prevent duplicates
+    // when the branchKey becomes known mid-flight (race between pending and resolved).
     const now = Date.now();
-    const lastFetch = _lastFetchByBranch.get(cooldownKey) ?? 0;
+    const lastFetch = Math.max(
+      _lastFetchByBranch.get(cooldownKey) ?? 0,
+      bk ? (_lastFetchByBranch.get(pendingKey) ?? 0) : 0,
+    );
     if (now - lastFetch < BRANCH_FETCH_COOLDOWN_MS) return;
     _lastFetchByBranch.set(cooldownKey, now);
+    // Also stamp the pending key so a concurrent call using the other key sees the cooldown
+    if (bk) _lastFetchByBranch.set(pendingKey, now);
 
     if (bk) {
       set((s) => ({ _loadingBranchKeys: new Set([...s._loadingBranchKeys, bk]) }));
@@ -184,8 +192,10 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
       if (result.isOk()) {
         const status = result.value;
         const key = status.branchKey;
-        // Update cooldown with the real branchKey
+        // Update cooldown with the real branchKey + pending key so concurrent
+        // callers using either key are correctly deduped
         _lastFetchByBranch.set(key, now);
+        _lastFetchByBranch.set(pendingKey, now);
         set((state) => {
           const statusPatch = mergeStatuses(state, { [key]: status });
           const keyChanged = state.threadToBranchKey[threadId] !== key;

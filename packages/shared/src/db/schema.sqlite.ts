@@ -5,7 +5,23 @@
  * Both packages/runtime and packages/server import from here.
  */
 
-import { sqliteTable, text, real, integer, primaryKey } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, real, integer, primaryKey, customType } from 'drizzle-orm/sqlite-core';
+
+/**
+ * Text column that also accepts Date objects (serializes them to ISO strings).
+ * Required for Better Auth's Drizzle adapter, which passes `new Date()` for timestamp fields.
+ */
+const dateText = customType<{ data: string; driverData: string }>({
+  dataType() {
+    return 'TEXT';
+  },
+  toDriver(value: string | Date): string {
+    return value instanceof Date ? value.toISOString() : value;
+  },
+  fromDriver(value: string): string {
+    return value;
+  },
+});
 
 import {
   DEFAULT_FOLLOW_UP_MODE,
@@ -371,4 +387,98 @@ export const inviteLinks = sqliteTable('invite_links', {
   useCount: text('use_count').notNull().default('0'),
   revoked: text('revoked').notNull().default('0'),
   createdAt: text('created_at').notNull(),
+});
+
+// ── Better Auth tables ──────────────────────────────────────────
+// These must be passed explicitly to drizzleAdapter since they live
+// outside the runtime schema. Column names match migration 026.
+
+export const user = sqliteTable('user', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  email: text('email').notNull().unique(),
+  emailVerified: integer('email_verified').notNull().default(0),
+  image: text('image'),
+  createdAt: dateText('created_at').notNull(),
+  updatedAt: dateText('updated_at').notNull(),
+  username: text('username').unique(),
+  role: text('role'),
+  banned: integer('banned'),
+  banReason: text('ban_reason'),
+  banExpires: dateText('ban_expires'),
+});
+
+export const session = sqliteTable('session', {
+  id: text('id').primaryKey(),
+  expiresAt: dateText('expires_at').notNull(),
+  token: text('token').notNull().unique(),
+  createdAt: dateText('created_at').notNull(),
+  updatedAt: dateText('updated_at').notNull(),
+  ipAddress: text('ip_address'),
+  userAgent: text('user_agent'),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+});
+
+export const account = sqliteTable('account', {
+  id: text('id').primaryKey(),
+  accountId: text('account_id').notNull(),
+  providerId: text('provider_id').notNull(),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  accessToken: text('access_token'),
+  refreshToken: text('refresh_token'),
+  idToken: text('id_token'),
+  accessTokenExpiresAt: dateText('access_token_expires_at'),
+  refreshTokenExpiresAt: dateText('refresh_token_expires_at'),
+  scope: text('scope'),
+  password: text('password'),
+  createdAt: dateText('created_at').notNull(),
+  updatedAt: dateText('updated_at').notNull(),
+});
+
+export const verification = sqliteTable('verification', {
+  id: text('id').primaryKey(),
+  identifier: text('identifier').notNull(),
+  value: text('value').notNull(),
+  expiresAt: dateText('expires_at').notNull(),
+  createdAt: dateText('created_at'),
+  updatedAt: dateText('updated_at'),
+});
+
+export const organization = sqliteTable('organization', {
+  id: text('id').primaryKey(),
+  name: text('name').notNull(),
+  slug: text('slug').unique(),
+  logo: text('logo'),
+  createdAt: dateText('created_at').notNull(),
+  metadata: text('metadata'),
+});
+
+export const member = sqliteTable('member', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id')
+    .notNull()
+    .references(() => organization.id, { onDelete: 'cascade' }),
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+  role: text('role').notNull(),
+  createdAt: dateText('created_at').notNull(),
+});
+
+export const invitation = sqliteTable('invitation', {
+  id: text('id').primaryKey(),
+  organizationId: text('organization_id')
+    .notNull()
+    .references(() => organization.id, { onDelete: 'cascade' }),
+  email: text('email').notNull(),
+  role: text('role'),
+  status: text('status').notNull(),
+  expiresAt: dateText('expires_at').notNull(),
+  inviterId: text('inviter_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
 });

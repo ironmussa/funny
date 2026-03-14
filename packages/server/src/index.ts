@@ -62,7 +62,11 @@ const { initDatabase } = await import('./db/index.js');
 const { autoMigrate } = await import('./db/migrate.js');
 const { initBetterAuth, auth } = await import('./lib/auth.js');
 
-await initDatabase();
+const dbResult = await initDatabase();
+if (dbResult.isErr()) {
+  log.error(dbResult.error, { namespace: 'db' });
+  process.exit(1);
+}
 await autoMigrate();
 await initBetterAuth();
 authInstance = auth;
@@ -81,6 +85,8 @@ if (useLocalRunner) {
     dbConnection: getConnection()!,
   });
   await runtimeApp.init();
+  const { setLocalRunnerFetch } = await import('./lib/local-runner.js');
+  setLocalRunnerFetch(runtimeApp.app.fetch.bind(runtimeApp.app));
   log.info('Local runner started in-process', { namespace: 'server' });
 }
 

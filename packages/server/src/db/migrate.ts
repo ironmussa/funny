@@ -652,6 +652,107 @@ const migrations: Migration[] = [
       await ctx().addColumn('user_profiles', 'assemblyai_api_key', 'TEXT');
     },
   },
+
+  {
+    // Better Auth tables — only needed in SQLite mode.
+    // In PostgreSQL mode, Better Auth uses the Kysely adapter and handles its own migrations.
+    name: '026_better_auth_tables',
+    async up() {
+      if (ctx().isPg) return;
+
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS "user" (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          email TEXT NOT NULL UNIQUE,
+          email_verified INTEGER NOT NULL DEFAULT 0,
+          image TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          username TEXT UNIQUE,
+          role TEXT,
+          banned INTEGER,
+          ban_reason TEXT,
+          ban_expires TEXT
+        )
+      `);
+
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS session (
+          id TEXT PRIMARY KEY,
+          expires_at TEXT NOT NULL,
+          token TEXT NOT NULL UNIQUE,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL,
+          ip_address TEXT,
+          user_agent TEXT,
+          user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE
+        )
+      `);
+
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS account (
+          id TEXT PRIMARY KEY,
+          account_id TEXT NOT NULL,
+          provider_id TEXT NOT NULL,
+          user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+          access_token TEXT,
+          refresh_token TEXT,
+          id_token TEXT,
+          access_token_expires_at TEXT,
+          refresh_token_expires_at TEXT,
+          scope TEXT,
+          password TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT NOT NULL
+        )
+      `);
+
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS verification (
+          id TEXT PRIMARY KEY,
+          identifier TEXT NOT NULL,
+          value TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          created_at TEXT,
+          updated_at TEXT
+        )
+      `);
+
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS organization (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          slug TEXT UNIQUE,
+          logo TEXT,
+          created_at TEXT NOT NULL,
+          metadata TEXT
+        )
+      `);
+
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS member (
+          id TEXT PRIMARY KEY,
+          organization_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE,
+          role TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        )
+      `);
+
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS invitation (
+          id TEXT PRIMARY KEY,
+          organization_id TEXT NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
+          email TEXT NOT NULL,
+          role TEXT,
+          status TEXT NOT NULL,
+          expires_at TEXT NOT NULL,
+          inviter_id TEXT NOT NULL REFERENCES "user"(id) ON DELETE CASCADE
+        )
+      `);
+    },
+  },
 ];
 
 export async function autoMigrate() {

@@ -80,8 +80,44 @@ settingsRoutes.put('/smtp', async (c) => {
   return c.json({ ok: true });
 });
 
-// POST /api/settings/smtp/test — proxy to runner (needs nodemailer)
+// POST /api/settings/smtp/test — send a test email using stored SMTP settings
 settingsRoutes.post('/smtp/test', async (c) => {
-  const { proxyToRunner } = await import('../middleware/proxy.js');
-  return proxyToRunner(c as any);
+  const [host, port, user, from, pass] = await Promise.all([
+    getSetting('smtp_host'),
+    getSetting('smtp_port'),
+    getSetting('smtp_user'),
+    getSetting('smtp_from'),
+    getSetting('smtp_pass'),
+  ]);
+
+  const smtpHost = host || process.env.SMTP_HOST;
+  const smtpFrom = from || process.env.SMTP_FROM;
+  if (!smtpHost || !smtpFrom) {
+    return c.json({ error: 'SMTP not configured' }, 400);
+  }
+
+  try {
+    const nodemailer = await import('nodemailer');
+    const transport = nodemailer.createTransport({
+      host: smtpHost,
+      port: Number(port || process.env.SMTP_PORT || '587'),
+      secure: Number(port || process.env.SMTP_PORT || '587') === 465,
+      auth: {
+        user: user || process.env.SMTP_USER || '',
+        pass: pass || process.env.SMTP_PASS || '',
+      },
+    });
+
+    await transport.sendMail({
+      from: smtpFrom,
+      to: smtpFrom,
+      subject: 'Funny SMTP Test',
+      text: 'This is a test email from Funny to verify your SMTP settings are working correctly.',
+    });
+
+    return c.json({ ok: true, sentTo: smtpFrom });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : String(err);
+    return c.json({ error: message }, 502);
+  }
 });

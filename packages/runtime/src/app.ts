@@ -2,10 +2,9 @@
  * Runtime Hono application factory.
  *
  * Exports `createRuntimeApp()` which builds the Hono app with all routes
- * and middleware, without starting Bun.serve(). The server package mounts
- * this app in-process and handles auth; the runtime receives user identity
- * via X-Forwarded-User headers. When TEAM_SERVER_URL is set, the runtime
- * also connects to the central server as a runner.
+ * and middleware, without starting Bun.serve(). The runtime always connects
+ * to a central server as a remote runner; user identity is received via
+ * X-Forwarded-User headers or validated against the central server.
  */
 
 import { existsSync } from 'fs';
@@ -49,18 +48,11 @@ import { testRoutes } from './routes/tests.js';
 import { threadRoutes } from './routes/threads.js';
 import { worktreeRoutes } from './routes/worktrees.js';
 import { startAgent } from './services/agent-runner.js';
-import { startScheduler } from './services/automation-scheduler.js';
-import { rehydrateWatchers } from './services/git-watcher-service.js';
 import { registerAllHandlers } from './services/handlers/handler-registry.js';
 import type { HandlerServiceContext } from './services/handlers/types.js';
-import { startExternalThreadSweep } from './services/ingest-mapper.js';
 import * as ptyManager from './services/pty-manager.js';
 import type { RuntimeServiceProvider } from './services/service-provider.js';
 import { getServices, setServices } from './services/service-registry.js';
-import {
-  markStaleThreadsInterrupted,
-  markStaleExternalThreadsStopped,
-} from './services/thread-manager.js';
 import * as tm from './services/thread-manager.js';
 import { handleTranscribeWs } from './services/transcribe-stream.js';
 import { wsBroker } from './services/ws-broker.js';
@@ -252,8 +244,6 @@ export async function createRuntimeApp(options: RuntimeAppOptions): Promise<Runt
       log.info('Stateless runner service provider created', { namespace: 'server' });
     }
 
-    const isRunnerMode = !!process.env.TEAM_SERVER_URL;
-
     // Share the DB connection for legacy subsystems that still use direct access
     // (pty-manager, runner-manager, email). Will be removed once those are migrated.
     if (options.dbConnection) {
@@ -261,29 +251,7 @@ export async function createRuntimeApp(options: RuntimeAppOptions): Promise<Runt
       setConnection(options.dbConnection);
     }
 
-    if (!isRunnerMode) {
-      void startScheduler();
-
-      if (!options.skipAuthSetup) {
-        const { initBetterAuth } = await import('./lib/auth.js');
-        await initBetterAuth();
-        log.info('Auth: Better Auth (local)', { namespace: 'server' });
-      } else {
-        log.info('Auth: forwarded from server', { namespace: 'server' });
-      }
-
-      // Mark stale threads
-      await markStaleThreadsInterrupted();
-      await markStaleExternalThreadsStopped();
-
-      // Re-register watchers
-      void rehydrateWatchers();
-
-      // Periodic sweep for external threads
-      startExternalThreadSweep();
-    } else {
-      log.info('Runner mode — skipping auth and scheduler', { namespace: 'server' });
-    }
+    log.info('Runner mode — skipping auth and scheduler', { namespace: 'server' });
 
     // Register handler registry (needed in both modes for tunnel:request handling)
     const handlerCtx: HandlerServiceContext = {
@@ -313,26 +281,24 @@ export async function createRuntimeApp(options: RuntimeAppOptions): Promise<Runt
     // Eagerly load native git
     getNativeGit();
 
-    // Runner mode — connect to central server when TEAM_SERVER_URL is set
-    if (process.env.TEAM_SERVER_URL) {
-      if (!process.env.RUNNER_AUTH_SECRET) {
-        log.error('RUNNER_AUTH_SECRET is required when TEAM_SERVER_URL is set.', {
-          namespace: 'server',
-        });
-        process.exit(1);
-      }
-      const { initTeamMode, setBrowserWSHandler, setLocalApp } =
-        await import('./services/team-client.js');
-      await initTeamMode(process.env.TEAM_SERVER_URL);
-      // Register the local app so tunnel:request messages can be forwarded to it
-      setLocalApp(app);
-
-      setBrowserWSHandler(async (userId, data, respond) => {
-        const parsed = data as { type: string; data: any };
-        if (!parsed?.type) return;
-        handlePtyMessage(parsed.type, parsed.data, userId, (msg) => respond(msg));
+    // Connect to central server
+    if (!process.env.RUNNER_AUTH_SECRET) {
+      log.error('RUNNER_AUTH_SECRET is required when TEAM_SERVER_URL is set.', {
+        namespace: 'server',
       });
+      process.exit(1);
     }
+    const { initTeamMode, setBrowserWSHandler, setLocalApp } =
+      await import('./services/team-client.js');
+    await initTeamMode(process.env.TEAM_SERVER_URL!);
+    // Register the local app so tunnel:request messages can be forwarded to it
+    setLocalApp(app);
+
+    setBrowserWSHandler(async (userId, data, respond) => {
+      const parsed = data as { type: string; data: any };
+      if (!parsed?.type) return;
+      handlePtyMessage(parsed.type, parsed.data, userId, (msg) => respond(msg));
+    });
   }
 
   // ── WebSocket authentication ───────────────────────────────────

@@ -30,7 +30,6 @@ import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
 import { buildThreadContext, needsContextRecovery } from './thread-context-builder.js';
 import { threadEventBus } from './thread-event-bus.js';
-import * as tm from './thread-manager.js';
 import { transitionStatus } from './thread-status-machine.js';
 import { wsBroker } from './ws-broker.js';
 
@@ -523,12 +522,9 @@ export class AgentRunner {
 
 import { createRemoteThreadManager } from './remote-thread-manager.js';
 
-// In team mode, use the remote thread manager that delegates persistence
-// to the central server via WebSocket. In standalone mode, use local DB.
-// Check env var directly to avoid circular import with team-client.ts at init time.
-const threadManager: IThreadManager = process.env.TEAM_SERVER_URL
-  ? createRemoteThreadManager()
-  : tm;
+// Always use the remote thread manager that delegates persistence
+// to the central server via WebSocket tunnel.
+const threadManager: IThreadManager = createRemoteThreadManager();
 
 const defaultRunner = new AgentRunner(threadManager, wsBroker, defaultProcessFactory);
 

@@ -113,6 +113,14 @@ export async function handleDataMessage(runnerId: string, data: any): Promise<vo
       case 'data:update_thread': {
         const threadRepo = getThreadRepo();
         await threadRepo.updateThread(data.payload.threadId, data.payload.updates);
+        // Respond so the runner can await confirmation
+        if (data.requestId) {
+          sendToRunner(runnerId, {
+            type: 'data:update_thread_response',
+            requestId: data.requestId,
+            ok: true,
+          });
+        }
         break;
       }
 

@@ -62,23 +62,6 @@ async function fetchFromRunner(
   path: string,
   opts: { method: string; headers: Record<string, string>; body?: string },
 ): Promise<{ ok: boolean; status: number; body: string }> {
-  // Local runner: use in-process runtime directly
-  const { getLocalRunnerFetch } = await import('../lib/local-runner.js');
-  const localFetch = getLocalRunnerFetch();
-  if (localFetch) {
-    const headers = new Headers(opts.headers);
-    const url = `http://localhost${path}`;
-    const resp = await localFetch(
-      new Request(url, {
-        method: opts.method,
-        headers,
-        body: opts.body,
-      }),
-    );
-    const body = await resp.text();
-    return { ok: resp.ok, status: resp.status, body };
-  }
-
   if (resolved.runnerId === '__default__' && resolved.httpUrl) {
     return await directFetch(resolved.httpUrl, path, opts);
   }
@@ -273,10 +256,7 @@ threadRoutes.post('/', async (c) => {
     return c.json({ error: 'projectId is required' }, 400);
   }
 
-  const { getLocalRunnerFetch } = await import('../lib/local-runner.js');
-  const resolved = getLocalRunnerFetch()
-    ? { runnerId: '__local__', httpUrl: null }
-    : await resolveRunnerForProject(projectId, userId);
+  const resolved = await resolveRunnerForProject(projectId, userId);
   if (!resolved) {
     return c.json({ error: 'No online runner found for this project' }, 502);
   }
@@ -331,10 +311,7 @@ threadRoutes.post('/idle', async (c) => {
     return c.json({ error: 'projectId is required' }, 400);
   }
 
-  const { getLocalRunnerFetch } = await import('../lib/local-runner.js');
-  const resolved = getLocalRunnerFetch()
-    ? { runnerId: '__local__', httpUrl: null }
-    : await resolveRunnerForProject(projectId, userId);
+  const resolved = await resolveRunnerForProject(projectId, userId);
   if (!resolved) {
     return c.json({ error: 'No online runner found for this project' }, 502);
   }

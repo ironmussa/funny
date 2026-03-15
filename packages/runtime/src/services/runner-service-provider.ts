@@ -1,8 +1,8 @@
 /**
- * Minimal service provider for stateless runner mode.
+ * Service provider for the runtime runner.
  *
- * When the runtime runs as a remote runner (TEAM_SERVER_URL is set),
- * it has no local database. This provider:
+ * The runtime always runs as a remote runner connected to the central server.
+ * This provider:
  *  - Proxies thread/message/toolcall/project ops via the WebSocket tunnel
  *    (using remote* functions from team-client.ts)
  *  - Provides no-op stubs for server-only concerns (analytics, search, etc.)
@@ -12,7 +12,6 @@
 
 import { ok, err } from 'neverthrow';
 
-import { log } from '../lib/logger.js';
 import type { RuntimeServiceProvider } from './service-provider.js';
 import { wsBroker } from './ws-broker.js';
 
@@ -25,13 +24,12 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
     // ── Threads — proxy to server via team-client ────────────
     threads: {
       async getThread(id) {
-        const { isTeamModeActive, remoteGetThread } = await import('./team-client.js');
-        if (isTeamModeActive()) return remoteGetThread(id);
-        return undefined;
+        const { remoteGetThread } = await import('./team-client.js');
+        return remoteGetThread(id);
       },
       async updateThread(id, updates) {
-        const { isTeamModeActive, remoteUpdateThread } = await import('./team-client.js');
-        if (isTeamModeActive()) return remoteUpdateThread(id, updates);
+        const { remoteUpdateThread } = await import('./team-client.js');
+        return remoteUpdateThread(id, updates);
       },
       async getThreadWithMessages(_id) {
         // Read-heavy — forwarded via HTTP tunnel, not here
@@ -47,14 +45,12 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         return undefined;
       },
       async createThread(data) {
-        const { isTeamModeActive, remoteCreateThread } = await import('./team-client.js');
-        if (isTeamModeActive()) return remoteCreateThread(data);
-        notAvailable('createThread');
+        const { remoteCreateThread } = await import('./team-client.js');
+        return remoteCreateThread(data);
       },
       async deleteThread(id) {
-        const { isTeamModeActive, remoteDeleteThread } = await import('./team-client.js');
-        if (isTeamModeActive()) return remoteDeleteThread(id);
-        notAvailable('deleteThread');
+        const { remoteDeleteThread } = await import('./team-client.js');
+        return remoteDeleteThread(id);
       },
       async markStaleThreadsInterrupted() {},
       async markStaleExternalThreadsStopped() {},
@@ -62,32 +58,28 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         return [];
       },
       async insertMessage(data) {
-        const { isTeamModeActive, remoteInsertMessage } = await import('./team-client.js');
-        if (isTeamModeActive()) return remoteInsertMessage(data);
-        return '';
+        const { remoteInsertMessage } = await import('./team-client.js');
+        return remoteInsertMessage(data);
       },
       async updateMessage(id, content) {
-        const { isTeamModeActive, remoteUpdateMessage } = await import('./team-client.js');
-        if (isTeamModeActive()) return remoteUpdateMessage(id, content);
+        const { remoteUpdateMessage } = await import('./team-client.js');
+        return remoteUpdateMessage(id, content);
       },
       async insertToolCall(data) {
-        const { isTeamModeActive, remoteInsertToolCall } = await import('./team-client.js');
-        if (isTeamModeActive()) return remoteInsertToolCall(data);
-        return '';
+        const { remoteInsertToolCall } = await import('./team-client.js');
+        return remoteInsertToolCall(data);
       },
       async updateToolCallOutput(id, output) {
-        const { isTeamModeActive, remoteUpdateToolCallOutput } = await import('./team-client.js');
-        if (isTeamModeActive()) return remoteUpdateToolCallOutput(id, output);
+        const { remoteUpdateToolCallOutput } = await import('./team-client.js');
+        return remoteUpdateToolCallOutput(id, output);
       },
       async findToolCall(messageId, name, input) {
-        const { isTeamModeActive, remoteFindToolCall } = await import('./team-client.js');
-        if (isTeamModeActive()) return remoteFindToolCall(messageId, name, input);
-        return undefined;
+        const { remoteFindToolCall } = await import('./team-client.js');
+        return remoteFindToolCall(messageId, name, input);
       },
       async getToolCall(id) {
-        const { isTeamModeActive, remoteGetToolCall } = await import('./team-client.js');
-        if (isTeamModeActive()) return remoteGetToolCall(id);
-        return undefined;
+        const { remoteGetToolCall } = await import('./team-client.js');
+        return remoteGetToolCall(id);
       },
       async findLastUnansweredInteractiveToolCall() {
         return undefined;
@@ -110,9 +102,8 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
     // ── Projects — proxy reads to server, writes handled by server routes ──
     projects: {
       async listProjects(userId) {
-        const { isTeamModeActive, remoteListProjects } = await import('./team-client.js');
-        if (isTeamModeActive()) return remoteListProjects(userId);
-        return [];
+        const { remoteListProjects } = await import('./team-client.js');
+        return remoteListProjects(userId);
       },
       async listProjectsByOrg() {
         return [];
@@ -121,9 +112,8 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         return false;
       },
       async getProject(id) {
-        const { isTeamModeActive, remoteGetProject } = await import('./team-client.js');
-        if (isTeamModeActive()) return remoteGetProject(id);
-        return undefined;
+        const { remoteGetProject } = await import('./team-client.js');
+        return remoteGetProject(id);
       },
       async projectNameExists() {
         return false;
@@ -140,16 +130,13 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         return null;
       },
       async resolveProjectPath(projectId, userId) {
-        const { isTeamModeActive, remoteResolveProjectPath } = await import('./team-client.js');
-        if (isTeamModeActive()) {
-          const result = await remoteResolveProjectPath(projectId, userId);
-          if (result.ok && result.path) return ok(result.path);
-          return err({
-            type: 'BAD_REQUEST' as const,
-            message: result.error || 'Failed to resolve project path',
-          });
-        }
-        notAvailable('resolveProjectPath');
+        const { remoteResolveProjectPath } = await import('./team-client.js');
+        const result = await remoteResolveProjectPath(projectId, userId);
+        if (result.ok && result.path) return ok(result.path);
+        return err({
+          type: 'BAD_REQUEST' as const,
+          message: result.error || 'Failed to resolve project path',
+        });
       },
       async reorderProjects() {
         notAvailable('reorderProjects');
@@ -279,9 +266,8 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
 
     messageQueue: {
       async enqueue(threadId, data) {
-        const { isTeamModeActive, remoteEnqueueMessage } = await import('./team-client.js');
-        if (isTeamModeActive()) return remoteEnqueueMessage(threadId, data);
-        notAvailable('enqueue');
+        const { remoteEnqueueMessage } = await import('./team-client.js');
+        return remoteEnqueueMessage(threadId, data);
       },
       async peek() {
         return null;

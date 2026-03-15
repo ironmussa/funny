@@ -42,12 +42,26 @@ export type BrowserWSHandler = (
 /** A Hono-like app that can handle fetch requests */
 type FetchableApp = { fetch: (request: Request) => Promise<Response> | Response };
 
+/** WebSocket reconnection with exponential backoff */
+const WS_RECONNECT = {
+  BASE_DELAY_MS: 1_000,
+  MAX_DELAY_MS: 30_000,
+  BACKOFF_FACTOR: 2,
+  /** How often we send a protocol-level ping (ms) */
+  PING_INTERVAL_MS: 30_000,
+  /** If no pong arrives within this window, consider the connection dead (ms) */
+  PONG_TIMEOUT_MS: 10_000,
+} as const;
+
 interface TeamClientState {
   serverUrl: string;
   runnerId: string | null;
   runnerToken: string | null;
   heartbeatTimer: ReturnType<typeof setInterval> | null;
   pollTimer: ReturnType<typeof setInterval> | null;
+  wsPingTimer: ReturnType<typeof setInterval> | null;
+  wsPongTimeout: ReturnType<typeof setTimeout> | null;
+  wsReconnectAttempt: number;
   ws: WebSocket | null;
   unsubscribeBroker: (() => void) | null;
   browserWSHandler: BrowserWSHandler | null;
@@ -63,6 +77,9 @@ const state: TeamClientState = {
   runnerToken: null,
   heartbeatTimer: null,
   pollTimer: null,
+  wsPingTimer: null,
+  wsPongTimeout: null,
+  wsReconnectAttempt: 0,
   ws: null,
   unsubscribeBroker: null,
   browserWSHandler: null,
@@ -268,6 +285,51 @@ export async function assignProjectToRunner(project: Project): Promise<void> {
 
 // ── WebSocket Connection ─────────────────────────────────
 
+/** Clear all keepalive timers */
+function clearWsTimers(): void {
+  if (state.wsPingTimer) {
+    clearInterval(state.wsPingTimer);
+    state.wsPingTimer = null;
+  }
+  if (state.wsPongTimeout) {
+    clearTimeout(state.wsPongTimeout);
+    state.wsPongTimeout = null;
+  }
+}
+
+/** Schedule a reconnect with exponential backoff */
+function scheduleReconnect(): void {
+  const delay = Math.min(
+    WS_RECONNECT.BASE_DELAY_MS * Math.pow(WS_RECONNECT.BACKOFF_FACTOR, state.wsReconnectAttempt),
+    WS_RECONNECT.MAX_DELAY_MS,
+  );
+  state.wsReconnectAttempt++;
+  log.warn(
+    `WebSocket disconnected from central, reconnecting in ${(delay / 1000).toFixed(1)}s...`,
+    {
+      namespace: 'runner',
+      attempt: state.wsReconnectAttempt,
+    },
+  );
+  setTimeout(connectWebSocket, delay);
+}
+
+/** Send a ping and arm a pong timeout — if no pong arrives, force-close */
+function sendWsPing(ws: WebSocket): void {
+  if (ws.readyState !== WebSocket.OPEN) return;
+
+  ws.send(JSON.stringify({ type: 'runner:ping' }));
+
+  // Arm a pong timeout — if the server doesn't respond, the connection is dead
+  if (state.wsPongTimeout) clearTimeout(state.wsPongTimeout);
+  state.wsPongTimeout = setTimeout(() => {
+    log.warn('WebSocket pong timeout — closing stale connection', { namespace: 'runner' });
+    try {
+      ws.close(4000, 'Pong timeout');
+    } catch {}
+  }, WS_RECONNECT.PONG_TIMEOUT_MS);
+}
+
 function connectWebSocket(): void {
   const wsUrl = state.serverUrl.replace(/^http/, 'ws') + '/ws/runner';
 
@@ -278,14 +340,32 @@ function connectWebSocket(): void {
       // Authenticate
       ws.send(JSON.stringify({ type: 'runner:auth', token: state.runnerToken }));
       log.info('WebSocket connected to central', { namespace: 'runner' });
+
+      // Reset backoff on successful connection
+      state.wsReconnectAttempt = 0;
+
+      // Start periodic ping keepalive
+      clearWsTimers();
+      state.wsPingTimer = setInterval(() => sendWsPing(ws), WS_RECONNECT.PING_INTERVAL_MS);
+      if (state.wsPingTimer.unref) state.wsPingTimer.unref();
     };
 
     ws.onmessage = (event) => {
       try {
         const data = JSON.parse(event.data as string);
+
+        // Any message from the server proves liveness — clear pong timeout
+        if (state.wsPongTimeout) {
+          clearTimeout(state.wsPongTimeout);
+          state.wsPongTimeout = null;
+        }
+
         if (data.type === 'runner:auth_ok') {
           log.info('WebSocket authenticated', { namespace: 'runner' });
         }
+
+        // Pong response — already handled above (timeout cleared)
+        if (data.type === 'runner:pong') return;
 
         // Handle browser WS messages forwarded through the central server
         if (data.type === 'central:browser_ws' && data.userId && data.data) {
@@ -315,11 +395,17 @@ function connectWebSocket(): void {
     };
 
     ws.onclose = () => {
-      log.warn('WebSocket disconnected from central, reconnecting in 5s...', {
-        namespace: 'runner',
-      });
       state.ws = null;
-      setTimeout(connectWebSocket, 5000);
+      clearWsTimers();
+
+      // Immediately reject all pending data requests — the WS is gone,
+      // no point waiting for the 15s timeout to fire as unhandled rejections.
+      for (const [id, pending] of state.pendingDataRequests) {
+        state.pendingDataRequests.delete(id);
+        pending.reject(new Error('WebSocket disconnected before response'));
+      }
+
+      scheduleReconnect();
     };
 
     ws.onerror = () => {
@@ -329,7 +415,7 @@ function connectWebSocket(): void {
     state.ws = ws;
   } catch (err) {
     log.error('Failed to connect WebSocket to central', { namespace: 'runner', error: err as any });
-    setTimeout(connectWebSocket, 5000);
+    scheduleReconnect();
   }
 }
 
@@ -497,6 +583,9 @@ function handleDataResponse(data: any): void {
         pending.reject(new Error(data.error ?? 'Server returned error'));
       }
       break;
+    case 'data:update_thread_response':
+      pending.resolve({ ok: true });
+      break;
     case 'data:get_thread_response':
       pending.resolve(data.thread);
       break;
@@ -590,20 +679,17 @@ export async function remoteInsertToolCall(data: DataInsertToolCall['payload']):
   return response.toolCallId;
 }
 
-/** Update thread fields on the server (fire-and-forget) */
+/** Update thread fields on the server (request-response, awaits confirmation) */
 export async function remoteUpdateThread(
   threadId: string,
   updates: Record<string, any>,
 ): Promise<void> {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
-  try {
-    state.ws.send(
-      JSON.stringify({
-        type: 'data:update_thread',
-        payload: { threadId, updates },
-      }),
-    );
-  } catch {}
+  const requestId = nanoid();
+  await sendDataMessage({
+    type: 'data:update_thread',
+    requestId,
+    payload: { threadId, updates },
+  });
 }
 
 /** Update message content on the server (fire-and-forget) */
@@ -809,11 +895,6 @@ export function shutdownTeamMode(): void {
   state.pendingDataRequests.clear();
 
   log.info('Runner mode shutdown', { namespace: 'runner' });
-}
-
-/** Check if the runner is connected to a server */
-export function isTeamModeActive(): boolean {
-  return !!state.runnerId;
 }
 
 /** Get the central server URL (or null if not connected) */

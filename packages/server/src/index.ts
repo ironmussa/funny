@@ -1,10 +1,9 @@
 /**
- * Unified server entry point.
+ * Server entry point.
  *
- * The server ALWAYS initializes its own DB and mounts its own data routes.
- * Filesystem/git/agent operations are proxied to a runner.
- * In local mode (default), an in-process runner is auto-started.
- * Set LOCAL_RUNNER=false for pure server deployments with remote runners only.
+ * The server initializes its own DB, auth, and data routes.
+ * Filesystem/git/agent operations are proxied to remote runners
+ * connected via WebSocket tunnel.
  */
 
 import { existsSync } from 'fs';
@@ -30,31 +29,19 @@ type WSData = {
 import { log } from './lib/logger.js';
 import { authMiddleware, setAuthInstance } from './middleware/auth.js';
 
-// Whether to start a local in-process runner (default: true)
-const useLocalRunner = process.env.LOCAL_RUNNER !== 'false';
-
 // ── Init ────────────────────────────────────────────────
-
-let runtimeApp: Awaited<
-  ReturnType<typeof import('@ironmussa/funny-runtime/app').createRuntimeApp>
-> | null = null;
 
 // Auth instance — populated during init, used by middleware and route handlers.
 // Uses `any` because the runtime and server auth instances have slightly different types
 // (different access control statements, different plugin configurations).
 let authInstance: any;
 
-// Ensure a RUNNER_AUTH_SECRET exists (auto-generate for local mode)
+// Ensure a RUNNER_AUTH_SECRET exists
 if (!process.env.RUNNER_AUTH_SECRET) {
-  if (useLocalRunner) {
-    const crypto = await import('crypto');
-    process.env.RUNNER_AUTH_SECRET = crypto.randomUUID();
-  } else {
-    log.error('RUNNER_AUTH_SECRET is required when LOCAL_RUNNER=false. Set it in your .env file.', {
-      namespace: 'server',
-    });
-    process.exit(1);
-  }
+  log.error('RUNNER_AUTH_SECRET is required. Set it in your .env file.', {
+    namespace: 'server',
+  });
+  process.exit(1);
 }
 
 // ── Always initialize server DB and auth ────────────────
@@ -80,31 +67,6 @@ const { markAllRunnersOffline, purgeOfflineRunners } = await import('./services/
 await markAllRunnersOffline();
 await purgeOfflineRunners();
 
-// ── Start local runner if enabled ───────────────────────
-if (useLocalRunner) {
-  const { createRuntimeApp } = await import('@ironmussa/funny-runtime/app');
-  const { getConnection } = await import('./db/index.js');
-
-  // Build the service provider so the runtime accesses data through it
-  const { createRuntimeServiceProvider } = await import('./services/runtime-service-provider.js');
-  // The wsBroker is created by the runtime during init; pass a lazy reference
-  // that will be replaced once the runtime initializes its own broker.
-  // For now, we import the runtime's wsBroker since it shares the same process.
-  const { wsBroker } = await import('@ironmussa/funny-runtime/services/ws-broker');
-  const services = createRuntimeServiceProvider(wsBroker);
-
-  runtimeApp = await createRuntimeApp({
-    skipStaticServing: true, // Server handles static files
-    skipAuthSetup: true, // Server handles all auth (Better Auth)
-    dbConnection: getConnection()!,
-    services,
-  });
-  await runtimeApp.init();
-  const { setLocalRunnerFetch } = await import('./lib/local-runner.js');
-  setLocalRunnerFetch(async (req: Request) => runtimeApp!.app.fetch(req));
-  log.info('Local runner started in-process', { namespace: 'server' });
-}
-
 // ── App ─────────────────────────────────────────────────
 
 const app = new Hono<ServerEnv>();
@@ -121,7 +83,6 @@ app.use('*', logger());
 app.get('/api/health', (c) => {
   return c.json({
     status: 'ok',
-    mode: useLocalRunner ? 'local' : 'remote-runners',
     timestamp: new Date().toISOString(),
   });
 });
@@ -169,29 +130,8 @@ app.route('/api/analytics', analyticsRoutes);
 app.route('/api/pipelines', pipelineRoutes);
 app.route('/api/invite-links', inviteLinkRoutes);
 
-// Setup status — delegate to local runner if available, otherwise stub
+// Setup status — proxy to runner
 app.get('/api/setup/status', async (c) => {
-  if (runtimeApp) {
-    // Forward to runtime for real provider detection
-    const userId = c.get('userId') || '';
-    const userRole = c.get('userRole') || 'user';
-    const orgId = c.get('organizationId') || '';
-    const orgName = c.get('organizationName') || '';
-
-    const headers = new Headers(c.req.raw.headers);
-    headers.set('X-Forwarded-User', userId);
-    headers.set('X-Forwarded-Role', userRole);
-    if (orgId) headers.set('X-Forwarded-Org', orgId);
-    if (orgName) headers.set('X-Forwarded-Org-Name', orgName);
-
-    const forwardedReq = new Request(c.req.raw.url, {
-      method: 'GET',
-      headers,
-    });
-
-    return runtimeApp.app.fetch(forwardedReq);
-  }
-
   return c.json({
     providers: {},
     claudeCli: { available: true, path: null, error: null, version: null },
@@ -200,36 +140,8 @@ app.get('/api/setup/status', async (c) => {
 });
 
 // ── Proxy catch-all: forward remaining API requests to runner ──
-if (useLocalRunner && runtimeApp) {
-  // Local runner: forward directly to in-process runtime
-  const localRuntime = runtimeApp;
-  app.all('/api/*', async (c) => {
-    const userId = c.get('userId') || '';
-    const userRole = c.get('userRole') || 'user';
-    const orgId = c.get('organizationId') || '';
-    const orgName = c.get('organizationName') || '';
-
-    const headers = new Headers(c.req.raw.headers);
-    headers.set('X-Forwarded-User', userId);
-    headers.set('X-Forwarded-Role', userRole);
-    if (orgId) headers.set('X-Forwarded-Org', orgId);
-    if (orgName) headers.set('X-Forwarded-Org-Name', orgName);
-
-    const forwardedReq = new Request(c.req.raw.url, {
-      method: c.req.raw.method,
-      headers,
-      body: c.req.raw.body,
-      // @ts-expect-error -- Bun supports duplex
-      duplex: c.req.raw.body ? 'half' : undefined,
-    });
-
-    return localRuntime.app.fetch(forwardedReq);
-  });
-} else {
-  // Remote runners: proxy via WebSocket tunnel or direct HTTP
-  const { proxyToRunner } = await import('./middleware/proxy.js');
-  app.all('/api/*', proxyToRunner);
-}
+const { proxyToRunner } = await import('./middleware/proxy.js');
+app.all('/api/*', proxyToRunner);
 
 // Serve static files from client build (only if dist exists)
 const clientDistDir = resolve(import.meta.dir, '..', '..', 'client', 'dist');
@@ -245,7 +157,7 @@ if (existsSync(clientDistDir)) {
 // ── Server ──────────────────────────────────────────────
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
-const HOST = process.env.HOST || (useLocalRunner ? '127.0.0.1' : '0.0.0.0');
+const HOST = process.env.HOST || '0.0.0.0';
 
 const server = Bun.serve({
   port: PORT,
@@ -254,44 +166,30 @@ const server = Bun.serve({
   async fetch(req, server) {
     const url = new URL(req.url);
 
-    if (useLocalRunner && runtimeApp) {
-      // Local runner: handle WS with runtime's auth + handlers
-      if (url.pathname === '/ws' || url.pathname === '/ws/transcribe') {
-        const wsData = await runtimeApp.authenticateWs(req);
-        if (!wsData) return new Response('Unauthorized', { status: 401 });
-        if (server.upgrade(req, { data: { type: 'browser', ...wsData } as any })) return;
-        return new Response('WebSocket upgrade failed', { status: 400 });
-      }
-    } else {
-      // Remote runners: handle WS for browsers and runners
-      if (url.pathname === '/ws' && req.headers.get('upgrade') === 'websocket') {
-        const upgraded = server.upgrade(req, {
-          data: { type: 'browser', req } as any,
-        });
-        return upgraded ? undefined : new Response('WebSocket upgrade failed', { status: 500 });
-      }
+    // Browser WebSocket
+    if (url.pathname === '/ws' && req.headers.get('upgrade') === 'websocket') {
+      const upgraded = server.upgrade(req, {
+        data: { type: 'browser', req } as any,
+      });
+      return upgraded ? undefined : new Response('WebSocket upgrade failed', { status: 500 });
+    }
 
-      if (url.pathname === '/ws/runner' && req.headers.get('upgrade') === 'websocket') {
-        const upgraded = server.upgrade(req, {
-          data: { type: 'runner' } as any,
-        });
-        return upgraded ? undefined : new Response('WebSocket upgrade failed', { status: 500 });
-      }
+    // Runner WebSocket
+    if (url.pathname === '/ws/runner' && req.headers.get('upgrade') === 'websocket') {
+      const upgraded = server.upgrade(req, {
+        data: { type: 'runner' } as any,
+      });
+      return upgraded ? undefined : new Response('WebSocket upgrade failed', { status: 500 });
     }
 
     return app.fetch(req, { IP: server.requestIP(req) });
   },
   websocket: {
+    idleTimeout: 500, // seconds — reset by any incoming message (including keepalive pings)
+    sendPings: true, // Bun sends protocol-level pings before idle timeout
     async open(ws) {
       const wsData = ws.data as unknown as WSData;
 
-      if (useLocalRunner && runtimeApp) {
-        // Local runner: delegate to runtime WS handler
-        runtimeApp.websocket.open(ws);
-        return;
-      }
-
-      // Remote runners
       if (wsData.type === 'browser' && wsData.req) {
         const session = await authInstance.api.getSession({ headers: wsData.req.headers });
         if (!session) {
@@ -307,12 +205,6 @@ const server = Bun.serve({
     async message(ws, message) {
       const wsData = ws.data as unknown as WSData;
 
-      if (useLocalRunner && runtimeApp) {
-        await runtimeApp.websocket.message(ws, message);
-        return;
-      }
-
-      // Remote runner relay logic
       try {
         const data = JSON.parse(typeof message === 'string' ? message : message.toString());
         const rm = await import('./services/runner-manager.js');
@@ -320,6 +212,14 @@ const server = Bun.serve({
         const threadRegistry = await import('./services/thread-registry.js');
 
         if (wsData.type === 'runner') {
+          // Keepalive ping — respond with pong so the runner knows we're alive
+          if (data.type === 'runner:ping') {
+            try {
+              ws.send(JSON.stringify({ type: 'runner:pong' }));
+            } catch {}
+            return;
+          }
+
           if (data.type === 'runner:auth' && data.token) {
             const runnerId = await rm.authenticateRunner(data.token);
             if (runnerId) {
@@ -397,11 +297,6 @@ const server = Bun.serve({
     close(ws) {
       const d = ws.data as any;
 
-      if (useLocalRunner && runtimeApp) {
-        runtimeApp.websocket.close(ws);
-        return;
-      }
-
       if (d.type === 'browser' && d.userId) {
         import('./services/ws-relay.js').then((wsRelay) => {
           wsRelay.removeBrowserClient(d.userId, ws);
@@ -419,12 +314,9 @@ const server = Bun.serve({
   },
 });
 
-log.info(
-  `funny-server running on http://${HOST}:${PORT} (${useLocalRunner ? 'local runner' : 'remote runners'})`,
-  {
-    namespace: 'server',
-  },
-);
+log.info(`funny-server running on http://${HOST}:${PORT}`, {
+  namespace: 'server',
+});
 
 // ── Graceful shutdown ────────────────────────────────────
 let shuttingDown = false;
@@ -442,15 +334,6 @@ async function shutdown() {
   // Stop accepting new connections (don't wait for in-flight)
   server.stop();
 
-  // Shut down the local runtime (kills child processes, PTY sessions, etc.)
-  if (runtimeApp) {
-    try {
-      await runtimeApp.shutdown?.();
-    } catch {
-      // Best-effort
-    }
-  }
-
   // Close the server DB connection
   try {
     const { closeDatabase } = await import('./db/index.js');
@@ -466,5 +349,22 @@ async function shutdown() {
 
 process.on('SIGINT', () => void shutdown());
 process.on('SIGTERM', () => void shutdown());
+
+// Catch unhandled errors — keep server alive
+process.on('uncaughtException', (err) => {
+  log.error('Uncaught exception — keeping server alive', {
+    namespace: 'server',
+    error: err?.message ?? String(err),
+    stack: err?.stack,
+  });
+});
+process.on('unhandledRejection', (reason) => {
+  const msg = reason instanceof Error ? reason.message : String(reason);
+  log.error('Unhandled rejection — keeping server alive', {
+    namespace: 'server',
+    error: msg,
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
+});
 
 export { app, server };

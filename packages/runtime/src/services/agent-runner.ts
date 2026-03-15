@@ -330,7 +330,7 @@ export class AgentRunner {
     }
 
     // Derive the system prefix from the machine's resumeReason
-    const isPostMerge = !!(thread?.sessionId && thread?.baseBranch && !thread?.worktreePath);
+    const isPostMerge = !!thread?.mergedAt;
     const resumePrefix = getResumeSystemPrefix(resumeReason, isPostMerge);
 
     // Inject project-level system prompt
@@ -382,14 +382,16 @@ export class AgentRunner {
         .filter(Boolean)
         .join('\n\n') || undefined;
 
-    log.debug('startAgent resume context', {
+    log.info('startAgent resume context', {
       namespace: 'agent',
       threadId,
       newStatus,
       resumeReason: resumeReason ?? 'none',
+      isResume: !!effectiveSessionId,
       isPostMerge,
-      needsRecovery: needsRecovery,
+      needsRecovery,
       effectiveSessionId: effectiveSessionId ?? 'none',
+      dbSessionId: thread?.sessionId ?? 'none',
       systemPrefixPreview: systemPrefix ? systemPrefix.slice(0, 80) : 'none',
     });
 

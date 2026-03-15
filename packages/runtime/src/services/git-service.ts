@@ -333,6 +333,7 @@ export function merge(params: MergeParams): ResultAsync<string, DomainError> {
                 worktreePath: null,
                 branch: null,
                 mode: 'local',
+                mergedAt: new Date().toISOString(),
               });
 
               // Calculate actual unpushed commits on the target branch after merge

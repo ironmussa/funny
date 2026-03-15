@@ -760,6 +760,13 @@ const migrations: Migration[] = [
       `);
     },
   },
+
+  {
+    name: '028_threads_merged_at',
+    async up() {
+      await ctx().addColumn('threads', 'merged_at', 'TEXT');
+    },
+  },
 ];
 
 export async function autoMigrate() {

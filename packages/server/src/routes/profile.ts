@@ -1,21 +1,33 @@
 /**
  * User profile routes for the central server.
- *
- * Most profile data (git identity, GitHub token) is managed locally.
- * Endpoints that require runtime-side logic (e.g. transcribe-token)
- * are proxied to the runner.
  */
 
 import { Hono } from 'hono';
 
 import type { ServerEnv } from '../lib/types.js';
-import { proxyToRunner } from '../middleware/proxy.js';
 import * as ps from '../services/profile-service.js';
 
 export const profileRoutes = new Hono<ServerEnv>();
 
-/** Proxy transcribe-token to the runtime (AssemblyAI logic lives there) */
-profileRoutes.get('/transcribe-token', proxyToRunner);
+/** Generate a temporary AssemblyAI streaming token (API key stays server-side) */
+profileRoutes.get('/transcribe-token', async (c) => {
+  const userId = c.get('userId') as string;
+  const apiKey = await ps.getAssemblyaiApiKey(userId);
+  if (!apiKey) {
+    return c.json({ error: 'AssemblyAI API key not configured' }, 400);
+  }
+
+  const res = await fetch('https://streaming.assemblyai.com/v3/token?expires_in_seconds=600', {
+    headers: { Authorization: apiKey },
+  });
+  if (!res.ok) {
+    const body = await res.text();
+    return c.json({ error: `Token request failed: ${res.status} ${body}` }, 502);
+  }
+
+  const data = (await res.json()) as { token: string };
+  return c.json({ token: data.token });
+});
 
 /** Get current user's profile */
 profileRoutes.get('/', async (c) => {

@@ -441,5 +441,24 @@ threadRoutes.delete('/:id', async (c) => {
   return c.json({ ok: true });
 });
 
-// GET /api/threads/search/content?q=xxx&projectId=xxx — proxy to runner (search logic is runner-side)
-threadRoutes.get('/search/content', proxyToRunner);
+// GET /api/threads/search/content?q=xxx&projectId=xxx
+threadRoutes.get('/search/content', async (c) => {
+  const userId = c.get('userId') as string;
+  const q = c.req.query('q') || '';
+  const projectId = c.req.query('projectId');
+
+  if (!q.trim()) {
+    return c.json({ threadIds: [], snippets: {} });
+  }
+
+  const { searchThreadIdsByContent } = await import('../services/search-repository.js');
+  const results = await searchThreadIdsByContent({ query: q, projectId, userId });
+
+  const threadIds = Array.from(results.keys());
+  const snippets: Record<string, string> = {};
+  for (const [id, snippet] of results) {
+    snippets[id] = snippet;
+  }
+
+  return c.json({ threadIds, snippets });
+});

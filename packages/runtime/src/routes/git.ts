@@ -81,9 +81,11 @@ export function computeBranchKey(thread: {
   branch?: string | null;
   worktreePath?: string | null;
   baseBranch?: string | null;
+  mergedAt?: string | null;
 }): string {
-  // Merged threads (worktree cleaned up): unique per thread
-  if (!thread.branch && !thread.worktreePath && thread.baseBranch) return `tid:${thread.id}`;
+  // Merged threads (worktree cleaned up, mergedAt set): unique per thread
+  if (!thread.branch && !thread.worktreePath && thread.baseBranch && thread.mergedAt)
+    return `tid:${thread.id}`;
   // Threads with a branch (worktree or local): group by project + branch
   if (thread.branch) return `${thread.projectId}:${thread.branch}`;
   // Local threads without a branch: group by project
@@ -151,8 +153,15 @@ gitRoutes.get('/status', async (c) => {
   const worktreeThreads = threads.filter(
     (t) => t.mode === 'worktree' && t.worktreePath && t.branch,
   );
-  const mergedThreads = threads.filter((t) => !t.worktreePath && !t.branch && t.baseBranch);
-  const localThreads = threads.filter((t) => !t.worktreePath && !(!t.branch && t.baseBranch));
+  // Merged threads: worktree was cleaned up after merge (mergedAt is set).
+  // Without the mergedAt check, local-mode threads with branch=null would be
+  // incorrectly classified as merged and always receive hardcoded zero stats.
+  const mergedThreads = threads.filter(
+    (t) => !t.worktreePath && !t.branch && t.baseBranch && t.mergedAt,
+  );
+  const localThreads = threads.filter(
+    (t) => !t.worktreePath && !(!t.branch && t.baseBranch && t.mergedAt),
+  );
 
   const statusSpan = requestSpan(c, 'git.status.aggregate', {
     projectId,
@@ -645,7 +654,10 @@ gitRoutes.get('/:threadId/status', async (c) => {
   if (threadResult.isErr()) return resultToResponse(c, threadResult);
   const thread = threadResult.value;
 
-  if (!thread.worktreePath && !thread.branch && thread.baseBranch) {
+  // Only treat as merged if mergedAt is set (worktree was actually cleaned up
+  // after merge). Without this, local-mode threads with branch=null get
+  // hardcoded zero stats instead of real git status.
+  if (!thread.worktreePath && !thread.branch && thread.baseBranch && thread.mergedAt) {
     const projectResult = await requireProject(thread.projectId);
     const projectPath = projectResult.isOk() ? projectResult.value.path : null;
     const unpushed = projectPath ? await countUnpushedCommits(projectPath, thread.baseBranch) : 0;

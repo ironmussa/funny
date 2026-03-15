@@ -11,7 +11,7 @@ import {
   ShieldQuestion,
   ChevronRight,
 } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import {
   useState,
   useRef,
@@ -74,7 +74,6 @@ import { GitEventCard } from './thread/GitEventCard';
 import { NewThreadInput } from './thread/NewThreadInput';
 import { ProjectHeader } from './thread/ProjectHeader';
 import { PromptTimeline } from './thread/PromptTimeline';
-import { StickyUserMessage } from './thread/StickyUserMessage';
 import { WorkflowEventGroup } from './thread/WorkflowEventGroup';
 import { ToolCallCard } from './ToolCallCard';
 import { ToolCallGroup } from './ToolCallGroup';
@@ -939,9 +938,6 @@ export function ThreadView() {
   const messageListRef = useRef<MemoizedMessageListHandle>(null);
   const pinnedPromptIdRef = useRef<string | null>(null);
   const [visibleMessageId, setVisibleMessageId] = useState<string | null>(null);
-  // Tracks whether the last user message card is visible in the viewport.
-  // When true, we hide the StickyUserMessage banner to avoid duplication.
-  const [lastUserCardVisible, setLastUserCardVisible] = useState(true);
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxImages, setLightboxImages] = useState<{ src: string; alt: string }[]>([]);
   const [lightboxIndex, setLightboxIndex] = useState(0);
@@ -1220,56 +1216,6 @@ export function ThreadView() {
       clearTimeout(debounceTimer);
     };
   }, [activeThread?.id, scheduleIdle]);
-
-  // IntersectionObserver: track whether the *last* user message card is visible
-  // in the viewport. When it scrolls off-screen, show the StickyUserMessage banner.
-  useEffect(() => {
-    const viewport = scrollViewportRef.current;
-    if (!viewport || !activeThread?.id) return;
-
-    const lastId = lastUserMsgIdRef.current;
-    if (!lastId) {
-      setLastUserCardVisible(true);
-      return;
-    }
-
-    const io = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          setLastUserCardVisible(entry.isIntersecting);
-        }
-      },
-      { root: viewport, threshold: 0 },
-    );
-
-    const observe = () => {
-      io.disconnect();
-      const curId = lastUserMsgIdRef.current;
-      if (!curId) return;
-      const el = viewport.querySelector<HTMLElement>(`[data-user-msg="${curId}"]`);
-      if (el) {
-        io.observe(el);
-      } else {
-        // Element not yet rendered — assume visible until proven otherwise
-        setLastUserCardVisible(true);
-      }
-    };
-    observe();
-
-    // Re-observe when DOM changes (new messages may add/change the last user card)
-    let debounceTimer: ReturnType<typeof setTimeout>;
-    const mo = new MutationObserver(() => {
-      clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(observe, 200);
-    });
-    mo.observe(viewport, { childList: true, subtree: true });
-
-    return () => {
-      io.disconnect();
-      mo.disconnect();
-      clearTimeout(debounceTimer);
-    };
-  }, [activeThread?.id, stableMessages]);
 
   // Only re-pin the user prompt when a *new user message* appears (the user
   // sent a prompt) or on thread switch.  Agent-side updates (tool calls,
@@ -1819,16 +1765,6 @@ export function ThreadView() {
       <div className="thread-container flex min-h-0 flex-1">
         {/* Messages column + input */}
         <div className="relative flex min-h-0 min-w-0 flex-1 flex-col">
-          {/* Sticky banner showing last user prompt when scrolled away from it */}
-          <AnimatePresence>
-            {activeThread?.lastUserMessage && !lastUserCardVisible && (
-              <StickyUserMessage
-                content={activeThread.lastUserMessage.content}
-                images={activeThread.lastUserMessage.images as any}
-                onScrollTo={() => pinUserMessageToTop(null, true)}
-              />
-            )}
-          </AnimatePresence>
           <div
             className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
             ref={scrollViewportRef}

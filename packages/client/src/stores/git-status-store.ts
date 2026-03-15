@@ -18,8 +18,12 @@ export function branchKey(thread: {
   worktreePath?: string | null;
   baseBranch?: string | null;
 }): string {
-  if (!thread.branch && !thread.worktreePath && thread.baseBranch) return `tid:${thread.id}`;
+  // Threads with a branch (worktree or local): group by project + branch
   if (thread.branch) return `${thread.projectId}:${thread.branch}`;
+  // Local threads without a branch: group by project.
+  // This covers both active local threads (branch=null) and merged threads —
+  // the server resolves the correct branchKey per thread and the client picks
+  // it up from the server response via threadToBranchKey mapping.
   return thread.projectId;
 }
 

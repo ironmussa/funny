@@ -53,7 +53,7 @@ export const agentCompletedGitStatusHandler: EventHandler<'agent:completed'> = {
 
     const branchKey = thread.branch
       ? `${thread.projectId}:${thread.branch}`
-      : thread.baseBranch
+      : thread.baseBranch && thread.mergedAt
         ? `tid:${threadId}`
         : thread.projectId;
 

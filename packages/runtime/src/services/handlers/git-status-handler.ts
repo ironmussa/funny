@@ -79,7 +79,7 @@ async function emitGitStatus(event: GitChangedEvent, ctx: HandlerServiceContext)
 
   const branchKey = thread.branch
     ? `${thread.projectId}:${thread.branch}`
-    : thread.baseBranch
+    : thread.baseBranch && thread.mergedAt
       ? `tid:${threadId}`
       : thread.projectId;
 

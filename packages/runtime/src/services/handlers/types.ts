@@ -40,6 +40,7 @@ interface HandlerThread {
   branch?: string | null;
   baseBranch?: string | null;
   worktreePath?: string | null;
+  mergedAt?: string | null;
 }
 
 interface HandlerProject {

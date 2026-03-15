@@ -215,6 +215,8 @@ function WebTerminalTabContent({
   const [termReady, setTermReady] = useState(false);
   // Track whether we already sent a spawn/restore for this tab to avoid duplicates
   const spawnedRef = useRef(false);
+  // Incremented to re-trigger the spawn effect after a failed attempt
+  const [spawnAttempt, setSpawnAttempt] = useState(0);
   // Capture whether this tab was freshly created (alive on mount) vs loaded from persistence.
   // Uses getState() to avoid subscribing to alive changes (we only need the initial value).
   const [wasAliveOnMount] = useState(
@@ -236,7 +238,6 @@ function WebTerminalTabContent({
       ]);
       // @ts-ignore - CSS import handled by Vite bundler
       await import('@xterm/xterm/css/xterm.css');
-
       if (cancelled || !containerRef.current) return;
 
       const terminal = new Terminal({
@@ -264,7 +265,12 @@ function WebTerminalTabContent({
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => {
           fitAddon.fit();
-          terminal.focus();
+          // Only focus if no modal dialog is open — Radix UI sets aria-hidden
+          // on the <main> ancestor when a dialog opens, and focusing a hidden
+          // descendant triggers a browser warning.
+          if (!document.querySelector('[role="dialog"][data-state="open"]')) {
+            terminal.focus();
+          }
           resolve();
         });
       });
@@ -356,11 +362,27 @@ function WebTerminalTabContent({
 
     const ws = getActiveWS();
 
+    // Helper: send the spawn/restore message once the WS is open.
+    // If the WS is not yet open, listen for the 'open' event and retry.
+    const sendWhenReady = (send: (ws: WebSocket) => void) => {
+      if (ws && ws.readyState === WebSocket.OPEN) {
+        spawnedRef.current = true;
+        send(ws);
+      } else if (ws && ws.readyState === WebSocket.CONNECTING) {
+        const onOpen = () => {
+          if (spawnedRef.current) return;
+          spawnedRef.current = true;
+          send(ws);
+        };
+        ws.addEventListener('open', onOpen, { once: true });
+        return () => ws.removeEventListener('open', onOpen);
+      }
+    };
+
     if (restored) {
       // Restored tab: server confirmed the session exists.
       // Sync terminal dimensions and request the current pane content.
-      spawnedRef.current = true;
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      const cleanup = sendWhenReady((ws) => {
         ws.send(
           JSON.stringify({
             type: 'pty:resize',
@@ -368,13 +390,14 @@ function WebTerminalTabContent({
           }),
         );
         ws.send(JSON.stringify({ type: 'pty:restore', data: { id } }));
-      }
+      });
       setLoading(false);
+      return cleanup;
     } else if (wasAliveOnMount || sessionsChecked) {
       // Either a freshly created tab (alive on mount) or the session list
       // was checked and this tab was NOT found — spawn a new PTY.
-      spawnedRef.current = true;
-      if (ws && ws.readyState === WebSocket.OPEN) {
+      let spawnTimer: ReturnType<typeof setTimeout> | null = null;
+      const cleanup = sendWhenReady((ws) => {
         ws.send(
           JSON.stringify({
             type: 'pty:spawn',
@@ -389,7 +412,21 @@ function WebTerminalTabContent({
             },
           }),
         );
-      }
+        // If no pty:data arrives within 5s, reset spawnedRef and bump
+        // spawnAttempt to re-trigger the effect (runner may not have been
+        // connected yet). Give up after 3 attempts.
+        spawnTimer = setTimeout(() => {
+          const tab = useTerminalStore.getState().tabs.find((t) => t.id === id);
+          if (tab && !tab.alive && !tab.error) {
+            spawnedRef.current = false;
+            setSpawnAttempt((a) => (a < 3 ? a + 1 : a));
+          }
+        }, 5000);
+      });
+      return () => {
+        cleanup?.();
+        if (spawnTimer) clearTimeout(spawnTimer);
+      };
     }
   }, [
     termReady,
@@ -397,6 +434,7 @@ function WebTerminalTabContent({
     restored,
     sessionsChecked,
     wasAliveOnMount,
+    spawnAttempt,
     id,
     cwd,
     projectId,
@@ -428,7 +466,10 @@ function WebTerminalTabContent({
           }
         }
         terminal.refresh(0, terminal.rows - 1);
-        terminal.focus();
+        // Only focus if no modal dialog is open (see aria-hidden note above)
+        if (!document.querySelector('[role="dialog"][data-state="open"]')) {
+          terminal.focus();
+        }
       }, 220);
       return () => clearTimeout(timer);
     }
@@ -569,6 +610,7 @@ export function TerminalPanel() {
   const [dragging, setDragging] = useState(false);
   const [panelHeight, setPanelHeight] = useState(PANEL_HEIGHT);
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  const [tooltipOpen, setTooltipOpen] = useState(false);
 
   const visibleTabs = useMemo(
     () => tabs.filter((t) => t.projectId === selectedProjectId),
@@ -698,7 +740,7 @@ export function TerminalPanel() {
           </div>
 
           <DropdownMenu onOpenChange={setDropdownOpen}>
-            <Tooltip open={dropdownOpen ? false : undefined}>
+            <Tooltip open={dropdownOpen ? false : tooltipOpen} onOpenChange={setTooltipOpen}>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon-xs">
@@ -737,7 +779,7 @@ export function TerminalPanel() {
         </div>
 
         {/* Terminal content area */}
-        <div className="min-h-0 flex-1 overflow-hidden bg-background m-2">
+        <div className="m-2 min-h-0 flex-1 overflow-hidden bg-background">
           {visibleTabs.length === 0 ? (
             <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
               {t('terminal.noProcesses')}

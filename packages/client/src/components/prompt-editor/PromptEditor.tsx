@@ -421,7 +421,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     () => ({
       char: '/',
       allowSpaces: false,
-      allowedPrefixes: null,
+      allowedPrefixes: [' ', '\n'],
       items: async ({ query }: { query: string }) => {
         // Update query immediately so highlights stay in sync with typing
         setSuggestionQuery(query);

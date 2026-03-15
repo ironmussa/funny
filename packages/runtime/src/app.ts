@@ -54,7 +54,6 @@ import * as ptyManager from './services/pty-manager.js';
 import type { RuntimeServiceProvider } from './services/service-provider.js';
 import { getServices, setServices } from './services/service-registry.js';
 import * as tm from './services/thread-manager.js';
-import { handleTranscribeWs } from './services/transcribe-stream.js';
 import { wsBroker } from './services/ws-broker.js';
 import { resetBinaryCache } from './utils/claude-binary.js';
 import {
@@ -94,16 +93,6 @@ export interface RuntimeApp {
   app: Hono;
   /** Initialize DB, run migrations, set up auth, register handlers. */
   init(): Promise<void>;
-  /** WebSocket handlers for Bun.serve() */
-  websocket: {
-    open(ws: any): void;
-    close(ws: any): void;
-    message(ws: any, msg: any): Promise<void>;
-  };
-  /** Authenticate and upgrade a WebSocket request. Returns upgrade data or null. */
-  authenticateWs(
-    req: Request,
-  ): Promise<{ userId: string; organizationId: string | null; isTranscribe?: boolean } | null>;
   /** Graceful shutdown — kills child processes, PTY sessions, closes DB. */
   shutdown(): Promise<void>;
 }
@@ -301,114 +290,12 @@ export async function createRuntimeApp(options: RuntimeAppOptions): Promise<Runt
     });
   }
 
-  // ── WebSocket authentication ───────────────────────────────────
-  async function authenticateWs(
-    req: Request,
-  ): Promise<{ userId: string; organizationId: string | null; isTranscribe?: boolean } | null> {
-    const url = new URL(req.url);
-
-    // Transcription WebSocket
-    if (url.pathname === '/ws/transcribe') {
-      const { auth } = await import('./lib/auth.js');
-      const session = await auth.api.getSession({ headers: req.headers });
-      if (!session) return null;
-      return { userId: session.user.id, organizationId: null, isTranscribe: true };
-    }
-
-    // Browser WebSocket
-    if (url.pathname === '/ws') {
-      // Try central server session validation first (team mode)
-      const teamServerUrl = process.env.TEAM_SERVER_URL;
-      const cookie = req.headers.get('Cookie');
-      if (teamServerUrl && cookie) {
-        try {
-          const forwardCookie = cookie.replace(/\bbetter-auth\./g, '__Secure-better-auth.');
-          const res = await fetch(`${teamServerUrl}/api/auth/get-session`, {
-            headers: { Cookie: forwardCookie },
-          });
-          if (res.ok) {
-            const data = (await res.json()) as any;
-            if (data?.user?.id) {
-              return {
-                userId: data.user.id,
-                organizationId: data.session?.activeOrganizationId ?? null,
-              };
-            }
-          }
-        } catch {
-          // Fall through to local Better Auth
-        }
-      }
-
-      // Validate with local Better Auth
-      const { auth } = await import('./lib/auth.js');
-      const session = await auth.api.getSession({ headers: req.headers });
-      if (!session) return null;
-      return {
-        userId: session.user.id,
-        organizationId: (session.session as any).activeOrganizationId ?? null,
-      };
-    }
-
-    return null;
-  }
-
-  // ── WebSocket handlers ─────────────────────────────────────────
-  const websocket = {
-    open(ws: any) {
-      if (ws.data?.isTranscribe) {
-        handleTranscribeWs(ws, ws.data.userId);
-        return;
-      }
-      const userId = ws.data?.userId;
-      if (!userId) return;
-      const organizationId = ws.data?.organizationId ?? null;
-      wsBroker.addClient(ws, userId, organizationId);
-    },
-    close(ws: any) {
-      if (ws.data?.isTranscribe) {
-        const assemblyWs = ws.data?.assemblyWs;
-        if (assemblyWs && assemblyWs.readyState === 1) {
-          try {
-            assemblyWs.send(JSON.stringify({ type: 'Terminate' }));
-          } catch {}
-          assemblyWs.close();
-        }
-        return;
-      }
-      wsBroker.removeClient(ws);
-    },
-    async message(ws: any, msg: any) {
-      try {
-        if (ws.data?.isTranscribe) {
-          const assemblyWs = ws.data?.assemblyWs;
-          if (!assemblyWs || assemblyWs.readyState !== 1) return;
-          if (typeof msg !== 'string') assemblyWs.send(msg);
-          return;
-        }
-
-        const parsed = JSON.parse(msg.toString());
-        const { type, data } = parsed;
-        const userId = ws.data?.userId;
-        if (!userId) return;
-
-        handlePtyMessage(type, data, userId, (msg) => {
-          try {
-            ws.send(JSON.stringify(msg));
-          } catch {}
-        });
-      } catch (err) {
-        log.error('Error handling message', { namespace: 'ws', error: err });
-      }
-    },
-  };
-
   async function shutdown(): Promise<void> {
     const { shutdownManager } = await import('./services/shutdown-manager.js');
     await shutdownManager.run('hard');
   }
 
-  return { app, init, websocket, authenticateWs, shutdown };
+  return { app, init, shutdown };
 }
 
 // ── Shared PTY message handler ─────────────────────────────────
@@ -455,6 +342,21 @@ function handlePtyMessage(type: string, data: any, userId: string, send: (msg: a
             data.projectId,
             data.label,
           );
+        })
+        .catch((err) => {
+          log.error('PTY spawn failed: project validation error', {
+            namespace: 'ws',
+            error: err,
+            ptyId: data.id,
+            userId,
+          });
+          send({
+            type: 'pty:error',
+            data: {
+              ptyId: data.id,
+              error: 'Failed to validate project access',
+            },
+          });
         });
       break;
     }

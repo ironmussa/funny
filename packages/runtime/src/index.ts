@@ -59,21 +59,9 @@ const server = Bun.serve({
   port,
   hostname: host,
   reusePort: true,
-  async fetch(req: Request, server: any) {
-    const url = new URL(req.url);
-
-    // Handle WebSocket upgrade
-    if (url.pathname === '/ws/transcribe' || url.pathname === '/ws') {
-      const wsData = await runtime.authenticateWs(req);
-      if (!wsData) return new Response('Unauthorized', { status: 401 });
-      if (server.upgrade(req, { data: wsData })) return;
-      return new Response('WebSocket upgrade failed', { status: 400 });
-    }
-
-    // All other requests handled by Hono
+  fetch(req: Request) {
     return runtime.app.fetch(req);
   },
-  websocket: runtime.websocket,
 });
 
 // ── Shutdown registry ──────────────────────────────────────────

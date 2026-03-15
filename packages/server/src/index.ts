@@ -268,24 +268,47 @@ const server = Bun.serve({
           const innerType = data.type as string;
           if (innerType?.startsWith('pty:')) {
             const projectId = data.data?.projectId;
+            const forwardToRunner = (runnerId: string | null) => {
+              if (runnerId) {
+                wsRelay.forwardBrowserMessageToRunner(runnerId, userId, undefined, data);
+              } else {
+                // No runner connected — send error so the client can retry
+                if (innerType === 'pty:spawn') {
+                  try {
+                    ws.send(
+                      JSON.stringify({
+                        type: 'pty:error',
+                        data: {
+                          ptyId: data.data?.id,
+                          error: 'No runner available to handle terminal request',
+                        },
+                      }),
+                    );
+                  } catch {}
+                }
+                // For pty:list, send empty sessions so sessionsChecked becomes true
+                if (innerType === 'pty:list') {
+                  try {
+                    ws.send(
+                      JSON.stringify({
+                        type: 'pty:sessions',
+                        threadId: '',
+                        data: { sessions: [] },
+                      }),
+                    );
+                  } catch {}
+                }
+              }
+            };
             if (projectId) {
               rm.findRunnerForProject(projectId)
                 .then((result) => {
-                  if (result) {
-                    wsRelay.forwardBrowserMessageToRunner(
-                      result.runner.runnerId,
-                      userId,
-                      undefined,
-                      data,
-                    );
-                  }
+                  // If no runner is explicitly assigned, fall back to any connected runner
+                  forwardToRunner(result?.runner.runnerId ?? wsRelay.getAnyConnectedRunnerId());
                 })
-                .catch(() => {});
+                .catch(() => forwardToRunner(wsRelay.getAnyConnectedRunnerId()));
             } else {
-              const runnerId = wsRelay.getAnyConnectedRunnerId();
-              if (runnerId) {
-                wsRelay.forwardBrowserMessageToRunner(runnerId, userId, undefined, data);
-              }
+              forwardToRunner(wsRelay.getAnyConnectedRunnerId());
             }
           }
         }

@@ -49,7 +49,7 @@ function UserMessageContent({ content }: { content: string }) {
         className={cn(
           'whitespace-pre-wrap font-mono text-xs leading-relaxed break-words overflow-x-auto',
           !expanded && isOverflowing && 'overflow-hidden',
-          expanded && 'max-h-[50vh] overflow-y-auto',
+          expanded && 'max-h-[40vh] overflow-y-auto',
         )}
         style={!expanded && isOverflowing ? { maxHeight: COLLAPSED_MAX_H } : undefined}
       >

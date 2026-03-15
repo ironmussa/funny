@@ -83,6 +83,7 @@ export const threads = sqliteTable('threads', {
   initTools: text('init_tools'),
   initCwd: text('init_cwd'),
   runnerId: text('runner_id'), // which runner handles this thread (multi/team mode)
+  mergedAt: text('merged_at'), // set when worktree is merged+cleaned — explicit post-merge signal
   createdAt: text('created_at').notNull(),
   completedAt: text('completed_at'),
 });

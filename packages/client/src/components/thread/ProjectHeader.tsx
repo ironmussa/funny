@@ -25,6 +25,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { useShallow } from 'zustand/react/shallow';
 
+import { BranchBadge } from '@/components/BranchBadge';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DiffStats } from '@/components/DiffStats';
 import {
@@ -416,6 +417,8 @@ export const ProjectHeader = memo(function ProjectHeader() {
     activeThreadStatus,
     activeThreadWorktreePath,
     activeThreadParentId,
+    activeThreadBranch,
+    activeThreadBaseBranch,
   } = useThreadStore(
     useShallow((s) => ({
       activeThreadId: s.activeThread?.id,
@@ -425,6 +428,8 @@ export const ProjectHeader = memo(function ProjectHeader() {
       activeThreadStatus: s.activeThread?.status,
       activeThreadWorktreePath: s.activeThread?.worktreePath,
       activeThreadParentId: s.activeThread?.parentThreadId,
+      activeThreadBranch: s.activeThread?.branch,
+      activeThreadBaseBranch: s.activeThread?.baseBranch,
     })),
   );
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
@@ -553,6 +558,17 @@ export const ProjectHeader = memo(function ProjectHeader() {
                 <BreadcrumbItem className="min-w-0 flex-1">
                   <span className="block min-w-0 truncate text-sm">{activeThreadTitle}</span>
                 </BreadcrumbItem>
+              )}
+              {(activeThreadBranch || activeThreadBaseBranch) && (
+                <>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem className="flex-shrink-0">
+                    <BranchBadge
+                      branch={(activeThreadBranch || activeThreadBaseBranch)!}
+                      size="sm"
+                    />
+                  </BreadcrumbItem>
+                </>
               )}
             </BreadcrumbList>
           </Breadcrumb>

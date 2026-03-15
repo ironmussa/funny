@@ -70,6 +70,9 @@ export class SDKClaudeProcess extends BaseAgentProcess {
 
     if (this.options.sessionId) {
       sdkOptions.resume = this.options.sessionId;
+      dlog.info('SDK query will resume session', { sessionId: this.options.sessionId });
+    } else {
+      dlog.info('SDK query starting fresh (no session to resume)');
     }
 
     if (this.options.permissionMode) {

@@ -117,7 +117,7 @@ export class AgentOrchestrator extends EventEmitter {
     const isResume = !!sessionId;
     let effectivePrompt = prompt;
     if (isResume) {
-      dlog.info('Resuming session', { threadId, sessionId });
+      dlog.info('Resuming session with sessionId', { threadId, sessionId });
       const prefix =
         systemPrefix ??
         `[SYSTEM NOTE: This is a session resume after an interruption. Your previous session was interrupted mid-execution. Continue from where you left off. Do NOT re-plan or start over — pick up execution from the last completed step.]`;
@@ -157,8 +157,10 @@ export class AgentOrchestrator extends EventEmitter {
     };
 
     if (isResume) {
+      dlog.info('Starting agent with session resume', { threadId, sessionId });
       this.startWithResume(threadId, processOpts, sessionId!);
     } else {
+      dlog.info('Starting agent fresh (no sessionId)', { threadId });
       this.startFresh(threadId, processOpts, sessionId);
     }
   }
@@ -368,7 +370,10 @@ export class AgentOrchestrator extends EventEmitter {
       }
 
       if (!gotMessage) {
-        dlog.warn('Stale session detected — retrying fresh', { threadId });
+        dlog.warn('Stale session detected — retrying fresh WITHOUT conversation history', {
+          threadId,
+          code,
+        });
         onStaleSession();
         return;
       }

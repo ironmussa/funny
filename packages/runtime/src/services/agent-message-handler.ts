@@ -95,14 +95,19 @@ export class AgentMessageHandler {
 
     // System init — capture session ID and broadcast init info
     if (msg.type === 'system' && 'subtype' in msg && msg.subtype === 'init') {
-      log.info('Session initialized', {
+      log.info('Session initialized — persisting sessionId', {
         ...(await this.threadCtx(threadId)),
-        sessionId: msg.session_id,
+        newSessionId: msg.session_id,
       });
       await this.threadManager.updateThread(threadId, {
         sessionId: msg.session_id,
         initTools: JSON.stringify(msg.tools ?? []),
         initCwd: msg.cwd ?? '',
+      });
+      log.info('Session ID persisted to server', {
+        namespace: 'agent',
+        threadId,
+        sessionId: msg.session_id,
       });
 
       await this.emitWS(threadId, 'agent:init', {

@@ -83,8 +83,8 @@ export async function buildThreadContext(threadId: string): Promise<string | nul
 }
 
 /**
- * Check if a thread needs context recovery (has sessionId but no valid resume path).
- * This happens when a worktree was merged and cleaned up.
+ * Check if a thread needs context recovery.
+ * Uses the explicit `mergedAt` flag set during merge+cleanup.
  */
 export async function needsContextRecovery(threadId: string): Promise<boolean> {
   const thread = await tm.getThread(threadId);
@@ -92,8 +92,5 @@ export async function needsContextRecovery(threadId: string): Promise<boolean> {
     return false;
   }
 
-  // If thread has a sessionId but the worktree was removed (post-merge scenario)
-  const isPostMerge = !!(thread.sessionId && thread.baseBranch && !thread.worktreePath);
-
-  return isPostMerge;
+  return !!thread.mergedAt;
 }

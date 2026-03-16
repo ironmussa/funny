@@ -31,6 +31,7 @@ import {
   codeReviewPipeline,
   type CodeReviewPipelineContext,
 } from '../pipelines/code-review.pipeline.js';
+import { BUILTIN_AGENTS, resolveAgent } from './agent-registry.js';
 import { RuntimeActionProvider, RuntimeProgressReporter } from './pipeline-adapter.js';
 import { getServices } from './service-registry.js';
 import * as tm from './thread-manager.js';
@@ -269,7 +270,7 @@ export async function startPipelineRun(opts: {
     workflowId: runId,
   });
 
-  // Build the code-review pipeline context
+  // Build the code-review pipeline context with agent definitions
   const initialCtx: CodeReviewPipelineContext = {
     provider,
     progress,
@@ -277,10 +278,14 @@ export async function startPipelineRun(opts: {
     // Config
     commitSha: commitSha ?? undefined,
     maxIterations: pipeline.maxIterations,
-    reviewerModel: pipeline.reviewModel,
-    correctorModel: pipeline.fixModel,
-    reviewerPrompt: pipeline.reviewerPrompt ?? undefined,
-    correctorPrompt: pipeline.correctorPrompt ?? undefined,
+    reviewer: resolveAgent(BUILTIN_AGENTS.reviewer, {
+      model: pipeline.reviewModel,
+      ...(pipeline.reviewerPrompt ? { systemPrompt: pipeline.reviewerPrompt } : {}),
+    }),
+    corrector: resolveAgent(BUILTIN_AGENTS.corrector, {
+      model: pipeline.fixModel,
+      ...(pipeline.correctorPrompt ? { systemPrompt: pipeline.correctorPrompt } : {}),
+    }),
     // State
     iteration: 1,
     noChanges: false,

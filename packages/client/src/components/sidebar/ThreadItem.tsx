@@ -195,6 +195,12 @@ export const ThreadItem = memo(function ThreadItem({
               </TooltipContent>
             </Tooltip>
           )}
+          {/* Arc purpose badge */}
+          {thread.arcId && thread.purpose === 'explore' && (
+            <span className="flex-shrink-0 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] font-medium leading-none text-amber-500">
+              {t('thread.purposeExplore', 'Explore')}
+            </span>
+          )}
           {/* Remote runtime badge */}
           {thread.runtime === 'remote' && (
             <span className="flex-shrink-0 rounded bg-violet-500/15 px-1 py-0.5 text-[10px] font-medium leading-none text-violet-500">

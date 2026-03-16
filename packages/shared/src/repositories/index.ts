@@ -10,3 +10,4 @@ export { createToolCallRepository, type ToolCallRepositoryDeps } from './tool-ca
 export { createThreadRepository, type ThreadRepositoryDeps } from './thread-repository.js';
 export { createCommentRepository, type CommentRepositoryDeps } from './comment-repository.js';
 export { createStageHistoryRepository, type StageHistoryDeps } from './stage-history.js';
+export { createArcRepository, type ArcRepositoryDeps } from './arc-repository.js';

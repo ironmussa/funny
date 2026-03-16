@@ -15,6 +15,7 @@
  */
 
 import { definePipeline, node, runPipeline } from '@funny/pipelines';
+import type { AgentDefinition } from '@funny/shared';
 
 import { codeReviewPipeline } from './code-review.pipeline.js';
 import { commitPipeline } from './commit.pipeline.js';
@@ -38,32 +39,26 @@ export interface CodeQualityContext extends PipelineContext {
   noVerify?: boolean;
   /** Max retries for commit pre-hook failures. Default: 3. */
   maxCommitRetries?: number;
-  /** Model for the pre-commit fixer. */
-  precommitFixerModel?: string;
-  /** Custom pre-commit fixer prompt. */
-  precommitFixerPrompt?: string;
+
+  // ── Agent definitions ─────────────────────────────────
+  /** Agent for reviewing code. */
+  reviewer: AgentDefinition;
+  /** Agent for correcting review findings. */
+  corrector: AgentDefinition;
+  /** Agent for fixing pre-commit hook failures. */
+  precommitFixer: AgentDefinition;
+  /** Agent for fixing test failures. */
+  testFixer: AgentDefinition;
 
   // ── Review config ──────────────────────────────────────
   /** Max review→fix iterations. Default: 10. */
   maxReviewIterations?: number;
-  /** Model for the reviewer agent. */
-  reviewerModel?: string;
-  /** Model for the corrector agent. */
-  correctorModel?: string;
-  /** Custom reviewer prompt. */
-  reviewerPrompt?: string;
-  /** Custom corrector prompt. */
-  correctorPrompt?: string;
 
   // ── Test config ────────────────────────────────────────
   /** Test command (e.g. 'bun test'). If null/undefined, tests are skipped. */
   testCommand?: string;
   /** Max test→fix retries. Default: 5. */
   maxTestRetries?: number;
-  /** Model for the test fixer. */
-  testFixerModel?: string;
-  /** Custom test fixer prompt. */
-  testFixerPrompt?: string;
 
   // ── Push config ────────────────────────────────────────
   /** Max push retries. Default: 2. */
@@ -90,8 +85,7 @@ export const codeQualityPipeline = definePipeline<CodeQualityContext>({
         {
           ...ctx,
           maxRetries: ctx.maxCommitRetries,
-          fixerModel: ctx.precommitFixerModel,
-          fixerPrompt: ctx.precommitFixerPrompt,
+          fixer: ctx.precommitFixer,
           attempt: 1,
         } as any,
         { signal },
@@ -149,8 +143,7 @@ export const codeQualityPipeline = definePipeline<CodeQualityContext>({
           {
             ...ctx,
             maxRetries: ctx.maxTestRetries,
-            fixerModel: ctx.testFixerModel,
-            fixerPrompt: ctx.testFixerPrompt,
+            fixer: ctx.testFixer,
             testPassed: false,
             attempt: 1,
           } as any,

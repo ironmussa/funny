@@ -371,6 +371,7 @@
         "funny-server": "./bin/funny-server.js",
       },
       "dependencies": {
+        "@abbacchio/transport": "^0.2.0",
         "@funny/core": "workspace:*",
         "@funny/shared": "workspace:*",
         "@ironmussa/funny-runtime": "workspace:*",
@@ -382,6 +383,8 @@
         "neverthrow": "^8.2.0",
         "nodemailer": "^8.0.2",
         "pg": "^8.20.0",
+        "winston": "^3.19.0",
+        "winston-daily-rotate-file": "^5.0.0",
       },
       "devDependencies": {
         "@types/bun": "^1.3.8",

@@ -1,3 +1,4 @@
+import type { ThreadPurpose } from '@funny/shared';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, DEFAULT_THREAD_MODE } from '@funny/shared/models';
 import { GitBranch } from 'lucide-react';
 import { useState, useEffect, useMemo } from 'react';
@@ -23,6 +24,7 @@ import {
 import { api } from '@/lib/api';
 import { PROVIDERS, getModelOptions } from '@/lib/providers';
 import { toastError } from '@/lib/toast-error';
+import { useArcStore } from '@/stores/arc-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -53,6 +55,15 @@ export function NewThreadDialog() {
   const [prompt, setPrompt] = useState('');
   const [title, setTitle] = useState('');
   const [creating, setCreating] = useState(false);
+  const [selectedArcId, setSelectedArcId] = useState<string>('');
+  const [purpose, setPurpose] = useState<ThreadPurpose>('implement');
+  const [showNewArcInput, setShowNewArcInput] = useState(false);
+  const [newArcName, setNewArcName] = useState('');
+
+  const arcsByProject = useArcStore((s) => s.arcsByProject);
+  const loadArcs = useArcStore((s) => s.loadArcs);
+  const createArc = useArcStore((s) => s.createArc);
+  const arcs = newThreadProjectId ? (arcsByProject[newThreadProjectId] ?? []) : [];
 
   // Reset model when provider changes and current model isn't valid for new provider
   useEffect(() => {
@@ -63,6 +74,13 @@ export function NewThreadDialog() {
   }, [provider]);
 
   const [gitCurrentBranch, setGitCurrentBranch] = useState<string | null>(null);
+
+  // Load arcs when dialog opens
+  useEffect(() => {
+    if (newThreadProjectId) {
+      loadArcs(newThreadProjectId);
+    }
+  }, [newThreadProjectId, loadArcs]);
 
   // Load branches and detect default branch when dialog opens
   useEffect(() => {
@@ -121,14 +139,17 @@ export function NewThreadDialog() {
       }
     }
 
+    const isLocalOnlyPurpose = selectedArcId && selectedArcId !== 'none' && purpose !== 'implement';
     const result = await api.createThread({
       projectId: newThreadProjectId,
       title: title || prompt,
-      mode: createWorktree ? 'worktree' : 'local',
+      mode: isLocalOnlyPurpose ? 'local' : createWorktree ? 'worktree' : 'local',
       model,
       provider,
       baseBranch: selectedBranch || undefined,
       prompt,
+      arcId: selectedArcId && selectedArcId !== 'none' ? selectedArcId : undefined,
+      purpose,
     });
 
     if (result.isErr()) {
@@ -168,20 +189,22 @@ export function NewThreadDialog() {
           />
         </div>
 
-        {/* Worktree toggle */}
-        <label className="flex cursor-pointer items-center gap-2">
-          <input
-            type="checkbox"
-            data-testid="new-thread-worktree-checkbox"
-            checked={createWorktree}
-            onChange={(e) => setCreateWorktree(e.target.checked)}
-            className="h-4 w-4 rounded border-input text-primary focus-visible:ring-1 focus-visible:ring-ring"
-          />
-          <div className="flex items-center gap-2 text-sm">
-            <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
-            <span>{t('newThread.createWorktree', 'Create isolated worktree')}</span>
-          </div>
-        </label>
+        {/* Worktree toggle — hidden when purpose is explore (explore always uses local mode) */}
+        {!(selectedArcId && selectedArcId !== 'none' && purpose !== 'implement') && (
+          <label className="flex cursor-pointer items-center gap-2">
+            <input
+              type="checkbox"
+              data-testid="new-thread-worktree-checkbox"
+              checked={createWorktree}
+              onChange={(e) => setCreateWorktree(e.target.checked)}
+              className="h-4 w-4 rounded border-input text-primary focus-visible:ring-1 focus-visible:ring-ring"
+            />
+            <div className="flex items-center gap-2 text-sm">
+              <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
+              <span>{t('newThread.createWorktree', 'Create isolated worktree')}</span>
+            </div>
+          </label>
+        )}
 
         {/* Provider + Model selector */}
         <div>
@@ -214,6 +237,101 @@ export function NewThreadDialog() {
               </SelectContent>
             </Select>
           </div>
+        </div>
+
+        {/* Arc + Purpose */}
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <label className="mb-1 block text-xs font-medium text-muted-foreground">
+              {t('newThread.arc', 'Arc')}
+            </label>
+            {showNewArcInput ? (
+              <div className="flex gap-1">
+                <Input
+                  data-testid="new-thread-new-arc-name"
+                  placeholder="my-arc-name"
+                  value={newArcName}
+                  onChange={(e) => setNewArcName(e.target.value)}
+                  className="flex-1"
+                  autoFocus
+                />
+                <Button
+                  data-testid="new-thread-new-arc-confirm"
+                  size="sm"
+                  variant="outline"
+                  disabled={!newArcName || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(newArcName)}
+                  onClick={async () => {
+                    if (!newThreadProjectId || !newArcName) return;
+                    const arc = await createArc(newThreadProjectId, newArcName);
+                    if (arc) {
+                      setSelectedArcId(arc.id);
+                      setShowNewArcInput(false);
+                      setNewArcName('');
+                    } else {
+                      toast.error(t('newThread.arcCreateFailed', 'Failed to create arc'));
+                    }
+                  }}
+                >
+                  {t('common.create', 'Create')}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => {
+                    setShowNewArcInput(false);
+                    setNewArcName('');
+                  }}
+                >
+                  {t('common.cancel', 'Cancel')}
+                </Button>
+              </div>
+            ) : (
+              <Select
+                value={selectedArcId}
+                onValueChange={(v) => {
+                  if (v === '__new__') {
+                    setShowNewArcInput(true);
+                  } else {
+                    setSelectedArcId(v);
+                  }
+                }}
+              >
+                <SelectTrigger data-testid="new-thread-arc-select">
+                  <SelectValue placeholder={t('newThread.noArc', 'None')} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">{t('newThread.noArc', 'None')}</SelectItem>
+                  {arcs.map((arc) => (
+                    <SelectItem key={arc.id} value={arc.id}>
+                      {arc.name}
+                    </SelectItem>
+                  ))}
+                  <SelectItem value="__new__">+ {t('newThread.newArc', 'New arc')}</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          {selectedArcId && selectedArcId !== 'none' && !showNewArcInput && (
+            <div className="w-[140px]">
+              <label className="mb-1 block text-xs font-medium text-muted-foreground">
+                {t('newThread.purpose', 'Purpose')}
+              </label>
+              <Select value={purpose} onValueChange={(v) => setPurpose(v as ThreadPurpose)}>
+                <SelectTrigger data-testid="new-thread-purpose-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="explore">
+                    {t('newThread.purposeExplore', 'Explore')}
+                  </SelectItem>
+                  <SelectItem value="plan">{t('newThread.purposePlan', 'Plan')}</SelectItem>
+                  <SelectItem value="implement">
+                    {t('newThread.purposeImplement', 'Implement')}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         {/* Title */}

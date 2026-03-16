@@ -177,8 +177,21 @@ export interface Project {
   needsSetup?: boolean;
 }
 
+// ─── Arcs ───────────────────────────────────────────────
+
+export interface Arc {
+  id: string;
+  projectId: string;
+  userId: string;
+  name: string;
+  createdAt: string;
+  /** Number of linked threads (populated in list queries) */
+  threadCount?: number;
+}
+
 // ─── Threads ─────────────────────────────────────────────
 
+export type ThreadPurpose = 'explore' | 'plan' | 'implement';
 export type ThreadMode = 'local' | 'worktree';
 export type ThreadRuntime = 'local' | 'remote';
 export type ThreadStatus =
@@ -209,6 +222,23 @@ export type GeminiModel =
 export type AgentModel = ClaudeModel | CodexModel | GeminiModel;
 export type PermissionMode = 'plan' | 'autoEdit' | 'confirmEdit' | 'ask';
 
+// ─── Agent Definitions ──────────────────────────────────
+
+export interface AgentDefinition {
+  /** Unique identifier for this agent role (e.g. 'reviewer', 'corrector', 'arc-explore'). */
+  name: string;
+  /** Human-readable display label. */
+  label: string;
+  /** The system prompt — static string or function that receives context and returns the prompt. */
+  systemPrompt: string | ((context: Record<string, string>) => string);
+  /** Default model for this agent role. */
+  model: AgentModel;
+  /** Default provider. */
+  provider: AgentProvider;
+  /** Default permission mode. */
+  permissionMode: PermissionMode;
+}
+
 export interface Thread {
   id: string;
   projectId: string;
@@ -232,6 +262,8 @@ export interface Thread {
   source: ThreadSource;
   externalRequestId?: string;
   parentThreadId?: string;
+  arcId?: string;
+  purpose: ThreadPurpose;
   runtime: ThreadRuntime;
   containerUrl?: string;
   containerName?: string;
@@ -441,8 +473,22 @@ export interface TestFile {
   path: string; // relative to project root, e.g. "e2e/app.spec.ts"
 }
 
+export interface TestSpec {
+  id: string; // Playwright spec id or "file:line" fallback
+  title: string; // e.g. "A.1 Sidebar navigation icons have accessible labels"
+  file: string; // relative path
+  line: number;
+  column: number;
+}
+
+export interface DiscoverTestsResponse {
+  file: string;
+  specs: TestSpec[];
+}
+
 export interface RunTestRequest {
   file: string; // relative path of the test file to run
+  line?: number; // when set, runs only the test at this line
 }
 
 export interface RunTestResponse {
@@ -766,6 +812,25 @@ export interface CreateThreadRequest {
   disallowedTools?: string[];
   worktreePath?: string;
   parentThreadId?: string;
+  arcId?: string;
+  purpose?: ThreadPurpose;
+}
+
+// ─── Arcs API ───────────────────────────────────────────
+
+export interface CreateArcRequest {
+  name: string;
+}
+
+export interface ArcArtifacts {
+  proposal?: string;
+  design?: string;
+  tasks?: string;
+  specs?: Record<string, string>;
+}
+
+export interface ArcWithArtifacts extends Arc {
+  artifacts: ArcArtifacts;
 }
 
 export interface SendMessageRequest {

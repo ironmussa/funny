@@ -793,6 +793,29 @@ const migrations: Migration[] = [
     name: '044_invite_links',
     async up() {},
   },
+
+  {
+    name: '045_arcs',
+    async up() {
+      await exec(sql`
+        CREATE TABLE IF NOT EXISTS arcs (
+          id TEXT PRIMARY KEY,
+          project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+          user_id TEXT NOT NULL,
+          name TEXT NOT NULL,
+          created_at TEXT NOT NULL
+        )
+      `);
+
+      await exec(sql`
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_arcs_project_name
+        ON arcs (project_id, user_id, name)
+      `);
+
+      await addColumn('threads', 'arc_id', 'TEXT');
+      await addColumn('threads', 'purpose', 'TEXT NOT NULL', "'implement'");
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

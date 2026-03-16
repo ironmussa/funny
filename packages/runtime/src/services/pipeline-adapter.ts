@@ -78,20 +78,18 @@ export class RuntimeActionProvider implements ActionProvider {
         ? `${agentOpts.prompt}\n\nContext from previous step:\n${agentOpts.context}`
         : agentOpts.prompt;
 
+      // Resolve model and permission mode: explicit opts > agent definition > defaults
+      const effectiveMode = agentOpts.mode ?? agentOpts.agent?.permissionMode ?? 'autoEdit';
       const permissionMode: PermissionMode =
-        agentOpts.mode === 'plan'
-          ? 'plan'
-          : agentOpts.mode === 'autoEdit'
-            ? 'autoEdit'
-            : 'autoEdit';
+        effectiveMode === 'plan' ? 'plan' : effectiveMode === 'autoEdit' ? 'autoEdit' : 'autoEdit';
 
       const childThread = await createAndStartThread({
         projectId,
         userId,
-        title: `Pipeline agent`,
+        title: agentOpts.agent ? `Pipeline: ${agentOpts.agent.label}` : `Pipeline agent`,
         mode: 'local',
-        provider: 'claude',
-        model: (agentOpts.model || 'sonnet') as AgentModel,
+        provider: (agentOpts.agent?.provider ?? 'claude') as any,
+        model: (agentOpts.model ?? agentOpts.agent?.model ?? 'sonnet') as AgentModel,
         permissionMode,
         source: 'automation',
         prompt,

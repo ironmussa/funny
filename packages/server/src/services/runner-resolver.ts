@@ -114,6 +114,9 @@ function extractProjectId(path: string, query: Record<string, string>): string |
   const projectMatch = path.match(/\/api\/projects\/([^/]+)/);
   if (projectMatch) return projectMatch[1];
 
+  const testsMatch = path.match(/\/api\/tests\/([^/]+)/);
+  if (testsMatch) return testsMatch[1];
+
   if (query.projectId) return query.projectId;
 
   return null;

@@ -1,4 +1,4 @@
-import type { TestFile, TestFileStatus } from '@funny/shared';
+import type { TestFile, TestFileStatus, TestSpec } from '@funny/shared';
 import {
   ChevronDown,
   ChevronRight,
@@ -61,14 +61,59 @@ function StatusDot({ status }: { status: TestFileStatus | undefined }) {
   }
 }
 
+/* ─── Individual spec (test) row ────────────────────────── */
+
+function SpecItem({
+  spec,
+  depth,
+  isRunning,
+  onRunSpec,
+}: {
+  spec: TestSpec;
+  depth: number;
+  isRunning: boolean;
+  onRunSpec: (file: string, line: number) => void;
+}) {
+  return (
+    <div
+      data-testid={`test-spec-${spec.file}-${spec.line}`}
+      className="group flex items-center gap-1.5 px-2 py-0.5 text-xs hover:bg-accent/50"
+      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+    >
+      <Circle className="h-2.5 w-2.5 flex-shrink-0 text-muted-foreground/30" />
+      <span className="flex-1 truncate text-muted-foreground" title={spec.title}>
+        {spec.title}
+      </span>
+      <Button
+        data-testid={`test-spec-play-${spec.file}-${spec.line}`}
+        variant="ghost"
+        size="icon"
+        className="h-5 w-5 opacity-0 group-hover:opacity-100"
+        disabled={isRunning}
+        onClick={() => onRunSpec(spec.file, spec.line)}
+      >
+        <Play className="h-2.5 w-2.5" />
+      </Button>
+    </div>
+  );
+}
+
+/* ─── Tree item (folder or file) ────────────────────────── */
+
 interface TreeItemProps {
   node: TreeNode;
   depth: number;
   expandedFolders: Set<string>;
   toggleFolder: (path: string) => void;
+  expandedFiles: Set<string>;
+  toggleFile: (path: string) => void;
   fileStatuses: Record<string, TestFileStatus>;
+  fileSpecs: Record<string, TestSpec[]>;
+  specsLoading: Record<string, boolean>;
   isRunning: boolean;
   onRunFile: (file: string) => void;
+  onRunSpec: (file: string, line: number) => void;
+  onExpandFile: (file: string) => void;
 }
 
 function TreeItem({
@@ -76,9 +121,15 @@ function TreeItem({
   depth,
   expandedFolders,
   toggleFolder,
+  expandedFiles,
+  toggleFile,
   fileStatuses,
+  fileSpecs,
+  specsLoading,
   isRunning,
   onRunFile,
+  onRunSpec,
+  onExpandFile,
 }: TreeItemProps) {
   const isExpanded = expandedFolders.has(node.path);
 
@@ -106,62 +157,132 @@ function TreeItem({
               depth={depth + 1}
               expandedFolders={expandedFolders}
               toggleFolder={toggleFolder}
+              expandedFiles={expandedFiles}
+              toggleFile={toggleFile}
               fileStatuses={fileStatuses}
+              fileSpecs={fileSpecs}
+              specsLoading={specsLoading}
               isRunning={isRunning}
               onRunFile={onRunFile}
+              onRunSpec={onRunSpec}
+              onExpandFile={onExpandFile}
             />
           ))}
       </>
     );
   }
 
+  // File node — expandable to show individual specs
   const status = fileStatuses[node.path];
+  const isFileExpanded = expandedFiles.has(node.path);
+  const specs = fileSpecs[node.path];
+  const isSpecsLoading = specsLoading[node.path];
+
+  const handleToggleFile = () => {
+    toggleFile(node.path);
+    onExpandFile(node.path);
+  };
 
   return (
-    <div
-      data-testid={`test-file-${node.path}`}
-      className={cn(
-        'group flex items-center gap-1.5 px-2 py-1 text-sm hover:bg-accent/50',
-        status === 'running' && 'bg-blue-500/5',
-      )}
-      style={{ paddingLeft: `${depth * 16 + 8}px` }}
-    >
-      <FileCode className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-      <span className="flex-1 truncate">{node.name}</span>
-      <StatusDot status={status} />
-      <Button
-        data-testid={`test-play-${node.path}`}
-        variant="ghost"
-        size="icon"
-        className="h-5 w-5 opacity-0 group-hover:opacity-100"
-        disabled={isRunning}
-        onClick={() => onRunFile(node.path)}
+    <>
+      <div
+        data-testid={`test-file-${node.path}`}
+        className={cn(
+          'group flex items-center gap-1.5 px-2 py-1 text-sm hover:bg-accent/50',
+          status === 'running' && 'bg-blue-500/5',
+        )}
+        style={{ paddingLeft: `${depth * 16 + 8}px` }}
       >
-        <Play className="h-3 w-3" />
-      </Button>
-    </div>
+        <button
+          data-testid={`test-file-expand-${node.path}`}
+          className="flex-shrink-0"
+          onClick={handleToggleFile}
+        >
+          {isFileExpanded ? (
+            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
+          ) : (
+            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
+          )}
+        </button>
+        <FileCode className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+        <span className="flex-1 cursor-pointer truncate" onClick={handleToggleFile}>
+          {node.name}
+        </span>
+        <StatusDot status={status} />
+        <Button
+          data-testid={`test-play-${node.path}`}
+          variant="ghost"
+          size="icon"
+          className="h-5 w-5 opacity-0 group-hover:opacity-100"
+          disabled={isRunning}
+          onClick={() => onRunFile(node.path)}
+        >
+          <Play className="h-3 w-3" />
+        </Button>
+      </div>
+
+      {/* Expanded specs */}
+      {isFileExpanded &&
+        (isSpecsLoading ? (
+          <div
+            className="flex items-center gap-2 py-1 text-xs text-muted-foreground"
+            style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
+          >
+            <Loader2 className="h-3 w-3 animate-spin" />
+            Discovering tests...
+          </div>
+        ) : specs && specs.length > 0 ? (
+          specs.map((spec) => (
+            <SpecItem
+              key={`${spec.file}:${spec.line}`}
+              spec={spec}
+              depth={depth + 1}
+              isRunning={isRunning}
+              onRunSpec={onRunSpec}
+            />
+          ))
+        ) : specs ? (
+          <div
+            className="py-1 text-xs text-muted-foreground"
+            style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
+          >
+            No tests found
+          </div>
+        ) : null)}
+    </>
   );
 }
+
+/* ─── File browser ──────────────────────────────────────── */
 
 interface TestFileBrowserProps {
   files: TestFile[];
   fileStatuses: Record<string, TestFileStatus>;
+  fileSpecs: Record<string, TestSpec[]>;
+  specsLoading: Record<string, boolean>;
   isRunning: boolean;
   isLoading: boolean;
   onRunFile: (file: string) => void;
+  onRunSpec: (file: string, line: number) => void;
+  onExpandFile: (file: string) => void;
   onRunAll: () => void;
 }
 
 export function TestFileBrowser({
   files,
   fileStatuses,
+  fileSpecs,
+  specsLoading,
   isRunning,
   isLoading,
   onRunFile,
+  onRunSpec,
+  onExpandFile,
   onRunAll,
 }: TestFileBrowserProps) {
   const [search, setSearch] = useState('');
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
 
   const filteredFiles = useMemo(() => {
     if (!search) return files;
@@ -198,8 +319,17 @@ export function TestFileBrowser({
     });
   };
 
+  const toggleFile = (path: string) => {
+    setExpandedFiles((prev) => {
+      const next = new Set(prev);
+      if (next.has(path)) next.delete(path);
+      else next.add(path);
+      return next;
+    });
+  };
+
   return (
-    <div className="flex flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center gap-2 border-b px-2 py-1.5">
         <Input
@@ -245,9 +375,15 @@ export function TestFileBrowser({
               depth={0}
               expandedFolders={effectiveExpanded}
               toggleFolder={toggleFolder}
+              expandedFiles={expandedFiles}
+              toggleFile={toggleFile}
               fileStatuses={fileStatuses}
+              fileSpecs={fileSpecs}
+              specsLoading={specsLoading}
               isRunning={isRunning}
               onRunFile={onRunFile}
+              onRunSpec={onRunSpec}
+              onExpandFile={onExpandFile}
             />
           ))
         )}

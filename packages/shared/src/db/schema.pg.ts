@@ -36,6 +36,16 @@ export const projects = pgTable('projects', {
   createdAt: text('created_at').notNull(),
 });
 
+export const arcs = pgTable('arcs', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  userId: text('user_id').notNull(),
+  name: text('name').notNull(),
+  createdAt: text('created_at').notNull(),
+});
+
 export const threads = pgTable('threads', {
   id: text('id').primaryKey(),
   projectId: text('project_id')
@@ -61,6 +71,8 @@ export const threads = pgTable('threads', {
   source: text('source').notNull().default('web'),
   externalRequestId: text('external_request_id'),
   parentThreadId: text('parent_thread_id'),
+  arcId: text('arc_id'),
+  purpose: text('purpose').notNull().default('implement'),
   runtime: text('runtime').notNull().default('local'),
   containerUrl: text('container_url'),
   containerName: text('container_name'),

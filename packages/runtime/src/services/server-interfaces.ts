@@ -398,3 +398,13 @@ export interface IMcpOauthService {
 export interface IStageHistoryRepository {
   recordStageChange(data: { threadId: string; fromStage: string; toStage: string }): Promise<void>;
 }
+
+// ── Arc repository ──────────────────────────────────────────────
+
+export interface IArcRepository {
+  getArc(
+    id: string,
+  ): Promise<
+    { id: string; projectId: string; userId: string; name: string; createdAt: string } | undefined
+  >;
+}

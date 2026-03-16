@@ -52,7 +52,7 @@
     "format:check": "oxfmt --check .",
     "test:e2e": "bunx playwright test",
     "test:e2e:ui": "bunx playwright test --ui",
-    "codegen": "bunx playwright codegen http://localhost:5180"
+    "codegen": "bunx playwright codegen http://localhost:5173"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.14.1"

@@ -1,4 +1,10 @@
-import type { TestFile, TestFileStatus, WSTestStatusData, WSTestOutputData } from '@funny/shared';
+import type {
+  TestFile,
+  TestFileStatus,
+  TestSpec,
+  WSTestStatusData,
+  WSTestOutputData,
+} from '@funny/shared';
 import { create } from 'zustand';
 
 import { api } from '@/lib/api';
@@ -20,10 +26,17 @@ interface TestState {
   isStreaming: boolean; // true when frames are arriving
   isLoading: boolean;
 
+  /** Specs discovered within expanded files, keyed by file path */
+  fileSpecs: Record<string, TestSpec[]>;
+  /** Loading state for spec discovery, keyed by file path */
+  specsLoading: Record<string, boolean>;
+
   // Actions
   loadFiles: (projectId: string) => Promise<void>;
   startRun: (projectId: string, file: string) => Promise<void>;
+  startSpecRun: (projectId: string, file: string, line: number) => Promise<void>;
   stopRun: (projectId: string) => Promise<void>;
+  discoverSpecs: (projectId: string, file: string) => Promise<void>;
   handleTestStatus: (data: WSTestStatusData) => void;
   handleTestOutput: (data: WSTestOutputData) => void;
   setStreaming: (streaming: boolean) => void;
@@ -40,6 +53,8 @@ export const useTestStore = create<TestState>((set, get) => ({
   outputLines: [],
   isStreaming: false,
   isLoading: false,
+  fileSpecs: {},
+  specsLoading: {},
 
   loadFiles: async (projectId: string) => {
     set({ isLoading: true });
@@ -73,8 +88,48 @@ export const useTestStore = create<TestState>((set, get) => ({
     }
   },
 
+  startSpecRun: async (projectId: string, file: string, line: number) => {
+    set((s) => ({
+      outputLines: [],
+      isStreaming: false,
+      fileStatuses: { ...s.fileStatuses, [file]: 'running' },
+      activeFile: file,
+      isRunning: true,
+    }));
+
+    const result = await api.runTest(projectId, file, line);
+    if (result.isOk()) {
+      set({ activeRunId: result.value.runId });
+    } else {
+      set((s) => ({
+        isRunning: false,
+        activeFile: null,
+        fileStatuses: { ...s.fileStatuses, [file]: 'failed' },
+      }));
+    }
+  },
+
   stopRun: async (projectId: string) => {
     await api.stopTest(projectId);
+  },
+
+  discoverSpecs: async (projectId: string, file: string) => {
+    set((s) => ({
+      specsLoading: { ...s.specsLoading, [file]: true },
+    }));
+    const result = await api.discoverTestSpecs(projectId, file);
+    if (result.isOk()) {
+      set((s) => ({
+        fileSpecs: { ...s.fileSpecs, [file]: result.value.specs },
+        specsLoading: { ...s.specsLoading, [file]: false },
+      }));
+    } else {
+      // On error, set empty array so UI shows "No tests found" instead of nothing
+      set((s) => ({
+        fileSpecs: { ...s.fileSpecs, [file]: [] },
+        specsLoading: { ...s.specsLoading, [file]: false },
+      }));
+    }
   },
 
   handleTestStatus: (data: WSTestStatusData) => {
@@ -121,5 +176,8 @@ export const useTestStore = create<TestState>((set, get) => ({
       fileStatuses: {},
       outputLines: [],
       isStreaming: false,
+      isLoading: false,
+      fileSpecs: {},
+      specsLoading: {},
     }),
 }));

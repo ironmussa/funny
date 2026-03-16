@@ -11,7 +11,9 @@
  */
 
 import { definePipeline, node } from '@funny/pipelines';
+import type { AgentDefinition } from '@funny/shared';
 
+import { resolveSystemPrompt } from '../services/agent-registry.js';
 import type { PipelineContext } from './types.js';
 
 // ── Context ─────────────────────────────────────────────────
@@ -25,10 +27,8 @@ export interface PrePushPipelineContext extends PipelineContext {
   // ── Config ─────────────────────────────────────────────
   /** Max test→fix retries. Default: 5. */
   maxRetries?: number;
-  /** Model for the test fixer agent. */
-  fixerModel?: string;
-  /** Custom fixer prompt (replaces default). */
-  fixerPrompt?: string;
+  /** Agent definition for the test fixer. */
+  fixer: AgentDefinition;
 
   // ── State (populated during execution) ─────────────────
   /** Whether tests passed on the last run. */
@@ -109,15 +109,13 @@ export const prePushPipeline = definePipeline<PrePushPipelineContext>({
           level: 'warning',
         });
 
-        const prompt = ctx.fixerPrompt
-          ? `${ctx.fixerPrompt}\n\nTest output:\n${ctx.testOutput}`
-          : `The test command \`${ctx.testCommand}\` failed (attempt ${ctx.attempt}) with the following output:\n\n\`\`\`\n${ctx.testOutput}\n\`\`\`\n\nAnalyze the test failures and fix the underlying code. Focus on:\n- Fix the source code that causes the test failures\n- Only modify tests if the tests themselves have bugs\n- Do not delete or skip failing tests\n\nAfter fixing, run the tests again with \`${ctx.testCommand}\` to verify they pass.\nDo NOT create a git commit — just fix the files and stage with \`git add\`.`;
+        const fixerBase = resolveSystemPrompt(ctx.fixer);
+        const prompt = `${fixerBase}\n\nThe test command \`${ctx.testCommand}\` failed (attempt ${ctx.attempt}) with the following output:\n\n\`\`\`\n${ctx.testOutput}\n\`\`\`\n\nAfter fixing, run the tests again with \`${ctx.testCommand}\` to verify they pass.\nDo NOT create a git commit — just fix the files and stage with \`git add\`.`;
 
         const fixResult = await ctx.provider.spawnAgent({
           prompt,
           cwd: ctx.cwd,
-          mode: 'autoEdit',
-          model: ctx.fixerModel,
+          agent: ctx.fixer,
           context: ctx.testOutput,
         });
 

@@ -73,7 +73,7 @@ export class ContainerService {
         ...envOverrides,
       };
 
-      console.log(`[containers] Starting containers for thread=${threadId} in ${worktreePath}`);
+      console.info(`[containers] Starting containers for thread=${threadId} in ${worktreePath}`);
 
       // Launch containers
       await execute('podman', ['compose', '-f', composeFile, 'up', '-d', '--build'], {
@@ -87,7 +87,7 @@ export class ContainerService {
       // Parse exposed ports from running containers
       await this.parseExposedPorts(state);
 
-      console.log(
+      console.info(
         `[containers] Running for thread=${threadId}, ports:`,
         Object.fromEntries(state.exposedPorts),
       );
@@ -113,7 +113,7 @@ export class ContainerService {
     const url = `http://localhost:${port}`;
     const start = Date.now();
 
-    console.log(`[containers] Waiting for health check at ${url}...`);
+    console.info(`[containers] Waiting for health check at ${url}...`);
 
     while (Date.now() - start < timeout) {
       try {
@@ -122,7 +122,7 @@ export class ContainerService {
         });
         if (response.ok || response.status < 500) {
           state.status = 'healthy';
-          console.log(`[containers] Healthy at ${url} (${Date.now() - start}ms)`);
+          console.info(`[containers] Healthy at ${url} (${Date.now() - start}ms)`);
           return;
         }
       } catch {
@@ -143,7 +143,7 @@ export class ContainerService {
     if (!state) return;
 
     state.status = 'stopping';
-    console.log(`[containers] Stopping containers for thread=${state.threadId}`);
+    console.info(`[containers] Stopping containers for thread=${state.threadId}`);
 
     try {
       await execute('podman', ['compose', '-f', state.composeFile, 'down', '--remove-orphans'], {
@@ -172,9 +172,9 @@ export class ContainerService {
     const entries = [...this.activeContainers.entries()];
     if (entries.length === 0) return;
 
-    console.log(`[containers] Stopping ${entries.length} container group(s)...`);
+    console.info(`[containers] Stopping ${entries.length} container group(s)...`);
     await Promise.allSettled(entries.map(([worktreePath]) => this.stopContainers(worktreePath)));
-    console.log('[containers] All containers stopped.');
+    console.info('[containers] All containers stopped.');
   }
 
   // ── Internal ───────────────────────────────────────────────────

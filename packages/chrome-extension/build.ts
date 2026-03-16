@@ -36,7 +36,7 @@ if (watch) {
     }),
   ]);
   await Promise.all([ctx1.watch(), ctx2.watch()]);
-  console.log('Watching for changes...');
+  console.info('Watching for changes...');
 } else {
   await Promise.all([
     esbuild.build({
@@ -52,5 +52,5 @@ if (watch) {
       format: 'iife',
     }),
   ]);
-  console.log('Build complete.');
+  console.info('Build complete.');
 }

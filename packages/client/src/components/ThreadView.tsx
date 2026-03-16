@@ -544,6 +544,25 @@ const MemoizedMessageList = memo(
     const visibleItems = groupedItems.slice(windowStart);
     const hasHiddenItems = windowStart > 0;
 
+    // When windowed rendering hides items, the user message that "owns" the
+    // first visible section may be above the window.  Find it so the section
+    // grouping can still show a sticky header for context.
+    const hiddenSectionUserItem = useMemo(() => {
+      if (windowStart === 0) return null;
+      // Check if the first visible item is already a user message — no need
+      // to inject one in that case.
+      const firstVisible = visibleItems[0];
+      if (firstVisible?.type === 'message' && firstVisible.msg.role === 'user') return null;
+      // Walk backwards from windowStart to find the nearest user message.
+      for (let i = windowStart - 1; i >= 0; i--) {
+        const item = groupedItems[i];
+        if (item.type === 'message' && item.msg.role === 'user') {
+          return item as Extract<RenderItem, { type: 'message' }>;
+        }
+      }
+      return null;
+    }, [groupedItems, visibleItems, windowStart]);
+
     // ID → index map for expandToItem (scroll-to-message support)
     const itemIndexMap = useMemo(() => {
       const map = new Map<string, number>();
@@ -718,6 +737,8 @@ const MemoizedMessageList = memo(
     // Group items into sections: each section starts with a user message
     // and contains all following items until the next user message.
     // Items before the first user message go into a "preamble" section (no sticky header).
+    // When windowed rendering hides the owning user message, we inject
+    // hiddenSectionUserItem so the first visible section still has a sticky header.
     type MessageItem = Extract<RenderItem, { type: 'message' }>;
     const sections = useMemo(() => {
       const result: { userItem: MessageItem | null; items: RenderItem[] }[] = [];
@@ -741,8 +762,15 @@ const MemoizedMessageList = memo(
       if (current.userItem || current.items.length > 0) {
         result.push(current);
       }
+
+      // If the first section has no user message but we found one above the
+      // render window, inject it so a sticky header is always visible.
+      if (result.length > 0 && !result[0].userItem && hiddenSectionUserItem) {
+        result[0].userItem = hiddenSectionUserItem;
+      }
+
       return result;
-    }, [visibleItems]);
+    }, [visibleItems, hiddenSectionUserItem]);
 
     const renderNonUserItem = useCallback(
       (item: RenderItem) => {
@@ -1100,17 +1128,25 @@ export function ThreadView() {
 
   const lastMessage = selectLastMessage(activeThread);
 
-  // Count user messages to detect when the *user* sends a new prompt
-  // (as opposed to agent streaming updates which shouldn't reposition scroll).
-  const userMessageCount = useMemo(
-    () => activeThread?.messages?.filter((m: any) => m.role === 'user').length ?? 0,
-    [activeThread?.messages],
-  );
-  const prevUserMessageCountRef = useRef(userMessageCount);
+  // Track the last user message ID to detect when the *user* sends a new
+  // prompt (as opposed to older messages arriving via pagination, which
+  // increase the count but should not reposition scroll).
+  const lastUserMessageId = useMemo(() => {
+    const msgs = activeThread?.messages;
+    if (!msgs) return null;
+    for (let i = msgs.length - 1; i >= 0; i--) {
+      if (msgs[i].role === 'user') return msgs[i].id;
+    }
+    return null;
+  }, [activeThread?.messages]);
+  const prevLastUserMessageIdRef = useRef(lastUserMessageId);
   const prevWaitingReasonRef = useRef(activeThread?.waitingReason);
 
+  // Use the last message's ID (not messages.length) so that prepending older
+  // messages during pagination does NOT trigger sticky-bottom scrolling.
+  // Only tail-end changes (new agent content, status transitions) should fire.
   const scrollFingerprint = [
-    activeThread?.messages?.length,
+    lastMessage?.id,
     lastMessage?.content?.length,
     lastMessage?.toolCalls?.length,
     activeThread?.status,
@@ -1228,8 +1264,9 @@ export function ThreadView() {
     }
     smoothScrollPending.current = false;
 
-    const hasNewUserMessage = userMessageCount > prevUserMessageCountRef.current;
-    prevUserMessageCountRef.current = userMessageCount;
+    const hasNewUserMessage =
+      lastUserMessageId != null && lastUserMessageId !== prevLastUserMessageIdRef.current;
+    prevLastUserMessageIdRef.current = lastUserMessageId;
 
     // Detect when waitingReason transitions to 'question' or 'permission'
     // — the agent is asking something and the user needs to see the widget.
@@ -1269,29 +1306,43 @@ export function ThreadView() {
           viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
         });
       }
-    } else if (!userHasScrolledUp.current) {
+    } else if (!userHasScrolledUp.current && !loadingMore) {
       // Sticky bottom: if the user is at the bottom and new agent content arrives,
       // keep them at the bottom so they can follow along in real time.
+      // Skip entirely while loadingMore — the user is scrolling up to browse
+      // history and we must not yank the viewport back.
       const viewport = scrollViewportRef.current;
       if (viewport) {
-        requestAnimationFrame(() => {
-          viewport.scrollTop = viewport.scrollHeight;
-          // Second frame: catch layout shifts from windowed-rendering expansion
-          // triggered by the first scroll (spacer recalc, new items rendered).
+        // Double-check the actual scroll position — the scroll event handler
+        // is asynchronous (passive) and may not have flipped userHasScrolledUp
+        // yet if the user just started scrolling up.  This prevents the layout
+        // effect from yanking the viewport back to the bottom while the user
+        // is actively scrolling away.
+        const { scrollTop, scrollHeight, clientHeight } = viewport;
+        const actuallyAtBottom = scrollHeight - scrollTop - clientHeight <= 80;
+        if (!actuallyAtBottom) {
+          userHasScrolledUp.current = true;
+        } else {
           requestAnimationFrame(() => {
-            if (!userHasScrolledUp.current) {
-              viewport.scrollTop = viewport.scrollHeight;
-            }
+            viewport.scrollTop = viewport.scrollHeight;
+            // Second frame: catch layout shifts from windowed-rendering expansion
+            // triggered by the first scroll (spacer recalc, new items rendered).
+            requestAnimationFrame(() => {
+              if (!userHasScrolledUp.current) {
+                viewport.scrollTop = viewport.scrollHeight;
+              }
+            });
           });
-        });
+        }
       }
     }
   }, [
     activeThread?.id,
     activeThread?.waitingReason,
+    lastUserMessageId,
+    loadingMore,
     pinUserMessageToTop,
     scrollFingerprint,
-    userMessageCount,
   ]);
 
   // Preserve scroll position when older messages are prepended
@@ -1302,6 +1353,10 @@ export function ThreadView() {
 
     if (viewport && prevOldestIdRef.current && oldestId && prevOldestIdRef.current !== oldestId) {
       const addedHeight = viewport.scrollHeight - prevScrollHeightRef.current;
+      // Ensure the user stays marked as scrolled-up during pagination —
+      // the scrollTop adjustment below fires a scroll event which could
+      // otherwise re-evaluate the at-bottom threshold incorrectly.
+      userHasScrolledUp.current = true;
       viewport.scrollTop += addedHeight;
     }
 

@@ -7,6 +7,7 @@
 export {
   // Runtime tables
   projects,
+  arcs,
   threads,
   messages,
   startupCommands,

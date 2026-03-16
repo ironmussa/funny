@@ -25,7 +25,9 @@ import type { ThreadEvent } from '@funny/shared/thread-machine';
 import { log } from '../lib/logger.js';
 import { metric, startSpan, setThreadTrace, clearThreadTrace } from '../lib/telemetry.js';
 import { AgentMessageHandler, type ProjectLookup } from './agent-message-handler.js';
+import { getArcAgent } from './agent-registry.js';
 import { AgentStateTracker } from './agent-state.js';
+import { readArcArtifacts } from './arc-service.js';
 import type { IThreadManager, IWSBroker } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
 import { buildThreadContext, needsContextRecovery } from './thread-context-builder.js';
@@ -371,11 +373,46 @@ export class AgentRunner {
       }
     }
 
+    // Arc context injection: read artifacts and purpose prompt for arc-linked threads
+    let arcContext: string | undefined;
+    let arcPurposePrompt: string | undefined;
+    if (thread?.arcId && project && !effectiveSessionId) {
+      try {
+        const arc = await getServices().arcs?.getArc(thread.arcId);
+        if (arc) {
+          const artifacts = await readArcArtifacts(project.path, arc.name);
+          const sections: string[] = [];
+          if (artifacts.proposal) sections.push(`## Proposal\n${artifacts.proposal}`);
+          if (artifacts.design) sections.push(`## Design\n${artifacts.design}`);
+          if (artifacts.tasks) sections.push(`## Tasks\n${artifacts.tasks}`);
+          if (artifacts.specs) {
+            for (const [name, content] of Object.entries(artifacts.specs)) {
+              sections.push(`## Spec: ${name}\n${content}`);
+            }
+          }
+          if (sections.length > 0) {
+            arcContext = `[ARC CONTEXT: ${arc.name}]\n${sections.join('\n\n')}\n[/ARC CONTEXT]`;
+          }
+          const purpose = ((thread as any).purpose as string | undefined) ?? 'implement';
+          const arcAgent = getArcAgent(purpose as any, arc.name);
+          arcPurposePrompt = `[ARC PURPOSE]\n${arcAgent.systemPrompt as string}\n[/ARC PURPOSE]`;
+        }
+      } catch (e) {
+        log.warn('Arc context injection failed, proceeding without', {
+          namespace: 'agent',
+          threadId,
+          error: String(e),
+        });
+      }
+    }
+
     const systemPrefix =
       [
         projectSystemPrompt
           ? `[PROJECT INSTRUCTIONS]\n${projectSystemPrompt}\n[/PROJECT INSTRUCTIONS]`
           : undefined,
+        arcContext,
+        arcPurposePrompt,
         memoryContext,
         resumePrefix,
       ]

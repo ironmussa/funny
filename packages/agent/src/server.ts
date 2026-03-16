@@ -13,7 +13,7 @@ import {
 
 const port = parseInt(process.env.PORT ?? '3002', 10);
 
-console.log(`[agent] Starting on port ${port}...`);
+console.info(`[agent] Starting on port ${port}...`);
 
 // ── Graceful shutdown ────────────────────────────────────────────
 
@@ -22,13 +22,13 @@ let shuttingDown = false;
 async function shutdown(signal: string): Promise<void> {
   if (shuttingDown) return;
   shuttingDown = true;
-  console.log(`[agent] Shutting down (${signal})...`);
+  console.info(`[agent] Shutting down (${signal})...`);
   ciRetryWorkflow.stop();
   reviewWorkflow.stop();
   mergeWorkflow.stop();
   reviewAdapter.stop();
   ingestAdapter.stop();
-  console.log('[agent] Shutdown complete');
+  console.info('[agent] Shutdown complete');
   process.exit(0);
 }
 

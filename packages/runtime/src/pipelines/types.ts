@@ -7,6 +7,7 @@
  */
 
 import type { ProgressReporter } from '@funny/pipelines';
+import type { AgentDefinition } from '@funny/shared';
 
 // ── Action results ──────────────────────────────────────────
 
@@ -34,6 +35,8 @@ export interface SpawnAgentOpts {
   model?: string;
   /** Extra context from a previous step. */
   context?: string;
+  /** Agent definition — if provided, model and mode default to agent's values. */
+  agent?: AgentDefinition;
 }
 
 export interface RunCommandOpts {

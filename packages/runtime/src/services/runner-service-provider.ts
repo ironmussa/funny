@@ -304,6 +304,12 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
       async recordStageChange() {},
     },
 
+    arcs: {
+      async getArc() {
+        return undefined;
+      },
+    },
+
     wsBroker,
   };
 }

@@ -27,6 +27,7 @@ import type {
   IMessageQueueService,
   IMcpOauthService,
   IStageHistoryRepository,
+  IArcRepository,
   IWSBroker,
 } from './server-interfaces.js';
 
@@ -55,6 +56,8 @@ export interface RuntimeServiceProvider {
   mcpOauth: IMcpOauthService;
   /** Git stage change tracking */
   stageHistory: IStageHistoryRepository;
+  /** Arc lookup for agent context injection */
+  arcs?: IArcRepository;
   /** WebSocket event broadcasting */
   wsBroker: IWSBroker;
 }

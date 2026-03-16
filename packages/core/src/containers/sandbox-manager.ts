@@ -124,7 +124,7 @@ export class SandboxManager {
     if (this.podmanPath === undefined) {
       this.podmanPath = findPodman();
       if (this.podmanPath) {
-        console.log(`[sandbox] Podman found at: ${this.podmanPath}`);
+        console.info(`[sandbox] Podman found at: ${this.podmanPath}`);
       }
     }
     return this.podmanPath;
@@ -171,7 +171,7 @@ export class SandboxManager {
       return this.imageName;
     }
 
-    console.log(`[sandbox] Building image ${this.imageName}...`);
+    console.info(`[sandbox] Building image ${this.imageName}...`);
     await execute(
       podman,
       ['build', '-t', this.imageName, '-f', DOCKERFILE_PATH, dirname(DOCKERFILE_PATH)],
@@ -179,7 +179,7 @@ export class SandboxManager {
     );
 
     this.imageReady = true;
-    console.log(`[sandbox] Image ${this.imageName} ready`);
+    console.info(`[sandbox] Image ${this.imageName} ready`);
     return this.imageName;
   }
 
@@ -189,7 +189,7 @@ export class SandboxManager {
   private getHostSdkPath(): string {
     if (!this.hostSdkPath) {
       this.hostSdkPath = resolveHostSdkPath();
-      console.log(`[sandbox] Resolved SDK path: ${this.hostSdkPath}`);
+      console.info(`[sandbox] Resolved SDK path: ${this.hostSdkPath}`);
     }
     return this.hostSdkPath;
   }
@@ -237,7 +237,7 @@ export class SandboxManager {
         getHostBranch(worktreePath),
         getHostRemoteUrl(worktreePath),
       ]);
-      console.log(`[sandbox] Host branch=${branch}, remoteUrl=${remoteUrl}`);
+      console.info(`[sandbox] Host branch=${branch}, remoteUrl=${remoteUrl}`);
 
       // Build podman run args — mount worktree as READ-ONLY at /mnt/source
       const runArgs = [
@@ -270,13 +270,13 @@ export class SandboxManager {
 
       runArgs.push(this.imageName, 'sleep', 'infinity');
 
-      console.log(`[sandbox] Starting container ${containerName} for request=${requestId}`);
+      console.info(`[sandbox] Starting container ${containerName} for request=${requestId}`);
 
       const result = await execute(podman, runArgs, { timeout: 60_000 });
       state.containerId = result.stdout.trim();
       state.status = 'running';
 
-      console.log(
+      console.info(
         `[sandbox] Container ${containerName} running (id=${state.containerId.slice(0, 12)})`,
       );
 
@@ -299,7 +299,7 @@ export class SandboxManager {
 
       // Copy worktree files (excluding .git) from read-only mount to /workspace.
       // Run as root first to copy, then chown to sandbox user.
-      console.log(`[sandbox] Copying worktree files to ${CONTAINER_WORKSPACE}...`);
+      console.info(`[sandbox] Copying worktree files to ${CONTAINER_WORKSPACE}...`);
       const copyResult = await execute(
         podman,
         [
@@ -314,7 +314,7 @@ export class SandboxManager {
         ],
         { reject: false, timeout: 120_000 },
       );
-      console.log(
+      console.info(
         `[sandbox] Copy files: exit=${copyResult.exitCode} stderr=${copyResult.stderr.slice(0, 200)}`,
       );
 
@@ -325,7 +325,7 @@ export class SandboxManager {
       // Initialize git repo inside the container
       if (remoteUrl) {
         // Clone approach: init repo, add remote, fetch, and checkout the branch
-        console.log(`[sandbox] Initializing git repo with remote=${remoteUrl} branch=${branch}`);
+        console.info(`[sandbox] Initializing git repo with remote=${remoteUrl} branch=${branch}`);
 
         // git init + add remote + fetch
         const gitInitScript = [
@@ -346,7 +346,7 @@ export class SandboxManager {
           ['exec', '--user', 'sandbox', containerName, 'sh', '-c', gitInitScript],
           { reject: false, timeout: 120_000 },
         );
-        console.log(
+        console.info(
           `[sandbox] Git init+fetch: exit=${initResult.exitCode} stderr=${initResult.stderr.slice(0, 500)}`,
         );
 
@@ -356,7 +356,7 @@ export class SandboxManager {
         }
       } else {
         // No remote — just init a local repo
-        console.log(`[sandbox] No remote URL found, initializing local-only git repo`);
+        console.info(`[sandbox] No remote URL found, initializing local-only git repo`);
         await this.fallbackGitInit(podman, containerName, branch);
       }
 
@@ -376,7 +376,7 @@ export class SandboxManager {
         ],
         { reject: false, timeout: 10_000 },
       );
-      console.log(
+      console.info(
         `[sandbox] Verify git status: exit=${verifyGitStatus.exitCode} stdout=${verifyGitStatus.stdout.slice(0, 200)} stderr=${verifyGitStatus.stderr.slice(0, 200)}`,
       );
 
@@ -395,7 +395,7 @@ export class SandboxManager {
         ],
         { reject: false, timeout: 10_000 },
       );
-      console.log(`[sandbox] Container branch: ${verifyBranch.stdout.trim()}`);
+      console.info(`[sandbox] Container branch: ${verifyBranch.stdout.trim()}`);
 
       return state;
     } catch (error: any) {
@@ -430,7 +430,7 @@ export class SandboxManager {
       ['exec', '--user', 'sandbox', containerName, 'sh', '-c', script],
       { reject: false, timeout: 60_000 },
     );
-    console.log(
+    console.info(
       `[sandbox] Fallback git init: exit=${result.exitCode} stderr=${result.stderr.slice(0, 200)}`,
     );
   }
@@ -444,7 +444,7 @@ export class SandboxManager {
     if (!state) return;
 
     state.status = 'stopping';
-    console.log(`[sandbox] Stopping container ${state.containerName}`);
+    console.info(`[sandbox] Stopping container ${state.containerName}`);
 
     const podman = this.getPodmanPath();
     if (!podman) return;
@@ -489,7 +489,7 @@ export class SandboxManager {
     const podman = this.requirePodman();
 
     return (options) => {
-      console.log(`[sandbox] spawnClaudeCodeProcess: ${options.command} (cwd=${options.cwd})`);
+      console.info(`[sandbox] spawnClaudeCodeProcess: ${options.command} (cwd=${options.cwd})`);
 
       // Rewrite args: replace host SDK paths with container mount path
       // Normalize backslashes to forward slashes for cross-platform matching
@@ -586,9 +586,9 @@ export class SandboxManager {
     const entries = [...this.activeSandboxes.keys()];
     if (entries.length === 0) return;
 
-    console.log(`[sandbox] Stopping ${entries.length} sandbox(es)...`);
+    console.info(`[sandbox] Stopping ${entries.length} sandbox(es)...`);
     await Promise.allSettled(entries.map((requestId) => this.stopSandbox(requestId)));
-    console.log('[sandbox] All sandboxes stopped.');
+    console.info('[sandbox] All sandboxes stopped.');
   }
 
   /**
@@ -614,9 +614,9 @@ export class SandboxManager {
 
       if (names.length === 0) return 0;
 
-      console.log(`[sandbox] Found ${names.length} orphaned container(s), removing...`);
+      console.info(`[sandbox] Found ${names.length} orphaned container(s), removing...`);
       await execute(podman, ['rm', '-f', ...names], { reject: false, timeout: 30_000 });
-      console.log(`[sandbox] Removed ${names.length} orphaned container(s): ${names.join(', ')}`);
+      console.info(`[sandbox] Removed ${names.length} orphaned container(s): ${names.join(', ')}`);
       return names.length;
     } catch (err: any) {
       console.warn(`[sandbox] Failed to clean up orphaned containers: ${err.message}`);

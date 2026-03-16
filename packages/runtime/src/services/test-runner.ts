@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import { readdir, stat } from 'fs/promises';
 import { join, relative } from 'path';
 
-import type { TestFileStatus } from '@funny/shared';
+import type { TestFileStatus, TestSpec } from '@funny/shared';
 
 import { log } from '../lib/logger.js';
 import { wsBroker } from './ws-broker.js';
@@ -57,6 +57,70 @@ export async function discoverTestFiles(projectPath: string): Promise<string[]> 
   return files.sort();
 }
 
+// ─── Test Spec Discovery ─────────────────────────────────
+
+function walkSuites(suites: any[], file: string): TestSpec[] {
+  const specs: TestSpec[] = [];
+  for (const suite of suites) {
+    if (suite.specs) {
+      for (const spec of suite.specs) {
+        specs.push({
+          id: spec.id ?? `${file}:${spec.line}`,
+          title: spec.title,
+          file: spec.file ?? file,
+          line: spec.line,
+          column: spec.column,
+        });
+      }
+    }
+    if (suite.suites) {
+      specs.push(...walkSuites(suite.suites, file));
+    }
+  }
+  return specs;
+}
+
+export async function discoverTestsInFile(
+  projectPath: string,
+  file: string,
+): Promise<{ specs: TestSpec[] } | { error: string; status: number }> {
+  try {
+    log.info('Discovering tests in file', { namespace: 'test-runner', projectPath, file });
+    const proc = Bun.spawn(['npx', 'playwright', 'test', file, '--list', '--reporter=json'], {
+      cwd: projectPath,
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
+
+    const [stdout, stderr] = await Promise.all([
+      new Response(proc.stdout).text(),
+      new Response(proc.stderr).text(),
+    ]);
+    const exitCode = await proc.exited;
+
+    log.info('Playwright list result', {
+      namespace: 'test-runner',
+      file,
+      exitCode,
+      stdoutLen: stdout.length,
+      stderrLen: stderr.length,
+      stderrPreview: stderr.slice(0, 200),
+    });
+
+    if (exitCode !== 0) {
+      return { error: `Playwright list failed: ${stderr}`, status: 500 };
+    }
+
+    const json = JSON.parse(stdout);
+    const specs = walkSuites(json.suites ?? [], file);
+    log.info('Discovered specs', { namespace: 'test-runner', file, count: specs.length });
+    return { specs };
+  } catch (err) {
+    log.error('discoverTestsInFile error', { namespace: 'test-runner', file, error: String(err) });
+    return { error: String(err), status: 500 };
+  }
+}
+
 // ─── Test Execution ─────────────────────────────────────
 
 export function isRunning(projectId: string): boolean {
@@ -68,6 +132,7 @@ export async function runTest(
   projectPath: string,
   file: string,
   userId: string,
+  line?: number,
 ): Promise<{ runId: string } | { error: string; status: number }> {
   if (activeRuns.has(projectId)) {
     return { error: 'A test is already running', status: 409 };
@@ -93,15 +158,19 @@ export async function runTest(
 
   try {
     // Spawn Playwright test process
-    const proc = Bun.spawn(['npx', 'playwright', 'test', file, '--headed', '--reporter=line'], {
-      cwd: projectPath,
-      env: {
-        ...process.env,
-        PLAYWRIGHT_CHROMIUM_DEBUG_PORT: String(CDP_PORT),
+    const testTarget = line ? `${file}:${line}` : file;
+    const proc = Bun.spawn(
+      ['npx', 'playwright', 'test', testTarget, '--headed', '--reporter=line'],
+      {
+        cwd: projectPath,
+        env: {
+          ...process.env,
+          PLAYWRIGHT_CHROMIUM_DEBUG_PORT: String(CDP_PORT),
+        },
+        stdout: 'pipe',
+        stderr: 'pipe',
       },
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
+    );
 
     run.process = proc;
 

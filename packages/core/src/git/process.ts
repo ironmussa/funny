@@ -216,12 +216,12 @@ export async function executeWithLogging(
 ): Promise<{ stdout: string; stderr: string; exitCode: number }> {
   const start = Date.now();
   const argsStr = args.join(' ');
-  console.log(`[exec] ${command} ${argsStr}`);
+  console.debug(`[exec] ${command} ${argsStr}`);
 
   try {
     const result = await execute(command, args, options);
     const duration = Date.now() - start;
-    console.log(`[exec] done ${command} (${duration}ms)`);
+    console.debug(`[exec] done ${command} (${duration}ms)`);
     return result;
   } catch (error) {
     const duration = Date.now() - start;

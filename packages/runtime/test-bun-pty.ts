@@ -1,5 +1,5 @@
 try {
-  console.log('Attempting to spawn PTY with Bun.spawn...');
+  console.info('Attempting to spawn PTY with Bun.spawn...');
   const shell = process.env.SHELL || 'powershell.exe';
   const proc = Bun.spawn([shell], {
     env: process.env,
@@ -7,8 +7,8 @@ try {
     stdin: 'pipe',
   });
 
-  console.log('Spawn returned:', proc);
-  console.log('Pid:', proc.pid);
+  console.info('Spawn returned:', proc);
+  console.info('Pid:', proc.pid);
 
   const decoder = new TextDecoder();
 
@@ -23,23 +23,23 @@ try {
       }
     })();
   } else {
-    console.log('No stdout?');
+    console.info('No stdout?');
   }
 
   // Write to PTY
   setTimeout(() => {
     if (proc.stdin) {
-      console.log('Writing "ls" to PTY...');
+      console.info('Writing "ls" to PTY...');
       const writer = proc.stdin.getWriter();
       writer.write(new TextEncoder().encode('ls\r'));
       writer.releaseLock();
     } else {
-      console.log('No stdin available to write');
+      console.info('No stdin available to write');
     }
   }, 2000);
 
   setTimeout(() => {
-    console.log('Killing process...');
+    console.info('Killing process...');
     proc.kill();
     process.exit(0);
   }, 5000);

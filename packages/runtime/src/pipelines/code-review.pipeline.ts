@@ -11,7 +11,9 @@
  */
 
 import { definePipeline, node } from '@funny/pipelines';
+import type { AgentDefinition } from '@funny/shared';
 
+import { resolveSystemPrompt } from '../services/agent-registry.js';
 import type { PipelineContext } from './types.js';
 
 // ── Context ─────────────────────────────────────────────────
@@ -23,14 +25,10 @@ export interface CodeReviewPipelineContext extends PipelineContext {
   // ── Config ─────────────────────────────────────────────
   /** Max review→fix iterations. Default: 10. */
   maxIterations?: number;
-  /** Model for the reviewer agent. */
-  reviewerModel?: string;
-  /** Model for the corrector agent. */
-  correctorModel?: string;
-  /** Custom reviewer prompt (replaces default). */
-  reviewerPrompt?: string;
-  /** Custom corrector prompt prefix. */
-  correctorPrompt?: string;
+  /** Agent definition for the reviewer. */
+  reviewer: AgentDefinition;
+  /** Agent definition for the corrector. */
+  corrector: AgentDefinition;
 
   // ── State (populated during execution) ─────────────────
   /** Current iteration (1-based). */
@@ -43,44 +41,6 @@ export interface CodeReviewPipelineContext extends PipelineContext {
   reviewOutput?: string;
   /** Whether the corrector made no changes (signals we should stop). */
   noChanges: boolean;
-}
-
-// ── Helpers ─────────────────────────────────────────────────
-
-function defaultReviewerPrompt(commitSha?: string): string {
-  const ref = commitSha || 'HEAD';
-  return `You are a code reviewer. Analyze the changes in the latest commit.
-
-Run this command to get the diff: \`git diff ${ref}~1..${ref}\`
-
-If that fails (first commit), run: \`git show ${ref}\`
-
-Review the diff for:
-- Bugs and logic errors
-- Security vulnerabilities
-- Performance issues
-- Missing error handling
-- Code that contradicts existing patterns
-
-You MUST respond with a JSON block at the end of your message:
-\`\`\`json
-{
-  "verdict": "pass" | "fail",
-  "findings": [
-    {
-      "severity": "critical" | "high" | "medium" | "low",
-      "category": "bug" | "security" | "performance" | "logic" | "style",
-      "file": "path/to/file.ts",
-      "line": 42,
-      "description": "What is wrong",
-      "suggestion": "How to fix it"
-    }
-  ]
-}
-\`\`\`
-
-If there are no significant issues, return verdict "pass" with an empty findings array.
-Only flag real problems — do not flag style preferences or nitpicks unless they indicate bugs.`;
 }
 
 /**
@@ -143,15 +103,12 @@ export const codeReviewPipeline = definePipeline<CodeReviewPipelineContext>({
     node('review', async (ctx) => {
       ctx.progress.onStepProgress('review', { status: 'running' });
 
-      const prompt = ctx.reviewerPrompt
-        ? `${ctx.reviewerPrompt}\n\nReview commit: ${ctx.commitSha || 'HEAD'}`
-        : defaultReviewerPrompt(ctx.commitSha);
+      const prompt = resolveSystemPrompt(ctx.reviewer, { commitSha: ctx.commitSha || 'HEAD' });
 
       const result = await ctx.provider.spawnAgent({
         prompt,
         cwd: ctx.cwd,
-        mode: 'plan', // read-only
-        model: ctx.reviewerModel,
+        agent: ctx.reviewer,
       });
 
       if (!result.ok) {
@@ -191,15 +148,13 @@ export const codeReviewPipeline = definePipeline<CodeReviewPipelineContext>({
       async (ctx) => {
         ctx.progress.onStepProgress('fix', { status: 'running' });
 
-        const prompt = ctx.correctorPrompt
-          ? `${ctx.correctorPrompt}\n\nFindings:\n${ctx.findings}`
-          : `You are a code corrector. The reviewer found the following issues:\n\n${ctx.findings}\n\nFix the issues in the source files. Do NOT create a git commit — just fix the files and stage with \`git add\`.`;
+        const correctorBase = resolveSystemPrompt(ctx.corrector);
+        const prompt = `${correctorBase}\n\nThe reviewer found the following issues that need to be fixed:\n\n${ctx.findings}\n\nDo NOT create a git commit — just fix the files and stage with \`git add\`.`;
 
         const fixResult = await ctx.provider.spawnAgent({
           prompt,
           cwd: ctx.cwd,
-          mode: 'autoEdit',
-          model: ctx.correctorModel,
+          agent: ctx.corrector,
           context: ctx.reviewOutput,
         });
 

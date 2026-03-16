@@ -23,6 +23,8 @@ import type {
   FunnyProjectConfig,
   Pipeline,
   PipelineRun,
+  Arc,
+  ArcArtifacts,
 } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { internal, processError } from '@funny/shared/errors';
@@ -261,6 +263,8 @@ export const api = {
     fileReferences?: { path: string }[];
     worktreePath?: string;
     parentThreadId?: string;
+    arcId?: string;
+    purpose?: 'explore' | 'plan' | 'implement';
   }) => request<Thread>('/threads', { method: 'POST', body: JSON.stringify(data) }),
   createIdleThread: (data: {
     projectId: string;
@@ -270,6 +274,8 @@ export const api = {
     prompt?: string;
     stage?: string;
     images?: ImageAttachment[];
+    arcId?: string;
+    purpose?: 'explore' | 'plan' | 'implement';
   }) => request<Thread>('/threads/idle', { method: 'POST', body: JSON.stringify(data) }),
   sendMessage: (
     threadId: string,
@@ -1011,10 +1017,14 @@ export const api = {
   // Test Runner
   listTestFiles: (projectId: string) =>
     request<import('@funny/shared').TestFile[]>(`/tests/${projectId}/files`),
-  runTest: (projectId: string, file: string) =>
+  discoverTestSpecs: (projectId: string, file: string) =>
+    request<import('@funny/shared').DiscoverTestsResponse>(
+      `/tests/${projectId}/specs?file=${encodeURIComponent(file)}`,
+    ),
+  runTest: (projectId: string, file: string, line?: number) =>
     request<import('@funny/shared').RunTestResponse>(`/tests/${projectId}/run`, {
       method: 'POST',
-      body: JSON.stringify({ file }),
+      body: JSON.stringify({ file, ...(line != null && { line }) }),
     }),
   stopTest: (projectId: string) =>
     request<{ ok: boolean }>(`/tests/${projectId}/stop`, { method: 'POST' }),
@@ -1069,4 +1079,24 @@ export const api = {
       user: { id: string; username: string; displayName: string };
       organizationId: string;
     }>('/invite-links/register', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Arcs
+  listArcs: (projectId: string) => request<Arc[]>(`/projects/${projectId}/arcs`),
+  createArc: (projectId: string, name: string) =>
+    request<Arc>(`/projects/${projectId}/arcs`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
+  getArc: (id: string) => request<Arc>(`/arcs/${id}`),
+  deleteArc: (id: string) => request<{ ok: boolean }>(`/arcs/${id}`, { method: 'DELETE' }),
+  listArcThreads: (arcId: string) => request<Thread[]>(`/arcs/${arcId}/threads`),
+  getArcArtifacts: (arcId: string, name: string, projectId: string) =>
+    request<{ artifacts: ArcArtifacts }>(
+      `/arcs/${arcId}/artifacts?name=${encodeURIComponent(name)}&projectId=${encodeURIComponent(projectId)}`,
+    ),
+  createArcDirectory: (projectId: string, name: string) =>
+    request<{ ok: boolean; path: string }>(`/projects/${projectId}/arcs/directory`, {
+      method: 'POST',
+      body: JSON.stringify({ name }),
+    }),
 };

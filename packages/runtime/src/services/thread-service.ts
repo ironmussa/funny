@@ -139,6 +139,8 @@ export interface CreateIdleThreadParams {
   prompt?: string;
   images?: ImageAttachment[];
   stage?: 'backlog' | 'planning';
+  arcId?: string;
+  purpose?: 'explore' | 'implement';
 }
 
 export async function createIdleThread(params: CreateIdleThreadParams) {
@@ -186,6 +188,8 @@ export async function createIdleThread(params: CreateIdleThreadParams) {
     baseBranch,
     worktreePath: undefined as string | undefined,
     initialPrompt: params.prompt,
+    arcId: params.arcId,
+    purpose: params.purpose || 'implement',
     cost: 0,
     createdAt: new Date().toISOString(),
   };
@@ -235,6 +239,8 @@ export interface CreateAndStartThreadParams {
   fileReferences?: FileRef[];
   worktreePath?: string;
   parentThreadId?: string;
+  arcId?: string;
+  purpose?: 'explore' | 'implement';
 }
 
 export async function createAndStartThread(params: CreateAndStartThreadParams) {
@@ -295,6 +301,8 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
       baseBranch: resolvedBaseBranch,
       worktreePath: undefined as string | undefined,
       parentThreadId: params.parentThreadId,
+      arcId: params.arcId,
+      purpose: params.purpose || 'implement',
       cost: 0,
       createdAt: new Date().toISOString(),
     };
@@ -437,6 +445,8 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
       baseBranch: resolvedBaseBranch || threadBranch,
       worktreePath: undefined as string | undefined,
       parentThreadId: params.parentThreadId,
+      arcId: params.arcId,
+      purpose: params.purpose || 'implement',
       cost: 0,
       createdAt: new Date().toISOString(),
     };
@@ -528,6 +538,8 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
     baseBranch: resolvedBaseBranch || (params.mode === 'local' ? threadBranch : undefined),
     worktreePath,
     parentThreadId: params.parentThreadId,
+    arcId: params.arcId,
+    purpose: params.purpose || 'implement',
     cost: 0,
     createdAt: new Date().toISOString(),
   };

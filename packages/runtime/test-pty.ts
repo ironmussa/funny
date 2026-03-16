@@ -4,7 +4,7 @@ import * as pty from 'node-pty';
 
 const shell = platform() === 'win32' ? 'powershell.exe' : 'bash';
 
-console.log(`Spawning ${shell}...`);
+console.info(`Spawning ${shell}...`);
 
 const ptyProcess = pty.spawn(shell, [], {
   name: 'xterm-color',
@@ -16,25 +16,25 @@ const ptyProcess = pty.spawn(shell, [], {
 });
 
 ptyProcess.onData((data) => {
-  console.log(`[PTY DATA]: ${JSON.stringify(data)}`);
+  console.info(`[PTY DATA]: ${JSON.stringify(data)}`);
 });
 
 ptyProcess.onExit((res) => {
-  console.log(`[PTY EXIT]: ${JSON.stringify(res)}`);
+  console.info(`[PTY EXIT]: ${JSON.stringify(res)}`);
 });
 
 // Wait for shell to start
 setTimeout(async () => {
-  console.log('PTY keys:', Object.keys(ptyProcess));
+  console.info('PTY keys:', Object.keys(ptyProcess));
   try {
-    console.log('Writing "ls" to PTY via fs.writeSync...');
+    console.info('Writing "ls" to PTY via fs.writeSync...');
     // @ts-ignore
     const fd = ptyProcess._fd;
     if (typeof fd === 'number') {
       const fs = await import('fs');
       fs.writeSync(fd, 'ls\r');
     } else {
-      console.log('No _fd found, trying standard write');
+      console.info('No _fd found, trying standard write');
       ptyProcess.write('ls\r');
     }
   } catch (e) {
@@ -43,6 +43,6 @@ setTimeout(async () => {
 }, 2000);
 
 setTimeout(() => {
-  console.log('Exiting...');
+  console.info('Exiting...');
   ptyProcess.kill();
 }, 5000);

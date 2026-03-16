@@ -68,5 +68,5 @@ if (proc.exitCode !== 0) {
   process.exit(1);
 }
 
-console.log(`\nPackaged: ${zipName}`);
-console.log(`Upload this file to the Chrome Web Store or share with testers.`);
+console.info(`\nPackaged: ${zipName}`);
+console.info(`Upload this file to the Chrome Web Store or share with testers.`);

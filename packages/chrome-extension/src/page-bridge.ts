@@ -12,7 +12,7 @@
 if (!window.__funnyBridgeLoaded) {
   window.__funnyBridgeLoaded = true;
 
-  console.log('[Funny Bridge] v2.2 loaded in MAIN world');
+  console.info('[Funny Bridge] v2.2 loaded in MAIN world');
 
   // -------------------------------------------------------------------------
   // Framework detection
@@ -104,7 +104,7 @@ if (!window.__funnyBridgeLoaded) {
     if (detectNuxt()) frameworks.push('Nuxt');
 
     const result = frameworks.join(', ');
-    console.log('[Funny Bridge] Framework detect:', result || 'none');
+    console.debug('[Funny Bridge] Framework detect:', result || 'none');
     document.documentElement.setAttribute('data-funny-framework', result);
   });
 

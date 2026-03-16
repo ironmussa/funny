@@ -11,7 +11,9 @@
  */
 
 import { definePipeline, node } from '@funny/pipelines';
+import type { AgentDefinition } from '@funny/shared';
 
+import { resolveSystemPrompt } from '../services/agent-registry.js';
 import type { PipelineContext } from './types.js';
 
 // ── Context ─────────────────────────────────────────────────
@@ -27,10 +29,8 @@ export interface CommitPipelineContext extends PipelineContext {
   // ── Retry config ───────────────────────────────────────
   /** Max retries for pre-commit hook failures. Default: 3. */
   maxRetries?: number;
-  /** Model to use for the fixer agent. */
-  fixerModel?: string;
-  /** Custom fixer prompt (replaces default). */
-  fixerPrompt?: string;
+  /** Agent definition for the pre-commit fixer. */
+  fixer: AgentDefinition;
 
   // ── State (populated during execution) ─────────────────
   /** Current attempt number (1-based). */
@@ -101,15 +101,13 @@ export const commitPipeline = definePipeline<CommitPipelineContext>({
           level: 'warning',
         });
 
-        const prompt = ctx.fixerPrompt
-          ? `${ctx.fixerPrompt}\n\nError:\n${ctx.lastHookError}`
-          : `A pre-commit hook failed with the following error:\n\n\`\`\`\n${ctx.lastHookError}\n\`\`\`\n\nFix the issues. After fixing, stage your changes with \`git add\`. Do NOT create a commit.`;
+        const fixerBase = resolveSystemPrompt(ctx.fixer);
+        const prompt = `${fixerBase}\n\nA pre-commit hook failed with the following error:\n\n\`\`\`\n${ctx.lastHookError}\n\`\`\``;
 
         const fixResult = await ctx.provider.spawnAgent({
           prompt,
           cwd: ctx.cwd,
-          mode: 'autoEdit',
-          model: ctx.fixerModel,
+          agent: ctx.fixer,
           context: ctx.lastHookError,
         });
 

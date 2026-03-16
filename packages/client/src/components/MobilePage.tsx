@@ -356,6 +356,14 @@ function ChatView({
 
     const scrollToBottom = () => {
       if (!userHasScrolledUp.current) {
+        // Double-check the actual scroll position — the scroll event handler
+        // is asynchronous and may not have flipped userHasScrolledUp yet.
+        const { scrollTop, scrollHeight, clientHeight } = viewport;
+        const actuallyAtBottom = scrollHeight - scrollTop - clientHeight <= 80;
+        if (!actuallyAtBottom) {
+          userHasScrolledUp.current = true;
+          return;
+        }
         if (smoothScrollPending.current) {
           smoothScrollPending.current = false;
           viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });

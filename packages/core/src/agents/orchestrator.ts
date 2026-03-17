@@ -154,7 +154,15 @@ export class AgentOrchestrator extends EventEmitter {
       provider,
       mcpServers,
       spawnClaudeCodeProcess,
+      systemPrefix,
     };
+
+    dlog.info('processOpts systemPrefix', {
+      threadId,
+      hasSystemPrefix: !!systemPrefix,
+      systemPrefixLength: systemPrefix?.length ?? 0,
+      isResume,
+    });
 
     if (isResume) {
       dlog.info('Starting agent with session resume', { threadId, sessionId });

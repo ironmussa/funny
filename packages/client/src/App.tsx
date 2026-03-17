@@ -268,7 +268,7 @@ export function App() {
             onPointerDown={handleRpPointerDown}
             onPointerMove={handleRpPointerMove}
             onPointerUp={handleRpPointerUp}
-            className="absolute inset-y-0 left-0 z-20 w-4 -translate-x-1/2 cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border"
+            className="absolute inset-y-0 left-0 z-20 w-3 -translate-x-1/2 cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-px after:bg-transparent hover:after:bg-sidebar-border"
           />
         )}
         {(reviewPaneReady || reviewPaneOpen) && (

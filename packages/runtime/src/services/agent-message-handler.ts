@@ -287,9 +287,17 @@ export class AgentMessageHandler {
           continue;
         }
 
-        // Skip duplicate ExitPlanMode calls
+        // Skip duplicate interactive tool calls when already waiting for user input
         if (block.name === 'ExitPlanMode' && this.state.pendingUserInput.get(threadId) === 'plan') {
           log.debug('Skipping duplicate ExitPlanMode', { namespace: 'agent', threadId });
+          seen.set(block.id, 'skipped');
+          continue;
+        }
+        if (
+          block.name === 'AskUserQuestion' &&
+          this.state.pendingUserInput.get(threadId) === 'question'
+        ) {
+          log.debug('Skipping duplicate AskUserQuestion', { namespace: 'agent', threadId });
           seen.set(block.id, 'skipped');
           continue;
         }

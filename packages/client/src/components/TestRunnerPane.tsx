@@ -117,10 +117,19 @@ export function TestRunnerPane() {
         </Tooltip>
       </div>
 
-      {/* Two-section layout: file browser (top) and preview (bottom) */}
-      <div className="flex flex-1 flex-col overflow-hidden">
-        {/* File browser — takes about 40% */}
-        <div className="h-[40%] min-h-[150px] overflow-hidden border-b">
+      {/* Two-column layout: browser preview (left, larger) and file explorer (right) */}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {/* Left column — browser preview + test output (3× wider) */}
+        <div className="min-w-0 flex-[3] overflow-hidden">
+          <BrowserPreview
+            isRunning={isRunning}
+            isStreaming={isStreaming}
+            outputLines={outputLines}
+          />
+        </div>
+
+        {/* Right column — test file explorer */}
+        <div className="min-w-0 flex-1 overflow-hidden border-l">
           <TestFileBrowser
             files={files}
             fileStatuses={fileStatuses}
@@ -134,9 +143,6 @@ export function TestRunnerPane() {
             onRunAll={handleRunAll}
           />
         </div>
-
-        {/* Browser preview + output log — takes remaining space */}
-        <BrowserPreview isRunning={isRunning} isStreaming={isStreaming} outputLines={outputLines} />
       </div>
     </div>
   );

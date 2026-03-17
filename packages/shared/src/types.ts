@@ -237,6 +237,8 @@ export interface AgentDefinition {
   provider: AgentProvider;
   /** Default permission mode. */
   permissionMode: PermissionMode;
+  /** Tools that should be disabled for this agent role. */
+  disallowedTools?: string[];
 }
 
 export interface Thread {

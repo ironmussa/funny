@@ -193,7 +193,7 @@ export async function createRuntimeApp(options: RuntimeAppOptions): Promise<Runt
   app.get('/api/bootstrap', (c) => {
     c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
     c.header('Pragma', 'no-cache');
-    return c.json({});
+    return c.json({ mode: 'local' });
   });
 
   // Mount routes — only runner-specific operations

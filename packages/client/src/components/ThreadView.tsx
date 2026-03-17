@@ -1,3 +1,4 @@
+import type { ThreadPurpose } from '@funny/shared';
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
 import {
   Loader2,
@@ -28,6 +29,7 @@ import {
 } from 'react';
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
+import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { UserMessageCard } from '@/components/thread/UserMessageCard';
@@ -48,6 +50,7 @@ import {
   type RenderItem,
 } from '@/lib/render-items';
 import { timeAgo, resolveModelLabel } from '@/lib/thread-utils';
+import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
@@ -932,6 +935,7 @@ const MemoizedMessageList = memo(
 
 export function ThreadView() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
   const activeThread = useThreadStore((s) => s.activeThread);
   // Granular selectors: these return the same reference when only status/cost
@@ -1673,6 +1677,46 @@ export function ThreadView() {
     }
   }, []);
 
+  const handlePhaseTransition = useCallback(
+    async (newPurpose: ThreadPurpose) => {
+      const thread = activeThreadRef.current;
+      if (!thread?.arcId || newPurpose === thread.purpose) return;
+
+      setSending(true);
+      const { allowedTools, disallowedTools } = deriveToolLists(
+        useSettingsStore.getState().toolPermissions,
+      );
+
+      const permissionMode = newPurpose === 'implement' ? 'autoEdit' : 'plan';
+      const result = await api.createThread({
+        projectId: thread.projectId,
+        title: `${thread.title} [${newPurpose}]`,
+        mode: newPurpose === 'implement' ? 'worktree' : 'local',
+        provider: thread.provider,
+        model: thread.model,
+        permissionMode,
+        baseBranch: thread.baseBranch || undefined,
+        prompt: `Continue from the ${thread.purpose} phase. Read the arc artifacts and proceed with the ${newPurpose} phase.`,
+        arcId: thread.arcId,
+        purpose: newPurpose,
+        allowedTools,
+        disallowedTools,
+      });
+
+      setSending(false);
+
+      if (result.isErr()) {
+        toast.error(`Failed to create ${newPurpose} thread`);
+        return;
+      }
+
+      useThreadStore.setState({ selectedThreadId: result.value.id });
+      await useThreadStore.getState().loadThreadsForProject(thread.projectId);
+      navigate(buildPath(`/projects/${thread.projectId}/threads/${result.value.id}`));
+    },
+    [navigate],
+  );
+
   const handlePermissionApproval = useCallback(async (toolName: string, approved: boolean) => {
     const thread = activeThreadRef.current;
     if (!thread) return;
@@ -1786,6 +1830,7 @@ export function ThreadView() {
           <div className="w-full max-w-3xl">
             <PromptInput
               onSubmit={handleSend}
+              onPhaseTransition={handlePhaseTransition}
               loading={sending}
               isNewThread
               projectId={activeThread.projectId}
@@ -1823,7 +1868,7 @@ export function ThreadView() {
           <div
             className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
             ref={scrollViewportRef}
-            style={{ contain: 'layout style' }}
+            style={{ contain: 'layout style', scrollbarGutter: 'stable' }}
           >
             {/* Spacer pushes content to the bottom without mt-auto, which caused CLS
               as the margin shrank when messages arrived. A flex-grow spacer is inert
@@ -2027,6 +2072,7 @@ export function ThreadView() {
               <PromptInput
                 onSubmit={handleSend}
                 onStop={handleStop}
+                onPhaseTransition={handlePhaseTransition}
                 loading={sending}
                 running={isRunning && !isExternal}
                 threadId={activeThread.id}

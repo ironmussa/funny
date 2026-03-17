@@ -13,6 +13,7 @@ export default defineConfig(({ mode }) => {
   const wsTarget = `ws://127.0.0.1:${serverPort}`;
 
   return {
+    envDir: monorepoRoot,
     plugins: [react()],
     resolve: {
       alias: {

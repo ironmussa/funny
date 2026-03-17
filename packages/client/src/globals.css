@@ -96,33 +96,33 @@
   }
 
   .dark {
-    --background: 0 0% 12.2%;
+    --background: 240 5% 20%;
     --foreground: 0 0% 98%;
-    --card: 240 5.9% 5.5%;
+    --card: 240 4% 23%;
     --card-foreground: 0 0% 98%;
-    --popover: 240 5.9% 5.5%;
+    --popover: 240 4% 23%;
     --popover-foreground: 0 0% 98%;
     --primary: 0 0% 98%;
     --primary-foreground: 240 5.9% 10%;
-    --secondary: 240 3.7% 15.9%;
+    --secondary: 240 3.7% 27%;
     --secondary-foreground: 0 0% 98%;
-    --muted: 240 3.7% 15.9%;
+    --muted: 240 3.7% 27%;
     --muted-foreground: 240 5% 64.9%;
-    --accent: 240 3.7% 15.9%;
+    --accent: 240 3.7% 27%;
     --accent-foreground: 0 0% 98%;
     --destructive: 0 62.8% 30.6%;
     --destructive-foreground: 0 0% 98%;
-    --border: 240 3.7% 15.9%;
-    --input: 240 4% 20%;
+    --border: 240 3.7% 30%;
+    --input: 240 4% 32%;
     --ring: 240 4.9% 83.9%;
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 9.4%;
+    --sidebar-background: 240 5% 17%;
     --sidebar-foreground: 240 4.8% 95.9%;
     --sidebar-primary: 224.3 76.3% 48%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent: 240 3.7% 27%;
     --sidebar-accent-foreground: 240 4.8% 95.9%;
-    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-border: 240 3.7% 30%;
     --sidebar-ring: 217.2 91.2% 59.8%;
 
     /* Status colors (dark mode) */
@@ -160,33 +160,33 @@
 
   /* ── One Dark Pro ─────────────────────────────────────────── */
   .theme-one-dark {
-    --background: 220 13% 16.5%;
+    --background: 220 13% 12%;
     --foreground: 219 14% 82%;
-    --card: 220 10% 11%;
+    --card: 220 10% 8%;
     --card-foreground: 220 13% 90%;
-    --popover: 220 10% 11%;
+    --popover: 220 10% 8%;
     --popover-foreground: 220 13% 90%;
     --primary: 220 18% 40%;
     --primary-foreground: 0 0% 98%;
-    --secondary: 218.6 16% 26%;
+    --secondary: 218.6 16% 22%;
     --secondary-foreground: 219 14% 85%;
-    --muted: 218.6 14% 20%;
+    --muted: 218.6 14% 16%;
     --muted-foreground: 219 10% 55%;
-    --accent: 218.6 14% 20%;
+    --accent: 218.6 14% 16%;
     --accent-foreground: 220 13% 90%;
     --destructive: 3.5 58% 50%;
     --destructive-foreground: 0 0% 98%;
-    --border: 222 14% 33%;
-    --input: 220 12% 22%;
+    --border: 222 14% 28%;
+    --input: 220 12% 18%;
     --ring: 220.2 100% 66.1%;
     --radius: 0.5rem;
-    --sidebar-background: 216 13% 13%;
+    --sidebar-background: 216 13% 9%;
     --sidebar-foreground: 219 14% 82%;
     --sidebar-primary: 220.2 100% 66.1%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 218.6 14% 20%;
+    --sidebar-accent: 218.6 14% 16%;
     --sidebar-accent-foreground: 220 13% 90%;
-    --sidebar-border: 222 14% 31%;
+    --sidebar-border: 222 14% 26%;
     --sidebar-ring: 220.2 100% 66.1%;
 
     --status-success: 142 72% 58%;
@@ -476,33 +476,33 @@
   /* ── Monochrome Dark (Black & White) ─────────────────────── */
   .theme-monochrome-dark {
     --font-sans: 'Noto Sans', sans-serif;
-    --background: 0 0% 7%;
+    --background: 0 0% 4%;
     --foreground: 0 0% 93%;
-    --card: 0 0% 5%;
+    --card: 0 0% 3%;
     --card-foreground: 0 0% 93%;
-    --popover: 0 0% 5%;
+    --popover: 0 0% 3%;
     --popover-foreground: 0 0% 93%;
     --primary: 0 0% 93%;
-    --primary-foreground: 0 0% 7%;
-    --secondary: 0 0% 14%;
+    --primary-foreground: 0 0% 4%;
+    --secondary: 0 0% 10%;
     --secondary-foreground: 0 0% 93%;
-    --muted: 0 0% 14%;
+    --muted: 0 0% 10%;
     --muted-foreground: 0 0% 55%;
-    --accent: 0 0% 14%;
+    --accent: 0 0% 10%;
     --accent-foreground: 0 0% 93%;
     --destructive: 0 0% 93%;
-    --destructive-foreground: 0 0% 7%;
-    --border: 0 0% 20%;
-    --input: 0 0% 20%;
+    --destructive-foreground: 0 0% 4%;
+    --border: 0 0% 15%;
+    --input: 0 0% 15%;
     --ring: 0 0% 93%;
     --radius: 0.5rem;
-    --sidebar-background: 0 0% 5%;
+    --sidebar-background: 0 0% 2%;
     --sidebar-foreground: 0 0% 85%;
     --sidebar-primary: 0 0% 93%;
-    --sidebar-primary-foreground: 0 0% 7%;
-    --sidebar-accent: 0 0% 12%;
+    --sidebar-primary-foreground: 0 0% 4%;
+    --sidebar-accent: 0 0% 8%;
     --sidebar-accent-foreground: 0 0% 93%;
-    --sidebar-border: 0 0% 18%;
+    --sidebar-border: 0 0% 13%;
     --sidebar-ring: 0 0% 93%;
 
     --status-success: 0 0% 70%;

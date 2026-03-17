@@ -42,6 +42,14 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       API_TIMEOUT_MS: process.env.API_TIMEOUT_MS ?? '14400000',
     };
 
+    dlog.info('runProcess options check', {
+      hasSystemPrefix: !!this.options.systemPrefix,
+      systemPrefixLength: this.options.systemPrefix?.length ?? 0,
+      systemPrefixPreview: this.options.systemPrefix?.slice(0, 120) ?? 'none',
+      disallowedTools: this.options.disallowedTools?.join(', ') ?? 'none',
+      permissionMode: this.options.permissionMode ?? 'none',
+    });
+
     const sdkOptions: Record<string, any> = {
       pathToClaudeCodeExecutable: resolveSDKCliPath(),
       model: this.options.model,
@@ -52,7 +60,13 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       disallowedTools: this.options.disallowedTools,
       executable: 'node',
       env: sdkEnv,
-      systemPrompt: { type: 'preset', preset: 'claude_code' },
+      systemPrompt: this.options.systemPrefix
+        ? {
+            type: 'preset' as const,
+            preset: 'claude_code' as const,
+            append: this.options.systemPrefix,
+          }
+        : { type: 'preset' as const, preset: 'claude_code' as const },
       tools: { type: 'preset', preset: 'claude_code' },
       settingSources: ['user', 'project'],
       hooks: {
@@ -60,6 +74,12 @@ export class SDKClaudeProcess extends BaseAgentProcess {
           {
             matcher: '.*',
             hooks: [this.preToolUseHook.bind(this) as HookCallback],
+            // Long timeout so the SDK doesn't auto-deny interactive tools
+            // (AskUserQuestion, ExitPlanMode) while waiting for user input.
+            // Without this, the SDK's default hook timeout (~3s) fires,
+            // generates a deny tool_result, and the model retries — causing
+            // duplicate questions in the UI.
+            timeout: 14400, // 4 hours, matches API_TIMEOUT_MS
           },
         ],
       },

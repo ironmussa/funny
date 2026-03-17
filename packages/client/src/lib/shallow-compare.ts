@@ -22,6 +22,8 @@ const THREAD_VISUAL_KEYS: readonly (keyof Thread)[] = [
   'archived',
   'provider',
   'lastAssistantMessage',
+  'arcId',
+  'purpose',
 ] as const;
 
 /**

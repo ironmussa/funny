@@ -16,6 +16,7 @@ import {
   createThreadRepository,
   createCommentRepository,
   createStageHistoryRepository,
+  createArcRepository,
 } from '@funny/shared/repositories';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
@@ -29,6 +30,7 @@ import { sendToRunner } from './ws-relay.js';
 let _messageRepo: ReturnType<typeof createMessageRepository> | null = null;
 let _toolCallRepo: ReturnType<typeof createToolCallRepository> | null = null;
 let _threadRepo: ReturnType<typeof createThreadRepository> | null = null;
+let _arcRepo: ReturnType<typeof createArcRepository> | null = null;
 
 function getMessageRepo() {
   if (!_messageRepo) {
@@ -79,6 +81,19 @@ function getThreadRepo() {
     });
   }
   return _threadRepo;
+}
+
+function getArcRepo() {
+  if (!_arcRepo) {
+    _arcRepo = createArcRepository({
+      db,
+      schema: schema as any,
+      dbAll,
+      dbGet,
+      dbRun,
+    });
+  }
+  return _arcRepo;
 }
 
 /**
@@ -247,6 +262,19 @@ export async function handleDataMessage(runnerId: string, data: any): Promise<vo
           type: 'data:enqueue_message_response',
           requestId: data.requestId,
           queued,
+        });
+        break;
+      }
+
+      // ── Arc operations ───────────────────────────────────
+
+      case 'data:get_arc': {
+        const arcRepository = getArcRepo();
+        const arc = await arcRepository.getArc(data.arcId);
+        sendToRunner(runnerId, {
+          type: 'data:get_arc_response',
+          requestId: data.requestId,
+          arc: arc ?? null,
         });
         break;
       }

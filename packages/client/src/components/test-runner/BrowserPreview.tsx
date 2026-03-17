@@ -1,5 +1,6 @@
+import AnsiToHtml from 'ansi-to-html';
 import { Monitor, Loader2 } from 'lucide-react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 
 import { cn } from '@/lib/utils';
 import { useTestStore } from '@/stores/test-store';
@@ -52,6 +53,11 @@ export function BrowserPreview({ isRunning, isStreaming, outputLines }: BrowserP
   const logRef = useRef<HTMLDivElement>(null);
   const userScrolled = useRef(false);
 
+  const ansiConverter = useMemo(
+    () => new AnsiToHtml({ fg: '#a1a1aa', bg: 'transparent', newline: false, escapeXML: true }),
+    [],
+  );
+
   // Listen for frame events
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -90,9 +96,9 @@ export function BrowserPreview({ isRunning, isStreaming, outputLines }: BrowserP
   };
 
   return (
-    <div className="flex flex-1 flex-col overflow-hidden">
+    <div className="flex h-full flex-col overflow-hidden">
       {/* Browser stream canvas */}
-      <div className="relative flex min-h-[200px] flex-1 items-center justify-center border-b bg-black/5">
+      <div className="relative flex min-h-0 flex-[3] items-center justify-center border-b bg-black/5">
         {!isRunning && !isStreaming ? (
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <Monitor className="h-8 w-8" />
@@ -114,7 +120,7 @@ export function BrowserPreview({ isRunning, isStreaming, outputLines }: BrowserP
       <div
         ref={logRef}
         onScroll={handleLogScroll}
-        className="h-[200px] min-h-[100px] overflow-y-auto bg-zinc-950 p-2 font-mono text-xs"
+        className="min-h-0 flex-1 overflow-y-auto bg-zinc-950 p-2 font-mono text-xs"
       >
         {outputLines.length === 0 ? (
           <div className="py-4 text-center text-zinc-500">Test output will appear here...</div>
@@ -126,9 +132,8 @@ export function BrowserPreview({ isRunning, isStreaming, outputLines }: BrowserP
                 'whitespace-pre-wrap break-all leading-5',
                 line.stream === 'stderr' ? 'text-red-400' : 'text-zinc-300',
               )}
-            >
-              {line.line}
-            </div>
+              dangerouslySetInnerHTML={{ __html: ansiConverter.toHtml(line.line) }}
+            />
           ))
         )}
       </div>

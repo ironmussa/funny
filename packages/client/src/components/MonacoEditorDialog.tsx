@@ -104,66 +104,60 @@ export function MonacoEditorDialog({
         )}
       >
         <DialogHeader className="overflow-hidden border-b border-border/50 px-6 pb-2 pt-4">
-          <div className="flex items-center justify-between gap-2">
-            <DialogTitle
-              className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-sm"
-              style={{ direction: 'rtl', textAlign: 'left' }}
-            >
-              {filePath}
-            </DialogTitle>
-            <ToggleGroup
-              type="multiple"
-              size="sm"
-              value={[
-                ...(showPreview ? ['preview'] : []),
-                ...(showMinimap ? ['minimap'] : []),
-                ...(isFullscreen ? ['fullscreen'] : []),
-              ]}
-              onValueChange={(value: string[]) => {
-                if (isMarkdown) setShowPreview(value.includes('preview'));
-                setShowMinimap(value.includes('minimap'));
-                setIsFullscreen(value.includes('fullscreen'));
-              }}
-              className="flex-shrink-0 rounded-md border border-border bg-muted/30 p-0.5"
-            >
-              {/* Markdown preview toggle */}
-              {isMarkdown && (
-                <ToggleGroupItem
-                  value="preview"
-                  title={
-                    showPreview
-                      ? t('editor.showCode', 'Show code')
-                      : t('editor.showPreview', 'Show preview')
-                  }
-                  data-testid="editor-toggle-preview"
-                >
-                  {showPreview ? <Code className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />}
-                </ToggleGroupItem>
-              )}
-
-              {/* Minimap toggle */}
+          <DialogTitle
+            className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap font-mono text-sm"
+            style={{ direction: 'rtl', textAlign: 'left' }}
+          >
+            {filePath}
+          </DialogTitle>
+          <ToggleGroup
+            type="multiple"
+            size="sm"
+            value={[
+              ...(showPreview ? ['preview'] : []),
+              ...(showMinimap ? ['minimap'] : []),
+              ...(isFullscreen ? ['fullscreen'] : []),
+            ]}
+            onValueChange={(value: string[]) => {
+              if (isMarkdown) setShowPreview(value.includes('preview'));
+              setShowMinimap(value.includes('minimap'));
+              setIsFullscreen(value.includes('fullscreen'));
+            }}
+            className="flex-shrink-0 rounded-md border border-border bg-muted/30 p-0.5"
+          >
+            {/* Markdown preview toggle */}
+            {isMarkdown && (
               <ToggleGroupItem
-                value="minimap"
-                title={showMinimap ? t('editor.hideMinimap') : t('editor.showMinimap')}
-                data-testid="editor-toggle-minimap"
+                value="preview"
+                title={
+                  showPreview
+                    ? t('editor.showCode', 'Show code')
+                    : t('editor.showPreview', 'Show preview')
+                }
+                data-testid="editor-toggle-preview"
               >
-                {showMinimap ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showPreview ? <Code className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />}
               </ToggleGroupItem>
+            )}
 
-              {/* Fullscreen toggle */}
-              <ToggleGroupItem
-                value="fullscreen"
-                title={isFullscreen ? t('editor.exitFullscreen') : t('editor.fullscreen')}
-                data-testid="editor-toggle-fullscreen"
-              >
-                {isFullscreen ? (
-                  <Minimize2 className="h-4 w-4" />
-                ) : (
-                  <Maximize2 className="h-4 w-4" />
-                )}
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
+            {/* Minimap toggle */}
+            <ToggleGroupItem
+              value="minimap"
+              title={showMinimap ? t('editor.hideMinimap') : t('editor.showMinimap')}
+              data-testid="editor-toggle-minimap"
+            >
+              {showMinimap ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+            </ToggleGroupItem>
+
+            {/* Fullscreen toggle */}
+            <ToggleGroupItem
+              value="fullscreen"
+              title={isFullscreen ? t('editor.exitFullscreen') : t('editor.fullscreen')}
+              data-testid="editor-toggle-fullscreen"
+            >
+              {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
+            </ToggleGroupItem>
+          </ToggleGroup>
         </DialogHeader>
 
         <div className="flex-1 overflow-hidden">

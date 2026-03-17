@@ -87,11 +87,35 @@ app.get('/api/health', (c) => {
   });
 });
 
-// Bootstrap endpoint (public — minimal, no token)
-app.get('/api/bootstrap', (c) => {
+// Bootstrap endpoint (public — auto-signs in as admin in local mode, returns bearer token)
+app.get('/api/bootstrap', async (c) => {
   c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
   c.header('Pragma', 'no-cache');
-  return c.json({});
+
+  const adminUsername = process.env.ADMIN_USERNAME ?? 'admin';
+  const adminPassword = process.env.ADMIN_PASSWORD ?? 'admin';
+
+  try {
+    const res = await authInstance.api.signInUsername({
+      body: { username: adminUsername, password: adminPassword },
+      asResponse: true,
+    });
+
+    const token = res.headers.get('set-auth-token');
+    if (token) {
+      // Forward session cookies so browser clients are also authenticated
+      const cookies =
+        res.headers.getSetCookie?.() ?? (res.headers as any).raw?.()?.['set-cookie'] ?? [];
+      for (const cookie of cookies) {
+        c.header('Set-Cookie', cookie, { append: true });
+      }
+      return c.json({ mode: 'local', token });
+    }
+  } catch (err) {
+    log.warn('Bootstrap sign-in failed', { namespace: 'auth', error: (err as Error).message });
+  }
+
+  return c.json({ mode: 'local' });
 });
 
 // ── Public routes (before auth middleware) ────────────────

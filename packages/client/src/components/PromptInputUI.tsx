@@ -1,4 +1,4 @@
-import type { ImageAttachment, QueuedMessage, Skill } from '@funny/shared';
+import type { ImageAttachment, QueuedMessage, Skill, ThreadPurpose } from '@funny/shared';
 import {
   ArrowUp,
   ArrowLeft,
@@ -18,6 +18,9 @@ import {
   Pencil,
   Trash2,
   Check,
+  Compass,
+  Map,
+  Hammer,
 } from 'lucide-react';
 import { useState, useRef, useCallback, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -119,6 +122,46 @@ export const ModelSelect = memo(function ModelSelect({
   );
 });
 
+const PURPOSE_OPTIONS = [
+  { value: 'explore' as const, label: 'Explore', icon: Compass },
+  { value: 'plan' as const, label: 'Plan', icon: Map },
+  { value: 'implement' as const, label: 'Implement', icon: Hammer },
+];
+
+export const PurposeSelect = memo(function PurposeSelect({
+  value,
+  onChange,
+}: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <Select value={value} onValueChange={onChange}>
+      <SelectTrigger
+        data-testid="prompt-purpose-select"
+        tabIndex={-1}
+        size="xs"
+        className="w-auto border-none bg-transparent shadow-none"
+      >
+        <SelectValue />
+      </SelectTrigger>
+      <SelectContent side="top" align="start">
+        {PURPOSE_OPTIONS.map((opt) => {
+          const Icon = opt.icon;
+          return (
+            <SelectItem key={opt.value} value={opt.value} size="xs">
+              <span className="flex items-center gap-1.5">
+                <Icon className="h-3 w-3" />
+                {opt.label}
+              </span>
+            </SelectItem>
+          );
+        })}
+      </SelectContent>
+    </Select>
+  );
+});
+
 /** Parse a git remote URL into a friendly `owner/repo` display string. */
 export function formatRemoteUrl(url: string): string {
   const sshMatch = url.match(/[:/]([^/]+\/[^/]+?)(?:\.git)?$/);
@@ -148,6 +191,7 @@ export interface PromptInputUIProps {
       cwd?: string;
       sendToBacklog?: boolean;
       fileReferences?: { path: string; type?: 'file' | 'folder' }[];
+      purpose?: ThreadPurpose;
     },
     images?: ImageAttachment[],
   ) => Promise<boolean | void> | boolean | void;
@@ -223,6 +267,13 @@ export interface PromptInputUIProps {
 
   // ── Checkout preflight (new thread local mode) ──
   onCheckoutPreflight?: (branch: string) => Promise<boolean>;
+
+  // ── Arc / Purpose ──
+  purpose?: ThreadPurpose;
+  onPurposeChange?: (v: ThreadPurpose) => void;
+  arcId?: string;
+  /** Callback to trigger phase transition: creates new thread with same arcId but different purpose */
+  onPhaseTransition?: (newPurpose: ThreadPurpose) => void;
 }
 
 // ── Component ────────────────────────────────────────────────────
@@ -279,6 +330,10 @@ export const PromptInputUI = memo(function PromptInputUI({
   onEditorChange,
   onEditorPaste,
   onCheckoutPreflight,
+  purpose = 'implement',
+  onPurposeChange,
+  arcId,
+  onPhaseTransition,
 }: PromptInputUIProps) {
   const { t } = useTranslation();
 
@@ -344,6 +399,7 @@ export const PromptInputUI = memo(function PromptInputUI({
     setEditorEmpty(true);
     editorRef.current?.focus();
 
+    const isLocalOnlyPurpose = purpose !== 'implement';
     const result = await onSubmit(
       submittedPrompt,
       {
@@ -352,10 +408,11 @@ export const PromptInputUI = memo(function PromptInputUI({
         mode,
         ...(isNewThread
           ? {
-              threadMode: createWorktree ? 'worktree' : 'local',
+              threadMode: isLocalOnlyPurpose ? 'local' : createWorktree ? 'worktree' : 'local',
               runtime,
               baseBranch: selectedBranch || undefined,
               sendToBacklog,
+              purpose,
             }
           : { baseBranch: followUpSelectedBranch || undefined }),
         fileReferences: submittedFiles,
@@ -384,6 +441,7 @@ export const PromptInputUI = memo(function PromptInputUI({
     sendToBacklog,
     followUpSelectedBranch,
     editorRef,
+    purpose,
   ]);
 
   // ── Editor callbacks ──
@@ -777,6 +835,18 @@ export const PromptInputUI = memo(function PromptInputUI({
               >
                 <Paperclip className="h-4 w-4" />
               </Button>
+              {isNewThread && (
+                <PurposeSelect
+                  value={purpose}
+                  onChange={(v) => onPurposeChange?.(v as ThreadPurpose)}
+                />
+              )}
+              {!isNewThread && arcId && (
+                <PurposeSelect
+                  value={purpose}
+                  onChange={(v) => onPhaseTransition?.(v as ThreadPurpose)}
+                />
+              )}
               <ModeSelect value={mode} onChange={onModeChange} modes={modes} />
               {/* Model + send — always visible, pushed right */}
               <div className="ml-auto flex shrink-0 items-center gap-1">
@@ -885,16 +955,18 @@ export const PromptInputUI = memo(function PromptInputUI({
                     />
                   )
                 )}
-                <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
-                  <Switch
-                    data-testid="prompt-worktree-switch"
-                    checked={createWorktree}
-                    onCheckedChange={onCreateWorktreeChange ?? (() => {})}
-                    tabIndex={-1}
-                    size="xs"
-                  />
-                  <span>{t('thread.mode.worktree')}</span>
-                </label>
+                {purpose === 'implement' && (
+                  <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                    <Switch
+                      data-testid="prompt-worktree-switch"
+                      checked={createWorktree}
+                      onCheckedChange={onCreateWorktreeChange ?? (() => {})}
+                      tabIndex={-1}
+                      size="xs"
+                    />
+                    <span>{t('thread.mode.worktree')}</span>
+                  </label>
+                )}
                 {hasLauncher && (
                   <ModeSelect
                     value={runtime}

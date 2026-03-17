@@ -1,3 +1,4 @@
+import type { ThreadPurpose } from '@funny/shared';
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -13,6 +14,22 @@ import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { PromptInput } from '../PromptInput';
+
+/** Generate a kebab-case arc name from a prompt with a short unique suffix. */
+function generateArcName(prompt: string): string {
+  const slug =
+    prompt
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-|-$/g, '')
+      .slice(0, 32)
+      .replace(/-$/, '') || 'unnamed-arc';
+  const suffix = Math.random().toString(36).slice(2, 6);
+  return `${slug}-${suffix}`;
+}
 
 export function NewThreadInput() {
   const navigate = useNavigate();
@@ -44,13 +61,33 @@ export function NewThreadInput() {
       baseBranch?: string;
       sendToBacklog?: boolean;
       fileReferences?: { path: string }[];
+      purpose?: ThreadPurpose;
     },
     images?: any[],
   ): Promise<boolean> => {
     if (!effectiveProjectId || creating) return false;
     setCreating(true);
 
-    const threadMode = (opts.threadMode as 'local' | 'worktree') || defaultThreadMode;
+    const purpose = opts.purpose ?? 'implement';
+    const isLocalOnlyPurpose = purpose !== 'implement';
+    const threadMode = isLocalOnlyPurpose
+      ? 'local'
+      : (opts.threadMode as 'local' | 'worktree') || defaultThreadMode;
+
+    // Auto-create arc for explore purpose
+    let arcId: string | undefined;
+    if (purpose === 'explore') {
+      const arcName = generateArcName(prompt);
+      const arcResult = await api.createArc(effectiveProjectId, arcName);
+      if (arcResult.isErr()) {
+        toastError(arcResult.error, 'createArc');
+        setCreating(false);
+        return false;
+      }
+      arcId = arcResult.value.id;
+      // Create arc directory on filesystem
+      await api.createArcDirectory(effectiveProjectId, arcName);
+    }
 
     // If idle-only mode or sendToBacklog toggle, create idle thread without executing
     if (newThreadIdleOnly || opts.sendToBacklog) {
@@ -61,6 +98,8 @@ export function NewThreadInput() {
         baseBranch: opts.baseBranch,
         prompt,
         images,
+        arcId,
+        purpose,
       });
 
       if (result.isErr()) {
@@ -86,13 +125,15 @@ export function NewThreadInput() {
       runtime: opts.runtime as 'local' | 'remote' | undefined,
       provider: opts.provider,
       model: opts.model,
-      permissionMode: opts.mode,
+      permissionMode: isLocalOnlyPurpose ? 'plan' : opts.mode,
       baseBranch: opts.baseBranch,
       prompt,
       images,
       allowedTools,
       disallowedTools,
       fileReferences: opts.fileReferences,
+      arcId,
+      purpose,
     });
 
     if (result.isErr()) {

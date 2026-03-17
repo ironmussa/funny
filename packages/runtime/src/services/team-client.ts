@@ -607,6 +607,9 @@ function handleDataResponse(data: any): void {
     case 'data:enqueue_message_response':
       pending.resolve(data.queued);
       break;
+    case 'data:get_arc_response':
+      pending.resolve(data.arc);
+      break;
     default:
       pending.resolve(data);
   }
@@ -764,6 +767,16 @@ export async function remoteGetProject(projectId: string): Promise<any> {
     type: 'data:get_project',
     requestId,
     projectId,
+  });
+}
+
+/** Get an arc from the server by ID */
+export async function remoteGetArc(arcId: string): Promise<any> {
+  const requestId = nanoid();
+  return sendDataMessage({
+    type: 'data:get_arc',
+    requestId,
+    arcId,
   });
 }
 

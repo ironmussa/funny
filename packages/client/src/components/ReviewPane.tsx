@@ -577,6 +577,9 @@ export function ReviewPane() {
   // Track whether we need to refresh when the pane becomes visible
   const needsRefreshRef = useRef(false);
 
+  // Track when a dropdown menu closes so we can suppress the parent row click
+  const dropdownCloseRef = useRef(0);
+
   // Reset state and refresh when the active thread or project-mode changes.
   // Using effectiveThreadId (not just gitContextKey) ensures we refresh even
   // when switching between two local threads of the same project that share
@@ -1378,6 +1381,7 @@ export function ReviewPane() {
                           : 'hover:bg-sidebar-accent/50 text-muted-foreground',
                       )}
                       onClick={() => {
+                        if (Date.now() - dropdownCloseRef.current < 400) return;
                         setSelectedFile(f.path);
                         setExpandedFile(f.path);
                       }}
@@ -1426,19 +1430,33 @@ export function ReviewPane() {
                               ? 'D'
                               : 'R'}
                       </span>
-                      <DropdownMenu>
+                      <DropdownMenu
+                        onOpenChange={(open) => {
+                          if (!open) dropdownCloseRef.current = Date.now();
+                        }}
+                      >
                         <DropdownMenuTrigger asChild>
                           <button
-                            onClick={(e) => e.stopPropagation()}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                            }}
+                            onPointerDown={(e) => {
+                              e.stopPropagation();
+                            }}
                             aria-label={t('review.moreActions', 'More actions')}
                             className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
                           >
                             <MoreVertical className="h-3 w-3" />
                           </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="min-w-[220px]">
+                        <DropdownMenuContent
+                          align="end"
+                          className="min-w-[220px]"
+                          onCloseAutoFocus={(e) => e.preventDefault()}
+                        >
                           <DropdownMenuItem
-                            onClick={() => {
+                            onClick={(e) => {
+                              e.stopPropagation();
                               const fullPath = basePath ? `${basePath}/${f.path}` : f.path;
                               openFileInEditor(fullPath);
                             }}
@@ -1448,14 +1466,22 @@ export function ReviewPane() {
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
-                            onClick={() => handleRevertFile(f.path)}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleRevertFile(f.path);
+                            }}
                             className="text-destructive focus:text-destructive"
                           >
                             <Undo2 />
                             {t('review.discardChanges')}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleIgnore(f.path)}>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleIgnore(f.path);
+                            }}
+                          >
                             <EyeOff />
                             {t('review.ignoreFile')}
                           </DropdownMenuItem>
@@ -1464,7 +1490,12 @@ export function ReviewPane() {
                             if (folders.length === 0) return null;
                             if (folders.length === 1) {
                               return (
-                                <DropdownMenuItem onClick={() => handleIgnore(folders[0])}>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleIgnore(folders[0]);
+                                  }}
+                                >
                                   <FolderX />
                                   {t('review.ignoreFolder')}
                                 </DropdownMenuItem>
@@ -1472,15 +1503,24 @@ export function ReviewPane() {
                             }
                             return (
                               <DropdownMenuSub>
-                                <DropdownMenuSubTrigger>
+                                <DropdownMenuSubTrigger
+                                  onClick={(e) => e.stopPropagation()}
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                >
                                   <FolderX />
                                   {t('review.ignoreFolder')}
                                 </DropdownMenuSubTrigger>
-                                <DropdownMenuSubContent>
+                                <DropdownMenuSubContent
+                                  onClick={(e) => e.stopPropagation()}
+                                  onPointerDown={(e) => e.stopPropagation()}
+                                >
                                   {folders.map((folder) => (
                                     <DropdownMenuItem
                                       key={folder}
-                                      onClick={() => handleIgnore(folder)}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleIgnore(folder);
+                                      }}
                                     >
                                       {folder}
                                     </DropdownMenuItem>
@@ -1493,18 +1533,33 @@ export function ReviewPane() {
                             const ext = getFileExtension(f.path);
                             if (!ext) return null;
                             return (
-                              <DropdownMenuItem onClick={() => handleIgnore(`*${ext}`)}>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleIgnore(`*${ext}`);
+                                }}
+                              >
                                 <EyeOff />
                                 {t('review.ignoreExtension', { ext })}
                               </DropdownMenuItem>
                             );
                           })()}
                           <DropdownMenuSeparator />
-                          <DropdownMenuItem onClick={() => handleCopyPath(f.path, false)}>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCopyPath(f.path, false);
+                            }}
+                          >
                             <Copy />
                             {t('review.copyFilePath')}
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleCopyPath(f.path, true)}>
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleCopyPath(f.path, true);
+                            }}
+                          >
                             <ClipboardCopy />
                             {t('review.copyRelativePath')}
                           </DropdownMenuItem>

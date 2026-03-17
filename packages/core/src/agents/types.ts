@@ -82,6 +82,8 @@ export interface ClaudeProcessOptions {
   provider?: string;
   /** MCP servers to pass to the SDK query() call (e.g., CDP browser tools) */
   mcpServers?: Record<string, any>;
+  /** Extra instructions appended to the system prompt (e.g., arc purpose prompts, project instructions) */
+  systemPrefix?: string;
   /** Custom spawn function for sandboxed execution (e.g., Podman container) */
   spawnClaudeCodeProcess?: (options: {
     command: string;

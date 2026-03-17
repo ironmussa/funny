@@ -305,8 +305,9 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
     },
 
     arcs: {
-      async getArc() {
-        return undefined;
+      async getArc(id) {
+        const { remoteGetArc } = await import('./team-client.js');
+        return remoteGetArc(id);
       },
     },
 

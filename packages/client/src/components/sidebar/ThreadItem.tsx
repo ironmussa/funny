@@ -13,7 +13,6 @@ import {
 } from 'lucide-react';
 import { useState, memo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 
 import { DiffStats } from '@/components/DiffStats';
 import { Button } from '@/components/ui/button';
@@ -199,6 +198,11 @@ export const ThreadItem = memo(function ThreadItem({
           {thread.arcId && thread.purpose === 'explore' && (
             <span className="flex-shrink-0 rounded bg-amber-500/15 px-1 py-0.5 text-[10px] font-medium leading-none text-amber-500">
               {t('thread.purposeExplore', 'Explore')}
+            </span>
+          )}
+          {thread.arcId && thread.purpose === 'plan' && (
+            <span className="flex-shrink-0 rounded bg-blue-500/15 px-1 py-0.5 text-[10px] font-medium leading-none text-blue-500">
+              {t('thread.purposePlan', 'Plan')}
             </span>
           )}
           {/* Remote runtime badge */}

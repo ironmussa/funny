@@ -21,7 +21,7 @@ import {
 } from '@funny/shared/db/schema-sqlite';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { admin, username, organization } from 'better-auth/plugins';
+import { admin, bearer, username, organization } from 'better-auth/plugins';
 import { createAccessControl } from 'better-auth/plugins/access';
 
 import { db } from '../db/index.js';
@@ -169,6 +169,7 @@ export async function initBetterAuth(): Promise<void> {
     plugins: [
       username(),
       admin(),
+      bearer(),
       organization({
         allowUserToCreateOrganization: true,
         organizationLimit: 50,

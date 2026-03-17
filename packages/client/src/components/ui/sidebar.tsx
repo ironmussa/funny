@@ -280,7 +280,7 @@ const Sidebar = React.forwardRef<
             // Adjust the padding for floating and inset variants.
             variant === 'floating' || variant === 'inset'
               ? 'p-2 group-data-[collapsible=icon]:w-[calc(var(--sidebar-width-icon)_+_theme(spacing.4)_+2px)]'
-              : 'group-data-[collapsible=icon]:w-[--sidebar-width-icon] group-data-[side=left]:border-r group-data-[side=right]:border-l',
+              : 'group-data-[collapsible=icon]:w-[--sidebar-width-icon]',
             className,
           )}
           {...props}
@@ -382,7 +382,7 @@ const SidebarRail = React.forwardRef<HTMLButtonElement, React.ComponentProps<'bu
         onPointerUp={handlePointerUp}
         title="Drag to resize, click to toggle"
         className={cn(
-          'absolute inset-y-0 z-20 hidden w-4 -translate-x-1/2 transition-all ease-linear after:absolute after:inset-y-0 after:left-1/2 after:w-[2px] hover:after:bg-sidebar-border group-data-[side=left]:-right-4 group-data-[side=right]:left-0 sm:flex',
+          'absolute inset-y-0 z-20 hidden w-2 translate-x-full transition-all ease-linear after:absolute after:inset-y-0 after:left-0 after:w-px after:bg-border hover:after:bg-sidebar-border group-data-[side=left]:right-0 group-data-[side=right]:left-0 sm:flex',
           'cursor-col-resize',
           'group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full group-data-[collapsible=offcanvas]:hover:bg-sidebar',
           '[[data-side=left][data-collapsible=offcanvas]_&]:-right-2',

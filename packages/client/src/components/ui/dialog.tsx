@@ -47,13 +47,20 @@ const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 const DialogHeader = ({ className, children, ...props }: React.HTMLAttributes<HTMLDivElement>) => {
-  // Separate DialogTitle from other children (description, etc.)
+  // Separate DialogTitle and DialogDescription from other children
   const childArray = React.Children.toArray(children);
   const title = childArray.find(
     (child) => React.isValidElement(child) && (child.type as any)?.displayName === 'DialogTitle',
   );
-  const rest = childArray.filter(
-    (child) => !React.isValidElement(child) || (child.type as any)?.displayName !== 'DialogTitle',
+  const description = childArray.filter(
+    (child) =>
+      React.isValidElement(child) && (child.type as any)?.displayName === 'DialogDescription',
+  );
+  const actions = childArray.filter(
+    (child) =>
+      !React.isValidElement(child) ||
+      ((child.type as any)?.displayName !== 'DialogTitle' &&
+        (child.type as any)?.displayName !== 'DialogDescription'),
   );
 
   // If no direct DialogTitle found, fall back to simple layout (for custom headers)
@@ -74,19 +81,22 @@ const DialogHeader = ({ className, children, ...props }: React.HTMLAttributes<HT
 
   return (
     <div className={cn('flex flex-col gap-4 sm:text-left', className)} {...props}>
-      {/* Section 1: Title + close button */}
-      <div className="flex items-start justify-between gap-4">
-        {title}
-        <DialogPrimitive.Close
-          tabIndex={-1}
-          className="shrink-0 rounded-md bg-muted/80 p-1.5 opacity-70 ring-offset-background transition-all hover:bg-muted hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
-        >
-          <X className="h-4 w-4" />
-          <span className="sr-only">Close</span>
-        </DialogPrimitive.Close>
+      {/* Title row: title + extra actions + close button */}
+      <div className="flex items-center justify-between gap-4">
+        <div className="min-w-0 flex-1">{title}</div>
+        <div className="flex shrink-0 items-center gap-2">
+          {actions.length > 0 && actions}
+          <DialogPrimitive.Close
+            tabIndex={-1}
+            className="shrink-0 rounded-md bg-muted/80 p-1.5 opacity-70 ring-offset-background transition-all hover:bg-muted hover:opacity-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none data-[state=open]:bg-accent data-[state=open]:text-muted-foreground"
+          >
+            <X className="h-4 w-4" />
+            <span className="sr-only">Close</span>
+          </DialogPrimitive.Close>
+        </div>
       </div>
-      {/* Section 2: Description / other content */}
-      {rest.length > 0 && rest}
+      {/* Description below the title row */}
+      {description.length > 0 && description}
     </div>
   );
 };

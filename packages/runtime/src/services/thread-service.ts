@@ -140,7 +140,7 @@ export interface CreateIdleThreadParams {
   images?: ImageAttachment[];
   stage?: 'backlog' | 'planning';
   arcId?: string;
-  purpose?: 'explore' | 'implement';
+  purpose?: 'explore' | 'plan' | 'implement';
 }
 
 export async function createIdleThread(params: CreateIdleThreadParams) {
@@ -240,7 +240,7 @@ export interface CreateAndStartThreadParams {
   worktreePath?: string;
   parentThreadId?: string;
   arcId?: string;
-  purpose?: 'explore' | 'implement';
+  purpose?: 'explore' | 'plan' | 'implement';
 }
 
 export async function createAndStartThread(params: CreateAndStartThreadParams) {

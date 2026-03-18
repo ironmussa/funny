@@ -31,6 +31,7 @@ export function createToolCallRepository(deps: ToolCallRepositoryDeps) {
     name: string;
     input: string;
     author?: string | null;
+    parentToolCallId?: string | null;
   }): Promise<string> {
     const id = nanoid();
     await dbRun(
@@ -40,6 +41,7 @@ export function createToolCallRepository(deps: ToolCallRepositoryDeps) {
         name: data.name,
         input: data.input,
         author: data.author ?? null,
+        parentToolCallId: data.parentToolCallId ?? null,
       }),
     );
     return id;

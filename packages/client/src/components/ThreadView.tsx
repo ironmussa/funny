@@ -668,6 +668,7 @@ const MemoizedMessageList = memo(
                 input={tc.input}
                 output={tc.output}
                 planText={tc._planText}
+                childToolCalls={tc._childToolCalls}
                 onRespond={
                   (tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode') &&
                   threadStatus === 'waiting'

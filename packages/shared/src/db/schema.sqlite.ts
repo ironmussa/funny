@@ -136,6 +136,7 @@ export const toolCalls = sqliteTable('tool_calls', {
   input: text('input'),
   output: text('output'),
   author: text('author'),
+  parentToolCallId: text('parent_tool_call_id'),
 });
 
 export const automations = sqliteTable('automations', {

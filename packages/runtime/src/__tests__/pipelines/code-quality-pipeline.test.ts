@@ -38,6 +38,43 @@ function makeReviewResponse(verdict: 'pass' | 'fail', findings: any[] = []): Act
   };
 }
 
+const mockReviewer = {
+  name: 'reviewer',
+  label: 'Code Reviewer',
+  systemPrompt: (ctx: Record<string, string>) =>
+    `You are a code reviewer. Review commit ${ctx.commitSha || 'HEAD'}.`,
+  model: 'sonnet' as const,
+  provider: 'claude' as const,
+  permissionMode: 'plan' as const,
+};
+
+const mockCorrector = {
+  name: 'corrector',
+  label: 'Code Corrector',
+  systemPrompt: 'You are a code corrector. Fix the issues.',
+  model: 'sonnet' as const,
+  provider: 'claude' as const,
+  permissionMode: 'autoEdit' as const,
+};
+
+const mockPrecommitFixer = {
+  name: 'precommit-fixer',
+  label: 'Pre-commit Fixer',
+  systemPrompt: 'Fix pre-commit hook issues.',
+  model: 'sonnet' as const,
+  provider: 'claude' as const,
+  permissionMode: 'autoEdit' as const,
+};
+
+const mockTestFixer = {
+  name: 'test-fixer',
+  label: 'Test Fixer',
+  systemPrompt: 'Fix test failures in the source code.',
+  model: 'sonnet' as const,
+  provider: 'claude' as const,
+  permissionMode: 'autoEdit' as const,
+};
+
 function baseContext(provider: ActionProvider): CodeQualityContext {
   return {
     provider,
@@ -45,6 +82,10 @@ function baseContext(provider: ActionProvider): CodeQualityContext {
     cwd: '/repo',
     commitMessage: 'feat: add feature',
     branch: 'feature/test',
+    reviewer: mockReviewer,
+    corrector: mockCorrector,
+    precommitFixer: mockPrecommitFixer,
+    testFixer: mockTestFixer,
     maxCommitRetries: 2,
     maxReviewIterations: 3,
     maxPushRetries: 2,

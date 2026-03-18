@@ -5,6 +5,7 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 const mockGetThread = vi.fn(() => undefined as any);
 const mockGetThreadWithMessages = vi.fn(() => undefined as any);
 const mockGetProject = vi.fn(() => undefined as any);
+const mockIsProjectInOrg = vi.fn(() => false);
 
 vi.mock('../../services/thread-manager.js', () => ({
   getThread: mockGetThread,
@@ -13,6 +14,15 @@ vi.mock('../../services/thread-manager.js', () => ({
 
 vi.mock('../../services/project-manager.js', () => ({
   getProject: mockGetProject,
+}));
+
+vi.mock('../../services/service-registry.js', () => ({
+  getServices: () => ({
+    projects: {
+      getProject: mockGetProject,
+      isProjectInOrg: mockIsProjectInOrg,
+    },
+  }),
 }));
 
 // Import under test AFTER mocks are registered
@@ -49,6 +59,7 @@ beforeEach(() => {
   mockGetThread.mockReset();
   mockGetThreadWithMessages.mockReset();
   mockGetProject.mockReset();
+  mockIsProjectInOrg.mockReset();
 });
 
 // ── requireThread ────────────────────────────────────────────────

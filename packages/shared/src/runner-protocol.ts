@@ -328,6 +328,7 @@ export interface DataInsertToolCall {
     name: string;
     input: string;
     author?: string | null;
+    parentToolCallId?: string | null;
   };
 }
 

@@ -53,6 +53,7 @@ export const insertToolCall = (data: {
   name: string;
   input: string;
   author?: string | null;
+  parentToolCallId?: string | null;
 }) => getServices().threads.insertToolCall(data);
 export const updateToolCallOutput = (id: string, output: string) =>
   getServices().threads.updateToolCallOutput(id, output);

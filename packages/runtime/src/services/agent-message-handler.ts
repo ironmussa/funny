@@ -274,6 +274,12 @@ export class AgentMessageHandler {
 
     // Handle tool calls (deduplicate — streaming sends cumulative content)
     const seen = this.state.processedToolUseIds.get(threadId) ?? new Map<string, string>();
+
+    // Resolve parent_tool_use_id → DB parentToolCallId for subagent tool calls
+    const parentToolCallId = msg.parent_tool_use_id
+      ? (seen.get(msg.parent_tool_use_id) ?? null)
+      : null;
+
     for (const block of msg.message.content) {
       if ('type' in block && block.type === 'tool_use') {
         if (seen.has(block.id)) {
@@ -351,6 +357,7 @@ export class AgentMessageHandler {
             messageId: parentMsgId,
             name: block.name,
             input: inputJson,
+            parentToolCallId,
           });
           seen.set(block.id, toolCallId);
 
@@ -359,6 +366,7 @@ export class AgentMessageHandler {
             messageId: parentMsgId,
             name: block.name,
             input: block.input,
+            parentToolCallId,
           });
         }
 

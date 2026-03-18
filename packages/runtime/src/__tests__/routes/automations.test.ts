@@ -21,39 +21,19 @@ const mockAutomation = {
   updatedAt: new Date().toISOString(),
 };
 
-const {
-  mockListAutomations,
-  mockGetAutomation,
-  mockCreateAutomation,
-  mockUpdateAutomation,
-  mockDeleteAutomation,
-  mockListRuns,
-  mockUpdateRun,
-  mockListInboxRuns,
-} = vi.hoisted(() => ({
-  mockListAutomations: vi.fn(),
-  mockGetAutomation: vi.fn(),
-  mockCreateAutomation: vi.fn(),
-  mockUpdateAutomation: vi.fn(),
-  mockDeleteAutomation: vi.fn(),
-  mockListRuns: vi.fn(),
-  mockUpdateRun: vi.fn(),
-  mockListInboxRuns: vi.fn(),
+const mockGetAutomation = vi.fn();
+const mockTriggerAutomationRun = vi.fn();
+
+vi.mock('../../services/service-registry.js', () => ({
+  getServices: () => ({
+    automations: {
+      getAutomation: (...args: any[]) => mockGetAutomation(...args),
+    },
+  }),
 }));
 
-vi.mock('../../services/automation-manager.js', () => ({
-  listAutomations: mockListAutomations,
-  getAutomation: mockGetAutomation,
-  createAutomation: mockCreateAutomation,
-  updateAutomation: mockUpdateAutomation,
-  deleteAutomation: mockDeleteAutomation,
-  listRuns: mockListRuns,
-  updateRun: mockUpdateRun,
-  listInboxRuns: mockListInboxRuns,
-}));
-
-vi.mock('../../services/project-manager.js', () => ({
-  getProject: (id: string) => (id === 'p1' ? { id: 'p1', name: 'Test', path: '/tmp/test' } : null),
+vi.mock('../../services/automation-scheduler.js', () => ({
+  triggerAutomationRun: (...args: any[]) => mockTriggerAutomationRun(...args),
 }));
 
 import { automationRoutes } from '../../routes/automations.js';
@@ -62,20 +42,10 @@ describe('Automation Routes', () => {
   let app: Hono<HonoEnv>;
 
   beforeEach(() => {
-    mockListAutomations.mockReset();
     mockGetAutomation.mockReset();
-    mockCreateAutomation.mockReset();
-    mockUpdateAutomation.mockReset();
-    mockDeleteAutomation.mockReset();
-    mockListRuns.mockReset();
-    mockUpdateRun.mockReset();
-    mockListInboxRuns.mockReset();
+    mockTriggerAutomationRun.mockReset();
 
-    mockListAutomations.mockReturnValue([mockAutomation]);
     mockGetAutomation.mockImplementation((id: string) => (id === 'auto-1' ? mockAutomation : null));
-    mockCreateAutomation.mockImplementation((data: any) => ({ ...mockAutomation, ...data }));
-    mockListRuns.mockReturnValue([]);
-    mockListInboxRuns.mockReturnValue([]);
 
     app = new Hono<HonoEnv>();
     // Set userId middleware
@@ -86,55 +56,19 @@ describe('Automation Routes', () => {
     app.route('/automations', automationRoutes);
   });
 
-  test('GET /automations returns list', async () => {
-    const res = await app.request('/automations');
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(Array.isArray(body)).toBe(true);
-  });
-
-  test('GET /automations with projectId filter', async () => {
-    const res = await app.request('/automations?projectId=p1');
-    expect(res.status).toBe(200);
-    expect(mockListAutomations).toHaveBeenCalledWith('p1', '__local__');
-  });
-
-  test('GET /automations/:id returns automation', async () => {
-    const res = await app.request('/automations/auto-1');
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(body.id).toBe('auto-1');
-  });
-
-  test('GET /automations/:id returns 404 for nonexistent', async () => {
-    const res = await app.request('/automations/nonexistent');
-    expect(res.status).toBe(404);
-  });
-
-  test('DELETE /automations/:id deletes automation', async () => {
-    const res = await app.request('/automations/auto-1', { method: 'DELETE' });
+  test('POST /automations/:id/trigger triggers automation', async () => {
+    const res = await app.request('/automations/auto-1/trigger', { method: 'POST' });
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.ok).toBe(true);
-    expect(mockDeleteAutomation).toHaveBeenCalledWith('auto-1');
+    expect(mockGetAutomation).toHaveBeenCalledWith('auto-1');
+    expect(mockTriggerAutomationRun).toHaveBeenCalledWith(mockAutomation);
   });
 
-  test('DELETE /automations/:id returns 404 for nonexistent', async () => {
-    const res = await app.request('/automations/nonexistent', { method: 'DELETE' });
+  test('POST /automations/:id/trigger returns 404 for nonexistent', async () => {
+    const res = await app.request('/automations/nonexistent/trigger', { method: 'POST' });
     expect(res.status).toBe(404);
-  });
-
-  test('GET /automations/:id/runs returns runs list', async () => {
-    const res = await app.request('/automations/auto-1/runs');
-    expect(res.status).toBe(200);
     const body = await res.json();
-    expect(Array.isArray(body)).toBe(true);
-  });
-
-  test('GET /automations/inbox returns inbox items', async () => {
-    const res = await app.request('/automations/inbox');
-    expect(res.status).toBe(200);
-    const body = await res.json();
-    expect(Array.isArray(body)).toBe(true);
+    expect(body.error).toBe('Automation not found');
   });
 });

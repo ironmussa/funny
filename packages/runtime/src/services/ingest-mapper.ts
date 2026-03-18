@@ -118,7 +118,7 @@ function getCLIState(requestId: string): CLIMessageState {
  * Decode literal Unicode escape sequences (\uXXXX) that may appear
  * in CLI output when the text was double-encoded.
  */
-function decodeUnicodeEscapes(str: string): string {
+export function decodeUnicodeEscapes(str: string): string {
   return str.replace(/\\u([0-9a-fA-F]{4})/g, (_, hex) => String.fromCharCode(parseInt(hex, 16)));
 }
 
@@ -160,7 +160,7 @@ async function resolveProjectId(workingPath: string): Promise<string | null> {
 }
 
 /** Extract owner/repo from a GitHub remote URL. */
-function parseOwnerRepo(remoteUrl: string): string | null {
+export function parseOwnerRepo(remoteUrl: string): string | null {
   const httpsMatch = remoteUrl.match(/github\.com[/:]([^/]+\/[^/.]+?)(?:\.git)?$/);
   if (httpsMatch) return httpsMatch[1];
   const sshMatch = remoteUrl.match(/git@github\.com:([^/]+\/[^/.]+?)(?:\.git)?$/);

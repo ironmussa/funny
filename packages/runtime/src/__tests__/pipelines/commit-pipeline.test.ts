@@ -12,6 +12,15 @@ import type { ActionProvider } from '../../pipelines/types.js';
 
 // ── Helpers ──────────────────────────────────────────────────
 
+const mockFixer = {
+  name: 'precommit-fixer',
+  label: 'Pre-commit Fixer',
+  systemPrompt: 'Fix pre-commit hook issues.',
+  model: 'sonnet' as const,
+  provider: 'claude' as const,
+  permissionMode: 'autoEdit' as const,
+};
+
 function mockProvider(overrides: Partial<ActionProvider> = {}): ActionProvider {
   return {
     spawnAgent: vi.fn().mockResolvedValue({ ok: true, output: '' }),
@@ -35,6 +44,7 @@ function baseContext(
     progress: nullReporter,
     cwd: '/repo',
     commitMessage: 'feat: add feature',
+    fixer: mockFixer,
     attempt: 1,
     ...overrides,
   };
@@ -119,7 +129,7 @@ describe('Commit Pipeline', () => {
       expect(provider.spawnAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/repo',
-          mode: 'autoEdit',
+          agent: mockFixer,
           context: 'eslint failed: no-unused-vars',
         }),
       );
@@ -128,7 +138,7 @@ describe('Commit Pipeline', () => {
       expect(prompt).toContain('eslint failed: no-unused-vars');
     });
 
-    test('uses custom fixerPrompt when provided', async () => {
+    test('uses custom fixer systemPrompt when provided', async () => {
       let callCount = 0;
       const provider = mockProvider({
         gitCommit: vi.fn().mockImplementation(() => {
@@ -141,7 +151,7 @@ describe('Commit Pipeline', () => {
       await runPipeline(
         commitPipeline,
         baseContext(provider, {
-          fixerPrompt: 'Use prettier to fix formatting',
+          fixer: { ...mockFixer, systemPrompt: 'Use prettier to fix formatting' },
         }),
       );
 
@@ -150,7 +160,7 @@ describe('Commit Pipeline', () => {
       expect(prompt).toContain('hook error');
     });
 
-    test('uses custom fixerModel when provided', async () => {
+    test('uses custom fixer agent definition', async () => {
       let callCount = 0;
       const provider = mockProvider({
         gitCommit: vi.fn().mockImplementation(() => {
@@ -160,14 +170,17 @@ describe('Commit Pipeline', () => {
         }),
       });
 
+      const customFixer = { ...mockFixer, model: 'haiku' as const };
       await runPipeline(
         commitPipeline,
         baseContext(provider, {
-          fixerModel: 'haiku',
+          fixer: customFixer,
         }),
       );
 
-      expect(provider.spawnAgent).toHaveBeenCalledWith(expect.objectContaining({ model: 'haiku' }));
+      expect(provider.spawnAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ agent: customFixer }),
+      );
     });
 
     test('retries multiple times before succeeding', async () => {

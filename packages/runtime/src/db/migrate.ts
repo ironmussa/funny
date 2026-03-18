@@ -816,6 +816,13 @@ const migrations: Migration[] = [
       await addColumn('threads', 'purpose', 'TEXT NOT NULL', "'implement'");
     },
   },
+
+  {
+    name: '046_tool_call_parent',
+    async up() {
+      await addColumn('tool_calls', 'parent_tool_call_id', 'TEXT');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

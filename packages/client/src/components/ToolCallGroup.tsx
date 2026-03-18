@@ -66,7 +66,7 @@ export const ToolCallGroup = memo(function ToolCallGroup({
       </button>
       {expanded && (
         <div className="space-y-1.5 border-t border-border/40 px-2 pb-2 pt-1">
-          {calls.map((tc) => (
+          {calls.map((tc: any) => (
             <ToolCallCard
               key={tc.id}
               name={tc.name}
@@ -74,6 +74,7 @@ export const ToolCallGroup = memo(function ToolCallGroup({
               output={tc.output}
               onRespond={onRespond}
               hideLabel
+              childToolCalls={tc._childToolCalls}
             />
           ))}
         </div>

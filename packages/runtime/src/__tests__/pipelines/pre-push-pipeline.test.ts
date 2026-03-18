@@ -12,6 +12,15 @@ import type { ActionProvider } from '../../pipelines/types.js';
 
 // ── Helpers ──────────────────────────────────────────────────
 
+const mockTestFixer = {
+  name: 'test-fixer',
+  label: 'Test Fixer',
+  systemPrompt: 'Fix test failures in the source code.',
+  model: 'sonnet' as const,
+  provider: 'claude' as const,
+  permissionMode: 'autoEdit' as const,
+};
+
 function mockProvider(overrides: Partial<ActionProvider> = {}): ActionProvider {
   return {
     spawnAgent: vi.fn().mockResolvedValue({ ok: true, output: '' }),
@@ -33,6 +42,7 @@ function baseContext(
     progress: nullReporter,
     cwd: '/repo',
     testCommand: 'bun test',
+    fixer: mockTestFixer,
     testPassed: false,
     attempt: 1,
     ...overrides,
@@ -112,7 +122,7 @@ describe('Pre-Push Pipeline', () => {
       expect(provider.spawnAgent).toHaveBeenCalledWith(
         expect.objectContaining({
           cwd: '/repo',
-          mode: 'autoEdit',
+          agent: mockTestFixer,
           context: 'TypeError: Cannot read property "foo" of undefined',
         }),
       );
@@ -142,7 +152,7 @@ describe('Pre-Push Pipeline', () => {
       expect(prompt).toContain('test failure output');
     });
 
-    test('uses custom fixerPrompt when provided', async () => {
+    test('uses custom fixer systemPrompt when provided', async () => {
       let runCount = 0;
       const provider = mockProvider({
         runCommand: vi.fn().mockImplementation(() => {
@@ -155,7 +165,7 @@ describe('Pre-Push Pipeline', () => {
       await runPipeline(
         prePushPipeline,
         baseContext(provider, {
-          fixerPrompt: 'Only fix the source code, not the tests',
+          fixer: { ...mockTestFixer, systemPrompt: 'Only fix the source code, not the tests' },
         }),
       );
 
@@ -163,7 +173,7 @@ describe('Pre-Push Pipeline', () => {
       expect(prompt).toContain('Only fix the source code, not the tests');
     });
 
-    test('uses custom fixerModel', async () => {
+    test('uses custom fixer agent definition', async () => {
       let runCount = 0;
       const provider = mockProvider({
         runCommand: vi.fn().mockImplementation(() => {
@@ -173,14 +183,17 @@ describe('Pre-Push Pipeline', () => {
         }),
       });
 
+      const customFixer = { ...mockTestFixer, model: 'opus' as const };
       await runPipeline(
         prePushPipeline,
         baseContext(provider, {
-          fixerModel: 'opus',
+          fixer: customFixer,
         }),
       );
 
-      expect(provider.spawnAgent).toHaveBeenCalledWith(expect.objectContaining({ model: 'opus' }));
+      expect(provider.spawnAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ agent: customFixer }),
+      );
     });
 
     test('fix commits with noVerify and descriptive message', async () => {

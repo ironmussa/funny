@@ -67,6 +67,7 @@ export interface IToolCallRepository {
     name: string;
     input: string;
     author?: string | null;
+    parentToolCallId?: string | null;
   }): string | Promise<string>;
   updateToolCallOutput(id: string, output: string): void | Promise<void>;
   findToolCall(

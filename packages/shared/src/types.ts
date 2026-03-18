@@ -345,6 +345,8 @@ export interface ToolCall {
   output?: string;
   /** Agent name that executed this tool call (for pipeline threads) */
   author?: string;
+  /** Links subagent tool calls to their parent Task tool call */
+  parentToolCallId?: string;
 }
 
 // ─── WebSocket Events ────────────────────────────────────
@@ -368,6 +370,7 @@ export interface WSToolCallData {
   name: string;
   input: unknown;
   author?: string;
+  parentToolCallId?: string;
 }
 
 export interface WSToolOutputData {

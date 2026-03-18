@@ -49,6 +49,20 @@ export function buildGroupedRenderItems(
   threadEvents?: ThreadEvent[],
   compactionEvents?: CompactionEvent[],
 ): RenderItem[] {
+  // Build a map of all tool calls by ID and collect child→parent relationships
+  const allToolCalls: any[] = [];
+  const childrenByParent = new Map<string, any[]>();
+  for (const msg of messages) {
+    for (const tc of msg.toolCalls ?? []) {
+      allToolCalls.push(tc);
+      if (tc.parentToolCallId) {
+        const siblings = childrenByParent.get(tc.parentToolCallId) ?? [];
+        siblings.push(tc);
+        childrenByParent.set(tc.parentToolCallId, siblings);
+      }
+    }
+  }
+
   // Flatten all messages into a single stream of items
   const flat: ({ type: 'message'; msg: any } | { type: 'toolcall'; tc: any })[] = [];
   // Collect Write tool calls that wrote plan files, so ExitPlanMode can use their content
@@ -65,6 +79,8 @@ export function buildGroupedRenderItems(
       // EnterPlanMode carries no useful data (empty input) — skip it entirely.
       // The actual plan content is rendered by ExitPlanMode.
       if (tc.name === 'EnterPlanMode') continue;
+      // Skip child tool calls — they render inside their parent TaskCard
+      if (tc.parentToolCallId) continue;
       // Track the most recent Write to a plan file (.plan, plan.md, or ~/.claude/plans/*.md)
       if (tc.name === 'Write') {
         try {
@@ -86,6 +102,10 @@ export function buildGroupedRenderItems(
       // then fall back to the parent assistant message content
       if (tc.name === 'ExitPlanMode') {
         tc._planText = lastWrittenPlanContent || msg.content?.trim() || undefined;
+      }
+      // Attach child tool calls to Task tools for nested rendering
+      if (tc.name === 'Task' && childrenByParent.has(tc.id)) {
+        tc._childToolCalls = childrenByParent.get(tc.id);
       }
       flat.push({ type: 'toolcall', tc });
     }

@@ -55,6 +55,73 @@ vi.mock('../../services/ws-broker.js', () => ({
     broadcast: vi.fn(),
   },
 }));
+vi.mock('../../services/service-registry.js', () => ({
+  getServices: () => ({
+    pipelines: {
+      createRun: vi.fn().mockResolvedValue('run-1'),
+      updateRun: vi.fn().mockResolvedValue(undefined),
+      getRunById: vi.fn(),
+      getRunsForThread: vi.fn().mockReturnValue([]),
+      getPipelineForProject: vi.fn(),
+      createPipeline: vi.fn(),
+      getPipelineById: vi.fn(),
+      getPipelinesByProject: vi.fn(),
+      updatePipeline: vi.fn(),
+      deletePipeline: vi.fn(),
+    },
+    wsBroker: {
+      emitToUser: (...args: any[]) => mockEmitToUser(...args),
+      broadcast: vi.fn(),
+    },
+    projects: {
+      getProject: vi.fn(),
+    },
+    automations: {
+      getAutomation: vi.fn(),
+    },
+  }),
+}));
+vi.mock('../../services/pipeline-adapter.js', () => {
+  return {
+    RuntimeActionProvider: class {
+      constructor() {}
+      spawnAgent = vi.fn().mockResolvedValue({ ok: true, output: '' });
+      runCommand = vi.fn().mockResolvedValue({ ok: true, output: '' });
+      gitCommit = vi.fn().mockResolvedValue({ ok: true, output: '' });
+      gitPush = vi.fn().mockResolvedValue({ ok: true, output: '' });
+      createPr = vi.fn().mockResolvedValue({ ok: true, output: '' });
+      notify = vi.fn().mockResolvedValue({ ok: true });
+    },
+    RuntimeProgressReporter: class {
+      constructor() {}
+      onStepProgress = vi.fn();
+      onPipelineEvent = vi.fn();
+    },
+  };
+});
+vi.mock('../../services/agent-registry.js', () => ({
+  BUILTIN_AGENTS: {
+    reviewer: {
+      name: 'reviewer',
+      label: 'Code Reviewer',
+      systemPrompt: 'Review code',
+      model: 'sonnet',
+      provider: 'claude',
+      permissionMode: 'plan',
+    },
+    corrector: {
+      name: 'corrector',
+      label: 'Code Corrector',
+      systemPrompt: 'Fix code',
+      model: 'sonnet',
+      provider: 'claude',
+      permissionMode: 'autoEdit',
+    },
+  },
+  resolveAgent: (_base: any, overrides: any) => ({ ..._base, ...overrides }),
+  resolveSystemPrompt: (agent: any) =>
+    typeof agent.systemPrompt === 'function' ? agent.systemPrompt({}) : agent.systemPrompt,
+}));
 vi.mock('../../services/thread-manager.js', () => ({
   getThread: vi.fn(),
   getThreadWithMessages: vi.fn(),
@@ -120,6 +187,10 @@ function makePipeline(overrides: Partial<PipelineConfig> = {}): PipelineConfig {
     precommitFixEnabled: false,
     precommitFixModel: 'sonnet',
     precommitFixMaxIterations: 3,
+    testEnabled: false,
+    testFixEnabled: false,
+    testFixModel: 'sonnet',
+    testFixMaxIterations: 3,
     ...overrides,
   };
 }

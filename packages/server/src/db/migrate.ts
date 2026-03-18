@@ -790,6 +790,13 @@ const migrations: Migration[] = [
       await ctx().addColumn('threads', 'purpose', 'TEXT NOT NULL', "'implement'");
     },
   },
+
+  {
+    name: '030_tool_call_parent',
+    async up() {
+      await ctx().addColumn('tool_calls', 'parent_tool_call_id', 'TEXT');
+    },
+  },
 ];
 
 export async function autoMigrate() {

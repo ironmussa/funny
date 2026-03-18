@@ -138,7 +138,14 @@ export function handleWSToolCall(
   get: Get,
   set: Set,
   threadId: string,
-  data: { toolCallId?: string; messageId?: string; name: string; input: unknown; author?: string },
+  data: {
+    toolCallId?: string;
+    messageId?: string;
+    name: string;
+    input: unknown;
+    author?: string;
+    parentToolCallId?: string;
+  },
 ): void {
   const { activeThread, selectedThreadId } = get();
 
@@ -150,6 +157,7 @@ export function handleWSToolCall(
       name: data.name,
       input: JSON.stringify(data.input),
       ...(data.author ? { author: data.author } : {}),
+      ...(data.parentToolCallId ? { parentToolCallId: data.parentToolCallId } : {}),
     };
 
     if (activeThread.messages.some((m) => m.toolCalls?.some((tc: any) => tc.id === toolCallId)))

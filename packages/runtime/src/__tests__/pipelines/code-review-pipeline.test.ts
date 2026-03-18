@@ -35,6 +35,25 @@ function makeReviewResponse(verdict: 'pass' | 'fail', findings: any[] = []): Act
   };
 }
 
+const mockReviewer = {
+  name: 'reviewer',
+  label: 'Code Reviewer',
+  systemPrompt: (ctx: Record<string, string>) =>
+    `You are a code reviewer. Review commit ${ctx.commitSha || 'HEAD'}.`,
+  model: 'sonnet' as const,
+  provider: 'claude' as const,
+  permissionMode: 'plan' as const,
+};
+
+const mockCorrector = {
+  name: 'corrector',
+  label: 'Code Corrector',
+  systemPrompt: 'You are a code corrector. Fix the issues.',
+  model: 'sonnet' as const,
+  provider: 'claude' as const,
+  permissionMode: 'autoEdit' as const,
+};
+
 function baseContext(
   provider: ActionProvider,
   overrides: Partial<CodeReviewPipelineContext> = {},
@@ -44,6 +63,8 @@ function baseContext(
     progress: nullReporter,
     cwd: '/repo',
     commitSha: 'abc123',
+    reviewer: mockReviewer,
+    corrector: mockCorrector,
     iteration: 1,
     noChanges: false,
     ...overrides,
@@ -118,14 +139,16 @@ describe('Code Review Pipeline', () => {
       expect(provider.gitCommit).not.toHaveBeenCalled(); // no fix needed
     });
 
-    test('reviewer uses plan mode (read-only)', async () => {
+    test('reviewer passes agent definition to spawnAgent', async () => {
       const provider = mockProvider({
         spawnAgent: vi.fn().mockResolvedValue(makeReviewResponse('pass')),
       });
 
       await runPipeline(codeReviewPipeline, baseContext(provider));
 
-      expect(provider.spawnAgent).toHaveBeenCalledWith(expect.objectContaining({ mode: 'plan' }));
+      expect(provider.spawnAgent).toHaveBeenCalledWith(
+        expect.objectContaining({ agent: mockReviewer }),
+      );
     });
 
     test('uses commit SHA in reviewer prompt', async () => {
@@ -178,7 +201,7 @@ describe('Code Review Pipeline', () => {
       expect(spawnAgent).toHaveBeenCalledTimes(3);
     });
 
-    test('corrector agent uses autoEdit mode', async () => {
+    test('corrector agent passes corrector definition to spawnAgent', async () => {
       const spawnAgent = vi
         .fn()
         .mockResolvedValueOnce(makeReviewResponse('fail', [{ description: 'bug' }]))
@@ -189,7 +212,7 @@ describe('Code Review Pipeline', () => {
       await runPipeline(codeReviewPipeline, baseContext(provider));
 
       // Second call is the corrector
-      expect(spawnAgent.mock.calls[1][0].mode).toBe('autoEdit');
+      expect(spawnAgent.mock.calls[1][0].agent).toEqual(mockCorrector);
     });
 
     test('fix commits with noVerify flag', async () => {
@@ -247,7 +270,7 @@ describe('Code Review Pipeline', () => {
       // Fix always succeeds but review always fails
       const provider = mockProvider({
         spawnAgent: vi.fn().mockImplementation((opts: any) => {
-          if (opts.mode === 'plan') {
+          if (opts.agent?.name === 'reviewer') {
             return Promise.resolve(makeReviewResponse('fail', [{ description: 'issue' }]));
           }
           return Promise.resolve({ ok: true, output: 'fixed' });
@@ -266,7 +289,10 @@ describe('Code Review Pipeline', () => {
       expect(result.ctx.iteration).toBeGreaterThan(2);
     });
 
-    test('uses custom reviewerModel and correctorModel', async () => {
+    test('uses custom reviewer and corrector agent definitions', async () => {
+      const customReviewer = { ...mockReviewer, model: 'opus' as const };
+      const customCorrector = { ...mockCorrector, model: 'haiku' as const };
+
       const spawnAgent = vi
         .fn()
         .mockResolvedValueOnce(makeReviewResponse('fail', [{ description: 'bug' }]))
@@ -277,18 +303,18 @@ describe('Code Review Pipeline', () => {
       await runPipeline(
         codeReviewPipeline,
         baseContext(provider, {
-          reviewerModel: 'opus',
-          correctorModel: 'sonnet',
+          reviewer: customReviewer,
+          corrector: customCorrector,
         }),
       );
 
-      // Reviewer (1st call) uses opus
-      expect(spawnAgent.mock.calls[0][0].model).toBe('opus');
-      // Corrector (2nd call) uses sonnet
-      expect(spawnAgent.mock.calls[1][0].model).toBe('sonnet');
+      // Reviewer (1st call) uses custom definition
+      expect(spawnAgent.mock.calls[0][0].agent).toEqual(customReviewer);
+      // Corrector (2nd call) uses custom definition
+      expect(spawnAgent.mock.calls[1][0].agent).toEqual(customCorrector);
     });
 
-    test('uses custom reviewerPrompt', async () => {
+    test('uses custom reviewer systemPrompt', async () => {
       const provider = mockProvider({
         spawnAgent: vi.fn().mockResolvedValue(makeReviewResponse('pass')),
       });
@@ -296,17 +322,16 @@ describe('Code Review Pipeline', () => {
       await runPipeline(
         codeReviewPipeline,
         baseContext(provider, {
-          reviewerPrompt: 'Check for security issues only',
+          reviewer: { ...mockReviewer, systemPrompt: 'Check for security issues only' },
           commitSha: 'abc123',
         }),
       );
 
       const prompt = (provider.spawnAgent as ReturnType<typeof vi.fn>).mock.calls[0][0].prompt;
       expect(prompt).toContain('Check for security issues only');
-      expect(prompt).toContain('abc123');
     });
 
-    test('uses custom correctorPrompt', async () => {
+    test('uses custom corrector systemPrompt', async () => {
       const spawnAgent = vi
         .fn()
         .mockResolvedValueOnce(makeReviewResponse('fail', [{ description: 'bug' }]))
@@ -317,7 +342,7 @@ describe('Code Review Pipeline', () => {
       await runPipeline(
         codeReviewPipeline,
         baseContext(provider, {
-          correctorPrompt: 'Use the project style guide to fix',
+          corrector: { ...mockCorrector, systemPrompt: 'Use the project style guide to fix' },
         }),
       );
 
@@ -374,7 +399,7 @@ describe('Code Review Pipeline', () => {
       // This test verifies the default is enforced
       const provider = mockProvider({
         spawnAgent: vi.fn().mockImplementation((opts: any) => {
-          if (opts.mode === 'plan') {
+          if (opts.agent?.name === 'reviewer') {
             return Promise.resolve(makeReviewResponse('fail', [{ description: 'issue' }]));
           }
           return Promise.resolve({ ok: true, output: 'fixed' });

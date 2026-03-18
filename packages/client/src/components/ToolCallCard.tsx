@@ -12,6 +12,7 @@ import { EditFileCard } from './tool-cards/EditFileCard';
 import { ExitPlanModeCard } from './tool-cards/ExitPlanModeCard';
 import { PlanCard } from './tool-cards/PlanCard';
 import { ReadFileCard } from './tool-cards/ReadFileCard';
+import { TaskCard } from './tool-cards/TaskCard';
 import { TodoList } from './tool-cards/TodoList';
 import {
   formatInput,
@@ -36,6 +37,8 @@ interface ToolCallCardProps {
   hideLabel?: boolean;
   /** Plan text from the parent assistant message (for ExitPlanMode) */
   planText?: string;
+  /** Nested tool calls from a subagent (Task tool) */
+  childToolCalls?: any[];
 }
 
 export const ToolCallCard = memo(
@@ -46,6 +49,7 @@ export const ToolCallCard = memo(
     onRespond,
     hideLabel,
     planText,
+    childToolCalls,
   }: ToolCallCardProps) {
     const { t } = useTranslation();
     const isTodo = name === 'TodoWrite';
@@ -109,6 +113,15 @@ export const ToolCallCard = memo(
           onRespond={output ? undefined : onRespond}
           output={output}
           hideLabel={hideLabel}
+        />
+      );
+    if (name === 'Task')
+      return (
+        <TaskCard
+          parsed={parsed}
+          output={output}
+          hideLabel={hideLabel}
+          childToolCalls={childToolCalls}
         />
       );
 
@@ -240,7 +253,8 @@ export const ToolCallCard = memo(
       prev.output === next.output &&
       prev.hideLabel === next.hideLabel &&
       !!prev.onRespond === !!next.onRespond &&
-      prev.planText === next.planText
+      prev.planText === next.planText &&
+      prev.childToolCalls === next.childToolCalls
     );
   },
 );

@@ -120,6 +120,7 @@ export const toolCalls = pgTable('tool_calls', {
   input: text('input'),
   output: text('output'),
   author: text('author'),
+  parentToolCallId: text('parent_tool_call_id'),
 });
 
 export const automations = pgTable('automations', {

@@ -16,6 +16,8 @@ import {
   getDefaultBranch,
   getCurrentBranch,
   git,
+  stash,
+  invalidateStatusCache,
   getWeaveStatus,
   ensureWeaveConfigured,
 } from '@funny/core/git';
@@ -80,12 +82,17 @@ projectRoutes.get('/:id/checkout-preflight', async (c) => {
   const currentBranch = currentBranchResult.isOk() ? currentBranchResult.value : null;
 
   if (currentBranch === targetBranch) {
-    return c.json({ canCheckout: true, currentBranch });
+    return c.json({ canCheckout: true, currentBranch, hasDirtyFiles: false });
   }
 
   const statusResult = await git(['status', '--porcelain'], project.path);
   if (statusResult.isErr()) {
-    return c.json({ canCheckout: false, currentBranch, reason: 'git_status_failed' });
+    return c.json({
+      canCheckout: false,
+      currentBranch,
+      reason: 'git_status_failed',
+      hasDirtyFiles: false,
+    });
   }
 
   const dirtyFiles = statusResult.value
@@ -94,33 +101,57 @@ projectRoutes.get('/:id/checkout-preflight', async (c) => {
     .map((l) => l.slice(3).trim());
 
   if (dirtyFiles.length === 0) {
-    return c.json({ canCheckout: true, currentBranch });
+    return c.json({ canCheckout: true, currentBranch, hasDirtyFiles: false });
   }
 
-  const diffResult = await git(['diff', '--name-only', `HEAD...${targetBranch}`], project.path);
+  // There are dirty files — return info so the client can show the Switch Branch dialog
+  return c.json({
+    canCheckout: false,
+    currentBranch,
+    reason: 'dirty_files',
+    hasDirtyFiles: true,
+    dirtyFileCount: dirtyFiles.length,
+  });
+});
 
-  if (diffResult.isErr()) {
-    return c.json({
-      canCheckout: false,
-      currentBranch,
-      reason: 'dirty_files',
-      conflictingFiles: dirtyFiles.slice(0, 10),
-    });
+// POST /api/projects/:id/checkout — perform branch checkout with a strategy for dirty files
+projectRoutes.post('/:id/checkout', async (c) => {
+  const projectResult = await requireProject(c.req.param('id'));
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+
+  const body = await c.req.json<{ branch: string; strategy?: 'stash' | 'carry' }>();
+  const { branch, strategy = 'carry' } = body;
+  if (!branch) return c.json({ error: 'Missing required field: branch' }, 400);
+
+  const project = projectResult.value;
+
+  // Check current branch
+  const currentBranchResult = await getCurrentBranch(project.path);
+  const currentBranch = currentBranchResult.isOk() ? currentBranchResult.value : null;
+  if (currentBranch === branch) {
+    return c.json({ ok: true, currentBranch: branch });
   }
 
-  const changedInTarget = new Set(diffResult.value.split('\n').filter((l) => l.trim()));
-  const conflicting = dirtyFiles.filter((f) => changedInTarget.has(f));
-
-  if (conflicting.length > 0) {
-    return c.json({
-      canCheckout: false,
-      currentBranch,
-      reason: 'dirty_files',
-      conflictingFiles: conflicting.slice(0, 10),
-    });
+  // If strategy is stash, stash changes first
+  if (strategy === 'stash') {
+    const stashResult = await stash(project.path);
+    if (stashResult.isErr()) {
+      return c.json({ error: `Failed to stash: ${stashResult.error.message}` }, 500);
+    }
   }
 
-  return c.json({ canCheckout: true, currentBranch });
+  // Checkout the target branch
+  const checkoutResult = await git(['checkout', branch], project.path);
+  if (checkoutResult.isErr()) {
+    // If we stashed and checkout failed, try to restore the stash
+    if (strategy === 'stash') {
+      await git(['stash', 'pop'], project.path);
+    }
+    return c.json({ error: `Checkout failed: ${checkoutResult.error.message}` }, 500);
+  }
+
+  invalidateStatusCache(project.path);
+  return c.json({ ok: true, currentBranch: branch });
 });
 
 // ─── Startup Commands ───────────────────────────────────

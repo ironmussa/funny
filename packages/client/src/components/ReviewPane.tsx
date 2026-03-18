@@ -1236,14 +1236,7 @@ export function ReviewPane() {
               >
                 {virtualizer.getVirtualItems().map((virtualRow) => {
                   const row = treeRows[virtualRow.index];
-                  const baseStyle = {
-                    position: 'absolute' as const,
-                    top: 0,
-                    left: 0,
-                    width: '100%',
-                    height: `${virtualRow.size}px`,
-                    transform: `translateY(${virtualRow.start}px)`,
-                  };
+                  const paddingLeft = `${8 + row.depth * INDENT_PX}px`;
 
                   if (row.kind === 'folder') {
                     const isCollapsed = collapsedFolders.has(row.path);
@@ -1251,7 +1244,15 @@ export function ReviewPane() {
                       <div
                         key={`folder-${row.path}`}
                         className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50"
-                        style={{ ...baseStyle, paddingLeft: `${8 + row.depth * INDENT_PX}px` }}
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          width: '100%',
+                          height: `${virtualRow.size}px`,
+                          transform: `translateY(${virtualRow.start}px)`,
+                          paddingLeft,
+                        }}
                         onClick={() => toggleFolder(row.path)}
                         data-testid={`review-folder-${row.path}`}
                       >
@@ -1286,7 +1287,15 @@ export function ReviewPane() {
                   return (
                     <div
                       key={f.path}
-                      style={{ ...baseStyle, paddingLeft: `${8 + row.depth * INDENT_PX}px` }}
+                      style={{
+                        position: 'absolute',
+                        top: 0,
+                        left: 0,
+                        width: '100%',
+                        height: `${virtualRow.size}px`,
+                        transform: `translateY(${virtualRow.start}px)`,
+                        paddingLeft,
+                      }}
                       className={cn(
                         'group flex items-center gap-1.5 text-xs cursor-pointer transition-colors',
                         selectedFile === f.path

@@ -135,7 +135,12 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
       return;
     }
     _lastFetchByProject.set(projectId, now);
-    set((s) => ({ loadingProjects: new Set([...s.loadingProjects, projectId]) }));
+    set((s) => {
+      if (s.loadingProjects.has(projectId)) return {};
+      const next = new Set(s.loadingProjects);
+      next.add(projectId);
+      return { loadingProjects: next };
+    });
 
     const result = await api.getGitStatuses(projectId);
     if (result.isOk()) {
@@ -166,6 +171,7 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
     }
     // Silently ignore errors — git status is best-effort
     set((s) => {
+      if (!s.loadingProjects.has(projectId)) return {};
       const next = new Set(s.loadingProjects);
       next.delete(projectId);
       return { loadingProjects: next };
@@ -198,7 +204,12 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
     if (bk) _lastFetchByBranch.set(pendingKey, now);
 
     if (bk) {
-      set((s) => ({ _loadingBranchKeys: new Set([...s._loadingBranchKeys, bk]) }));
+      set((s) => {
+        if (s._loadingBranchKeys.has(bk)) return {};
+        const next = new Set(s._loadingBranchKeys);
+        next.add(bk);
+        return { _loadingBranchKeys: next };
+      });
     }
     try {
       const result = await api.getGitStatus(threadId);
@@ -224,6 +235,7 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
     } finally {
       if (bk) {
         set((s) => {
+          if (!s._loadingBranchKeys.has(bk)) return {};
           const next = new Set(s._loadingBranchKeys);
           next.delete(bk);
           return { _loadingBranchKeys: next };
@@ -238,7 +250,12 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
     const lastFetch = _lastFetchByProjectStatus.get(projectId) ?? 0;
     if (now - lastFetch < PROJECT_STATUS_COOLDOWN_MS) return;
     _lastFetchByProjectStatus.set(projectId, now);
-    set((s) => ({ _loadingProjectStatus: new Set([...s._loadingProjectStatus, projectId]) }));
+    set((s) => {
+      if (s._loadingProjectStatus.has(projectId)) return {};
+      const next = new Set(s._loadingProjectStatus);
+      next.add(projectId);
+      return { _loadingProjectStatus: next };
+    });
     try {
       const result = await api.projectGitStatus(projectId);
       if (result.isOk()) {
@@ -246,6 +263,7 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
       }
     } finally {
       set((s) => {
+        if (!s._loadingProjectStatus.has(projectId)) return {};
         const next = new Set(s._loadingProjectStatus);
         next.delete(projectId);
         return { _loadingProjectStatus: next };

@@ -20,6 +20,7 @@ import { useThreadStore } from '@/stores/thread-store';
 
 import type { PromptEditorHandle } from './prompt-editor/PromptEditor';
 import { PromptInputUI } from './PromptInputUI';
+import { SwitchBranchDialog } from './SwitchBranchDialog';
 
 const piLog = createClientLogger('PromptInput');
 
@@ -578,18 +579,34 @@ export const PromptInput = memo(function PromptInput({
     }
   }, [initialPromptProp, initialImagesProp]);
 
+  // ── Switch-branch dialog state ──
+  const [switchBranchDialog, setSwitchBranchDialog] = useState<{
+    targetBranch: string;
+    currentBranch: string;
+  } | null>(null);
+  const [switchBranchLoading, setSwitchBranchLoading] = useState(false);
+  const switchBranchResolverRef = useRef<((result: boolean) => void) | null>(null);
+
   // ── Checkout preflight ──
   const handleCheckoutPreflight = useCallback(
     async (branch: string): Promise<boolean> => {
       if (!effectiveProjectId || !gitCurrentBranch || branch === gitCurrentBranch) return true;
       const preflight = await api.checkoutPreflight(effectiveProjectId, branch);
       if (preflight.isOk() && !preflight.value.canCheckout) {
-        const files = preflight.value.conflictingFiles?.join(', ') || '';
+        if (preflight.value.hasDirtyFiles) {
+          // Show the switch-branch dialog and wait for user's choice
+          return new Promise<boolean>((resolve) => {
+            switchBranchResolverRef.current = resolve;
+            setSwitchBranchDialog({
+              targetBranch: branch,
+              currentBranch: gitCurrentBranch,
+            });
+          });
+        }
         toast.error(
           t('prompt.checkoutBlocked', {
             branch,
             currentBranch: gitCurrentBranch,
-            files,
           }),
           { duration: 8000 },
         );
@@ -599,6 +616,37 @@ export const PromptInput = memo(function PromptInput({
     },
     [effectiveProjectId, gitCurrentBranch, t],
   );
+
+  const handleSwitchBranch = useCallback(
+    async (strategy: 'stash' | 'carry') => {
+      if (!effectiveProjectId || !switchBranchDialog) return;
+      setSwitchBranchLoading(true);
+      const result = await api.checkout(
+        effectiveProjectId,
+        switchBranchDialog.targetBranch,
+        strategy,
+      );
+      setSwitchBranchLoading(false);
+
+      if (result.isOk()) {
+        // Update the branch in the project store
+        useProjectStore.getState().fetchBranch(effectiveProjectId);
+        setGitCurrentBranch(switchBranchDialog.targetBranch);
+        setSwitchBranchDialog(null);
+        switchBranchResolverRef.current?.(true);
+        switchBranchResolverRef.current = null;
+      } else {
+        toast.error(result.error.message || t('switchBranch.failed', 'Failed to switch branch'));
+      }
+    },
+    [effectiveProjectId, switchBranchDialog, t],
+  );
+
+  const handleSwitchBranchCancel = useCallback(() => {
+    setSwitchBranchDialog(null);
+    switchBranchResolverRef.current?.(false);
+    switchBranchResolverRef.current = null;
+  }, []);
 
   // ── Editor paste handler (for draft tracking) ──
   const handleEditorPaste = useCallback(async (e: ClipboardEvent) => {
@@ -625,65 +673,79 @@ export const PromptInput = memo(function PromptInput({
   );
 
   return (
-    <PromptInputUI
-      onSubmit={wrappedOnSubmit}
-      onStop={onStop}
-      loading={loading}
-      running={running}
-      queuedCount={queuedCount}
-      isQueueMode={isQueueMode}
-      queuedMessages={queuedMessages}
-      queueLoading={queueLoading}
-      onQueueEditSave={handleQueueEditSave}
-      onQueueDelete={handleQueueDelete}
-      unifiedModel={unifiedModel}
-      onUnifiedModelChange={setUnifiedModel}
-      modelGroups={unifiedModelGroups}
-      mode={mode}
-      onModeChange={setMode}
-      modes={modes}
-      isNewThread={isNewThread}
-      createWorktree={createWorktree}
-      onCreateWorktreeChange={setCreateWorktree}
-      runtime={runtime}
-      onRuntimeChange={setRuntime}
-      hasLauncher={hasLauncher}
-      branches={newThreadBranches}
-      remoteBranches={newThreadRemoteBranches}
-      defaultBranch={newThreadDefaultBranch}
-      branchesLoading={newThreadBranchesLoading}
-      selectedBranch={selectedBranch}
-      onSelectedBranchChange={setSelectedBranch}
-      followUpBranches={followUpBranches}
-      followUpRemoteBranches={followUpRemoteBranches}
-      followUpDefaultBranch={followUpDefaultBranch}
-      followUpSelectedBranch={followUpSelectedBranch}
-      onFollowUpSelectedBranchChange={setFollowUpSelectedBranch}
-      activeThreadBranch={activeThreadBranch}
-      remoteUrl={remoteUrl}
-      effectiveCwd={threadCwd}
-      showBacklog={showBacklog}
-      sendToBacklog={sendToBacklog}
-      onSendToBacklogChange={setSendToBacklog}
-      hasDictation={hasAssemblyaiKey}
-      isRecording={isRecording}
-      isTranscribing={isTranscribing}
-      onToggleRecording={toggleRecording}
-      onStopRecording={stopRecording}
-      placeholder={placeholder}
-      editorCwd={threadCwd}
-      loadSkills={loadSkillsForEditor}
-      setPromptRef={setPromptRef}
-      editorRef={editorRef}
-      editorContainerRef={editorContainerRef}
-      initialPrompt={initialPromptProp}
-      initialImages={initialImagesProp}
-      onEditorPaste={handleEditorPaste}
-      onCheckoutPreflight={handleCheckoutPreflight}
-      purpose={purpose}
-      onPurposeChange={setPurpose}
-      arcId={activeThreadArcId}
-      onPhaseTransition={onPhaseTransition}
-    />
+    <>
+      <PromptInputUI
+        onSubmit={wrappedOnSubmit}
+        onStop={onStop}
+        loading={loading}
+        running={running}
+        queuedCount={queuedCount}
+        isQueueMode={isQueueMode}
+        queuedMessages={queuedMessages}
+        queueLoading={queueLoading}
+        onQueueEditSave={handleQueueEditSave}
+        onQueueDelete={handleQueueDelete}
+        unifiedModel={unifiedModel}
+        onUnifiedModelChange={setUnifiedModel}
+        modelGroups={unifiedModelGroups}
+        mode={mode}
+        onModeChange={setMode}
+        modes={modes}
+        isNewThread={isNewThread}
+        createWorktree={createWorktree}
+        onCreateWorktreeChange={setCreateWorktree}
+        runtime={runtime}
+        onRuntimeChange={setRuntime}
+        hasLauncher={hasLauncher}
+        branches={newThreadBranches}
+        remoteBranches={newThreadRemoteBranches}
+        defaultBranch={newThreadDefaultBranch}
+        branchesLoading={newThreadBranchesLoading}
+        selectedBranch={selectedBranch}
+        onSelectedBranchChange={setSelectedBranch}
+        followUpBranches={followUpBranches}
+        followUpRemoteBranches={followUpRemoteBranches}
+        followUpDefaultBranch={followUpDefaultBranch}
+        followUpSelectedBranch={followUpSelectedBranch}
+        onFollowUpSelectedBranchChange={setFollowUpSelectedBranch}
+        activeThreadBranch={activeThreadBranch}
+        remoteUrl={remoteUrl}
+        effectiveCwd={threadCwd}
+        showBacklog={showBacklog}
+        sendToBacklog={sendToBacklog}
+        onSendToBacklogChange={setSendToBacklog}
+        hasDictation={hasAssemblyaiKey}
+        isRecording={isRecording}
+        isTranscribing={isTranscribing}
+        onToggleRecording={toggleRecording}
+        onStopRecording={stopRecording}
+        placeholder={placeholder}
+        editorCwd={threadCwd}
+        loadSkills={loadSkillsForEditor}
+        setPromptRef={setPromptRef}
+        editorRef={editorRef}
+        editorContainerRef={editorContainerRef}
+        initialPrompt={initialPromptProp}
+        initialImages={initialImagesProp}
+        onEditorPaste={handleEditorPaste}
+        onCheckoutPreflight={handleCheckoutPreflight}
+        purpose={purpose}
+        onPurposeChange={setPurpose}
+        arcId={activeThreadArcId}
+        onPhaseTransition={onPhaseTransition}
+      />
+
+      <SwitchBranchDialog
+        open={!!switchBranchDialog}
+        onOpenChange={(open) => {
+          if (!open) handleSwitchBranchCancel();
+        }}
+        currentBranch={switchBranchDialog?.currentBranch ?? ''}
+        targetBranch={switchBranchDialog?.targetBranch ?? ''}
+        loading={switchBranchLoading}
+        onSwitch={handleSwitchBranch}
+        onCancel={handleSwitchBranchCancel}
+      />
+    </>
   );
 });

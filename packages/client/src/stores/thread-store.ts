@@ -791,7 +791,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     const { activeThread } = get();
     if (!activeThread) return;
     const [result, eventsResult] = await Promise.all([
-      api.getThread(activeThread.id),
+      api.getThread(activeThread.id, 50),
       api.getThreadEvents(activeThread.id),
     ]);
     if (result.isErr()) return; // silently ignore

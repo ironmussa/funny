@@ -71,11 +71,20 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         // Threads load in background and fill in progressively.
         set({ projects, initialized: true });
 
+        // Fire git status + branch fetches immediately in parallel with thread
+        // loading (async-parallel). Previously these waited until ALL threads
+        // finished loading, adding unnecessary latency to sidebar diff stats.
+        const gitStore = useGitStatusStore.getState();
+        const { expandedProjects, fetchBranch } = get();
+        for (const p of projects) {
+          gitStore.fetchForProject(p.id);
+          if (expandedProjects.has(p.id)) {
+            fetchBranch(p.id);
+          }
+        }
+
         // Load threads for all projects in parallel, then batch-update the store
         // in a single set() call to avoid N separate re-renders (one per project).
-        // After threads are loaded, fetch git status for ALL projects so sidebar
-        // diff stats are visible immediately (git status requests are serialized
-        // server-side via the cooldown mechanism).
         Promise.all(
           projects.map(async (p) => {
             const result = await api.listThreads(p.id, true);
@@ -96,17 +105,6 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
               }
             }
             if (changed) useThreadStore.setState({ threadsByProject: next });
-
-            // Fetch git status for ALL projects so sidebar shows diff stats
-            // immediately, and branch info for expanded projects.
-            const gitStore = useGitStatusStore.getState();
-            const { expandedProjects, fetchBranch } = get();
-            for (const p of projects) {
-              gitStore.fetchForProject(p.id);
-              if (expandedProjects.has(p.id)) {
-                fetchBranch(p.id);
-              }
-            }
           })
           .catch(() => {});
       } finally {

@@ -655,7 +655,17 @@
     "deleteQueuedMessage": "Excluir",
     "saveQueuedMessage": "Salvar",
     "cancelQueuedEdit": "Cancelar",
-    "checkoutBlocked": "Não é possível mudar para a branch \"{{branch}}\" — você tem alterações não commitadas que seriam sobrescritas. Branch atual: {{currentBranch}}. Arquivos em conflito: {{files}}. Faça commit ou stash das suas alterações, ou use o modo worktree."
+    "checkoutBlocked": "Não é possível mudar para a branch \"{{branch}}\" — você tem alterações não commitadas que seriam sobrescritas. Branch atual: {{currentBranch}}. Faça commit ou stash das suas alterações, ou use o modo worktree."
+  },
+  "switchBranch": {
+    "title": "Mudar branch",
+    "description": "Você tem alterações nesta branch. O que gostaria de fazer com elas?",
+    "leaveChanges": "Deixar minhas alterações em {{branch}}",
+    "leaveChangesDesc": "Seu trabalho em andamento será guardado em stash nesta branch para você voltar depois",
+    "bringChanges": "Levar minhas alterações para {{branch}}",
+    "bringChangesDesc": "Seu trabalho em andamento vai acompanhar você para a nova branch",
+    "switchButton": "Mudar branch",
+    "failed": "Falha ao mudar de branch"
   },
   "gitStatus": {
     "dirty": "Alterações não commitadas",

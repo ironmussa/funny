@@ -665,7 +665,17 @@
     "deleteQueuedMessage": "Eliminar",
     "saveQueuedMessage": "Guardar",
     "cancelQueuedEdit": "Cancelar",
-    "checkoutBlocked": "No se puede cambiar a la rama \"{{branch}}\" — tienes cambios sin confirmar que se perderían. Rama actual: {{currentBranch}}. Archivos en conflicto: {{files}}. Confirma o guarda tus cambios, o usa el modo worktree."
+    "checkoutBlocked": "No se puede cambiar a la rama \"{{branch}}\" — tienes cambios sin confirmar que se perderían. Rama actual: {{currentBranch}}. Confirma o guarda tus cambios, o usa el modo worktree."
+  },
+  "switchBranch": {
+    "title": "Cambiar rama",
+    "description": "Tienes cambios en esta rama. ¿Qué quieres hacer con ellos?",
+    "leaveChanges": "Dejar mis cambios en {{branch}}",
+    "leaveChangesDesc": "Tu trabajo en progreso será guardado en stash en esta rama para que puedas volver después",
+    "bringChanges": "Llevar mis cambios a {{branch}}",
+    "bringChangesDesc": "Tu trabajo en progreso te seguirá a la nueva rama",
+    "switchButton": "Cambiar rama",
+    "failed": "Error al cambiar de rama"
   },
   "gitStatus": {
     "dirty": "Cambios sin commitear",

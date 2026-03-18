@@ -672,7 +672,17 @@
     "deleteQueuedMessage": "Delete",
     "saveQueuedMessage": "Save",
     "cancelQueuedEdit": "Cancel",
-    "checkoutBlocked": "Cannot switch to branch \"{{branch}}\" — you have uncommitted changes that would be overwritten. Current branch: {{currentBranch}}. Conflicting files: {{files}}. Commit or stash your changes, or use worktree mode."
+    "checkoutBlocked": "Cannot switch to branch \"{{branch}}\" — you have uncommitted changes that would be overwritten. Current branch: {{currentBranch}}. Commit or stash your changes, or use worktree mode."
+  },
+  "switchBranch": {
+    "title": "Switch branch",
+    "description": "You have changes on this branch. What would you like to do with them?",
+    "leaveChanges": "Leave my changes on {{branch}}",
+    "leaveChangesDesc": "Your in-progress work will be stashed on this branch for you to return to later",
+    "bringChanges": "Bring my changes to {{branch}}",
+    "bringChangesDesc": "Your in-progress work will follow you to the new branch",
+    "switchButton": "Switch branch",
+    "failed": "Failed to switch branch"
   },
   "gitStatus": {
     "dirty": "Uncommitted changes",

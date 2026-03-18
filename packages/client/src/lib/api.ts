@@ -219,8 +219,14 @@ export const api = {
       canCheckout: boolean;
       currentBranch: string | null;
       reason?: string;
-      conflictingFiles?: string[];
+      hasDirtyFiles?: boolean;
+      dirtyFileCount?: number;
     }>(`/projects/${projectId}/checkout-preflight?branch=${encodeURIComponent(branch)}`),
+  checkout: (projectId: string, branch: string, strategy: 'stash' | 'carry' = 'carry') =>
+    request<{ ok: boolean; currentBranch: string }>(`/projects/${projectId}/checkout`, {
+      method: 'POST',
+      body: JSON.stringify({ branch, strategy }),
+    }),
 
   // Threads
   listThreads: (projectId?: string, includeArchived?: boolean) => {

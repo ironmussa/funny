@@ -6,10 +6,11 @@
  * @domain depends: WSBroker, ShutdownManager
  *
  * Manages interactive PTY sessions. Selects the best backend at startup:
- *   0. Headless xterm.js (Linux/macOS — full state tracking via @xterm/headless)
- *   1. Bun native terminal (Linux/macOS — zero dependencies, fallback)
- *   2. node-pty via helper process (Windows — requires node-pty package)
- *   3. Null fallback (reports error to client)
+ *   0. Daemon (Linux/macOS — PTY processes survive server restarts)
+ *   1. Headless xterm.js (Linux/macOS — full state tracking via @xterm/headless)
+ *   2. Bun native terminal (Linux/macOS — zero dependencies, fallback)
+ *   3. node-pty via helper process (Windows — requires node-pty package)
+ *   4. Null fallback (reports error to client)
  */
 
 import { log } from '../lib/logger.js';
@@ -19,9 +20,28 @@ import { wsBroker } from './ws-broker.js';
 // ── Backend selection ───────────────────────────────────────────────
 
 function selectBackend(): PtyBackend {
-  // 0. Try headless xterm.js backend (POSIX only) — preferred because it
-  //    keeps full terminal state (scrollback, colors, cursor) in memory via
-  //    @xterm/headless + @xterm/addon-serialize for perfect reconnect restore.
+  // 0. Try daemon backend (POSIX only) — preferred because PTY processes
+  //    survive server restarts. The daemon runs as a separate Bun process
+  //    that owns the PTYs and communicates via Unix socket.
+  if (process.platform !== 'win32') {
+    try {
+      const { DaemonPtyBackend } =
+        require('./pty-backend-daemon.js') as typeof import('./pty-backend-daemon.js');
+      const backend = new DaemonPtyBackend();
+      if (backend.available) {
+        log.info('PTY backend selected: daemon', { namespace: 'pty-manager' });
+        return backend;
+      }
+    } catch (err: any) {
+      log.warn('Daemon PTY backend failed to load, falling back', {
+        namespace: 'pty-manager',
+        error: err?.message,
+      });
+    }
+  }
+
+  // 1. Try headless xterm.js backend (POSIX only) — keeps full terminal state
+  //    (scrollback, colors, cursor) in memory via @xterm/headless + serialize.
   if (process.platform !== 'win32') {
     try {
       const { HeadlessPtyBackend } =
@@ -391,16 +411,58 @@ export function listActiveSessions(
 
 /**
  * Reattach to all persisted PTY sessions on server startup.
+ * For daemon: queries the daemon for live sessions and syncs with DB metadata.
  * For tmux: reattaches to existing tmux sessions.
  * For headless-xterm: restores serialized terminal state and spawns fresh PTYs.
  */
-export function reattachSessions(): void {
-  if (!backend.persistent || !backend.reattach) {
+export async function reattachSessions(): Promise<void> {
+  if (!backend.persistent) {
     log.info('PTY backend is not persistent — skipping session reattach', {
       namespace: 'pty-manager',
     });
     return;
   }
+
+  // Daemon backend: query daemon for live sessions, sync with DB metadata
+  if (backend.name === 'daemon' && 'listDaemonSessions' in backend) {
+    const daemonBackend = backend as import('./pty-backend-daemon.js').DaemonPtyBackend;
+    const dbRows = loadPtySessions();
+    const dbMap = new Map(dbRows.map((r) => [r.id, r]));
+
+    try {
+      const daemonSessions = await daemonBackend.listDaemonSessions();
+      log.info(`Daemon reports ${daemonSessions.length} live session(s)`, {
+        namespace: 'pty-manager',
+      });
+
+      for (const ds of daemonSessions) {
+        const dbRow = dbMap.get(ds.id);
+        activeSessions.set(ds.id, {
+          userId: dbRow?.user_id ?? '__local__',
+          cwd: ds.cwd,
+          projectId: dbRow?.project_id ?? undefined,
+          label: dbRow?.label ?? undefined,
+          shell: ds.shell,
+        });
+      }
+
+      // Clean up DB rows for sessions that no longer exist in daemon
+      for (const row of dbRows) {
+        if (!daemonSessions.find((ds) => ds.id === row.id)) {
+          removePtySession(row.id);
+        }
+      }
+    } catch (err: any) {
+      log.error('Failed to query daemon for sessions', {
+        namespace: 'pty-manager',
+        error: err?.message,
+      });
+    }
+    return;
+  }
+
+  // Non-daemon persistent backends (tmux, headless-xterm)
+  if (!backend.reattach) return;
 
   const rows = loadPtySessions();
   if (rows.length === 0) {
@@ -438,8 +500,23 @@ export const isPersistent = backend.persistent ?? false;
 // ── Self-register with ShutdownManager ──────────────────────────────
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 
-if (backend.persistent && backend.detachAll) {
-  // Persistent backend: serialize terminal state to DB, then detach/kill processes
+if (backend.name === 'daemon' && backend.detachAll) {
+  // Daemon backend: just disconnect from socket — daemon keeps PTYs alive.
+  // Session metadata stays in DB for the next server instance to discover.
+  const detachAll = backend.detachAll.bind(backend);
+  shutdownManager.register(
+    'pty-manager',
+    () => {
+      detachAll();
+      activeSessions.clear();
+      log.info('Disconnected from PTY daemon (sessions preserved)', {
+        namespace: 'pty-manager',
+      });
+    },
+    ShutdownPhase.SERVICES,
+  );
+} else if (backend.persistent && backend.detachAll) {
+  // Other persistent backends (headless-xterm, tmux): serialize state then detach
   const detachAll = backend.detachAll.bind(backend);
   shutdownManager.register(
     'pty-manager',

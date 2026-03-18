@@ -268,7 +268,7 @@ export async function createRuntimeApp(options: RuntimeAppOptions): Promise<Runt
     await logProviderStatus();
 
     // Reattach PTY sessions
-    ptyManager.reattachSessions();
+    await ptyManager.reattachSessions();
 
     // Eagerly load native git
     getNativeGit();

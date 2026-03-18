@@ -46,6 +46,7 @@
     "db:push": "bunx drizzle-kit push",
     "db:studio": "bunx drizzle-kit studio",
     "test": "vitest run",
+    "test:bun": "bun test src/__tests__/db/ src/__tests__/routes/projects.test.ts src/__tests__/routes/git.test.ts src/__tests__/routes/threads.test.ts src/__tests__/services/project-manager.test.ts src/__tests__/services/thread-manager.test.ts src/__tests__/services/worktree-manager.test.ts src/__tests__/services/agent-runner.test.ts src/__tests__/services/agent-runner-class.test.ts src/__tests__/services/automation-manager.test.ts src/__tests__/services/pipeline-db.test.ts src/__tests__/utils/process.test.ts src/__tests__/utils/git-v2.test.ts",
     "lint:promises": "eslint src/",
     "mcp:memory": "bun ../memory/src/mcp/server.ts",
     "prepublishOnly": "bun run build"

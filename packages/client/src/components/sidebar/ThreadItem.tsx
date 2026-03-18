@@ -27,7 +27,7 @@ import { ProjectChip } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
-import { statusConfig, gitSyncStateConfig, timeAgo } from '@/lib/thread-utils';
+import { statusConfig, timeAgo } from '@/lib/thread-utils';
 import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
 
@@ -94,33 +94,17 @@ export const ThreadItem = memo(function ThreadItem({
     : 'text-muted-foreground';
   const displayTime = timeValue ?? timeAgo(thread.createdAt, t);
 
-  // Git status config
+  // Git status — only used for diff stats
   const showGitIcon = !!gitStatus && gitStatus.state !== 'clean';
-  const gitCfg = showGitIcon ? gitSyncStateConfig[gitStatus.state] : null;
-  const GitIcon = gitCfg?.icon ?? null;
-
-  // Build tooltip text for git status
-  let gitTooltip: string | null = null;
-  if (showGitIcon) {
-    const label = t(gitSyncStateConfig[gitStatus.state].labelKey);
-    if (gitStatus.state === 'dirty' && gitStatus.dirtyFileCount > 0) {
-      gitTooltip = `${label} (${gitStatus.dirtyFileCount})`;
-    } else if (gitStatus.state === 'unpushed' && gitStatus.unpushedCommitCount > 0) {
-      gitTooltip = `${label} (${gitStatus.unpushedCommitCount})`;
-    } else {
-      gitTooltip = label;
-    }
-  }
 
   // Whether to show the second row (has project subtitle or git diff stats)
   const hasDiffStats =
     showGitIcon &&
     (gitStatus.linesAdded > 0 || gitStatus.linesDeleted > 0 || gitStatus.dirtyFileCount > 0);
-  const hasGitIconOnly = showGitIcon && !hasDiffStats && GitIcon;
   const hasSnippet = !!thread.lastAssistantMessage;
   const showLaunching = isBusy && !hasSnippet;
   const isBacklog = !hasSnippet && !isBusy && (!thread.stage || thread.stage === 'backlog');
-  const hasMetadataRow = !!subtitle || hasDiffStats || hasGitIconOnly;
+  const hasMetadataRow = !!subtitle || hasDiffStats;
   const hasSnippetRow = hasSnippet || showLaunching || isBacklog;
 
   return (
@@ -220,23 +204,14 @@ export const ThreadItem = memo(function ThreadItem({
                 className="flex-shrink-0"
               />
             )}
-            {hasDiffStats ? (
+            {hasDiffStats && (
               <DiffStats
                 linesAdded={gitStatus.linesAdded}
                 linesDeleted={gitStatus.linesDeleted}
                 dirtyFileCount={gitStatus.dirtyFileCount}
                 size="xs"
               />
-            ) : hasGitIconOnly ? (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <GitIcon className={cn('h-3 w-3 flex-shrink-0', gitCfg!.className)} />
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  {gitTooltip}
-                </TooltipContent>
-              </Tooltip>
-            ) : null}
+            )}
             {hasSnippet ? (
               <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground/50">
                 {thread.lastAssistantMessage}

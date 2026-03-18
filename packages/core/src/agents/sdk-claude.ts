@@ -339,6 +339,14 @@ export class SDKClaudeProcess extends BaseAgentProcess {
         // Ensure tool_result content is always a string
         const content = raw.message.content.map((block: any) => {
           if (block.type === 'tool_result' && typeof block.content !== 'string') {
+            // Content from Task/subagent tools comes as an array of content blocks
+            if (Array.isArray(block.content)) {
+              const text = block.content
+                .filter((b: any) => b.type === 'text' && b.text)
+                .map((b: any) => b.text)
+                .join('\n\n');
+              return { ...block, content: text };
+            }
             return { ...block, content: JSON.stringify(block.content) };
           }
           return block;

@@ -266,6 +266,14 @@ export async function handleDataMessage(runnerId: string, data: any): Promise<vo
         break;
       }
 
+      // ── Thread events ─────────────────────────────────────
+
+      case 'data:save_thread_event': {
+        const { saveThreadEvent } = await import('./thread-event-repository.js');
+        await saveThreadEvent(data.payload.threadId, data.payload.eventType, data.payload.data);
+        break;
+      }
+
       // ── Arc operations ───────────────────────────────────
 
       case 'data:get_arc': {

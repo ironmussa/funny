@@ -199,7 +199,10 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
   const badgeCount = innerEvents.length + uncoveredSteps.length;
 
   return (
-    <div data-testid="workflow-event-group" className="max-w-full overflow-hidden text-sm">
+    <div
+      data-testid="workflow-event-group"
+      className="max-w-full overflow-hidden rounded-lg border border-border text-sm"
+    >
       {/* Header row — clickable to expand/collapse */}
       <button
         data-testid="workflow-event-group-toggle"

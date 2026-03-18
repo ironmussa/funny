@@ -257,7 +257,10 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
 
     threadEvents: {
       async createThreadEvent() {},
-      async saveThreadEvent() {},
+      async saveThreadEvent(threadId: string, type: string, data: Record<string, unknown>) {
+        const { remoteSaveThreadEvent } = await import('./team-client.js');
+        await remoteSaveThreadEvent(threadId, type, data);
+      },
       async getThreadEvents() {
         return [];
       },

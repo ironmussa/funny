@@ -247,6 +247,10 @@ export function ReviewPane() {
   const [hasRebaseConflict, setHasRebaseConflict] = useState(false);
   const commitLockRef = useRef(false);
 
+  // Track when a workflow just completed so we can auto-close the pane
+  // once the refresh shows a fully-clean branch.
+  const justCompletedWorkflowRef = useRef(false);
+
   // Commit progress (per-thread, persists across thread switches)
   const commitProgressId = effectiveThreadId || projectModeId || '';
   const commitEntry = useCommitProgressStore((s) => s.activeCommits[commitProgressId]);
@@ -265,6 +269,7 @@ export function ReviewPane() {
       setPushInProgress(false);
       setMergeInProgress(false);
       setPrInProgress(false);
+      justCompletedWorkflowRef.current = true;
       // Refresh diffs and git status
       refresh();
       if (effectiveThreadId && prev.action === 'commit-merge') {
@@ -332,6 +337,29 @@ export function ReviewPane() {
       }
     }
   }, [commitEntry]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Auto-close the review pane when the branch becomes fully clean after a workflow
+  // (commit-push, push, merge, etc.). This avoids leaving an empty "No changes" pane.
+  useEffect(() => {
+    if (
+      justCompletedWorkflowRef.current &&
+      !loading &&
+      summaries.length === 0 &&
+      stashEntries.length === 0 &&
+      (!gitStatus || gitStatus.unpushedCommitCount === 0) &&
+      !hasRebaseConflict
+    ) {
+      justCompletedWorkflowRef.current = false;
+      setReviewPaneOpen(false);
+    }
+  }, [
+    loading,
+    summaries.length,
+    stashEntries.length,
+    gitStatus,
+    hasRebaseConflict,
+    setReviewPaneOpen,
+  ]);
 
   // Show standalone merge button when no dirty files but branch has unmerged commits.
   // Works in both worktree and local mode — as long as the thread is on a different branch from base.

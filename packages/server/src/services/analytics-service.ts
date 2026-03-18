@@ -20,7 +20,7 @@ type GroupBy = 'day' | 'week' | 'month' | 'year';
  * string. getTimezoneOffset() returns positive values for west of UTC (e.g. 300
  * for UTC-5) so we negate it before formatting.
  */
-function tzOffsetToModifier(offsetMinutes: number): string {
+export function tzOffsetToModifier(offsetMinutes: number): string {
   const total = -offsetMinutes;
   const sign = total >= 0 ? '+' : '-';
   const abs = Math.abs(total);
@@ -59,7 +59,7 @@ function dateBucket(column: any, groupBy: GroupBy, tzMod: string) {
   }
 }
 
-function getDateRange(
+export function getDateRange(
   timeRange?: string,
   _offsetMinutes = 0,
   startDate?: string,

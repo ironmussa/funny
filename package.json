@@ -40,7 +40,7 @@
     "build:native": "bun run --cwd packages/native-git build",
     "build:native:debug": "bun run --cwd packages/native-git build:debug",
     "build:sidecar": "bun scripts/build-sidecar.ts",
-    "test": "bun run --cwd packages/shared test && bun run --cwd packages/core test && bun run --cwd packages/agent test && bun run --cwd packages/runtime test && bun run --cwd packages/client test",
+    "test": "bun run --cwd packages/shared test && bun run --cwd packages/core test && bun run --cwd packages/agent test && bun run --cwd packages/runtime test && bun run --cwd packages/server test && bun run --cwd packages/client test",
     "prepare": "husky",
     "security:check": "npm run security:secrets && npm run security:audit",
     "security:secrets": "npx secretlint \"**/*\"",

@@ -553,12 +553,62 @@ function cleanupHookWrapper(dir: string) {
 }
 
 /**
+ * Run a git command that requires remote access (push, pull, fetch).
+ * Sets up GIT_ASKPASS for HTTPS token auth and GIT_TERMINAL_PROMPT=0
+ * so git fails fast instead of hanging when no credentials are available.
+ */
+function gitRemote(
+  args: string[],
+  cwd: string,
+  identity?: GitIdentityOptions,
+  timeout = 120_000,
+): ResultAsync<string, DomainError> {
+  const env: Record<string, string> = {
+    GIT_TERMINAL_PROMPT: '0',
+  };
+
+  let askpassPath: string | undefined;
+
+  if (identity?.githubToken) {
+    env.GH_TOKEN = identity.githubToken;
+
+    // Create a temporary GIT_ASKPASS script that returns the token.
+    // git calls this script with a prompt like "Password for ..." and
+    // expects the credential on stdout.
+    askpassPath = join(tmpdir(), `funny-askpass-${crypto.randomUUID()}.sh`);
+    // Use single quotes to prevent shell expansion of special characters in the token.
+    // Escape any embedded single quotes with the '\'' idiom.
+    const safeToken = identity.githubToken.replace(/'/g, "'\\''");
+    writeFileSync(askpassPath, `#!/bin/sh\necho '${safeToken}'\n`, { mode: 0o700 });
+    env.GIT_ASKPASS = askpassPath;
+  }
+
+  return ResultAsync.fromPromise(
+    gitWrite(args, { cwd, env, timeout }).finally(() => {
+      if (askpassPath) {
+        try {
+          rmSync(askpassPath);
+        } catch {}
+      }
+    }),
+    (error) => {
+      if (error instanceof ProcessExecutionError) {
+        return processError(error.message, error.exitCode, error.stderr);
+      }
+      return internal(String(error));
+    },
+  ).map((result) => result.stdout.trim());
+}
+
+/**
  * Push to remote.
- * When identity.githubToken is provided, passes GH_TOKEN env var for authentication.
+ * When identity.githubToken is provided, configures GIT_ASKPASS so that
+ * `git push` can authenticate over HTTPS without interactive prompts.
  */
 export function push(cwd: string, identity?: GitIdentityOptions): ResultAsync<string, DomainError> {
-  const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
-  return getCurrentBranch(cwd).andThen((branch) => git(['push', '-u', 'origin', branch], cwd, env));
+  return getCurrentBranch(cwd).andThen((branch) =>
+    gitRemote(['push', '-u', 'origin', branch], cwd, identity),
+  );
 }
 
 /**
@@ -1389,8 +1439,7 @@ export function getLog(
  * Pull from remote (fast-forward only).
  */
 export function pull(cwd: string, identity?: GitIdentityOptions): ResultAsync<string, DomainError> {
-  const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
-  return git(['pull', '--ff-only'], cwd, env);
+  return gitRemote(['pull', '--ff-only'], cwd, identity);
 }
 
 // ─── Stash ───────────────────────────────────────────────

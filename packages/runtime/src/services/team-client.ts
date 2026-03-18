@@ -708,6 +708,23 @@ export async function remoteUpdateMessage(messageId: string, content: string): P
   } catch {}
 }
 
+/** Save a thread event on the server (fire-and-forget) */
+export async function remoteSaveThreadEvent(
+  threadId: string,
+  type: string,
+  data: Record<string, unknown>,
+): Promise<void> {
+  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
+  try {
+    state.ws.send(
+      JSON.stringify({
+        type: 'data:save_thread_event',
+        payload: { threadId, eventType: type, data },
+      }),
+    );
+  } catch {}
+}
+
 /** Update tool call output on the server (fire-and-forget) */
 export async function remoteUpdateToolCallOutput(
   toolCallId: string,

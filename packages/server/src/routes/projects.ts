@@ -55,7 +55,11 @@ projectRoutes.get('/', async (c) => {
   }
 
   const projects = await projectRepo.listProjects(userId);
-  return c.json(projects);
+  // Exclude projects that belong to any organization
+  const orgProjectIds = await projectRepo.getOrgProjectIds();
+  const personalProjects =
+    orgProjectIds.length > 0 ? projects.filter((p) => !orgProjectIds.includes(p.id)) : projects;
+  return c.json(personalProjects);
 });
 
 /** GET /api/projects/resolve — find project by URL pattern */

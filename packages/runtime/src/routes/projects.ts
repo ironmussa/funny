@@ -11,7 +11,8 @@
  */
 
 import {
-  listBranches,
+  listBranchesDetailed,
+  fetchRemote,
   getDefaultBranch,
   getCurrentBranch,
   git,
@@ -46,14 +47,20 @@ projectRoutes.get('/:id/branches', async (c) => {
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const project = projectResult.value;
+  // Fetch remote refs first so we see up-to-date origin branches
+  await fetchRemote(project.path);
   const [branchesResult, defaultBranchResult, currentBranchResult] = await Promise.all([
-    listBranches(project.path),
+    listBranchesDetailed(project.path),
     getDefaultBranch(project.path),
     getCurrentBranch(project.path),
   ]);
 
+  const detailed = branchesResult.isOk() ? branchesResult.value : [];
+  const remoteBranches = detailed.filter((b) => b.isRemote).map((b) => b.name);
+
   return c.json({
-    branches: branchesResult.isOk() ? branchesResult.value : [],
+    branches: detailed.map((b) => b.name),
+    remoteBranches,
     defaultBranch: defaultBranchResult.isOk() ? defaultBranchResult.value : null,
     currentBranch: currentBranchResult.isOk() ? currentBranchResult.value : null,
   });

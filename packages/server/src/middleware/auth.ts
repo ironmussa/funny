@@ -152,8 +152,14 @@ export function requirePermission(resource: string, action: string) {
       if (!hasPermission) {
         return c.json({ error: `Forbidden: ${resource}:${action} permission required` }, 403);
       }
-    } catch {
-      // If permission check fails, allow through
+    } catch (err) {
+      log.warn('Permission check failed — denying access', {
+        namespace: 'auth',
+        resource,
+        action,
+        error: String(err),
+      });
+      return c.json({ error: 'Forbidden: permission check failed' }, 403);
     }
 
     return next();

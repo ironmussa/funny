@@ -202,7 +202,8 @@ export async function initBetterAuth(): Promise<void> {
 
     const email = process.env.ADMIN_EMAIL ?? 'admin@local.host';
     const username = process.env.ADMIN_USERNAME ?? 'admin';
-    const password = process.env.ADMIN_PASSWORD ?? 'admin';
+    const isGeneratedPassword = !process.env.ADMIN_PASSWORD;
+    const password = process.env.ADMIN_PASSWORD ?? randomBytes(16).toString('base64url');
 
     const hash = await ctx.password.hash(password);
     const created = await ctx.internalAdapter.createUser({
@@ -219,11 +220,25 @@ export async function initBetterAuth(): Promise<void> {
         accountId: created.id,
         password: hash,
       });
-      log.info('Created default admin account (change the password after first login)', {
-        namespace: 'auth',
-        username,
-        email,
-      });
+      if (isGeneratedPassword) {
+        log.warn(
+          `\n` +
+            `  ========================================\n` +
+            `  GENERATED ADMIN CREDENTIALS\n` +
+            `  Username: ${username}\n` +
+            `  Password: ${password}\n` +
+            `  ========================================\n` +
+            `  Change this password after first login.\n` +
+            `  Set ADMIN_PASSWORD env var to use a fixed password.\n`,
+          { namespace: 'auth' },
+        );
+      } else {
+        log.info('Created admin account with configured password', {
+          namespace: 'auth',
+          username,
+          email,
+        });
+      }
     }
   } catch (err: any) {
     log.error('Failed to create default admin account', { namespace: 'auth', error: err });

@@ -289,14 +289,14 @@ function stripAnsi(str: string): string {
 }
 
 /**
- * Install a skill via `npx skills add`.
+ * Install a skill via `bunx skills add`.
  * Identifier format: owner/repo@skill-name
  */
 export async function addSkill(identifier: string): Promise<void> {
   log.info('Installing skill', { namespace: 'skills-service', identifier });
 
   try {
-    await execute('npx', ['--yes', 'skills', 'add', identifier, '-g', '-y'], {
+    await execute('bunx', ['skills', 'add', identifier, '-g', '-y'], {
       cwd: homedir(),
       timeout: 60_000,
     });
@@ -361,7 +361,7 @@ export const RECOMMENDED_SKILLS = [
   {
     name: 'react-best-practices',
     description: 'React and Next.js performance optimization guidelines from Vercel',
-    identifier: 'vercel-labs/agent-skills@react-best-practices',
+    identifier: 'vercel-labs/agent-skills@vercel-react-best-practices',
   },
   {
     name: 'web-design-guidelines',
@@ -371,7 +371,7 @@ export const RECOMMENDED_SKILLS = [
   {
     name: 'composition-patterns',
     description: 'React component API design and compound component patterns',
-    identifier: 'vercel-labs/agent-skills@composition-patterns',
+    identifier: 'vercel-labs/agent-skills@vercel-composition-patterns',
   },
   {
     name: 'remotion-best-practices',

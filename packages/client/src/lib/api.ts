@@ -208,9 +208,12 @@ export const api = {
       body: JSON.stringify({ localPath }),
     }),
   listBranches: (projectId: string) =>
-    request<{ branches: string[]; defaultBranch: string | null; currentBranch: string | null }>(
-      `/projects/${projectId}/branches`,
-    ),
+    request<{
+      branches: string[];
+      remoteBranches: string[];
+      defaultBranch: string | null;
+      currentBranch: string | null;
+    }>(`/projects/${projectId}/branches`),
   checkoutPreflight: (projectId: string, branch: string) =>
     request<{
       canCheckout: boolean;

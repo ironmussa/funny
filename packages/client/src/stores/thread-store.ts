@@ -151,6 +151,7 @@ export interface ThreadState {
   ) => void;
   handleWSToolOutput: (threadId: string, data: { toolCallId: string; output: string }) => void;
   handleWSStatus: (threadId: string, data: { status: string }) => void;
+  handleWSError: (threadId: string, data: { error?: string }) => void;
   handleWSResult: (threadId: string, data: any) => void;
   handleWSQueueUpdate: (
     threadId: string,
@@ -199,6 +200,9 @@ function flushWSBuffer(threadId: string, store: ThreadState) {
         break;
       case 'status':
         store.handleWSStatus(threadId, event.data);
+        break;
+      case 'error':
+        store.handleWSError(threadId, event.data);
         break;
       case 'result':
         store.handleWSResult(threadId, event.data);
@@ -613,14 +617,20 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   deleteThread: async (threadId, projectId) => {
-    // Optimistic: update UI immediately, then fire API in background
-    cleanupThreadActor(threadId);
+    // If the thread is still running, stop the agent first so it doesn't
+    // keep executing in the background after we remove it from the UI.
     const { threadsByProject, selectedThreadId } = get();
     const projectThreads = threadsByProject[projectId] ?? [];
+    const thread = projectThreads.find((t) => t.id === threadId);
+    if (thread && (thread.status === 'running' || thread.status === 'waiting')) {
+      await api.stopThread(threadId);
+    }
+    // Optimistic: update UI immediately, then fire API in background
+    cleanupThreadActor(threadId);
     set({
       threadsByProject: {
-        ...threadsByProject,
-        [projectId]: projectThreads.filter((t) => t.id !== threadId),
+        ...get().threadsByProject,
+        [projectId]: (get().threadsByProject[projectId] ?? []).filter((t) => t.id !== threadId),
       },
     });
     if (selectedThreadId === threadId) {
@@ -904,6 +914,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
   handleWSStatus: (threadId, data) => {
     wsHandlers.handleWSStatus(get, set, threadId, data);
+  },
+
+  handleWSError: (threadId, data) => {
+    wsHandlers.handleWSError(get, set, threadId, data);
   },
 
   handleWSResult: (threadId, data) => {

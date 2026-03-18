@@ -29,7 +29,9 @@ export function DiffStats({
   const { t } = useTranslation();
   const showTooltips = tooltips ?? size === 'sm';
 
-  if (linesAdded === 0 && linesDeleted === 0 && (dirtyFileCount ?? 0) === 0) return null;
+  const hasDirty = dirtyFileCount != null && dirtyFileCount > 0;
+
+  if (linesAdded === 0 && linesDeleted === 0 && !hasDirty) return null;
 
   const textSize = size === 'xxs' ? 'text-[10px]' : size === 'xs' ? 'text-xs' : 'text-sm';
 
@@ -49,19 +51,17 @@ export function DiffStats({
     />
   );
 
-  const files = (
-    <Stat
-      value={`· ${dirtyFileCount ?? 0}`}
-      colorClass="text-muted-foreground"
-      tooltip={showTooltips ? t('gitStats.dirtyFiles', { count: dirtyFileCount ?? 0 }) : undefined}
-    />
-  );
-
   return (
     <span className={cn('flex flex-shrink-0 items-center gap-1 font-mono', textSize, className)}>
       {added}
       {deleted}
-      {files}
+      {hasDirty && (
+        <Stat
+          value={`· ${dirtyFileCount}`}
+          colorClass="text-muted-foreground"
+          tooltip={showTooltips ? t('gitStats.dirtyFiles', { count: dirtyFileCount }) : undefined}
+        />
+      )}
     </span>
   );
 }

@@ -289,7 +289,7 @@ const ThreadListItem = memo(function ThreadListItem({
       onSelect={handleSelect}
       onRename={handleRename}
       onArchive={isRunning ? undefined : handleArchive}
-      onDelete={isRunning ? undefined : handleDelete}
+      onDelete={handleDelete}
     />
   );
 });

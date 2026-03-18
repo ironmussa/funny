@@ -26,10 +26,17 @@ export function OrgSwitcher() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const setActiveOrg = useAuthStore((s) => s.setActiveOrg);
   const [orgs, setOrgs] = useState<OrgInfo[]>([]);
-  const [activeOrgId, setActiveOrgId] = useState<string | null>(null);
+  // Read the org restored by auth-store.initialize() so we don't re-fetch
+  const restoredOrgId = useAuthStore((s) => s.activeOrgId);
+  const [activeOrgId, setActiveOrgId] = useState<string | null>(restoredOrgId);
   const [loading, setLoading] = useState(true);
   const loadProjects = useProjectStore((s) => s.loadProjects);
   const navigate = useNavigate();
+
+  // Keep local state in sync when the auth store restores the org
+  useEffect(() => {
+    setActiveOrgId(restoredOrgId);
+  }, [restoredOrgId]);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -44,12 +51,17 @@ export function OrgSwitcher() {
         if (!cancelled && res.data) {
           setOrgs(res.data.map((o: any) => ({ id: o.id, name: o.name, slug: o.slug })));
         }
-        const active = await authClient.organization.getActiveMember();
-        if (!cancelled && active.data) {
-          const orgId = active.data.organizationId;
-          setActiveOrgId(orgId);
-          const orgInfo = res.data?.find((o: any) => o.id === orgId);
-          setActiveOrg(orgId, orgInfo?.name ?? null, orgInfo?.slug ?? null);
+        // The active org is already restored by auth-store.initialize().
+        // Only fetch it here if it wasn't restored (e.g. initialize ran
+        // before the org plugin was ready).
+        if (!cancelled && !useAuthStore.getState().activeOrgId) {
+          const active = await authClient.organization.getActiveMember();
+          if (!cancelled && active.data) {
+            const orgId = active.data.organizationId;
+            setActiveOrgId(orgId);
+            const orgInfo = res.data?.find((o: any) => o.id === orgId);
+            setActiveOrg(orgId, orgInfo?.name ?? null, orgInfo?.slug ?? null);
+          }
         }
       } catch (err) {
         console.error('[OrgSwitcher] Failed to load orgs:', err);

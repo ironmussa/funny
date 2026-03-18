@@ -49,14 +49,11 @@ pub async fn list_branches(cwd: String) -> napi::Result<Vec<String>> {
       if name.contains("HEAD") {
         continue;
       }
-      // Strip "origin/" prefix
-      let branch = if let Some(stripped) = name.strip_prefix("origin/") {
-        stripped.to_string()
-      } else {
-        name
-      };
-      if seen.insert(branch.clone()) {
-        branches.push(branch);
+      // Only include branches with origin/ prefix, strip it
+      if let Some(stripped) = name.strip_prefix("origin/") {
+        if !stripped.is_empty() && seen.insert(stripped.to_string()) {
+          branches.push(stripped.to_string());
+        }
       }
     }
   }

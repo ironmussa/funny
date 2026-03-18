@@ -87,7 +87,7 @@ export async function authMiddleware(c: Context, next: Next) {
   // ── Server session validation (when connected to a central server) ──
   if (TEAM_SERVER_URL && c.req.header('Cookie')) {
     const cookie = c.req.header('Cookie')!;
-    const cacheKey = cookie.slice(0, 128);
+    const cacheKey = new Bun.CryptoHasher('sha256').update(cookie).digest('hex');
 
     const cached = sessionCache.get(cacheKey);
     if (cached && cached.expiresAt > Date.now()) {
@@ -179,8 +179,14 @@ export function requirePermission(resource: string, action: string) {
       if (!hasPermission) {
         return c.json({ error: `Forbidden: ${resource}:${action} permission required` }, 403);
       }
-    } catch {
-      // If permission check fails, allow through
+    } catch (err) {
+      log.warn('Permission check failed — denying access', {
+        namespace: 'auth',
+        resource,
+        action,
+        error: String(err),
+      });
+      return c.json({ error: 'Forbidden: permission check failed' }, 403);
     }
 
     return next();

@@ -128,10 +128,14 @@ export const PromptInput = memo(function PromptInput({
 
   // ── Branch state ──
   const [newThreadBranches, setNewThreadBranches] = useState<string[]>([]);
+  const [newThreadRemoteBranches, setNewThreadRemoteBranches] = useState<string[]>([]);
+  const [newThreadDefaultBranch, setNewThreadDefaultBranch] = useState<string | null>(null);
   const [newThreadBranchesLoading, setNewThreadBranchesLoading] = useState(false);
   const [selectedBranch, setSelectedBranch] = useState<string>('');
   const [sendToBacklog, setSendToBacklog] = useState(false);
   const [followUpBranches, setFollowUpBranches] = useState<string[]>([]);
+  const [followUpRemoteBranches, setFollowUpRemoteBranches] = useState<string[]>([]);
+  const [followUpDefaultBranch, setFollowUpDefaultBranch] = useState<string | null>(null);
   const [followUpSelectedBranch, setFollowUpSelectedBranch] = useState<string>('');
   const [gitCurrentBranch, setGitCurrentBranch] = useState<string | null>(null);
   const [remoteUrl, setRemoteUrl] = useState<string | null>(null);
@@ -314,6 +318,8 @@ export const PromptInput = memo(function PromptInput({
         if (result.isOk()) {
           const data = result.value;
           setNewThreadBranches(data.branches);
+          setNewThreadRemoteBranches(data.remoteBranches ?? []);
+          setNewThreadDefaultBranch(data.defaultBranch);
           setGitCurrentBranch(data.currentBranch);
           if (!createWorktree && data.currentBranch && data.branches.includes(data.currentBranch)) {
             setSelectedBranch(data.currentBranch);
@@ -361,6 +367,8 @@ export const PromptInput = memo(function PromptInput({
         if (result.isOk()) {
           const data = result.value;
           setFollowUpBranches(data.branches);
+          setFollowUpRemoteBranches(data.remoteBranches ?? []);
+          setFollowUpDefaultBranch(data.defaultBranch);
           const proj = projects.find((p) => p.id === selectedProjectId);
           if (activeThreadBaseBranch) {
             setFollowUpSelectedBranch(activeThreadBaseBranch);
@@ -641,10 +649,14 @@ export const PromptInput = memo(function PromptInput({
       onRuntimeChange={setRuntime}
       hasLauncher={hasLauncher}
       branches={newThreadBranches}
+      remoteBranches={newThreadRemoteBranches}
+      defaultBranch={newThreadDefaultBranch}
       branchesLoading={newThreadBranchesLoading}
       selectedBranch={selectedBranch}
       onSelectedBranchChange={setSelectedBranch}
       followUpBranches={followUpBranches}
+      followUpRemoteBranches={followUpRemoteBranches}
+      followUpDefaultBranch={followUpDefaultBranch}
       followUpSelectedBranch={followUpSelectedBranch}
       onFollowUpSelectedBranchChange={setFollowUpSelectedBranch}
       activeThreadBranch={activeThreadBranch}

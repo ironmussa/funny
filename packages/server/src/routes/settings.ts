@@ -2,6 +2,7 @@
  * Instance settings routes for the central server.
  *
  * Handles SMTP and other instance-level settings using the server's DB.
+ * All routes require admin role.
  */
 
 import { eq } from 'drizzle-orm';
@@ -9,7 +10,9 @@ import { Hono } from 'hono';
 
 import { db } from '../db/index.js';
 import { instanceSettings } from '../db/schema.js';
+import { encrypt, decrypt } from '../lib/crypto.js';
 import type { ServerEnv } from '../lib/types.js';
+import { requireAdmin } from '../middleware/auth.js';
 
 export const settingsRoutes = new Hono<ServerEnv>();
 
@@ -39,7 +42,7 @@ async function setSetting(key: string, value: string): Promise<void> {
 // ── SMTP settings ────────────────────────────────────────────────
 
 // GET /api/settings/smtp — get SMTP settings (never exposes password)
-settingsRoutes.get('/smtp', async (c) => {
+settingsRoutes.get('/smtp', requireAdmin, async (c) => {
   const [host, port, user, from, pass] = await Promise.all([
     getSetting('smtp_host'),
     getSetting('smtp_port'),
@@ -60,7 +63,7 @@ settingsRoutes.get('/smtp', async (c) => {
 });
 
 // PUT /api/settings/smtp — save SMTP config
-settingsRoutes.put('/smtp', async (c) => {
+settingsRoutes.put('/smtp', requireAdmin, async (c) => {
   const body = await c.req.json<{
     host: string;
     port: string;
@@ -74,14 +77,16 @@ settingsRoutes.put('/smtp', async (c) => {
     setSetting('smtp_port', body.port || '587'),
     setSetting('smtp_user', body.user),
     setSetting('smtp_from', body.from),
-    ...(body.pass !== undefined && body.pass !== '' ? [setSetting('smtp_pass', body.pass)] : []),
+    ...(body.pass !== undefined && body.pass !== ''
+      ? [setSetting('smtp_pass', encrypt(body.pass))]
+      : []),
   ]);
 
   return c.json({ ok: true });
 });
 
 // POST /api/settings/smtp/test — send a test email using stored SMTP settings
-settingsRoutes.post('/smtp/test', async (c) => {
+settingsRoutes.post('/smtp/test', requireAdmin, async (c) => {
   const [host, port, user, from, pass] = await Promise.all([
     getSetting('smtp_host'),
     getSetting('smtp_port'),
@@ -96,6 +101,10 @@ settingsRoutes.post('/smtp/test', async (c) => {
     return c.json({ error: 'SMTP not configured' }, 400);
   }
 
+  // Decrypt stored password; fall back to raw value for backwards compatibility
+  // with passwords saved before encryption was added.
+  const decryptedPass = pass ? (decrypt(pass) ?? pass) : '';
+
   try {
     const nodemailer = await import('nodemailer');
     const transport = nodemailer.createTransport({
@@ -104,7 +113,7 @@ settingsRoutes.post('/smtp/test', async (c) => {
       secure: Number(port || process.env.SMTP_PORT || '587') === 465,
       auth: {
         user: user || process.env.SMTP_USER || '',
-        pass: pass || process.env.SMTP_PASS || '',
+        pass: decryptedPass || process.env.SMTP_PASS || '',
       },
     });
 

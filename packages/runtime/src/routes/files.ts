@@ -6,9 +6,9 @@
  */
 
 import { readFile, writeFile, stat } from 'fs/promises';
-import { homedir } from 'os';
-import { normalize, resolve } from 'path';
+import { basename, dirname, normalize, resolve } from 'path';
 
+import { WORKTREE_DIR_NAME } from '@funny/core/git';
 import { badRequest, internal, notFound } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { ResultAsync, err } from 'neverthrow';
@@ -21,19 +21,22 @@ const app = new Hono<HonoEnv>();
 
 /**
  * Check if a path is within an allowed directory.
- * Scoped to the requesting user's projects in multi-user mode.
+ * Restricted to the user's registered project directories and their worktrees.
+ * Does NOT allow blanket home directory access — prevents reading ~/.ssh, ~/.aws, etc.
  */
 async function isPathAllowed(targetPath: string, userId: string): Promise<boolean> {
   const normalizedTarget = normalize(resolve(targetPath));
 
-  const home = normalize(resolve(homedir()));
-  if (normalizedTarget.startsWith(home)) return true;
-
   const projects = await getServices().projects.listProjects(userId);
   for (const project of projects) {
     const projectPath = normalize(resolve(project.path));
+    // Allow paths within the project directory
     if (normalizedTarget.startsWith(projectPath)) return true;
-    if (projectPath.startsWith(normalizedTarget)) return true;
+    // Allow the project's worktree directory
+    const worktreeBase = normalize(
+      resolve(dirname(projectPath), WORKTREE_DIR_NAME, basename(projectPath)),
+    );
+    if (normalizedTarget.startsWith(worktreeBase)) return true;
   }
 
   return false;

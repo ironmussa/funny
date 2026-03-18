@@ -191,7 +191,9 @@ function handleMessage(e: MessageEvent) {
     }
     case 'agent:error':
       wsLog.error('agent:error', { threadId, error: data.error ?? 'unknown' });
-      useThreadStore.getState().handleWSStatus(threadId, { status: 'failed' });
+      startTransition(() => {
+        useThreadStore.getState().handleWSError(threadId, data);
+      });
       break;
     case 'agent:compact_boundary':
       startTransition(() => {

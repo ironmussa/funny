@@ -8,11 +8,11 @@
 
 import { resolve, isAbsolute } from 'path';
 
-import type { Project, FollowUpMode } from '@funny/shared';
 import { isGitRepoSync, ensureWeaveConfigured } from '@funny/core/git';
+import type { Project, FollowUpMode } from '@funny/shared';
 import { badRequest, notFound, conflict, internal, type DomainError } from '@funny/shared/errors';
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
-import { eq, and, asc, inArray } from 'drizzle-orm';
+import { eq, and, asc, inArray, notInArray } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 import { ok, err, type Result } from 'neverthrow';
 
@@ -117,6 +117,14 @@ export async function getProject(id: string): Promise<Project | undefined> {
   return row ? toProject(row) : undefined;
 }
 
+/** Return IDs of all projects associated with any organization. */
+export async function getOrgProjectIds(): Promise<string[]> {
+  const rows = await dbAll(
+    db.select({ projectId: schema.teamProjects.projectId }).from(schema.teamProjects),
+  );
+  return rows.map((r: any) => r.projectId);
+}
+
 export async function projectNameExists(
   name: string,
   userId: string,
@@ -127,15 +135,18 @@ export async function projectNameExists(
     return orgProjects.some((p) => p.name === name);
   }
 
-  const existing =
-    userId === '__local__'
-      ? await dbGet(db.select().from(schema.projects).where(eq(schema.projects.name, name)))
-      : await dbGet(
-          db
-            .select()
-            .from(schema.projects)
-            .where(and(eq(schema.projects.name, name), eq(schema.projects.userId, userId))),
-        );
+  // For personal projects, exclude projects that belong to any organization
+  const orgIds = await getOrgProjectIds();
+  const conditions = [eq(schema.projects.name, name)];
+  if (userId !== '__local__') conditions.push(eq(schema.projects.userId, userId));
+  if (orgIds.length > 0) conditions.push(notInArray(schema.projects.id, orgIds));
+
+  const existing = await dbGet(
+    db
+      .select()
+      .from(schema.projects)
+      .where(and(...conditions)),
+  );
   return !!existing;
 }
 
@@ -163,28 +174,33 @@ export async function createProject(
       return err(conflict(`A project with this name already exists: ${name}`));
     }
   } else {
-    const existingPath =
-      userId === '__local__'
-        ? await dbGet(db.select().from(schema.projects).where(eq(schema.projects.path, path)))
-        : await dbGet(
-            db
-              .select()
-              .from(schema.projects)
-              .where(and(eq(schema.projects.path, path), eq(schema.projects.userId, userId))),
-          );
+    // For personal projects, exclude projects that belong to any organization
+    const orgIds = await getOrgProjectIds();
+
+    const pathConditions = [eq(schema.projects.path, path)];
+    if (userId !== '__local__') pathConditions.push(eq(schema.projects.userId, userId));
+    if (orgIds.length > 0) pathConditions.push(notInArray(schema.projects.id, orgIds));
+
+    const existingPath = await dbGet(
+      db
+        .select()
+        .from(schema.projects)
+        .where(and(...pathConditions)),
+    );
     if (existingPath) {
       return err(conflict(`A project with this path already exists: ${path}`));
     }
 
-    const existingName =
-      userId === '__local__'
-        ? await dbGet(db.select().from(schema.projects).where(eq(schema.projects.name, name)))
-        : await dbGet(
-            db
-              .select()
-              .from(schema.projects)
-              .where(and(eq(schema.projects.name, name), eq(schema.projects.userId, userId))),
-          );
+    const nameConditions = [eq(schema.projects.name, name)];
+    if (userId !== '__local__') nameConditions.push(eq(schema.projects.userId, userId));
+    if (orgIds.length > 0) nameConditions.push(notInArray(schema.projects.id, orgIds));
+
+    const existingName = await dbGet(
+      db
+        .select()
+        .from(schema.projects)
+        .where(and(...nameConditions)),
+    );
     if (existingName) {
       return err(conflict(`A project with this name already exists: ${name}`));
     }
@@ -196,8 +212,14 @@ export async function createProject(
       : await dbAll(db.select().from(schema.projects).where(eq(schema.projects.userId, userId)));
 
   const PALETTE = [
-    '#7CB9E8', '#F4A4A4', '#A8D5A2', '#F9D98C',
-    '#C3A6E0', '#F2A6C8', '#89D4CF', '#F9B97C',
+    '#7CB9E8',
+    '#F4A4A4',
+    '#A8D5A2',
+    '#F9D98C',
+    '#C3A6E0',
+    '#F2A6C8',
+    '#89D4CF',
+    '#F9B97C',
   ];
   const autoColor = PALETTE[existing.length % PALETTE.length];
 

@@ -152,9 +152,9 @@ export function listBranches(cwd: string): ResultAsync<string[], DomainError> {
           .split('\n')
           .map((s) => s.trim())
           .filter(Boolean)) {
-          if (raw.includes('HEAD')) continue;
-          const name = raw.replace(/^origin\//, '');
-          if (!seen.has(name)) {
+          if (!raw.startsWith('origin/')) continue;
+          const name = raw.slice('origin/'.length);
+          if (name && !name.includes('HEAD') && !seen.has(name)) {
             seen.add(name);
             branches.push(name);
           }
@@ -169,6 +169,88 @@ export function listBranches(cwd: string): ResultAsync<string[], DomainError> {
       if (symbolicBranch) return [symbolicBranch];
 
       return [];
+    })(),
+    (error) => internal(String(error)),
+  );
+}
+
+export interface BranchInfo {
+  name: string;
+  isLocal: boolean;
+  isRemote: boolean;
+}
+
+/**
+ * List branches with metadata about whether each exists locally and/or on origin.
+ */
+export function listBranchesDetailed(cwd: string): ResultAsync<BranchInfo[], DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const localSet = new Set<string>();
+      const remoteSet = new Set<string>();
+
+      // Collect local branch names
+      const localOutput = await gitOptional(['branch', '--format=%(refname:short)'], cwd);
+      if (localOutput) {
+        for (const b of localOutput
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean)) {
+          localSet.add(b);
+        }
+      }
+
+      // Collect remote branch names (strip origin/ prefix)
+      const remoteOutput = await gitOptional(['branch', '-r', '--format=%(refname:short)'], cwd);
+      if (remoteOutput) {
+        for (const raw of remoteOutput
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean)) {
+          if (raw.includes('HEAD')) continue;
+          if (!raw.startsWith('origin/')) continue;
+          const name = raw.slice('origin/'.length);
+          if (name) {
+            remoteSet.add(name);
+          }
+        }
+      }
+
+      // Merge into unified list
+      const allNames = new Set([...localSet, ...remoteSet]);
+      const branches: BranchInfo[] = [];
+      for (const name of allNames) {
+        branches.push({
+          name,
+          isLocal: localSet.has(name),
+          isRemote: remoteSet.has(name),
+        });
+      }
+
+      if (branches.length > 0)
+        return branches.sort((a, b) =>
+          a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }),
+        );
+
+      // Fall back to symbolic-ref for empty repos (no commits yet)
+      const symbolicBranch = await gitOptional(['symbolic-ref', '--short', 'HEAD'], cwd);
+      if (symbolicBranch) return [{ name: symbolicBranch, isLocal: true, isRemote: false }];
+
+      return [];
+    })(),
+    (error) => internal(String(error)),
+  );
+}
+
+/**
+ * Fetch remote refs so branch listings are up-to-date.
+ * Non-blocking: returns ok(true) on success, ok(false) if fetch fails (e.g. no remote).
+ */
+export function fetchRemote(cwd: string): ResultAsync<boolean, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const result = await gitOptional(['fetch', '--prune', '--quiet'], cwd);
+      return result !== null;
     })(),
     (error) => internal(String(error)),
   );

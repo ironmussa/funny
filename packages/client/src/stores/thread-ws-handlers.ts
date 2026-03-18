@@ -576,6 +576,45 @@ export function handleWSContextUsage(
   set(updates as any);
 }
 
+// ── Error ────────────────────────────────────────────────────────
+
+/**
+ * Handle agent:error WS events. Unlike handleWSStatus (which only sets
+ * status to 'failed'), this stores the error message in resultInfo so
+ * AgentResultCard can display it, and shows a toast immediately.
+ */
+export function handleWSError(
+  get: Get,
+  set: Set,
+  threadId: string,
+  data: { error?: string },
+): void {
+  const errorMessage = data.error ?? 'Unknown error';
+
+  // Delegate status transition to the existing handler (updates sidebar + activeThread)
+  handleWSStatus(get, set, threadId, { status: 'failed' });
+
+  // Now enrich the activeThread with resultInfo so AgentResultCard renders the error
+  const { activeThread } = get();
+  if (activeThread?.id === threadId) {
+    set({
+      activeThread: {
+        ...activeThread,
+        ...get().activeThread, // pick up status changes from handleWSStatus
+        resultInfo: activeThread.resultInfo ?? {
+          status: 'failed' as const,
+          cost: activeThread.cost ?? 0,
+          duration: 0,
+          error: errorMessage,
+        },
+      },
+    });
+  }
+
+  // Show an immediate toast with the error
+  toast.error(errorMessage, { duration: 8000 });
+}
+
 // ── Toast helper ────────────────────────────────────────────────
 
 const ERROR_REASON_MESSAGES: Record<string, string> = {

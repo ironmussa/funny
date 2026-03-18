@@ -190,7 +190,7 @@ export const useTerminalStore = create<TerminalState>()(
 
           return {
             tabs: [...tabs, ...newTabs],
-            panelVisible: tabs.length > 0 || newTabs.length > 0 ? true : state.panelVisible,
+            panelVisible: newTabs.length > 0 ? true : state.panelVisible,
             activeTabId: state.activeTabId ?? newTabs[0]?.id ?? tabs[0]?.id ?? null,
           };
         }),

@@ -350,10 +350,11 @@ export const ThreadItem = memo(function ThreadItem({
                     {t('sidebar.archive')}
                   </DropdownMenuItem>
                 )}
-                {onDelete && !isBusy && (
+                {onDelete && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem
+                      data-testid={`thread-delete-${thread.id}`}
                       onClick={(e) => {
                         e.stopPropagation();
                         onDelete();

@@ -75,6 +75,7 @@ import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { DiffStats } from './DiffStats';
+import { buildTreeRows, type TreeRow } from './FileTree';
 import { InlineProgressSteps } from './InlineProgressSteps';
 import { ExpandedDiffDialog } from './tool-cards/ExpandedDiffDialog';
 
@@ -88,105 +89,6 @@ const fileStatusIcons: Record<string, typeof FileCode> = {
 const FILE_ROW_HEIGHT = 24;
 const FOLDER_ROW_HEIGHT = 24;
 const INDENT_PX = 12;
-
-type TreeRow =
-  | {
-      kind: 'folder';
-      path: string;
-      label: string;
-      depth: number;
-      fileCount: number;
-      additions: number;
-      deletions: number;
-    }
-  | { kind: 'file'; file: FileDiffSummary; depth: number };
-
-interface FolderNode {
-  children: Map<string, FolderNode>;
-  files: FileDiffSummary[];
-}
-
-function buildTreeRows(diffs: FileDiffSummary[], collapsed: Set<string>): TreeRow[] {
-  // Build tree
-  const root: FolderNode = { children: new Map(), files: [] };
-  for (const f of diffs) {
-    const parts = f.path.split('/');
-    parts.pop(); // remove filename, keep only directory parts
-    let node = root;
-    for (const part of parts) {
-      if (!node.children.has(part)) {
-        node.children.set(part, { children: new Map(), files: [] });
-      }
-      node = node.children.get(part)!;
-    }
-    node.files.push(f);
-  }
-
-  // Aggregate stats under a node
-  function aggregateStats(node: FolderNode): {
-    fileCount: number;
-    additions: number;
-    deletions: number;
-  } {
-    let fileCount = node.files.length;
-    let additions = node.files.reduce((acc, f) => acc + (f.additions ?? 0), 0);
-    let deletions = node.files.reduce((acc, f) => acc + (f.deletions ?? 0), 0);
-
-    for (const child of node.children.values()) {
-      const childStats = aggregateStats(child);
-      fileCount += childStats.fileCount;
-      additions += childStats.additions;
-      deletions += childStats.deletions;
-    }
-    return { fileCount, additions, deletions };
-  }
-
-  // Flatten with path compaction (merge single-child intermediate dirs)
-  const rows: TreeRow[] = [];
-
-  function flatten(node: FolderNode, depth: number, pathPrefix: string) {
-    // Sort folders first, then files
-    const sortedFolders = [...node.children.entries()].sort(([a], [b]) => a.localeCompare(b));
-
-    for (const [name, child] of sortedFolders) {
-      // Compact: merge single-subfolder chains with no files
-      let compactedName = name;
-      let current = child;
-      let currentPath = pathPrefix ? `${pathPrefix}/${name}` : name;
-      while (current.files.length === 0 && current.children.size === 1) {
-        const [nextName, nextChild] = [...current.children.entries()][0];
-        compactedName += `/${nextName}`;
-        currentPath += `/${nextName}`;
-        current = nextChild;
-      }
-
-      const folderPath = currentPath;
-      const stats = aggregateStats(current);
-
-      rows.push({
-        kind: 'folder',
-        path: folderPath,
-        label: compactedName,
-        depth,
-        fileCount: stats.fileCount,
-        additions: stats.additions,
-        deletions: stats.deletions,
-      });
-
-      if (!collapsed.has(folderPath)) {
-        flatten(current, depth + 1, currentPath);
-      }
-    }
-
-    // Files at root level (no folder)
-    for (const file of node.files.sort((a, b) => a.path.localeCompare(b.path))) {
-      rows.push({ kind: 'file', file, depth });
-    }
-  }
-
-  flatten(root, 0, '');
-  return rows;
-}
 
 function parseDiffOld(unifiedDiff: string): string {
   const lines = unifiedDiff.split('\n');
@@ -2117,6 +2019,19 @@ export function ReviewPane() {
                   })
                 : undefined
             }
+            files={summaries}
+            onFileSelect={(path) => {
+              setExpandedFile(path);
+              setSelectedFile(path);
+              loadDiffForFile(path);
+            }}
+            diffCache={diffCache}
+            loadingDiffPath={loadingDiff}
+            checkedFiles={checkedFiles}
+            onToggleFile={toggleFile}
+            onRevertFile={handleRevertFile}
+            onIgnore={handleIgnore}
+            basePath={basePath}
           />
         );
       })()}

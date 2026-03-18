@@ -315,6 +315,8 @@ export function SearchablePicker({
 
 export function BranchPicker({
   branches,
+  remoteBranches = [],
+  defaultBranch,
   selected,
   onChange,
   triggerClassName,
@@ -327,6 +329,8 @@ export function BranchPicker({
   testId,
 }: {
   branches: string[];
+  remoteBranches?: string[];
+  defaultBranch?: string | null;
   selected: string;
   onChange: (branch: string) => void;
   triggerClassName?: string;
@@ -340,17 +344,32 @@ export function BranchPicker({
 }) {
   const { t } = useTranslation();
 
+  const remoteSet = useMemo(() => new Set(remoteBranches), [remoteBranches]);
+
   const items: SearchablePickerItem[] = useMemo(() => {
-    const branchItems = branches.map((b) => ({
-      key: b,
-      label: b,
-      isSelected: b === selected,
-    }));
+    const branchItems = branches
+      .map((b) => {
+        const badges: string[] = [];
+        if (b === defaultBranch) badges.push('default');
+        if (remoteSet.has(b)) badges.push('origin');
+        return {
+          key: b,
+          label: b,
+          isSelected: b === selected,
+          badge: badges.length > 0 ? badges.join(' · ') : undefined,
+        };
+      })
+      .sort((a, b) => {
+        // Default branch always first
+        if (a.key === defaultBranch) return -1;
+        if (b.key === defaultBranch) return 1;
+        return 0;
+      });
     if (extraItems) {
       return [...extraItems, ...branchItems];
     }
     return branchItems;
-  }, [branches, selected, extraItems]);
+  }, [branches, selected, extraItems, defaultBranch, remoteSet]);
 
   return (
     <SearchablePicker

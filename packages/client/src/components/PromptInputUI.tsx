@@ -225,10 +225,14 @@ export interface PromptInputUIProps {
 
   // ── Branch picking ──
   branches?: string[];
+  remoteBranches?: string[];
+  defaultBranch?: string | null;
   branchesLoading?: boolean;
   selectedBranch?: string;
   onSelectedBranchChange?: (v: string) => void;
   followUpBranches?: string[];
+  followUpRemoteBranches?: string[];
+  followUpDefaultBranch?: string | null;
   followUpSelectedBranch?: string;
   onFollowUpSelectedBranchChange?: (v: string) => void;
   activeThreadBranch?: string | null;
@@ -302,10 +306,14 @@ export const PromptInputUI = memo(function PromptInputUI({
   onRuntimeChange,
   hasLauncher = false,
   branches = [],
+  remoteBranches = [],
+  defaultBranch = null,
   branchesLoading = false,
   selectedBranch = '',
   onSelectedBranchChange,
   followUpBranches = [],
+  followUpRemoteBranches = [],
+  followUpDefaultBranch = null,
   followUpSelectedBranch = '',
   onFollowUpSelectedBranchChange,
   activeThreadBranch,
@@ -950,6 +958,8 @@ export const PromptInputUI = memo(function PromptInputUI({
                   branches.length > 0 && (
                     <BranchPicker
                       branches={branches}
+                      remoteBranches={remoteBranches}
+                      defaultBranch={defaultBranch}
                       selected={selectedBranch}
                       onChange={onSelectedBranchChange ?? (() => {})}
                     />
@@ -1020,6 +1030,8 @@ export const PromptInputUI = memo(function PromptInputUI({
                     {followUpBranches.length > 0 && (
                       <BranchPicker
                         branches={followUpBranches}
+                        remoteBranches={followUpRemoteBranches}
+                        defaultBranch={followUpDefaultBranch}
                         selected={followUpSelectedBranch}
                         onChange={onFollowUpSelectedBranchChange ?? (() => {})}
                       />

@@ -13,6 +13,7 @@ import { Hono } from 'hono';
 import { serveStatic } from 'hono/bun';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
+import { secureHeaders } from 'hono/secure-headers';
 
 import type { ServerEnv } from './lib/types.js';
 
@@ -24,6 +25,7 @@ type WSData = {
   runnerId?: string;
   organizationId?: string | null;
   isTranscribe?: boolean;
+  ip?: string;
 };
 
 import { log } from './lib/logger.js';
@@ -77,6 +79,21 @@ const corsOrigins = process.env.CORS_ORIGIN
   : ['http://localhost:5173', 'http://127.0.0.1:5173'];
 
 app.use('*', cors({ origin: corsOrigins, credentials: true }));
+app.use(
+  '*',
+  secureHeaders({
+    contentSecurityPolicy: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", 'data:', 'blob:'],
+      connectSrc: ["'self'", 'ws:', 'wss:'],
+      fontSrc: ["'self'", 'data:'],
+      objectSrc: ["'none'"],
+      frameAncestors: ["'none'"],
+    },
+  }),
+);
 app.use('*', logger());
 
 // Health check (before auth)
@@ -87,34 +104,10 @@ app.get('/api/health', (c) => {
   });
 });
 
-// Bootstrap endpoint (public — auto-signs in as admin in local mode, returns bearer token)
-app.get('/api/bootstrap', async (c) => {
+// Bootstrap endpoint (public — returns minimal info for client init)
+app.get('/api/bootstrap', (c) => {
   c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
   c.header('Pragma', 'no-cache');
-
-  const adminUsername = process.env.ADMIN_USERNAME ?? 'admin';
-  const adminPassword = process.env.ADMIN_PASSWORD ?? 'admin';
-
-  try {
-    const res = await authInstance.api.signInUsername({
-      body: { username: adminUsername, password: adminPassword },
-      asResponse: true,
-    });
-
-    const token = res.headers.get('set-auth-token');
-    if (token) {
-      // Forward session cookies so browser clients are also authenticated
-      const cookies =
-        res.headers.getSetCookie?.() ?? (res.headers as any).raw?.()?.['set-cookie'] ?? [];
-      for (const cookie of cookies) {
-        c.header('Set-Cookie', cookie, { append: true });
-      }
-      return c.json({ mode: 'local', token });
-    }
-  } catch (err) {
-    log.warn('Bootstrap sign-in failed', { namespace: 'auth', error: (err as Error).message });
-  }
-
   return c.json({ mode: 'local' });
 });
 
@@ -186,6 +179,10 @@ if (existsSync(clientDistDir)) {
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 
+// WebSocket connection rate limiting — prevents connection flood DoS
+const WS_MAX_CONNECTIONS_PER_IP = 50;
+const wsConnectionCounts = new Map<string, number>();
+
 const server = Bun.serve({
   port: PORT,
   hostname: HOST,
@@ -195,18 +192,36 @@ const server = Bun.serve({
 
     // Browser WebSocket
     if (url.pathname === '/ws' && req.headers.get('upgrade') === 'websocket') {
+      const ip = server.requestIP(req)?.address ?? 'unknown';
+      const count = wsConnectionCounts.get(ip) ?? 0;
+      if (count >= WS_MAX_CONNECTIONS_PER_IP) {
+        return new Response('Too many WebSocket connections', { status: 429 });
+      }
       const upgraded = server.upgrade(req, {
-        data: { type: 'browser', req } as any,
+        data: { type: 'browser', req, ip } as any,
       });
-      return upgraded ? undefined : new Response('WebSocket upgrade failed', { status: 500 });
+      if (!upgraded) {
+        return new Response('WebSocket upgrade failed', { status: 500 });
+      }
+      wsConnectionCounts.set(ip, count + 1);
+      return undefined;
     }
 
     // Runner WebSocket
     if (url.pathname === '/ws/runner' && req.headers.get('upgrade') === 'websocket') {
+      const ip = server.requestIP(req)?.address ?? 'unknown';
+      const count = wsConnectionCounts.get(ip) ?? 0;
+      if (count >= WS_MAX_CONNECTIONS_PER_IP) {
+        return new Response('Too many WebSocket connections', { status: 429 });
+      }
       const upgraded = server.upgrade(req, {
-        data: { type: 'runner' } as any,
+        data: { type: 'runner', ip } as any,
       });
-      return upgraded ? undefined : new Response('WebSocket upgrade failed', { status: 500 });
+      if (!upgraded) {
+        return new Response('WebSocket upgrade failed', { status: 500 });
+      }
+      wsConnectionCounts.set(ip, count + 1);
+      return undefined;
     }
 
     return app.fetch(req, { IP: server.requestIP(req) });
@@ -346,6 +361,13 @@ const server = Bun.serve({
 
     close(ws) {
       const d = ws.data as any;
+
+      // Decrement WebSocket connection counter
+      if (d.ip) {
+        const count = wsConnectionCounts.get(d.ip) ?? 1;
+        if (count <= 1) wsConnectionCounts.delete(d.ip);
+        else wsConnectionCounts.set(d.ip, count - 1);
+      }
 
       if (d.type === 'browser' && d.userId) {
         import('./services/ws-relay.js').then((wsRelay) => {

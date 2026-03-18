@@ -37,9 +37,36 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
       const session = await authClient.getSession();
       if (session.data?.user) {
         const u = session.data.user as any;
+
+        // Restore active org BEFORE setting isLoading=false so that
+        // loadProjects() (which fires when App mounts) uses the correct
+        // org context.  Without this, a page refresh loads personal
+        // projects first and the OrgSwitcher restores the org too late.
+        let activeOrgId: string | null = null;
+        let activeOrgName: string | null = null;
+        let activeOrgSlug: string | null = null;
+        try {
+          const active = await authClient.organization.getActiveMember();
+          if (active.data?.organizationId) {
+            activeOrgId = active.data.organizationId;
+            // Fetch org list to resolve name/slug
+            const orgList = await authClient.organization.list();
+            const orgInfo = orgList.data?.find((o: any) => o.id === activeOrgId);
+            if (orgInfo) {
+              activeOrgName = orgInfo.name;
+              activeOrgSlug = orgInfo.slug;
+            }
+          }
+        } catch {
+          // Org fetch failed — continue with personal context
+        }
+
         set({
           isAuthenticated: true,
           isLoading: false,
+          activeOrgId,
+          activeOrgName,
+          activeOrgSlug,
           user: {
             id: u.id,
             username: u.username || u.name || 'user',

@@ -27,8 +27,8 @@ const PUBLIC_PATHS = new Set([
 /**
  * Forwarded auth middleware — trusts X-Forwarded-User headers from the server.
  *
- * Used when the runtime is mounted in-process by the server. The server has
- * already validated the session (via Better Auth) and sets these headers:
+ * The server has already validated the session (via Better Auth) and sets
+ * these headers when proxying requests to the runner:
  * - X-Forwarded-User: userId
  * - X-Forwarded-Role: userRole
  * - X-Forwarded-Org: organizationId

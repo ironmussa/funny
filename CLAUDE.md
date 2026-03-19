@@ -58,12 +58,12 @@ bun run db:studio
 - **`packages/shared`** — TypeScript types and error definitions (no runtime code). Exports from `src/types.ts` and `src/errors.ts`. Contains interfaces for Project, Thread, Message, ToolCall, FileDiff, WebSocket events, and API request/response types.
 - **`packages/core`** — Pure logic shared across server and runtime. Contains git operations (`git/`), agent process management (`agents/`), container/sandbox support (`containers/`), and port allocation (`ports/`). No HTTP or database code.
 - **`packages/runtime`** — Hono HTTP routes and services for agent execution. Manages agent runners, PTY sessions, worktrees, pipelines, and WebSocket broadcasting. Acts as the "runner" in the server+runner architecture.
-- **`packages/server`** — Entry point for the application. Handles authentication (Better Auth), database (Drizzle + SQLite/PostgreSQL), user management, and mounts the runtime in-process. Owns all persistent state.
+- **`packages/server`** — Entry point for the application. Handles authentication (Better Auth), database (Drizzle + SQLite/PostgreSQL), user management, and proxies requests to remote runners. Owns all persistent state.
 - **`packages/client`** — React 19 + Vite SPA. Runs on port 5173 with a proxy to the server at `/api`.
 
 ### Server Architecture
 
-**Entry point:** `packages/server/src/index.ts` — Initializes auth, mounts the runtime in-process, and starts `Bun.serve()` with WebSocket support. The runtime app is created via `packages/runtime/src/app.ts` which builds the Hono app with all routes and middleware under `/api`.
+**Entry point:** `packages/server/src/index.ts` — Initializes auth, database, and starts `Bun.serve()` with WebSocket support. All agent/filesystem/git operations are proxied to remote runners connected via WebSocket tunnel.
 
 **Database:** SQLite via `bun:sqlite` (Bun's native SQLite driver) + Drizzle ORM. DB file lives at `~/.funny/data.db`. Tables are auto-created on startup via `db/migrate.ts` (raw SQL, not Drizzle migrations). Schema in `db/schema.ts` defines: `projects`, `threads`, `messages`, `tool_calls`.
 
@@ -78,7 +78,7 @@ bun run db:studio
 **Key services (server):**
 
 - `project-manager.ts` — CRUD for projects. Validates that the path is a git repo before creating.
-- `runner-manager.ts` — Manages local and remote runner instances.
+- `runner-manager.ts` — Manages remote runner instances (registration, heartbeat, project assignments).
 - `project-repository.ts`, `thread-event-repository.ts`, etc. — Database repositories for persistent state.
 
 **Core modules (`packages/core/src/`):**
@@ -137,18 +137,16 @@ The admin can create additional users from **Settings > Users** in the UI. Self-
 
 ### Deployment Topologies
 
-The architecture follows a unified **Server + Runner** model:
+The architecture follows a **Server + Runner** model:
 
-- **Server** (`packages/server`) — Handles authentication, serves the client UI, and owns the database. Always mounts the runtime in-process as a local runner. The server is the single entry point for all client requests.
-- **Runner** (`packages/runtime`) — Executes agent work (spawning Claude CLI processes, managing git worktrees, PTY sessions). The runtime mounted in-process by the server acts as the local runner.
-- **Remote runners** (optional, `TEAM_SERVER_URL` set on the runner): Additional runtime instances can connect to the server as remote runners. The server proxies requests to the appropriate runner based on project assignments. Communication uses WebSocket tunneling so runners can work behind NAT.
+- **Server** (`packages/server`) — Handles authentication, serves the client UI, and owns the database. Proxies all agent/filesystem/git requests to runners. The server is the single entry point for all client requests.
+- **Runner** (`packages/runtime`) — Executes agent work (spawning Claude CLI processes, managing git worktrees, PTY sessions). Runners connect to the server via WebSocket tunnel and can work behind NAT.
 
-Data flow: `Client → Server(:3001) → Runner (in-process or remote)`
+Data flow: `Client → Server(:3001) → Runner (via WS tunnel or direct HTTP)`
 
 Configuration:
-- `TEAM_SERVER_URL` — Set on a runner instance to connect it to a remote server
+- `TEAM_SERVER_URL` — Set on a runner instance to connect it to the server
 - `RUNNER_AUTH_SECRET` — Shared secret for runner ↔ server authentication
-- `LOCAL_RUNNER=false` — Set on the server to disable the in-process runner (remote-only mode)
 - `DATABASE_URL` — Optional PostgreSQL connection string (default: SQLite at `~/.funny/data.db`)
 
 ### Per-User Git Identity

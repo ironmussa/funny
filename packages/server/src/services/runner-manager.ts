@@ -385,19 +385,18 @@ export async function purgeOfflineRunners(olderThanMs = 60_000): Promise<number>
 }
 
 /**
- * Purge ALL runners and their project assignments on server startup.
- * After a restart no runner has an active WebSocket, so all DB state is stale.
- * Runners will re-register and re-assign projects when they reconnect.
- * Also clears stale runnerId references from threads.
+ * Mark ALL runners as offline on server startup.
+ * After a restart no runner has an active WebSocket, so mark them offline.
+ * Runners will re-register via heartbeat and re-establish their WS tunnel.
+ * We keep the runner records (and project assignments) so that the proxy can
+ * use httpUrl fallback while the runner reconnects, avoiding 502 errors
+ * during the restart window.
  */
 export async function purgeAllRunners(): Promise<void> {
-  await db.delete(runnerProjectAssignments);
+  await db.update(runners).set({ status: 'offline' });
+  // Clear pending tasks — they're stale after a restart
   await db.delete(runnerTasks);
-  await db.delete(runners);
-  // Clear stale runnerId from threads so the resolver doesn't try old runner IDs
-  const { threads } = await import('../db/schema.js');
-  await db.update(threads).set({ runnerId: null });
-  log.info('Purged all runners, assignments, and thread runner refs (server restart)', {
+  log.info('Marked all runners offline (server restart)', {
     namespace: 'runner',
   });
 }

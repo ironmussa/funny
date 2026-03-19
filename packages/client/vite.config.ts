@@ -42,7 +42,7 @@ export default defineConfig(({ mode }) => {
       port: clientPort,
       allowedHosts: true,
       proxy: {
-        // All API requests go to the server (which handles auth and proxies/mounts runtime)
+        // All API requests go to the server (which handles auth and proxies to runners)
         '/api': {
           target: serverTarget,
           changeOrigin: true,

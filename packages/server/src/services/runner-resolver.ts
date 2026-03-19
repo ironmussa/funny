@@ -35,8 +35,12 @@ const threadRunnerCache = new Map<string, ResolvedRunner>();
 
 /**
  * A runner is reachable if it has a live WebSocket OR a direct HTTP URL.
+ * Set WS_ONLY=true to disable httpUrl fallback (for testing WS stability).
  */
+const WS_ONLY = !!process.env.WS_TUNNEL_ONLY;
+
 function isReachable(runnerId: string, httpUrl: string | null): boolean {
+  if (WS_ONLY) return isRunnerConnected(runnerId);
   return isRunnerConnected(runnerId) || !!httpUrl;
 }
 
@@ -93,12 +97,22 @@ export async function resolveRunner(
     if (resolved) return resolved;
   }
 
-  log.debug('No reachable runner found', {
+  // Diagnostic: log all runners in DB to identify userId mismatches
+  const allRunners = await db
+    .select({ id: runners.id, userId: runners.userId, httpUrl: runners.httpUrl })
+    .from(runners);
+  log.warn('No reachable runner found', {
     namespace: 'proxy',
-    userId: userId ?? 'none',
+    requestUserId: userId ?? 'none',
     threadId: threadId ?? 'none',
     projectId: projectId ?? 'none',
     path,
+    runnersInDb: allRunners.map((r) => ({
+      id: r.id,
+      userId: r.userId ?? 'null',
+      wsConnected: isRunnerConnected(r.id),
+      hasHttpUrl: !!r.httpUrl,
+    })),
   });
 
   return null;
@@ -180,9 +194,11 @@ async function resolveUserRunner(userId: string): Promise<ResolvedRunner | null>
   }
 
   // Second pass: accept runners with httpUrl (direct HTTP fallback)
-  for (const r of userRunners) {
-    if (r.httpUrl) {
-      return { runnerId: r.id, httpUrl: r.httpUrl };
+  if (!WS_ONLY) {
+    for (const r of userRunners) {
+      if (r.httpUrl) {
+        return { runnerId: r.id, httpUrl: r.httpUrl };
+      }
     }
   }
 
@@ -209,9 +225,11 @@ async function resolveByProject(projectId: string, userId: string): Promise<Reso
       return { runnerId: a.runnerId, httpUrl: a.httpUrl ?? null };
     }
   }
-  for (const a of assignments) {
-    if (a.runnerId && a.httpUrl) {
-      return { runnerId: a.runnerId, httpUrl: a.httpUrl };
+  if (!WS_ONLY) {
+    for (const a of assignments) {
+      if (a.runnerId && a.httpUrl) {
+        return { runnerId: a.runnerId, httpUrl: a.httpUrl };
+      }
     }
   }
 

@@ -428,7 +428,6 @@ DATABASE_URL=postgresql://user:pass@db.example.com/funny?sslmode=require
 | `TEAM_SERVER_URL`    | Central server URL — **activates team/runner mode**      | —              | Only in team mode   |
 | `RUNNER_AUTH_SECRET` | Shared secret for runner ↔ server authentication         | Auto-generated | Yes in team mode    |
 | `RUNNER_HTTP_URL`    | Runner's own HTTP URL (enables direct HTTP fallback)     | —              | No                  |
-| `LOCAL_RUNNER`       | Set to `false` to disable the in-process runner          | `true`         | No                  |
 | `DATABASE_URL`       | PostgreSQL connection URL                                | SQLite         | No                  |
 | `CORS_ORIGIN`        | Allowed CORS origins (comma-separated)                   | Auto           | No                  |
 | `CLAUDE_BINARY_PATH` | Explicit path to the Claude CLI binary                   | Auto-detected  | No                  |

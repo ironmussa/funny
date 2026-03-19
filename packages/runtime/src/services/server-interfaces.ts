@@ -7,10 +7,8 @@
  *
  * The runtime NEVER accesses the database directly. Instead, the server
  * injects concrete implementations of these interfaces at startup via
- * `RuntimeServiceProvider`. When mounted in-process the implementations
- * are thin wrappers around the server's repositories (zero overhead).
- * When running as a remote runner, the implementations proxy over
- * WebSocket to the central server.
+ * `RuntimeServiceProvider`. The implementations proxy over WebSocket
+ * to the central server.
  *
  * Interfaces are split by responsibility (ISP).
  */

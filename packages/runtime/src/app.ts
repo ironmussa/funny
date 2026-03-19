@@ -2,9 +2,10 @@
  * Runtime Hono application factory.
  *
  * Exports `createRuntimeApp()` which builds the Hono app with all routes
- * and middleware, without starting Bun.serve(). The runtime always connects
- * to a central server as a remote runner; user identity is received via
- * X-Forwarded-User headers or validated against the central server.
+ * and middleware, without starting Bun.serve(). The runtime is always a
+ * standalone remote runner that connects to the central server via
+ * TEAM_SERVER_URL. It has no database — all data is proxied to the server
+ * via the WebSocket data channel.
  */
 
 import { existsSync } from 'fs';
@@ -29,7 +30,7 @@ import { logger as honoLogger } from 'hono/logger';
 import { secureHeaders } from 'hono/secure-headers';
 
 import { log } from './lib/logger.js';
-import { authMiddleware, forwardedAuthMiddleware } from './middleware/auth.js';
+import { authMiddleware } from './middleware/auth.js';
 import { handleError } from './middleware/error-handler.js';
 import { rateLimit } from './middleware/rate-limit.js';
 import { tracingMiddleware } from './middleware/tracing.js';
@@ -52,7 +53,6 @@ import { startAgent } from './services/agent-runner.js';
 import { registerAllHandlers } from './services/handlers/handler-registry.js';
 import type { HandlerServiceContext } from './services/handlers/types.js';
 import * as ptyManager from './services/pty-manager.js';
-import type { RuntimeServiceProvider } from './services/service-provider.js';
 import { getServices, setServices } from './services/service-registry.js';
 import * as tm from './services/thread-manager.js';
 import { wsBroker } from './services/ws-broker.js';
@@ -71,22 +71,8 @@ export interface RuntimeAppOptions {
   clientPort?: number;
   /** Custom CORS origin (comma-separated) */
   corsOrigin?: string;
-  /**
-   * Pre-existing database connection to share.
-   * Required for legacy subsystems (pty-manager, runner-manager, email)
-   * that still use direct DB access. Will be removed once those are migrated.
-   */
-  dbConnection?: import('@funny/shared/db/connection').DatabaseConnection;
-  /** Skip auth setup (if server handles auth) */
-  skipAuthSetup?: boolean;
   /** Skip static file serving */
   skipStaticServing?: boolean;
-  /**
-   * Injected service provider for all data access.
-   * When omitted (runner mode), a stateless provider is created
-   * that proxies to the server via WebSocket.
-   */
-  services?: RuntimeServiceProvider;
 }
 
 export interface RuntimeApp {
@@ -137,8 +123,8 @@ export async function createRuntimeApp(options: RuntimeAppOptions): Promise<Runt
   app.use('/api/*', tracingMiddleware);
   app.route('/api/ingest', ingestRoutes);
 
-  // Auth middleware: forwarded (server handles auth) or standalone (runtime handles auth)
-  app.use('/api/*', options.skipAuthSetup ? forwardedAuthMiddleware : authMiddleware);
+  // Auth middleware: validates X-Runner-Auth from server proxy, or direct sessions
+  app.use('/api/*', authMiddleware);
 
   // Health check
   app.get('/api/health', (c) => {
@@ -226,24 +212,10 @@ export async function createRuntimeApp(options: RuntimeAppOptions): Promise<Runt
 
   // ── init() — service provider, handlers, startup tasks ──────────
   async function init() {
-    // Wire up the service provider — injected by the server, or auto-created for runner mode.
-    if (options.services) {
-      setServices(options.services);
-      log.info('Service provider injected by server', { namespace: 'server' });
-    } else {
-      const { createRunnerServiceProvider } = await import('./services/runner-service-provider.js');
-      setServices(createRunnerServiceProvider());
-      log.info('Stateless runner service provider created', { namespace: 'server' });
-    }
-
-    // Share the DB connection for legacy subsystems that still use direct access
-    // (pty-manager, runner-manager, email). Will be removed once those are migrated.
-    if (options.dbConnection) {
-      const { setConnection } = await import('./db/index.js');
-      setConnection(options.dbConnection);
-    }
-
-    log.info('Runner mode — skipping auth and scheduler', { namespace: 'server' });
+    // Create the stateless runner service provider — proxies all data to the server via WebSocket.
+    const { createRunnerServiceProvider } = await import('./services/runner-service-provider.js');
+    setServices(createRunnerServiceProvider());
+    log.info('Runner service provider created', { namespace: 'server' });
 
     // Register handler registry (needed in both modes for tunnel:request handling)
     const handlerCtx: HandlerServiceContext = {
@@ -374,13 +346,13 @@ function handlePtyMessage(type: string, data: any, userId: string, send: (msg: a
       break;
     case 'pty:restore': {
       ptyManager.capturePaneAsync(data.id).then((captured) => {
-        if (captured) {
-          send({
-            type: 'pty:data',
-            threadId: '',
-            data: { ptyId: data.id, data: captured },
-          });
-        }
+        // Always respond — even with empty string — so the client exits loading state.
+        // If captured is null the session may be freshly spawned with no output yet.
+        send({
+          type: 'pty:data',
+          threadId: '',
+          data: { ptyId: data.id, data: captured ?? '' },
+        });
       });
       break;
     }

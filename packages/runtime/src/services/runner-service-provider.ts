@@ -1,10 +1,12 @@
 /**
  * Service provider for the runtime runner.
  *
- * The runtime always runs as a remote runner connected to the central server.
+ * The runtime is always a remote runner connected to the central server.
+ * This is the ONLY service provider — there is no in-process alternative.
+ *
  * This provider:
- *  - Proxies thread/message/toolcall/project ops via the WebSocket tunnel
- *    (using remote* functions from team-client.ts)
+ *  - Proxies thread/message/toolcall/project/profile ops via the WebSocket
+ *    data channel (using remote* functions from team-client.ts)
  *  - Provides no-op stubs for server-only concerns (analytics, search, etc.)
  *    since those routes are handled by the server directly
  *  - Uses the wsBroker for local WebSocket event delivery

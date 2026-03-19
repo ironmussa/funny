@@ -38,10 +38,8 @@ if (!process.env.TEAM_SERVER_URL) {
 const port = Number(process.env.RUNNER_PORT) || 3003;
 const host = process.env.RUNNER_HOST || '0.0.0.0';
 
-// Create the runtime app — no services injected, auto-creates stateless runner provider
-const runtime = await createRuntimeApp({
-  skipAuthSetup: true,
-});
+// Create the runtime app — stateless runner that proxies data to the server
+const runtime = await createRuntimeApp({});
 
 // Clean up previous instance on bun --watch restarts.
 const prev = (globalThis as any).__bunServer;

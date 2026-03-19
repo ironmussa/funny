@@ -38,7 +38,7 @@ const threadRunnerCache = new Map<string, ResolvedRunner>();
  * A runner is reachable if it has a live WebSocket OR a direct HTTP URL.
  * Set WS_ONLY=true to disable httpUrl fallback (for testing WS stability).
  */
-const WS_ONLY = !!process.env.WS_TUNNEL_ONLY;
+const WS_ONLY = process.env.WS_TUNNEL_ONLY === 'true' || process.env.WS_TUNNEL_ONLY === '1';
 
 function isReachable(runnerId: string, httpUrl: string | null): boolean {
   if (WS_ONLY) return isRunnerConnected(runnerId) || isPolling(runnerId);
@@ -80,7 +80,7 @@ export async function resolveRunner(
   if (threadId && userId) {
     const fromDb = await getRunnerForThread(threadId, userId);
     if (fromDb) {
-      const httpUrl = fromDb.httpUrl ?? null;
+      const httpUrl = WS_ONLY ? null : (fromDb.httpUrl ?? null);
       if (isReachable(fromDb.runnerId, httpUrl)) {
         const resolved: ResolvedRunner = {
           runnerId: fromDb.runnerId,
@@ -191,7 +191,7 @@ async function resolveUserRunner(userId: string): Promise<ResolvedRunner | null>
   // First pass: prefer WS-connected or actively polling runners
   for (const r of userRunners) {
     if (isRunnerConnected(r.id) || isPolling(r.id)) {
-      return { runnerId: r.id, httpUrl: r.httpUrl ?? null };
+      return { runnerId: r.id, httpUrl: WS_ONLY ? null : (r.httpUrl ?? null) };
     }
   }
 
@@ -224,7 +224,7 @@ async function resolveByProject(projectId: string, userId: string): Promise<Reso
   // Prefer WS-connected or actively polling, fall back to httpUrl
   for (const a of assignments) {
     if (a.runnerId && (isRunnerConnected(a.runnerId) || isPolling(a.runnerId))) {
-      return { runnerId: a.runnerId, httpUrl: a.httpUrl ?? null };
+      return { runnerId: a.runnerId, httpUrl: WS_ONLY ? null : (a.httpUrl ?? null) };
     }
   }
   if (!WS_ONLY) {

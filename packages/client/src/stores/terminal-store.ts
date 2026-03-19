@@ -194,12 +194,18 @@ export const useTerminalStore = create<TerminalState>()(
             });
           }
 
-          if (newTabs.length === 0 && tabs === state.tabs) return state;
+          if (newTabs.length === 0 && tabs === state.tabs) {
+            // Even if no tab changes, mark sessionsChecked atomically
+            return { sessionsChecked: true };
+          }
 
           return {
             tabs: [...tabs, ...newTabs],
             panelVisible: newTabs.length > 0 ? true : state.panelVisible,
             activeTabId: state.activeTabId ?? newTabs[0]?.id ?? tabs[0]?.id ?? null,
+            // Mark sessionsChecked atomically with the tab update — avoids
+            // intermediate state flickers that cancel in-flight spawn timers.
+            sessionsChecked: true,
           };
         }),
     }),

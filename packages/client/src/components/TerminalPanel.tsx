@@ -278,15 +278,20 @@ function WebTerminalTabContent({
           if (el && el.offsetParent !== null && el.clientHeight > 0) {
             fitAddon.fit();
           }
-          // Only focus if no modal dialog is open — Radix UI sets aria-hidden
-          // on the <main> ancestor when a dialog opens, and focusing a hidden
-          // descendant triggers a browser warning.
-          if (!document.querySelector('[role="dialog"][data-state="open"]')) {
-            terminal.focus();
-          }
           resolve();
         });
       });
+
+      // Focus the terminal after a short delay so that any closing dialog
+      // (e.g. NewThreadDialog) has time to unmount and the panel expand
+      // animation can finish.  Without this, the caret won't appear inside
+      // the terminal when it is first created.
+      setTimeout(() => {
+        if (cancelled) return;
+        if (!document.querySelector('[role="dialog"][data-state="open"]')) {
+          terminal.focus();
+        }
+      }, 250);
 
       if (cancelled || !containerRef.current) return;
 

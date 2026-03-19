@@ -6,6 +6,7 @@ import Mention from '@tiptap/extension-mention';
 import Paragraph from '@tiptap/extension-paragraph';
 import Placeholder from '@tiptap/extension-placeholder';
 import Text from '@tiptap/extension-text';
+import { TextSelection } from '@tiptap/pm/state';
 import type { JSONContent } from '@tiptap/react';
 import { EditorContent, useEditor } from '@tiptap/react';
 import { FileText, FolderOpen, Zap, Loader2 } from 'lucide-react';
@@ -778,6 +779,9 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           if (slice.length > 0) {
             // Replace previous partial with new partial using a single transaction
             const tr = state.tr.replaceWith(safeFrom, safeTo, state.schema.text(text));
+            // Place cursor at end of replaced text
+            const endPos = safeFrom + text.length;
+            tr.setSelection(TextSelection.create(tr.doc, endPos));
             editor.view.dispatch(tr);
             insertFrom = safeFrom;
           } else {
@@ -809,6 +813,9 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 
         if (safeFrom !== null && safeTo !== null && safeFrom < safeTo) {
           const tr = state.tr.replaceWith(safeFrom, safeTo, state.schema.text(finalText));
+          // Place cursor at end of committed text so next dictation inserts here
+          const endPos = safeFrom + finalText.length;
+          tr.setSelection(TextSelection.create(tr.doc, endPos));
           editor.view.dispatch(tr);
         } else {
           // No valid partial range — insert at cursor

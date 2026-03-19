@@ -5,13 +5,10 @@
  *
  * Aggregates all service interfaces that the runtime depends on.
  *
- * The server creates a concrete `RuntimeServiceProvider` at startup and
- * passes it to `createRuntimeApp()`. The runtime accesses data exclusively
- * through this provider — it never imports DB modules directly.
- *
- * For in-process mounting the implementations are direct function calls
- * (zero overhead). For remote runners the implementations proxy over
- * the WebSocket tunnel to the central server.
+ * The runtime accesses data exclusively through this provider — it never
+ * imports DB modules directly. The concrete implementation
+ * (`runner-service-provider.ts`) proxies all operations over the
+ * WebSocket tunnel to the central server.
  */
 
 import type {

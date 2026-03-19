@@ -367,11 +367,13 @@ function handleMessage(e: MessageEvent) {
           const tryRestore = () => {
             const projects = useProjectStore.getState().projects;
             const termStore = useTerminalStore.getState();
+            // restoreTabs atomically updates tabs AND marks sessionsChecked
+            // in a single set() call — avoids intermediate state flickers
+            // that would cancel in-flight spawn retry timers for other tabs.
             termStore.restoreTabs(
               data.sessions,
               projects.map((p: any) => ({ id: p.id, path: p.path })),
             );
-            termStore.markSessionsChecked();
           };
 
           const projects = useProjectStore.getState().projects;
@@ -556,7 +558,7 @@ function setupWS(ws: WebSocket) {
       if (!termStore.sessionsChecked) {
         termStore.markSessionsChecked();
       }
-    }, 15_000);
+    }, 30_000);
     // Clear the timeout if we disconnect before it fires
     ws.addEventListener('close', () => clearTimeout(sessionsTimeout), { once: true });
   };

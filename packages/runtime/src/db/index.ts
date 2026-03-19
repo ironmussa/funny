@@ -65,14 +65,9 @@ export const schema = sqliteSchema;
 export const sqlite = mode === 'sqlite' ? (_connection?.sqlite ?? null) : null;
 export const dbMode = mode;
 
-/** Get the underlying DatabaseConnection (for sharing with in-process server). */
+/** Get the underlying DatabaseConnection. */
 export function getConnection(): DatabaseConnection | null {
   return _connection;
-}
-
-/** Set a pre-existing connection (e.g. shared from server when skipDbInit is true). */
-export function setConnection(conn: DatabaseConnection): void {
-  _connection = conn;
 }
 
 // ── Compat helpers ──────────────────────────────────────────────

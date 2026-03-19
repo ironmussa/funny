@@ -295,19 +295,18 @@ export function spawnPty(
     });
     // The client tried to spawn but the session already exists (e.g. browser refresh).
     // Auto-restore: send the serialized terminal content back to the client.
+    // Always emit — even with empty string — so the client exits loading state.
     const session = activeSessions.get(id)!;
     capturePaneAsync(id).then((content) => {
-      if (content) {
-        const event = {
-          type: 'pty:data' as const,
-          threadId: '',
-          data: { ptyId: id, data: content },
-        };
-        if (session.userId && session.userId !== '__local__') {
-          wsBroker.emitToUser(session.userId, event);
-        } else {
-          wsBroker.emit(event);
-        }
+      const event = {
+        type: 'pty:data' as const,
+        threadId: '',
+        data: { ptyId: id, data: content ?? '' },
+      };
+      if (session.userId && session.userId !== '__local__') {
+        wsBroker.emitToUser(session.userId, event);
+      } else {
+        wsBroker.emit(event);
       }
     });
     return;

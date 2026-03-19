@@ -33,6 +33,9 @@ import { log } from '../lib/logger.js';
 import { getServices } from './service-registry.js';
 import { wsBroker } from './ws-broker.js';
 
+/** When true, ALL runner↔server communication uses WebSocket (no HTTP except initial registration) */
+const WS_ONLY = process.env.WS_TUNNEL_ONLY === 'true' || process.env.WS_TUNNEL_ONLY === '1';
+
 export type BrowserWSHandler = (
   userId: string,
   data: unknown,
@@ -136,11 +139,13 @@ async function centralFetch(path: string, options: RequestInit = {}): Promise<Re
 
 async function register(): Promise<boolean> {
   try {
-    // Always register with httpUrl so the server can use direct HTTP as fallback
+    // Register with httpUrl so the server can use direct HTTP as fallback
     // when the WebSocket tunnel is unavailable. For remote runners behind NAT,
-    // set RUNNER_HTTP_URL='' to disable direct HTTP and force tunnel-only mode.
+    // set RUNNER_HTTP_URL='' or WS_TUNNEL_ONLY=true to disable direct HTTP.
     const runnerPort = Number(process.env.RUNNER_PORT) || 3003;
-    const httpUrl = process.env.RUNNER_HTTP_URL ?? `http://127.0.0.1:${runnerPort}`;
+    const httpUrl = WS_ONLY
+      ? ''
+      : (process.env.RUNNER_HTTP_URL ?? `http://127.0.0.1:${runnerPort}`);
 
     // When using a user invite token (RUNNER_INVITE_TOKEN), send it as a header
     // so the server can associate this runner with the user's account.
@@ -213,6 +218,8 @@ async function registerWithRetry(): Promise<boolean> {
 // ── Heartbeat ────────────────────────────────────────────
 
 async function sendHeartbeat(): Promise<void> {
+  if (WS_ONLY) return sendHeartbeatWS();
+
   try {
     const res = await centralFetch('/api/runners/heartbeat', {
       method: 'POST',
@@ -278,9 +285,98 @@ async function sendHeartbeat(): Promise<void> {
   }
 }
 
+// ── WS-only Heartbeat ────────────────────────────────────
+
+async function sendHeartbeatWS(): Promise<void> {
+  try {
+    const response = await sendDataMessage({
+      type: 'runner:heartbeat',
+      requestId: nanoid(),
+      payload: { activeThreadIds: [] },
+    });
+
+    // WS health check — if the server says our WS is not connected,
+    // something is wrong (should not happen in WS-only mode, but be safe)
+    if (response?.wsConnected === false) {
+      log.warn('Server reports WS not connected despite WS heartbeat — reconnecting', {
+        namespace: 'runner',
+      });
+      if (state.ws) {
+        try {
+          state.ws.close();
+        } catch {}
+        state.ws = null;
+      }
+      clearWsTimers();
+      state.wsReconnectAttempt = 0;
+      connectWebSocket();
+    }
+
+    // Handle re-registration if runner not found
+    if (response?.code === 'RUNNER_NOT_FOUND') {
+      log.warn('Runner not found on server — re-registering', { namespace: 'runner' });
+      state.runnerId = null;
+      state.runnerToken = null;
+      const ok = await register();
+      if (ok) {
+        if (state.ws) {
+          try {
+            state.ws.close();
+          } catch {}
+        }
+        connectWebSocket();
+        await assignLocalProjects();
+      }
+    }
+  } catch (err) {
+    log.warn('WS heartbeat failed', { namespace: 'runner', error: (err as Error).message });
+  }
+}
+
+// ── WS-only Task Polling ─────────────────────────────────
+
+async function pollTasksWS(): Promise<void> {
+  try {
+    const response = await sendDataMessage({
+      type: 'runner:poll_tasks',
+      requestId: nanoid(),
+    });
+
+    const tasks = response?.tasks ?? [];
+    for (const task of tasks) {
+      log.info('Received task from central (WS)', {
+        namespace: 'runner',
+        taskId: task.taskId,
+        type: task.type,
+        threadId: task.threadId,
+      });
+    }
+  } catch {
+    // Silent — WS may be temporarily disconnected
+  }
+}
+
+// ── WS-only Project Assignment ───────────────────────────
+
+async function assignProjectWS(projectId: string, localPath: string): Promise<void> {
+  if (!state.runnerId) return;
+  try {
+    await sendDataMessage({
+      type: 'runner:assign_project',
+      requestId: nanoid(),
+      runnerId: state.runnerId,
+      payload: { projectId, localPath },
+    });
+  } catch {
+    // Non-fatal
+  }
+}
+
 // ── Task Polling ─────────────────────────────────────────
 
 async function pollTasks(): Promise<void> {
+  if (WS_ONLY) return pollTasksWS();
+
   try {
     const res = await centralFetch('/api/runners/tasks');
     if (!res.ok) return;
@@ -316,13 +412,17 @@ async function assignLocalProjects(): Promise<void> {
 
     for (const project of projects) {
       try {
-        await centralFetch(`/api/runners/${state.runnerId}/projects`, {
-          method: 'POST',
-          body: JSON.stringify({
-            projectId: project.id,
-            localPath: project.path,
-          }),
-        });
+        if (WS_ONLY) {
+          await assignProjectWS(project.id, project.path);
+        } else {
+          await centralFetch(`/api/runners/${state.runnerId}/projects`, {
+            method: 'POST',
+            body: JSON.stringify({
+              projectId: project.id,
+              localPath: project.path,
+            }),
+          });
+        }
       } catch {
         // Individual assignment failures are non-fatal
       }
@@ -348,13 +448,17 @@ export async function assignProjectToRunner(project: Project): Promise<void> {
   if (!state.runnerId) return;
 
   try {
-    await centralFetch(`/api/runners/${state.runnerId}/projects`, {
-      method: 'POST',
-      body: JSON.stringify({
-        projectId: project.id,
-        localPath: project.path,
-      }),
-    });
+    if (WS_ONLY) {
+      await assignProjectWS(project.id, project.path);
+    } else {
+      await centralFetch(`/api/runners/${state.runnerId}/projects`, {
+        method: 'POST',
+        body: JSON.stringify({
+          projectId: project.id,
+          localPath: project.path,
+        }),
+      });
+    }
     log.info('Assigned new project to runner', {
       namespace: 'runner',
       projectId: project.id,
@@ -445,6 +549,11 @@ function connectWebSocket(): void {
 
         if (data.type === 'runner:auth_ok') {
           log.info('WebSocket authenticated', { namespace: 'runner' });
+
+          // In WS-only mode, assign projects now that WS is ready
+          if (WS_ONLY) {
+            assignLocalProjects().catch(() => {});
+          }
         }
 
         // Pong response — already handled above (timeout cleared)
@@ -470,8 +579,11 @@ function connectWebSocket(): void {
           handleTunnelRequest(data as CentralWSTunnelRequest);
         }
 
-        // Handle data persistence responses from the server
-        if (data.type?.startsWith('data:') && data.requestId) {
+        // Handle data persistence and runner operation responses from the server
+        if (
+          data.requestId &&
+          (data.type?.startsWith('data:') || data.type?.startsWith('runner:'))
+        ) {
           handleDataResponse(data);
         }
       } catch {}
@@ -654,8 +766,10 @@ function sendTunnelResponse(
     }
   }
 
-  // Fallback: send result via HTTP POST
-  sendTunnelResponseHttp(requestId, status, headers, body).catch(() => {});
+  // Fallback: send result via HTTP POST (skip in WS-only mode)
+  if (!WS_ONLY) {
+    sendTunnelResponseHttp(requestId, status, headers, body).catch(() => {});
+  }
 }
 
 /** Send tunnel result via HTTP when WS is unavailable */
@@ -1145,16 +1259,25 @@ export async function initTeamMode(serverUrl: string): Promise<void> {
   state.pollTimer = setInterval(pollTasks, 5_000);
   if (state.pollTimer.unref) state.pollTimer.unref();
 
-  // Connect WebSocket for event streaming (opportunistic accelerator)
+  // Connect WebSocket for event streaming
   connectWebSocket();
 
-  // Start HTTP tunnel poll loop (reliable baseline transport)
-  tunnelPollLoop();
+  // Start HTTP tunnel poll loop (reliable baseline transport) — skip in WS-only mode
+  if (!WS_ONLY) {
+    tunnelPollLoop();
+  }
 
-  // Assign local projects to this runner on the server
-  await assignLocalProjects();
+  // In WS-only mode, defer project assignment until WS is authenticated.
+  // The WS onopen handler sends runner:auth, and after auth_ok we assign projects.
+  if (!WS_ONLY) {
+    await assignLocalProjects();
+  }
 
-  log.info('Runner mode initialized', { namespace: 'runner', runnerId: state.runnerId });
+  log.info('Runner mode initialized', {
+    namespace: 'runner',
+    runnerId: state.runnerId,
+    transport: WS_ONLY ? 'ws-only' : 'http+ws',
+  });
 }
 
 /**

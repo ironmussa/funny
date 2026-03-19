@@ -135,19 +135,19 @@ The admin can create additional users from **Settings > Users** in the UI. Self-
 - WebSocket events are filtered per user
 - SQLite is the default database; PostgreSQL is optional (set `DATABASE_URL`)
 
-### Deployment Topologies
+### Deployment Architecture
 
-The architecture follows a **Server + Runner** model:
+The server and runner are **always separate processes** — the runner is never embedded in the server.
 
 - **Server** (`packages/server`) — Handles authentication, serves the client UI, and owns the database. Proxies all agent/filesystem/git requests to runners. The server is the single entry point for all client requests.
-- **Runner** (`packages/runtime`) — Executes agent work (spawning Claude CLI processes, managing git worktrees, PTY sessions). Runners connect to the server via WebSocket tunnel and can work behind NAT.
+- **Runner** (`packages/runtime`) — Stateless process that executes agent work (spawning Claude CLI processes, managing git worktrees, PTY sessions). Runners connect to the server via WebSocket tunnel and can work behind NAT. The runner has **no database** — all data is proxied to the server via the WebSocket data channel.
 
-Data flow: `Client → Server(:3001) → Runner (via WS tunnel or direct HTTP)`
+Data flow: `Client → Server → Runner (via WS tunnel or direct HTTP)`
 
 Configuration:
-- `TEAM_SERVER_URL` — Set on a runner instance to connect it to the server
-- `RUNNER_AUTH_SECRET` — Shared secret for runner ↔ server authentication
-- `DATABASE_URL` — Optional PostgreSQL connection string (default: SQLite at `~/.funny/data.db`)
+- `TEAM_SERVER_URL` — **Required** on the runner to connect it to the server
+- `RUNNER_AUTH_SECRET` — **Required** shared secret for runner ↔ server authentication
+- `DATABASE_URL` — Optional PostgreSQL connection string on the server (default: SQLite at `~/.funny/data.db`)
 
 ### Per-User Git Identity
 
@@ -168,7 +168,7 @@ Tokens are encrypted at rest using **AES-256-GCM**. The encryption key is auto-g
 
 - `packages/runtime/src/lib/auth.ts` — Better Auth instance (initialized by the server on startup)
 - `packages/server/src/middleware/auth.ts` — Server auth middleware (validates sessions, sets user context)
-- `packages/runtime/src/middleware/auth.ts` — Runtime auth middleware (trusts `X-Forwarded-User` headers from server, or validates sessions directly when running standalone)
+- `packages/runtime/src/middleware/auth.ts` — Runtime auth middleware (validates `X-Runner-Auth` shared secret from server proxy, falls back to server session validation)
 - `packages/client/src/stores/auth-store.ts` — Client auth state (session-based login/logout)
 - `packages/client/src/lib/auth-client.ts` — Better Auth client with username + admin plugins
 

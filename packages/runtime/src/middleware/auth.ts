@@ -5,11 +5,11 @@
  *
  * Runtime auth middleware.
  *
- * Two modes of operation:
- * 1. **Forwarded** (mounted by server): trusts X-Forwarded-User headers set by
- *    the server's auth middleware. This is the primary mode.
- * 2. **Direct** (runtime runs standalone or as a remote runner): validates
- *    Better Auth sessions or server sessions via TEAM_SERVER_URL.
+ * The runtime always runs as a remote runner connected to the central server.
+ * Auth priority:
+ * 1. **X-Runner-Auth** — shared secret from server proxy (tunnel or direct HTTP)
+ * 2. **Server session** — browser cookie validated against TEAM_SERVER_URL
+ * 3. **Better Auth** — local session fallback
  */
 
 import type { Context, Next } from 'hono';
@@ -24,34 +24,8 @@ const PUBLIC_PATHS = new Set([
   '/api/setup/status',
 ]);
 
-/**
- * Forwarded auth middleware — trusts X-Forwarded-User headers from the server.
- *
- * The server has already validated the session (via Better Auth) and sets
- * these headers when proxying requests to the runner:
- * - X-Forwarded-User: userId
- * - X-Forwarded-Role: userRole
- * - X-Forwarded-Org: organizationId
- */
-export async function forwardedAuthMiddleware(c: Context, next: Next) {
-  const path = new URL(c.req.url).pathname;
-  if (PUBLIC_PATHS.has(path)) return next();
-  if (path.startsWith('/api/auth/')) return next();
-  if (path === '/api/mcp/oauth/callback') return next();
-
-  const userId = c.req.header('X-Forwarded-User');
-  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
-
-  c.set('userId', userId);
-  c.set('userRole', c.req.header('X-Forwarded-Role') || 'user');
-  c.set('organizationId', c.req.header('X-Forwarded-Org') || null);
-  c.set('organizationName', c.req.header('X-Forwarded-Org-Name') || null);
-  return next();
-}
-
-// ── Direct auth (used when runtime handles auth itself, e.g. remote runner) ──────
-
 const TEAM_SERVER_URL = process.env.TEAM_SERVER_URL;
+const WS_TUNNEL_ONLY = process.env.WS_TUNNEL_ONLY === 'true' || process.env.WS_TUNNEL_ONLY === '1';
 
 // Cache validated sessions: cookie hash → { userId, role, orgId, expiresAt }
 const sessionCache = new Map<
@@ -85,7 +59,8 @@ export async function authMiddleware(c: Context, next: Next) {
   }
 
   // ── Server session validation (when connected to a central server) ──
-  if (TEAM_SERVER_URL && c.req.header('Cookie')) {
+  // Skip in WS-only mode — all requests arrive via tunnel with X-Runner-Auth already set
+  if (TEAM_SERVER_URL && !WS_TUNNEL_ONLY && c.req.header('Cookie')) {
     const cookie = c.req.header('Cookie')!;
     const cacheKey = new Bun.CryptoHasher('sha256').update(cookie).digest('hex');
 

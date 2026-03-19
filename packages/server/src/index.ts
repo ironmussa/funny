@@ -300,6 +300,78 @@ const server = Bun.serve({
             return;
           }
 
+          // ── WS-only runner operations (when WS_TUNNEL_ONLY=true on runner) ──
+
+          // Heartbeat over WS
+          if (data.type === 'runner:heartbeat' && wsData.runnerId && data.requestId) {
+            const exists = await rm.handleHeartbeat(
+              wsData.runnerId,
+              data.payload ?? { activeThreadIds: [] },
+            );
+            if (!exists) {
+              ws.send(
+                JSON.stringify({
+                  type: 'runner:heartbeat_response',
+                  requestId: data.requestId,
+                  code: 'RUNNER_NOT_FOUND',
+                }),
+              );
+            } else {
+              ws.send(
+                JSON.stringify({
+                  type: 'runner:heartbeat_response',
+                  requestId: data.requestId,
+                  ok: true,
+                  wsConnected: wsRelay.isRunnerConnected(wsData.runnerId),
+                }),
+              );
+            }
+            return;
+          }
+
+          // Task polling over WS
+          if (data.type === 'runner:poll_tasks' && wsData.runnerId && data.requestId) {
+            const tasks = await rm.getPendingTasks(wsData.runnerId);
+            ws.send(
+              JSON.stringify({
+                type: 'runner:poll_tasks_response',
+                requestId: data.requestId,
+                tasks,
+              }),
+            );
+            return;
+          }
+
+          // Project assignment over WS
+          if (data.type === 'runner:assign_project' && wsData.runnerId && data.requestId) {
+            try {
+              const payload = data.payload;
+              if (payload?.projectId && payload?.localPath) {
+                await rm.assignProject(wsData.runnerId, {
+                  projectId: payload.projectId,
+                  localPath: payload.localPath,
+                });
+              }
+              ws.send(
+                JSON.stringify({
+                  type: 'runner:assign_project_response',
+                  requestId: data.requestId,
+                  ok: true,
+                }),
+              );
+            } catch (err) {
+              ws.send(
+                JSON.stringify({
+                  type: 'runner:assign_project_response',
+                  requestId: data.requestId,
+                  ok: false,
+                  error: (err as Error).message,
+                }),
+              );
+            }
+            return;
+          }
+
           if (data.type === 'runner:agent_event') {
             if (!data.userId) return;
             wsRelay.relayToUser(data.userId, data.event);

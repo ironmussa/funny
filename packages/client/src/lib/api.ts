@@ -124,8 +124,11 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
           });
         }
 
-        // 5xx errors trigger the circuit breaker; 4xx do NOT
-        if (res.status >= 500) {
+        // 5xx errors trigger the circuit breaker; 4xx do NOT.
+        // 502 is excluded — it means the runner (proxy target) is unreachable,
+        // not the server itself. Tripping the breaker on 502 would block
+        // server-local requests (profile, threads, etc.) that still work fine.
+        if (res.status >= 500 && res.status !== 502) {
           useCircuitBreakerStore.getState().recordFailure();
         }
 

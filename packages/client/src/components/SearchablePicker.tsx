@@ -106,7 +106,11 @@ export function SearchablePicker({
 
   const scrollToIndex = useCallback(
     (index: number) => {
-      rowVirtualizer.scrollToIndex(index, { align: 'auto' });
+      // Schedule scroll after React has re-rendered so the virtualizer
+      // has the updated highlightIndex and can render the target row.
+      requestAnimationFrame(() => {
+        rowVirtualizer.scrollToIndex(index, { align: 'auto' });
+      });
     },
     [rowVirtualizer],
   );
@@ -115,15 +119,16 @@ export function SearchablePicker({
     if (e.key === 'ArrowDown') {
       e.preventDefault();
       if (filtered.length > 0) {
-        setHighlightIndex(0);
-        scrollToIndex(0);
+        const next = highlightIndex < filtered.length - 1 ? highlightIndex + 1 : 0;
+        setHighlightIndex(next);
+        scrollToIndex(next);
       }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (filtered.length > 0) {
-        const last = filtered.length - 1;
-        setHighlightIndex(last);
-        scrollToIndex(last);
+        const prev = highlightIndex > 0 ? highlightIndex - 1 : filtered.length - 1;
+        setHighlightIndex(prev);
+        scrollToIndex(prev);
       }
     } else if (e.key === 'Enter') {
       e.preventDefault();
@@ -132,28 +137,26 @@ export function SearchablePicker({
         setOpen(false);
         setSearch('');
       }
+    } else if (e.key === 'Escape') {
+      setOpen(false);
+      setSearch('');
     }
   };
 
   const handleItemKeyDown = (e: React.KeyboardEvent, i: number) => {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
-      if (i < filtered.length - 1) {
-        setHighlightIndex(i + 1);
-        scrollToIndex(i + 1);
-      } else {
-        setHighlightIndex(-1);
-        searchInputRef.current?.focus();
-      }
+      const next = i < filtered.length - 1 ? i + 1 : 0;
+      setHighlightIndex(next);
+      scrollToIndex(next);
+      // Keep focus on the search input so keyboard navigation stays consistent
+      searchInputRef.current?.focus();
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
-      if (i > 0) {
-        setHighlightIndex(i - 1);
-        scrollToIndex(i - 1);
-      } else {
-        setHighlightIndex(-1);
-        searchInputRef.current?.focus();
-      }
+      const prev = i > 0 ? i - 1 : filtered.length - 1;
+      setHighlightIndex(prev);
+      scrollToIndex(prev);
+      searchInputRef.current?.focus();
     } else if (e.key === 'Enter') {
       e.preventDefault();
       onSelect(filtered[i].key);

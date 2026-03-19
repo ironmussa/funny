@@ -142,13 +142,16 @@ export function NewThreadInput() {
       return false;
     }
 
-    // Thread created — navigate immediately (worktree setup runs in background)
+    // Thread created — navigate immediately (worktree setup runs in background).
+    // Navigate BEFORE awaiting loadThreadsForProject: the await yields execution,
+    // React re-renders, and this component unmounts (selectedThreadId is now set),
+    // which can cause navigate() to silently fail from an unmounted component.
     useThreadStore.setState({ selectedThreadId: result.value.id });
-    await loadThreadsForProject(effectiveProjectId);
     setCreating(false);
     setReviewPaneOpen(false);
     cancelNewThread();
     navigate(buildPath(`/projects/${effectiveProjectId}/threads/${result.value.id}`));
+    loadThreadsForProject(effectiveProjectId);
     return true;
   };
 

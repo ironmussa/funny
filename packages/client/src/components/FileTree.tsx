@@ -1,4 +1,5 @@
 import type { FileDiffSummary } from '@funny/shared';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   Check,
   ChevronRight,
@@ -35,6 +36,7 @@ import { DiffStats } from './DiffStats';
 /* ── Tree data structures ── */
 
 const INDENT_PX = 12;
+const ROW_HEIGHT = 24; // h-6 = 1.5rem = 24px
 
 export type TreeRow =
   | {
@@ -193,6 +195,8 @@ export interface FileTreeProps {
   testIdPrefix?: string;
   /** Optional inline style applied to each row (used for virtualizer positioning) */
   rowStyle?: (row: TreeRow, index: number) => CSSProperties | undefined;
+  /** Enable virtual scrolling for large file lists. The FileTree must be placed inside a fixed-height scroll container. */
+  virtualize?: boolean;
 }
 
 /* ── Component ── */
@@ -212,12 +216,26 @@ export function FileTree({
   hoverClass = 'hover:bg-sidebar-accent/50 text-muted-foreground',
   testIdPrefix = 'filetree',
   rowStyle,
+  virtualize = false,
 }: FileTreeProps) {
   const { t } = useTranslation();
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const dropdownCloseRef = useRef(0);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const treeRows = useMemo(() => buildTreeRows(files, collapsedFolders), [files, collapsedFolders]);
+
+  const virtualizer = useVirtualizer({
+    count: virtualize ? treeRows.length : 0,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => ROW_HEIGHT,
+    getItemKey: (index) => {
+      const row = treeRows[index];
+      return row.kind === 'folder' ? `d:${row.path}` : `f:${row.file.path}`;
+    },
+    overscan: 15,
+    enabled: virtualize,
+  });
 
   const toggleFolder = useCallback((folderPath: string) => {
     setCollapsedFolders((prev) => {
@@ -237,259 +255,293 @@ export function FileTree({
     [t],
   );
 
-  return (
-    <>
-      {treeRows.map((row, index) => {
-        const style = rowStyle?.(row, index);
-
-        if (row.kind === 'folder') {
-          const isCollapsed = collapsedFolders.has(row.path);
-          return (
-            <div
-              key={`folder-${row.path}`}
-              className={cn(
-                'flex h-6 cursor-pointer select-none items-center gap-1.5',
-                fontSize,
-                'text-muted-foreground transition-colors',
-                hoverClass,
-              )}
-              style={{
-                ...style,
-                paddingLeft: `${8 + row.depth * INDENT_PX}px`,
-              }}
-              onClick={() => toggleFolder(row.path)}
-              data-testid={`${testIdPrefix}-folder-${row.path}`}
-            >
-              <ChevronRight
-                className={cn(
-                  'h-3.5 w-3.5 flex-shrink-0 transition-transform',
-                  !isCollapsed && 'rotate-90',
-                )}
-              />
-              {isCollapsed ? (
-                <Folder className="h-4 w-4 flex-shrink-0 text-muted-foreground/70" />
-              ) : (
-                <FolderOpen className="h-4 w-4 flex-shrink-0 text-muted-foreground/70" />
-              )}
-              <span className={cn('flex-1 truncate font-mono-explorer', fontSize)}>
-                {row.label}
-              </span>
-              <DiffStats
-                linesAdded={row.additions}
-                linesDeleted={row.deletions}
-                size={diffStatsSize}
-              />
-              {/* Spacers to align with file rows (status letter + 3-dot menu) */}
-              <span className={cn('invisible flex-shrink-0 font-medium', fontSize)}>M</span>
-              <span className="h-6 w-6 flex-shrink-0" />
-            </div>
-          );
-        }
-
-        const f = row.file;
-        const isActive = f.path === selectedFile;
-        const isChecked = checkedFiles?.has(f.path) ?? false;
-        const fileName = f.path.split('/').pop() || f.path;
-
-        return (
-          <div
-            key={f.path}
+  const renderRow = (row: TreeRow, index: number, style?: CSSProperties) => {
+    if (row.kind === 'folder') {
+      const isCollapsed = collapsedFolders.has(row.path);
+      return (
+        <div
+          key={`folder-${row.path}`}
+          className={cn(
+            'flex h-6 cursor-pointer select-none items-center gap-1.5',
+            fontSize,
+            'text-muted-foreground transition-colors',
+            hoverClass,
+          )}
+          style={{
+            ...style,
+            paddingLeft: `${8 + row.depth * INDENT_PX}px`,
+          }}
+          onClick={() => toggleFolder(row.path)}
+          data-testid={`${testIdPrefix}-folder-${row.path}`}
+        >
+          <ChevronRight
             className={cn(
-              'group flex h-6 items-center gap-1.5 cursor-pointer transition-colors',
-              fontSize,
-              isActive ? activeClass : hoverClass,
+              'h-3.5 w-3.5 flex-shrink-0 transition-transform',
+              !isCollapsed && 'rotate-90',
             )}
-            style={{
-              ...style,
-              paddingLeft: `${8 + row.depth * INDENT_PX}px`,
+          />
+          {isCollapsed ? (
+            <Folder className="h-4 w-4 flex-shrink-0 text-muted-foreground/70" />
+          ) : (
+            <FolderOpen className="h-4 w-4 flex-shrink-0 text-muted-foreground/70" />
+          )}
+          <span className={cn('flex-1 truncate font-mono-explorer', fontSize)}>{row.label}</span>
+          <DiffStats linesAdded={row.additions} linesDeleted={row.deletions} size={diffStatsSize} />
+          {/* Spacers to align with file rows (status letter + 3-dot menu) */}
+          <span className={cn('invisible flex-shrink-0 font-medium', fontSize)}>M</span>
+          <span className="h-6 w-6 flex-shrink-0" />
+        </div>
+      );
+    }
+
+    const f = row.file;
+    const isActive = f.path === selectedFile;
+    const isChecked = checkedFiles?.has(f.path) ?? false;
+    const fileName = f.path.split('/').pop() || f.path;
+
+    return (
+      <div
+        key={f.path}
+        className={cn(
+          'group flex h-6 items-center gap-1.5 cursor-pointer transition-colors',
+          fontSize,
+          isActive ? activeClass : hoverClass,
+        )}
+        style={{
+          ...style,
+          paddingLeft: `${8 + row.depth * INDENT_PX}px`,
+        }}
+        onClick={() => {
+          if (Date.now() - dropdownCloseRef.current < 400) return;
+          onFileClick(f.path);
+        }}
+        data-testid={`${testIdPrefix}-file-${f.path}`}
+      >
+        {checkedFiles && onToggleFile && (
+          <button
+            role="checkbox"
+            aria-checked={isChecked}
+            aria-label={t('review.selectFile', {
+              file: f.path,
+              defaultValue: `Select ${f.path}`,
+            })}
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleFile(f.path);
             }}
-            onClick={() => {
-              if (Date.now() - dropdownCloseRef.current < 400) return;
-              onFileClick(f.path);
-            }}
-            data-testid={`${testIdPrefix}-file-${f.path}`}
+            className={cn(
+              'flex items-center justify-center h-3.5 w-3.5 rounded border transition-colors flex-shrink-0',
+              isChecked
+                ? 'bg-primary border-primary text-primary-foreground'
+                : 'border-muted-foreground/40',
+            )}
+            data-testid={`${testIdPrefix}-check-${f.path}`}
           >
-            {checkedFiles && onToggleFile && (
-              <button
-                role="checkbox"
-                aria-checked={isChecked}
-                aria-label={t('review.selectFile', {
-                  file: f.path,
-                  defaultValue: `Select ${f.path}`,
-                })}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onToggleFile(f.path);
-                }}
-                className={cn(
-                  'flex items-center justify-center h-3.5 w-3.5 rounded border transition-colors flex-shrink-0',
-                  isChecked
-                    ? 'bg-primary border-primary text-primary-foreground'
-                    : 'border-muted-foreground/40',
-                )}
-                data-testid={`${testIdPrefix}-check-${f.path}`}
-              >
-                {isChecked && <Check className="h-2.5 w-2.5" />}
-              </button>
-            )}
-            <FileExtensionIcon
-              filePath={f.path}
-              className="h-4 w-4 flex-shrink-0 text-muted-foreground/80"
-            />
-            <span className={cn('flex-1 truncate font-mono-explorer', fontSize)}>{fileName}</span>
-            <DiffStats
-              linesAdded={f.additions ?? 0}
-              linesDeleted={f.deletions ?? 0}
-              size={diffStatsSize}
-            />
-            <span
-              className={cn('flex-shrink-0 font-medium', fontSize)}
-              style={{ color: statusColor(f.status) }}
+            {isChecked && <Check className="h-2.5 w-2.5" />}
+          </button>
+        )}
+        <FileExtensionIcon
+          filePath={f.path}
+          className="h-4 w-4 flex-shrink-0 text-muted-foreground/80"
+        />
+        <span className={cn('flex-1 truncate font-mono-explorer', fontSize)}>{fileName}</span>
+        <DiffStats
+          linesAdded={f.additions ?? 0}
+          linesDeleted={f.deletions ?? 0}
+          size={diffStatsSize}
+        />
+        <span
+          className={cn('flex-shrink-0 font-medium', fontSize)}
+          style={{ color: statusColor(f.status) }}
+        >
+          {statusLetter(f.status)}
+        </span>
+        <DropdownMenu
+          onOpenChange={(open) => {
+            if (!open) dropdownCloseRef.current = Date.now();
+          }}
+        >
+          <DropdownMenuTrigger asChild>
+            <button
+              onClick={(e) => e.stopPropagation()}
+              onPointerDown={(e) => e.stopPropagation()}
+              aria-label={t('review.moreActions', 'More actions')}
+              className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+              data-testid={`${testIdPrefix}-menu-${f.path}`}
             >
-              {statusLetter(f.status)}
-            </span>
-            <DropdownMenu
-              onOpenChange={(open) => {
-                if (!open) dropdownCloseRef.current = Date.now();
+              <MoreHorizontal className="h-3.5 w-3.5" />
+            </button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent
+            align="end"
+            className="min-w-[220px]"
+            onCloseAutoFocus={(e) => e.preventDefault()}
+          >
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                const fullPath = basePath ? `${basePath}/${f.path}` : f.path;
+                openFileInEditor(fullPath);
               }}
             >
-              <DropdownMenuTrigger asChild>
-                <button
-                  onClick={(e) => e.stopPropagation()}
-                  onPointerDown={(e) => e.stopPropagation()}
-                  aria-label={t('review.moreActions', 'More actions')}
-                  className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
-                  data-testid={`${testIdPrefix}-menu-${f.path}`}
-                >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
-                </button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent
-                align="end"
-                className="min-w-[220px]"
-                onCloseAutoFocus={(e) => e.preventDefault()}
-              >
-                <DropdownMenuItem
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    const fullPath = basePath ? `${basePath}/${f.path}` : f.path;
-                    openFileInEditor(fullPath);
-                  }}
-                >
-                  <ExternalLink />
-                  {t('review.openInEditor', { editor: getEditorLabel() })}
-                </DropdownMenuItem>
-                {onRevertFile && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onRevertFile(f.path);
-                      }}
-                      className="text-destructive focus:text-destructive"
-                    >
-                      <Undo2 />
-                      {t('review.discardChanges')}
-                    </DropdownMenuItem>
-                  </>
-                )}
-                {onIgnore && (
-                  <>
-                    <DropdownMenuSeparator />
-                    <DropdownMenuItem
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onIgnore(f.path);
-                      }}
-                    >
-                      <EyeOff />
-                      {t('review.ignoreFile')}
-                    </DropdownMenuItem>
-                    {(() => {
-                      const folders = getParentFolders(f.path);
-                      if (folders.length === 0) return null;
-                      if (folders.length === 1) {
-                        return (
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onIgnore(folders[0]);
-                            }}
-                          >
-                            <FolderX />
-                            {t('review.ignoreFolder')}
-                          </DropdownMenuItem>
-                        );
-                      }
-                      return (
-                        <DropdownMenuSub>
-                          <DropdownMenuSubTrigger
-                            onClick={(e) => e.stopPropagation()}
-                            onPointerDown={(e) => e.stopPropagation()}
-                          >
-                            <FolderX />
-                            {t('review.ignoreFolder')}
-                          </DropdownMenuSubTrigger>
-                          <DropdownMenuSubContent
-                            onClick={(e) => e.stopPropagation()}
-                            onPointerDown={(e) => e.stopPropagation()}
-                          >
-                            {folders.map((folder) => (
-                              <DropdownMenuItem
-                                key={folder}
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  onIgnore(folder);
-                                }}
-                              >
-                                {folder}
-                              </DropdownMenuItem>
-                            ))}
-                          </DropdownMenuSubContent>
-                        </DropdownMenuSub>
-                      );
-                    })()}
-                    {(() => {
-                      const ext = getFileExtension(f.path);
-                      if (!ext) return null;
-                      return (
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onIgnore(`*${ext}`);
-                          }}
-                        >
-                          <EyeOff />
-                          {t('review.ignoreExtension', { ext })}
-                        </DropdownMenuItem>
-                      );
-                    })()}
-                  </>
-                )}
+              <ExternalLink />
+              {t('review.openInEditor', { editor: getEditorLabel() })}
+            </DropdownMenuItem>
+            {onRevertFile && (
+              <>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleCopyPath(f.path, false);
+                    onRevertFile(f.path);
                   }}
+                  className="text-destructive focus:text-destructive"
                 >
-                  <Copy />
-                  {t('review.copyFilePath')}
+                  <Undo2 />
+                  {t('review.discardChanges')}
                 </DropdownMenuItem>
+              </>
+            )}
+            {onIgnore && (
+              <>
+                <DropdownMenuSeparator />
                 <DropdownMenuItem
                   onClick={(e) => {
                     e.stopPropagation();
-                    handleCopyPath(f.path, true);
+                    onIgnore(f.path);
                   }}
                 >
-                  <ClipboardCopy />
-                  {t('review.copyRelativePath')}
+                  <EyeOff />
+                  {t('review.ignoreFile')}
                 </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
-          </div>
-        );
+                {(() => {
+                  const folders = getParentFolders(f.path);
+                  if (folders.length === 0) return null;
+                  if (folders.length === 1) {
+                    return (
+                      <DropdownMenuItem
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onIgnore(folders[0]);
+                        }}
+                      >
+                        <FolderX />
+                        {t('review.ignoreFolder')}
+                      </DropdownMenuItem>
+                    );
+                  }
+                  return (
+                    <DropdownMenuSub>
+                      <DropdownMenuSubTrigger
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        <FolderX />
+                        {t('review.ignoreFolder')}
+                      </DropdownMenuSubTrigger>
+                      <DropdownMenuSubContent
+                        onClick={(e) => e.stopPropagation()}
+                        onPointerDown={(e) => e.stopPropagation()}
+                      >
+                        {folders.map((folder) => (
+                          <DropdownMenuItem
+                            key={folder}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onIgnore(folder);
+                            }}
+                          >
+                            {folder}
+                          </DropdownMenuItem>
+                        ))}
+                      </DropdownMenuSubContent>
+                    </DropdownMenuSub>
+                  );
+                })()}
+                {(() => {
+                  const ext = getFileExtension(f.path);
+                  if (!ext) return null;
+                  return (
+                    <DropdownMenuItem
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        onIgnore(`*${ext}`);
+                      }}
+                    >
+                      <EyeOff />
+                      {t('review.ignoreExtension', { ext })}
+                    </DropdownMenuItem>
+                  );
+                })()}
+              </>
+            )}
+            <DropdownMenuSeparator />
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCopyPath(f.path, false);
+              }}
+            >
+              <Copy />
+              {t('review.copyFilePath')}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCopyPath(f.path, true);
+              }}
+            >
+              <ClipboardCopy />
+              {t('review.copyRelativePath')}
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+      </div>
+    );
+  };
+
+  /* ── Virtualized rendering ── */
+
+  if (virtualize) {
+    return (
+      <div ref={scrollRef} style={{ overflow: 'auto', height: '100%' }}>
+        <div
+          style={{
+            height: `${virtualizer.getTotalSize()}px`,
+            width: '100%',
+            position: 'relative',
+          }}
+        >
+          {virtualizer.getVirtualItems().map((virtualRow) => {
+            const row = treeRows[virtualRow.index];
+            return (
+              <div
+                key={virtualRow.key}
+                style={{
+                  position: 'absolute',
+                  top: 0,
+                  left: 0,
+                  width: '100%',
+                  height: `${virtualRow.size}px`,
+                  transform: `translateY(${virtualRow.start}px)`,
+                }}
+              >
+                {renderRow(row, virtualRow.index)}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    );
+  }
+
+  /* ── Non-virtualized (original) rendering ── */
+
+  return (
+    <>
+      {treeRows.map((row, index) => {
+        const style = rowStyle?.(row, index);
+        return renderRow(row, index, style);
       })}
     </>
   );

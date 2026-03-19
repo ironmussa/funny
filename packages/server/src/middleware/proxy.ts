@@ -21,7 +21,6 @@ import type { Context } from 'hono';
 
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
-import { isPolling } from '../services/http-tunnel.js';
 import { resolveRunner } from '../services/runner-resolver.js';
 import { isRunnerConnected } from '../services/ws-relay.js';
 import { tunnelFetch } from '../services/ws-tunnel.js';
@@ -89,9 +88,9 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
   }
 
   const tunnelPath = `${path}${url.search}`;
-  const tunnelActive = isRunnerConnected(runnerId) || isPolling(runnerId);
+  const tunnelActive = isRunnerConnected(runnerId);
 
-  // If the tunnel transport is active (WS or polling), use it as primary
+  // If the runner is connected via Socket.IO, use the tunnel as primary
   if (tunnelActive) {
     try {
       const tunnelResp = await tunnelFetch(runnerId, {
@@ -120,27 +119,12 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
     }
   }
 
-  // Tunnel not active — try direct HTTP first (instant), queue in tunnel as backup
+  // Runner not connected via Socket.IO — try direct HTTP if available
   if (httpUrl) {
     return await directHttpFetch(c, httpUrl, path, url.search, forwardedHeaders, body);
   }
 
-  // No httpUrl either — queue in tunnel anyway (runner might start polling soon)
-  try {
-    const tunnelResp = await tunnelFetch(runnerId, {
-      method: c.req.method,
-      path: tunnelPath,
-      headers: forwardedHeaders,
-      body,
-    });
-
-    return new Response(tunnelResp.body, {
-      status: tunnelResp.status,
-      headers: new Headers(tunnelResp.headers),
-    });
-  } catch {
-    return c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
-  }
+  return c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
 }
 
 /**

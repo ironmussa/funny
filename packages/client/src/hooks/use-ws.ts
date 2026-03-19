@@ -1,4 +1,5 @@
 import { useEffect, startTransition } from 'react';
+import { io, type Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
@@ -10,13 +11,12 @@ import { useThreadStore } from '@/stores/thread-store';
 
 const wsLog = createClientLogger('ws');
 
-// Module-level singleton to prevent duplicate WebSocket connections
+// Module-level singleton to prevent duplicate connections
 // (React StrictMode double-mounts effects in development)
-let activeWS: WebSocket | null = null;
+let activeSocket: Socket | null = null;
 let refCount = 0;
 let _wasConnected = false;
 let stopped = false;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 // ── Remote container WS connections ─────────────────────────────
 // For threads with runtime === 'remote', we open a secondary WS to the
@@ -26,11 +26,9 @@ const remoteConnections = new Map<string, WebSocket>(); // containerUrl → ws
 const remoteReconnectTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 // ── WS message batching ─────────────────────────────────────────
-// Rapid WS updates (e.g. streaming tokens) can overwhelm React with
-// constant re-renders. We batch high-frequency events (agent:message,
-// agent:tool_output) and flush them once per animation frame.
-// Low-frequency events (status, result, init, tool_call) are dispatched
-// immediately so the UI stays responsive.
+// Rapid updates (e.g. streaming tokens) can overwhelm React with
+// constant re-renders. We batch high-frequency events and flush
+// them once per animation frame.
 
 interface BufferedMessage {
   threadId: string;
@@ -47,23 +45,16 @@ const FILE_MODIFYING_TOOLS = new Set(['Write', 'Edit', 'Bash']);
 function flushBatch() {
   rafId = null;
 
-  // Capture batched data before clearing
   const msgs = Array.from(pendingMessages.values());
   const toolOutputs = pendingToolOutputs.slice();
   pendingMessages.clear();
   pendingToolOutputs = [];
 
-  // Wrap in startTransition so React treats the resulting re-renders
-  // as low-priority — user interactions (typing, clicks) can interrupt them.
   startTransition(() => {
     const store = useThreadStore.getState();
-
-    // Flush messages (only the latest per thread — they're cumulative)
     for (const entry of msgs) {
       store.handleWSMessage(entry.threadId, entry.data);
     }
-
-    // Flush tool outputs
     for (const entry of toolOutputs) {
       store.handleWSToolOutput(entry.threadId, entry.data);
     }
@@ -76,16 +67,16 @@ function scheduleFlush() {
   }
 }
 
-// ── Message handler ──────────────────────────────────────────────
+// ── Event handler registration ──────────────────────────────────
 
-function handleMessage(e: MessageEvent) {
-  const event = JSON.parse(e.data);
-  const { type, threadId, data } = event;
-
+/**
+ * Dispatch a received event (from Socket.IO or raw WS) to the appropriate store.
+ * The event object has { type, threadId, data } shape.
+ */
+function dispatchEvent(type: string, threadId: string, data: any): void {
   switch (type) {
     // High-frequency events → batched
     case 'agent:message':
-      // Keep only the latest message per thread (they're cumulative)
       pendingMessages.set(threadId, { threadId, data });
       scheduleFlush();
       break;
@@ -94,9 +85,6 @@ function handleMessage(e: MessageEvent) {
       scheduleFlush();
       break;
 
-    // Low-frequency events → wrapped in startTransition so they don't block
-    // user interactions (e.g. opening a dropdown menu). React can interrupt
-    // these updates if a higher-priority event (click, keypress) arrives.
     case 'agent:init':
       startTransition(() => {
         useThreadStore.getState().handleWSInit(threadId, data);
@@ -121,12 +109,6 @@ function handleMessage(e: MessageEvent) {
         errorReason: data.errorReason ?? '',
         isWaiting: String(data.status === 'waiting'),
       });
-      // Flush any pending batched messages synchronously (outside
-      // startTransition) so React commits them immediately.  Then
-      // defer the result dispatch to the next animation frame — this
-      // guarantees all prior startTransition updates (from
-      // agent:tool_call, agent:status, etc.) have been committed
-      // before the UI transitions to "completed".
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
         rafId = null;
@@ -136,21 +118,18 @@ function handleMessage(e: MessageEvent) {
       pendingMessages.clear();
       pendingToolOutputs = [];
 
-      // Flush pending messages/tool outputs synchronously
       if (msgs.length > 0 || toolOutputs.length > 0) {
         const store = useThreadStore.getState();
         for (const entry of msgs) store.handleWSMessage(entry.threadId, entry.data);
         for (const entry of toolOutputs) store.handleWSToolOutput(entry.threadId, entry.data);
       }
 
-      // Defer result dispatch so prior transitions settle first
       requestAnimationFrame(() => {
         startTransition(() => {
           useThreadStore.getState().handleWSResult(threadId, data);
         });
       });
 
-      // Final review pane refresh when agent finishes
       import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
         useReviewPaneStore.getState().notifyDirty(threadId);
       });
@@ -164,8 +143,6 @@ function handleMessage(e: MessageEvent) {
           toolCallId: data.toolCallId ?? '',
         });
       }
-      // Flush pending messages first so the parent message exists,
-      // then dispatch tool_call — all inside one transition.
       const hasPendingTC = pendingMessages.size > 0;
       if (hasPendingTC && rafId !== null) {
         cancelAnimationFrame(rafId);
@@ -173,15 +150,13 @@ function handleMessage(e: MessageEvent) {
       }
       startTransition(() => {
         if (hasPendingTC) {
-          const msgs = Array.from(pendingMessages.values());
+          const msgs2 = Array.from(pendingMessages.values());
           pendingMessages.clear();
-          // Note: only flushing messages here, not tool outputs
           const store = useThreadStore.getState();
-          for (const entry of msgs) store.handleWSMessage(entry.threadId, entry.data);
+          for (const entry of msgs2) store.handleWSMessage(entry.threadId, entry.data);
         }
         useThreadStore.getState().handleWSToolCall(threadId, data);
       });
-      // Signal ReviewPane when file-modifying tools are invoked
       if (FILE_MODIFYING_TOOLS.has(data.name)) {
         import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
           useReviewPaneStore.getState().notifyDirty(threadId);
@@ -211,9 +186,9 @@ function handleMessage(e: MessageEvent) {
       break;
     }
     case 'command:status': {
-      const termStore = useTerminalStore.getState();
+      const termStore2 = useTerminalStore.getState();
       if (data.status === 'exited' || data.status === 'stopped') {
-        termStore.markCommandExited(data.commandId);
+        termStore2.markCommandExited(data.commandId);
         closePreviewForCommand(data.commandId);
       }
       break;
@@ -248,13 +223,10 @@ function handleMessage(e: MessageEvent) {
       break;
     }
     case 'thread:created': {
-      // New thread created externally (e.g. Chrome extension ingest)
-      // Refresh threads for the project so it appears in the sidebar
       useThreadStore.getState().loadThreadsForProject(data.projectId);
       break;
     }
     case 'thread:comment_deleted': {
-      // Comment deleted server-side — refresh the active thread if it matches
       const store = useThreadStore.getState();
       if (store.activeThread?.id === threadId) {
         store.refreshActiveThread();
@@ -262,25 +234,22 @@ function handleMessage(e: MessageEvent) {
       break;
     }
     case 'thread:updated': {
-      // Thread archived, status changed, or branch info updated server-side
-      const store = useThreadStore.getState();
+      const store2 = useThreadStore.getState();
       if (data.status) {
-        store.handleWSStatus(threadId, { status: data.status });
+        store2.handleWSStatus(threadId, { status: data.status });
       }
       if (data.archived) {
-        store.refreshAllLoadedThreads();
+        store2.refreshAllLoadedThreads();
       }
       if (data.branch || data.worktreePath || data.containerUrl) {
-        // Branch/worktree/container info arrived — refresh to pick it up
-        if (store.activeThread?.id === threadId) {
-          store.refreshActiveThread();
+        if (store2.activeThread?.id === threadId) {
+          store2.refreshActiveThread();
         }
       }
       break;
     }
     case 'git:status': {
       useGitStatusStore.getState().updateFromWS(data.statuses);
-      // Bridge: also refresh ReviewPane diff when git status changes
       import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
         useReviewPaneStore.getState().notifyDirty(threadId);
       });
@@ -295,7 +264,6 @@ function handleMessage(e: MessageEvent) {
           store.startCommit(threadId, title, steps, action, workflowId);
         } else if (wfStatus === 'step_update') {
           store.replaceSteps(threadId, steps);
-          // Toast when pre-commit hooks fail
           const failedHook = steps?.find((s: any) => s.id === 'hooks' && s.status === 'failed');
           if (failedHook) {
             toast.error('Pre-commit hook failed', {
@@ -312,12 +280,10 @@ function handleMessage(e: MessageEvent) {
           toast.error('Workflow failed', {
             description: data.title || 'The git operation failed',
           });
-          // Clean up after a delay so the user can see the failed state
           setTimeout(() => store.finishCommit(threadId), 5000);
         }
       });
 
-      // Refresh review pane on completion or failure
       if (data.status === 'completed' || data.status === 'failed') {
         import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
           useReviewPaneStore.getState().notifyDirty(threadId);
@@ -330,7 +296,6 @@ function handleMessage(e: MessageEvent) {
         const active = useThreadStore.getState().activeThread;
         if (active && active.id === threadId) {
           const existing = active.threadEvents ?? [];
-          // Deduplicate by event ID to prevent double-rendering
           if (data.event?.id && existing.some((e: any) => e.id === data.event.id)) return;
           useThreadStore.setState({
             activeThread: {
@@ -343,49 +308,44 @@ function handleMessage(e: MessageEvent) {
       break;
     }
     case 'pty:data': {
-      const termStore = useTerminalStore.getState();
-      termStore.emitPtyData(data.ptyId, data.data);
+      const termStore3 = useTerminalStore.getState();
+      termStore3.emitPtyData(data.ptyId, data.data);
       break;
     }
     case 'pty:exit': {
-      const termStore = useTerminalStore.getState();
-      termStore.markExited(data.ptyId);
+      const termStore4 = useTerminalStore.getState();
+      termStore4.markExited(data.ptyId);
       break;
     }
     case 'pty:error': {
-      const termStore = useTerminalStore.getState();
-      termStore.setTabError(data.ptyId, data.error ?? 'Failed to create terminal');
+      const termStore5 = useTerminalStore.getState();
+      termStore5.setTabError(data.ptyId, data.error ?? 'Failed to create terminal');
       toast.error(data.error ?? 'Failed to create terminal');
       break;
     }
     case 'pty:sessions': {
       if (data.sessions && data.sessions.length > 0) {
-        // Projects may not be loaded yet (race with loadProjects).
-        // Store pending sessions and attempt restoration; if projects are
-        // empty, subscribe and retry once they arrive.
         import('@/stores/project-store').then(({ useProjectStore }) => {
           const tryRestore = () => {
             const projects = useProjectStore.getState().projects;
-            const termStore = useTerminalStore.getState();
-            termStore.restoreTabs(
+            const termStore6 = useTerminalStore.getState();
+            termStore6.restoreTabs(
               data.sessions,
               projects.map((p: any) => ({ id: p.id, path: p.path })),
             );
-            termStore.markSessionsChecked();
+            termStore6.markSessionsChecked();
           };
 
           const projects = useProjectStore.getState().projects;
           if (projects.length > 0) {
             tryRestore();
           } else {
-            // Projects not loaded yet — subscribe and restore when they arrive
             const unsub = useProjectStore.subscribe((state) => {
               if (state.projects.length > 0) {
                 unsub();
                 tryRestore();
               }
             });
-            // Safety timeout: if projects never load within 10s, restore anyway
             setTimeout(() => {
               unsub();
               tryRestore();
@@ -393,7 +353,6 @@ function handleMessage(e: MessageEvent) {
           }
         });
       } else {
-        // No sessions on server — mark checked so tabs can show their true state
         useTerminalStore.getState().markSessionsChecked();
       }
       break;
@@ -403,7 +362,6 @@ function handleMessage(e: MessageEvent) {
       break;
     }
     case 'test:frame': {
-      // Dispatch frame to canvas renderer via custom event (high-frequency, avoid store)
       import('@/components/test-runner/BrowserPreview').then(({ renderFrame }) => {
         renderFrame(data.data);
       });
@@ -426,9 +384,7 @@ function handleMessage(e: MessageEvent) {
       break;
     }
     case 'worktree:setup': {
-      // Dispatch a custom DOM event for components listening for setup progress
       window.dispatchEvent(new CustomEvent('worktree:setup', { detail: { threadId, ...data } }));
-      // Also update thread store for inline progress display
       useThreadStore.getState().handleWSWorktreeSetup(threadId, data);
       break;
     }
@@ -439,9 +395,68 @@ function handleMessage(e: MessageEvent) {
   }
 }
 
-// ── Remote WS management ─────────────────────────────────────────
+// ── Raw WS message handler (for remote containers) ──────────────
 
-/** Open a WS connection to a remote container server (if not already open). */
+function handleRawMessage(e: MessageEvent) {
+  const event = JSON.parse(e.data);
+  const { type, threadId, data } = event;
+  dispatchEvent(type, threadId, data);
+}
+
+// ── Socket.IO event registration ────────────────────────────────
+
+/** All event types that the server can emit to browser clients. */
+const ALL_EVENT_TYPES = [
+  'agent:message',
+  'agent:tool_output',
+  'agent:init',
+  'agent:status',
+  'agent:result',
+  'agent:tool_call',
+  'agent:error',
+  'agent:compact_boundary',
+  'agent:context_usage',
+  'command:output',
+  'command:status',
+  'automation:run_started',
+  'automation:run_completed',
+  'automation:run_updated',
+  'pipeline:run_started',
+  'pipeline:stage_update',
+  'pipeline:run_completed',
+  'thread:created',
+  'thread:comment_deleted',
+  'thread:updated',
+  'git:status',
+  'git:workflow_progress',
+  'thread:event',
+  'pty:data',
+  'pty:exit',
+  'pty:error',
+  'pty:sessions',
+  'thread:queue_update',
+  'test:frame',
+  'test:output',
+  'test:status',
+  'clone:progress',
+  'worktree:setup',
+  'worktree:setup_complete',
+];
+
+function registerSocketIOHandlers(socket: Socket): void {
+  for (const eventType of ALL_EVENT_TYPES) {
+    socket.on(eventType, (eventData: any) => {
+      // Socket.IO events carry the full event object (with threadId and data)
+      const threadId = eventData.threadId ?? '';
+      const data = eventData.data ?? eventData;
+      dispatchEvent(eventType, threadId, data);
+    });
+  }
+}
+
+// ── Remote WS management ─────────────────────────────────────────
+// Remote containers still use raw WebSocket (they run standalone runtime)
+
 export function connectRemoteWS(containerUrl: string) {
   if (stopped || remoteConnections.has(containerUrl)) return;
 
@@ -455,15 +470,13 @@ export function connectRemoteWS(containerUrl: string) {
     wsLog.info('remote WS connected', { containerUrl });
   };
 
-  ws.onmessage = handleMessage;
+  ws.onmessage = handleRawMessage;
 
   ws.onclose = () => {
     remoteConnections.delete(containerUrl);
     if (stopped) return;
-    // Reconnect after delay if the connection was expected
     const timer = setTimeout(() => {
       remoteReconnectTimers.delete(containerUrl);
-      // Only reconnect if a thread still needs this container
       const active = useThreadStore.getState().activeThread;
       if (active?.runtime === 'remote' && active?.containerUrl === containerUrl) {
         connectRemoteWS(containerUrl);
@@ -477,7 +490,6 @@ export function connectRemoteWS(containerUrl: string) {
   };
 }
 
-/** Close a remote container WS connection. */
 export function disconnectRemoteWS(containerUrl: string) {
   const timer = remoteReconnectTimers.get(containerUrl);
   if (timer) {
@@ -494,12 +506,13 @@ export function disconnectRemoteWS(containerUrl: string) {
   }
 }
 
-/** Close all remote WS connections. */
 function disconnectAllRemote() {
   for (const url of [...remoteConnections.keys()]) {
     disconnectRemoteWS(url);
   }
 }
+
+// ── Main connection ──────────────────────────────────────────────
 
 function connect() {
   if (stopped) return;
@@ -507,32 +520,36 @@ function connect() {
   const isTauri = !!(window as any).__TAURI_INTERNALS__;
   const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
 
-  // Determine WebSocket base URL.
-  // In the browser, use relative WS URL so it goes through the Vite proxy (same-origin).
-  let base: string;
+  let url: string;
   if (isTauri) {
-    base = `ws://localhost:${serverPort}/ws`;
+    url = `http://localhost:${serverPort}`;
   } else {
-    base = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}/ws`;
+    url = window.location.origin;
   }
 
-  // Cookies are sent automatically — no token needed
-  const ws = new WebSocket(base);
-  activeWS = ws;
-  setupWS(ws);
-}
+  const socket = io(url, {
+    // Session cookie sent automatically
+    withCredentials: true,
+    // Socket.IO handles reconnection automatically
+    reconnection: true,
+    reconnectionDelay: 2_000,
+    reconnectionDelayMax: 10_000,
+    // Allow both transports
+    transports: ['websocket', 'polling'],
+  });
 
-function setupWS(ws: WebSocket) {
-  ws.onopen = () => {
-    // WebSocket connected — server is alive, so reset the HTTP circuit breaker
-    // to dismiss the "server unavailable" overlay immediately
+  activeSocket = socket;
+
+  socket.on('connect', () => {
+    wsLog.info('Socket.IO connected', {
+      transport: socket.io.engine?.transport?.name ?? 'unknown',
+    });
+
+    // Reset circuit breaker
     useCircuitBreakerStore.getState().recordSuccess();
-    // Always re-sync loaded threads on connect — events may have been lost
-    // while disconnected (e.g. agent:result emitted when 0 clients were connected)
+    // Refresh all loaded threads
     useThreadStore.getState().refreshAllLoadedThreads();
-    // Also re-sync git status for all loaded projects so diff stats stay in sync
-    // with the refreshed thread data (avoids branchKey mismatches after reconnect).
-    // Reset cooldowns first so the fetch isn't throttled after a disconnect.
+    // Re-sync git status
     _resetCooldowns();
     const loadedProjectIds = Object.keys(useThreadStore.getState().threadsByProject);
     for (const pid of loadedProjectIds) {
@@ -540,77 +557,52 @@ function setupWS(ws: WebSocket) {
     }
     _wasConnected = true;
 
-    // Reset sessions-checked flag so persisted tabs don't show "(exited)" prematurely
+    // Reset sessions-checked flag for PTY tabs
     useTerminalStore.getState().resetSessionsChecked();
 
-    // Ask server for any persistent PTY sessions (tmux) to restore.
-    // The server may not respond immediately if the runner hasn't connected
-    // yet — the runner will push sessions once it authenticates. Add a
-    // safety timeout so tabs don't stay in loading state forever if the
-    // runner never connects.
-    try {
-      ws.send(JSON.stringify({ type: 'pty:list', data: {} }));
-    } catch {}
+    // Request PTY sessions from server
+    socket.emit('pty:list', {});
     const sessionsTimeout = setTimeout(() => {
       const termStore = useTerminalStore.getState();
       if (!termStore.sessionsChecked) {
         termStore.markSessionsChecked();
       }
     }, 15_000);
-    // Clear the timeout if we disconnect before it fires
-    ws.addEventListener('close', () => clearTimeout(sessionsTimeout), { once: true });
-  };
+    socket.once('disconnect', () => clearTimeout(sessionsTimeout));
+  });
 
-  ws.onmessage = handleMessage;
-
-  ws.onclose = (e) => {
+  socket.on('disconnect', (reason) => {
     if (stopped) return;
-    // If closed with 4001 (auth failed), trigger logout
-    if (e.code === 4001 || e.code === 1008) {
+    wsLog.info('Socket.IO disconnected', { reason });
+    // If server forced disconnect (auth failed), trigger logout
+    if (reason === 'io server disconnect') {
       import('@/stores/auth-store').then(({ useAuthStore }) => {
         useAuthStore.getState().logout();
       });
-      return;
     }
-    reconnectTimer = setTimeout(connect, 2000);
-  };
+    // Socket.IO auto-reconnects for other reasons
+  });
 
-  ws.onerror = () => {
-    ws.close();
-  };
+  socket.on('connect_error', (err) => {
+    wsLog.error('Socket.IO connect error', { error: err.message });
+  });
+
+  // Register all event handlers
+  registerSocketIOHandlers(socket);
 }
 
 function teardown() {
   stopped = true;
   disconnectAllRemote();
-  if (reconnectTimer) {
-    clearTimeout(reconnectTimer);
-    reconnectTimer = null;
-  }
   if (rafId !== null) {
     cancelAnimationFrame(rafId);
     rafId = null;
   }
   pendingMessages.clear();
   pendingToolOutputs = [];
-  if (activeWS) {
-    // Null out handlers BEFORE closing to prevent the async close handshake
-    // from triggering a phantom reconnection (StrictMode: teardown sets
-    // stopped=true, but the remount resets stopped=false before the old WS
-    // finishes closing — so its onclose would see stopped=false and reconnect).
-    activeWS.onmessage = null;
-    activeWS.onclose = null;
-    activeWS.onerror = null;
-    // If the socket is still CONNECTING, defer close until it opens to avoid
-    // the browser warning "WebSocket is closed before the connection is
-    // established". The nulled-out handlers prevent any event processing.
-    if (activeWS.readyState === WebSocket.CONNECTING) {
-      const pending = activeWS;
-      pending.onopen = () => pending.close();
-    } else {
-      activeWS.close();
-    }
-    activeWS = null;
+  if (activeSocket) {
+    activeSocket.disconnect();
+    activeSocket = null;
   }
   _wasConnected = false;
 }
@@ -631,12 +623,10 @@ export function useWS() {
 
       if (containerUrl === lastContainerUrl) return;
 
-      // Disconnect from previous remote container
       if (lastContainerUrl) {
         disconnectRemoteWS(lastContainerUrl);
       }
 
-      // Connect to new remote container
       if (containerUrl) {
         connectRemoteWS(containerUrl);
       }
@@ -654,7 +644,7 @@ export function useWS() {
   }, []);
 }
 
-/** Get the active WebSocket instance (for sending messages from components) */
-export function getActiveWS(): WebSocket | null {
-  return activeWS;
+/** Get the active Socket.IO instance (for sending messages from components) */
+export function getActiveWS(): Socket | null {
+  return activeSocket;
 }

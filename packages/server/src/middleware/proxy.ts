@@ -5,6 +5,10 @@
  * to the appropriate runner. Uses WebSocket tunnel as the primary transport
  * (works behind NAT), with direct HTTP as a fallback when httpUrl is available.
  *
+ * STRICT ISOLATION: The resolver guarantees the runner belongs to the
+ * requesting user and is connected via WebSocket. If no runner is found,
+ * we return 502 immediately — no retries against dead runners.
+ *
  * Headers added to proxied requests:
  * - X-Forwarded-User: userId from the authenticated session
  * - X-Forwarded-Org: organizationId (if present)
@@ -38,13 +42,7 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
   const resolved = await resolveRunner(path, query, userId);
 
   if (!resolved) {
-    return c.json(
-      {
-        error:
-          'No runner available for this request. Check that a runner is online and assigned to the project.',
-      },
-      502,
-    );
+    return c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
   }
 
   const { runnerId, httpUrl } = resolved;
@@ -81,12 +79,7 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
     }
   }
 
-  // Special case: __default__ runnerId means we're using DEFAULT_RUNNER_URL (always direct HTTP)
-  if (runnerId === '__default__' && httpUrl) {
-    return await directHttpFetch(c, httpUrl, path, url.search, forwardedHeaders, body);
-  }
-
-  // Primary: try WebSocket tunnel
+  // Try WebSocket tunnel (runner was verified connected by the resolver)
   try {
     const tunnelResp = await tunnelFetch(runnerId, {
       method: c.req.method,
@@ -101,10 +94,12 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
       headers: responseHeaders,
     });
   } catch (tunnelErr) {
-    log.warn('Tunnel request failed, trying direct HTTP fallback', {
+    const errMsg = (tunnelErr as Error).message;
+
+    log.warn('Tunnel request failed', {
       namespace: 'proxy',
       runnerId,
-      error: (tunnelErr as Error).message,
+      error: errMsg,
     });
 
     // Fallback: direct HTTP (only if httpUrl is set)
@@ -112,12 +107,12 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
       return await directHttpFetch(c, httpUrl, path, url.search, forwardedHeaders, body);
     }
 
-    return c.json({ error: 'Runner unreachable (no tunnel connection and no direct URL)' }, 502);
+    return c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
   }
 }
 
 /**
- * Direct HTTP fetch to a runner (fallback when tunnel fails or for __default__).
+ * Direct HTTP fetch to a runner (fallback when tunnel fails and httpUrl is available).
  */
 async function directHttpFetch(
   c: Context<ServerEnv>,

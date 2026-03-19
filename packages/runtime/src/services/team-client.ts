@@ -110,9 +110,11 @@ async function centralFetch(path: string, options: RequestInit = {}): Promise<Re
 
 async function register(): Promise<boolean> {
   try {
-    // Only set httpUrl if explicitly configured (allows direct HTTP fallback).
-    // Without it, all communication goes through the WebSocket tunnel (works behind NAT).
-    const httpUrl = process.env.RUNNER_HTTP_URL || undefined;
+    // Always register with httpUrl so the server can use direct HTTP as fallback
+    // when the WebSocket tunnel is unavailable. For remote runners behind NAT,
+    // set RUNNER_HTTP_URL='' to disable direct HTTP and force tunnel-only mode.
+    const runnerPort = Number(process.env.RUNNER_PORT) || 3003;
+    const httpUrl = process.env.RUNNER_HTTP_URL ?? `http://127.0.0.1:${runnerPort}`;
 
     // When using a user invite token (RUNNER_INVITE_TOKEN), send it as a header
     // so the server can associate this runner with the user's account.
@@ -128,7 +130,7 @@ async function register(): Promise<boolean> {
         name: `${hostname()}-funny`,
         hostname: hostname(),
         os: process.platform,
-        ...(httpUrl ? { httpUrl } : {}),
+        httpUrl: httpUrl || undefined,
       }),
     });
 
@@ -186,12 +188,35 @@ async function registerWithRetry(): Promise<boolean> {
 
 async function sendHeartbeat(): Promise<void> {
   try {
-    await centralFetch('/api/runners/heartbeat', {
+    const res = await centralFetch('/api/runners/heartbeat', {
       method: 'POST',
       body: JSON.stringify({
         activeThreadIds: [], // TODO: populate from agent-runner
       }),
     });
+
+    // Server purged our runner record (e.g. after restart) — re-register
+    if (res.status === 404) {
+      log.warn('Runner not found on server — re-registering', { namespace: 'runner' });
+      state.runnerId = null;
+      state.runnerToken = null;
+      const ok = await register();
+      if (ok) {
+        // Re-establish WS connection with new token
+        if (state.ws) {
+          try {
+            state.ws.close();
+          } catch {}
+        }
+        connectWebSocket();
+        // Re-assign projects
+        await assignLocalProjects();
+        log.info('Runner re-registered after server restart', {
+          namespace: 'runner',
+          runnerId: state.runnerId,
+        });
+      }
+    }
   } catch (err) {
     log.warn('Heartbeat failed', { namespace: 'runner', error: err as any });
   }
@@ -615,14 +640,37 @@ function handleDataResponse(data: any): void {
   }
 }
 
+/** Max retries when the WS is temporarily disconnected */
+const SEND_RETRY_MAX = 3;
+/** Delay between retries (ms) — should be enough for a reconnect cycle */
+const SEND_RETRY_DELAY_MS = 2_000;
+
 /**
  * Send a data message to the server and wait for a response.
  * Creates a pending promise keyed by requestId that is resolved
  * when the server sends the corresponding response.
+ *
+ * If the WebSocket is temporarily disconnected, retries up to
+ * SEND_RETRY_MAX times with a delay, giving the reconnect logic
+ * time to re-establish the connection.
  */
-function sendDataMessage(message: Record<string, any>): Promise<any> {
+async function sendDataMessage(message: Record<string, any>, attempt = 0): Promise<any> {
   return new Promise((resolve, reject) => {
     if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
+      if (attempt < SEND_RETRY_MAX) {
+        // Wait for the WS to reconnect and retry
+        log.debug(
+          `sendDataMessage: WS not connected, retrying in ${SEND_RETRY_DELAY_MS}ms (attempt ${attempt + 1}/${SEND_RETRY_MAX})`,
+          {
+            namespace: 'runner',
+            messageType: message.type,
+          },
+        );
+        setTimeout(() => {
+          sendDataMessage(message, attempt + 1).then(resolve, reject);
+        }, SEND_RETRY_DELAY_MS);
+        return;
+      }
       reject(new Error('WebSocket not connected to central server'));
       return;
     }

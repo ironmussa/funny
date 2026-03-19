@@ -182,7 +182,7 @@ export function ExpandedDiffDialog({
                   onRevertFile={onRevertFile}
                   onIgnore={onIgnore}
                   basePath={basePath}
-                  fontSize="text-sm"
+                  fontSize="text-xs"
                   activeClass="bg-sidebar-accent text-sidebar-accent-foreground"
                   hoverClass="hover:bg-sidebar-accent/50 text-muted-foreground"
                   testIdPrefix="diff-sidebar"

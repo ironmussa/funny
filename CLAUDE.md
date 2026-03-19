@@ -188,6 +188,10 @@ bunx tsc --noEmit
 
 ## Key Patterns
 
+### Runner Isolation (CRITICAL)
+
+**Requests MUST only be routed to the runner that belongs to the requesting user.** Never fall back to a different user's runner, even if that runner is online and connected. This is a hard security boundary — each user's runner has access to their local filesystem, git credentials, and environment. Routing a request to another user's runner would leak data across tenant boundaries. If the user's runner is unavailable, return a 502 — do NOT try another runner.
+
 - Thread modes: `local` runs the agent in the project directory; `worktree` creates a git worktree with an isolated branch
 - All git operations use async functions from `packages/core/src/git/` — use `gitRead`/`gitWrite` for git commands and `execute` for general process execution from `git/process.ts`
 - The agent runner spawns agent processes via `packages/core/src/agents/` and stores a session ID for resuming conversations

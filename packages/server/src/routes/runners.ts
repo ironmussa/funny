@@ -26,8 +26,17 @@ runnerRoutes.post('/register', async (c) => {
       return c.json({ error: 'Missing required fields: name, hostname, os' }, 400);
     }
 
-    // If this is a user-authenticated request, associate runner with user
+    // Runner MUST be associated with a user for tenant isolation
     const userId = c.get('userId') as string | undefined;
+    log.warn('Runner registration: userId from context', {
+      namespace: 'runner',
+      userId: userId ?? '(undefined)',
+      isRunner: c.get('isRunner'),
+    });
+    if (!userId) {
+      log.error('Runner registration rejected — no userId in context', { namespace: 'runner' });
+      return c.json({ error: 'Runner must be associated with a user' }, 400);
+    }
     const result = await rm.registerRunner(body, userId);
     return c.json(result, 201);
   } catch (err: any) {
@@ -52,7 +61,13 @@ runnerRoutes.post('/heartbeat', async (c) => {
   if (!runnerId) return c.json({ error: 'Unauthorized: runner token required' }, 401);
 
   const body = await c.req.json<RunnerHeartbeatRequest>();
-  await rm.handleHeartbeat(runnerId, body);
+  const exists = await rm.handleHeartbeat(runnerId, body);
+  if (!exists) {
+    return c.json(
+      { error: 'Runner not found — re-register required', code: 'RUNNER_NOT_FOUND' },
+      404,
+    );
+  }
   return c.json({ ok: true });
 });
 

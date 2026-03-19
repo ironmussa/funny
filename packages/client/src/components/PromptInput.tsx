@@ -69,7 +69,7 @@ export const PromptInput = memo(function PromptInput({
   onStop,
   loading = false,
   running = false,
-  queuedCount = 0,
+  queuedCount: queuedCountProp = 0,
   isQueueMode = false,
   placeholder,
   isNewThread = false,
@@ -82,6 +82,13 @@ export const PromptInput = memo(function PromptInput({
   onPhaseTransition,
 }: PromptInputProps) {
   const { t } = useTranslation();
+
+  // Read queuedCount directly from the store to avoid stale prop values.
+  // The prop may lag behind when ThreadView re-renders are deferred by memo().
+  const storeQueuedCount = useThreadStore(
+    (s) => (s.activeThread as any)?.queuedCount ?? 0,
+  ) as number;
+  const queuedCount = storeQueuedCount > 0 ? storeQueuedCount : queuedCountProp;
 
   // ── Project defaults ──
   const projects = useProjectStore((s) => s.projects);
@@ -612,6 +619,17 @@ export const PromptInput = memo(function PromptInput({
         );
         return false;
       }
+      // canCheckout is true and branches differ — perform the checkout now
+      // so the server sees matching branches and skips the setting_up flow
+      const checkoutResult = await api.checkout(effectiveProjectId, branch, 'carry');
+      if (checkoutResult.isErr()) {
+        toast.error(
+          checkoutResult.error.message || t('switchBranch.failed', 'Failed to switch branch'),
+        );
+        return false;
+      }
+      useProjectStore.getState().fetchBranch(effectiveProjectId);
+      setGitCurrentBranch(branch);
       return true;
     },
     [effectiveProjectId, gitCurrentBranch, t],

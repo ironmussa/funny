@@ -248,7 +248,7 @@ export function FileTree({
             <div
               key={`folder-${row.path}`}
               className={cn(
-                'flex cursor-pointer select-none items-center gap-1.5 py-1',
+                'flex h-6 cursor-pointer select-none items-center gap-1.5',
                 fontSize,
                 'text-muted-foreground transition-colors',
                 hoverClass,
@@ -295,7 +295,7 @@ export function FileTree({
           <div
             key={f.path}
             className={cn(
-              'group flex items-center gap-1.5 py-1 cursor-pointer transition-colors',
+              'group flex h-6 items-center gap-1.5 cursor-pointer transition-colors',
               fontSize,
               isActive ? activeClass : hoverClass,
             )}

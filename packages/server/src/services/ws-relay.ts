@@ -55,6 +55,11 @@ export function removeRunnerClient(runnerId: string): void {
   log.info('Runner disconnected', { namespace: 'ws-relay', runnerId });
 }
 
+/** Check if a runner is actually connected via WebSocket (in-memory check). */
+export function isRunnerConnected(runnerId: string): boolean {
+  return runnerClients.has(runnerId);
+}
+
 // ── Event relay ─────────────────────────────────────────
 
 /**
@@ -129,6 +134,14 @@ export function forwardBrowserMessageToRunner(
 export function getAnyConnectedRunnerId(): string | null {
   const first = runnerClients.keys().next();
   return first.done ? null : first.value;
+}
+
+/**
+ * Get all connected browser user IDs.
+ * Used to push PTY session lists when a runner (re)connects.
+ */
+export function getConnectedBrowserUserIds(): string[] {
+  return Array.from(browserClients.keys());
 }
 
 /**

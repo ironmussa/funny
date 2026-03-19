@@ -543,10 +543,22 @@ function setupWS(ws: WebSocket) {
     // Reset sessions-checked flag so persisted tabs don't show "(exited)" prematurely
     useTerminalStore.getState().resetSessionsChecked();
 
-    // Ask server for any persistent PTY sessions (tmux) to restore
+    // Ask server for any persistent PTY sessions (tmux) to restore.
+    // The server may not respond immediately if the runner hasn't connected
+    // yet — the runner will push sessions once it authenticates. Add a
+    // safety timeout so tabs don't stay in loading state forever if the
+    // runner never connects.
     try {
       ws.send(JSON.stringify({ type: 'pty:list', data: {} }));
     } catch {}
+    const sessionsTimeout = setTimeout(() => {
+      const termStore = useTerminalStore.getState();
+      if (!termStore.sessionsChecked) {
+        termStore.markSessionsChecked();
+      }
+    }, 15_000);
+    // Clear the timeout if we disconnect before it fires
+    ws.addEventListener('close', () => clearTimeout(sessionsTimeout), { once: true });
   };
 
   ws.onmessage = handleMessage;

@@ -4,7 +4,7 @@
  * for routing and listing.
  */
 
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { db } from '../db/index.js';
 import { threads, runners } from '../db/schema.js';
@@ -76,10 +76,13 @@ export async function registerThread(entry: {
 }
 
 /**
- * Get the runner ID and httpUrl for a thread.
+ * Get the runner ID and httpUrl for a thread, scoped to the requesting user.
+ * Returns null if the thread has no runner, the runner doesn't belong to the user,
+ * or the runner no longer exists.
  */
 export async function getRunnerForThread(
   threadId: string,
+  userId: string,
 ): Promise<{ runnerId: string; httpUrl: string | null } | null> {
   const rows = await db
     .select({
@@ -88,13 +91,14 @@ export async function getRunnerForThread(
     })
     .from(threads)
     .innerJoin(runners, eq(runners.id, threads.runnerId))
-    .where(eq(threads.id, threadId));
+    .where(and(eq(threads.id, threadId), eq(runners.userId, userId)));
 
-  if (!rows[0] || !rows[0].runnerId) return null;
+  const row = rows[0];
+  if (!row || !row.runnerId) return null;
 
   return {
-    runnerId: rows[0].runnerId,
-    httpUrl: rows[0].httpUrl ?? null,
+    runnerId: row.runnerId,
+    httpUrl: row.httpUrl ?? null,
   };
 }
 

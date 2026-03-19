@@ -40,6 +40,7 @@ interface TerminalState {
   setActiveTab: (id: string) => void;
   markExited: (id: string) => void;
   markAlive: (id: string) => void;
+  respawnTab: (id: string) => void;
   setPanelVisible: (visible: boolean) => void;
   togglePanel: () => void;
   appendCommandOutput: (commandId: string, data: string) => void;
@@ -102,6 +103,13 @@ export const useTerminalStore = create<TerminalState>()(
       markAlive: (id) =>
         set((state) => ({
           tabs: state.tabs.map((t) => (t.id === id ? { ...t, alive: true, error: undefined } : t)),
+        })),
+
+      respawnTab: (id) =>
+        set((state) => ({
+          tabs: state.tabs.map((t) =>
+            t.id === id ? { ...t, alive: true, error: undefined, restored: false } : t,
+          ),
         })),
 
       setPanelVisible: (visible) => set({ panelVisible: visible }),

@@ -71,6 +71,47 @@ export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
     const runnerSecret = c.req.header('X-Runner-Auth');
     if (runnerSecret === RUNNER_AUTH_SECRET) {
       c.set('isRunner', true);
+
+      // For runner registration, associate the runner with the admin user
+      // so that project resolution can match runners by userId.
+      if (c.req.method === 'POST' && path === '/api/runners/register') {
+        try {
+          const { getConnection } = await import('../db/index.js');
+          const conn = getConnection();
+          let adminId: string | undefined;
+
+          if (conn?.sqlite) {
+            // SQLite: use raw bun:sqlite query
+            const row = conn.sqlite
+              .query('SELECT id FROM "user" WHERE role = ? LIMIT 1')
+              .get('admin') as { id: string } | null;
+            adminId = row?.id;
+          } else if (conn?.pgClient) {
+            // PostgreSQL: use raw pg client
+            const result = await conn.pgClient.query(
+              'SELECT id FROM "user" WHERE role = $1 LIMIT 1',
+              ['admin'],
+            );
+            adminId = result.rows?.[0]?.id;
+          }
+
+          if (adminId) {
+            c.set('userId', adminId);
+          } else {
+            log.error('No admin user found — runner cannot register without userId', {
+              namespace: 'auth',
+            });
+            return c.json({ error: 'No admin user found for runner association' }, 500);
+          }
+        } catch (err) {
+          log.error('Failed to resolve admin userId for runner registration', {
+            namespace: 'auth',
+            error: (err as Error).message,
+          });
+          return c.json({ error: 'Failed to resolve userId for runner' }, 500);
+        }
+      }
+
       return next();
     }
   }

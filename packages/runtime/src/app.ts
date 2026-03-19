@@ -373,14 +373,15 @@ function handlePtyMessage(type: string, data: any, userId: string, send: (msg: a
       ptyManager.killPty(data.id);
       break;
     case 'pty:restore': {
-      const captured = ptyManager.capturePane(data.id);
-      if (captured) {
-        send({
-          type: 'pty:data',
-          threadId: '',
-          data: { ptyId: data.id, data: captured },
-        });
-      }
+      ptyManager.capturePaneAsync(data.id).then((captured) => {
+        if (captured) {
+          send({
+            type: 'pty:data',
+            threadId: '',
+            data: { ptyId: data.id, data: captured },
+          });
+        }
+      });
       break;
     }
     case 'pty:list': {

@@ -29,6 +29,7 @@ import {
   stashPop,
   stashList,
   resetSoft,
+  fetchRemote,
   git,
 } from '@funny/core/git';
 import { badRequest, internal } from '@funny/shared/errors';
@@ -465,6 +466,20 @@ gitRoutes.post('/project/:projectId/pull', async (c) => {
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/project/:projectId/fetch
+gitRoutes.post('/project/:projectId/fetch', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const identity = await resolveIdentity(userId);
+  const result = await fetchRemote(cwdResult.value, identity);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true });
 });
 
 // POST /api/git/project/:projectId/stash
@@ -1207,6 +1222,20 @@ gitRoutes.post('/:threadId/pull', async (c) => {
   if (result.isErr()) return resultToResponse(c, result);
   await invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/:threadId/fetch
+gitRoutes.post('/:threadId/fetch', async (c) => {
+  const threadId = c.req.param('threadId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const identity = await resolveIdentity(userId);
+  const result = await fetchRemote(cwdResult.value, identity);
+  if (result.isErr()) return resultToResponse(c, result);
+  await invalidateGitStatusCache(threadId);
+  return c.json({ ok: true });
 });
 
 // POST /api/git/:threadId/stash

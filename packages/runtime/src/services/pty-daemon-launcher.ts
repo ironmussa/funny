@@ -16,11 +16,15 @@ import { log } from '../lib/logger.js';
 
 const SOCKET_PATH = resolve(DATA_DIR, 'pty.sock');
 const PID_FILE = resolve(DATA_DIR, 'pty-daemon.pid');
+const LOG_FILE = resolve(DATA_DIR, 'pty-daemon.log');
 
 /** Path to the daemon entry point (resolved relative to this file). */
 const DAEMON_ENTRY = resolve(import.meta.dir, 'pty-daemon.ts');
 
 export { SOCKET_PATH };
+
+/** Prevent concurrent launch attempts. */
+let launchInProgress: Promise<boolean> | null = null;
 
 /**
  * Check if the daemon process is alive by reading the PID file
@@ -50,9 +54,21 @@ function readPid(): number | null {
 }
 
 /**
- * Clean up stale PID and socket files.
+ * Kill any stale (unresponsive) daemon process and clean up files.
+ * Only called when isDaemonRunning() returned false — meaning the daemon
+ * is either dead or not responding to pings.
  */
-function cleanupStaleFiles(): void {
+function cleanupStale(): void {
+  const pid = readPid();
+  if (pid && isProcessAlive(pid)) {
+    log.info('Killing unresponsive daemon process', {
+      namespace: 'pty-daemon-launcher',
+      pid,
+    });
+    try {
+      process.kill(pid, 'SIGTERM');
+    } catch {}
+  }
   try {
     if (existsSync(PID_FILE)) unlinkSync(PID_FILE);
   } catch {}
@@ -78,6 +94,7 @@ export async function isDaemonRunning(): Promise<boolean> {
   // Try a quick ping/pong
   try {
     const connected = await new Promise<boolean>((resolve) => {
+      let gotPong = false;
       const timeout = setTimeout(() => resolve(false), 2000);
 
       Bun.connect({
@@ -89,14 +106,14 @@ export async function isDaemonRunning(): Promise<boolean> {
           data(socket, data) {
             const str = data.toString();
             if (str.includes('"pong"')) {
+              gotPong = true;
               clearTimeout(timeout);
               socket.end();
-              resolve(true);
             }
           },
           close() {
             clearTimeout(timeout);
-            resolve(false);
+            resolve(gotPong);
           },
           error() {
             clearTimeout(timeout);
@@ -115,8 +132,19 @@ export async function isDaemonRunning(): Promise<boolean> {
 /**
  * Start the daemon if not already running.
  * Returns true if daemon is running after this call.
+ *
+ * Uses a lock to prevent concurrent launches from spawning
+ * multiple daemon processes (which leads to process leaks).
  */
-export async function ensureDaemonRunning(): Promise<boolean> {
+export function ensureDaemonRunning(): Promise<boolean> {
+  if (launchInProgress) return launchInProgress;
+  launchInProgress = doEnsureDaemonRunning().finally(() => {
+    launchInProgress = null;
+  });
+  return launchInProgress;
+}
+
+async function doEnsureDaemonRunning(): Promise<boolean> {
   // Check if already running
   if (await isDaemonRunning()) {
     log.info('PTY daemon already running', {
@@ -126,8 +154,8 @@ export async function ensureDaemonRunning(): Promise<boolean> {
     return true;
   }
 
-  // Clean up stale files from previous daemon
-  cleanupStaleFiles();
+  // Kill any leftover daemon process and clean up stale files
+  cleanupStale();
 
   log.info('Starting PTY daemon', {
     namespace: 'pty-daemon-launcher',
@@ -135,8 +163,9 @@ export async function ensureDaemonRunning(): Promise<boolean> {
   });
 
   try {
+    // Redirect daemon stderr to a log file so startup errors are visible
     const proc = Bun.spawn(['bun', 'run', DAEMON_ENTRY], {
-      stdio: ['ignore', 'ignore', 'ignore'],
+      stdio: ['ignore', 'ignore', Bun.file(LOG_FILE)],
       env: {
         ...process.env,
         FUNNY_DATA_DIR: DATA_DIR,
@@ -147,11 +176,22 @@ export async function ensureDaemonRunning(): Promise<boolean> {
     proc.unref();
 
     // Wait for daemon to be ready (socket appears + responds to ping)
-    const maxWaitMs = 5000;
+    const maxWaitMs = 10000;
     const startTime = Date.now();
 
     while (Date.now() - startTime < maxWaitMs) {
       await Bun.sleep(200);
+
+      // If the process already exited, no point waiting
+      if (proc.exitCode !== null) {
+        log.error('PTY daemon process exited during startup', {
+          namespace: 'pty-daemon-launcher',
+          exitCode: proc.exitCode,
+          logFile: LOG_FILE,
+        });
+        return false;
+      }
+
       if (await isDaemonRunning()) {
         log.info('PTY daemon started successfully', {
           namespace: 'pty-daemon-launcher',
@@ -161,8 +201,14 @@ export async function ensureDaemonRunning(): Promise<boolean> {
       }
     }
 
+    // Timeout — kill the process we just spawned to avoid leaking it
+    try {
+      proc.kill();
+    } catch {}
+
     log.error('PTY daemon failed to start within timeout', {
       namespace: 'pty-daemon-launcher',
+      logFile: LOG_FILE,
     });
     return false;
   } catch (err: any) {
@@ -180,7 +226,7 @@ export async function ensureDaemonRunning(): Promise<boolean> {
 export async function stopDaemon(): Promise<void> {
   const pid = readPid();
   if (!pid || !isProcessAlive(pid)) {
-    cleanupStaleFiles();
+    cleanupStale();
     return;
   }
 
@@ -214,7 +260,7 @@ export async function stopDaemon(): Promise<void> {
 
       if (!isProcessAlive(pid)) {
         log.info('PTY daemon stopped gracefully', { namespace: 'pty-daemon-launcher' });
-        cleanupStaleFiles();
+        cleanupStale();
         return;
       }
     } catch {
@@ -232,6 +278,6 @@ export async function stopDaemon(): Promise<void> {
     }
   } catch {}
 
-  cleanupStaleFiles();
+  cleanupStale();
   log.info('PTY daemon stopped', { namespace: 'pty-daemon-launcher' });
 }

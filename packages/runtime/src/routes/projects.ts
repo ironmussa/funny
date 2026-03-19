@@ -25,6 +25,7 @@ import { Hono } from 'hono';
 
 import { requireAdmin } from '../middleware/auth.js';
 import { startCommand, stopCommand, isCommandRunning } from '../services/command-runner.js';
+import { resolveIdentity } from '../services/git-service.js';
 import * as pc from '../services/project-config-service.js';
 import * as ph from '../services/project-hooks-service.js';
 import { getServices } from '../services/service-registry.js';
@@ -49,8 +50,12 @@ projectRoutes.get('/:id/branches', async (c) => {
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   const project = projectResult.value;
-  // Fetch remote refs first so we see up-to-date origin branches
-  await fetchRemote(project.path);
+  // Fire-and-forget: fetch remote refs in the background so the response is
+  // instant (uses locally cached branch data). The next call will see updated
+  // remote branches once the fetch completes.
+  const userId = c.get('userId');
+  const identity = userId ? await resolveIdentity(userId) : undefined;
+  void fetchRemote(project.path, identity);
   const [branchesResult, defaultBranchResult, currentBranchResult] = await Promise.all([
     listBranchesDetailed(project.path),
     getDefaultBranch(project.path),

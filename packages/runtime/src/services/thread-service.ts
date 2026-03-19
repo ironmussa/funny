@@ -79,33 +79,6 @@ function createSetupProgressEmitter(userId: string, threadId: string): SetupProg
   };
 }
 
-/**
- * Fetch + checkout a branch with setup progress events.
- * Used in local mode when the user selects a branch different from the current one.
- */
-async function checkoutBranchWithProgress(
-  projectPath: string,
-  branchName: string,
-  emitProgress: SetupProgressFn,
-): Promise<void> {
-  // Step 1: Fetch latest from origin (best-effort — may fail for local-only branches)
-  emitProgress('checkout:fetch', `Fetching "${branchName}" from origin`, 'running');
-  await git(['fetch', 'origin', branchName], projectPath);
-  emitProgress('checkout:fetch', `Fetched "${branchName}"`, 'completed');
-
-  // Step 2: Switch to the branch (git checkout auto-creates tracking branch from origin)
-  emitProgress('checkout:switch', `Switching to "${branchName}"`, 'running');
-  const result = await git(['checkout', branchName], projectPath);
-  if (result.isErr()) {
-    emitProgress('checkout:switch', `Switching to "${branchName}"`, 'failed', result.error.message);
-    throw new ThreadServiceError(
-      `Failed to checkout branch "${branchName}": ${result.error.message}`,
-      400,
-    );
-  }
-  emitProgress('checkout:switch', `Switched to "${branchName}"`, 'completed');
-}
-
 function emitThreadUpdated(userId: string, threadId: string, data: Record<string, any>): void {
   wsBroker.emitToUser(userId, {
     type: 'thread:updated',
@@ -427,98 +400,29 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
     }
   }
 
-  // ── Local mode with branch checkout (async with progress) ──
+  // ── Local mode with branch checkout (synchronous, no setting_up UI) ──
   if (needsBranchCheckout && !worktreePath) {
-    const thread = {
-      id: threadId,
-      projectId: params.projectId,
-      userId: params.userId,
-      title: params.title || params.prompt,
-      mode: params.mode,
-      provider: resolvedProvider,
-      permissionMode: resolvedPermissionMode,
-      model: resolvedModel,
-      source: params.source || 'web',
-      status: 'setting_up' as const,
-      runtime: (params.runtime || 'local') as 'local' | 'remote',
-      branch: threadBranch,
-      baseBranch: resolvedBaseBranch || threadBranch,
-      worktreePath: undefined as string | undefined,
-      parentThreadId: params.parentThreadId,
-      arcId: params.arcId,
-      purpose: params.purpose || 'implement',
-      cost: 0,
-      createdAt: new Date().toISOString(),
-    };
-
-    await tm.createThread(thread);
-
-    if (params.prompt) {
-      const storedContent = await augmentPromptWithFiles(
-        params.prompt,
-        params.fileReferences,
-        projectPath,
-      );
-      await tm.insertMessage({
+    const fetchResult = await git(['fetch', 'origin', resolvedBaseBranch!], projectPath);
+    if (fetchResult.isErr()) {
+      log.warn('Failed to fetch branch before checkout (non-fatal)', {
+        namespace: 'thread-service',
         threadId,
-        role: 'user',
-        content: storedContent,
-        images: params.images?.length ? JSON.stringify(params.images) : null,
+        branch: resolvedBaseBranch,
+        error: fetchResult.error.message,
       });
     }
 
-    threadEventBus.emit('thread:created', {
-      threadId,
-      projectId: params.projectId,
-      userId: params.userId,
-      cwd: projectPath,
-      worktreePath: null,
-      stage: 'in_progress' as const,
-      status: 'setting_up',
-    });
+    const checkoutResult = await git(['checkout', resolvedBaseBranch!], projectPath);
+    if (checkoutResult.isErr()) {
+      throw new ThreadServiceError(
+        `Failed to checkout branch "${resolvedBaseBranch}": ${checkoutResult.error.message}`,
+        400,
+      );
+    }
 
-    // Background: checkout branch, then start agent
-    void (async () => {
-      try {
-        await checkoutBranchWithProgress(projectPath, resolvedBaseBranch!, emitSetupProgress);
-
-        await tm.updateThread(threadId, { status: 'pending' });
-        wsBroker.emitToUser(params.userId, {
-          type: 'worktree:setup_complete',
-          threadId,
-          data: { branch: resolvedBaseBranch! },
-        } as WSEvent);
-        emitThreadUpdated(params.userId, threadId, {
-          status: 'pending',
-          branch: resolvedBaseBranch,
-        });
-
-        const augmentedPrompt = await augmentPromptWithFiles(
-          params.prompt,
-          params.fileReferences,
-          projectPath,
-        );
-        await startAgent(
-          threadId,
-          augmentedPrompt,
-          projectPath,
-          resolvedModel,
-          resolvedPermissionMode,
-          params.images,
-          params.disallowedTools,
-          params.allowedTools,
-          resolvedProvider,
-          undefined,
-          true, // skipMessageInsert — already inserted above
-        );
-      } catch (err: any) {
-        log.error('Failed to checkout branch and start agent', { threadId, error: err });
-        await tm.updateThread(threadId, { status: 'failed' });
-        emitThreadUpdated(params.userId, threadId, { status: 'failed' });
-      }
-    })();
-
-    return thread;
+    threadBranch = resolvedBaseBranch;
+    needsBranchCheckout = false;
+    // Falls through to normal path below (status: 'pending')
   }
 
   // ── Normal path (no branch checkout needed) ──
@@ -1167,7 +1071,7 @@ async function autoStartIdleThread(
     // Worktree already exists or local mode: start agent directly
     const cwd = thread.worktreePath || projectPath;
 
-    // Check if local mode needs branch checkout
+    // Check if local mode needs branch checkout (synchronous, no setting_up UI)
     const needsCheckout =
       !thread.worktreePath &&
       thread.baseBranch &&
@@ -1175,55 +1079,30 @@ async function autoStartIdleThread(
       thread.baseBranch !== thread.branch;
 
     if (needsCheckout) {
-      await tm.updateThread(threadId, { status: 'setting_up' });
-      const emitProgress = createSetupProgressEmitter(thread.userId, threadId);
-      emitThreadUpdated(thread.userId, threadId, { status: 'setting_up', stage: 'in_progress' });
-
-      void (async () => {
-        try {
-          await checkoutBranchWithProgress(projectPath, thread.baseBranch!, emitProgress);
-
-          await tm.updateThread(threadId, { status: 'pending', branch: thread.baseBranch });
-          wsBroker.emitToUser(thread.userId, {
-            type: 'worktree:setup_complete',
-            threadId,
-            data: { branch: thread.baseBranch! },
-          } as WSEvent);
-          emitThreadUpdated(thread.userId, threadId, {
-            status: 'pending',
-            branch: thread.baseBranch,
-          });
-
-          const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });
-          const draftMsg = draftMessages[0];
-          const draftImages = draftMsg?.images ? JSON.parse(draftMsg.images as string) : undefined;
-          await startAgent(
-            threadId,
-            thread.initialPrompt!,
-            projectPath,
-            (thread.model || project.defaultModel || DEFAULT_MODEL) as AgentModel,
-            (thread.permissionMode || DEFAULT_PERMISSION_MODE) as PermissionMode,
-            draftImages,
-            undefined,
-            undefined,
-            (thread.provider || project.defaultProvider || DEFAULT_PROVIDER) as AgentProvider,
-            undefined,
-            !!draftMsg,
-          );
-        } catch (err) {
-          log.error('Failed to checkout branch and start agent', {
-            namespace: 'agent',
-            threadId,
-            error: err,
-          });
-          await tm.updateThread(threadId, {
-            status: 'failed',
-            completedAt: new Date().toISOString(),
-          });
-          emitAgentFailed(thread.userId, threadId);
-        }
-      })();
-      return;
+      const fetchResult = await git(['fetch', 'origin', thread.baseBranch!], projectPath);
+      if (fetchResult.isErr()) {
+        log.warn('Failed to fetch branch for idle thread checkout (non-fatal)', {
+          namespace: 'agent',
+          threadId,
+          error: fetchResult.error.message,
+        });
+      }
+      const checkoutResult = await git(['checkout', thread.baseBranch!], projectPath);
+      if (checkoutResult.isErr()) {
+        log.error('Failed to checkout branch for idle thread', {
+          namespace: 'agent',
+          threadId,
+          error: checkoutResult.error.message,
+        });
+        await tm.updateThread(threadId, {
+          status: 'failed',
+          completedAt: new Date().toISOString(),
+        });
+        emitAgentFailed(thread.userId, threadId);
+        return;
+      }
+      await tm.updateThread(threadId, { branch: thread.baseBranch });
+      // Fall through to normal agent start below
     }
 
     const { messages: draftMessages } = await tm.getThreadMessages({ threadId, limit: 1 });

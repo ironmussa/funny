@@ -20,6 +20,18 @@ function escapeFts5Query(value: string): string {
     .join(' ');
 }
 
+/**
+ * Returns true when the query contains characters (like `_`) that FTS
+ * tokenizers typically strip, making full-text search unreliable.
+ * In those cases we should use LIKE instead.
+ */
+function needsLikeFallback(query: string): boolean {
+  // FTS tokenizers (unicode61 / english) keep only alphanumeric chars.
+  // If the query contains connectors or punctuation that are meaningful
+  // to the user (e.g. _TOKEN, .env, @scope) FTS won't match reliably.
+  return /[_@.#$%^&*+!=<>{}[\]\\|/~`]/.test(query);
+}
+
 export async function searchThreadIdsByContent(opts: {
   query: string;
   projectId?: string;
@@ -27,6 +39,12 @@ export async function searchThreadIdsByContent(opts: {
 }): Promise<Map<string, string>> {
   const { query, projectId, userId } = opts;
   if (!query.trim()) return new Map();
+
+  // When the query contains characters that FTS tokenizers strip (e.g. _TOKEN),
+  // go straight to LIKE which does exact substring matching.
+  if (needsLikeFallback(query)) {
+    return await searchViaLike(query, projectId, userId);
+  }
 
   try {
     if (dbMode === 'postgres') {

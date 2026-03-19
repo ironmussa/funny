@@ -2,17 +2,25 @@
  * Runner resolver for the central server.
  * Given an incoming HTTP request, determines which runner should handle it.
  *
+ * STRICT ISOLATION: Every request is routed exclusively to the requesting
+ * user's runner. No cross-user fallbacks. If the user has no runner
+ * registered, return null → 502.
+ *
+ * The resolver only handles USER-SCOPING (who owns the runner).
+ * It does NOT check WebSocket connectivity — that's the tunnel's job.
+ * The tunnel fails instantly if the WS is down, so there's no delay.
+ *
  * Resolution strategies:
- * 1. Extract projectId from URL params or query → look up runner via project assignments
- * 2. Extract threadId from URL params → look up runner via thread registry (Phase 3)
- * 3. Fall back to null if no runner can be determined
+ * 1. Thread cache (in-memory)
+ * 2. Project assignment (DB, scoped to userId)
+ * 3. Thread registry (DB, scoped to userId)
+ * 4. User's runner (any runner belonging to this user)
  */
 
-import { and, eq, ne } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 
 import { db } from '../db/index.js';
 import { runnerProjectAssignments, runners } from '../db/schema.js';
-import { log } from '../lib/logger.js';
 import { getRunnerForThread } from './thread-registry.js';
 
 export interface ResolvedRunner {
@@ -24,16 +32,12 @@ export interface ResolvedRunner {
 // In-memory cache: threadId → { runnerId, httpUrl }
 const threadRunnerCache = new Map<string, ResolvedRunner>();
 
-// Fallback: if a default runner URL is configured, use it when no runner is registered
-const DEFAULT_RUNNER_URL = process.env.DEFAULT_RUNNER_URL || null;
-
 /**
  * Resolve which runner should handle a request.
- * Returns { runnerId, httpUrl } where httpUrl may be null (use tunnel).
- * Returns null if no runner can be determined.
+ * Returns { runnerId, httpUrl } or null if no runner is registered for this user.
  *
- * When userId is provided, resolution is scoped to that user's runners
- * to ensure tenant isolation.
+ * All resolution paths are scoped to the requesting user's runners.
+ * WebSocket connectivity is NOT checked here — the tunnel handles that.
  */
 export async function resolveRunner(
   path: string,
@@ -43,21 +47,21 @@ export async function resolveRunner(
   const projectId = extractProjectId(path, query);
   const threadId = extractThreadId(path);
 
-  // Strategy 1: Thread-based resolution (cached from thread creation)
+  // Strategy 1: Thread cache
   if (threadId) {
     const cached = threadRunnerCache.get(threadId);
     if (cached) return cached;
   }
 
-  // Strategy 2: Project-based resolution
-  if (projectId) {
+  // Strategy 2: Project assignment (scoped to userId)
+  if (projectId && userId) {
     const resolved = await resolveByProject(projectId, userId);
     if (resolved) return resolved;
   }
 
-  // Strategy 3: Thread registry DB lookup (fallback when cache misses)
-  if (threadId) {
-    const fromDb = await getRunnerForThread(threadId);
+  // Strategy 3: Thread registry DB lookup (scoped to userId)
+  if (threadId && userId) {
+    const fromDb = await getRunnerForThread(threadId, userId);
     if (fromDb) {
       const resolved: ResolvedRunner = {
         runnerId: fromDb.runnerId,
@@ -66,22 +70,14 @@ export async function resolveRunner(
       threadRunnerCache.set(threadId, resolved);
       return resolved;
     }
-    log.warn('No runner found for thread', { namespace: 'proxy', threadId });
   }
 
-  // Strategy 4: Fallback to any online runner scoped to this user (or DEFAULT_RUNNER_URL)
-  return await resolveAnyOnlineRunner(userId);
-}
+  // Strategy 4: User's runner (last resort, still user-scoped)
+  if (userId) {
+    return await resolveUserRunner(userId);
+  }
 
-/**
- * @deprecated Use resolveRunner() instead. Kept for backward compatibility during migration.
- */
-export async function resolveRunnerUrl(
-  path: string,
-  query: Record<string, string>,
-): Promise<string | null> {
-  const resolved = await resolveRunner(path, query);
-  return resolved?.httpUrl ?? null;
+  return null;
 }
 
 /**
@@ -102,11 +98,19 @@ export function uncacheThread(threadId: string): void {
   threadRunnerCache.delete(threadId);
 }
 
+/**
+ * Evict all cache entries for a specific runner (called when runner disconnects).
+ */
+export function evictRunnerFromCache(runnerId: string): void {
+  for (const [threadId, resolved] of threadRunnerCache) {
+    if (resolved.runnerId === runnerId) {
+      threadRunnerCache.delete(threadId);
+    }
+  }
+}
+
 // ── Internal helpers ──────────────────────────────────────
 
-/**
- * Extract projectId from URL path or query params.
- */
 function extractProjectId(path: string, query: Record<string, string>): string | null {
   const gitProjectMatch = path.match(/\/api\/git\/project\/([^/]+)/);
   if (gitProjectMatch) return gitProjectMatch[1];
@@ -122,9 +126,6 @@ function extractProjectId(path: string, query: Record<string, string>): string |
   return null;
 }
 
-/**
- * Extract threadId from URL path.
- */
 function extractThreadId(path: string): string | null {
   const threadMatch = path.match(/\/api\/threads\/([^/?]+)/);
   if (threadMatch) return threadMatch[1];
@@ -137,63 +138,38 @@ function extractThreadId(path: string): string | null {
   return null;
 }
 
-async function resolveAnyOnlineRunner(userId?: string): Promise<ResolvedRunner | null> {
-  // First try user-scoped runners
-  if (userId) {
-    const userRunners = await db
-      .select({ id: runners.id, httpUrl: runners.httpUrl })
-      .from(runners)
-      .where(and(ne(runners.status, 'offline'), eq(runners.userId, userId)));
-
-    if (userRunners.length > 0) {
-      return { runnerId: userRunners[0].id, httpUrl: userRunners[0].httpUrl ?? null };
-    }
-  }
-
-  // Fallback: any online runner (includes runners registered without a userId, e.g. dev mode
-  // runners that authenticated via shared secret without an invite token)
-  const allOnline = await db
+/**
+ * Find the user's runner (DB lookup only, no WS check).
+ * Returns the first runner belonging to this user, or null.
+ */
+async function resolveUserRunner(userId: string): Promise<ResolvedRunner | null> {
+  const userRunners = await db
     .select({ id: runners.id, httpUrl: runners.httpUrl })
     .from(runners)
-    .where(ne(runners.status, 'offline'));
+    .where(eq(runners.userId, userId))
+    .limit(1);
 
-  if (allOnline.length > 0) {
-    return { runnerId: allOnline[0].id, httpUrl: allOnline[0].httpUrl ?? null };
-  }
+  if (userRunners.length === 0) return null;
 
-  // Fallback to configured default runner URL
-  if (DEFAULT_RUNNER_URL) {
-    log.debug('Using DEFAULT_RUNNER_URL fallback', { namespace: 'proxy', url: DEFAULT_RUNNER_URL });
-    return { runnerId: '__default__', httpUrl: DEFAULT_RUNNER_URL };
-  }
-
-  return null;
+  return { runnerId: userRunners[0].id, httpUrl: userRunners[0].httpUrl ?? null };
 }
 
-async function resolveByProject(
-  projectId: string,
-  userId?: string,
-): Promise<ResolvedRunner | null> {
-  const condition = userId
-    ? and(eq(runnerProjectAssignments.projectId, projectId), eq(runners.userId, userId))
-    : eq(runnerProjectAssignments.projectId, projectId);
-
+/**
+ * Resolve runner for a project, scoped to the requesting user.
+ * DB lookup only — no WS connectivity check.
+ */
+async function resolveByProject(projectId: string, userId: string): Promise<ResolvedRunner | null> {
   const assignments = await db
     .select({
       runnerId: runnerProjectAssignments.runnerId,
       httpUrl: runners.httpUrl,
-      status: runners.status,
     })
     .from(runnerProjectAssignments)
     .innerJoin(runners, eq(runners.id, runnerProjectAssignments.runnerId))
-    .where(condition);
+    .where(and(eq(runnerProjectAssignments.projectId, projectId), eq(runners.userId, userId)))
+    .limit(1);
 
-  // Filter to online runners
-  const online = assignments.filter((a) => a.status !== 'offline');
-  if (online.length === 0) {
-    log.warn('No online runner found for project', { namespace: 'proxy', projectId });
-    return null;
-  }
+  if (assignments.length === 0 || !assignments[0].runnerId) return null;
 
-  return { runnerId: online[0].runnerId, httpUrl: online[0].httpUrl ?? null };
+  return { runnerId: assignments[0].runnerId, httpUrl: assignments[0].httpUrl ?? null };
 }

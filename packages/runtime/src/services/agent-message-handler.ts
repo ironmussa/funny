@@ -54,17 +54,30 @@ export class AgentMessageHandler {
     return this._getProject!(id);
   }
 
-  /** Build common log attributes with thread context for observability */
+  /** Build common log attributes with thread context for observability.
+   *  Resilient to WS failures — falls back to minimal context if the
+   *  thread lookup fails (e.g. during a transient WS disconnect). */
   private async threadCtx(threadId: string): Promise<Record<string, string>> {
-    const thread = await this.threadManager.getThread(threadId);
-    return {
-      namespace: 'agent',
-      threadId,
-      userId: thread?.userId ?? 'unknown',
-      projectId: thread?.projectId ?? 'unknown',
-      threadStatus: thread?.status ?? 'unknown',
-      sessionId: thread?.sessionId ?? '',
-    };
+    try {
+      const thread = await this.threadManager.getThread(threadId);
+      return {
+        namespace: 'agent',
+        threadId,
+        userId: thread?.userId ?? 'unknown',
+        projectId: thread?.projectId ?? 'unknown',
+        threadStatus: thread?.status ?? 'unknown',
+        sessionId: thread?.sessionId ?? '',
+      };
+    } catch {
+      return {
+        namespace: 'agent',
+        threadId,
+        userId: 'unknown',
+        projectId: 'unknown',
+        threadStatus: 'unknown',
+        sessionId: '',
+      };
+    }
   }
 
   private async emitWS(threadId: string, type: WSEvent['type'], data: unknown): Promise<void> {
@@ -73,9 +86,13 @@ export class AgentMessageHandler {
     // Fast path: use cached userId to avoid a DB read on every emission
     let userId = this.state.threadUserIds.get(threadId);
     if (!userId) {
-      const thread = await this.threadManager.getThread(threadId);
-      userId = thread?.userId;
-      if (userId) this.state.threadUserIds.set(threadId, userId);
+      try {
+        const thread = await this.threadManager.getThread(threadId);
+        userId = thread?.userId;
+        if (userId) this.state.threadUserIds.set(threadId, userId);
+      } catch {
+        // WS may be temporarily disconnected — emit without user filter
+      }
     }
 
     if (userId) {

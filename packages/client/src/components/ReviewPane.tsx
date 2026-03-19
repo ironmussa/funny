@@ -32,6 +32,7 @@ import {
   PenLine,
   RotateCcw,
   ChevronRight,
+  CloudDownload,
 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -222,6 +223,7 @@ export function ReviewPane() {
   const [logOpen, setLogOpen] = useState(false);
   const [logLoading, setLogLoading] = useState(false);
   const [pullInProgress, setPullInProgress] = useState(false);
+  const [fetchInProgress, setFetchInProgress] = useState(false);
   const [stashInProgress, setStashInProgress] = useState(false);
   const [stashEntries, setStashEntries] = useState<
     Array<{ index: string; message: string; relativeDate: string }>
@@ -899,6 +901,35 @@ export function ReviewPane() {
     await refresh();
   };
 
+  const handleFetchOrigin = async () => {
+    if (!hasGitContext || fetchInProgress) return;
+    setFetchInProgress(true);
+    const result = effectiveThreadId
+      ? await api.fetchOrigin(effectiveThreadId)
+      : await api.projectFetchOrigin(projectModeId!);
+    if (result.isErr()) {
+      const msg = result.error.message;
+      const isAuthError =
+        /auth|token|credential|permission|denied|403|fatal:/i.test(msg) ||
+        result.error.type === 'INTERNAL';
+      toast.error(
+        isAuthError
+          ? t('review.fetchAuthFailed', {
+              defaultValue:
+                'Fetch failed: authentication error. Check your GitHub token in Settings > Profile.',
+            })
+          : t('review.fetchFailed', {
+              message: msg,
+              defaultValue: `Fetch failed: ${msg}`,
+            }),
+      );
+    } else {
+      toast.success(t('review.fetchSuccess', 'Fetched from origin'));
+    }
+    setFetchInProgress(false);
+    await refresh();
+  };
+
   const handleStash = async () => {
     if (!hasGitContext || stashInProgress) return;
     setStashInProgress(true);
@@ -1059,6 +1090,25 @@ export function ReviewPane() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">{t('review.pull', 'Pull')}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleFetchOrigin}
+                  disabled={fetchInProgress}
+                  className="text-muted-foreground"
+                  data-testid="review-fetch-origin"
+                >
+                  <CloudDownload
+                    className={cn('h-3.5 w-3.5', fetchInProgress && 'animate-pulse')}
+                  />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top">
+                {t('review.fetchOrigin', 'Fetch from origin')}
+              </TooltipContent>
             </Tooltip>
             <Popover
               open={logOpen}

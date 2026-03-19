@@ -245,8 +245,15 @@ export function listBranchesDetailed(cwd: string): ResultAsync<BranchInfo[], Dom
 /**
  * Fetch remote refs so branch listings are up-to-date.
  * Non-blocking: returns ok(true) on success, ok(false) if fetch fails (e.g. no remote).
+ * When called without identity, falls back to unauthenticated fetch (public repos only).
  */
-export function fetchRemote(cwd: string): ResultAsync<boolean, DomainError> {
+export function fetchRemote(
+  cwd: string,
+  identity?: GitIdentityOptions,
+): ResultAsync<boolean, DomainError> {
+  if (identity?.githubToken) {
+    return gitRemote(['fetch', '--prune', '--quiet'], cwd, identity).map(() => true);
+  }
   return ResultAsync.fromPromise(
     (async () => {
       const result = await gitOptional(['fetch', '--prune', '--quiet'], cwd);
@@ -591,15 +598,22 @@ function gitRemote(
   if (identity?.githubToken) {
     env.GH_TOKEN = identity.githubToken;
 
-    // Create a temporary GIT_ASKPASS script that returns the token.
-    // git calls this script with a prompt like "Password for ..." and
-    // expects the credential on stdout.
+    // Create a temporary GIT_ASKPASS script that returns the token for
+    // both Username and Password prompts. GitHub accepts the PAT as
+    // either the username (with any/empty password) or via the
+    // x-access-token convention. By always echoing the token we cover
+    // the "Username for ..." prompt that git issues first.
     askpassPath = join(tmpdir(), `funny-askpass-${crypto.randomUUID()}.sh`);
-    // Use single quotes to prevent shell expansion of special characters in the token.
-    // Escape any embedded single quotes with the '\'' idiom.
     const safeToken = identity.githubToken.replace(/'/g, "'\\''");
     writeFileSync(askpassPath, `#!/bin/sh\necho '${safeToken}'\n`, { mode: 0o700 });
     env.GIT_ASKPASS = askpassPath;
+
+    // Also set the Authorization header directly — this is the most
+    // reliable method for GitHub HTTPS and avoids the Username/Password
+    // prompt dance entirely.
+    env.GIT_CONFIG_COUNT = '1';
+    env.GIT_CONFIG_KEY_0 = 'http.extraHeader';
+    env.GIT_CONFIG_VALUE_0 = `Authorization: Basic ${Buffer.from(`x-access-token:${identity.githubToken}`).toString('base64')}`;
   }
 
   return ResultAsync.fromPromise(

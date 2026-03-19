@@ -1,5 +1,5 @@
 import AnsiToHtml from 'ansi-to-html';
-import { Plus, X, Square, Loader2, AlertCircle } from 'lucide-react';
+import { Plus, X, Square, Loader2, AlertCircle, RotateCcw } from 'lucide-react';
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
@@ -181,7 +181,13 @@ function TauriTerminalTabContent({
   }, [id, cwd]);
 
   return (
-    <div ref={containerRef} className={cn('w-full h-full bg-background', !active && 'hidden')} />
+    <div
+      ref={containerRef}
+      className={cn(
+        'absolute inset-0 bg-background',
+        active ? 'z-10' : 'z-0 invisible pointer-events-none',
+      )}
+    />
   );
 }
 
@@ -210,6 +216,7 @@ function WebTerminalTabContent({
   const registerPtyCallback = useTerminalStore((s) => s.registerPtyCallback);
   const unregisterPtyCallback = useTerminalStore((s) => s.unregisterPtyCallback);
   const tabError = useTerminalStore((s) => s.tabs.find((t) => t.id === id)?.error);
+  const tabAlive = useTerminalStore((s) => s.tabs.find((t) => t.id === id)?.alive ?? false);
   const sessionsChecked = useTerminalStore((s) => s.sessionsChecked);
   const [loading, setLoading] = useState(true);
   const [termReady, setTermReady] = useState(false);
@@ -262,9 +269,15 @@ function WebTerminalTabContent({
       // Wait for the terminal to settle dimensions before spawning the PTY.
       // Without this, the shell starts outputting before xterm.js has correct
       // dimensions, causing garbled characters on initial render.
+      // Only fit if the container is actually visible — inactive tabs have
+      // display:hidden, so fitting would yield tiny dimensions and trigger
+      // an onResize with wrong cols, resizing the daemon's headless xterm.
       await new Promise<void>((resolve) => {
         requestAnimationFrame(() => {
-          fitAddon.fit();
+          const el = containerRef.current;
+          if (el && el.offsetParent !== null && el.clientHeight > 0) {
+            fitAddon.fit();
+          }
           // Only focus if no modal dialog is open — Radix UI sets aria-hidden
           // on the <main> ancestor when a dialog opens, and focusing a hidden
           // descendant triggers a browser warning.
@@ -293,6 +306,11 @@ function WebTerminalTabContent({
       });
 
       const onResizeDisposable = terminal.onResize(({ rows, cols }) => {
+        // Don't send tiny dimensions to the server — this happens when
+        // fitAddon.fit() runs on a hidden (inactive tab) container.
+        // Sending these would resize the daemon's headless xterm to a tiny
+        // size, causing the shell to wrap output at the wrong width.
+        if (cols < 20 || rows < 4) return;
         const ws = getActiveWS();
         if (ws && ws.readyState === WebSocket.OPEN) {
           ws.send(JSON.stringify({ type: 'pty:resize', data: { id, cols, rows } }));
@@ -353,12 +371,11 @@ function WebTerminalTabContent({
     fitAddon.fit();
     const dims = fitAddon.proposeDimensions();
 
-    // Guard against unreasonably small dimensions (container still animating)
+    // Use proposed dimensions with sensible fallbacks
     const cols = dims?.cols ?? 80;
     const rows = dims?.rows ?? 24;
     const MIN_COLS = 20;
     const MIN_ROWS = 4;
-    if (cols < MIN_COLS || rows < MIN_ROWS) return;
 
     const ws = getActiveWS();
 
@@ -381,19 +398,30 @@ function WebTerminalTabContent({
 
     if (restored) {
       // Restored tab: server confirmed the session exists.
-      // Sync terminal dimensions and request the current pane content.
+      // Only send resize if we have real dimensions (active tab); for inactive
+      // tabs the container is hidden so measured dims are zero — sending a
+      // resize with fallback 80x24 would shrink the daemon's headless xterm
+      // and cause the shell to wrap output at the wrong width.
+      // The correct resize happens when the user switches to this tab (see
+      // the active+panelVisible effect below).
+      const hasGoodDims = cols >= MIN_COLS && rows >= MIN_ROWS;
       const cleanup = sendWhenReady((ws) => {
-        ws.send(
-          JSON.stringify({
-            type: 'pty:resize',
-            data: { id, cols, rows },
-          }),
-        );
+        if (hasGoodDims) {
+          ws.send(
+            JSON.stringify({
+              type: 'pty:resize',
+              data: { id, cols, rows },
+            }),
+          );
+        }
         ws.send(JSON.stringify({ type: 'pty:restore', data: { id } }));
       });
       setLoading(false);
       return cleanup;
     } else if (wasAliveOnMount || sessionsChecked) {
+      // Guard against unreasonably small dimensions (container still animating)
+      // Only applies to new PTY spawns where correct initial size matters.
+      if (cols < MIN_COLS || rows < MIN_ROWS) return;
       // Either a freshly created tab (alive on mount) or the session list
       // was checked and this tab was NOT found — spawn a new PTY.
       let spawnTimer: ReturnType<typeof setTimeout> | null = null;
@@ -477,8 +505,26 @@ function WebTerminalTabContent({
 
   const { t } = useTranslation();
 
+  const handleRestart = useCallback(() => {
+    // Clear terminal screen
+    if (termRef.current?.terminal) {
+      termRef.current.terminal.clear();
+    }
+    // Reset spawn tracking so the spawn effect re-triggers
+    spawnedRef.current = false;
+    setLoading(true);
+    // Mark tab as respawnable (clears error, restored flag)
+    useTerminalStore.getState().respawnTab(id);
+    // Force the spawn effect to re-run by changing its dependency
+    setSpawnAttempt((a) => a + 1);
+  }, [id]);
+
+  // Determine if we should show the exited overlay — process died and we're not
+  // in initial loading state (which would mean we haven't connected yet)
+  const showExited = !tabAlive && !loading && !tabError && sessionsChecked;
+
   return (
-    <div className={cn('relative w-full h-full ', !active && 'hidden')}>
+    <div className={cn('absolute inset-0', active ? 'z-10' : 'z-0 invisible pointer-events-none')}>
       <div ref={containerRef} className="h-full w-full bg-background" />
       {tabError ? (
         <div className="absolute inset-0 flex items-center justify-center bg-background">
@@ -486,6 +532,19 @@ function WebTerminalTabContent({
             <AlertCircle className="h-4 w-4 flex-shrink-0" />
             <span>{tabError}</span>
           </div>
+        </div>
+      ) : showExited ? (
+        <div className="absolute inset-x-0 bottom-0 flex items-center justify-center p-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={handleRestart}
+            className="gap-1.5 text-xs"
+            data-testid="terminal-restart"
+          >
+            <RotateCcw className="h-3 w-3" />
+            {t('terminal.restart', 'Restart')}
+          </Button>
         </div>
       ) : loading ? (
         <div className="absolute inset-0 flex items-center justify-center bg-background">
@@ -544,7 +603,12 @@ function CommandTabContent({
   };
 
   return (
-    <div className={cn('w-full h-full flex flex-col', !active && 'hidden')}>
+    <div
+      className={cn(
+        'absolute inset-0 flex flex-col bg-background',
+        active ? 'z-10' : 'z-0 invisible pointer-events-none',
+      )}
+    >
       {alive && (
         <div className="flex flex-shrink-0 items-center justify-end px-2 py-0.5">
           <Tooltip>
@@ -779,7 +843,7 @@ export function TerminalPanel() {
         </div>
 
         {/* Terminal content area */}
-        <div className="m-2 min-h-0 flex-1 overflow-hidden bg-background">
+        <div className="relative m-2 min-h-0 flex-1 overflow-hidden bg-background">
           {visibleTabs.length === 0 ? (
             <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
               {t('terminal.noProcesses')}

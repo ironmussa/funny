@@ -401,7 +401,7 @@ threadRoutes.delete('/:id', async (c) => {
   await threadRepo.deleteThread(threadId);
 
   // Find which runner handles this thread and clean up there too
-  const runnerInfo = await threadRegistry.getRunnerForThread(threadId);
+  const runnerInfo = await threadRegistry.getRunnerForThread(threadId, userId);
 
   // Unregister from central DB and cache
   await threadRegistry.unregisterThread(threadId);

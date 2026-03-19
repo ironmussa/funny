@@ -470,6 +470,8 @@ export const api = {
     }>(`/git/${threadId}/log?limit=${limit}`),
   pull: (threadId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/pull`, { method: 'POST' }),
+  fetchOrigin: (threadId: string) =>
+    request<{ ok: boolean }>(`/git/${threadId}/fetch`, { method: 'POST' }),
   stash: (threadId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/stash`, { method: 'POST' }),
   stashPop: (threadId: string) =>
@@ -528,6 +530,8 @@ export const api = {
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/push`, { method: 'POST' }),
   projectPull: (projectId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/pull`, { method: 'POST' }),
+  projectFetchOrigin: (projectId: string) =>
+    request<{ ok: boolean }>(`/git/project/${projectId}/fetch`, { method: 'POST' }),
   projectStash: (projectId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/stash`, {
       method: 'POST',

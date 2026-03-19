@@ -15,7 +15,7 @@ import type {
   AssignProjectRequest,
   UnassignProjectRequest,
 } from '@funny/shared/runner-protocol';
-import { eq, and, lt } from 'drizzle-orm';
+import { eq, and, lt, or, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import { db } from '../db/index.js';
@@ -32,13 +32,18 @@ export async function registerRunner(
 ): Promise<RunnerRegisterResponse> {
   const now = new Date().toISOString();
 
-  // Check if a runner with the same hostname+userId already exists — reuse it
+  // Check if a runner with the same hostname already exists — reuse it.
+  // When userId is provided, match runners owned by this user OR runners
+  // that were previously registered without a userId (will be backfilled).
   const existing = await db
     .select({ id: runners.id, token: runners.token })
     .from(runners)
     .where(
       userId
-        ? and(eq(runners.hostname, req.hostname), eq(runners.userId, userId))
+        ? and(
+            eq(runners.hostname, req.hostname),
+            or(eq(runners.userId, userId), isNull(runners.userId)),
+          )
         : eq(runners.hostname, req.hostname),
     )
     .limit(1);
@@ -47,17 +52,19 @@ export async function registerRunner(
     const runnerId = existing[0].id;
     const token = existing[0].token;
 
-    // Update existing runner — mark online, refresh heartbeat
-    await db
-      .update(runners)
-      .set({
-        name: req.name,
-        status: 'online',
-        os: req.os,
-        httpUrl: req.httpUrl ?? null,
-        lastHeartbeatAt: now,
-      })
-      .where(eq(runners.id, runnerId));
+    // Update existing runner — mark online, refresh heartbeat.
+    // Also update userId if provided (backfills runners registered without one).
+    const updateFields: Record<string, any> = {
+      name: req.name,
+      status: 'online',
+      os: req.os,
+      httpUrl: req.httpUrl ?? null,
+      lastHeartbeatAt: now,
+    };
+    if (userId) {
+      updateFields.userId = userId;
+    }
+    await db.update(runners).set(updateFields).where(eq(runners.id, runnerId));
 
     log.info('Runner reconnected (reusing existing registration)', {
       namespace: 'runner',
@@ -109,7 +116,18 @@ export async function authenticateRunner(token: string): Promise<string | null> 
 export async function handleHeartbeat(
   runnerId: string,
   req: RunnerHeartbeatRequest,
-): Promise<void> {
+): Promise<boolean> {
+  // Verify runner still exists (may have been purged on server restart)
+  const exists = await db
+    .select({ id: runners.id })
+    .from(runners)
+    .where(eq(runners.id, runnerId))
+    .limit(1);
+
+  if (exists.length === 0) {
+    return false;
+  }
+
   const now = new Date().toISOString();
   const activeCount = req.activeThreadIds.length;
 
@@ -121,6 +139,8 @@ export async function handleHeartbeat(
       lastHeartbeatAt: now,
     })
     .where(eq(runners.id, runnerId));
+
+  return true;
 }
 
 // ── Runner Listing ──────────────────────────────────────
@@ -362,6 +382,34 @@ export async function purgeOfflineRunners(olderThanMs = 60_000): Promise<number>
     log.info(`Purged ${stale.length} stale offline runner(s)`, { namespace: 'runner' });
   }
   return stale.length;
+}
+
+/**
+ * Purge ALL runners and their project assignments on server startup.
+ * After a restart no runner has an active WebSocket, so all DB state is stale.
+ * Runners will re-register and re-assign projects when they reconnect.
+ * Also clears stale runnerId references from threads.
+ */
+export async function purgeAllRunners(): Promise<void> {
+  await db.delete(runnerProjectAssignments);
+  await db.delete(runnerTasks);
+  await db.delete(runners);
+  // Clear stale runnerId from threads so the resolver doesn't try old runner IDs
+  const { threads } = await import('../db/schema.js');
+  await db.update(threads).set({ runnerId: null });
+  log.info('Purged all runners, assignments, and thread runner refs (server restart)', {
+    namespace: 'runner',
+  });
+}
+
+/**
+ * Mark a single runner as offline when its WebSocket disconnects.
+ * This prevents the resolver from routing requests to a runner
+ * that is no longer reachable via tunnel.
+ */
+export async function markRunnerOffline(runnerId: string): Promise<void> {
+  await db.update(runners).set({ status: 'offline' }).where(eq(runners.id, runnerId));
+  log.info('Runner marked offline (WS disconnected)', { namespace: 'runner', runnerId });
 }
 
 /**

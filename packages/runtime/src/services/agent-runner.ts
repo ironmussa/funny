@@ -56,7 +56,13 @@ export class AgentRunner {
       void (async () => {
         await this.messageHandler.handle(threadId, msg);
         metric('agent.messages', 1, { type: 'sum', attributes: { threadId } });
-      })();
+      })().catch((err) => {
+        log.error('Unhandled error in agent:message handler', {
+          namespace: 'agent',
+          threadId,
+          error: (err as Error).message,
+        });
+      });
     });
 
     this.orchestrator.on('agent:error', (threadId: string, err: Error) => {
@@ -77,7 +83,13 @@ export class AgentRunner {
         await this.emitWS(threadId, 'agent:error', { error: err.message });
         await this.emitWS(threadId, 'agent:status', { status });
         await this.emitAgentCompleted(threadId, status as 'completed' | 'failed' | 'stopped');
-      })();
+      })().catch((innerErr) => {
+        log.error('Unhandled error in agent:error handler', {
+          namespace: 'agent',
+          threadId,
+          error: (innerErr as Error).message,
+        });
+      });
     });
 
     this.orchestrator.on('agent:unexpected-exit', (threadId: string) => {
@@ -100,7 +112,13 @@ export class AgentRunner {
         });
         await this.emitWS(threadId, 'agent:status', { status });
         await this.emitAgentCompleted(threadId, status as 'completed' | 'failed' | 'stopped');
-      })();
+      })().catch((err) => {
+        log.error('Unhandled error in agent:unexpected-exit handler', {
+          namespace: 'agent',
+          threadId,
+          error: (err as Error).message,
+        });
+      });
     });
 
     this.orchestrator.on('agent:stopped', (threadId: string) => {
@@ -120,7 +138,13 @@ export class AgentRunner {
         });
         await this.emitWS(threadId, 'agent:status', { status });
         await this.emitAgentCompleted(threadId, 'stopped');
-      })();
+      })().catch((err) => {
+        log.error('Unhandled error in agent:stopped handler', {
+          namespace: 'agent',
+          threadId,
+          error: (err as Error).message,
+        });
+      });
     });
 
     // End run span on natural completion (emitted from message handler)
@@ -139,7 +163,13 @@ export class AgentRunner {
       void (async () => {
         log.warn('Clearing stale sessionId after resume failure', { namespace: 'agent', threadId });
         await this.threadManager.updateThread(threadId, { sessionId: null });
-      })();
+      })().catch((err) => {
+        log.error('Unhandled error in agent:session-cleared handler', {
+          namespace: 'agent',
+          threadId,
+          error: (err as Error).message,
+        });
+      });
     });
 
     // Adopt surviving agent processes from a previous --watch restart.

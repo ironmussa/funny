@@ -63,11 +63,11 @@ setAuthInstance(authInstance);
 
 log.info('Server DB and auth initialized', { namespace: 'server' });
 
-// On restart, mark all runners offline and purge stale ones.
-// No runner has an active WebSocket connection at this point.
-const { markAllRunnersOffline, purgeOfflineRunners } = await import('./services/runner-manager.js');
-await markAllRunnersOffline();
-await purgeOfflineRunners();
+// On restart, purge all runners and their project assignments.
+// No runner has an active WebSocket connection at this point, so all
+// state is stale. Runners will re-register and re-assign projects on connect.
+const { purgeAllRunners } = await import('./services/runner-manager.js');
+await purgeAllRunners();
 
 // ── App ─────────────────────────────────────────────────
 
@@ -268,6 +268,18 @@ const server = Bun.serve({
               (ws.data as any).runnerId = runnerId;
               wsRelay.addRunnerClient(runnerId, ws);
               ws.send(JSON.stringify({ type: 'runner:auth_ok', runnerId }));
+
+              // Push PTY session list to all connected browser clients.
+              // When the server restarts, browser clients reconnect and send
+              // pty:list before the runner is available, receiving empty sessions.
+              // Now that the runner is connected, re-issue pty:list for each user
+              // so browser clients receive the real session list.
+              for (const userId of wsRelay.getConnectedBrowserUserIds()) {
+                wsRelay.forwardBrowserMessageToRunner(runnerId, userId, undefined, {
+                  type: 'pty:list',
+                  data: {},
+                });
+              }
             } else {
               ws.close(4001, 'Invalid runner token');
             }
@@ -328,18 +340,12 @@ const server = Bun.serve({
                     );
                   } catch {}
                 }
-                // For pty:list, send empty sessions so sessionsChecked becomes true
-                if (innerType === 'pty:list') {
-                  try {
-                    ws.send(
-                      JSON.stringify({
-                        type: 'pty:sessions',
-                        threadId: '',
-                        data: { sessions: [] },
-                      }),
-                    );
-                  } catch {}
-                }
+                // For pty:list, do NOT send empty sessions when no runner is
+                // connected. The runner may still be starting up and will push
+                // real sessions once it connects (see runner:auth handler above).
+                // Sending empty sessions prematurely would cause the client to
+                // mark sessionsChecked=true, triggering new PTY spawns for tabs
+                // that actually have live daemon sessions waiting to reconnect.
               }
             };
             if (projectId) {
@@ -380,6 +386,14 @@ const server = Bun.serve({
         });
         import('./services/ws-tunnel.js').then((wsTunnel) => {
           wsTunnel.cancelPendingRequests(d.runnerId);
+        });
+        // Mark runner offline in DB so the resolver stops routing to it
+        import('./services/runner-manager.js').then((rm) => {
+          rm.markRunnerOffline(d.runnerId).catch(() => {});
+        });
+        // Clear stale thread-runner cache entries for this runner
+        import('./services/runner-resolver.js').then((resolver) => {
+          resolver.evictRunnerFromCache(d.runnerId);
         });
       }
     },

@@ -96,9 +96,7 @@ export const TaskCard = memo(function TaskCard({
           </span>
         )}
         {!output && (
-          <span className="flex-shrink-0 text-[10px] italic text-muted-foreground/60">
-            running…
-          </span>
+          <span className="mr-1 h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-status-info" />
         )}
       </button>
 

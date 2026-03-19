@@ -13,6 +13,9 @@
  *   4. Null fallback (reports error to client)
  */
 
+import { sql } from 'drizzle-orm';
+
+import { db } from '../db/index.js';
 import { log } from '../lib/logger.js';
 import type { PtyBackend } from './pty-backend.js';
 import { wsBroker } from './ws-broker.js';
@@ -214,9 +217,9 @@ backend.init({
   },
 });
 
-// ── In-memory session persistence (replaces SQLite) ─────────────────
-// PTY sessions are process-local — they only need to survive hot-reloads
-// (via globalThis), not across full restarts. An in-memory Map is sufficient.
+// ── Persistent session storage (SQLite) ──────────────────────────────
+// PTY sessions are persisted to the `pty_sessions` table so the server can
+// re-discover them after a full restart (the daemon keeps them alive).
 
 interface PtySessionRow {
   id: string;
@@ -231,9 +234,6 @@ interface PtySessionRow {
   terminal_state: string | null;
 }
 
-const sessionStore: Map<string, PtySessionRow> = (globalThis as any).__ptySessionStore ?? new Map();
-(globalThis as any).__ptySessionStore = sessionStore;
-
 function savePtySession(
   id: string,
   tmuxSession: string,
@@ -246,30 +246,34 @@ function savePtySession(
   rows: number,
   terminalState?: string | null,
 ): void {
-  sessionStore.set(id, {
-    id,
-    tmux_session: tmuxSession,
-    user_id: userId,
-    cwd,
-    project_id: projectId ?? null,
-    label: label ?? null,
-    shell: shell ?? null,
-    cols,
-    rows,
-    terminal_state: terminalState ?? null,
-  });
+  try {
+    db.run(sql`
+      INSERT OR REPLACE INTO pty_sessions (id, tmux_session, user_id, cwd, shell, cols, rows, created_at, project_id, label, terminal_state)
+      VALUES (${id}, ${tmuxSession}, ${userId}, ${cwd}, ${shell ?? null}, ${cols}, ${rows}, ${new Date().toISOString()}, ${projectId ?? null}, ${label ?? null}, ${terminalState ?? null})
+    `);
+  } catch (err: any) {
+    log.error('Failed to save PTY session', { namespace: 'pty-manager', id, error: err?.message });
+  }
 }
 
 function removePtySession(id: string): void {
-  sessionStore.delete(id);
+  try {
+    db.run(sql`DELETE FROM pty_sessions WHERE id = ${id}`);
+  } catch (err: any) {
+    log.error('Failed to remove PTY session', {
+      namespace: 'pty-manager',
+      id,
+      error: err?.message,
+    });
+  }
 }
 
 function loadPtySessions(): PtySessionRow[] {
-  return Array.from(sessionStore.values());
+  return db.all<PtySessionRow>(sql`SELECT * FROM pty_sessions`);
 }
 
 function loadPtySessionsForUser(userId: string): PtySessionRow[] {
-  return Array.from(sessionStore.values()).filter((s) => s.user_id === userId);
+  return db.all<PtySessionRow>(sql`SELECT * FROM pty_sessions WHERE user_id = ${userId}`);
 }
 
 // ── Public API ────────────────────────────────────────────────────────
@@ -291,20 +295,21 @@ export function spawnPty(
     });
     // The client tried to spawn but the session already exists (e.g. browser refresh).
     // Auto-restore: send the serialized terminal content back to the client.
-    const content = capturePane(id);
-    if (content) {
-      const session = activeSessions.get(id)!;
-      const event = {
-        type: 'pty:data' as const,
-        threadId: '',
-        data: { ptyId: id, data: content },
-      };
-      if (session.userId && session.userId !== '__local__') {
-        wsBroker.emitToUser(session.userId, event);
-      } else {
-        wsBroker.emit(event);
+    const session = activeSessions.get(id)!;
+    capturePaneAsync(id).then((content) => {
+      if (content) {
+        const event = {
+          type: 'pty:data' as const,
+          threadId: '',
+          data: { ptyId: id, data: content },
+        };
+        if (session.userId && session.userId !== '__local__') {
+          wsBroker.emitToUser(session.userId, event);
+        } else {
+          wsBroker.emit(event);
+        }
       }
-    }
+    });
     return;
   }
 
@@ -345,6 +350,18 @@ export function capturePane(id: string): string | null {
   if (backend.capturePane) return backend.capturePane(id);
   // Fallback: return buffered output for non-persistent backends
   return drainScrollback(id);
+}
+
+/**
+ * Async capture — delegates to the daemon's headless xterm serializer.
+ * Falls back to synchronous capturePane for non-daemon backends.
+ */
+export async function capturePaneAsync(id: string): Promise<string | null> {
+  if (backend.name === 'daemon' && 'capturePaneAsync' in backend) {
+    const daemonBackend = backend as import('./pty-backend-daemon.js').DaemonPtyBackend;
+    return daemonBackend.capturePaneAsync(id);
+  }
+  return capturePane(id);
 }
 
 export function killPty(id: string): void {
@@ -431,24 +448,37 @@ export async function reattachSessions(): Promise<void> {
 
     try {
       const daemonSessions = await daemonBackend.listDaemonSessions();
-      log.info(`Daemon reports ${daemonSessions.length} live session(s)`, {
+      log.info(`Daemon reports ${daemonSessions.length} live session(s), DB has ${dbRows.length}`, {
         namespace: 'pty-manager',
       });
 
-      for (const ds of daemonSessions) {
-        const dbRow = dbMap.get(ds.id);
-        activeSessions.set(ds.id, {
-          userId: dbRow?.user_id ?? '__local__',
-          cwd: ds.cwd,
-          projectId: dbRow?.project_id ?? undefined,
-          label: dbRow?.label ?? undefined,
-          shell: ds.shell,
-        });
-      }
+      if (daemonSessions.length > 0) {
+        for (const ds of daemonSessions) {
+          const dbRow = dbMap.get(ds.id);
+          activeSessions.set(ds.id, {
+            userId: dbRow?.user_id ?? '__local__',
+            cwd: ds.cwd,
+            projectId: dbRow?.project_id ?? undefined,
+            label: dbRow?.label ?? undefined,
+            shell: ds.shell,
+          });
+        }
 
-      // Clean up DB rows for sessions that no longer exist in daemon
-      for (const row of dbRows) {
-        if (!daemonSessions.find((ds) => ds.id === row.id)) {
+        // Clean up DB rows for sessions that no longer exist in daemon
+        for (const row of dbRows) {
+          if (!daemonSessions.find((ds) => ds.id === row.id)) {
+            removePtySession(row.id);
+          }
+        }
+      } else if (dbRows.length > 0) {
+        // Daemon reports 0 sessions but DB has entries — the daemon has
+        // restarted and sessions were lost. Clean up the DB so the client
+        // knows the sessions are dead and can spawn new ones.
+        log.warn('Daemon has no sessions but DB has entries — sessions lost, cleaning up DB', {
+          namespace: 'pty-manager',
+          dbCount: dbRows.length,
+        });
+        for (const row of dbRows) {
           removePtySession(row.id);
         }
       }
@@ -457,6 +487,16 @@ export async function reattachSessions(): Promise<void> {
         namespace: 'pty-manager',
         error: err?.message,
       });
+      // On failure, still populate from DB so sessions remain visible
+      for (const row of dbRows) {
+        activeSessions.set(row.id, {
+          userId: row.user_id,
+          cwd: row.cwd,
+          projectId: row.project_id ?? undefined,
+          label: row.label ?? undefined,
+          shell: row.shell ?? undefined,
+        });
+      }
     }
     return;
   }

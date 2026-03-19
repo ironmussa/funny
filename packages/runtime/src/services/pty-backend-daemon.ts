@@ -33,6 +33,9 @@ export class DaemonPtyBackend implements PtyBackend {
   private pendingList: ((sessions: any[]) => void) | null = null;
   /** Queue of messages to send once connected. */
   private sendQueue: string[] = [];
+  private reconnectAttempts = 0;
+  private static readonly MAX_RECONNECT_ATTEMPTS = 5;
+  private static readonly RECONNECT_BASE_MS = 2000;
 
   constructor() {
     // Available on POSIX only (Unix sockets)
@@ -143,11 +146,37 @@ export class DaemonPtyBackend implements PtyBackend {
   }
 
   /**
+   * Wait for the daemon connection to be established.
+   * Used by reattachSessions() to avoid querying before connected.
+   */
+  async ensureConnected(timeoutMs = 15000): Promise<boolean> {
+    if (this.connected) return true;
+
+    const start = Date.now();
+    while (Date.now() - start < timeoutMs) {
+      await new Promise((r) => setTimeout(r, 200));
+      if (this.connected) return true;
+    }
+    return false;
+  }
+
+  /**
    * List sessions currently alive in the daemon.
    */
   async listDaemonSessions(): Promise<
     Array<{ id: string; cwd: string; shell: string; cols: number; rows: number }>
   > {
+    // Wait for connection before sending — critical for startup reattach
+    if (!this.connected) {
+      const ok = await this.ensureConnected();
+      if (!ok) {
+        log.warn('Cannot list daemon sessions — not connected', {
+          namespace: 'pty-backend-daemon',
+        });
+        return [];
+      }
+    }
+
     return new Promise((resolve) => {
       const timeout = setTimeout(() => {
         this.pendingList = null;
@@ -180,17 +209,23 @@ export class DaemonPtyBackend implements PtyBackend {
       // Ensure daemon is running
       const running = await ensureDaemonRunning();
       if (!running) {
-        log.error('Failed to start PTY daemon', { namespace: 'pty-backend-daemon' });
+        log.error('Failed to start PTY daemon', {
+          namespace: 'pty-backend-daemon',
+          attempt: this.reconnectAttempts,
+        });
         this.reconnecting = false;
         this.scheduleReconnect();
         return;
       }
 
       await this.openSocket();
+      // Reset reconnect counter on successful connection
+      this.reconnectAttempts = 0;
     } catch (err: any) {
       log.error('Failed to connect to PTY daemon', {
         namespace: 'pty-backend-daemon',
         error: err?.message,
+        attempt: this.reconnectAttempts,
       });
       this.reconnecting = false;
       this.scheduleReconnect();
@@ -322,6 +357,10 @@ export class DaemonPtyBackend implements PtyBackend {
     } else {
       // Queue messages while disconnected
       this.sendQueue.push(line);
+      // Reset reconnect counter — user actively wants a terminal
+      if (this.reconnectAttempts > DaemonPtyBackend.MAX_RECONNECT_ATTEMPTS) {
+        this.reconnectAttempts = 0;
+      }
       // Ensure we're trying to connect
       if (!this.reconnecting) {
         this.connectToDaemon();
@@ -331,10 +370,28 @@ export class DaemonPtyBackend implements PtyBackend {
 
   private scheduleReconnect(): void {
     if (this.reconnecting) return;
+
+    this.reconnectAttempts++;
+    if (this.reconnectAttempts > DaemonPtyBackend.MAX_RECONNECT_ATTEMPTS) {
+      log.error('PTY daemon reconnect limit reached, giving up', {
+        namespace: 'pty-backend-daemon',
+        attempts: this.reconnectAttempts,
+      });
+      return;
+    }
+
+    // Exponential backoff: 2s, 4s, 8s, 16s, 32s
+    const delay = DaemonPtyBackend.RECONNECT_BASE_MS * Math.pow(2, this.reconnectAttempts - 1);
+    log.info('Scheduling PTY daemon reconnect', {
+      namespace: 'pty-backend-daemon',
+      attempt: this.reconnectAttempts,
+      delayMs: delay,
+    });
+
     setTimeout(() => {
       if (!this.connected) {
         this.connectToDaemon();
       }
-    }, 2000);
+    }, delay);
   }
 }

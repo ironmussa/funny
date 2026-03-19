@@ -232,6 +232,13 @@ const server = Bun.serve({
     async open(ws) {
       const wsData = ws.data as unknown as WSData;
 
+      if (wsData.type === 'runner') {
+        log.info('Runner WebSocket connection opened', {
+          namespace: 'server',
+          ip: (ws.data as any).ip,
+        });
+      }
+
       if (wsData.type === 'browser' && wsData.req) {
         const session = await authInstance.api.getSession({ headers: wsData.req.headers });
         if (!session) {
@@ -360,13 +367,31 @@ const server = Bun.serve({
             }
           }
         }
-      } catch {
-        // Invalid JSON — ignore
+      } catch (err) {
+        // Log unexpected errors — don't just ignore them
+        if (err instanceof SyntaxError) {
+          // Invalid JSON — ignore
+        } else {
+          log.error('WebSocket message handler error', {
+            namespace: 'server',
+            wsType: wsData.type,
+            error: String(err),
+          });
+        }
       }
     },
 
-    close(ws) {
+    close(ws, code, reason) {
       const d = ws.data as any;
+
+      if (d.type === 'runner') {
+        log.warn('Runner WebSocket closed', {
+          namespace: 'server',
+          runnerId: d.runnerId ?? 'unauthenticated',
+          code,
+          reason: reason || 'none',
+        });
+      }
 
       // Decrement WebSocket connection counter
       if (d.ip) {
@@ -404,12 +429,61 @@ log.info(`funny-server running on http://${HOST}:${PORT}`, {
   namespace: 'server',
 });
 
+// ── Runner status monitor (debug) ────────────────────────
+// Prints runner connection state every second to help diagnose
+// spurious "not connected" errors.
+const RUNNER_STATUS_INTERVAL_MS = 1_000;
+let runnerStatusTimer: ReturnType<typeof setInterval> | null = null;
+
+if (process.env.NODE_ENV !== 'production') {
+  runnerStatusTimer = setInterval(async () => {
+    try {
+      const wsRelay = await import('./services/ws-relay.js');
+      const rm = await import('./services/runner-manager.js');
+      const stats = wsRelay.getRelayStats();
+      const allRunners = await rm.listRunners();
+
+      if (allRunners.length === 0 && stats.runners === 0) return; // nothing to report
+
+      const runnerDetails = allRunners.map((r) => ({
+        id: r.runnerId.slice(0, 8),
+        name: r.name,
+        dbStatus: r.status,
+        wsConnected: wsRelay.isRunnerConnected(r.runnerId),
+        lastHb: r.lastHeartbeatAt,
+        threads: r.activeThreadCount,
+        projects: r.assignedProjectIds.length,
+      }));
+
+      // Warn when there's a mismatch between WS and DB status
+      const hasIssue = runnerDetails.some(
+        (r) =>
+          (r.dbStatus === 'online' && !r.wsConnected) ||
+          (r.dbStatus === 'offline' && r.wsConnected),
+      );
+
+      const level = hasIssue ? 'warn' : 'info';
+      log[level]('Runner status', {
+        namespace: 'runner-monitor',
+        wsRunners: stats.runners,
+        wsBrowsers: stats.browserClients,
+        runners: runnerDetails,
+      });
+    } catch {
+      // Ignore — DB may not be ready yet
+    }
+  }, RUNNER_STATUS_INTERVAL_MS);
+}
+
 // ── Graceful shutdown ────────────────────────────────────
 let shuttingDown = false;
 async function shutdown() {
   if (shuttingDown) return;
   shuttingDown = true;
   log.info('Shutting down…', { namespace: 'server' });
+
+  // Stop runner status monitor
+  if (runnerStatusTimer) clearInterval(runnerStatusTimer);
 
   // Force exit after 5 seconds if graceful shutdown hangs
   const forceExit = setTimeout(() => {

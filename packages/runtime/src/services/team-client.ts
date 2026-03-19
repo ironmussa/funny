@@ -48,9 +48,9 @@ const WS_RECONNECT = {
   MAX_DELAY_MS: 30_000,
   BACKOFF_FACTOR: 2,
   /** How often we send a protocol-level ping (ms) */
-  PING_INTERVAL_MS: 30_000,
+  PING_INTERVAL_MS: 10_000,
   /** If no pong arrives within this window, consider the connection dead (ms) */
-  PONG_TIMEOUT_MS: 10_000,
+  PONG_TIMEOUT_MS: 5_000,
 } as const;
 
 interface TeamClientState {
@@ -217,6 +217,36 @@ async function sendHeartbeat(): Promise<void> {
         });
       }
     }
+    // WS health check — reconnect if WS is locally dead OR the server says it's not connected.
+    // The server includes `wsConnected` in the heartbeat response so the runner can detect
+    // stale connections (e.g. after server restart where the TCP close was never delivered).
+    if (res.ok) {
+      let serverSaysDisconnected = false;
+      try {
+        const hbData = await res.clone().json();
+        serverSaysDisconnected = hbData.wsConnected === false;
+      } catch {}
+
+      const locallyDead = !state.ws || state.ws.readyState !== WebSocket.OPEN;
+
+      if (locallyDead || serverSaysDisconnected) {
+        log.warn('WS tunnel stale — reconnecting', {
+          namespace: 'runner',
+          locallyDead,
+          serverSaysDisconnected,
+          wsState: state.ws?.readyState ?? 'null',
+        });
+        if (state.ws) {
+          try {
+            state.ws.close();
+          } catch {}
+          state.ws = null;
+        }
+        clearWsTimers();
+        state.wsReconnectAttempt = 0;
+        connectWebSocket();
+      }
+    }
   } catch (err) {
     log.warn('Heartbeat failed', { namespace: 'runner', error: err as any });
   }
@@ -358,6 +388,8 @@ function sendWsPing(ws: WebSocket): void {
 function connectWebSocket(): void {
   const wsUrl = state.serverUrl.replace(/^http/, 'ws') + '/ws/runner';
 
+  log.info('Attempting WebSocket connection', { namespace: 'runner', url: wsUrl });
+
   try {
     const ws = new WebSocket(wsUrl);
 
@@ -419,7 +451,14 @@ function connectWebSocket(): void {
       } catch {}
     };
 
-    ws.onclose = () => {
+    ws.onclose = (event) => {
+      log.warn('WebSocket closed', {
+        namespace: 'runner',
+        code: event.code,
+        reason: event.reason || 'none',
+        wasClean: event.wasClean,
+      });
+
       state.ws = null;
       clearWsTimers();
 
@@ -433,7 +472,12 @@ function connectWebSocket(): void {
       scheduleReconnect();
     };
 
-    ws.onerror = () => {
+    ws.onerror = (event) => {
+      log.error('WebSocket connection error', {
+        namespace: 'runner',
+        url: wsUrl,
+        message: (event as any)?.message || 'unknown',
+      });
       // onclose will fire after onerror
     };
 

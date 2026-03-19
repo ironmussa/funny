@@ -377,7 +377,9 @@ export class AgentRunner {
 
     // Paisley Park: recall project memory for context injection
     let memoryContext: string | undefined;
-    if (project && !effectiveSessionId) {
+    const memoryEnabled =
+      process.env.MEMORY_ENABLED === 'true' || process.env.MEMORY_ENABLED === '1';
+    if (project && !effectiveSessionId && memoryEnabled) {
       try {
         const pp = getPaisleyPark(project.id, project.name);
         const recallResult = await pp.recall(prompt, {

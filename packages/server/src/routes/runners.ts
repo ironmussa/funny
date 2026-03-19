@@ -68,7 +68,11 @@ runnerRoutes.post('/heartbeat', async (c) => {
       404,
     );
   }
-  return c.json({ ok: true });
+
+  // Tell the runner whether its WS tunnel is connected from the server's perspective.
+  // This lets the runner detect stale connections (e.g. after server restart).
+  const { isRunnerConnected } = await import('../services/ws-relay.js');
+  return c.json({ ok: true, wsConnected: isRunnerConnected(runnerId) });
 });
 
 // ── Task Polling ────────────────────────────────────────

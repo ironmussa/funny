@@ -159,18 +159,15 @@ export async function runTest(
   try {
     // Spawn Playwright test process
     const testTarget = line ? `${file}:${line}` : file;
-    const proc = Bun.spawn(
-      ['npx', 'playwright', 'test', testTarget, '--headed', '--reporter=line'],
-      {
-        cwd: projectPath,
-        env: {
-          ...process.env,
-          PLAYWRIGHT_CHROMIUM_DEBUG_PORT: String(CDP_PORT),
-        },
-        stdout: 'pipe',
-        stderr: 'pipe',
+    const proc = Bun.spawn(['npx', 'playwright', 'test', testTarget, '--reporter=line'], {
+      cwd: projectPath,
+      env: {
+        ...process.env,
+        PLAYWRIGHT_CHROMIUM_DEBUG_PORT: String(CDP_PORT),
       },
-    );
+      stdout: 'pipe',
+      stderr: 'pipe',
+    });
 
     run.process = proc;
 

@@ -19,6 +19,10 @@ export const memoryGCHandler: EventHandler<'agent:completed'> = {
   event: 'agent:completed',
 
   async action(payload, ctx) {
+    const memoryEnabled =
+      process.env.MEMORY_ENABLED === 'true' || process.env.MEMORY_ENABLED === '1';
+    if (!memoryEnabled) return;
+
     trackThreadCompletion();
 
     if (!shouldRunGC(GC_INTERVAL)) return;

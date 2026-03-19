@@ -4,11 +4,10 @@
  *
  * STRICT ISOLATION: Every request is routed exclusively to the requesting
  * user's runner. No cross-user fallbacks. If the user has no runner
- * registered, return null → 502.
+ * reachable, return null → 502.
  *
- * The resolver only handles USER-SCOPING (who owns the runner).
- * It does NOT check WebSocket connectivity — that's the tunnel's job.
- * The tunnel fails instantly if the WS is down, so there's no delay.
+ * A runner is considered "reachable" if it has an active WebSocket tunnel
+ * OR a direct HTTP URL. The proxy tries tunnel first, then httpUrl fallback.
  *
  * Resolution strategies:
  * 1. Thread cache (in-memory)
@@ -21,7 +20,9 @@ import { and, eq } from 'drizzle-orm';
 
 import { db } from '../db/index.js';
 import { runnerProjectAssignments, runners } from '../db/schema.js';
+import { log } from '../lib/logger.js';
 import { getRunnerForThread } from './thread-registry.js';
+import { isRunnerConnected } from './ws-relay.js';
 
 export interface ResolvedRunner {
   runnerId: string;
@@ -33,11 +34,18 @@ export interface ResolvedRunner {
 const threadRunnerCache = new Map<string, ResolvedRunner>();
 
 /**
+ * A runner is reachable if it has a live WebSocket OR a direct HTTP URL.
+ */
+function isReachable(runnerId: string, httpUrl: string | null): boolean {
+  return isRunnerConnected(runnerId) || !!httpUrl;
+}
+
+/**
  * Resolve which runner should handle a request.
- * Returns { runnerId, httpUrl } or null if no runner is registered for this user.
+ * Returns { runnerId, httpUrl } or null if no runner is reachable for this user.
  *
  * All resolution paths are scoped to the requesting user's runners.
- * WebSocket connectivity is NOT checked here — the tunnel handles that.
+ * Runners must be reachable (WS connected or httpUrl available).
  */
 export async function resolveRunner(
   path: string,
@@ -47,10 +55,14 @@ export async function resolveRunner(
   const projectId = extractProjectId(path, query);
   const threadId = extractThreadId(path);
 
-  // Strategy 1: Thread cache
+  // Strategy 1: Thread cache (verify runner is still reachable)
   if (threadId) {
     const cached = threadRunnerCache.get(threadId);
-    if (cached) return cached;
+    if (cached) {
+      if (isReachable(cached.runnerId, cached.httpUrl)) return cached;
+      // Stale cache entry — runner unreachable, evict it
+      threadRunnerCache.delete(threadId);
+    }
   }
 
   // Strategy 2: Project assignment (scoped to userId)
@@ -63,19 +75,31 @@ export async function resolveRunner(
   if (threadId && userId) {
     const fromDb = await getRunnerForThread(threadId, userId);
     if (fromDb) {
-      const resolved: ResolvedRunner = {
-        runnerId: fromDb.runnerId,
-        httpUrl: fromDb.httpUrl ?? null,
-      };
-      threadRunnerCache.set(threadId, resolved);
-      return resolved;
+      const httpUrl = fromDb.httpUrl ?? null;
+      if (isReachable(fromDb.runnerId, httpUrl)) {
+        const resolved: ResolvedRunner = {
+          runnerId: fromDb.runnerId,
+          httpUrl,
+        };
+        threadRunnerCache.set(threadId, resolved);
+        return resolved;
+      }
     }
   }
 
   // Strategy 4: User's runner (last resort, still user-scoped)
   if (userId) {
-    return await resolveUserRunner(userId);
+    const resolved = await resolveUserRunner(userId);
+    if (resolved) return resolved;
   }
+
+  log.debug('No reachable runner found', {
+    namespace: 'proxy',
+    userId: userId ?? 'none',
+    threadId: threadId ?? 'none',
+    projectId: projectId ?? 'none',
+    path,
+  });
 
   return null;
 }
@@ -139,24 +163,35 @@ function extractThreadId(path: string): string | null {
 }
 
 /**
- * Find the user's runner (DB lookup only, no WS check).
- * Returns the first runner belonging to this user, or null.
+ * Find a reachable runner belonging to this user.
+ * Prefers WS-connected runners, falls back to httpUrl-only runners.
  */
 async function resolveUserRunner(userId: string): Promise<ResolvedRunner | null> {
   const userRunners = await db
     .select({ id: runners.id, httpUrl: runners.httpUrl })
     .from(runners)
-    .where(eq(runners.userId, userId))
-    .limit(1);
+    .where(eq(runners.userId, userId));
 
-  if (userRunners.length === 0) return null;
+  // First pass: prefer WS-connected runners (tunnel is faster/more reliable)
+  for (const r of userRunners) {
+    if (isRunnerConnected(r.id)) {
+      return { runnerId: r.id, httpUrl: r.httpUrl ?? null };
+    }
+  }
 
-  return { runnerId: userRunners[0].id, httpUrl: userRunners[0].httpUrl ?? null };
+  // Second pass: accept runners with httpUrl (direct HTTP fallback)
+  for (const r of userRunners) {
+    if (r.httpUrl) {
+      return { runnerId: r.id, httpUrl: r.httpUrl };
+    }
+  }
+
+  return null;
 }
 
 /**
  * Resolve runner for a project, scoped to the requesting user.
- * DB lookup only — no WS connectivity check.
+ * Only returns reachable runners (WS connected or httpUrl available).
  */
 async function resolveByProject(projectId: string, userId: string): Promise<ResolvedRunner | null> {
   const assignments = await db
@@ -166,10 +201,19 @@ async function resolveByProject(projectId: string, userId: string): Promise<Reso
     })
     .from(runnerProjectAssignments)
     .innerJoin(runners, eq(runners.id, runnerProjectAssignments.runnerId))
-    .where(and(eq(runnerProjectAssignments.projectId, projectId), eq(runners.userId, userId)))
-    .limit(1);
+    .where(and(eq(runnerProjectAssignments.projectId, projectId), eq(runners.userId, userId)));
 
-  if (assignments.length === 0 || !assignments[0].runnerId) return null;
+  // Prefer WS-connected, fall back to httpUrl
+  for (const a of assignments) {
+    if (a.runnerId && isRunnerConnected(a.runnerId)) {
+      return { runnerId: a.runnerId, httpUrl: a.httpUrl ?? null };
+    }
+  }
+  for (const a of assignments) {
+    if (a.runnerId && a.httpUrl) {
+      return { runnerId: a.runnerId, httpUrl: a.httpUrl };
+    }
+  }
 
-  return { runnerId: assignments[0].runnerId, httpUrl: assignments[0].httpUrl ?? null };
+  return null;
 }

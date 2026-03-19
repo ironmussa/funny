@@ -6,8 +6,8 @@
  * (works behind NAT), with direct HTTP as a fallback when httpUrl is available.
  *
  * STRICT ISOLATION: The resolver guarantees the runner belongs to the
- * requesting user and is connected via WebSocket. If no runner is found,
- * we return 502 immediately — no retries against dead runners.
+ * requesting user AND is connected via WebSocket. If no runner is found
+ * or connected, we return 502 immediately.
  *
  * Headers added to proxied requests:
  * - X-Forwarded-User: userId from the authenticated session
@@ -42,6 +42,11 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
   const resolved = await resolveRunner(path, query, userId);
 
   if (!resolved) {
+    log.warn('No reachable runner for proxy request', {
+      namespace: 'proxy',
+      userId,
+      path,
+    });
     return c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
   }
 
@@ -79,7 +84,7 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
     }
   }
 
-  // Try WebSocket tunnel (runner was verified connected by the resolver)
+  // Try WebSocket tunnel first, fall back to direct HTTP if available
   try {
     const tunnelResp = await tunnelFetch(runnerId, {
       method: c.req.method,

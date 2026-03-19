@@ -1,15 +1,21 @@
 /**
- * WebSocket tunnel for proxying HTTP requests to runners.
+ * Unified tunnel for proxying HTTP requests to runners.
  *
- * Instead of direct HTTP fetch to the runner (which fails behind NAT),
- * this sends the request through the existing runner WebSocket connection
- * and correlates responses via requestId.
+ * Every request is ALWAYS queued in the HTTP tunnel (for poll-based pickup).
+ * If the runner has an active WebSocket, the request is ALSO pushed via WS
+ * for lower latency. The runner deduplicates by requestId.
+ *
+ * Responses can arrive via either channel:
+ * - WS: runner sends tunnel:response message
+ * - HTTP: runner POSTs to /api/runners/tunnel/result
+ * Both resolve the same pending Promise via handleTunnelResponse().
  */
 
-import type { CentralWSTunnelRequest, RunnerWSTunnelResponse } from '@funny/shared/runner-protocol';
+import type { CentralWSTunnelRequest } from '@funny/shared/runner-protocol';
 import { nanoid } from 'nanoid';
 
 import { log } from '../lib/logger.js';
+import { enqueueRequest } from './http-tunnel.js';
 import { sendToRunner } from './ws-relay.js';
 
 const TUNNEL_TIMEOUT_MS = 30_000;
@@ -31,8 +37,12 @@ export interface TunnelResponse {
 const pending = new Map<string, PendingRequest>();
 
 /**
- * Send an HTTP request to a runner through the WebSocket tunnel.
+ * Send an HTTP request to a runner through the tunnel.
  * Returns a Response-like object with status, headers, and body.
+ *
+ * The request is always queued for HTTP poll pickup.
+ * If WS is connected, it's also pushed for lower latency.
+ * The response can arrive from either channel.
  */
 export function tunnelFetch(
   runnerId: string,
@@ -40,8 +50,7 @@ export function tunnelFetch(
 ): Promise<TunnelResponse> {
   const requestId = nanoid();
 
-  const message: CentralWSTunnelRequest = {
-    type: 'tunnel:request',
+  const pollItem = {
     requestId,
     method: opts.method,
     path: opts.path,
@@ -49,11 +58,18 @@ export function tunnelFetch(
     body: opts.body ?? null,
   };
 
-  const sent = sendToRunner(runnerId, message as unknown as Record<string, unknown>);
-  if (!sent) {
-    return Promise.reject(new Error(`Runner ${runnerId} is not connected`));
-  }
+  // 1. ALWAYS queue for HTTP poll pickup (reliable baseline)
+  enqueueRequest(runnerId, pollItem);
 
+  // 2. Opportunistically push via WS (best-effort accelerator)
+  const wsMessage: CentralWSTunnelRequest = {
+    type: 'tunnel:request',
+    ...pollItem,
+  };
+  sendToRunner(runnerId, wsMessage as unknown as Record<string, unknown>);
+  // Ignore send failure — the request is already queued for poll
+
+  // 3. Wait for response (arrives via WS tunnel:response OR HTTP POST /tunnel/result)
   return new Promise<TunnelResponse>((resolve, reject) => {
     const timer = setTimeout(() => {
       pending.delete(requestId);
@@ -69,14 +85,19 @@ export function tunnelFetch(
 }
 
 /**
- * Handle a tunnel:response message from a runner.
- * Called by the server WS message handler.
+ * Handle a tunnel response (from either WS or HTTP).
+ * Called by the server WS message handler and the POST /tunnel/result route.
  */
-export function handleTunnelResponse(data: RunnerWSTunnelResponse): void {
+export function handleTunnelResponse(data: {
+  requestId: string;
+  status: number;
+  headers: Record<string, string>;
+  body: string | null;
+}): void {
   const entry = pending.get(data.requestId);
   if (!entry) {
-    log.warn('Received tunnel:response for unknown requestId', {
-      namespace: 'ws-tunnel',
+    log.warn('Received tunnel response for unknown requestId', {
+      namespace: 'tunnel',
       requestId: data.requestId,
     });
     return;
@@ -93,7 +114,8 @@ export function handleTunnelResponse(data: RunnerWSTunnelResponse): void {
 }
 
 /**
- * Cancel all pending tunnel requests for a runner (e.g. on disconnect).
+ * Cancel all pending tunnel requests for a runner.
+ * Only call when the runner is truly unreachable (no WS AND no polling).
  */
 export function cancelPendingRequests(runnerId: string): void {
   let cancelled = 0;
@@ -106,7 +128,7 @@ export function cancelPendingRequests(runnerId: string): void {
   }
   if (cancelled > 0) {
     log.info(`Cancelled ${cancelled} pending tunnel requests for runner ${runnerId}`, {
-      namespace: 'ws-tunnel',
+      namespace: 'tunnel',
     });
   }
 }

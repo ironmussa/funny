@@ -2,12 +2,14 @@
  * HTTP reverse proxy middleware for the central server.
  *
  * Any /api/* route not handled by native server routes gets forwarded
- * to the appropriate runner. Uses WebSocket tunnel as the primary transport
- * (works behind NAT), with direct HTTP as a fallback when httpUrl is available.
+ * to the appropriate runner via the best available transport:
+ *
+ * 1. Tunnel (queue + WS accelerator) — used when runner is polling or WS-connected
+ * 2. Direct HTTP — used when runner has an httpUrl (e.g. same LAN)
+ * 3. 502 — no reachable runner
  *
  * STRICT ISOLATION: The resolver guarantees the runner belongs to the
- * requesting user AND is connected via WebSocket. If no runner is found
- * or connected, we return 502 immediately.
+ * requesting user. If no runner is found, we return 502 immediately.
  *
  * Headers added to proxied requests:
  * - X-Forwarded-User: userId from the authenticated session
@@ -19,14 +21,16 @@ import type { Context } from 'hono';
 
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
+import { isPolling } from '../services/http-tunnel.js';
 import { resolveRunner } from '../services/runner-resolver.js';
+import { isRunnerConnected } from '../services/ws-relay.js';
 import { tunnelFetch } from '../services/ws-tunnel.js';
 
 const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET!;
 
 /**
- * Hono handler that proxies the request to the appropriate runner
- * via WebSocket tunnel or direct HTTP.
+ * Hono handler that proxies the request to the appropriate runner.
+ * Picks the best transport based on runner connectivity state.
  */
 export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
   const userId = c.get('userId') as string | undefined;
@@ -84,40 +88,63 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
     }
   }
 
-  // Try WebSocket tunnel first, fall back to direct HTTP if available
+  const tunnelPath = `${path}${url.search}`;
+  const tunnelActive = isRunnerConnected(runnerId) || isPolling(runnerId);
+
+  // If the tunnel transport is active (WS or polling), use it as primary
+  if (tunnelActive) {
+    try {
+      const tunnelResp = await tunnelFetch(runnerId, {
+        method: c.req.method,
+        path: tunnelPath,
+        headers: forwardedHeaders,
+        body,
+      });
+
+      return new Response(tunnelResp.body, {
+        status: tunnelResp.status,
+        headers: new Headers(tunnelResp.headers),
+      });
+    } catch (tunnelErr) {
+      log.warn('Tunnel request failed, trying direct HTTP', {
+        namespace: 'proxy',
+        runnerId,
+        error: (tunnelErr as Error).message,
+      });
+
+      if (httpUrl) {
+        return await directHttpFetch(c, httpUrl, path, url.search, forwardedHeaders, body);
+      }
+
+      return c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
+    }
+  }
+
+  // Tunnel not active — try direct HTTP first (instant), queue in tunnel as backup
+  if (httpUrl) {
+    return await directHttpFetch(c, httpUrl, path, url.search, forwardedHeaders, body);
+  }
+
+  // No httpUrl either — queue in tunnel anyway (runner might start polling soon)
   try {
     const tunnelResp = await tunnelFetch(runnerId, {
       method: c.req.method,
-      path: `${path}${url.search}`,
+      path: tunnelPath,
       headers: forwardedHeaders,
       body,
     });
 
-    const responseHeaders = new Headers(tunnelResp.headers);
     return new Response(tunnelResp.body, {
       status: tunnelResp.status,
-      headers: responseHeaders,
+      headers: new Headers(tunnelResp.headers),
     });
-  } catch (tunnelErr) {
-    const errMsg = (tunnelErr as Error).message;
-
-    log.warn('Tunnel request failed', {
-      namespace: 'proxy',
-      runnerId,
-      error: errMsg,
-    });
-
-    // Fallback: direct HTTP (only if httpUrl is set)
-    if (httpUrl) {
-      return await directHttpFetch(c, httpUrl, path, url.search, forwardedHeaders, body);
-    }
-
+  } catch {
     return c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);
   }
 }
 
 /**
- * Direct HTTP fetch to a runner (fallback when tunnel fails and httpUrl is available).
+ * Direct HTTP fetch to a runner (when httpUrl is available).
  */
 async function directHttpFetch(
   c: Context<ServerEnv>,

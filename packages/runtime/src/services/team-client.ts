@@ -69,6 +69,10 @@ interface TeamClientState {
   localApp: FetchableApp | null;
   /** Pending data requests awaiting server responses, keyed by requestId */
   pendingDataRequests: Map<string, { resolve: (value: any) => void; reject: (err: Error) => void }>;
+  /** Whether the tunnel poll loop is running */
+  tunnelPollRunning: boolean;
+  /** Set of requestIds already processed, for dedup between WS push and HTTP poll */
+  processedRequestIds: Set<string>;
 }
 
 const state: TeamClientState = {
@@ -85,7 +89,29 @@ const state: TeamClientState = {
   browserWSHandler: null,
   localApp: null,
   pendingDataRequests: new Map(),
+  tunnelPollRunning: false,
+  processedRequestIds: new Set(),
 };
+
+// ── Deduplication ─────────────────────────────────────────
+// Requests may arrive via both WS push and HTTP poll. Track processed IDs
+// to avoid handling the same request twice.
+
+const DEDUP_TTL_MS = 60_000;
+const dedupTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** Returns true if this is the first time seeing this requestId. */
+function markProcessed(requestId: string): boolean {
+  if (state.processedRequestIds.has(requestId)) return false;
+  state.processedRequestIds.add(requestId);
+  const timer = setTimeout(() => {
+    state.processedRequestIds.delete(requestId);
+    dedupTimers.delete(requestId);
+  }, DEDUP_TTL_MS);
+  if (timer.unref) timer.unref();
+  dedupTimers.set(requestId, timer);
+  return true;
+}
 
 // ── HTTP helpers ─────────────────────────────────────────
 
@@ -562,6 +588,9 @@ function forwardEventToCentral(event: WSEvent, userId?: string): void {
  * Forwards the request to the local Hono app and sends the response back.
  */
 async function handleTunnelRequest(data: CentralWSTunnelRequest): Promise<void> {
+  // Dedup: skip if already handled via the other channel (WS push or HTTP poll)
+  if (!markProcessed(data.requestId)) return;
+
   if (!state.localApp) {
     log.warn('Received tunnel:request but no local app registered', { namespace: 'runner' });
     sendTunnelResponse(data.requestId, 503, {}, 'Local app not initialized');
@@ -607,20 +636,108 @@ function sendTunnelResponse(
   headers: Record<string, string>,
   body: string | null,
 ): void {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
-  try {
-    state.ws.send(
-      JSON.stringify({
-        type: 'tunnel:response',
-        requestId,
-        status,
-        headers,
-        body,
-      }),
-    );
-  } catch {
-    // WS may have closed
+  // Try WS first (lower latency)
+  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
+    try {
+      state.ws.send(
+        JSON.stringify({
+          type: 'tunnel:response',
+          requestId,
+          status,
+          headers,
+          body,
+        }),
+      );
+      return; // WS send succeeded
+    } catch {
+      // WS send failed — fall through to HTTP
+    }
   }
+
+  // Fallback: send result via HTTP POST
+  sendTunnelResponseHttp(requestId, status, headers, body).catch(() => {});
+}
+
+/** Send tunnel result via HTTP when WS is unavailable */
+async function sendTunnelResponseHttp(
+  requestId: string,
+  status: number,
+  headers: Record<string, string>,
+  body: string | null,
+): Promise<void> {
+  try {
+    const res = await centralFetch('/api/runners/tunnel/result', {
+      method: 'POST',
+      body: JSON.stringify({ requestId, status, headers, body }),
+    });
+    if (!res.ok) {
+      log.warn('HTTP tunnel result rejected', {
+        namespace: 'runner',
+        requestId,
+        status: res.status,
+      });
+    }
+  } catch (err) {
+    log.warn('Failed to send tunnel result via HTTP', {
+      namespace: 'runner',
+      requestId,
+      error: (err as Error).message,
+    });
+  }
+}
+
+// ── HTTP Tunnel Poll Loop ────────────────────────────────
+
+/**
+ * Long-poll loop that pulls queued tunnel requests from the server.
+ * This is the reliable baseline transport — runs continuously alongside WS.
+ * Requests may also arrive via WS push (deduped by requestId).
+ */
+async function tunnelPollLoop(): Promise<void> {
+  if (state.tunnelPollRunning) return;
+  state.tunnelPollRunning = true;
+
+  log.info('Tunnel poll loop started', { namespace: 'runner' });
+
+  while (state.tunnelPollRunning && state.runnerId) {
+    try {
+      const res = await centralFetch('/api/runners/tunnel/poll');
+      if (!res.ok) {
+        // Server error — back off briefly
+        await new Promise((r) => setTimeout(r, 2_000));
+        continue;
+      }
+
+      const { requests } = (await res.json()) as {
+        requests: Array<{
+          requestId: string;
+          method: string;
+          path: string;
+          headers: Record<string, string>;
+          body: string | null;
+        }>;
+      };
+
+      for (const req of requests) {
+        // handleTunnelRequest dedupes internally via markProcessed()
+        handleTunnelRequest({
+          type: 'tunnel:request',
+          requestId: req.requestId,
+          method: req.method,
+          path: req.path,
+          headers: req.headers,
+          body: req.body,
+        });
+      }
+    } catch {
+      // Network error — back off before retrying
+      if (state.tunnelPollRunning) {
+        await new Promise((r) => setTimeout(r, 3_000));
+      }
+    }
+  }
+
+  log.info('Tunnel poll loop stopped', { namespace: 'runner' });
 }
 
 // ── Data Persistence (Runner → Server) ──────────────────
@@ -678,6 +795,15 @@ function handleDataResponse(data: any): void {
       break;
     case 'data:get_arc_response':
       pending.resolve(data.arc);
+      break;
+    case 'data:get_profile_response':
+      pending.resolve(data.profile);
+      break;
+    case 'data:get_github_token_response':
+      pending.resolve({ token: data.token });
+      break;
+    case 'data:update_profile_response':
+      pending.resolve(data.profile);
       break;
     default:
       pending.resolve(data);
@@ -914,6 +1040,40 @@ export async function remoteResolveProjectPath(
   });
 }
 
+// ── Profile operations ──────────────────────────────────
+
+/** Get a user profile from the server */
+export async function remoteGetProfile(userId: string): Promise<any> {
+  const requestId = nanoid();
+  return sendDataMessage({
+    type: 'data:get_profile',
+    requestId,
+    userId,
+  });
+}
+
+/** Get a user's decrypted GitHub token from the server */
+export async function remoteGetGithubToken(userId: string): Promise<string | null> {
+  const requestId = nanoid();
+  const result = await sendDataMessage({
+    type: 'data:get_github_token',
+    requestId,
+    userId,
+  });
+  return result?.token ?? null;
+}
+
+/** Update a user profile on the server */
+export async function remoteUpdateProfile(userId: string, data: Record<string, any>): Promise<any> {
+  const requestId = nanoid();
+  return sendDataMessage({
+    type: 'data:update_profile',
+    requestId,
+    userId,
+    payload: data,
+  });
+}
+
 // ── Thread creation/deletion ────────────────────────────
 
 /** Create a thread record on the server */
@@ -985,8 +1145,11 @@ export async function initTeamMode(serverUrl: string): Promise<void> {
   state.pollTimer = setInterval(pollTasks, 5_000);
   if (state.pollTimer.unref) state.pollTimer.unref();
 
-  // Connect WebSocket for event streaming
+  // Connect WebSocket for event streaming (opportunistic accelerator)
   connectWebSocket();
+
+  // Start HTTP tunnel poll loop (reliable baseline transport)
+  tunnelPollLoop();
 
   // Assign local projects to this runner on the server
   await assignLocalProjects();
@@ -1002,6 +1165,14 @@ export function shutdownTeamMode(): void {
   if (state.pollTimer) clearInterval(state.pollTimer);
   if (state.unsubscribeBroker) state.unsubscribeBroker();
   if (state.ws) state.ws.close();
+
+  // Stop tunnel poll loop
+  state.tunnelPollRunning = false;
+
+  // Clean up dedup state
+  state.processedRequestIds.clear();
+  for (const [, timer] of dedupTimers) clearTimeout(timer);
+  dedupTimers.clear();
 
   state.heartbeatTimer = null;
   state.pollTimer = null;

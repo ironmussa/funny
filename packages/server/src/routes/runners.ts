@@ -75,6 +75,27 @@ runnerRoutes.post('/heartbeat', async (c) => {
   return c.json({ ok: true, wsConnected: isRunnerConnected(runnerId) });
 });
 
+// ── HTTP Tunnel (Poll + Result) ─────────────────────────
+
+runnerRoutes.get('/tunnel/poll', async (c) => {
+  const runnerId = c.get('runnerId') as string | undefined;
+  if (!runnerId) return c.json({ error: 'Unauthorized: runner token required' }, 401);
+
+  const { waitForRequests } = await import('../services/http-tunnel.js');
+  const requests = await waitForRequests(runnerId);
+  return c.json({ requests });
+});
+
+runnerRoutes.post('/tunnel/result', async (c) => {
+  const runnerId = c.get('runnerId') as string | undefined;
+  if (!runnerId) return c.json({ error: 'Unauthorized: runner token required' }, 401);
+
+  const body = await c.req.json<import('@funny/shared/runner-protocol').TunnelResultRequest>();
+  const { handleTunnelResponse } = await import('../services/ws-tunnel.js');
+  handleTunnelResponse(body);
+  return c.json({ ok: true });
+});
+
 // ── Task Polling ────────────────────────────────────────
 
 runnerRoutes.get('/tasks', async (c) => {

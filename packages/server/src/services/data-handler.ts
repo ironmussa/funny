@@ -274,6 +274,41 @@ export async function handleDataMessage(runnerId: string, data: any): Promise<vo
         break;
       }
 
+      // ── Profile operations ─────────────────────────────────
+
+      case 'data:get_profile': {
+        const { getProfile } = await import('./profile-service.js');
+        const profile = await getProfile(data.userId);
+        sendToRunner(runnerId, {
+          type: 'data:get_profile_response',
+          requestId: data.requestId,
+          profile: profile ?? null,
+        });
+        break;
+      }
+
+      case 'data:get_github_token': {
+        const { getGithubToken } = await import('./profile-service.js');
+        const token = await getGithubToken(data.userId);
+        sendToRunner(runnerId, {
+          type: 'data:get_github_token_response',
+          requestId: data.requestId,
+          token: token ?? null,
+        });
+        break;
+      }
+
+      case 'data:update_profile': {
+        const { upsertProfile } = await import('./profile-service.js');
+        const updatedProfile = await upsertProfile(data.userId, data.payload);
+        sendToRunner(runnerId, {
+          type: 'data:update_profile_response',
+          requestId: data.requestId,
+          profile: updatedProfile,
+        });
+        break;
+      }
+
       // ── Arc operations ───────────────────────────────────
 
       case 'data:get_arc': {

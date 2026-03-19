@@ -285,6 +285,34 @@ export interface CentralWSTunnelRequest {
   body: string | null;
 }
 
+// ─── HTTP Tunnel (Poll-Based) ───────────────────────────
+// The server queues tunnel requests in memory. The runner picks them up
+// via GET /api/runners/tunnel/poll (long-poll) or receives them pushed
+// via WS (opportunistic accelerator). Results come back via
+// POST /api/runners/tunnel/result.
+
+/** A queued tunnel request, returned from GET /tunnel/poll */
+export interface TunnelPollItem {
+  requestId: string;
+  method: string;
+  path: string;
+  headers: Record<string, string>;
+  body: string | null;
+}
+
+/** Response body from GET /api/runners/tunnel/poll */
+export interface TunnelPollResponse {
+  requests: TunnelPollItem[];
+}
+
+/** Body for POST /api/runners/tunnel/result */
+export interface TunnelResultRequest {
+  requestId: string;
+  status: number;
+  headers: Record<string, string>;
+  body: string | null;
+}
+
 // ─── Pending Tasks Response ─────────────────────────────
 
 export interface PendingTasksResponse {

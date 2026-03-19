@@ -206,23 +206,33 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
     },
 
     profile: {
-      async getProfile() {
-        return null;
+      async getProfile(userId) {
+        const { remoteGetProfile } = await import('./team-client.js');
+        return remoteGetProfile(userId);
       },
-      async getGithubToken() {
-        return null;
+      async getGithubToken(userId) {
+        const { remoteGetGithubToken } = await import('./team-client.js');
+        return remoteGetGithubToken(userId);
       },
       async getAssemblyaiApiKey() {
         return null;
       },
-      async getGitIdentity() {
+      async getGitIdentity(userId) {
+        const { remoteGetProfile } = await import('./team-client.js');
+        const profile = await remoteGetProfile(userId);
+        if (profile?.gitName && profile?.gitEmail) {
+          return { name: profile.gitName, email: profile.gitEmail };
+        }
         return null;
       },
-      async isSetupCompleted() {
-        return false;
+      async isSetupCompleted(userId) {
+        const { remoteGetProfile } = await import('./team-client.js');
+        const profile = await remoteGetProfile(userId);
+        return !!profile?.setupCompleted;
       },
-      async updateProfile() {
-        notAvailable('updateProfile');
+      async updateProfile(userId, data) {
+        const { remoteUpdateProfile } = await import('./team-client.js');
+        return remoteUpdateProfile(userId, data);
       },
     },
 

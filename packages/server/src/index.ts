@@ -409,12 +409,18 @@ const server = Bun.serve({
         import('./services/ws-relay.js').then((wsRelay) => {
           wsRelay.removeRunnerClient(d.runnerId);
         });
-        import('./services/ws-tunnel.js').then((wsTunnel) => {
-          wsTunnel.cancelPendingRequests(d.runnerId);
-        });
-        // Mark runner offline in DB so the resolver stops routing to it
-        import('./services/runner-manager.js').then((rm) => {
-          rm.markRunnerOffline(d.runnerId).catch(() => {});
+        // Only cancel pending requests and mark offline if the runner is NOT
+        // actively polling. HTTP poll is the reliable baseline — if the runner
+        // is still polling, requests will be delivered via poll even without WS.
+        import('./services/http-tunnel.js').then((httpTunnel) => {
+          if (!httpTunnel.isPolling(d.runnerId)) {
+            import('./services/ws-tunnel.js').then((wsTunnel) => {
+              wsTunnel.cancelPendingRequests(d.runnerId);
+            });
+            import('./services/runner-manager.js').then((rm) => {
+              rm.markRunnerOffline(d.runnerId).catch(() => {});
+            });
+          }
         });
         // Clear stale thread-runner cache entries for this runner
         import('./services/runner-resolver.js').then((resolver) => {
@@ -440,6 +446,7 @@ if (process.env.NODE_ENV !== 'production') {
     try {
       const wsRelay = await import('./services/ws-relay.js');
       const rm = await import('./services/runner-manager.js');
+      const httpTunnel = await import('./services/http-tunnel.js');
       const stats = wsRelay.getRelayStats();
       const allRunners = await rm.listRunners();
 
@@ -450,6 +457,7 @@ if (process.env.NODE_ENV !== 'production') {
         name: r.name,
         dbStatus: r.status,
         wsConnected: wsRelay.isRunnerConnected(r.runnerId),
+        polling: httpTunnel.isPolling(r.runnerId),
         lastHb: r.lastHeartbeatAt,
         threads: r.activeThreadCount,
         projects: r.assignedProjectIds.length,

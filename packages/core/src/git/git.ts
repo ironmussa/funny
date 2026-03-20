@@ -403,11 +403,41 @@ export function revertFiles(cwd: string, paths: string[]): ResultAsync<void, Dom
           .filter(Boolean),
       );
 
+      // Identify unmerged files (merge conflicts) — these need special handling.
+      // Use ls-files --unmerged which catches all conflict types (UU, AA, AU, UA, DD, etc.)
+      // Output format: "<mode> <hash> <stage>\t<path>" — extract the path after the tab
+      const unmergedResult = await gitRead(['ls-files', '--unmerged'], { cwd });
+      const unmergedSet = new Set(
+        unmergedResult.stdout
+          .split('\n')
+          .map((l) => l.trim())
+          .filter(Boolean)
+          .map((l) => l.split('\t').pop() ?? ''),
+      );
+
       for (const path of paths) {
         if (untrackedSet.has(path)) {
           // Untracked file: delete it (there's no git version to restore)
           const fullPath = join(cwd, path);
           if (existsSync(fullPath)) rmSync(fullPath);
+        } else if (unmergedSet.has(path)) {
+          // Unmerged file (merge conflict): check if file exists in HEAD to decide strategy
+          const fullPath = join(cwd, path);
+          const headCheck = await gitRead(['cat-file', '-e', `HEAD:${path}`], {
+            cwd,
+            reject: false,
+          });
+          const existsInHead = headCheck.exitCode === 0;
+
+          if (existsInHead) {
+            // File exists in HEAD — restore to HEAD version, resolving the conflict
+            const result = await git(['checkout', 'HEAD', '--', path], cwd);
+            if (result.isErr()) throw result.error;
+          } else {
+            // File is new (only from the merge/incoming branch) — remove from index and disk
+            await git(['rm', '--cached', '--force', '--', path], cwd);
+            if (existsSync(fullPath)) rmSync(fullPath);
+          }
         } else {
           const result = await git(['checkout', '--', path], cwd);
           if (result.isErr()) throw result.error;

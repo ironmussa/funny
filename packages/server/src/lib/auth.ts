@@ -9,21 +9,13 @@ import { randomBytes } from 'crypto';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
-import {
-  user as authUser,
-  session as authSession,
-  account as authAccount,
-  verification as authVerification,
-  organization as authOrganization,
-  member as authMember,
-  invitation as authInvitation,
-} from '@funny/shared/db/schema-sqlite';
+import { getSchema } from '@funny/shared/db/schema';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin, bearer, username, organization } from 'better-auth/plugins';
 import { createAccessControl } from 'better-auth/plugins/access';
 
-import { db } from '../db/index.js';
+import { db, dbDialect } from '../db/index.js';
 import { DATA_DIR } from './data-dir.js';
 import { log } from './logger.js';
 
@@ -116,18 +108,19 @@ function resolveSessionCookieSecure(): { secure: boolean; useSecureCookies?: boo
   return { secure: httpsBase };
 }
 
-/** Build the SQLite database config for Better Auth. */
+/** Build the dialect-aware database config for Better Auth. */
 function buildDatabaseConfig() {
+  const s = getSchema(dbDialect);
   return drizzleAdapter(db, {
-    provider: 'sqlite',
+    provider: dbDialect === 'pg' ? 'pg' : 'sqlite',
     schema: {
-      user: authUser,
-      session: authSession,
-      account: authAccount,
-      verification: authVerification,
-      organization: authOrganization,
-      member: authMember,
-      invitation: authInvitation,
+      user: s.user,
+      session: s.session,
+      account: s.account,
+      verification: s.verification,
+      organization: s.organization,
+      member: s.member,
+      invitation: s.invitation,
     },
   });
 }

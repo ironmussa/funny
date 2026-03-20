@@ -508,12 +508,22 @@ export function handleWSQueueUpdate(
     });
   }
 
+  // Always persist to the byThread map so the count survives thread switches
+  const { queuedCountByThread } = get();
+  const updatedMap =
+    data.queuedCount > 0
+      ? { ...queuedCountByThread, [threadId]: data.queuedCount }
+      : (() => {
+          const { [threadId]: _, ...rest } = queuedCountByThread;
+          return rest;
+        })();
+
   if (activeThread?.id === threadId) {
     wsLog.info('handleWSQueueUpdate: setting queuedCount on activeThread', {
       threadId,
       queuedCount: String(data.queuedCount),
       nextMessage: data.nextMessage?.slice(0, 50) ?? 'none',
-      prevQueuedCount: String((activeThread as any).queuedCount ?? 'undefined'),
+      prevQueuedCount: String(activeThread.queuedCount ?? 'undefined'),
     });
     set({
       activeThread: {
@@ -521,9 +531,12 @@ export function handleWSQueueUpdate(
         queuedCount: data.queuedCount,
         queuedNextMessage: data.nextMessage,
       },
-    } as any);
+      queuedCountByThread: updatedMap,
+    });
   } else {
-    wsLog.warn('handleWSQueueUpdate: activeThread mismatch — event dropped', {
+    // Even when not the active thread, persist the count for later
+    set({ queuedCountByThread: updatedMap });
+    wsLog.warn('handleWSQueueUpdate: activeThread mismatch — count persisted to map', {
       threadId,
       activeThreadId: activeThread?.id ?? 'null',
       queuedCount: String(data.queuedCount),

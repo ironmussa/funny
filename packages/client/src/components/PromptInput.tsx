@@ -85,9 +85,7 @@ export const PromptInput = memo(function PromptInput({
 
   // Read queuedCount directly from the store to avoid stale prop values.
   // The prop may lag behind when ThreadView re-renders are deferred by memo().
-  const storeQueuedCount = useThreadStore(
-    (s) => (s.activeThread as any)?.queuedCount ?? 0,
-  ) as number;
+  const storeQueuedCount = useThreadStore((s) => s.activeThread?.queuedCount ?? 0);
   const queuedCount = storeQueuedCount > 0 ? storeQueuedCount : queuedCountProp;
 
   // ── Project defaults ──

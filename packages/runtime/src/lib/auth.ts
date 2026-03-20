@@ -16,7 +16,7 @@ import { admin, username, organization } from 'better-auth/plugins';
 import { createAccessControl } from 'better-auth/plugins/access';
 import { sql } from 'drizzle-orm';
 
-import { db, dbRun } from '../db/index.js';
+import { db, dbDialect, dbRun } from '../db/index.js';
 import { DATA_DIR } from './data-dir.js';
 import { log } from './logger.js';
 
@@ -104,7 +104,8 @@ function buildAuthDatabase(): any {
     // The server handles all auth; this instance only exists to satisfy imports.
     return { db: null, type: 'sqlite' as const };
   }
-  return drizzleAdapter(db, { provider: 'sqlite' });
+  const dialect = dbDialect === 'pg' ? 'pg' : 'sqlite';
+  return drizzleAdapter(db, { provider: dialect });
 }
 
 export const auth = betterAuth({

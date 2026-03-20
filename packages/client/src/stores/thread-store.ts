@@ -106,6 +106,10 @@ export interface ThreadWithMessages extends Thread {
   setupProgress?: import('@/components/GitProgressModal').GitProgressStep[];
   /** Last user message — always available even when messages are paginated */
   lastUserMessage?: import('@funny/shared').Message & { toolCalls?: any[] };
+  /** Number of messages currently queued for this thread */
+  queuedCount?: number;
+  /** Preview of the next queued message */
+  queuedNextMessage?: string;
 }
 
 export interface ThreadState {
@@ -116,6 +120,8 @@ export interface ThreadState {
   setupProgressByThread: Record<string, import('@/components/GitProgressModal').GitProgressStep[]>;
   /** Context usage keyed by threadId — survives thread switches */
   contextUsageByThread: Record<string, ContextUsage>;
+  /** Queued message count keyed by threadId — survives thread switches */
+  queuedCountByThread: Record<string, number>;
 
   loadThreadsForProject: (projectId: string) => Promise<void>;
   selectThread: (threadId: string | null) => Promise<void>;
@@ -249,6 +255,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   activeThread: null,
   setupProgressByThread: {},
   contextUsageByThread: {},
+  queuedCountByThread: {},
 
   loadThreadsForProject: async (projectId: string) => {
     // Deduplicate concurrent loads for the same project
@@ -389,6 +396,9 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       // Restore cached context usage so the bar survives thread switches
       const storedContextUsage = get().contextUsageByThread[threadId];
 
+      // Restore cached queued count so the queue widget survives thread switches
+      const storedQueuedCount = get().queuedCountByThread[threadId];
+
       set({
         activeThread: {
           ...thread,
@@ -400,6 +410,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
           pendingPermission,
           setupProgress: storedSetupProgress,
           contextUsage: storedContextUsage,
+          queuedCount: storedQueuedCount,
           compactionEvents: compactionEvents.length > 0 ? compactionEvents : undefined,
         },
       });

@@ -387,11 +387,14 @@ function setupRunnerControlHandlers(socket: Socket, runnerId: string): void {
 
 /**
  * Set up data persistence handlers for a runner socket.
- * Each data message uses Socket.IO acknowledgements for request/response.
+ *
+ * Uses event-based request/response: the runner includes a `_requestId` in
+ * each data message, and the server emits the response back on
+ * `data:response:<requestId>`. This avoids Socket.IO ack callbacks which
+ * deadlock when the runner sends data requests while processing a
+ * tunnel:request on the same connection (Bun WebSocket limitation).
  */
 function setupRunnerDataHandlers(socket: Socket, runnerId: string): void {
-  // Data persistence messages — use the existing data-handler
-  // but with ack callbacks instead of sendToRunner
   const dataEvents = [
     'data:insert_message',
     'data:insert_tool_call',
@@ -415,20 +418,31 @@ function setupRunnerDataHandlers(socket: Socket, runnerId: string): void {
     'data:update_queued_message',
     'data:save_thread_event',
     'data:get_profile',
+    'data:get_provider_key',
     'data:get_github_token',
+    'data:get_minimax_api_key',
     'data:update_profile',
     'data:get_arc',
   ];
 
   for (const eventName of dataEvents) {
     socket.on(eventName, async (data: any, ack?: (response: any) => void) => {
+      const requestId = data?._requestId;
       try {
         const { handleDataMessageWithAck } = await import('./data-handler.js');
         const response = await handleDataMessageWithAck(runnerId, {
           type: eventName,
           ...data,
         });
-        if (ack && response !== undefined) {
+        // Event-based response (new pattern): emit on data:response:<requestId>
+        if (requestId && response !== undefined) {
+          socket.emit(`data:response:${requestId}`, response);
+        } else if (requestId) {
+          // Fire-and-forget messages still need an empty ack so the runner doesn't time out
+          socket.emit(`data:response:${requestId}`, { type: 'data:ack', success: true });
+        }
+        // Legacy ack fallback (for runners that still use the ack pattern)
+        if (!requestId && ack && response !== undefined) {
           ack(response);
         }
       } catch (err) {
@@ -438,8 +452,11 @@ function setupRunnerDataHandlers(socket: Socket, runnerId: string): void {
           type: eventName,
           error: (err as Error).message,
         });
-        if (ack) {
-          ack({ error: (err as Error).message, success: false });
+        const errorResponse = { error: (err as Error).message, success: false };
+        if (requestId) {
+          socket.emit(`data:response:${requestId}`, errorResponse);
+        } else if (ack) {
+          ack(errorResponse);
         }
       }
     });

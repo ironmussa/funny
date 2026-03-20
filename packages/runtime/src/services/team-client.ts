@@ -29,6 +29,7 @@ import type {
   RunnerRegisterResponse,
   RunnerTask,
 } from '@funny/shared/runner-protocol';
+import { nanoid } from 'nanoid';
 import { io, type Socket } from 'socket.io-client';
 
 import { log } from '../lib/logger.js';
@@ -613,8 +614,13 @@ async function handleTunnelRequest(data: {
 // ── Data Persistence (Runner → Server) ──────────────────
 
 /**
- * Send a data message to the server using Socket.IO emit + ack.
- * Socket.IO's acknowledgement callback handles request/response correlation.
+ * Send a data message to the server using event-based request/response.
+ *
+ * Uses a unique requestId to correlate requests with responses. The server
+ * emits back on `data:response:<requestId>` instead of using Socket.IO ack
+ * callbacks. This avoids a deadlock where ack packets can't be delivered
+ * while the runner is processing a tunnel:request on the same connection
+ * (Bun's WebSocket / @socket.io/bun-engine limitation).
  */
 async function sendDataMessage(eventType: string, payload: Record<string, any>): Promise<any> {
   if (!state.socket?.connected) {
@@ -640,18 +646,26 @@ async function sendDataMessage(eventType: string, payload: Record<string, any>):
     });
   }
 
+  const requestId = nanoid();
+  const responseEvent = `data:response:${requestId}`;
+
   return new Promise((resolve, reject) => {
-    state
-      .socket!.timeout(DATA_REQUEST_TIMEOUT)
-      .emit(eventType, payload, (err: Error | null, response: any) => {
-        if (err) {
-          reject(new Error(`Data request timed out (${eventType})`));
-        } else if (response?.success === false && response?.error) {
-          reject(new Error(response.error));
-        } else {
-          resolve(response);
-        }
-      });
+    const timeout = setTimeout(() => {
+      state.socket!.off(responseEvent, handler);
+      reject(new Error(`Data request timed out (${eventType})`));
+    }, DATA_REQUEST_TIMEOUT);
+
+    const handler = (response: any) => {
+      clearTimeout(timeout);
+      if (response?.success === false && response?.error) {
+        reject(new Error(response.error));
+      } else {
+        resolve(response);
+      }
+    };
+
+    state.socket!.once(responseEvent, handler);
+    state.socket!.emit(eventType, { ...payload, _requestId: requestId });
   });
 }
 
@@ -760,10 +774,23 @@ export async function remoteGetProfile(userId: string): Promise<any> {
   return response?.profile ?? null;
 }
 
+/** Get a user's decrypted provider key from the server. */
+export async function remoteGetProviderKey(
+  userId: string,
+  provider: string,
+): Promise<string | null> {
+  const result = await sendDataMessage('data:get_provider_key', { userId, provider });
+  return result?.key ?? null;
+}
+
 /** Get a user's decrypted GitHub token from the server */
 export async function remoteGetGithubToken(userId: string): Promise<string | null> {
-  const result = await sendDataMessage('data:get_github_token', { userId });
-  return result?.token ?? null;
+  return remoteGetProviderKey(userId, 'github');
+}
+
+/** Get a user's decrypted MiniMax API key from the server */
+export async function remoteGetMinimaxApiKey(userId: string): Promise<string | null> {
+  return remoteGetProviderKey(userId, 'minimax');
 }
 
 /** Update a user profile on the server */

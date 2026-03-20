@@ -4,7 +4,9 @@ import { useProjectStore } from './project-store';
 import { useThreadStore, invalidateSelectThread } from './thread-store';
 
 const REVIEW_PANE_WIDTH_KEY = 'review_pane_width';
+const TEST_PANE_WIDTH_KEY = 'test_pane_width';
 const DEFAULT_REVIEW_PANE_WIDTH = 50; // percentage of viewport width
+const DEFAULT_TEST_PANE_WIDTH = 50;
 const MIN_REVIEW_PANE_WIDTH = 20;
 const MAX_REVIEW_PANE_WIDTH = 70;
 const TIMELINE_VISIBLE_KEY = 'timeline_visible';
@@ -14,6 +16,7 @@ export type RightPaneTab = 'review' | 'tests' | 'tasks';
 interface UIState {
   reviewPaneOpen: boolean;
   reviewPaneWidth: number; // percentage of viewport width
+  testPaneWidth: number; // percentage of viewport width
   rightPaneTab: RightPaneTab;
   settingsOpen: boolean;
   activeSettingsPage: string | null;
@@ -32,6 +35,7 @@ interface UIState {
   setTestPaneOpen: (open: boolean) => void;
   setTasksPaneOpen: (open: boolean) => void;
   setReviewPaneWidth: (width: number) => void;
+  setTestPaneWidth: (width: number) => void;
   setRightPaneTab: (tab: RightPaneTab) => void;
   setSettingsOpen: (open: boolean) => void;
   setActiveSettingsPage: (page: string | null) => void;
@@ -60,6 +64,14 @@ export const useUIStore = create<UIState>((set) => ({
       return stored ? Number(stored) : DEFAULT_REVIEW_PANE_WIDTH;
     } catch {
       return DEFAULT_REVIEW_PANE_WIDTH;
+    }
+  })(),
+  testPaneWidth: (() => {
+    try {
+      const stored = localStorage.getItem(TEST_PANE_WIDTH_KEY);
+      return stored ? Number(stored) : DEFAULT_TEST_PANE_WIDTH;
+    } catch {
+      return DEFAULT_TEST_PANE_WIDTH;
     }
   })(),
   settingsOpen: false,
@@ -107,6 +119,13 @@ export const useUIStore = create<UIState>((set) => ({
       localStorage.setItem(REVIEW_PANE_WIDTH_KEY, String(clamped));
     } catch {}
     set({ reviewPaneWidth: clamped });
+  },
+  setTestPaneWidth: (width) => {
+    const clamped = Math.max(MIN_REVIEW_PANE_WIDTH, Math.min(MAX_REVIEW_PANE_WIDTH, width));
+    try {
+      localStorage.setItem(TEST_PANE_WIDTH_KEY, String(clamped));
+    } catch {}
+    set({ testPaneWidth: clamped });
   },
   setSettingsOpen: (open) =>
     set(

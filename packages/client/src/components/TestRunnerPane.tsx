@@ -1,5 +1,5 @@
 import { PanelRightClose, Square } from 'lucide-react';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { BrowserPreview } from '@/components/test-runner/BrowserPreview';
 import { TestFileBrowser } from '@/components/test-runner/TestFileBrowser';
@@ -8,6 +8,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useProjectStore } from '@/stores/project-store';
 import { useTestStore } from '@/stores/test-store';
 import { useUIStore } from '@/stores/ui-store';
+
+const TEST_VIEWER_WIDTH_KEY = 'test_viewer_split';
+const DEFAULT_SPLIT = 75; // percentage of container width for the left (viewer) column
+const MIN_SPLIT = 30;
+const MAX_SPLIT = 90;
 
 export function TestRunnerPane() {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
@@ -72,6 +77,47 @@ export function TestRunnerPane() {
     stopRun(selectedProjectId);
   }, [selectedProjectId, stopRun]);
 
+  // --- Internal column resize ---
+  const [splitPct, setSplitPct] = useState(() => {
+    try {
+      const stored = localStorage.getItem(TEST_VIEWER_WIDTH_KEY);
+      return stored ? Number(stored) : DEFAULT_SPLIT;
+    } catch {
+      return DEFAULT_SPLIT;
+    }
+  });
+  const containerRef = useRef<HTMLDivElement>(null);
+  const dragging = useRef(false);
+  const [resizing, setResizing] = useState(false);
+
+  const handleSplitPointerDown = useCallback((e: React.PointerEvent) => {
+    dragging.current = true;
+    setResizing(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+    (e.target as HTMLElement).setPointerCapture(e.pointerId);
+  }, []);
+
+  const handleSplitPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragging.current || !containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const pct = ((e.clientX - rect.left) / rect.width) * 100;
+    const clamped = Math.max(MIN_SPLIT, Math.min(MAX_SPLIT, pct));
+    setSplitPct(clamped);
+    try {
+      localStorage.setItem(TEST_VIEWER_WIDTH_KEY, String(clamped));
+    } catch {}
+  }, []);
+
+  const handleSplitPointerUp = useCallback((e: React.PointerEvent) => {
+    if (!dragging.current) return;
+    dragging.current = false;
+    setResizing(false);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+  }, []);
+
   if (!selectedProjectId) {
     return (
       <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
@@ -117,10 +163,10 @@ export function TestRunnerPane() {
         </Tooltip>
       </div>
 
-      {/* Two-column layout: browser preview (left, larger) and file explorer (right) */}
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        {/* Left column — browser preview + test output (3× wider) */}
-        <div className="min-w-0 flex-[3] overflow-hidden">
+      {/* Two-column layout: browser preview (left) and file explorer (right) */}
+      <div ref={containerRef} className="relative flex min-h-0 flex-1 overflow-hidden">
+        {/* Left column — browser preview + test output */}
+        <div className="min-w-0 overflow-hidden" style={{ width: `${splitPct}%` }}>
           <BrowserPreview
             isRunning={isRunning}
             isStreaming={isStreaming}
@@ -128,8 +174,19 @@ export function TestRunnerPane() {
           />
         </div>
 
+        {/* Resize handle */}
+        <button
+          aria-label="Resize test viewer"
+          tabIndex={-1}
+          onPointerDown={handleSplitPointerDown}
+          onPointerMove={handleSplitPointerMove}
+          onPointerUp={handleSplitPointerUp}
+          className={`relative z-10 w-1.5 flex-shrink-0 cursor-col-resize border-x border-border bg-sidebar hover:bg-sidebar-accent ${!resizing ? 'transition-colors' : ''}`}
+          data-testid="test-viewer-resize"
+        />
+
         {/* Right column — test file explorer */}
-        <div className="min-w-0 flex-1 overflow-hidden border-l">
+        <div className="min-w-0 flex-1 overflow-hidden">
           <TestFileBrowser
             files={files}
             fileStatuses={fileStatuses}

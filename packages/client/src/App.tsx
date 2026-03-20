@@ -116,8 +116,11 @@ export function App() {
   const loadProjects = useProjectStore((s) => s.loadProjects);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const reviewPaneWidth = useUIStore((s) => s.reviewPaneWidth);
+  const testPaneWidth = useUIStore((s) => s.testPaneWidth);
   const setReviewPaneWidth = useUIStore((s) => s.setReviewPaneWidth);
+  const setTestPaneWidth = useUIStore((s) => s.setTestPaneWidth);
   const rightPaneTab = useUIStore((s) => s.rightPaneTab);
+  const activeWidth = rightPaneTab === 'tests' ? testPaneWidth : reviewPaneWidth;
   const settingsOpen = useUIStore((s) => s.settingsOpen);
   const generalSettingsOpen = useUIStore((s) => s.generalSettingsOpen);
   const allThreadsProjectId = useUIStore((s) => s.allThreadsProjectId);
@@ -136,26 +139,32 @@ export function App() {
   const rpStartWidth = useRef(0);
   const [rpResizing, setRpResizing] = useState(false);
 
-  const handleRpPointerDown = useCallback((e: React.PointerEvent) => {
-    rpDragging.current = true;
-    rpStartX.current = e.clientX;
-    rpStartWidth.current = useUIStore.getState().reviewPaneWidth;
-    setRpResizing(true);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, []);
+  // Track which setter to use during a drag (captured at pointer-down)
+  const rpActiveSetWidth = useRef<(w: number) => void>(setReviewPaneWidth);
 
-  const handleRpPointerMove = useCallback(
+  const handleRpPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (!rpDragging.current) return;
-      // Dragging left increases width, dragging right decreases
-      const deltaPx = rpStartX.current - e.clientX;
-      const deltaVw = (deltaPx / window.innerWidth) * 100;
-      setReviewPaneWidth(rpStartWidth.current + deltaVw);
+      rpDragging.current = true;
+      rpStartX.current = e.clientX;
+      const state = useUIStore.getState();
+      const isTests = state.rightPaneTab === 'tests';
+      rpStartWidth.current = isTests ? state.testPaneWidth : state.reviewPaneWidth;
+      rpActiveSetWidth.current = isTests ? setTestPaneWidth : setReviewPaneWidth;
+      setRpResizing(true);
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none';
+      (e.target as HTMLElement).setPointerCapture(e.pointerId);
     },
-    [setReviewPaneWidth],
+    [setReviewPaneWidth, setTestPaneWidth],
   );
+
+  const handleRpPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!rpDragging.current) return;
+    // Dragging left increases width, dragging right decreases
+    const deltaPx = rpStartX.current - e.clientX;
+    const deltaVw = (deltaPx / window.innerWidth) * 100;
+    rpActiveSetWidth.current(rpStartWidth.current + deltaVw);
+  }, []);
 
   const handleRpPointerUp = useCallback((e: React.PointerEvent) => {
     if (!rpDragging.current) return;
@@ -259,7 +268,7 @@ export function App() {
         style={{
           contain: 'layout style',
           ...(reviewPaneOpen && !settingsOpen && !allThreadsProjectId
-            ? { width: `${reviewPaneWidth}vw` }
+            ? { width: `${activeWidth}vw` }
             : {}),
         }}
       >
@@ -278,7 +287,7 @@ export function App() {
           <div
             className="flex h-full flex-col"
             style={{
-              width: `${reviewPaneWidth}vw`,
+              width: `${activeWidth}vw`,
               ...(!(reviewPaneOpen && !settingsOpen && !allThreadsProjectId)
                 ? { visibility: 'hidden' as const }
                 : {}),

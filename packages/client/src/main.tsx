@@ -104,9 +104,18 @@ function AuthGate() {
           // Server might still be starting — retry with backoff
           retries++;
           setTimeout(fetchProfile, retries * 1000);
-        } else if (!setupCompleted) {
-          // Only show wizard if we have no cached state
-          setSetupCompleted(false);
+        } else {
+          // Profile 401 does not auto-logout (see api.ts). Re-check Better Auth session; if the
+          // cookie never stuck, this clears isAuthenticated and returns to login with a real cause.
+          void useAuthStore
+            .getState()
+            .initialize()
+            .then(() => {
+              if (!useAuthStore.getState().isAuthenticated) return;
+              if (!setupCompleted) {
+                setSetupCompleted(false);
+              }
+            });
         }
       });
     };

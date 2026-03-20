@@ -7,8 +7,6 @@
 
 import type { Server as SocketIOServer } from 'socket.io';
 
-import { log } from '../lib/logger.js';
-
 // ── Socket.IO reference ─────────────────────────────────
 // Set by socketio.ts after initialization to avoid circular imports
 
@@ -77,23 +75,4 @@ export function tunnelFetch(
       },
     );
   });
-}
-
-/**
- * Cancel all pending tunnel requests for a runner.
- * With Socket.IO, this is largely a no-op since Socket.IO handles
- * disconnect cleanup automatically. Kept for interface compatibility.
- */
-export function cancelPendingRequests(runnerId: string): void {
-  log.info(`Runner ${runnerId} disconnected — Socket.IO handles pending request cleanup`, {
-    namespace: 'tunnel',
-  });
-}
-
-/**
- * Get the number of pending tunnel requests (for monitoring).
- * With Socket.IO acks, this is no longer tracked server-side.
- */
-export function getPendingCount(): number {
-  return 0;
 }

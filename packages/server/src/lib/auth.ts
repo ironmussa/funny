@@ -9,7 +9,6 @@ import { randomBytes } from 'crypto';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
-import { getDbMode, getDatabaseUrl } from '@funny/shared/db/db-mode';
 import {
   user as authUser,
   session as authSession,
@@ -81,37 +80,44 @@ const owner = ac.newRole({
 
 // ── Auth Instance ───────────────────────────────────────────────
 
+/** Vite dev port (from root `.env` when server uses --env-file) — keeps CORS/trustedOrigins in sync */
+const DEV_CLIENT_PORT = process.env.VITE_PORT || '5173';
+
 const corsOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
-  : ['http://localhost:*', 'http://127.0.0.1:*'];
+  : [
+      `http://localhost:${DEV_CLIENT_PORT}`,
+      `http://127.0.0.1:${DEV_CLIENT_PORT}`,
+      'http://localhost:*',
+      'http://127.0.0.1:*',
+    ];
 
 const PORT = parseInt(process.env.PORT || '3001', 10);
 
 /**
- * Build the database config for Better Auth based on the detected mode.
- * - SQLite: uses drizzleAdapter with the shared Drizzle instance
- * - PostgreSQL: uses pg.Pool with Kysely dialect
+ * Session cookie Secure flag + Better Auth `__Secure-` cookie prefix.
+ * If `.env` sets BETTER_AUTH_BASE_URL to https://… (e.g. production) but you still open the UI on
+ * http://localhost, browsers drop Secure cookies — login looks OK (JSON user) then /api/* returns 401.
  */
-function buildDatabaseConfig(): any {
-  const mode = getDbMode();
-
-  if (mode === 'postgres') {
-    const pg = require('pg') as typeof import('pg');
-    const { Kysely, PostgresDialect } = require('kysely') as typeof import('kysely');
-
-    const Pool = pg.default?.Pool ?? pg.Pool;
-    const authPool = new Pool({ connectionString: getDatabaseUrl()! });
-    const kyselyDb = new Kysely<any>({
-      dialect: new PostgresDialect({ pool: authPool }),
-    });
-
+function resolveSessionCookieSecure(): { secure: boolean; useSecureCookies?: boolean } {
+  const o = process.env.BETTER_AUTH_COOKIE_SECURE;
+  const forceInsecure = o === 'false' || o === '0';
+  const forceSecure = o === 'true' || o === '1';
+  const httpsBase = !!process.env.BETTER_AUTH_BASE_URL?.startsWith('https');
+  if (forceInsecure) {
     return {
-      db: kyselyDb,
-      type: 'postgres' as const,
+      secure: false,
+      ...(httpsBase ? { useSecureCookies: false } : {}),
     };
   }
+  if (forceSecure) {
+    return { secure: true, useSecureCookies: true };
+  }
+  return { secure: httpsBase };
+}
 
-  // SQLite mode — pass schema explicitly so drizzle adapter can locate Better Auth tables
+/** Build the SQLite database config for Better Auth. */
+function buildDatabaseConfig() {
   return drizzleAdapter(db, {
     provider: 'sqlite',
     schema: {
@@ -142,6 +148,7 @@ export const auth = new Proxy({} as ReturnType<typeof betterAuth>, {
  * Ensure Better Auth tables exist and create default admin if needed.
  */
 export async function initBetterAuth(): Promise<void> {
+  const cookieOpts = resolveSessionCookieSecure();
   _auth = betterAuth({
     database: buildDatabaseConfig(),
     baseURL: process.env.BETTER_AUTH_BASE_URL || `http://localhost:${PORT}`,
@@ -160,9 +167,13 @@ export async function initBetterAuth(): Promise<void> {
       },
     },
     advanced: {
+      // Explicitly set useSecureCookies based on the base URL protocol.
+      // When unset, Better Auth may auto-detect and use Secure cookies,
+      // which browsers silently reject on http:// origins.
+      useSecureCookies: cookieOpts.useSecureCookies ?? cookieOpts.secure,
       defaultCookieAttributes: {
         sameSite: 'lax',
-        secure: !!process.env.BETTER_AUTH_BASE_URL?.startsWith('https'),
+        secure: cookieOpts.secure,
         path: '/',
       },
     },
@@ -181,17 +192,7 @@ export async function initBetterAuth(): Promise<void> {
     ],
   });
 
-  // runMigrations() only works with the Kysely adapter (PostgreSQL mode).
-  // In SQLite mode, Better Auth tables are created by the server's own migration system.
-  if (getDbMode() === 'postgres') {
-    try {
-      const ctx = await _auth.$context;
-      await ctx.runMigrations();
-    } catch (err) {
-      log.error('Failed to run Better Auth migrations', { namespace: 'auth', error: err as any });
-      throw err;
-    }
-  }
+  // Better Auth tables are created by the server's own migration system (027_better_auth_tables).
 
   try {
     const ctx = await _auth.$context;

@@ -1,7 +1,7 @@
 /**
- * Shared migration infrastructure for both runtime and server.
+ * Shared migration infrastructure — SQLite only.
  *
- * Provides dialect-aware helpers and a migration runner.
+ * Provides helpers and a migration runner.
  * Each package defines its own migrations array and calls `runMigrations()`.
  */
 
@@ -23,8 +23,6 @@ export interface MigrationContext {
   ) => Promise<T | undefined>;
   /** Safely add a column (idempotent) */
   addColumn: (table: string, column: string, type: string, dflt?: string) => Promise<void>;
-  /** Whether the database is PostgreSQL */
-  isPg: boolean;
 }
 
 export interface MigrationLogger {
@@ -35,49 +33,30 @@ export interface MigrationLogger {
 // ── Context factory ──────────────────────────────────────────────
 
 /**
- * Create a migration context from a Drizzle database instance.
- *
- * @param db - Drizzle database instance (SQLite or PostgreSQL)
- * @param isPg - Whether this is a PostgreSQL database
+ * Create a migration context from a Drizzle database instance (SQLite).
  */
-export function createMigrationContext(db: any, isPg: boolean): MigrationContext {
-  async function exec(query: ReturnType<typeof sql> | ReturnType<typeof sql.raw>): Promise<void> {
-    if (isPg) {
-      await db.execute(query);
-    } else {
-      db.run(query);
-    }
+export function createMigrationContext(db: any): MigrationContext {
+  function exec(query: ReturnType<typeof sql> | ReturnType<typeof sql.raw>): Promise<void> {
+    db.run(query);
+    return Promise.resolve();
   }
 
-  async function queryOne<T>(
+  function queryOne<T>(
     query: ReturnType<typeof sql> | ReturnType<typeof sql.raw>,
   ): Promise<T | undefined> {
-    if (isPg) {
-      const rows = await db.execute(query);
-      return rows?.[0] as T | undefined;
-    } else {
-      return db.get<T>(query);
-    }
+    return Promise.resolve(db.get<T>(query));
   }
 
   async function addColumn(table: string, column: string, type: string, dflt?: string) {
     try {
       const defaultClause = dflt !== undefined ? ` DEFAULT ${dflt}` : '';
-      if (isPg) {
-        await exec(
-          sql.raw(
-            `ALTER TABLE ${table} ADD COLUMN IF NOT EXISTS ${column} ${type}${defaultClause}`,
-          ),
-        );
-      } else {
-        await exec(sql.raw(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}${defaultClause}`));
-      }
+      await exec(sql.raw(`ALTER TABLE ${table} ADD COLUMN ${column} ${type}${defaultClause}`));
     } catch {
       // Column already exists (SQLite doesn't support IF NOT EXISTS for ADD COLUMN)
     }
   }
 
-  return { exec, queryOne, addColumn, isPg };
+  return { exec, queryOne, addColumn };
 }
 
 // ── Migration runner ─────────────────────────────────────────────
@@ -87,21 +66,14 @@ export function createMigrationContext(db: any, isPg: boolean): MigrationContext
  *
  * Creates the `_migrations` tracking table if needed, then applies
  * each migration that hasn't been run yet (in order).
- *
- * @param db - Drizzle database instance
- * @param isPg - Whether this is PostgreSQL
- * @param migrations - Ordered list of migrations to apply
- * @param log - Logger instance
- * @param label - Label for log messages (e.g. "db", "central-db")
  */
 export async function runMigrations(
   db: any,
-  isPg: boolean,
   migrations: Migration[],
   log: MigrationLogger,
   label: string = 'db',
 ): Promise<void> {
-  const ctx = createMigrationContext(db, isPg);
+  const ctx = createMigrationContext(db);
 
   // Ensure migration tracking table exists
   await ctx.exec(sql`

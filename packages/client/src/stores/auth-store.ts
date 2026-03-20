@@ -93,18 +93,29 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
       throw new Error(result.error.message || 'Login failed');
     }
 
-    const u = result.data?.user as any;
-    if (u) {
-      set({
-        isAuthenticated: true,
-        user: {
-          id: u.id,
-          username: u.username || u.name || 'user',
-          displayName: u.name || u.username || 'User',
-          role: u.role || 'user',
-        },
-      });
+    // Confirm the session cookie is visible to the client (same check as /api/profile).
+    let session = await authClient.getSession();
+    for (let i = 0; i < 10 && !session.data?.user; i++) {
+      await new Promise((r) => setTimeout(r, 80));
+      session = await authClient.getSession();
     }
+
+    const u = session.data?.user as any;
+    if (!u) {
+      throw new Error(
+        'Session was not stored in the browser. Use BETTER_AUTH_BASE_URL with the same origin you open in the address bar (e.g. http://localhost:5173 with Vite), add that origin to CORS_ORIGIN, and avoid https:// in BASE_URL when using http:// locally.',
+      );
+    }
+
+    set({
+      isAuthenticated: true,
+      user: {
+        id: u.id,
+        username: u.username || u.name || 'user',
+        displayName: u.name || u.username || 'User',
+        role: u.role || 'user',
+      },
+    });
   },
 
   logout: async () => {

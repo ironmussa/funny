@@ -117,11 +117,26 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
       if (!res.ok) {
         span.end('ERROR');
 
-        // On 401, trigger logout
+        // On 401, verify the session is truly invalid before logging out.
+        // Multiple requests fire concurrently after login; a transient 401
+        // (e.g. cookie-cache race in Better Auth + PostgreSQL) must not
+        // trigger logout while the session is still valid.
         if (res.status === 401) {
-          import('@/stores/auth-store').then(({ useAuthStore }) => {
-            useAuthStore.getState().logout();
-          });
+          const pathNoQuery = path.split('?')[0];
+          const isInitialProfileLoad = method === 'GET' && pathNoQuery === '/profile';
+          if (!isInitialProfileLoad) {
+            import('@/lib/auth-client').then(async ({ authClient }) => {
+              try {
+                const session = await authClient.getSession();
+                if (!session.data?.user) {
+                  const { useAuthStore } = await import('@/stores/auth-store');
+                  useAuthStore.getState().logout();
+                }
+              } catch {
+                // Session check failed — don't logout on transient errors
+              }
+            });
+          }
         }
 
         // 5xx errors trigger the circuit breaker; 4xx do NOT.

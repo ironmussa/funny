@@ -1,6 +1,6 @@
 /**
- * Re-exports PostgreSQL schema from shared package.
- * All table definitions now live in @funny/shared/db/schema-pg.
+ * Re-exports SQLite schema from shared package.
+ * All table definitions live in @funny/shared/db/schema-sqlite.
  *
  * Existing imports like `from '../db/schema.js'` continue to work unchanged.
  */
@@ -30,4 +30,4 @@ export {
   runnerTasks,
   projectMembers,
   inviteLinks,
-} from '@funny/shared/db/schema-pg';
+} from '@funny/shared/db/schema-sqlite';

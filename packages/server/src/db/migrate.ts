@@ -1,11 +1,10 @@
 /**
- * Central server migrations (SQLite and PostgreSQL).
+ * Central server migrations — SQLite only.
  *
  * Uses the shared migration infrastructure from @funny/shared.
  * Each package defines its own migrations array and calls `runMigrations()`.
  */
 
-import { getDbMode } from '@funny/shared/db/db-mode';
 import {
   type Migration,
   createMigrationContext,
@@ -19,7 +18,7 @@ import { db } from './index.js';
 // Lazily create context — db may not be ready at import time
 let _ctx: ReturnType<typeof createMigrationContext> | null = null;
 function ctx() {
-  if (!_ctx) _ctx = createMigrationContext(db, getDbMode() === 'postgres');
+  if (!_ctx) _ctx = createMigrationContext(db);
   return _ctx;
 }
 
@@ -31,12 +30,20 @@ const migrations: Migration[] = [
         CREATE TABLE IF NOT EXISTS projects (
           id TEXT PRIMARY KEY,
           name TEXT NOT NULL,
-          repo_url TEXT NOT NULL,
-          description TEXT,
-          created_by TEXT NOT NULL,
-          organization_id TEXT,
-          created_at TEXT NOT NULL,
-          updated_at TEXT NOT NULL
+          path TEXT NOT NULL DEFAULT '',
+          color TEXT,
+          follow_up_mode TEXT NOT NULL DEFAULT 'interrupt',
+          default_provider TEXT,
+          default_model TEXT,
+          default_mode TEXT,
+          default_permission_mode TEXT,
+          default_branch TEXT,
+          urls TEXT,
+          system_prompt TEXT,
+          launcher_url TEXT,
+          user_id TEXT NOT NULL DEFAULT '__local__',
+          sort_order INTEGER NOT NULL DEFAULT 0,
+          created_at TEXT NOT NULL
         )
       `);
 
@@ -253,43 +260,7 @@ const migrations: Migration[] = [
   {
     name: '010_messages_search_vector',
     async up() {
-      // TSVECTOR, GIN indexes, triggers, and plpgsql are PostgreSQL-only features
-      if (!ctx().isPg) return;
-
-      await ctx().addColumn('messages', 'search_vector', 'TSVECTOR');
-
-      await ctx().exec(sql`
-        CREATE INDEX IF NOT EXISTS idx_messages_search_vector
-        ON messages USING GIN (search_vector)
-      `);
-
-      await ctx().exec(
-        sql.raw(`
-          CREATE OR REPLACE FUNCTION messages_search_vector_update() RETURNS trigger AS $$
-          BEGIN
-            NEW.search_vector := to_tsvector('english', COALESCE(NEW.content, ''));
-            RETURN NEW;
-          END
-          $$ LANGUAGE plpgsql
-        `),
-      );
-
-      await ctx().exec(
-        sql.raw(`DROP TRIGGER IF EXISTS messages_search_vector_trigger ON messages`),
-      );
-      await ctx().exec(
-        sql.raw(`
-          CREATE TRIGGER messages_search_vector_trigger
-          BEFORE INSERT OR UPDATE ON messages
-          FOR EACH ROW EXECUTE FUNCTION messages_search_vector_update()
-        `),
-      );
-
-      await ctx().exec(sql`
-        UPDATE messages
-        SET search_vector = to_tsvector('english', COALESCE(content, ''))
-        WHERE search_vector IS NULL
-      `);
+      // Was PostgreSQL-only (tsvector). No-op for SQLite.
     },
   },
 
@@ -661,12 +632,9 @@ const migrations: Migration[] = [
   },
 
   {
-    // Better Auth tables — only needed in SQLite mode.
-    // In PostgreSQL mode, Better Auth uses the Kysely adapter and handles its own migrations.
+    // Better Auth tables for SQLite.
     name: '027_better_auth_tables',
     async up() {
-      if (ctx().isPg) return;
-
       await ctx().exec(sql`
         CREATE TABLE IF NOT EXISTS "user" (
           id TEXT PRIMARY KEY,
@@ -797,8 +765,43 @@ const migrations: Migration[] = [
       await ctx().addColumn('tool_calls', 'parent_tool_call_id', 'TEXT');
     },
   },
+  {
+    name: '031_backfill_runner_user_id',
+    async up() {
+      // Backfill null user_id on runners with the first admin user.
+      // Also deduplicate: keep only the most recently registered runner per hostname.
+      const c = ctx();
+
+      // 1. Backfill user_id from first admin user
+      await c.exec(sql`
+        UPDATE runners SET user_id = (
+          SELECT id FROM "user" WHERE role = 'admin' LIMIT 1
+        )
+        WHERE user_id IS NULL
+      `);
+
+      // 2. Deduplicate: delete all but the newest runner per hostname
+      // Also clean up their project assignments first
+      await c.exec(sql`
+        DELETE FROM runner_project_assignments WHERE runner_id NOT IN (
+          SELECT id FROM runners r1
+          WHERE registered_at = (
+            SELECT MAX(registered_at) FROM runners r2 WHERE r2.hostname = r1.hostname
+          )
+        )
+      `);
+      await c.exec(sql`
+        DELETE FROM runners WHERE id NOT IN (
+          SELECT id FROM runners r1
+          WHERE registered_at = (
+            SELECT MAX(registered_at) FROM runners r2 WHERE r2.hostname = r1.hostname
+          )
+        )
+      `);
+    },
+  },
 ];
 
 export async function autoMigrate() {
-  await runMigrations(db as any, getDbMode() === 'postgres', migrations, log, 'central-db');
+  await runMigrations(db as any, migrations, log, 'central-db');
 }

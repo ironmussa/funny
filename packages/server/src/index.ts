@@ -49,22 +49,24 @@ await initBetterAuth();
 authInstance = auth;
 setAuthInstance(authInstance);
 
-log.info('Server DB and auth initialized', { namespace: 'server' });
+log.info('Server initialized — DB mode: sqlite', { namespace: 'server' });
 
 // On restart, purge all runners and their project assignments.
 // No runner has an active WebSocket connection at this point, so all
 // state is stale. Runners will re-register and re-assign projects on connect.
-const { purgeAllRunners } = await import('./services/runner-manager.js');
+const { purgeAllRunners, purgeStaleRunners } = await import('./services/runner-manager.js');
 await purgeAllRunners();
+await purgeStaleRunners();
 
 // ── App ─────────────────────────────────────────────────
 
 const app = new Hono<ServerEnv>();
 
 // Middleware
+const devClientPort = process.env.VITE_PORT || '5173';
 const corsOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((s) => s.trim())
-  : ['http://localhost:5173', 'http://127.0.0.1:5173'];
+  : [`http://localhost:${devClientPort}`, `http://127.0.0.1:${devClientPort}`];
 
 app.use('*', cors({ origin: corsOrigins, credentials: true }));
 app.use(
@@ -167,32 +169,39 @@ if (existsSync(clientDistDir)) {
 const PORT = parseInt(process.env.PORT || '3001', 10);
 const HOST = process.env.HOST || '0.0.0.0';
 
-// Initialize Socket.IO server
-const { createSocketIOServer, attachSocketIO, closeSocketIO } =
-  await import('./services/socketio.js');
-createSocketIOServer(authInstance, corsOrigins);
+// Initialize Socket.IO server with Bun-native engine
+const { createSocketIOServer, closeSocketIO } = await import('./services/socketio.js');
+const { engine: socketEngine } = createSocketIOServer(authInstance, corsOrigins);
 
 const server = Bun.serve({
+  // Spread Bun engine handler FIRST — provides the `websocket` property
+  // for native Bun WebSocket lifecycle (open/message/close).
+  ...socketEngine.handler(),
   port: PORT,
   hostname: HOST,
   reusePort: true,
   async fetch(req, server) {
+    // Handle Socket.IO requests BEFORE Hono — WebSocket upgrades need
+    // direct access to Bun's server.upgrade(), which returns undefined
+    // (Hono always expects a Response, so it can't handle upgrades).
+    const url = new URL(req.url);
+    if (url.pathname.startsWith('/socket.io/')) {
+      return socketEngine.handleRequest(req, server);
+    }
     return app.fetch(req, { IP: server.requestIP(req) });
   },
 });
-
-// Attach Socket.IO to the Bun HTTP server
-attachSocketIO(server);
 
 log.info(`funny-server running on http://${HOST}:${PORT}`, {
   namespace: 'server',
 });
 
 // ── Runner status monitor (debug) ────────────────────────
-// Prints runner connection state every second to help diagnose
-// spurious "not connected" errors.
-const RUNNER_STATUS_INTERVAL_MS = 1_000;
+// Socket.IO handles heartbeats natively (pingInterval/pingTimeout),
+// so we only check periodically for DB↔connection state mismatches.
+const RUNNER_STATUS_INTERVAL_MS = 30_000;
 let runnerStatusTimer: ReturnType<typeof setInterval> | null = null;
+let lastRunnerStateHash = '';
 
 if (process.env.NODE_ENV !== 'production') {
   runnerStatusTimer = setInterval(async () => {
@@ -219,6 +228,13 @@ if (process.env.NODE_ENV !== 'production') {
         (r) =>
           (r.dbStatus === 'online' && !r.connected) || (r.dbStatus === 'offline' && r.connected),
       );
+
+      // Only log when state changes or there's an issue
+      const stateHash = JSON.stringify(
+        runnerDetails.map((r) => `${r.id}:${r.dbStatus}:${r.connected}`),
+      );
+      if (stateHash === lastRunnerStateHash && !hasIssue) return;
+      lastRunnerStateHash = stateHash;
 
       const level = hasIssue ? 'warn' : 'info';
       log[level]('Runner status', {

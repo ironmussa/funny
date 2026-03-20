@@ -139,6 +139,25 @@ async function register(): Promise<boolean> {
     state.runnerId = data.runnerId;
     state.runnerToken = data.token;
 
+    // Verify the registration by doing a test heartbeat
+    try {
+      const hbRes = await centralFetch('/api/runners/heartbeat', {
+        method: 'POST',
+        body: JSON.stringify({ activeThreadIds: [] }),
+      });
+      if (hbRes.status === 404) {
+        log.warn('Registration returned stale runner — server may be using wrong DB', {
+          namespace: 'runner',
+          runnerId: data.runnerId,
+        });
+        state.runnerId = null;
+        state.runnerToken = null;
+        return false;
+      }
+    } catch {
+      // Non-fatal — heartbeat verification is best-effort
+    }
+
     log.info('Registered with central server', {
       namespace: 'runner',
       runnerId: data.runnerId,
@@ -366,10 +385,21 @@ export async function assignProjectToRunner(project: Project): Promise<void> {
  * Connect to the central server via Socket.IO.
  * Socket.IO handles: reconnection, heartbeat, transport fallback.
  */
+let _reregistering = false;
+let _reregisterAttempts = 0;
+const MAX_REREGISTER_ATTEMPTS = 5;
+
 function connectSocket(): void {
   if (!state.runnerToken) {
     log.warn('Cannot connect Socket.IO — no runner token', { namespace: 'runner' });
     return;
+  }
+
+  // Tear down previous socket completely before creating a new one
+  if (state.socket) {
+    state.socket.removeAllListeners();
+    state.socket.disconnect();
+    state.socket = null;
   }
 
   const serverUrl = state.serverUrl;
@@ -390,6 +420,7 @@ function connectSocket(): void {
   });
 
   socket.on('connect', () => {
+    _reregisterAttempts = 0; // Reset on successful connection
     log.info('Socket.IO connected to server', {
       namespace: 'runner',
       transport: socket.io.engine?.transport?.name ?? 'unknown',
@@ -403,11 +434,46 @@ function connectSocket(): void {
     });
   });
 
-  socket.on('connect_error', (err) => {
+  socket.on('connect_error', async (err) => {
     log.warn('Socket.IO connection error', {
       namespace: 'runner',
       error: err.message,
     });
+
+    // Token rejected — re-register to get a fresh token (with guard against concurrent attempts)
+    if (
+      (err.message === 'Invalid runner token' || err.message === 'No runner token') &&
+      !_reregistering &&
+      _reregisterAttempts < MAX_REREGISTER_ATTEMPTS
+    ) {
+      _reregistering = true;
+      _reregisterAttempts++;
+      try {
+        log.warn(
+          `Runner token invalid — re-registering (attempt ${_reregisterAttempts}/${MAX_REREGISTER_ATTEMPTS})`,
+          { namespace: 'runner' },
+        );
+        socket.removeAllListeners();
+        socket.disconnect();
+        state.runnerId = null;
+        state.runnerToken = null;
+        const ok = await register();
+        if (ok) {
+          _reregisterAttempts = 0; // Reset on success
+          connectSocket();
+          await assignLocalProjects();
+        }
+      } finally {
+        _reregistering = false;
+      }
+    } else if (_reregisterAttempts >= MAX_REREGISTER_ATTEMPTS) {
+      log.error(
+        `Max re-registration attempts (${MAX_REREGISTER_ATTEMPTS}) reached. Restart the runtime.`,
+        { namespace: 'runner' },
+      );
+      socket.removeAllListeners();
+      socket.disconnect();
+    }
   });
 
   socket.io.on('reconnect', (attempt) => {
@@ -636,12 +702,14 @@ export async function remoteUpdateToolCallOutput(
 
 /** Get a thread from the server by ID */
 export async function remoteGetThread(threadId: string): Promise<any> {
-  return sendDataMessage('data:get_thread', { threadId });
+  const response = await sendDataMessage('data:get_thread', { threadId });
+  return response?.thread ?? null;
 }
 
 /** Get a tool call from the server by ID */
 export async function remoteGetToolCall(toolCallId: string): Promise<any> {
-  return sendDataMessage('data:get_tool_call', { toolCallId });
+  const response = await sendDataMessage('data:get_tool_call', { toolCallId });
+  return response?.toolCall ?? null;
 }
 
 /** Find a tool call on the server by messageId + name + input (dedup) */
@@ -650,19 +718,24 @@ export async function remoteFindToolCall(
   name: string,
   input: string,
 ): Promise<any> {
-  return sendDataMessage('data:find_tool_call', { payload: { messageId, name, input } });
+  const response = await sendDataMessage('data:find_tool_call', {
+    payload: { messageId, name, input },
+  });
+  return response?.toolCall ?? null;
 }
 
 // ── Project operations ──────────────────────────────────
 
 /** Get a project from the server by ID */
 export async function remoteGetProject(projectId: string): Promise<any> {
-  return sendDataMessage('data:get_project', { projectId });
+  const response = await sendDataMessage('data:get_project', { projectId });
+  return response?.project ?? null;
 }
 
 /** Get an arc from the server by ID */
 export async function remoteGetArc(arcId: string): Promise<any> {
-  return sendDataMessage('data:get_arc', { arcId });
+  const response = await sendDataMessage('data:get_arc', { arcId });
+  return response?.arc ?? null;
 }
 
 /** List projects for a user on the server */
@@ -683,7 +756,8 @@ export async function remoteResolveProjectPath(
 
 /** Get a user profile from the server */
 export async function remoteGetProfile(userId: string): Promise<any> {
-  return sendDataMessage('data:get_profile', { userId });
+  const response = await sendDataMessage('data:get_profile', { userId });
+  return response?.profile ?? null;
 }
 
 /** Get a user's decrypted GitHub token from the server */
@@ -694,7 +768,8 @@ export async function remoteGetGithubToken(userId: string): Promise<string | nul
 
 /** Update a user profile on the server */
 export async function remoteUpdateProfile(userId: string, data: Record<string, any>): Promise<any> {
-  return sendDataMessage('data:update_profile', { userId, payload: data });
+  const response = await sendDataMessage('data:update_profile', { userId, payload: data });
+  return response?.profile ?? null;
 }
 
 // ── Thread creation/deletion ────────────────────────────

@@ -418,7 +418,28 @@ export async function markRunnerOffline(runnerId: string): Promise<void> {
  */
 export async function markAllRunnersOffline(): Promise<void> {
   await db.update(runners).set({ status: 'offline', lastHeartbeatAt: new Date().toISOString() });
-  log.info('Marked all runners as offline (server restart)', { namespace: 'runner' });
+  log.info('Marked all runners offline (server restart)', { namespace: 'runner' });
+}
+
+/**
+ * Delete runners that haven't sent a heartbeat in 24 hours.
+ * Prevents hostname-match from reusing stale runner records.
+ */
+export async function purgeStaleRunners(): Promise<void> {
+  const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+  const stale = await db
+    .select({ id: runners.id })
+    .from(runners)
+    .where(lt(runners.lastHeartbeatAt, cutoff));
+
+  if (stale.length === 0) return;
+
+  const staleIds = stale.map((r) => r.id);
+  for (const id of staleIds) {
+    await db.delete(runnerProjectAssignments).where(eq(runnerProjectAssignments.runnerId, id));
+  }
+  await db.delete(runners).where(lt(runners.lastHeartbeatAt, cutoff));
+  log.info(`Purged ${staleIds.length} stale runner(s)`, { namespace: 'runner' });
 }
 
 /** List only the runners owned by a specific user. */

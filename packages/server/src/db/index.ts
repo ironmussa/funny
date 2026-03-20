@@ -1,8 +1,8 @@
 /**
- * Central server database connection.
+ * Central server database connection — SQLite only.
  *
  * Uses the shared connection factory from @funny/shared.
- * In multi mode, defaults to PostgreSQL. In local mode, can use SQLite.
+ * Database file lives at ~/.funny/data.db.
  */
 
 import { resolve } from 'path';
@@ -11,13 +11,12 @@ import {
   type AppDatabase,
   type DatabaseConnection,
   createSqliteDatabase,
-  createPostgresDatabase,
   dbAll as _dbAll,
   dbGet as _dbGet,
   dbRun as _dbRun,
 } from '@funny/shared/db/connection';
-import { getDbMode, getDatabaseUrl } from '@funny/shared/db/db-mode';
-import { ResultAsync, errAsync, okAsync } from 'neverthrow';
+import { okAsync } from 'neverthrow';
+import type { ResultAsync } from 'neverthrow';
 
 import { DATA_DIR } from '../lib/data-dir.js';
 import { log } from '../lib/logger.js';
@@ -28,41 +27,13 @@ export type { AppDatabase };
 let _connection: DatabaseConnection | null = null;
 
 /**
- * Initialize the database connection.
+ * Initialize the SQLite database connection.
  * Must be called once at startup before any DB access.
- *
- * Auto-detects mode via getDbMode():
- * - SQLite (default): uses ~/.funny/data.db
- * - PostgreSQL: uses DATABASE_URL or DB_HOST + DB_USER env vars
  */
 export function initDatabase(options?: {
-  /** Override mode detection */
-  mode?: 'sqlite' | 'postgres';
-  /** SQLite path (only for sqlite mode) */
+  /** SQLite path override */
   sqlitePath?: string;
-  /** PostgreSQL URL (only for postgres mode) */
-  postgresUrl?: string;
 }): ResultAsync<void, string> {
-  const mode = options?.mode ?? getDbMode();
-
-  if (mode === 'postgres') {
-    const url = options?.postgresUrl ?? getDatabaseUrl();
-    if (!url) {
-      return errAsync(
-        'DB_MODE is set to "postgres" but no database credentials were found.\n' +
-          '  Set DATABASE_URL in your .env file, for example:\n' +
-          '    DATABASE_URL=postgresql://user:password@host:5432/dbname\n' +
-          '  Or switch back to SQLite by setting DB_MODE=sqlite.',
-      );
-    }
-    return ResultAsync.fromPromise(
-      createPostgresDatabase({ mode: 'postgres', url, log }).then((conn) => {
-        _connection = conn;
-      }),
-      (e) => `Failed to connect to PostgreSQL: ${e}`,
-    );
-  }
-
   const dbPath = options?.sqlitePath ?? resolve(DATA_DIR, 'data.db');
   _connection = createSqliteDatabase({ mode: 'sqlite', path: dbPath, log });
   return okAsync(undefined);
@@ -90,11 +61,6 @@ export function setConnection(conn: DatabaseConnection): void {
   _connection = conn;
 }
 
-/** The raw SQL client for use with adapters that need it (e.g. Better Auth). */
-export function getRawClient(): any | null {
-  return _connection?.pgClient ?? null;
-}
-
 export async function closeDatabase(): Promise<void> {
   if (_connection) {
     await _connection.close();
@@ -102,7 +68,7 @@ export async function closeDatabase(): Promise<void> {
 }
 
 // Compat helpers
-export const dbMode = getDbMode();
+export const dbMode = 'sqlite';
 export const dbAll = _dbAll;
 export const dbGet = _dbGet;
 export const dbRun = _dbRun;

@@ -2,8 +2,8 @@
  * Runner ↔ Central Server Protocol Types
  *
  * Defines the contract between local runners and the central funny server.
- * Communication uses HTTP for request/response operations and WebSocket
- * only for real-time agent streaming.
+ * Communication uses Socket.IO for real-time events, tunnel requests,
+ * and data persistence. HTTP is used for registration and heartbeat fallback.
  *
  * Key design: Runners are project-agnostic. They register as available machines.
  * The central server assigns projects to runners via the admin UI/API.
@@ -198,120 +198,11 @@ export interface UnassignProjectRequest {
   projectId: string;
 }
 
-// ─── WebSocket: Agent Streaming ─────────────────────────
-// The runner connects to the central server via WebSocket to
+// ─── Socket.IO: Agent Streaming ─────────────────────────
+// The runner connects to the central server via Socket.IO to
 // stream real-time agent events (messages, tool calls, status changes).
-
-export type RunnerWSMessage =
-  | RunnerWSAuth
-  | RunnerWSAgentEvent
-  | RunnerWSBrowserRelay
-  | RunnerWSPing
-  | RunnerWSTunnelResponse
-  | RunnerDataMessage
-  | RunnerDataQuery;
-
-export interface RunnerWSAuth {
-  type: 'runner:auth';
-  runnerId: string;
-  token: string;
-}
-
-export interface RunnerWSAgentEvent {
-  type: 'runner:agent_event';
-  threadId: string;
-  userId?: string;
-  event: WSEvent;
-}
-
-/** Runner → Server: relay a WS response back to a specific browser user */
-export interface RunnerWSBrowserRelay {
-  type: 'runner:browser_relay';
-  userId: string;
-  data: unknown;
-}
-
-export interface RunnerWSPing {
-  type: 'runner:ping';
-}
-
-/** Runner → Server: response to a tunneled HTTP request */
-export interface RunnerWSTunnelResponse {
-  type: 'tunnel:response';
-  requestId: string;
-  status: number;
-  headers: Record<string, string>;
-  body: string | null;
-}
-
-// Messages from Central Server → Runner via WebSocket
-export type CentralWSMessage =
-  | CentralWSAuthOk
-  | CentralWSPong
-  | CentralWSCommand
-  | CentralWSBrowserMessage
-  | CentralWSTunnelRequest
-  | ServerDataResponse
-  | ServerDataQueryResponse;
-
-export interface CentralWSAuthOk {
-  type: 'central:auth_ok';
-}
-
-export interface CentralWSPong {
-  type: 'central:pong';
-}
-
-export interface CentralWSCommand {
-  type: 'central:command';
-  task: RunnerTask;
-}
-
-/** Server → Runner: forward a browser WS message for local handling */
-export interface CentralWSBrowserMessage {
-  type: 'central:browser_ws';
-  userId: string;
-  organizationId?: string;
-  data: unknown;
-}
-
-/** Server → Runner: tunneled HTTP request to be handled locally */
-export interface CentralWSTunnelRequest {
-  type: 'tunnel:request';
-  requestId: string;
-  method: string;
-  path: string;
-  headers: Record<string, string>;
-  body: string | null;
-}
-
-// ─── HTTP Tunnel (Poll-Based) ───────────────────────────
-// The server queues tunnel requests in memory. The runner picks them up
-// via GET /api/runners/tunnel/poll (long-poll) or receives them pushed
-// via WS (opportunistic accelerator). Results come back via
-// POST /api/runners/tunnel/result.
-
-/** A queued tunnel request, returned from GET /tunnel/poll */
-export interface TunnelPollItem {
-  requestId: string;
-  method: string;
-  path: string;
-  headers: Record<string, string>;
-  body: string | null;
-}
-
-/** Response body from GET /api/runners/tunnel/poll */
-export interface TunnelPollResponse {
-  requests: TunnelPollItem[];
-}
-
-/** Body for POST /api/runners/tunnel/result */
-export interface TunnelResultRequest {
-  requestId: string;
-  status: number;
-  headers: Record<string, string>;
-  body: string | null;
-}
+// Authentication is handled via Socket.IO handshake auth (bearer token).
+// Tunnel requests use Socket.IO emit + ack callbacks.
 
 // ─── Pending Tasks Response ─────────────────────────────
 

@@ -15,7 +15,7 @@
 
 import { sql } from 'drizzle-orm';
 
-import { db } from '../db/index.js';
+import { db, getConnection } from '../db/index.js';
 import { log } from '../lib/logger.js';
 import type { PtyBackend } from './pty-backend.js';
 import { wsBroker } from './ws-broker.js';
@@ -246,6 +246,7 @@ function savePtySession(
   rows: number,
   terminalState?: string | null,
 ): void {
+  if (!getConnection()) return; // No DB in runner mode
   try {
     db.run(sql`
       INSERT OR REPLACE INTO pty_sessions (id, tmux_session, user_id, cwd, shell, cols, rows, created_at, project_id, label, terminal_state)
@@ -257,8 +258,9 @@ function savePtySession(
 }
 
 function removePtySession(id: string): void {
+  if (!getConnection()) return; // No DB in runner mode
   try {
-    db.run(sql`DELETE FROM pty_sessions WHERE id = ${id}`);
+    db.run(sql`Delete FROM pty_sessions WHERE id = ${id}`);
   } catch (err: any) {
     log.error('Failed to remove PTY session', {
       namespace: 'pty-manager',
@@ -269,10 +271,12 @@ function removePtySession(id: string): void {
 }
 
 function loadPtySessions(): PtySessionRow[] {
+  if (!getConnection()) return []; // No DB in runner mode
   return db.all<PtySessionRow>(sql`SELECT * FROM pty_sessions`);
 }
 
 function loadPtySessionsForUser(userId: string): PtySessionRow[] {
+  if (!getConnection()) return []; // No DB in runner mode
   return db.all<PtySessionRow>(sql`SELECT * FROM pty_sessions WHERE user_id = ${userId}`);
 }
 

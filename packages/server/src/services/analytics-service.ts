@@ -10,7 +10,7 @@
 
 import { eq, and, gte, lt, sql } from 'drizzle-orm';
 
-import { db, dbAll, dbGet, dbMode, schema } from '../db/index.js';
+import { db, dbAll, dbGet, schema } from '../db/index.js';
 
 type TimeRange = 'day' | 'week' | 'month' | 'all';
 type GroupBy = 'day' | 'week' | 'month' | 'year';
@@ -29,23 +29,8 @@ export function tzOffsetToModifier(offsetMinutes: number): string {
   return `${sign}${h}:${m}`;
 }
 
-/** Returns a SQL expression that buckets a date column by the requested granularity. */
+/** Returns a SQL expression that buckets a date column by the requested granularity (SQLite). */
 function dateBucket(column: any, groupBy: GroupBy, tzMod: string) {
-  if (dbMode === 'postgres') {
-    // PostgreSQL: use to_char + timezone conversion via INTERVAL
-    switch (groupBy) {
-      case 'week':
-        return sql`to_char((${column})::timestamp AT TIME ZONE 'UTC' AT TIME ZONE ${tzMod}, 'IYYY-"W"IW')`;
-      case 'month':
-        return sql`to_char((${column})::timestamp AT TIME ZONE 'UTC' AT TIME ZONE ${tzMod}, 'YYYY-MM')`;
-      case 'year':
-        return sql`to_char((${column})::timestamp AT TIME ZONE 'UTC' AT TIME ZONE ${tzMod}, 'YYYY')`;
-      case 'day':
-      default:
-        return sql`to_char((${column})::timestamp AT TIME ZONE 'UTC' AT TIME ZONE ${tzMod}, 'YYYY-MM-DD')`;
-    }
-  }
-  // SQLite: use strftime + datetime modifier
   switch (groupBy) {
     case 'week':
       return sql`strftime('%Y-W%W', datetime(${column}, ${tzMod}))`;

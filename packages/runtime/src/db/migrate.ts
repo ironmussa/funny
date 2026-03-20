@@ -4,7 +4,7 @@
  * @domain layer: infrastructure
  * @domain depends: Database
  *
- * Runtime migrations — works with both SQLite and PostgreSQL.
+ * Runtime migrations — SQLite only.
  * Uses shared migration infrastructure from @funny/shared/db/migrate.
  */
 
@@ -16,10 +16,9 @@ import {
 } from '@funny/shared/db/migrate';
 
 import { log } from '../lib/logger.js';
-import { db, dbMode } from './index.js';
+import { db } from './index.js';
 
-const isPg = dbMode === 'postgres';
-const ctx = createMigrationContext(db, isPg);
+const ctx = createMigrationContext(db);
 const { exec, queryOne, addColumn } = ctx;
 
 // ── Migrations ──────────────────────────────────────────────────
@@ -221,21 +220,12 @@ const migrations: Migration[] = [
         sql`UPDATE threads SET stage = 'review' WHERE status IN ('completed', 'failed', 'stopped', 'interrupted') AND stage = 'backlog'`,
       );
 
-      if (isPg) {
-        await exec(sql`
-          INSERT INTO stage_history (id, thread_id, from_stage, to_stage, changed_at)
-          SELECT md5(random()::text), t.id, NULL, t.stage, t.created_at
-          FROM threads t
-          WHERE NOT EXISTS (SELECT 1 FROM stage_history sh WHERE sh.thread_id = t.id)
-        `);
-      } else {
-        await exec(sql`
-          INSERT INTO stage_history (id, thread_id, from_stage, to_stage, changed_at)
-          SELECT lower(hex(randomblob(16))), t.id, NULL, t.stage, t.created_at
-          FROM threads t
-          WHERE NOT EXISTS (SELECT 1 FROM stage_history sh WHERE sh.thread_id = t.id)
-        `);
-      }
+      await exec(sql`
+        INSERT INTO stage_history (id, thread_id, from_stage, to_stage, changed_at)
+        SELECT lower(hex(randomblob(16))), t.id, NULL, t.stage, t.created_at
+        FROM threads t
+        WHERE NOT EXISTS (SELECT 1 FROM stage_history sh WHERE sh.thread_id = t.id)
+      `);
     },
   },
 
@@ -315,58 +305,24 @@ const migrations: Migration[] = [
   {
     name: '016_fts5_search',
     async up() {
-      if (isPg) {
-        await addColumn('messages', 'search_vector', 'TSVECTOR');
-
-        await exec(sql`
-          CREATE INDEX IF NOT EXISTS idx_messages_search_vector
-          ON messages USING GIN (search_vector)
-        `);
-
-        await exec(
-          sql.raw(`
-          CREATE OR REPLACE FUNCTION messages_search_vector_update() RETURNS trigger AS $$
-          BEGIN
-            NEW.search_vector := to_tsvector('english', COALESCE(NEW.content, ''));
-            RETURN NEW;
-          END
-          $$ LANGUAGE plpgsql
-        `),
-        );
-
-        await exec(sql.raw(`DROP TRIGGER IF EXISTS messages_search_vector_trigger ON messages`));
-        await exec(
-          sql.raw(`
-          CREATE TRIGGER messages_search_vector_trigger
-          BEFORE INSERT OR UPDATE ON messages
-          FOR EACH ROW EXECUTE FUNCTION messages_search_vector_update()
-        `),
-        );
-
-        await exec(sql`
-          UPDATE messages
-          SET search_vector = to_tsvector('english', COALESCE(content, ''))
-          WHERE search_vector IS NULL
-        `);
-      } else {
-        await exec(sql`
+      await exec(sql`
           CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts
           USING fts5(content, content=messages, content_rowid=rowid)
         `);
 
-        await exec(sql`
+      await exec(sql`
           CREATE TRIGGER IF NOT EXISTS messages_fts_insert
           AFTER INSERT ON messages BEGIN
             INSERT INTO messages_fts(rowid, content) VALUES (NEW.rowid, NEW.content);
           END
         `);
-        await exec(sql`
+      await exec(sql`
           CREATE TRIGGER IF NOT EXISTS messages_fts_delete
           AFTER DELETE ON messages BEGIN
             INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', OLD.rowid, OLD.content);
           END
         `);
-        await exec(sql`
+      await exec(sql`
           CREATE TRIGGER IF NOT EXISTS messages_fts_update
           AFTER UPDATE ON messages BEGIN
             INSERT INTO messages_fts(messages_fts, rowid, content) VALUES('delete', OLD.rowid, OLD.content);
@@ -374,20 +330,19 @@ const migrations: Migration[] = [
           END
         `);
 
-        const ftsCount = await queryOne<{ count: number }>(
-          sql`SELECT COUNT(*) as count FROM messages_fts`,
+      const ftsCount = await queryOne<{ count: number }>(
+        sql`SELECT COUNT(*) as count FROM messages_fts`,
+      );
+      if (ftsCount && ftsCount.count === 0) {
+        const msgCount = await queryOne<{ count: number }>(
+          sql`SELECT COUNT(*) as count FROM messages`,
         );
-        if (ftsCount && ftsCount.count === 0) {
-          const msgCount = await queryOne<{ count: number }>(
-            sql`SELECT COUNT(*) as count FROM messages`,
+        if (msgCount && msgCount.count > 0) {
+          log.info(`Backfilling FTS index for ${msgCount.count} messages`, { namespace: 'db' });
+          await exec(
+            sql`INSERT INTO messages_fts(rowid, content) SELECT rowid, content FROM messages`,
           );
-          if (msgCount && msgCount.count > 0) {
-            log.info(`Backfilling FTS index for ${msgCount.count} messages`, { namespace: 'db' });
-            await exec(
-              sql`INSERT INTO messages_fts(rowid, content) SELECT rowid, content FROM messages`,
-            );
-            log.info('FTS backfill complete', { namespace: 'db' });
-          }
+          log.info('FTS backfill complete', { namespace: 'db' });
         }
       }
     },
@@ -831,5 +786,5 @@ const migrations: Migration[] = [
  * Run all pending migrations in order.
  */
 export async function autoMigrate() {
-  await runMigrations(db, isPg, migrations, log, 'db');
+  await runMigrations(db, migrations, log, 'db');
 }

@@ -27,6 +27,7 @@
   "dependencies": {
     "drizzle-orm": "^0.45.1",
     "nanoid": "^5.1.5",
+    "pg": "^8.20.0",
     "xstate": "^5.28.0"
   }
 }

@@ -76,23 +76,17 @@ export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
       // so that project resolution can match runners by userId.
       if (c.req.method === 'POST' && path === '/api/runners/register') {
         try {
+          // The "user" table is managed by Better Auth, not in our Drizzle schema.
+          // Use the raw connection to query it (works with both SQLite and PostgreSQL).
           const { getConnection } = await import('../db/index.js');
           const conn = getConnection();
           let adminId: string | undefined;
 
           if (conn?.sqlite) {
-            // SQLite: use raw bun:sqlite query
             const row = conn.sqlite
               .query('SELECT id FROM "user" WHERE role = ? LIMIT 1')
               .get('admin') as { id: string } | null;
             adminId = row?.id;
-          } else if (conn?.pgClient) {
-            // PostgreSQL: use raw pg client
-            const result = await conn.pgClient.query(
-              'SELECT id FROM "user" WHERE role = $1 LIMIT 1',
-              ['admin'],
-            );
-            adminId = result.rows?.[0]?.id;
           }
 
           if (adminId) {

@@ -15,10 +15,8 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { admin, username, organization } from 'better-auth/plugins';
 import { createAccessControl } from 'better-auth/plugins/access';
 import { sql } from 'drizzle-orm';
-import pg from 'pg';
 
-import { getDatabaseUrl } from '../db/db-mode.js';
-import { db, dbMode, dbRun } from '../db/index.js';
+import { db, dbRun } from '../db/index.js';
 import { DATA_DIR } from './data-dir.js';
 import { log } from './logger.js';
 
@@ -95,11 +93,22 @@ const owner = ac.newRole({
 
 // ── Auth Instance ───────────────────────────────────────────────
 
-const authPool =
-  dbMode === 'postgres' ? new pg.Pool({ connectionString: getDatabaseUrl()! }) : null;
+// In runner mode (TEAM_SERVER_URL set), the runtime is stateless.
+// Auth is handled by the server. We create a stub or a real instance
+// depending on the mode.
+const isRunner = !!process.env.TEAM_SERVER_URL;
+
+function buildAuthDatabase(): any {
+  if (isRunner) {
+    // Runner mode: no DB access. Return a minimal adapter that won't be used.
+    // The server handles all auth; this instance only exists to satisfy imports.
+    return { db: null, type: 'sqlite' as const };
+  }
+  return drizzleAdapter(db, { provider: 'sqlite' });
+}
 
 export const auth = betterAuth({
-  database: dbMode === 'postgres' ? authPool! : drizzleAdapter(db, { provider: 'sqlite' }),
+  database: buildAuthDatabase(),
   basePath: '/api/auth',
   secret: getOrCreateSecret(),
   trustedOrigins: ['http://localhost:5173', 'http://127.0.0.1:5173'],

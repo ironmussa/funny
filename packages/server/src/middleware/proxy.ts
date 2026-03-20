@@ -118,7 +118,15 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
 
   // Runner not connected via Socket.IO — try direct HTTP if available
   if (httpUrl) {
-    return await directHttpFetch(c, httpUrl, path, url.search, forwardedHeaders, body);
+    try {
+      return await directHttpFetch(c, httpUrl, path, url.search, forwardedHeaders, body);
+    } catch (httpErr) {
+      log.warn('Direct HTTP to runner failed', {
+        namespace: 'proxy',
+        runnerId,
+        error: (httpErr as Error).message,
+      });
+    }
   }
 
   return c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);

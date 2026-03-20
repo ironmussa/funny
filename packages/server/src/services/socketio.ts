@@ -1,15 +1,15 @@
 /**
  * Socket.IO server setup for runner and browser communication.
  *
- * Replaces the raw WebSocket + HTTP long-polling transport with Socket.IO,
- * which provides automatic reconnection, heartbeat, and transport fallback.
+ * Uses @socket.io/bun-engine for native Bun WebSocket integration
+ * instead of the default engine.io (which requires Node.js HTTP server events).
  *
  * Two namespaces:
  * - `/` (default): Browser clients, authenticated via session cookie
  * - `/runner`: Runner clients, authenticated via bearer token
  */
 
-import type { Server as BunServer } from 'bun';
+import { Server as BunEngine } from '@socket.io/bun-engine';
 import { Server as SocketIOServer, type Socket } from 'socket.io';
 
 import { log } from '../lib/logger.js';
@@ -19,36 +19,40 @@ import { setIO as setTunnelIO } from './ws-tunnel.js';
 // ── State ────────────────────────────────────────────────
 
 let io: SocketIOServer | null = null;
+let engine: BunEngine | null = null;
 let authInstance: any = null;
 
 // ── Initialization ───────────────────────────────────────
 
 /**
- * Create and configure the Socket.IO server.
+ * Create and configure the Socket.IO server with Bun engine.
  * Must be called after auth is initialized.
+ *
+ * Returns the Bun engine — the caller must spread `engine.handler()`
+ * into `Bun.serve()` config and route `/socket.io/*` requests via
+ * `engine.handleRequest()`.
  */
-export function createSocketIOServer(auth: any, corsOrigins: string[]): SocketIOServer {
+export function createSocketIOServer(
+  auth: any,
+  corsOrigins: string[],
+): { io: SocketIOServer; engine: BunEngine } {
   authInstance = auth;
 
-  io = new SocketIOServer({
+  // Create the Bun-native engine (replaces engine.io)
+  engine = new BunEngine({
+    path: '/socket.io/',
+    pingInterval: 25_000,
+    pingTimeout: 20_000,
+    maxHttpBufferSize: 5e6,
     cors: {
       origin: corsOrigins,
       credentials: true,
     },
-    // Socket.IO handles ping/pong automatically
-    pingInterval: 25_000,
-    pingTimeout: 20_000,
-    // Max HTTP buffer for tunnel payloads (5MB)
-    maxHttpBufferSize: 5e6,
-    // Allow both transports — Socket.IO handles fallback automatically
-    transports: ['websocket', 'polling'],
-    // Disable serving client bundle
-    serveClient: false,
-    // Connection state recovery for brief disconnects
-    connectionStateRecovery: {
-      maxDisconnectionDuration: 2 * 60 * 1000, // 2 minutes
-    },
   });
+
+  // Create Socket.IO server (no standalone engine — we bind our Bun engine)
+  io = new SocketIOServer();
+  io.bind(engine as any);
 
   // Share the IO instance with ws-relay and ws-tunnel (avoids circular imports)
   setRelayIO(io);
@@ -57,18 +61,17 @@ export function createSocketIOServer(auth: any, corsOrigins: string[]): SocketIO
   setupBrowserNamespace();
   setupRunnerNamespace();
 
-  log.info('Socket.IO server created', { namespace: 'socketio' });
+  log.info('Socket.IO server created with Bun engine', { namespace: 'socketio' });
 
-  return io;
+  return { io, engine };
 }
 
 /**
- * Attach the Socket.IO server to a Bun HTTP server.
+ * Get the Bun engine instance (for use in Bun.serve config).
  */
-export function attachSocketIO(bunServer: BunServer): void {
-  if (!io) throw new Error('Socket.IO server not created yet');
-  io.attach(bunServer as any);
-  log.info('Socket.IO attached to Bun server', { namespace: 'socketio' });
+export function getEngine(): BunEngine {
+  if (!engine) throw new Error('Socket.IO engine not initialized');
+  return engine;
 }
 
 /**
@@ -87,6 +90,7 @@ export async function closeSocketIO(): Promise<void> {
     io.close();
     io = null;
   }
+  engine = null;
 }
 
 // ── Browser Namespace (/) ────────────────────────────────
@@ -205,6 +209,9 @@ function setupBrowserPtyHandlers(socket: Socket, userId: string): void {
 
 // ── Runner Namespace (/runner) ───────────────────────────
 
+/** Pending offline timers — cancelled if the runner reconnects quickly. */
+const offlineTimers = new Map<string, ReturnType<typeof setTimeout>>();
+
 function setupRunnerNamespace(): void {
   if (!io) return;
 
@@ -237,10 +244,17 @@ function setupRunnerNamespace(): void {
   runnerNsp.on('connection', async (socket: Socket) => {
     const runnerId = socket.data.runnerId as string;
 
+    // Cancel any pending offline timer from a previous disconnect
+    const pendingTimer = offlineTimers.get(runnerId);
+    if (pendingTimer) {
+      clearTimeout(pendingTimer);
+      offlineTimers.delete(runnerId);
+    }
+
     // Join runner-specific room
     socket.join(`runner:${runnerId}`);
 
-    // Also register in ws-relay for backward compatibility with isRunnerConnected()
+    // Register in ws-relay for isRunnerConnected() checks
     const wsRelay = await import('./ws-relay.js');
     wsRelay.addRunnerClient(runnerId, socket.id);
 
@@ -282,31 +296,92 @@ function setupRunnerNamespace(): void {
       }
     });
 
+    // Handle runner control messages (heartbeat, task polling, project assignment)
+    setupRunnerControlHandlers(socket, runnerId);
+
     // Handle data persistence messages with ack callbacks
     setupRunnerDataHandlers(socket, runnerId);
 
-    // Handle tunnel requests with ack callbacks
-    // (tunnel:request is now emitted FROM server TO runner, runner responds via ack)
+    // Grace period before marking runner offline — Socket.IO reconnects
+    // automatically on transport hiccups, so a brief disconnect shouldn't
+    // make the runner unreachable. Only mark offline if the runner hasn't
+    // reconnected within the grace window (timer is cancelled on reconnect).
+    const OFFLINE_GRACE_MS = 15_000;
 
-    socket.on('disconnect', async (reason) => {
+    socket.on('disconnect', (reason) => {
       log.warn('Runner disconnected from Socket.IO', {
         namespace: 'socketio',
         runnerId,
         reason,
       });
 
-      wsRelay.removeRunnerClient(runnerId);
+      const timer = setTimeout(async () => {
+        offlineTimers.delete(runnerId);
 
-      // Cancel pending tunnel requests and mark offline
-      const wsTunnel = await import('./ws-tunnel.js');
-      wsTunnel.cancelPendingRequests(runnerId);
+        // Runner reconnected on a new socket — skip cleanup
+        if (wsRelay.isRunnerConnected(runnerId)) return;
 
-      const rm = await import('./runner-manager.js');
-      rm.markRunnerOffline(runnerId).catch(() => {});
+        wsRelay.removeRunnerClient(runnerId);
 
-      const resolver = await import('./runner-resolver.js');
-      resolver.evictRunnerFromCache(runnerId);
+        const rm = await import('./runner-manager.js');
+        rm.markRunnerOffline(runnerId).catch(() => {});
+
+        const resolver = await import('./runner-resolver.js');
+        resolver.evictRunnerFromCache(runnerId);
+      }, OFFLINE_GRACE_MS);
+
+      offlineTimers.set(runnerId, timer);
     });
+  });
+}
+
+/**
+ * Set up runner control handlers (heartbeat, task polling, project assignment).
+ * These use Socket.IO ack callbacks for request/response.
+ */
+function setupRunnerControlHandlers(socket: Socket, runnerId: string): void {
+  // Heartbeat — runner pings to stay alive, server responds with status
+  socket.on('runner:heartbeat', async (data: any, ack?: (response: any) => void) => {
+    try {
+      const rm = await import('./runner-manager.js');
+      const exists = await rm.handleHeartbeat(runnerId, data ?? { activeThreadIds: [] });
+      if (!exists) {
+        ack?.({ code: 'RUNNER_NOT_FOUND' });
+      } else {
+        const wsRelay = await import('./ws-relay.js');
+        ack?.({ ok: true, wsConnected: wsRelay.isRunnerConnected(runnerId) });
+      }
+    } catch (err) {
+      ack?.({ error: (err as Error).message, success: false });
+    }
+  });
+
+  // Task polling — runner asks for pending tasks
+  socket.on('runner:poll_tasks', async (_data: any, ack?: (response: any) => void) => {
+    try {
+      const rm = await import('./runner-manager.js');
+      const tasks = await rm.getPendingTasks(runnerId);
+      ack?.({ tasks });
+    } catch (err) {
+      ack?.({ tasks: [], error: (err as Error).message });
+    }
+  });
+
+  // Project assignment — runner assigns a local project
+  socket.on('runner:assign_project', async (data: any, ack?: (response: any) => void) => {
+    try {
+      const payload = data?.payload ?? data;
+      if (payload?.projectId && payload?.localPath) {
+        const rm = await import('./runner-manager.js');
+        await rm.assignProject(runnerId, {
+          projectId: payload.projectId,
+          localPath: payload.localPath,
+        });
+      }
+      ack?.({ ok: true });
+    } catch (err) {
+      ack?.({ ok: false, error: (err as Error).message });
+    }
   });
 }
 

@@ -11,6 +11,18 @@ export default defineConfig(({ mode }) => {
   const serverPort = Number(env.VITE_SERVER_PORT) || 3001;
   const serverTarget = `http://127.0.0.1:${serverPort}`;
 
+  // Default: listen on all interfaces (0.0.0.0) so http://<LAN-IP>:5173 works, matching a typical
+  // API on HOST=0.0.0.0. If Vite only bound 127.0.0.1, the UI was unreachable except via localhost.
+  // Set VITE_HOST=localhost in .env to restrict to loopback only.
+  const viteHost =
+    env.VITE_HOST === 'localhost' || env.VITE_HOST === '127.0.0.1'
+      ? env.VITE_HOST
+      : env.VITE_HOST === '0.0.0.0' || env.VITE_HOST === 'true'
+        ? true
+        : env.VITE_HOST
+          ? env.VITE_HOST
+          : true;
+
   return {
     envDir: monorepoRoot,
     plugins: [react()],
@@ -34,10 +46,10 @@ export default defineConfig(({ mode }) => {
       },
     },
     optimizeDeps: {
-      include: ['decimal.js-light'],
+      include: ['decimal.js-light', 'socket.io-client'],
     },
     server: {
-      host: env.VITE_HOST || 'localhost',
+      host: viteHost,
       port: clientPort,
       allowedHosts: true,
       proxy: {
@@ -46,6 +58,15 @@ export default defineConfig(({ mode }) => {
           target: serverTarget,
           changeOrigin: true,
           timeout: 60_000,
+          configure(proxy) {
+            proxy.on('proxyReq', (proxyReq, req) => {
+              const host = req.headers.host;
+              if (host) {
+                proxyReq.setHeader('X-Forwarded-Host', host);
+                proxyReq.setHeader('X-Forwarded-Proto', 'http');
+              }
+            });
+          },
         },
         // Socket.IO requests (polling + WebSocket upgrade)
         '/socket.io': {

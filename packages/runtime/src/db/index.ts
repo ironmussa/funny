@@ -4,8 +4,11 @@
  * @domain layer: infrastructure
  * @domain depends: ShutdownManager
  *
- * Database factory — uses shared connection factory from @funny/shared.
- * Exports `db`, `schema`, and `sqlite` (SQLite-only) for backward compatibility.
+ * Database factory — SQLite only.
+ * Exports `db`, `schema`, and `sqlite` for backward compatibility.
+ *
+ * In runner mode (TEAM_SERVER_URL set), the runtime is stateless —
+ * no database is created. All data is proxied to the server via WebSocket.
  */
 
 import { resolve } from 'path';
@@ -14,12 +17,10 @@ import {
   type AppDatabase,
   type DatabaseConnection,
   createSqliteDatabase,
-  createPostgresDatabase,
   dbAll as _dbAll,
   dbGet as _dbGet,
   dbRun as _dbRun,
 } from '@funny/shared/db/connection';
-import { getDbMode } from '@funny/shared/db/db-mode';
 import * as sqliteSchema from '@funny/shared/db/schema-sqlite';
 
 import { DATA_DIR } from '../lib/data-dir.js';
@@ -28,44 +29,40 @@ import { shutdownManager, ShutdownPhase } from '../services/shutdown-manager.js'
 
 export type { AppDatabase, DatabaseConnection };
 
-const mode = getDbMode();
+// ── Runner mode: completely stateless, no DB ────────────────────
+const isRunner = !!process.env.TEAM_SERVER_URL;
 
 let _connection: DatabaseConnection | null = null;
 
-// ── Default SQLite path (synchronous) ───────────────────────────
-if (mode === 'sqlite') {
+// Only create a DB connection when NOT in runner mode
+if (!isRunner) {
   const dbPath = resolve(DATA_DIR, 'data.db');
   _connection = createSqliteDatabase({ mode: 'sqlite', path: dbPath, log });
-
-  shutdownManager.register('database', () => _connection!.close(), ShutdownPhase.DATABASE);
-}
-
-// ── PostgreSQL initialization (async, must be called at startup) ──
-export async function initPostgres(): Promise<void> {
-  if (mode !== 'postgres' || _connection) return;
-
-  _connection = await createPostgresDatabase({ mode: 'postgres', log });
-
   shutdownManager.register('database', () => _connection!.close(), ShutdownPhase.DATABASE);
 }
 
 // ── Exports ─────────────────────────────────────────────────────
 
-/** The Drizzle database instance. In Postgres mode, `initPostgres()` must be called first. */
+/** The Drizzle database instance. Throws in runner mode (no DB). */
 export const db: AppDatabase = new Proxy({} as AppDatabase, {
   get(_target, prop) {
+    if (isRunner) {
+      throw new Error(
+        'Database not available in runner mode (stateless). Data is proxied to the server.',
+      );
+    }
     if (!_connection) {
-      throw new Error('Database not initialized. Call initPostgres() at startup (for PG mode).');
+      throw new Error('Database not initialized.');
     }
     return (_connection.db as any)[prop];
   },
 });
 
 export const schema = sqliteSchema;
-export const sqlite = mode === 'sqlite' ? (_connection?.sqlite ?? null) : null;
-export const dbMode = mode;
+export const sqlite = !isRunner ? (_connection?.sqlite ?? null) : null;
+export const dbMode = isRunner ? ('runner' as string) : 'sqlite';
 
-/** Get the underlying DatabaseConnection. */
+/** Get the underlying DatabaseConnection. Null in runner mode. */
 export function getConnection(): DatabaseConnection | null {
   return _connection;
 }
@@ -76,7 +73,7 @@ export const dbAll = _dbAll;
 export const dbGet = _dbGet;
 export const dbRun = _dbRun;
 
-/** @deprecated Use shutdown manager instead. Only works in SQLite mode. */
+/** @deprecated Use shutdown manager instead. */
 export function closeDatabase() {
   if (_connection?.sqlite) {
     try {

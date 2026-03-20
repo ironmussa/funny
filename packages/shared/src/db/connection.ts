@@ -1,28 +1,22 @@
 /**
- * Database connection factory — creates SQLite or PostgreSQL Drizzle instances.
+ * Database connection factory — SQLite only.
  *
- * Both runtime and server import from here to get a consistent DB setup.
- * SQLite setup includes WAL mode, foreign keys, and periodic checkpointing.
- * PostgreSQL setup uses Bun's native SQL client.
+ * Uses Bun's native SQLite driver with WAL mode, foreign keys, and periodic checkpointing.
  */
 
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 
-import { getDbMode, getDatabaseUrl } from './db-mode.js';
-import * as pgSchema from './schema.pg.js';
 import * as sqliteSchema from './schema.sqlite.js';
 
-// Use the SQLite schema as the canonical type shape (both are structurally equivalent)
+// Use the SQLite schema as the canonical type shape
 export type AppDatabase = BunSQLiteDatabase<typeof sqliteSchema>;
 
 export interface DatabaseConnection {
   db: AppDatabase;
   schema: typeof sqliteSchema;
-  /** Raw SQLite instance — only available in SQLite mode */
+  /** Raw SQLite instance */
   sqlite: import('bun:sqlite').Database | null;
-  /** Raw PostgreSQL client — only available in PostgreSQL mode */
-  pgClient: any | null;
-  mode: 'sqlite' | 'postgres';
+  mode: 'sqlite';
   /** Cleanup: close connections, clear timers */
   close(): Promise<void>;
 }
@@ -32,14 +26,6 @@ export interface CreateSqliteOptions {
   /** Absolute path to the .db file */
   path: string;
   /** Optional logger for warnings/info */
-  log?: { info: (msg: string, meta?: any) => void; warn: (msg: string, meta?: any) => void };
-}
-
-export interface CreatePostgresOptions {
-  mode: 'postgres';
-  /** PostgreSQL connection URL. If omitted, reads from env (DATABASE_URL or DB_HOST+DB_USER). */
-  url?: string;
-  /** Optional logger */
   log?: { info: (msg: string, meta?: any) => void; warn: (msg: string, meta?: any) => void };
 }
 
@@ -75,7 +61,6 @@ export function createSqliteDatabase(options: CreateSqliteOptions): DatabaseConn
     db,
     schema: sqliteSchema,
     sqlite: sqliteDb,
-    pgClient: null,
     mode: 'sqlite',
     async close() {
       clearInterval(walCheckpointTimer);
@@ -92,68 +77,7 @@ export function createSqliteDatabase(options: CreateSqliteOptions): DatabaseConn
   };
 }
 
-/**
- * Create a PostgreSQL database connection using Bun's native SQL client.
- */
-export async function createPostgresDatabase(
-  options: CreatePostgresOptions,
-): Promise<DatabaseConnection> {
-  const logger = options.log ?? noop;
-
-  const databaseUrl = options.url ?? getDatabaseUrl();
-  if (!databaseUrl) {
-    throw new Error(
-      'PostgreSQL connection not configured. Provide either DATABASE_URL or DB_HOST + DB_USER.',
-    );
-  }
-
-  const { SQL } = await import('bun');
-  const { drizzle: drizzlePg } = await import('drizzle-orm/bun-sql');
-
-  const pgClient = new SQL(databaseUrl);
-  const db = drizzlePg({ client: pgClient, schema: pgSchema }) as unknown as AppDatabase;
-
-  logger.info('Connected to PostgreSQL', { namespace: 'db' });
-
-  return {
-    db,
-    schema: pgSchema as unknown as typeof sqliteSchema,
-    sqlite: null,
-    pgClient,
-    mode: 'postgres',
-    async close() {
-      try {
-        await pgClient.close();
-        logger.info('PostgreSQL connection closed', { namespace: 'db' });
-      } catch (err) {
-        logger.warn('Error closing PostgreSQL connection', { namespace: 'db', error: err });
-      }
-    },
-  };
-}
-
-/**
- * Auto-detect mode from environment and create the appropriate connection.
- */
-export async function createDatabase(
-  options:
-    | CreateSqliteOptions
-    | CreatePostgresOptions
-    | { mode?: undefined; path?: string; url?: string; log?: any },
-): Promise<DatabaseConnection> {
-  const mode = options.mode ?? getDbMode();
-
-  if (mode === 'sqlite') {
-    if (!('path' in options) || !options.path) {
-      throw new Error('SQLite mode requires a path option');
-    }
-    return createSqliteDatabase({ mode: 'sqlite', path: options.path, log: options.log });
-  }
-
-  return createPostgresDatabase({ mode: 'postgres', url: (options as any).url, log: options.log });
-}
-
-// ── Compat helpers (work with both SQLite sync & PostgreSQL async) ──
+// ── Compat helpers (work with SQLite sync API) ──
 
 /** Execute a SELECT query and return all rows. */
 export async function dbAll<T = any>(query: any): Promise<T[]> {

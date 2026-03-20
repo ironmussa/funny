@@ -4,8 +4,12 @@
  * @domain layer: infrastructure
  * @domain depends: Database
  *
- * Runtime migrations — SQLite only.
+ * Runtime migrations — dialect-agnostic.
  * Uses shared migration infrastructure from @funny/shared/db/migrate.
+ *
+ * The raw SQL uses TEXT/INTEGER/REAL types which work identically in both
+ * SQLite and PostgreSQL. SQLite-specific features (FTS5 virtual tables,
+ * triggers) are guarded by dialect checks.
  */
 
 import {
@@ -16,9 +20,9 @@ import {
 } from '@funny/shared/db/migrate';
 
 import { log } from '../lib/logger.js';
-import { db } from './index.js';
+import { db, dbDialect } from './index.js';
 
-const ctx = createMigrationContext(db);
+const ctx = createMigrationContext(db, dbDialect === 'runner' ? 'sqlite' : dbDialect);
 const { exec, queryOne, addColumn } = ctx;
 
 // ── Migrations ──────────────────────────────────────────────────
@@ -305,6 +309,9 @@ const migrations: Migration[] = [
   {
     name: '016_fts5_search',
     async up() {
+      // FTS5 is SQLite-only. PostgreSQL uses tsvector (handled by server migration 010).
+      if (ctx.dialect === 'pg') return;
+
       await exec(sql`
           CREATE VIRTUAL TABLE IF NOT EXISTS messages_fts
           USING fts5(content, content=messages, content_rowid=rowid)
@@ -786,5 +793,6 @@ const migrations: Migration[] = [
  * Run all pending migrations in order.
  */
 export async function autoMigrate() {
-  await runMigrations(db, migrations, log, 'db');
+  const dialect = dbDialect === 'runner' ? 'sqlite' : dbDialect;
+  await runMigrations(db, migrations, log, 'db', dialect);
 }

@@ -1,8 +1,12 @@
 /**
- * Central server migrations — SQLite only.
+ * Central server migrations — dialect-agnostic.
  *
  * Uses the shared migration infrastructure from @funny/shared.
  * Each package defines its own migrations array and calls `runMigrations()`.
+ *
+ * The raw SQL uses TEXT/INTEGER/REAL types which work identically in both
+ * SQLite and PostgreSQL. Dialect-specific features (FTS5, tsvector) are
+ * guarded by `ctx().dialect` checks.
  */
 
 import {
@@ -13,12 +17,12 @@ import {
 } from '@funny/shared/db/migrate';
 
 import { log } from '../lib/logger.js';
-import { db } from './index.js';
+import { db, dbDialect } from './index.js';
 
 // Lazily create context — db may not be ready at import time
 let _ctx: ReturnType<typeof createMigrationContext> | null = null;
 function ctx() {
-  if (!_ctx) _ctx = createMigrationContext(db);
+  if (!_ctx) _ctx = createMigrationContext(db, dbDialect);
   return _ctx;
 }
 
@@ -260,7 +264,22 @@ const migrations: Migration[] = [
   {
     name: '010_messages_search_vector',
     async up() {
-      // Was PostgreSQL-only (tsvector). No-op for SQLite.
+      if (ctx().dialect === 'pg') {
+        // PostgreSQL: add tsvector column + GIN index for full-text search
+        await ctx().exec(
+          sql.raw(`
+          ALTER TABLE messages ADD COLUMN IF NOT EXISTS search_vector tsvector
+            GENERATED ALWAYS AS (to_tsvector('english', content)) STORED
+        `),
+        );
+        await ctx().exec(
+          sql.raw(`
+          CREATE INDEX IF NOT EXISTS idx_messages_search_vector
+          ON messages USING gin(search_vector)
+        `),
+        );
+      }
+      // SQLite: FTS5 is handled by the runtime's migration 016_fts5_search
     },
   },
 
@@ -803,5 +822,5 @@ const migrations: Migration[] = [
 ];
 
 export async function autoMigrate() {
-  await runMigrations(db as any, migrations, log, 'central-db');
+  await runMigrations(db as any, migrations, log, 'central-db', dbDialect);
 }

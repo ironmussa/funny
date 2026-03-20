@@ -417,3 +417,23 @@ export function seedProjectMember(
   db.insert(schema.projectMembers).values(member).run();
   return member;
 }
+
+export function seedMessageQueue(
+  db: ReturnType<typeof createTestDb>['db'],
+  overrides: {
+    id?: string;
+    threadId?: string;
+    content?: string;
+    sortOrder?: number;
+  } = {},
+) {
+  const entry = {
+    id: overrides.id ?? crypto.randomUUID(),
+    threadId: overrides.threadId ?? 'test-thread-1',
+    content: overrides.content ?? 'Queued message',
+    sortOrder: overrides.sortOrder ?? 0,
+    createdAt: new Date().toISOString(),
+  };
+  db.insert(schema.messageQueue).values(entry).run();
+  return entry;
+}

@@ -6,6 +6,33 @@ export type ToolItem =
   | { type: 'toolcall'; tc: any }
   | { type: 'toolcall-group'; name: string; calls: any[] };
 
+/** Tool calls that should never be grouped (interactive / need per-item tracking). */
+const NO_GROUP = new Set(['AskUserQuestion', 'ExitPlanMode']);
+
+/** Group consecutive tool calls with the same name into toolcall-group items. */
+export function groupConsecutiveToolCalls(items: { tc: any }[]): ToolItem[] {
+  const grouped: ToolItem[] = [];
+  for (const item of items) {
+    const last = grouped[grouped.length - 1];
+    if (!NO_GROUP.has(item.tc.name)) {
+      if (last?.type === 'toolcall' && last.tc.name === item.tc.name) {
+        grouped[grouped.length - 1] = {
+          type: 'toolcall-group',
+          name: item.tc.name,
+          calls: [last.tc, item.tc],
+        };
+        continue;
+      }
+      if (last?.type === 'toolcall-group' && last.name === item.tc.name) {
+        last.calls.push(item.tc);
+        continue;
+      }
+    }
+    grouped.push({ type: 'toolcall', tc: item.tc });
+  }
+  return grouped;
+}
+
 export type RenderItem =
   | { type: 'message'; msg: any }
   | ToolItem
@@ -111,37 +138,27 @@ export function buildGroupedRenderItems(
     }
   }
 
-  // Tool calls that should never be grouped (interactive, need individual response, or need per-item scroll tracking)
-  const noGroup = new Set(['AskUserQuestion', 'ExitPlanMode']);
-
-  // Group consecutive same-type tool calls (across message boundaries)
+  // Group consecutive same-type tool calls (across message boundaries).
+  // Messages are kept in-order; only toolcall items get grouped.
   const grouped: RenderItem[] = [];
+  let pendingToolCalls: { tc: any }[] = [];
+
+  const flushToolCalls = () => {
+    if (pendingToolCalls.length > 0) {
+      grouped.push(...groupConsecutiveToolCalls(pendingToolCalls));
+      pendingToolCalls = [];
+    }
+  };
+
   for (const item of flat) {
     if (item.type === 'toolcall') {
-      const last = grouped[grouped.length - 1];
-      if (
-        !noGroup.has(item.tc.name) &&
-        last?.type === 'toolcall' &&
-        (last as any).tc.name === item.tc.name
-      ) {
-        grouped[grouped.length - 1] = {
-          type: 'toolcall-group',
-          name: item.tc.name,
-          calls: [(last as any).tc, item.tc],
-        };
-      } else if (
-        !noGroup.has(item.tc.name) &&
-        last?.type === 'toolcall-group' &&
-        last.name === item.tc.name
-      ) {
-        last.calls.push(item.tc);
-      } else {
-        grouped.push(item);
-      }
+      pendingToolCalls.push(item);
     } else {
+      flushToolCalls();
       grouped.push(item);
     }
   }
+  flushToolCalls();
 
   // Deduplicate TodoWrite: only keep the last one (the floating panel handles history).
   // For TodoWrite groups, replace with a single toolcall using the last call's data.

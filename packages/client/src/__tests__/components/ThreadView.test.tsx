@@ -135,7 +135,7 @@ beforeEach(() => {
         id: 'p1',
         name: 'Test',
         path: '/tmp/test',
-        userId: '__local__',
+        userId: 'user-1',
         createdAt: '',
         sortOrder: 0,
       },

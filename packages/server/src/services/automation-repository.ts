@@ -18,7 +18,7 @@ export async function listAutomations(projectId?: string, userId?: string) {
     filters.push(eq(schema.automations.projectId, projectId));
   }
 
-  if (userId && userId !== '__local__') {
+  if (userId) {
     filters.push(eq(schema.automations.userId, userId));
   }
 

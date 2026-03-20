@@ -178,7 +178,7 @@ function makePipeline(overrides: Partial<PipelineConfig> = {}): PipelineConfig {
   return {
     id: 'pipe-1',
     projectId: 'proj-1',
-    userId: '__local__',
+    userId: 'user-1',
     name: 'Default Pipeline',
     enabled: true,
     reviewModel: 'sonnet',

@@ -93,11 +93,14 @@ function emitAgentFailed(userId: string, threadId: string): void {
     threadId,
     data: { status: 'failed' },
   };
-  if (userId && userId !== '__local__') {
-    wsBroker.emitToUser(userId, event);
-  } else {
-    wsBroker.emit(event);
+  if (!userId) {
+    log.warn('emitAgentFailed called without userId — dropping', {
+      namespace: 'thread-service',
+      threadId,
+    });
+    return;
   }
+  wsBroker.emitToUser(userId, event);
 }
 
 // ── Create Idle Thread ──────────────────────────────────────────
@@ -1257,9 +1260,12 @@ export async function deleteComment(threadId: string, commentId: string): Promis
     threadId,
     data: { commentId },
   };
-  if (thread.userId && thread.userId !== '__local__') {
-    wsBroker.emitToUser(thread.userId, event);
+  if (!thread.userId) {
+    log.warn('deleteComment: thread has no userId — dropping WS event', {
+      namespace: 'thread-service',
+      threadId,
+    });
   } else {
-    wsBroker.emit(event);
+    wsBroker.emitToUser(thread.userId, event);
   }
 }

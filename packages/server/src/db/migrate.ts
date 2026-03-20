@@ -45,7 +45,7 @@ const migrations: Migration[] = [
           urls TEXT,
           system_prompt TEXT,
           launcher_url TEXT,
-          user_id TEXT NOT NULL DEFAULT '__local__',
+          user_id TEXT NOT NULL,
           sort_order INTEGER NOT NULL DEFAULT 0,
           created_at TEXT NOT NULL
         )
@@ -324,7 +324,7 @@ const migrations: Migration[] = [
         CREATE TABLE IF NOT EXISTS automations (
           id TEXT PRIMARY KEY,
           project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-          user_id TEXT NOT NULL DEFAULT '__local__',
+          user_id TEXT NOT NULL,
           name TEXT NOT NULL,
           prompt TEXT NOT NULL,
           schedule TEXT NOT NULL,
@@ -447,7 +447,7 @@ const migrations: Migration[] = [
         CREATE TABLE IF NOT EXISTS pipelines (
           id TEXT PRIMARY KEY,
           project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-          user_id TEXT NOT NULL DEFAULT '__local__',
+          user_id TEXT NOT NULL,
           name TEXT NOT NULL,
           enabled INTEGER NOT NULL DEFAULT 1,
           review_model TEXT NOT NULL DEFAULT 'sonnet',
@@ -552,7 +552,7 @@ const migrations: Migration[] = [
         CREATE TABLE IF NOT EXISTS pty_sessions (
           id TEXT PRIMARY KEY,
           tmux_session TEXT NOT NULL UNIQUE,
-          user_id TEXT NOT NULL DEFAULT '__local__',
+          user_id TEXT NOT NULL,
           cwd TEXT NOT NULL,
           shell TEXT,
           cols INTEGER NOT NULL DEFAULT 80,
@@ -615,7 +615,7 @@ const migrations: Migration[] = [
     name: '024_projects_missing_columns',
     async up() {
       await ctx().addColumn('projects', 'path', 'TEXT');
-      await ctx().addColumn('projects', 'user_id', 'TEXT NOT NULL', "'__local__'");
+      await ctx().addColumn('projects', 'user_id', 'TEXT NOT NULL', "''");
       await ctx().addColumn('projects', 'sort_order', 'INTEGER NOT NULL', '0');
       await ctx().addColumn('projects', 'color', 'TEXT');
       await ctx().addColumn('projects', 'follow_up_mode', 'TEXT NOT NULL', "'interrupt'");

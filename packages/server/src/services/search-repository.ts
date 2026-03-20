@@ -74,9 +74,7 @@ async function searchViaFts5(
     WHERE fts.content MATCH ${ftsQuery}
   `;
 
-  if (userId !== '__local__') {
-    stmt = sql`${stmt} AND t.user_id = ${userId}`;
-  }
+  stmt = sql`${stmt} AND t.user_id = ${userId}`;
   if (projectId) {
     stmt = sql`${stmt} AND t.project_id = ${projectId}`;
   }
@@ -120,9 +118,7 @@ async function searchViaTsvector(
     WHERE m.search_vector @@ to_tsquery('english', ${tsQuery})
   `;
 
-  if (userId !== '__local__') {
-    stmt = sql`${stmt} AND t.user_id = ${userId}`;
-  }
+  stmt = sql`${stmt} AND t.user_id = ${userId}`;
   if (projectId) {
     stmt = sql`${stmt} AND t.project_id = ${projectId}`;
   }
@@ -150,9 +146,7 @@ async function searchViaLike(
 
   const filters: ReturnType<typeof eq>[] = [like(schema.messages.content, `%${safeQuery}%`)];
 
-  if (userId !== '__local__') {
-    filters.push(eq(schema.threads.userId, userId));
-  }
+  filters.push(eq(schema.threads.userId, userId));
   if (projectId) {
     filters.push(eq(schema.threads.projectId, projectId));
   }

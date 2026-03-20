@@ -98,10 +98,13 @@ export async function triggerAutomationRun(automation: {
     threadId,
     data: { automationId: automation.id, runId },
   };
-  if (project.userId && project.userId !== '__local__') {
-    wsBroker.emitToUser(project.userId, runStartEvent);
+  if (!project.userId) {
+    log.warn('triggerAutomationRun: project has no userId — dropping WS event', {
+      namespace: 'automation-scheduler',
+      automationId: automation.id,
+    });
   } else {
-    wsBroker.emit(runStartEvent);
+    wsBroker.emitToUser(project.userId, runStartEvent);
   }
 
   // Start the agent (local mode, read-only — no file writes allowed)
@@ -252,11 +255,13 @@ async function checkCompletedRuns(): Promise<void> {
           summary,
         },
       };
-      // Emit per-user if thread has userId
-      if (thread.userId && thread.userId !== '__local__') {
-        wsBroker.emitToUser(thread.userId, runCompleteEvent);
+      if (!thread.userId) {
+        log.warn('checkAutomationRuns: thread has no userId — dropping WS event', {
+          namespace: 'automation-scheduler',
+          threadId: run.threadId,
+        });
       } else {
-        wsBroker.emit(runCompleteEvent);
+        wsBroker.emitToUser(thread.userId, runCompleteEvent);
       }
 
       if (!hasFindings) {
@@ -266,10 +271,8 @@ async function checkCompletedRuns(): Promise<void> {
           threadId: run.threadId,
           data: { automationId: run.automationId, runId: run.id, triageStatus: 'dismissed' },
         };
-        if (thread.userId && thread.userId !== '__local__') {
+        if (thread.userId) {
           wsBroker.emitToUser(thread.userId, dismissEvent);
-        } else {
-          wsBroker.emit(dismissEvent);
         }
       }
 
@@ -304,12 +307,14 @@ async function cleanupOldRuns(automationId: string): Promise<void> {
         threadId: run.threadId,
         data: { automationId, runId: run.id, status: 'archived' },
       };
-      if (thread?.userId && thread.userId !== '__local__') {
+      if (thread?.userId) {
         wsBroker.emitToUser(thread.userId, archiveEvent);
         wsBroker.emitToUser(thread.userId, runArchiveEvent);
       } else {
-        wsBroker.emit(archiveEvent);
-        wsBroker.emit(runArchiveEvent);
+        log.warn('cleanupOldRuns: thread has no userId — dropping WS events', {
+          namespace: 'automation-scheduler',
+          threadId: run.threadId,
+        });
       }
     }
   }

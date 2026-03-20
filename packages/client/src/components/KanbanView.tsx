@@ -51,7 +51,7 @@ const SOURCE_ICON: Record<string, typeof Chrome | undefined> = {
   ingest: Webhook,
 };
 
-const AUTOMATED_SOURCES = new Set(['automation', 'pipeline', 'external', '__local__']);
+const AUTOMATED_SOURCES = new Set(['automation', 'pipeline', 'external']);
 
 function ThreadAvatar({ thread }: { thread: Thread }) {
   const authUser = useAuthStore((s) => s.user);

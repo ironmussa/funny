@@ -8,11 +8,8 @@
  * Route helper utilities — return Result<T, DomainError> for common lookups.
  *
  * All thread-access helpers accept a userId parameter to enforce ownership
- * checks in multi-user mode. In local mode (userId='__local__'), ownership
- * is not enforced since there is only one user.
- *
- * An optional organizationId parameter allows team members to access shared
- * projects via the team_projects join table.
+ * checks. An optional organizationId parameter allows team members to access
+ * shared projects via the team_projects join table.
  */
 
 import { notFound, forbidden, type DomainError } from '@funny/shared/errors';
@@ -22,15 +19,13 @@ import type { IProjectRepository } from '../services/server-interfaces.js';
 import { getServices } from '../services/service-registry.js';
 import * as tm from '../services/thread-manager.js';
 
-/** Check that a thread belongs to the requesting user (multi-user mode) */
+/** Check that a thread belongs to the requesting user */
 function checkOwnership(thread: { userId: string }, userId: string): Result<void, DomainError> {
-  // Local mode: single user, no ownership check needed
-  if (userId === '__local__') return ok(undefined);
   if (thread.userId !== userId) return err(forbidden('Access denied'));
   return ok(undefined);
 }
 
-/** Get a thread by ID or return Err(NOT_FOUND). Verifies ownership in multi-user mode. */
+/** Get a thread by ID or return Err(NOT_FOUND). Verifies ownership. */
 export async function requireThread(
   id: string,
   userId?: string,
@@ -55,7 +50,7 @@ export async function requireThread(
   return ok(thread);
 }
 
-/** Get a thread with messages by ID or return Err(NOT_FOUND). Verifies ownership in multi-user mode. */
+/** Get a thread with messages by ID or return Err(NOT_FOUND). Verifies ownership. */
 export async function requireThreadWithMessages(
   id: string,
   userId?: string,
@@ -79,7 +74,7 @@ export async function requireThreadWithMessages(
   return ok(result);
 }
 
-/** Get a project by ID or return Err(NOT_FOUND). Verifies ownership in multi-user mode. */
+/** Get a project by ID or return Err(NOT_FOUND). Verifies ownership. */
 export async function requireProject(
   id: string,
   userId?: string,
@@ -105,7 +100,7 @@ export async function requireProject(
 /**
  * Resolve the working directory for a thread or return Err(NOT_FOUND).
  * Returns worktreePath if set, otherwise the project path.
- * Verifies ownership in multi-user mode.
+ * Verifies ownership.
  */
 export async function requireThreadCwd(
   threadId: string,

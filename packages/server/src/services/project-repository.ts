@@ -57,25 +57,18 @@ function toProject(row: ProjectRow): Project {
 }
 
 export async function listProjects(userId: string): Promise<Project[]> {
-  if (userId === '__local__') {
-    return (
-      await dbAll(
-        db
-          .select()
-          .from(schema.projects)
-          .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt)),
-      )
-    ).map(toProject);
-  }
-  return (
-    await dbAll(
-      db
+  // Empty userId means "list all projects" (used by runner-internal services)
+  const query = userId
+    ? db
         .select()
         .from(schema.projects)
         .where(eq(schema.projects.userId, userId))
-        .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt)),
-    )
-  ).map(toProject);
+        .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt))
+    : db
+        .select()
+        .from(schema.projects)
+        .orderBy(asc(schema.projects.sortOrder), asc(schema.projects.createdAt));
+  return (await dbAll(query)).map(toProject);
 }
 
 export async function listProjectsByOrg(orgId: string): Promise<Project[]> {
@@ -137,8 +130,7 @@ export async function projectNameExists(
 
   // For personal projects, exclude projects that belong to any organization
   const orgIds = await getOrgProjectIds();
-  const conditions = [eq(schema.projects.name, name)];
-  if (userId !== '__local__') conditions.push(eq(schema.projects.userId, userId));
+  const conditions = [eq(schema.projects.name, name), eq(schema.projects.userId, userId)];
   if (orgIds.length > 0) conditions.push(notInArray(schema.projects.id, orgIds));
 
   const existing = await dbGet(
@@ -177,8 +169,7 @@ export async function createProject(
     // For personal projects, exclude projects that belong to any organization
     const orgIds = await getOrgProjectIds();
 
-    const pathConditions = [eq(schema.projects.path, path)];
-    if (userId !== '__local__') pathConditions.push(eq(schema.projects.userId, userId));
+    const pathConditions = [eq(schema.projects.path, path), eq(schema.projects.userId, userId)];
     if (orgIds.length > 0) pathConditions.push(notInArray(schema.projects.id, orgIds));
 
     const existingPath = await dbGet(
@@ -191,8 +182,7 @@ export async function createProject(
       return err(conflict(`A project with this path already exists: ${path}`));
     }
 
-    const nameConditions = [eq(schema.projects.name, name)];
-    if (userId !== '__local__') nameConditions.push(eq(schema.projects.userId, userId));
+    const nameConditions = [eq(schema.projects.name, name), eq(schema.projects.userId, userId)];
     if (orgIds.length > 0) nameConditions.push(notInArray(schema.projects.id, orgIds));
 
     const existingName = await dbGet(
@@ -206,10 +196,9 @@ export async function createProject(
     }
   }
 
-  const existing =
-    userId === '__local__'
-      ? await dbAll(db.select().from(schema.projects))
-      : await dbAll(db.select().from(schema.projects).where(eq(schema.projects.userId, userId)));
+  const existing = await dbAll(
+    db.select().from(schema.projects).where(eq(schema.projects.userId, userId)),
+  );
 
   const PALETTE = [
     '#7CB9E8',
@@ -370,11 +359,7 @@ export async function reorderProjects(
           tx
             .update(schema.projects)
             .set({ sortOrder: i })
-            .where(
-              userId === '__local__'
-                ? eq(schema.projects.id, projectIds[i])
-                : and(eq(schema.projects.id, projectIds[i]), eq(schema.projects.userId, userId)),
-            ),
+            .where(and(eq(schema.projects.id, projectIds[i]), eq(schema.projects.userId, userId))),
         );
       }
     });

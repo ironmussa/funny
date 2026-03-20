@@ -321,7 +321,7 @@ async function assignLocalProjects(): Promise<void> {
   if (!state.runnerId) return;
 
   try {
-    const projects = await getServices().projects.listProjects('__local__');
+    const projects = await getServices().projects.listProjects('');
 
     for (const project of projects) {
       try {

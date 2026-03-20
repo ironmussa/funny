@@ -102,7 +102,7 @@ export function getConnection(): DatabaseConnection | null {
   return _legacyConnection;
 }
 
-/** Set a pre-existing connection (e.g. shared from runtime in local mode). */
+/** Set a pre-existing connection (e.g. shared from runtime). */
 export function setConnection(conn: DatabaseConnection): void {
   _legacyConnection = conn;
   _provider = {

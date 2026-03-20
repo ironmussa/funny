@@ -71,11 +71,11 @@ describe('Project Routes (Integration)', () => {
       expect(body[0].id).toBe('p-personal');
     });
 
-    test('__local__ user sees all their projects', async () => {
-      seedProject(t.db as any, { id: 'p1', userId: '__local__', name: 'P1', path: '/a' });
-      seedProject(t.db as any, { id: 'p2', userId: '__local__', name: 'P2', path: '/b' });
+    test('user sees all their projects', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', name: 'P1', path: '/a' });
+      seedProject(t.db as any, { id: 'p2', userId: 'user-1', name: 'P2', path: '/b' });
 
-      const res = await t.requestAs('__local__').get('/api/projects');
+      const res = await t.requestAs('user-1').get('/api/projects');
       const body = await res.json();
       expect(body).toHaveLength(2);
     });
@@ -163,10 +163,10 @@ describe('Project Routes (Integration)', () => {
       expect(res.status).toBe(403);
     });
 
-    test('__local__ user can update any project', async () => {
-      seedProject(t.db as any, { id: 'p1', name: 'Any', userId: 'other-user', path: '/a' });
+    test('owner can update their project', async () => {
+      seedProject(t.db as any, { id: 'p1', name: 'Any', userId: 'user-1', path: '/a' });
 
-      const res = await t.requestAs('__local__').patch('/api/projects/p1', {
+      const res = await t.requestAs('user-1').patch('/api/projects/p1', {
         name: 'Updated',
       });
       expect(res.status).toBe(200);

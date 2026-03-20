@@ -156,33 +156,35 @@ backend.init({
     }
 
     const session = activeSessions.get(ptyId);
-    const event = {
+    if (!session?.userId) {
+      log.warn('PTY data for session without userId — dropping', {
+        namespace: 'pty-manager',
+        ptyId,
+      });
+      return;
+    }
+    wsBroker.emitToUser(session.userId, {
       type: 'pty:data' as const,
       threadId: '',
       data: { ptyId, data },
-    };
-
-    if (session?.userId && session.userId !== '__local__') {
-      wsBroker.emitToUser(session.userId, event);
-    } else {
-      wsBroker.emit(event);
-    }
+    });
   },
 
   onExit(ptyId, exitCode) {
     const session = activeSessions.get(ptyId);
     log.info('PTY exited', { namespace: 'pty-manager', ptyId, exitCode });
 
-    const event = {
-      type: 'pty:exit' as const,
-      threadId: '',
-      data: { ptyId, exitCode },
-    };
-
-    if (session?.userId && session.userId !== '__local__') {
-      wsBroker.emitToUser(session.userId, event);
+    if (!session?.userId) {
+      log.warn('PTY exit for session without userId — dropping', {
+        namespace: 'pty-manager',
+        ptyId,
+      });
     } else {
-      wsBroker.emit(event);
+      wsBroker.emitToUser(session.userId, {
+        type: 'pty:exit' as const,
+        threadId: '',
+        data: { ptyId, exitCode },
+      });
     }
 
     activeSessions.delete(ptyId);
@@ -197,16 +199,17 @@ backend.init({
     const session = activeSessions.get(ptyId);
     log.error('PTY error', { namespace: 'pty-manager', ptyId, error });
 
-    const event = {
-      type: 'pty:error' as const,
-      threadId: '',
-      data: { ptyId, error },
-    };
-
-    if (session?.userId && session.userId !== '__local__') {
-      wsBroker.emitToUser(session.userId, event);
+    if (!session?.userId) {
+      log.warn('PTY error for session without userId — dropping', {
+        namespace: 'pty-manager',
+        ptyId,
+      });
     } else {
-      wsBroker.emit(event);
+      wsBroker.emitToUser(session.userId, {
+        type: 'pty:error' as const,
+        threadId: '',
+        data: { ptyId, error },
+      });
     }
 
     activeSessions.delete(ptyId);
@@ -302,16 +305,18 @@ export function spawnPty(
     // Always emit — even with empty string — so the client exits loading state.
     const session = activeSessions.get(id)!;
     capturePaneAsync(id).then((content) => {
-      const event = {
+      if (!session.userId) {
+        log.warn('PTY restore for session without userId — dropping', {
+          namespace: 'pty-manager',
+          ptyId: id,
+        });
+        return;
+      }
+      wsBroker.emitToUser(session.userId, {
         type: 'pty:data' as const,
         threadId: '',
         data: { ptyId: id, data: content ?? '' },
-      };
-      if (session.userId && session.userId !== '__local__') {
-        wsBroker.emitToUser(session.userId, event);
-      } else {
-        wsBroker.emit(event);
-      }
+      });
     });
     return;
   }
@@ -459,7 +464,7 @@ export async function reattachSessions(): Promise<void> {
         for (const ds of daemonSessions) {
           const dbRow = dbMap.get(ds.id);
           activeSessions.set(ds.id, {
-            userId: dbRow?.user_id ?? '__local__',
+            userId: dbRow?.user_id ?? '',
             cwd: ds.cwd,
             projectId: dbRow?.project_id ?? undefined,
             label: dbRow?.label ?? undefined,

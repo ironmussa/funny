@@ -31,7 +31,7 @@ arcProjectRoutes.get('/:id/arcs', async (c) => {
 
   const project = await projectRepo.getProject(projectId);
   if (!project) return c.json({ error: 'Project not found' }, 404);
-  if (userId !== '__local__' && project.userId !== userId) {
+  if (project.userId !== userId) {
     if (!orgId || !(await projectRepo.isProjectInOrg(projectId, orgId))) {
       return c.json({ error: 'Access denied' }, 403);
     }
@@ -49,7 +49,7 @@ arcProjectRoutes.post('/:id/arcs', async (c) => {
 
   const project = await projectRepo.getProject(projectId);
   if (!project) return c.json({ error: 'Project not found' }, 404);
-  if (userId !== '__local__' && project.userId !== userId) {
+  if (project.userId !== userId) {
     if (!orgId || !(await projectRepo.isProjectInOrg(projectId, orgId))) {
       return c.json({ error: 'Access denied' }, 403);
     }
@@ -85,7 +85,7 @@ arcRoutes.get('/:id', async (c) => {
 
   const arc = await arcRepo.getArc(arcId);
   if (!arc) return c.json({ error: 'Arc not found' }, 404);
-  if (userId !== '__local__' && arc.userId !== userId) {
+  if (arc.userId !== userId) {
     return c.json({ error: 'Access denied' }, 403);
   }
 
@@ -99,7 +99,7 @@ arcRoutes.delete('/:id', async (c) => {
 
   const arc = await arcRepo.getArc(arcId);
   if (!arc) return c.json({ error: 'Arc not found' }, 404);
-  if (userId !== '__local__' && arc.userId !== userId) {
+  if (arc.userId !== userId) {
     return c.json({ error: 'Access denied' }, 403);
   }
 
@@ -114,7 +114,7 @@ arcRoutes.get('/:id/threads', async (c) => {
 
   const arc = await arcRepo.getArc(arcId);
   if (!arc) return c.json({ error: 'Arc not found' }, 404);
-  if (userId !== '__local__' && arc.userId !== userId) {
+  if (arc.userId !== userId) {
     return c.json({ error: 'Access denied' }, 403);
   }
 

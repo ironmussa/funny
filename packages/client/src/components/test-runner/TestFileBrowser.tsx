@@ -1,8 +1,8 @@
 import type { TestFile, TestFileStatus, TestSpec } from '@funny/shared';
 import {
-  ChevronDown,
   ChevronRight,
-  FileCode,
+  Folder,
+  FolderOpen,
   Play,
   Loader2,
   CheckCircle2,
@@ -13,7 +13,10 @@ import { useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { FileExtensionIcon } from '@/lib/file-icons';
 import { cn } from '@/lib/utils';
+
+const INDENT_PX = 12;
 
 interface TreeNode {
   name: string;
@@ -49,15 +52,15 @@ function buildTree(files: TestFile[]): TreeNode[] {
 function StatusDot({ status }: { status: TestFileStatus | undefined }) {
   switch (status) {
     case 'running':
-      return <Loader2 className="h-3.5 w-3.5 animate-spin text-blue-500" />;
+      return <Loader2 className="h-3 w-3 animate-spin text-blue-500" />;
     case 'passed':
-      return <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />;
+      return <CheckCircle2 className="h-3 w-3 text-green-500" />;
     case 'failed':
-      return <XCircle className="h-3.5 w-3.5 text-red-500" />;
+      return <XCircle className="h-3 w-3 text-red-500" />;
     case 'stopped':
-      return <Circle className="h-3.5 w-3.5 text-yellow-500" />;
+      return <Circle className="h-3 w-3 text-yellow-500" />;
     default:
-      return <Circle className="h-3.5 w-3.5 text-muted-foreground/30" />;
+      return <Circle className="h-3 w-3 text-muted-foreground/30" />;
   }
 }
 
@@ -77,11 +80,11 @@ function SpecItem({
   return (
     <div
       data-testid={`test-spec-${spec.file}-${spec.line}`}
-      className="group flex items-center gap-1.5 px-2 py-0.5 text-xs hover:bg-accent/50"
-      style={{ paddingLeft: `${depth * 16 + 8}px` }}
+      className="group flex h-6 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50"
+      style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
     >
       <Circle className="h-2.5 w-2.5 flex-shrink-0 text-muted-foreground/30" />
-      <span className="flex-1 truncate text-muted-foreground" title={spec.title}>
+      <span className="flex-1 truncate font-mono-explorer text-xs" title={spec.title}>
         {spec.title}
       </span>
       <Button
@@ -136,21 +139,28 @@ function TreeItem({
   if (node.isFolder) {
     return (
       <>
-        <button
+        <div
           data-testid={`test-folder-${node.path}`}
           onClick={() => toggleFolder(node.path)}
-          className="flex w-full items-center gap-1 px-2 py-1 text-sm hover:bg-accent/50"
-          style={{ paddingLeft: `${depth * 16 + 8}px` }}
-        >
-          {isExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+          className={cn(
+            'flex h-6 cursor-pointer select-none items-center gap-1.5 text-xs',
+            'text-muted-foreground transition-colors hover:bg-sidebar-accent/50',
           )}
-          <span className="truncate font-mono-explorer font-medium text-muted-foreground">
-            {node.name}
-          </span>
-        </button>
+          style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
+        >
+          <ChevronRight
+            className={cn(
+              'h-3.5 w-3.5 flex-shrink-0 transition-transform',
+              isExpanded && 'rotate-90',
+            )}
+          />
+          {isExpanded ? (
+            <FolderOpen className="h-4 w-4 flex-shrink-0 text-muted-foreground/70" />
+          ) : (
+            <Folder className="h-4 w-4 flex-shrink-0 text-muted-foreground/70" />
+          )}
+          <span className="flex-1 truncate font-mono-explorer text-xs">{node.name}</span>
+        </div>
         {isExpanded &&
           node.children.map((child) => (
             <TreeItem
@@ -190,29 +200,34 @@ function TreeItem({
       <div
         data-testid={`test-file-${node.path}`}
         className={cn(
-          'group flex items-center gap-1.5 px-2 py-1 text-sm hover:bg-accent/50',
-          status === 'running' && 'bg-blue-500/5',
+          'group flex h-6 items-center gap-1.5 text-xs cursor-pointer transition-colors',
+          status === 'running'
+            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+            : 'hover:bg-sidebar-accent/50 text-muted-foreground',
         )}
-        style={{ paddingLeft: `${depth * 16 + 8}px` }}
+        style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
+        onClick={handleToggleFile}
       >
         <button
           data-testid={`test-file-expand-${node.path}`}
           className="flex-shrink-0"
-          onClick={handleToggleFile}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleToggleFile();
+          }}
         >
-          {isFileExpanded ? (
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" />
-          ) : (
-            <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />
-          )}
+          <ChevronRight
+            className={cn(
+              'h-3.5 w-3.5 flex-shrink-0 transition-transform text-muted-foreground',
+              isFileExpanded && 'rotate-90',
+            )}
+          />
         </button>
-        <FileCode className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
-        <span
-          className="flex-1 cursor-pointer truncate font-mono-explorer"
-          onClick={handleToggleFile}
-        >
-          {node.name}
-        </span>
+        <FileExtensionIcon
+          filePath={node.path}
+          className="h-4 w-4 flex-shrink-0 text-muted-foreground/80"
+        />
+        <span className="flex-1 truncate font-mono-explorer text-xs">{node.name}</span>
         <StatusDot status={status} />
         <Button
           data-testid={`test-play-${node.path}`}
@@ -220,7 +235,10 @@ function TreeItem({
           size="icon"
           className="h-5 w-5 opacity-0 group-hover:opacity-100"
           disabled={isRunning}
-          onClick={() => onRunFile(node.path)}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRunFile(node.path);
+          }}
         >
           <Play className="h-3 w-3" />
         </Button>
@@ -230,8 +248,8 @@ function TreeItem({
       {isFileExpanded &&
         (isSpecsLoading ? (
           <div
-            className="flex items-center gap-2 py-1 text-xs text-muted-foreground"
-            style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
+            className="flex h-6 items-center gap-2 text-xs text-muted-foreground"
+            style={{ paddingLeft: `${8 + (depth + 1) * INDENT_PX}px` }}
           >
             <Loader2 className="h-3 w-3 animate-spin" />
             Discovering tests...
@@ -248,8 +266,8 @@ function TreeItem({
           ))
         ) : specs ? (
           <div
-            className="py-1 text-xs text-muted-foreground"
-            style={{ paddingLeft: `${(depth + 1) * 16 + 8}px` }}
+            className="flex h-6 items-center text-xs text-muted-foreground"
+            style={{ paddingLeft: `${8 + (depth + 1) * INDENT_PX}px` }}
           >
             No tests found
           </div>

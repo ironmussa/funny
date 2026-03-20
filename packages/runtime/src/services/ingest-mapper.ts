@@ -128,7 +128,7 @@ export function decodeUnicodeEscapes(str: string): string {
  */
 async function resolveProjectId(workingPath: string): Promise<string | null> {
   const normalised = workingPath.replace(/\\/g, '/').toLowerCase();
-  const projects = await getServices().projects.listProjects('__local__');
+  const projects = await getServices().projects.listProjects('');
 
   // First pass: exact prefix match (project path is prefix of working path)
   for (const project of projects) {
@@ -174,7 +174,7 @@ export function parseOwnerRepo(remoteUrl: string): string | null {
  */
 async function resolveProjectByRepo(repoFullName: string): Promise<string | null> {
   const target = repoFullName.toLowerCase();
-  const projects = await getServices().projects.listProjects('__local__');
+  const projects = await getServices().projects.listProjects('');
 
   for (const project of projects) {
     const result = await getRemoteUrl(project.path);
@@ -257,11 +257,14 @@ function resolveStateKey(event: IngestEvent): string {
 }
 
 function emitWS(state: ExternalThreadState, event: WSEvent): void {
-  if (state.userId && state.userId !== '__local__') {
-    wsBroker.emitToUser(state.userId, event);
-  } else {
-    wsBroker.emit(event);
+  if (!state.userId) {
+    log.warn('emitWS: state has no userId — dropping', {
+      namespace: 'ingest-mapper',
+      threadId: event.threadId,
+    });
+    return;
   }
+  wsBroker.emitToUser(state.userId, event);
 }
 
 // ── Event handlers ───────────────────────────────────────────
@@ -327,7 +330,7 @@ async function onAccepted(event: IngestEvent): Promise<string | undefined> {
   }
 
   const threadId = nanoid();
-  const userId = (metadata?.userId as string) ?? '__local__';
+  const userId = (metadata?.userId as string) ?? '';
   const title =
     (data.title as string) ??
     (data.branch ? `Pipeline: ${data.branch}` : `External: ${request_id.slice(0, 8)}`);

@@ -158,7 +158,7 @@ export function seedThread(db: any, overrides: Partial<typeof schema.threads.$in
   const thread = {
     id: 't1',
     projectId: 'p1',
-    userId: '__local__',
+    userId: 'user-1',
     title: 'Test Thread',
     mode: 'local',
     status: 'pending',

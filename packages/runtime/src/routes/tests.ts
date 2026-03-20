@@ -22,7 +22,7 @@ testRoutes.get('/:projectId/files', async (c) => {
   }
 
   // Ownership check
-  if (userId !== '__local__' && project.userId !== userId) {
+  if (project.userId !== userId) {
     return c.json({ error: 'Access denied' }, 403);
   }
 
@@ -45,7 +45,7 @@ testRoutes.get('/:projectId/specs', async (c) => {
     return c.json({ error: 'Project not found' }, 404);
   }
 
-  if (userId !== '__local__' && project.userId !== userId) {
+  if (project.userId !== userId) {
     return c.json({ error: 'Access denied' }, 403);
   }
 
@@ -66,7 +66,7 @@ testRoutes.post('/:projectId/run', async (c) => {
     return c.json({ error: 'Project not found' }, 404);
   }
 
-  if (userId !== '__local__' && project.userId !== userId) {
+  if (project.userId !== userId) {
     return c.json({ error: 'Access denied' }, 403);
   }
 
@@ -94,7 +94,7 @@ testRoutes.post('/:projectId/stop', async (c) => {
     return c.json({ error: 'Project not found' }, 404);
   }
 
-  if (userId !== '__local__' && project.userId !== userId) {
+  if (project.userId !== userId) {
     return c.json({ error: 'Access denied' }, 403);
   }
 

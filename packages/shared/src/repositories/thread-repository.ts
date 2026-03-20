@@ -124,7 +124,7 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
         // No projects in this org -- return empty
         return [];
       }
-    } else if (userId !== '__local__') {
+    } else {
       filters.push(eq(schema.threads.userId, userId));
     }
     if (projectId) {
@@ -170,9 +170,7 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
     const safeSearch = search ? escapeLike(search) : '';
     const filters: ReturnType<typeof eq>[] = [eq(schema.threads.archived, 1)];
 
-    if (userId !== '__local__') {
-      filters.push(eq(schema.threads.userId, userId));
-    }
+    filters.push(eq(schema.threads.userId, userId));
 
     if (search) {
       filters.push(

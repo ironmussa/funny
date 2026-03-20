@@ -7,7 +7,7 @@ import type { HonoEnv } from '../../types/hono-env.js';
 const mockAutomation = {
   id: 'auto-1',
   projectId: 'p1',
-  userId: '__local__',
+  userId: 'user-1',
   name: 'Test Automation',
   prompt: 'Run tests',
   schedule: 'daily',
@@ -50,7 +50,7 @@ describe('Automation Routes', () => {
     app = new Hono<HonoEnv>();
     // Set userId middleware
     app.use('*', async (c, next) => {
-      c.set('userId', '__local__');
+      c.set('userId', 'user-1');
       return next();
     });
     app.route('/automations', automationRoutes);

@@ -323,7 +323,7 @@ export function seedThread(
   const thread = {
     id: overrides.id ?? 'test-thread-1',
     projectId: overrides.projectId ?? 'test-project-1',
-    userId: overrides.userId ?? '__local__',
+    userId: overrides.userId ?? 'user-1',
     title: overrides.title ?? 'Test Thread',
     mode: overrides.mode ?? 'local',
     provider: overrides.provider ?? 'claude',

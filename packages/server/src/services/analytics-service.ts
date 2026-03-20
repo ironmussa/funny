@@ -98,9 +98,7 @@ function baseFiltersFor(opts: { projectId?: string; userId: string }) {
   if (opts.projectId) {
     filters.push(eq(schema.threads.projectId, opts.projectId));
   }
-  if (opts.userId !== '__local__') {
-    filters.push(eq(schema.threads.userId, opts.userId));
-  }
+  filters.push(eq(schema.threads.userId, opts.userId));
   return filters;
 }
 

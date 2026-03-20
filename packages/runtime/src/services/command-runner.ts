@@ -53,12 +53,15 @@ async function emitWS(type: string, data: unknown, projectId?: string) {
   // Look up project userId for per-user filtering
   if (projectId) {
     const project = await getServices().projects.getProject(projectId);
-    if (project?.userId && project.userId !== '__local__') {
+    if (project?.userId) {
       wsBroker.emitToUser(project.userId, event);
       return;
     }
   }
-  wsBroker.emit(event);
+  log.warn('emitWS: could not resolve userId for project — dropping', {
+    namespace: 'command-runner',
+    projectId,
+  });
 }
 
 export async function startCommand(

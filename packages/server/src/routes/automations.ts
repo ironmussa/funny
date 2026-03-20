@@ -59,7 +59,7 @@ automationRoutes.get('/', async (c) => {
   if (projectId) {
     filters.push(eq(automations.projectId, projectId));
   }
-  if (userId && userId !== '__local__') {
+  if (userId) {
     filters.push(eq(automations.userId, userId));
   }
 
@@ -99,7 +99,7 @@ automationRoutes.post('/', async (c) => {
   await db.insert(automations).values({
     id,
     projectId: body.projectId,
-    userId: userId || '__local__',
+    userId,
     name: body.name,
     prompt: body.prompt,
     schedule: body.schedule,

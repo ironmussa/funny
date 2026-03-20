@@ -268,7 +268,7 @@ export function seedProject(
     id: overrides.id ?? 'test-project-1',
     name: overrides.name ?? 'Test Project',
     path: overrides.path ?? '/tmp/test-repo',
-    userId: overrides.userId ?? '__local__',
+    userId: overrides.userId ?? 'user-1',
     sortOrder: overrides.sortOrder ?? 0,
     createdAt: overrides.createdAt ?? new Date().toISOString(),
   };
@@ -283,7 +283,7 @@ export function seedThread(
   const thread = {
     id: overrides.id ?? 'test-thread-1',
     projectId: overrides.projectId ?? 'test-project-1',
-    userId: overrides.userId ?? '__local__',
+    userId: overrides.userId ?? 'user-1',
     title: overrides.title ?? 'Test Thread',
     mode: overrides.mode ?? 'local',
     status: overrides.status ?? 'pending',
@@ -301,7 +301,7 @@ export function seedPipeline(
   const pipeline = {
     id: overrides.id ?? 'test-pipeline-1',
     projectId: overrides.projectId ?? 'test-project-1',
-    userId: overrides.userId ?? '__local__',
+    userId: overrides.userId ?? 'user-1',
     name: overrides.name ?? 'Test Pipeline',
     enabled: overrides.enabled ?? 1,
     createdAt: overrides.createdAt ?? now,

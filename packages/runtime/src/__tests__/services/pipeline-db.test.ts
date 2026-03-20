@@ -45,7 +45,7 @@ describe('Pipeline DB CRUD', () => {
       .values({
         id,
         projectId: data.projectId,
-        userId: data.userId ?? '__local__',
+        userId: data.userId ?? 'user-1',
         name: data.name,
         enabled: 1,
         reviewModel: data.reviewModel ?? 'sonnet',

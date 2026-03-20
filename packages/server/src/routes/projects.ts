@@ -121,7 +121,7 @@ projectRoutes.patch('/:id', async (c) => {
   // Ownership check
   const project = await projectRepo.getProject(id);
   if (!project) return c.json({ error: 'Project not found' }, 404);
-  if (userId !== '__local__' && project.userId !== userId) {
+  if (project.userId !== userId) {
     if (!orgId || !(await projectRepo.isProjectInOrg(id, orgId))) {
       return c.json({ error: 'Access denied' }, 403);
     }
@@ -146,7 +146,7 @@ projectRoutes.delete('/:id', async (c) => {
 
   const project = await projectRepo.getProject(id);
   if (!project) return c.json({ error: 'Project not found' }, 404);
-  if (userId !== '__local__' && project.userId !== userId) {
+  if (project.userId !== userId) {
     return c.json({ error: 'Access denied' }, 403);
   }
 

@@ -60,7 +60,7 @@ export async function createAutomation(data: {
   await getServices().automations.insertAutomation({
     id,
     projectId: data.projectId,
-    userId: data.userId || '__local__',
+    userId: data.userId || '',
     name: data.name,
     prompt: data.prompt,
     schedule: data.schedule,

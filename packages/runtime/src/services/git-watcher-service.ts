@@ -139,7 +139,7 @@ async function emitForAllThreads(projectId: string, pw: ProjectWatcher): Promise
   if (!project) return;
 
   // Query all active threads for this project once
-  const threads = await listThreads({ projectId, userId: '__local__', includeArchived: false });
+  const threads = await listThreads({ projectId, userId: '', includeArchived: false });
   const threadMap = new Map(threads.map((t) => [t.id, t]));
 
   let emitted = 0;
@@ -194,13 +194,13 @@ export function closeAllWatchers(): void {
  * changes would go unnoticed for all pre-existing threads.
  */
 export async function rehydrateWatchers(): Promise<void> {
-  const projects = await getServices().projects.listProjects('__local__');
+  const projects = await getServices().projects.listProjects('');
   let total = 0;
 
   for (const project of projects) {
     const threads = await listThreads({
       projectId: project.id,
-      userId: '__local__',
+      userId: '',
       includeArchived: false,
     });
 

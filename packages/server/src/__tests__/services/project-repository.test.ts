@@ -57,9 +57,9 @@ describe('project-repository', () => {
       expect(user1Projects).toHaveLength(2);
     });
 
-    test('list all projects for __local__ user', () => {
-      seedProject(testDb.db, { id: 'p1', userId: '__local__', name: 'P1', path: '/a' });
-      seedProject(testDb.db, { id: 'p2', userId: '__local__', name: 'P2', path: '/b' });
+    test('list all projects for a user', () => {
+      seedProject(testDb.db, { id: 'p1', userId: 'user-1', name: 'P1', path: '/a' });
+      seedProject(testDb.db, { id: 'p2', userId: 'user-1', name: 'P2', path: '/b' });
 
       const allProjects = testDb.db
         .select()

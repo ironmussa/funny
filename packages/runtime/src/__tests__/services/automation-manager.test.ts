@@ -26,7 +26,7 @@ describe('AutomationManager', () => {
     if (projectId) {
       filters.push(eq(testDb.schema.automations.projectId, projectId));
     }
-    if (userId && userId !== '__local__') {
+    if (userId) {
       filters.push(eq(testDb.schema.automations.userId, userId));
     }
 
@@ -65,7 +65,7 @@ describe('AutomationManager', () => {
       .values({
         id,
         projectId: data.projectId,
-        userId: data.userId || '__local__',
+        userId: data.userId || 'user-1',
         name: data.name,
         prompt: data.prompt,
         schedule: data.schedule,
@@ -172,7 +172,7 @@ describe('AutomationManager', () => {
       expect(auto.permissionMode).toBe('autoEdit');
       expect(auto.enabled).toBe(1);
       expect(auto.maxRunHistory).toBe(20);
-      expect(auto.userId).toBe('__local__');
+      expect(auto.userId).toBe('user-1');
       expect(auto.baseBranch).toBeNull();
       expect(auto.lastRunAt).toBeNull();
       expect(auto.nextRunAt).toBeNull();
@@ -304,7 +304,7 @@ describe('AutomationManager', () => {
       expect(userAAutos[0].name).toBe('User A auto');
     });
 
-    test('listAutomations with __local__ userId returns all automations', () => {
+    test('listAutomations with empty userId returns all automations', () => {
       seedProject(testDb.db, { id: 'p1' });
       createAutomation({
         id: 'auto-1',
@@ -323,7 +323,7 @@ describe('AutomationManager', () => {
         userId: 'user-b',
       });
 
-      const all = listAutomations(undefined, '__local__');
+      const all = listAutomations(undefined, '');
       expect(all).toHaveLength(2);
     });
 

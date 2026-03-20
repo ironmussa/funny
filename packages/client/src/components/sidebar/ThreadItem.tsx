@@ -164,7 +164,7 @@ export const ThreadItem = memo(function ThreadItem({
           </div>
           <span className="truncate text-sm leading-tight">{thread.title}</span>
           {/* External creator icon */}
-          {thread.createdBy && thread.createdBy !== 'user' && thread.createdBy !== '__local__' && (
+          {thread.createdBy && thread.createdBy !== 'user' && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Bot className="h-3 w-3 flex-shrink-0 text-muted-foreground" />

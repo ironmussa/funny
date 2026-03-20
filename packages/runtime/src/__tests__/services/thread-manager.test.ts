@@ -26,10 +26,10 @@ describe('ThreadManager', () => {
   // ── Helpers that mirror thread-manager.ts functions ────────────
 
   function listThreads(opts: { projectId?: string; userId?: string; includeArchived?: boolean }) {
-    const { projectId, userId = '__local__', includeArchived } = opts;
+    const { projectId, userId = '', includeArchived } = opts;
     const filters: ReturnType<typeof eq>[] = [];
 
-    if (userId !== '__local__') {
+    if (userId) {
       filters.push(eq(testDb.schema.threads.userId, userId));
     }
     if (projectId) {
@@ -294,12 +294,12 @@ describe('ThreadManager', () => {
       expect(threadsB[0].id).toBe('t2');
     });
 
-    test('listThreads with __local__ userId returns all threads', () => {
+    test('listThreads with empty userId returns all threads', () => {
       seedProject(testDb.db, { id: 'p1' });
       seedThread(testDb.db, { id: 't1', projectId: 'p1', userId: 'user-a' });
       seedThread(testDb.db, { id: 't2', projectId: 'p1', userId: 'user-b' });
 
-      const threads = listThreads({ projectId: 'p1', userId: '__local__' });
+      const threads = listThreads({ projectId: 'p1', userId: '' });
       expect(threads).toHaveLength(2);
     });
 
@@ -1140,7 +1140,7 @@ describe('ThreadManager', () => {
       const safeSearch = search ? escapeLike(search) : '';
       const filters: ReturnType<typeof eq>[] = [eq(testDb.schema.threads.archived, 1)];
 
-      if (userId !== '__local__') {
+      if (userId) {
         filters.push(eq(testDb.schema.threads.userId, userId));
       }
 
@@ -1181,7 +1181,7 @@ describe('ThreadManager', () => {
       seedThread(testDb.db, { id: 'archived-1', projectId: 'p1', archived: 1 });
       seedThread(testDb.db, { id: 'archived-2', projectId: 'p1', archived: 1 });
 
-      const result = listArchivedThreads({ page: 1, limit: 10, search: '', userId: '__local__' });
+      const result = listArchivedThreads({ page: 1, limit: 10, search: '', userId: 'user-1' });
       expect(result.total).toBe(2);
       expect(result.threads).toHaveLength(2);
       expect(result.threads.every((t) => t.archived === 1)).toBe(true);
@@ -1208,11 +1208,11 @@ describe('ThreadManager', () => {
         createdAt: '2025-01-03T00:00:00Z',
       });
 
-      const page1 = listArchivedThreads({ page: 1, limit: 2, search: '', userId: '__local__' });
+      const page1 = listArchivedThreads({ page: 1, limit: 2, search: '', userId: 'user-1' });
       expect(page1.total).toBe(3);
       expect(page1.threads).toHaveLength(2);
 
-      const page2 = listArchivedThreads({ page: 2, limit: 2, search: '', userId: '__local__' });
+      const page2 = listArchivedThreads({ page: 2, limit: 2, search: '', userId: 'user-1' });
       expect(page2.total).toBe(3);
       expect(page2.threads).toHaveLength(1);
     });
@@ -1227,7 +1227,7 @@ describe('ThreadManager', () => {
         page: 1,
         limit: 10,
         search: 'Fix',
-        userId: '__local__',
+        userId: 'user-1',
       });
       expect(result.total).toBe(2);
       expect(result.threads.every((t) => t.title.includes('Fix'))).toBe(true);
@@ -1242,7 +1242,7 @@ describe('ThreadManager', () => {
         page: 1,
         limit: 10,
         search: 'auth',
-        userId: '__local__',
+        userId: 'user-1',
       });
       expect(result.total).toBe(1);
       expect(result.threads[0].branch).toContain('auth');
@@ -1263,7 +1263,7 @@ describe('ThreadManager', () => {
       seedProject(testDb.db, { id: 'p1' });
       seedThread(testDb.db, { id: 't1', projectId: 'p1', archived: 0 });
 
-      const result = listArchivedThreads({ page: 1, limit: 10, search: '', userId: '__local__' });
+      const result = listArchivedThreads({ page: 1, limit: 10, search: '', userId: 'user-1' });
       expect(result.total).toBe(0);
       expect(result.threads).toHaveLength(0);
     });
@@ -1277,7 +1277,7 @@ describe('ThreadManager', () => {
         page: 1,
         limit: 10,
         search: 'bug',
-        userId: '__local__',
+        userId: 'user-1',
       });
       expect(result.total).toBe(1);
       expect(result.threads[0].title).toBe('Important BUG Fix');
@@ -1302,7 +1302,7 @@ describe('ThreadManager', () => {
         like(testDb.schema.messages.content, `%${safeQuery}%`),
       ];
 
-      if (userId !== '__local__') {
+      if (userId) {
         filters.push(eq(testDb.schema.threads.userId, userId));
       }
       if (projectId) {
@@ -1346,7 +1346,7 @@ describe('ThreadManager', () => {
       seedMessage(testDb.db, { id: 'm1', threadId: 't1', content: 'Implement the login feature' });
       seedMessage(testDb.db, { id: 'm2', threadId: 't2', content: 'Fix the logout bug' });
 
-      const result = searchViaLike('login', undefined, '__local__');
+      const result = searchViaLike('login', undefined, '');
       expect(result.size).toBe(1);
       expect(result.has('t1')).toBe(true);
       expect(result.get('t1')).toContain('login');
@@ -1366,7 +1366,7 @@ describe('ThreadManager', () => {
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
       seedMessage(testDb.db, { id: 'm1', threadId: 't1', content: 'Hello world' });
 
-      const result = searchViaLike('nonexistent-xyz', undefined, '__local__');
+      const result = searchViaLike('nonexistent-xyz', undefined, '');
       expect(result.size).toBe(0);
     });
 
@@ -1378,7 +1378,7 @@ describe('ThreadManager', () => {
       seedMessage(testDb.db, { id: 'm1', threadId: 't1', content: 'Find this keyword' });
       seedMessage(testDb.db, { id: 'm2', threadId: 't2', content: 'Also has keyword' });
 
-      const result = searchViaLike('keyword', 'p1', '__local__');
+      const result = searchViaLike('keyword', 'p1', '');
       expect(result.size).toBe(1);
       expect(result.has('t1')).toBe(true);
     });
@@ -1401,7 +1401,7 @@ describe('ThreadManager', () => {
       seedMessage(testDb.db, { id: 'm1', threadId: 't1', content: 'first match target' });
       seedMessage(testDb.db, { id: 'm2', threadId: 't1', content: 'second match target' });
 
-      const result = searchViaLike('target', undefined, '__local__');
+      const result = searchViaLike('target', undefined, '');
       expect(result.size).toBe(1);
       expect(result.has('t1')).toBe(true);
     });
@@ -1412,7 +1412,7 @@ describe('ThreadManager', () => {
       const longContent = 'A'.repeat(50) + 'FINDME' + 'B'.repeat(80);
       seedMessage(testDb.db, { id: 'm1', threadId: 't1', content: longContent });
 
-      const result = searchViaLike('FINDME', undefined, '__local__');
+      const result = searchViaLike('FINDME', undefined, '');
       expect(result.size).toBe(1);
       const snippet = result.get('t1')!;
       expect(snippet).toContain('FINDME');
@@ -1425,7 +1425,7 @@ describe('ThreadManager', () => {
       seedThread(testDb.db, { id: 't1', projectId: 'p1' });
       seedMessage(testDb.db, { id: 'm1', threadId: 't1', content: 'The Error Handler works' });
 
-      const result = searchViaLike('error handler', undefined, '__local__');
+      const result = searchViaLike('error handler', undefined, '');
       expect(result.size).toBe(1);
     });
   });

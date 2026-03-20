@@ -47,7 +47,7 @@ export const projects = sqliteTable('projects', {
   urls: text('urls'),
   systemPrompt: text('system_prompt'),
   launcherUrl: text('launcher_url'),
-  userId: text('user_id').notNull().default('__local__'),
+  userId: text('user_id').notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
   createdAt: text('created_at').notNull(),
 });
@@ -67,7 +67,7 @@ export const threads = sqliteTable('threads', {
   projectId: text('project_id')
     .notNull()
     .references(() => projects.id, { onDelete: 'cascade' }),
-  userId: text('user_id').notNull().default('__local__'),
+  userId: text('user_id').notNull(),
   createdBy: text('created_by'),
   title: text('title').notNull(),
   mode: text('mode').notNull(),
@@ -144,7 +144,7 @@ export const automations = sqliteTable('automations', {
   projectId: text('project_id')
     .notNull()
     .references(() => projects.id, { onDelete: 'cascade' }),
-  userId: text('user_id').notNull().default('__local__'),
+  userId: text('user_id').notNull(),
   name: text('name').notNull(),
   prompt: text('prompt').notNull(),
   schedule: text('schedule').notNull(),
@@ -257,7 +257,7 @@ export const pipelines = sqliteTable('pipelines', {
   projectId: text('project_id')
     .notNull()
     .references(() => projects.id, { onDelete: 'cascade' }),
-  userId: text('user_id').notNull().default('__local__'),
+  userId: text('user_id').notNull(),
   name: text('name').notNull(),
   enabled: integer('enabled').notNull().default(1),
   reviewModel: text('review_model').notNull().default(DEFAULT_MODEL),

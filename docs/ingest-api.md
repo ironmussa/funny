@@ -339,7 +339,7 @@ When creating a thread with `*.accepted`, the following fields are available:
 | Field       | Type   | Required | Description                              |
 | ----------- | ------ | -------- | ---------------------------------------- |
 | `projectId` | string | Yes\*    | Funny project ID to attach the thread to |
-| `userId`    | string | No       | User ID (defaults to `__local__`)        |
+| `userId`    | string | No       | User ID (defaults to authenticated user) |
 | `prompt`    | string | No       | Alternative location for initial prompt  |
 
 \*`projectId` can be omitted if `worktree_path` matches a known project path.

@@ -85,6 +85,7 @@ export interface HandlerServiceContext {
     disallowedTools?: string[],
     allowedTools?: string[],
     provider?: string,
+    skipMessageInsert?: boolean,
   ): Promise<void>;
 
   // Git
@@ -101,6 +102,19 @@ export interface HandlerServiceContext {
 
   // Message queue
   dequeueMessage(threadId: string): QueueEntry | null | Promise<QueueEntry | null>;
+  enqueueMessage(
+    threadId: string,
+    entry: {
+      content: string;
+      provider?: string;
+      model?: string;
+      permissionMode?: string;
+      images?: string;
+      allowedTools?: string;
+      disallowedTools?: string;
+      fileReferences?: string;
+    },
+  ): Promise<QueueEntry>;
   queueCount(threadId: string): number | Promise<number>;
   peekMessage(threadId: string): QueueEntry | null | Promise<QueueEntry | null>;
 

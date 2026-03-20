@@ -6,7 +6,7 @@
 import { eq, and, like } from 'drizzle-orm';
 import { sql } from 'drizzle-orm';
 
-import { db, dbAll, schema } from '../db/index.js';
+import { db, dbAll, dbDialect, schema } from '../db/index.js';
 
 function escapeLike(value: string): string {
   return value.replace(/%/g, '\\%').replace(/_/g, '\\_');
@@ -46,18 +46,24 @@ export async function searchThreadIdsByContent(opts: {
     return await searchViaLike(query, projectId, userId);
   }
 
+  // Dialect-specific full-text search with LIKE fallback on error
   try {
-    return searchViaFts5(query, projectId, userId);
+    if (dbDialect === 'pg') {
+      return await searchViaTsvector(query, projectId, userId);
+    }
+    return await searchViaFts5(query, projectId, userId);
   } catch {
     return await searchViaLike(query, projectId, userId);
   }
 }
 
-function searchViaFts5(
+// ── SQLite FTS5 ──────────────────────────────────────────────────
+
+async function searchViaFts5(
   query: string,
   projectId: string | undefined,
   userId: string,
-): Map<string, string> {
+): Promise<Map<string, string>> {
   const ftsQuery = escapeFts5Query(query);
 
   let stmt = sql`
@@ -77,13 +83,63 @@ function searchViaFts5(
 
   stmt = sql`${stmt} GROUP BY m.thread_id`;
 
-  const rows = db.all<{ threadId: string; snippet: string }>(stmt);
+  // SQLite: synchronous .all() on raw SQL is the correct API for FTS5 queries.
+  // This is intentionally dialect-specific — guarded by the dbDialect check above.
+  const rows = (db as any).all<{ threadId: string; snippet: string }>(stmt) as {
+    threadId: string;
+    snippet: string;
+  }[];
+
   const result = new Map<string, string>();
   for (const row of rows) {
     result.set(row.threadId, row.snippet.replace(/\n/g, ' '));
   }
   return result;
 }
+
+// ── PostgreSQL tsvector ──────────────────────────────────────────
+
+async function searchViaTsvector(
+  query: string,
+  projectId: string | undefined,
+  userId: string,
+): Promise<Map<string, string>> {
+  // Build a tsquery from the user input — each word becomes a lexeme joined with &
+  const tsQuery = query
+    .trim()
+    .split(/\s+/)
+    .map((t) => `'${t.replace(/'/g, "''")}'`)
+    .join(' & ');
+
+  let stmt = sql`
+    SELECT m.thread_id AS "threadId",
+           ts_headline('english', m.content, to_tsquery('english', ${tsQuery}),
+                       'MaxFragments=1, MaxWords=30, MinWords=10') AS snippet
+    FROM messages AS m
+    JOIN threads AS t ON t.id = m.thread_id
+    WHERE m.search_vector @@ to_tsquery('english', ${tsQuery})
+  `;
+
+  if (userId !== '__local__') {
+    stmt = sql`${stmt} AND t.user_id = ${userId}`;
+  }
+  if (projectId) {
+    stmt = sql`${stmt} AND t.project_id = ${projectId}`;
+  }
+
+  stmt = sql`${stmt} GROUP BY m.thread_id, m.content, m.search_vector`;
+
+  // PostgreSQL: async execute
+  const rows = await dbAll<{ threadId: string; snippet: string }>((db as any).execute(stmt));
+
+  const result = new Map<string, string>();
+  for (const row of rows) {
+    result.set(row.threadId, row.snippet.replace(/\n/g, ' '));
+  }
+  return result;
+}
+
+// ── LIKE fallback (dialect-agnostic) ─────────────────────────────
 
 async function searchViaLike(
   query: string,

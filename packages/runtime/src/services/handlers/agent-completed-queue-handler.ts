@@ -44,6 +44,8 @@ export const agentCompletedQueueHandler: EventHandler<'agent:completed'> = {
     const effectiveCwd = thread.worktreePath ?? project.path;
 
     try {
+      // skipMessageInsert: true — the user message was already inserted when
+      // the message was enqueued in thread-service.ts, avoid duplicates.
       await ctx.startAgent(
         threadId,
         next.content,
@@ -54,6 +56,7 @@ export const agentCompletedQueueHandler: EventHandler<'agent:completed'> = {
         next.disallowedTools ? JSON.parse(next.disallowedTools) : undefined,
         next.allowedTools ? JSON.parse(next.allowedTools) : undefined,
         next.provider || thread.provider || DEFAULT_PROVIDER,
+        true, // skipMessageInsert
       );
 
       // Emit queue update with the dequeued message content so the client
@@ -79,6 +82,24 @@ export const agentCompletedQueueHandler: EventHandler<'agent:completed'> = {
       }
     } catch (err: any) {
       ctx.log(`Failed to auto-send queued message for thread ${threadId}: ${err.message}`);
+
+      // Re-enqueue the message so it's not lost — the user can still see it
+      // in the queue widget and it will be retried on the next completion.
+      try {
+        await ctx.enqueueMessage(threadId, {
+          content: next.content,
+          provider: next.provider ?? undefined,
+          model: next.model ?? undefined,
+          permissionMode: next.permissionMode ?? undefined,
+          images: next.images ?? undefined,
+          allowedTools: next.allowedTools ?? undefined,
+          disallowedTools: next.disallowedTools ?? undefined,
+          fileReferences: next.fileReferences ?? undefined,
+        });
+        ctx.log(`Re-enqueued message ${next.id} after failed auto-send`);
+      } catch (reEnqueueErr: any) {
+        ctx.log(`CRITICAL: Failed to re-enqueue message ${next.id}: ${reEnqueueErr.message}`);
+      }
     }
   },
 };

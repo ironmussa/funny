@@ -1441,7 +1441,7 @@ export function ThreadView() {
       // Treat thread as running if agent is active OR queued messages are pending
       // (queue drains immediately on completion — there's a brief gap where status
       // is 'completed' but the next queued agent hasn't started yet)
-      const queuedCount = (thread as any).queuedCount ?? 0;
+      const queuedCount = thread.queuedCount ?? 0;
       const threadIsRunning = thread.status === 'running' || queuedCount > 0;
       const currentProject = useProjectStore
         .getState()
@@ -1547,9 +1547,11 @@ export function ThreadView() {
         });
         if (typeof responseQueuedCount === 'number') {
           const current = useThreadStore.getState().activeThread;
+          const { queuedCountByThread } = useThreadStore.getState();
           if (current?.id === thread.id) {
             useThreadStore.setState({
-              activeThread: { ...current, queuedCount: responseQueuedCount } as any,
+              activeThread: { ...current, queuedCount: responseQueuedCount },
+              queuedCountByThread: { ...queuedCountByThread, [thread.id]: responseQueuedCount },
             });
             tvLog.info('handleSend: queuedCount set on activeThread', {
               threadId: thread.id,
@@ -1557,7 +1559,11 @@ export function ThreadView() {
               activeThreadId: current.id,
             });
           } else {
-            tvLog.warn('handleSend: activeThread mismatch — queuedCount NOT set', {
+            // Still persist to the map even if not the active thread
+            useThreadStore.setState({
+              queuedCountByThread: { ...queuedCountByThread, [thread.id]: responseQueuedCount },
+            });
+            tvLog.warn('handleSend: activeThread mismatch — queuedCount persisted to map', {
               threadId: thread.id,
               activeThreadId: current?.id ?? 'null',
             });
@@ -1646,9 +1652,15 @@ export function ThreadView() {
         });
         if (typeof responseQueuedCount === 'number') {
           const current = useThreadStore.getState().activeThread;
+          const { queuedCountByThread } = useThreadStore.getState();
           if (current?.id === thread.id) {
             useThreadStore.setState({
-              activeThread: { ...current, queuedCount: responseQueuedCount } as any,
+              activeThread: { ...current, queuedCount: responseQueuedCount },
+              queuedCountByThread: { ...queuedCountByThread, [thread.id]: responseQueuedCount },
+            });
+          } else {
+            useThreadStore.setState({
+              queuedCountByThread: { ...queuedCountByThread, [thread.id]: responseQueuedCount },
             });
           }
         }
@@ -1789,7 +1801,7 @@ export function ThreadView() {
     );
   }
 
-  const uiQueuedCount = (activeThread as any).queuedCount ?? 0;
+  const uiQueuedCount = activeThread.queuedCount ?? 0;
   const isRunning = activeThread.status === 'running' || uiQueuedCount > 0;
   const isExternal = activeThread.provider === 'external';
   const isIdle = activeThread.status === 'idle' && uiQueuedCount === 0;
@@ -2078,8 +2090,8 @@ export function ThreadView() {
                 running={isRunning && !isExternal}
                 threadId={activeThread.id}
                 isQueueMode={isQueueMode}
-                queuedCount={(activeThread as any).queuedCount ?? 0}
-                queuedNextMessage={(activeThread as any).queuedNextMessage}
+                queuedCount={activeThread.queuedCount ?? 0}
+                queuedNextMessage={activeThread.queuedNextMessage}
                 setPromptRef={setPromptRef}
                 placeholder={t('thread.nextPrompt')}
               />

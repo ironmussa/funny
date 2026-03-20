@@ -305,8 +305,8 @@ function WebTerminalTabContent({
 
       const onDataDisposable = terminal.onData((data) => {
         const ws = getActiveWS();
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'pty:write', data: { id, data } }));
+        if (ws && ws.connected) {
+          ws.emit('pty:write', { id, data });
         }
       });
 
@@ -317,8 +317,8 @@ function WebTerminalTabContent({
         // size, causing the shell to wrap output at the wrong width.
         if (cols < 20 || rows < 4) return;
         const ws = getActiveWS();
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'pty:resize', data: { id, cols, rows } }));
+        if (ws && ws.connected) {
+          ws.emit('pty:resize', { id, cols, rows });
         }
       });
 
@@ -384,20 +384,20 @@ function WebTerminalTabContent({
 
     const ws = getActiveWS();
 
-    // Helper: send the spawn/restore message once the WS is open.
-    // If the WS is not yet open, listen for the 'open' event and retry.
-    const sendWhenReady = (send: (ws: WebSocket) => void) => {
-      if (ws && ws.readyState === WebSocket.OPEN) {
+    // Helper: send the spawn/restore message once Socket.IO is connected.
+    // If not yet connected, listen for the 'connect' event and retry.
+    const sendWhenReady = (send: (ws: any) => void) => {
+      if (ws && ws.connected) {
         spawnedRef.current = true;
         send(ws);
-      } else if (ws && ws.readyState === WebSocket.CONNECTING) {
-        const onOpen = () => {
+      } else if (ws) {
+        const onConnect = () => {
           if (spawnedRef.current) return;
           spawnedRef.current = true;
           send(ws);
         };
-        ws.addEventListener('open', onOpen, { once: true });
-        return () => ws.removeEventListener('open', onOpen);
+        ws.once('connect', onConnect);
+        return () => ws.off('connect', onConnect);
       }
     };
 
@@ -410,16 +410,11 @@ function WebTerminalTabContent({
       // The correct resize happens when the user switches to this tab (see
       // the active+panelVisible effect below).
       const hasGoodDims = cols >= MIN_COLS && rows >= MIN_ROWS;
-      const cleanup = sendWhenReady((ws) => {
+      const cleanup = sendWhenReady((ws: any) => {
         if (hasGoodDims) {
-          ws.send(
-            JSON.stringify({
-              type: 'pty:resize',
-              data: { id, cols, rows },
-            }),
-          );
+          ws.emit('pty:resize', { id, cols, rows });
         }
-        ws.send(JSON.stringify({ type: 'pty:restore', data: { id } }));
+        ws.emit('pty:restore', { id });
       });
       setLoading(false);
       return cleanup;
@@ -430,21 +425,16 @@ function WebTerminalTabContent({
       // Either a freshly created tab (alive on mount) or the session list
       // was checked and this tab was NOT found — spawn a new PTY.
       let spawnTimer: ReturnType<typeof setTimeout> | null = null;
-      const cleanup = sendWhenReady((ws) => {
-        ws.send(
-          JSON.stringify({
-            type: 'pty:spawn',
-            data: {
-              id,
-              cwd,
-              projectId,
-              label,
-              rows,
-              cols,
-              ...(shell !== 'default' && { shell }),
-            },
-          }),
-        );
+      const cleanup = sendWhenReady((ws: any) => {
+        ws.emit('pty:spawn', {
+          id,
+          cwd,
+          projectId,
+          label,
+          rows,
+          cols,
+          ...(shell !== 'default' && { shell }),
+        });
         // If no pty:data arrives within 5s, reset spawnedRef and bump
         // spawnAttempt to re-trigger the effect (runner may not have been
         // connected yet). Give up after 3 attempts.
@@ -489,13 +479,8 @@ function WebTerminalTabContent({
         const dims = fitAddon.proposeDimensions();
         if (dims && dims.cols > 0 && dims.rows > 0) {
           const ws = getActiveWS();
-          if (ws && ws.readyState === WebSocket.OPEN) {
-            ws.send(
-              JSON.stringify({
-                type: 'pty:resize',
-                data: { id, cols: dims.cols, rows: dims.rows },
-              }),
-            );
+          if (ws && ws.connected) {
+            ws.emit('pty:resize', { id, cols: dims.cols, rows: dims.rows });
           }
         }
         terminal.refresh(0, terminal.rows - 1);
@@ -746,8 +731,8 @@ export function TerminalPanel() {
       // Send pty:kill for interactive PTY tabs (user explicitly closing)
       if (tab?.type === 'pty') {
         const ws = getActiveWS();
-        if (ws && ws.readyState === WebSocket.OPEN) {
-          ws.send(JSON.stringify({ type: 'pty:kill', data: { id: tabId } }));
+        if (ws && ws.connected) {
+          ws.emit('pty:kill', { id: tabId });
         }
       }
       removeTab(tabId);

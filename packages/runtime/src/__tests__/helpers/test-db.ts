@@ -31,7 +31,7 @@ export function createTestDb() {
       urls TEXT,
       system_prompt TEXT,
       launcher_url TEXT,
-      user_id TEXT NOT NULL DEFAULT '__local__',
+      user_id TEXT NOT NULL DEFAULT '',
       sort_order INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL
     )
@@ -41,7 +41,7 @@ export function createTestDb() {
     CREATE TABLE IF NOT EXISTS threads (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      user_id TEXT NOT NULL DEFAULT '__local__',
+      user_id TEXT NOT NULL DEFAULT '',
       created_by TEXT,
       title TEXT NOT NULL,
       mode TEXT NOT NULL,
@@ -114,7 +114,7 @@ export function createTestDb() {
     CREATE TABLE IF NOT EXISTS automations (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      user_id TEXT NOT NULL DEFAULT '__local__',
+      user_id TEXT NOT NULL DEFAULT '',
       name TEXT NOT NULL,
       prompt TEXT NOT NULL,
       schedule TEXT NOT NULL,
@@ -225,7 +225,7 @@ export function createTestDb() {
     CREATE TABLE IF NOT EXISTS pipelines (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-      user_id TEXT NOT NULL DEFAULT '__local__',
+      user_id TEXT NOT NULL DEFAULT '',
       name TEXT NOT NULL,
       enabled INTEGER NOT NULL DEFAULT 1,
       review_model TEXT NOT NULL DEFAULT 'sonnet',

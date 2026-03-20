@@ -74,7 +74,7 @@ function createPtySessionsTable(testDb: ReturnType<typeof createTestDb>) {
     CREATE TABLE IF NOT EXISTS pty_sessions (
       id TEXT PRIMARY KEY,
       tmux_session TEXT NOT NULL UNIQUE,
-      user_id TEXT NOT NULL DEFAULT '__local__',
+      user_id TEXT NOT NULL,
       cwd TEXT NOT NULL,
       shell TEXT,
       cols INTEGER NOT NULL DEFAULT 80,

@@ -20,7 +20,9 @@
       "mcp__coplay-mcp__create_game_object",
       "mcp__coplay-mcp__create_material",
       "mcp__coplay-mcp__assign_material",
-      "WebSearch"
+      "WebSearch",
+      "Skill(commit-commands:commit)",
+      "Skill(commit-commands:commit:*)"
     ]
   },
   "enableAllProjectMcpServers": true,

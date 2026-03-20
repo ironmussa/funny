@@ -38,14 +38,14 @@ describe('getDbMode', () => {
     expect(getDbMode()).toBe('sqlite');
   });
 
-  test('returns postgres when DB_MODE=postgres', () => {
+  test('returns pg when DB_MODE=postgres', () => {
     process.env.DB_MODE = 'postgres';
-    expect(getDbMode()).toBe('postgres');
+    expect(getDbMode()).toBe('pg');
   });
 
-  test('returns postgres when DB_MODE=postgresql', () => {
+  test('returns pg when DB_MODE=postgresql', () => {
     process.env.DB_MODE = 'postgresql';
-    expect(getDbMode()).toBe('postgres');
+    expect(getDbMode()).toBe('pg');
   });
 
   test('returns sqlite when DB_MODE=sqlite', () => {
@@ -55,12 +55,12 @@ describe('getDbMode', () => {
 
   test('is case-insensitive', () => {
     process.env.DB_MODE = 'POSTGRES';
-    expect(getDbMode()).toBe('postgres');
+    expect(getDbMode()).toBe('pg');
   });
 
-  test('infers postgres when AUTH_MODE=multi', () => {
+  test('infers pg when AUTH_MODE=multi', () => {
     process.env.AUTH_MODE = 'multi';
-    expect(getDbMode()).toBe('postgres');
+    expect(getDbMode()).toBe('pg');
   });
 
   test('DB_MODE takes priority over AUTH_MODE', () => {
@@ -76,7 +76,7 @@ describe('getDbMode', () => {
 
   test('AUTH_MODE inference is case-insensitive', () => {
     process.env.AUTH_MODE = 'MULTI';
-    expect(getDbMode()).toBe('postgres');
+    expect(getDbMode()).toBe('pg');
   });
 });
 

@@ -521,7 +521,7 @@ const migrations: Migration[] = [
         CREATE TABLE IF NOT EXISTS pipelines (
           id TEXT PRIMARY KEY,
           project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-          user_id TEXT NOT NULL DEFAULT '__local__',
+          user_id TEXT NOT NULL DEFAULT '',
           name TEXT NOT NULL,
           enabled INTEGER NOT NULL DEFAULT 1,
           review_model TEXT NOT NULL DEFAULT 'sonnet',
@@ -642,7 +642,7 @@ const migrations: Migration[] = [
         CREATE TABLE IF NOT EXISTS pty_sessions (
           id TEXT PRIMARY KEY,
           tmux_session TEXT NOT NULL UNIQUE,
-          user_id TEXT NOT NULL DEFAULT '__local__',
+          user_id TEXT NOT NULL DEFAULT '',
           cwd TEXT NOT NULL,
           shell TEXT,
           cols INTEGER NOT NULL DEFAULT 80,

@@ -1,5 +1,5 @@
 import { randomUUID } from 'crypto';
-import { readdir, stat } from 'fs/promises';
+import { readdir, stat, writeFile, unlink } from 'fs/promises';
 import { join, relative } from 'path';
 
 import type { TestFileStatus, TestSpec } from '@funny/shared';
@@ -16,7 +16,11 @@ interface ActiveRun {
   userId: string;
   process: ReturnType<typeof Bun.spawn> | null;
   chromeSession: any | null; // ChromeSession from podman-chrome-streaming
+  startedAt: number;
 }
+
+/** Max time (ms) a run can stay in activeRuns before being considered stale. */
+const STALE_RUN_TIMEOUT = 5 * 60 * 1000; // 5 minutes
 
 // One active run per project
 const activeRuns = new Map<string, ActiveRun>();
@@ -123,7 +127,30 @@ export async function discoverTestsInFile(
 
 // ─── Test Execution ─────────────────────────────────────
 
+/**
+ * Check if a run's process has exited or the run has exceeded the stale timeout.
+ * If so, evict it from activeRuns so it doesn't block new runs.
+ */
+function evictIfStale(projectId: string): void {
+  const run = activeRuns.get(projectId);
+  if (!run) return;
+
+  const processExited = run.process && !run.process.killed && run.process.exitCode !== null;
+  const timedOut = Date.now() - run.startedAt > STALE_RUN_TIMEOUT;
+
+  if (processExited || timedOut) {
+    log.warn('Evicting stale test run', {
+      namespace: 'test-runner',
+      projectId,
+      runId: run.runId,
+      reason: processExited ? 'process already exited' : 'timeout exceeded',
+    });
+    activeRuns.delete(projectId);
+  }
+}
+
 export function isRunning(projectId: string): boolean {
+  evictIfStale(projectId);
   return activeRuns.has(projectId);
 }
 
@@ -134,6 +161,7 @@ export async function runTest(
   userId: string,
   line?: number,
 ): Promise<{ runId: string } | { error: string; status: number }> {
+  evictIfStale(projectId);
   if (activeRuns.has(projectId)) {
     return { error: 'A test is already running', status: 409 };
   }
@@ -146,6 +174,7 @@ export async function runTest(
     userId,
     process: null,
     chromeSession: null,
+    startedAt: Date.now(),
   };
   activeRuns.set(projectId, run);
 
@@ -157,17 +186,48 @@ export async function runTest(
   });
 
   try {
+    // Write a wrapper config that injects --remote-debugging-port into the user's
+    // Playwright config so we can connect CDP for browser streaming.
+    const wrapperConfigPath = join(projectPath, '.playwright.funny.config.ts');
+    const wrapperConfig = `
+import { defineConfig } from '@playwright/test';
+import baseConfig from './playwright.config';
+
+export default defineConfig({
+  ...baseConfig,
+  use: {
+    ...baseConfig.use,
+    launchOptions: {
+      ...(baseConfig.use as any)?.launchOptions,
+      args: [
+        ...((baseConfig.use as any)?.launchOptions?.args ?? []),
+        '--remote-debugging-port=${CDP_PORT}',
+      ],
+    },
+  },
+});
+`.trimStart();
+    await writeFile(wrapperConfigPath, wrapperConfig, 'utf-8');
+
     // Spawn Playwright test process
     const testTarget = line ? `${file}:${line}` : file;
-    const proc = Bun.spawn(['npx', 'playwright', 'test', testTarget, '--reporter=line'], {
-      cwd: projectPath,
-      env: {
-        ...process.env,
-        PLAYWRIGHT_CHROMIUM_DEBUG_PORT: String(CDP_PORT),
+    const proc = Bun.spawn(
+      [
+        'npx',
+        'playwright',
+        'test',
+        testTarget,
+        '--reporter=line',
+        '--config',
+        '.playwright.funny.config.ts',
+      ],
+      {
+        cwd: projectPath,
+        env: { ...process.env },
+        stdout: 'pipe',
+        stderr: 'pipe',
       },
-      stdout: 'pipe',
-      stderr: 'pipe',
-    });
+    );
 
     run.process = proc;
 
@@ -193,6 +253,7 @@ export async function runTest(
     const exitCode = await proc.exited;
 
     // Cleanup
+    await unlink(wrapperConfigPath).catch(() => {});
     const currentRun = activeRuns.get(projectId);
     if (currentRun?.runId === runId) {
       if (currentRun.chromeSession) {
@@ -210,6 +271,7 @@ export async function runTest(
       });
     }
   } catch (err) {
+    await unlink(wrapperConfigPath).catch(() => {});
     const currentRun = activeRuns.get(projectId);
     if (currentRun?.runId === runId) {
       activeRuns.delete(projectId);
@@ -273,24 +335,19 @@ async function streamLines(
 }
 
 async function connectCDP(projectId: string, userId: string, file: string, runId: string) {
-  // Dynamic import to avoid hard dependency on podman-chrome-streaming
-  const { ChromeSession, waitForChrome } =
-    await import('@funny/podman-chrome-streaming/stream-only').then((m) => ({
-      ChromeSession: m.ChromeSession ?? (m as any).default?.ChromeSession,
-      waitForChrome: m.waitForChrome ?? (m as any).default?.waitForChrome,
-    }));
+  const { ChromeSession, waitForChrome } = await import('@funny/core/chrome');
 
-  if (!ChromeSession || !waitForChrome) {
-    log.warn('ChromeSession not available — skipping browser stream', {
-      namespace: 'test-runner',
-    });
-    return;
-  }
+  log.info('Attempting CDP connection', { namespace: 'test-runner', port: CDP_PORT });
 
   // Wait for Chrome to be available (up to 30s)
   try {
     await waitForChrome('localhost', CDP_PORT, 30_000);
-  } catch {
+  } catch (err) {
+    log.warn('waitForChrome timed out', {
+      namespace: 'test-runner',
+      port: CDP_PORT,
+      error: String(err),
+    });
     wsBroker.emitToUser(userId, {
       type: 'test:status',
       threadId: projectId,
@@ -307,6 +364,8 @@ async function connectCDP(projectId: string, userId: string, file: string, runId
   const run = activeRuns.get(projectId);
   if (!run || run.runId !== runId) return; // Run was stopped before CDP connected
 
+  log.info('Chrome is ready, creating session', { namespace: 'test-runner', port: CDP_PORT });
+
   const session = new ChromeSession({
     host: 'localhost',
     port: CDP_PORT,
@@ -319,19 +378,33 @@ async function connectCDP(projectId: string, userId: string, file: string, runId
 
   run.chromeSession = session;
 
-  session.on('frame', (frame: { data: string; metadata: { timestamp: number } }) => {
+  let frameCount = 0;
+  session.on('frame', (frame: { data: string; timestamp: number; sessionId: number }) => {
+    frameCount++;
+    if (frameCount <= 3) {
+      log.info('CDP frame received', {
+        namespace: 'test-runner',
+        frameCount,
+        dataLen: frame.data.length,
+      });
+    }
     wsBroker.emitToUser(userId, {
       type: 'test:frame',
       threadId: projectId,
       data: {
         data: frame.data,
-        timestamp: frame.metadata.timestamp,
+        timestamp: frame.timestamp,
       },
     });
   });
 
+  session.on('disconnect', () => {
+    log.info('CDP session disconnected', { namespace: 'test-runner' });
+  });
+
   try {
     await session.connect();
+    log.info('CDP session connected successfully', { namespace: 'test-runner' });
   } catch (err) {
     log.warn('Failed to connect CDP session', {
       namespace: 'test-runner',

@@ -1,4 +1,4 @@
-import type { Automation, InboxItem, AutomationRun } from '@funny/shared';
+import type { Automation, InboxItem, AutomationRun, Thread } from '@funny/shared';
 import { ok, err } from 'neverthrow';
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 
@@ -21,11 +21,18 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
   return {
     id: 'auto-1',
     projectId: 'p1',
+    userId: 'user-1',
     name: 'Test Automation',
-    trigger: 'manual',
     prompt: 'Do something',
+    schedule: 'manual',
+    provider: 'claude',
+    model: 'sonnet',
+    mode: 'local',
+    permissionMode: 'autoEdit',
     enabled: true,
+    maxRunHistory: 10,
     createdAt: '2024-01-01',
+    updatedAt: '2024-01-01',
     ...overrides,
   } as Automation;
 }
@@ -33,13 +40,30 @@ function makeAutomation(overrides: Partial<Automation> = {}): Automation {
 function makeInboxItem(overrides: Partial<{ run: Partial<AutomationRun> }> = {}): InboxItem {
   return {
     automation: makeAutomation(),
+    thread: {
+      id: 't1',
+      projectId: 'p1',
+      userId: 'user-1',
+      title: 'Test Thread',
+      mode: 'local',
+      status: 'completed',
+      stage: 'done',
+      provider: 'claude',
+      permissionMode: 'autoEdit',
+      model: 'sonnet',
+      cost: 0,
+      source: 'automation',
+      purpose: 'implement',
+      runtime: 'local',
+      createdAt: '2024-01-01',
+    },
     run: {
       id: 'run-1',
       automationId: 'auto-1',
       threadId: 't1',
       status: 'completed',
       triageStatus: 'pending',
-      createdAt: '2024-01-01',
+      startedAt: '2024-01-01',
       ...overrides.run,
     },
   } as InboxItem;

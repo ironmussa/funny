@@ -75,8 +75,14 @@ export interface UserProfile {
   userId: string;
   gitName: string | null;
   gitEmail: string | null;
+  /** Map of provider key ID → whether a key is set (e.g. { github: true, minimax: false }). */
+  providerKeys: Record<string, boolean>;
+  /** @deprecated Use providerKeys['github'] */
   hasGithubToken: boolean;
+  /** @deprecated Use providerKeys['assemblyai'] */
   hasAssemblyaiKey: boolean;
+  /** @deprecated Use providerKeys['minimax'] */
+  hasMinimaxApiKey: boolean;
   setupCompleted: boolean;
   defaultEditor: string | null;
   useInternalEditor: boolean | null;
@@ -91,8 +97,14 @@ export interface UserProfile {
 export interface UpdateProfileRequest {
   gitName?: string;
   gitEmail?: string;
+  /** Set or clear a provider key by canonical ID. Value is plaintext; null clears it. */
+  providerKey?: { id: string; value: string | null };
+  /** @deprecated Use providerKey: { id: 'github', value } */
   githubToken?: string | null;
+  /** @deprecated Use providerKey: { id: 'assemblyai', value } */
   assemblyaiApiKey?: string | null;
+  /** @deprecated Use providerKey: { id: 'minimax', value } */
+  minimaxApiKey?: string | null;
   setupCompleted?: boolean;
   defaultEditor?: string;
   useInternalEditor?: boolean;
@@ -207,7 +219,7 @@ export type ThreadStatus =
 export type ThreadStage = 'backlog' | 'planning' | 'in_progress' | 'review' | 'done' | 'archived';
 export type WaitingReason = 'question' | 'plan' | 'permission';
 
-export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'llm-api' | 'external';
+export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'deepagent' | 'llm-api' | 'external';
 
 export type ThreadSource = 'web' | 'chrome_extension' | 'api' | 'automation' | 'ingest';
 
@@ -219,7 +231,12 @@ export type GeminiModel =
   | 'gemini-2.5-pro'
   | 'gemini-3-flash-preview'
   | 'gemini-3-pro-preview';
-export type AgentModel = ClaudeModel | CodexModel | GeminiModel;
+export type DeepAgentModel =
+  | 'minimax-m2.7'
+  | 'minimax-m2.7-highspeed'
+  | 'deepagent-gpt-4o'
+  | 'deepagent-sonnet';
+export type AgentModel = ClaudeModel | CodexModel | GeminiModel | DeepAgentModel;
 export type PermissionMode = 'plan' | 'autoEdit' | 'confirmEdit' | 'ask';
 
 // ─── Agent Definitions ──────────────────────────────────

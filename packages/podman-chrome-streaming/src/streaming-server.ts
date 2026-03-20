@@ -2,9 +2,9 @@ import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { fileURLToPath } from 'url';
 
+import type { ChromeSession, ScreencastFrame } from '@funny/core/chrome';
 import { WebSocketServer, WebSocket } from 'ws';
 
-import type { ChromeSession, ScreencastFrame } from './chrome-session.ts';
 import { VisualRegression } from './lib/visual-regression.ts';
 import { ScriptRunner } from './script-runner.ts';
 

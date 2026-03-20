@@ -5,6 +5,12 @@ import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { cn } from '@/lib/utils';
 import { useTestStore } from '@/stores/test-store';
 
+/** Resolve a CSS variable (HSL) to a string for ansi-to-html. */
+function getCssVar(name: string): string {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+  return raw ? `hsl(${raw})` : '#1b1b1b';
+}
+
 // Module-level frame ref to avoid re-renders on each frame
 let latestFrameData: string | null = null;
 
@@ -54,7 +60,13 @@ export function BrowserPreview({ isRunning, isStreaming, outputLines }: BrowserP
   const userScrolled = useRef(false);
 
   const ansiConverter = useMemo(
-    () => new AnsiToHtml({ fg: '#a1a1aa', bg: 'transparent', newline: false, escapeXML: true }),
+    () =>
+      new AnsiToHtml({
+        fg: getCssVar('--foreground'),
+        bg: getCssVar('--background'),
+        newline: false,
+        escapeXML: true,
+      }),
     [],
   );
 
@@ -97,8 +109,8 @@ export function BrowserPreview({ isRunning, isStreaming, outputLines }: BrowserP
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
-      {/* Browser stream canvas */}
-      <div className="relative flex min-h-0 flex-[3] items-center justify-center border-b bg-black/5">
+      {/* Browser stream canvas — compact at the top */}
+      <div className="relative flex min-h-0 flex-[2] items-center justify-center border-b bg-black/5">
         {!isRunning && !isStreaming ? (
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
             <Monitor className="h-8 w-8" />
@@ -116,25 +128,26 @@ export function BrowserPreview({ isRunning, isStreaming, outputLines }: BrowserP
         />
       </div>
 
-      {/* Test output log */}
+      {/* Test output log — takes most of the space */}
       <div
         ref={logRef}
         onScroll={handleLogScroll}
-        className="min-h-0 flex-1 overflow-y-auto bg-zinc-950 p-2 font-mono text-xs"
+        className="min-h-0 flex-[2] overflow-y-auto bg-background px-3 py-1 font-mono text-xs"
       >
         {outputLines.length === 0 ? (
-          <div className="py-4 text-center text-zinc-500">Test output will appear here...</div>
+          <div className="py-4 text-center text-muted-foreground">
+            Test output will appear here...
+          </div>
         ) : (
-          outputLines.map((line, i) => (
-            <div
-              key={i}
-              className={cn(
-                'whitespace-pre-wrap break-all leading-5',
-                line.stream === 'stderr' ? 'text-red-400' : 'text-zinc-300',
-              )}
-              dangerouslySetInnerHTML={{ __html: ansiConverter.toHtml(line.line) }}
-            />
-          ))
+          <pre className="whitespace-pre-wrap break-words leading-relaxed text-foreground">
+            {outputLines.map((line, i) => (
+              <div
+                key={i}
+                className={cn(line.stream === 'stderr' ? 'text-destructive' : '')}
+                dangerouslySetInnerHTML={{ __html: ansiConverter.toHtml(line.line) }}
+              />
+            ))}
+          </pre>
         )}
       </div>
     </div>

@@ -215,10 +215,20 @@ export async function handleDataMessageWithAck(runnerId: string, data: any): Pro
         const profile = await getProfile(data.userId);
         return { type: 'data:get_profile_response', profile: profile ?? null };
       }
+      case 'data:get_provider_key': {
+        const { getProviderKey } = await import('./profile-service.js');
+        const key = await getProviderKey(data.userId, data.provider);
+        return { type: 'data:get_provider_key_response', key: key ?? null };
+      }
       case 'data:get_github_token': {
-        const { getGithubToken } = await import('./profile-service.js');
-        const token = await getGithubToken(data.userId);
+        const { getProviderKey } = await import('./profile-service.js');
+        const token = await getProviderKey(data.userId, 'github');
         return { type: 'data:get_github_token_response', token: token ?? null };
+      }
+      case 'data:get_minimax_api_key': {
+        const { getProviderKey } = await import('./profile-service.js');
+        const key = await getProviderKey(data.userId, 'minimax');
+        return { type: 'data:get_minimax_api_key_response', key: key ?? null };
       }
       case 'data:update_profile': {
         const { upsertProfile } = await import('./profile-service.js');
@@ -501,13 +511,35 @@ export async function handleDataMessage(runnerId: string, data: any): Promise<vo
         break;
       }
 
+      case 'data:get_provider_key': {
+        const { getProviderKey } = await import('./profile-service.js');
+        const pk = await getProviderKey(data.userId, data.provider);
+        sendToRunner(runnerId, {
+          type: 'data:get_provider_key_response',
+          requestId: data.requestId,
+          key: pk ?? null,
+        });
+        break;
+      }
+
       case 'data:get_github_token': {
-        const { getGithubToken } = await import('./profile-service.js');
-        const token = await getGithubToken(data.userId);
+        const { getProviderKey } = await import('./profile-service.js');
+        const token = await getProviderKey(data.userId, 'github');
         sendToRunner(runnerId, {
           type: 'data:get_github_token_response',
           requestId: data.requestId,
           token: token ?? null,
+        });
+        break;
+      }
+
+      case 'data:get_minimax_api_key': {
+        const { getProviderKey } = await import('./profile-service.js');
+        const key = await getProviderKey(data.userId, 'minimax');
+        sendToRunner(runnerId, {
+          type: 'data:get_minimax_api_key_response',
+          requestId: data.requestId,
+          key: key ?? null,
         });
         break;
       }

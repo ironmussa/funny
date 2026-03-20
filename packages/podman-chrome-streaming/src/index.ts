@@ -1,4 +1,5 @@
-import { ChromeSession, waitForChrome } from './chrome-session.ts';
+import { ChromeSession, waitForChrome } from '@funny/core/chrome';
+
 import { StreamingServer } from './streaming-server.ts';
 
 const CHROME_HOST = process.env.CHROME_HOST ?? 'localhost';

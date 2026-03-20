@@ -45,6 +45,8 @@ export interface StartAgentOptions {
   spawnClaudeCodeProcess?: (options: any) => any;
   /** Custom system prefix for resume — replaces the default "interrupted session" note. */
   systemPrefix?: string;
+  /** Additional environment variables to pass to the agent subprocess (e.g., API keys). */
+  env?: Record<string, string>;
 }
 
 export interface OrchestratorEvents {
@@ -86,6 +88,7 @@ export class AgentOrchestrator extends EventEmitter {
       mcpServers,
       spawnClaudeCodeProcess,
       systemPrefix,
+      env,
     } = options;
 
     dlog.info('startAgent', {
@@ -155,6 +158,7 @@ export class AgentOrchestrator extends EventEmitter {
       mcpServers,
       spawnClaudeCodeProcess,
       systemPrefix,
+      env,
     };
 
     dlog.info('processOpts systemPrefix', {

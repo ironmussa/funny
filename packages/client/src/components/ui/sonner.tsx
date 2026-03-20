@@ -14,7 +14,6 @@ const Toaster = ({ ...props }: ToasterProps) => {
       className="toaster group"
       closeButton
       visibleToasts={5}
-      pauseWhenPageIsHidden={false}
       icons={{
         success: <CircleCheck className="h-4 w-4" />,
         info: <Info className="h-4 w-4" />,

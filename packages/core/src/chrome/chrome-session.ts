@@ -189,7 +189,6 @@ export class ChromeSession extends EventEmitter {
 
 /**
  * Wait until Chrome's debugging port is accepting connections.
- * Useful when Chrome is starting up inside the container.
  */
 export async function waitForChrome(host: string, port: number, timeoutMs = 30_000): Promise<void> {
   const start = Date.now();

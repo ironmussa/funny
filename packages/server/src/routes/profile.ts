@@ -12,7 +12,7 @@ export const profileRoutes = new Hono<ServerEnv>();
 /** Generate a temporary AssemblyAI streaming token (API key stays server-side) */
 profileRoutes.get('/transcribe-token', async (c) => {
   const userId = c.get('userId') as string;
-  const apiKey = await ps.getAssemblyaiApiKey(userId);
+  const apiKey = await ps.getProviderKey(userId, 'assemblyai');
   if (!apiKey) {
     return c.json({ error: 'AssemblyAI API key not configured' }, 400);
   }
@@ -39,8 +39,10 @@ profileRoutes.get('/', async (c) => {
       userId,
       gitName: null,
       gitEmail: null,
+      providerKeys: {},
       hasGithubToken: false,
       hasAssemblyaiKey: false,
+      hasMinimaxApiKey: false,
       setupCompleted: false,
       defaultEditor: null,
       useInternalEditor: null,
@@ -58,8 +60,10 @@ profileRoutes.put('/', async (c) => {
   const body = await c.req.json<{
     gitName?: string;
     gitEmail?: string;
-    githubToken?: string;
+    providerKey?: { id: string; value: string | null };
+    githubToken?: string | null;
     assemblyaiApiKey?: string | null;
+    minimaxApiKey?: string | null;
     setupCompleted?: boolean;
     defaultEditor?: string;
     useInternalEditor?: boolean;

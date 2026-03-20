@@ -28,6 +28,7 @@ export const PROVIDERS: ProviderConfig[] = [
   { value: 'claude', label: 'Claude' },
   { value: 'codex', label: 'Codex' },
   { value: 'gemini', label: 'Gemini' },
+  { value: 'deepagent', label: 'Deep Agent' },
 ];
 
 // ── Models per provider ────────────────────────────────────────
@@ -45,11 +46,62 @@ export const PROVIDER_MODELS: Record<string, ModelConfig[]> = {
     { value: 'codex-mini', i18nKey: 'codexMini', fallback: 'Codex Mini', contextWindow: 200_000 },
   ],
   gemini: [
-    { value: 'gemini-3-flash-preview', i18nKey: 'gemini3flash', fallback: 'Gemini 3 Flash', contextWindow: 1_000_000 },
-    { value: 'gemini-3-pro-preview', i18nKey: 'gemini3pro', fallback: 'Gemini 3 Pro', contextWindow: 1_000_000 },
-    { value: 'gemini-2.5-flash', i18nKey: 'gemini25flash', fallback: 'Gemini 2.5 Flash', contextWindow: 1_048_576 },
-    { value: 'gemini-2.5-pro', i18nKey: 'gemini25pro', fallback: 'Gemini 2.5 Pro', contextWindow: 1_048_576 },
-    { value: 'gemini-2.0-flash', i18nKey: 'gemini20flash', fallback: 'Gemini 2.0 Flash', contextWindow: 1_048_576 },
+    {
+      value: 'gemini-3-flash-preview',
+      i18nKey: 'gemini3flash',
+      fallback: 'Gemini 3 Flash',
+      contextWindow: 1_000_000,
+    },
+    {
+      value: 'gemini-3-pro-preview',
+      i18nKey: 'gemini3pro',
+      fallback: 'Gemini 3 Pro',
+      contextWindow: 1_000_000,
+    },
+    {
+      value: 'gemini-2.5-flash',
+      i18nKey: 'gemini25flash',
+      fallback: 'Gemini 2.5 Flash',
+      contextWindow: 1_048_576,
+    },
+    {
+      value: 'gemini-2.5-pro',
+      i18nKey: 'gemini25pro',
+      fallback: 'Gemini 2.5 Pro',
+      contextWindow: 1_048_576,
+    },
+    {
+      value: 'gemini-2.0-flash',
+      i18nKey: 'gemini20flash',
+      fallback: 'Gemini 2.0 Flash',
+      contextWindow: 1_048_576,
+    },
+  ],
+  deepagent: [
+    {
+      value: 'minimax-m2.7',
+      i18nKey: 'minimaxM27',
+      fallback: 'MiniMax M2.7',
+      contextWindow: 204_800,
+    },
+    {
+      value: 'minimax-m2.7-highspeed',
+      i18nKey: 'minimaxM27Highspeed',
+      fallback: 'MiniMax M2.7 Highspeed',
+      contextWindow: 204_800,
+    },
+    {
+      value: 'deepagent-gpt-4o',
+      i18nKey: 'deepagentGpt4o',
+      fallback: 'GPT-4o',
+      contextWindow: 128_000,
+    },
+    {
+      value: 'deepagent-sonnet',
+      i18nKey: 'deepagentSonnet',
+      fallback: 'Sonnet 4.5',
+      contextWindow: 200_000,
+    },
   ],
 };
 

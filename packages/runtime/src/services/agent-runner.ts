@@ -473,6 +473,22 @@ export class AgentRunner {
     metric('agents.running', this.runSpans.size, { type: 'gauge' });
     metric('threads.started', 1, { type: 'sum', attributes: { model, provider } });
 
+    // Resolve per-user API keys for providers that need them
+    let agentEnv: Record<string, string> | undefined;
+    if (thread?.userId) {
+      const { PROVIDER_KEY_REGISTRY } = await import('@funny/shared/models');
+      const relevantKeys = PROVIDER_KEY_REGISTRY.filter(
+        (k) => k.envVar && k.requiredByProviders?.includes(provider),
+      );
+      for (const keyConfig of relevantKeys) {
+        const keyValue = await getServices().profile.getProviderKey(thread.userId, keyConfig.id);
+        if (keyValue && keyConfig.envVar) {
+          agentEnv ??= {};
+          agentEnv[keyConfig.envVar] = keyValue;
+        }
+      }
+    }
+
     // Delegate lifecycle to orchestrator
     try {
       await this.orchestrator.startAgent({
@@ -488,6 +504,7 @@ export class AgentRunner {
         sessionId: effectiveSessionId,
         systemPrefix,
         mcpServers,
+        env: agentEnv,
       });
 
       threadEventBus.emit('agent:started', {

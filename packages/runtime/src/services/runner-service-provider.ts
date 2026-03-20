@@ -212,12 +212,21 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         const { remoteGetProfile } = await import('./team-client.js');
         return remoteGetProfile(userId);
       },
-      async getGithubToken(userId) {
-        const { remoteGetGithubToken } = await import('./team-client.js');
-        return remoteGetGithubToken(userId);
+      async getProviderKey(userId, provider) {
+        const { remoteGetProviderKey } = await import('./team-client.js');
+        return remoteGetProviderKey(userId, provider);
       },
-      async getAssemblyaiApiKey() {
-        return null;
+      async getGithubToken(userId) {
+        const { remoteGetProviderKey } = await import('./team-client.js');
+        return remoteGetProviderKey(userId, 'github');
+      },
+      async getAssemblyaiApiKey(userId) {
+        const { remoteGetProviderKey } = await import('./team-client.js');
+        return remoteGetProviderKey(userId, 'assemblyai');
+      },
+      async getMinimaxApiKey(userId) {
+        const { remoteGetProviderKey } = await import('./team-client.js');
+        return remoteGetProviderKey(userId, 'minimax');
       },
       async getGitIdentity(userId) {
         const { remoteGetProfile } = await import('./team-client.js');

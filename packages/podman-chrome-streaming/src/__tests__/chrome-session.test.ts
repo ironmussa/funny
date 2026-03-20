@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it } from 'bun:test';
 
-import { waitForChrome } from '../chrome-session.ts';
+import { waitForChrome } from '@funny/core/chrome';
 
 const originalFetch = globalThis.fetch;
 

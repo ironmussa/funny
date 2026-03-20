@@ -1,6 +1,8 @@
 import type { UserProfile } from '@funny/shared';
+import { PROVIDER_KEY_REGISTRY } from '@funny/shared/models';
 import {
   ArrowLeft,
+  Bot,
   Building2,
   Check,
   Github,
@@ -55,6 +57,7 @@ type GeneralPage =
   | 'general'
   | 'appearance'
   | 'github'
+  | 'ai-keys'
   | 'speech'
   | 'email'
   | 'organizations'
@@ -64,6 +67,7 @@ const NAV_ITEMS: Array<{ id: GeneralPage; label: string; icon: typeof SlidersHor
   { id: 'general', label: 'settings.general', icon: SlidersHorizontal },
   { id: 'appearance', label: 'settings.appearance', icon: Palette },
   { id: 'github', label: 'GitHub', icon: Github },
+  { id: 'ai-keys', label: 'AI Providers', icon: Bot },
   { id: 'speech', label: 'Speech', icon: Mic },
   { id: 'email', label: 'Email (SMTP)', icon: Mail },
   { id: 'organizations', label: 'Organizations', icon: Building2 },
@@ -190,15 +194,10 @@ export function GeneralSettingsView() {
   const { t, i18n } = useTranslation();
   const activePreferencesPage = useUIStore((s) => s.activePreferencesPage) as GeneralPage;
 
-  // GitHub token state
-  const [githubToken, setGithubToken] = useState('');
-  const [hasGithubToken, setHasGithubToken] = useState(false);
-  const [tokenSaving, setTokenSaving] = useState(false);
-
-  // AssemblyAI state
-  const [assemblyaiKey, setAssemblyaiKey] = useState('');
-  const [hasAssemblyaiKey, setHasAssemblyaiKey] = useState(false);
-  const [assemblyaiSaving, setAssemblyaiSaving] = useState(false);
+  // Provider keys state (generic: keyed by provider ID)
+  const [keyInputs, setKeyInputs] = useState<Record<string, string>>({});
+  const [keyPresence, setKeyPresence] = useState<Record<string, boolean>>({});
+  const [keySaving, setKeySaving] = useState<Record<string, boolean>>({});
 
   // SMTP state
   const [smtpHost, setSmtpHost] = useState('');
@@ -216,12 +215,10 @@ export function GeneralSettingsView() {
     api.getProfile().then((result) => {
       if (result.isOk() && result.value) {
         const profile = result.value as UserProfile;
-        setHasGithubToken(profile.hasGithubToken);
-        setHasAssemblyaiKey(profile.hasAssemblyaiKey);
+        setKeyPresence(profile.providerKeys ?? {});
       }
     });
-    setGithubToken('');
-    setAssemblyaiKey('');
+    setKeyInputs({});
     api.getSmtpSettings().then((result) => {
       if (result.isOk()) {
         setSmtpHost(result.value.host);
@@ -277,57 +274,38 @@ export function GeneralSettingsView() {
     [i18n, t],
   );
 
-  // GitHub token handlers
-  const handleSaveToken = useCallback(async () => {
-    if (!githubToken) return;
-    setTokenSaving(true);
-    const result = await api.updateProfile({ githubToken });
-    if (result.isOk()) {
-      setHasGithubToken(result.value.hasGithubToken);
-      setGithubToken('');
-      toast.success(t('profile.tokenSaved'));
-    } else {
-      toast.error(t('profile.saveFailed'));
-    }
-    setTokenSaving(false);
-  }, [githubToken, t]);
+  // Generic provider key handlers
+  const handleSaveProviderKey = useCallback(
+    async (id: string) => {
+      const value = keyInputs[id];
+      if (!value) return;
+      setKeySaving((prev) => ({ ...prev, [id]: true }));
+      const result = await api.updateProfile({ providerKey: { id, value } });
+      if (result.isOk()) {
+        setKeyPresence(result.value.providerKeys ?? {});
+        setKeyInputs((prev) => ({ ...prev, [id]: '' }));
+        toast.success(t('profile.tokenSaved'));
+      } else {
+        toast.error(t('profile.saveFailed'));
+      }
+      setKeySaving((prev) => ({ ...prev, [id]: false }));
+    },
+    [keyInputs, t],
+  );
 
-  const handleClearToken = useCallback(async () => {
-    setTokenSaving(true);
-    const result = await api.updateProfile({ githubToken: null });
-    if (result.isOk()) {
-      setHasGithubToken(false);
-      setGithubToken('');
-      toast.success(t('profile.tokenCleared'));
-    }
-    setTokenSaving(false);
-  }, [t]);
-
-  // AssemblyAI key handlers
-  const handleSaveAssemblyaiKey = useCallback(async () => {
-    if (!assemblyaiKey) return;
-    setAssemblyaiSaving(true);
-    const result = await api.updateProfile({ assemblyaiApiKey: assemblyaiKey });
-    if (result.isOk()) {
-      setHasAssemblyaiKey(result.value.hasAssemblyaiKey);
-      setAssemblyaiKey('');
-      toast.success(t('profile.tokenSaved'));
-    } else {
-      toast.error(t('profile.saveFailed'));
-    }
-    setAssemblyaiSaving(false);
-  }, [assemblyaiKey, t]);
-
-  const handleClearAssemblyaiKey = useCallback(async () => {
-    setAssemblyaiSaving(true);
-    const result = await api.updateProfile({ assemblyaiApiKey: null });
-    if (result.isOk()) {
-      setHasAssemblyaiKey(false);
-      setAssemblyaiKey('');
-      toast.success(t('profile.tokenCleared'));
-    }
-    setAssemblyaiSaving(false);
-  }, [t]);
+  const handleClearProviderKey = useCallback(
+    async (id: string) => {
+      setKeySaving((prev) => ({ ...prev, [id]: true }));
+      const result = await api.updateProfile({ providerKey: { id, value: null } });
+      if (result.isOk()) {
+        setKeyPresence(result.value.providerKeys ?? {});
+        setKeyInputs((prev) => ({ ...prev, [id]: '' }));
+        toast.success(t('profile.tokenCleared'));
+      }
+      setKeySaving((prev) => ({ ...prev, [id]: false }));
+    },
+    [t],
+  );
 
   // SMTP handlers
   const handleSaveSmtp = useCallback(async () => {
@@ -504,29 +482,29 @@ export function GeneralSettingsView() {
                 <div className="flex items-center gap-2">
                   <Input
                     type="password"
-                    value={githubToken}
-                    onChange={(e) => setGithubToken(e.target.value)}
+                    value={keyInputs.github ?? ''}
+                    onChange={(e) => setKeyInputs((prev) => ({ ...prev, github: e.target.value }))}
                     data-testid="preferences-github-token"
                     placeholder={
-                      hasGithubToken ? t('profile.tokenSaved') : t('profile.tokenPlaceholder')
+                      keyPresence.github ? t('profile.tokenSaved') : t('profile.tokenPlaceholder')
                     }
                     className="text-sm"
                   />
                   <Button
                     size="sm"
-                    onClick={handleSaveToken}
-                    disabled={!githubToken || tokenSaving}
+                    onClick={() => handleSaveProviderKey('github')}
+                    disabled={!keyInputs.github || !!keySaving.github}
                     data-testid="preferences-save-token"
                   >
-                    {tokenSaving ? t('common.saving') : t('common.save')}
+                    {keySaving.github ? t('common.saving') : t('common.save')}
                   </Button>
-                  {hasGithubToken && (
+                  {keyPresence.github && (
                     <Button
                       variant="ghost"
                       size="sm"
                       className="shrink-0 text-xs text-destructive hover:text-destructive"
-                      onClick={handleClearToken}
-                      disabled={tokenSaving}
+                      onClick={() => handleClearProviderKey('github')}
+                      disabled={!!keySaving.github}
                       data-testid="preferences-clear-token"
                     >
                       {t('profile.clearToken')}
@@ -534,6 +512,72 @@ export function GeneralSettingsView() {
                   )}
                 </div>
               </div>
+            </div>
+          </>
+        )}
+
+        {activePreferencesPage === 'ai-keys' && (
+          <>
+            <h3 className="settings-section-header">AI Providers</h3>
+            <p className="px-1 pb-3 text-xs text-muted-foreground">
+              Configure API keys for AI providers. Keys are encrypted at rest.
+            </p>
+            <div className="settings-card space-y-0 divide-y divide-border">
+              {PROVIDER_KEY_REGISTRY.filter((k) => k.id !== 'github' && k.id !== 'assemblyai').map(
+                (keyConfig) => (
+                  <div key={keyConfig.id} className="px-4 py-3.5">
+                    <p className="settings-row-title">{keyConfig.label}</p>
+                    <p className="settings-row-desc mb-2">
+                      Get your key at{' '}
+                      <a
+                        href={keyConfig.helpUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="text-primary hover:underline"
+                      >
+                        {new URL(keyConfig.helpUrl).hostname}
+                      </a>
+                      . {keyConfig.description}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="password"
+                        value={keyInputs[keyConfig.id] ?? ''}
+                        onChange={(e) =>
+                          setKeyInputs((prev) => ({ ...prev, [keyConfig.id]: e.target.value }))
+                        }
+                        data-testid={`preferences-${keyConfig.id}-key`}
+                        placeholder={
+                          keyPresence[keyConfig.id]
+                            ? t('profile.tokenSaved')
+                            : `Enter your ${keyConfig.label}`
+                        }
+                        className="text-sm"
+                      />
+                      <Button
+                        size="sm"
+                        onClick={() => handleSaveProviderKey(keyConfig.id)}
+                        disabled={!keyInputs[keyConfig.id] || !!keySaving[keyConfig.id]}
+                        data-testid={`preferences-save-${keyConfig.id}-key`}
+                      >
+                        {keySaving[keyConfig.id] ? t('common.saving') : t('common.save')}
+                      </Button>
+                      {keyPresence[keyConfig.id] && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="shrink-0 text-xs text-destructive hover:text-destructive"
+                          onClick={() => handleClearProviderKey(keyConfig.id)}
+                          disabled={!!keySaving[keyConfig.id]}
+                          data-testid={`preferences-clear-${keyConfig.id}-key`}
+                        >
+                          {t('profile.clearToken')}
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+                ),
+              )}
             </div>
           </>
         )}
@@ -562,29 +606,33 @@ export function GeneralSettingsView() {
                 <div className="flex items-center gap-2">
                   <Input
                     type="password"
-                    value={assemblyaiKey}
-                    onChange={(e) => setAssemblyaiKey(e.target.value)}
+                    value={keyInputs.assemblyai ?? ''}
+                    onChange={(e) =>
+                      setKeyInputs((prev) => ({ ...prev, assemblyai: e.target.value }))
+                    }
                     data-testid="preferences-assemblyai-key"
                     placeholder={
-                      hasAssemblyaiKey ? t('profile.tokenSaved') : 'Enter your AssemblyAI API key'
+                      keyPresence.assemblyai
+                        ? t('profile.tokenSaved')
+                        : 'Enter your AssemblyAI API key'
                     }
                     className="text-sm"
                   />
                   <Button
                     size="sm"
-                    onClick={handleSaveAssemblyaiKey}
-                    disabled={!assemblyaiKey || assemblyaiSaving}
+                    onClick={() => handleSaveProviderKey('assemblyai')}
+                    disabled={!keyInputs.assemblyai || !!keySaving.assemblyai}
                     data-testid="preferences-save-assemblyai-key"
                   >
-                    {assemblyaiSaving ? t('common.saving') : t('common.save')}
+                    {keySaving.assemblyai ? t('common.saving') : t('common.save')}
                   </Button>
-                  {hasAssemblyaiKey && (
+                  {keyPresence.assemblyai && (
                     <Button
                       variant="ghost"
                       size="sm"
                       className="shrink-0 text-xs text-destructive hover:text-destructive"
-                      onClick={handleClearAssemblyaiKey}
-                      disabled={assemblyaiSaving}
+                      onClick={() => handleClearProviderKey('assemblyai')}
+                      disabled={!!keySaving.assemblyai}
                       data-testid="preferences-clear-assemblyai-key"
                     >
                       {t('profile.clearToken')}

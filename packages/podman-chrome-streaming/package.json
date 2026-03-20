@@ -6,7 +6,7 @@
   "main": "./src/runtime/entrypoint.ts",
   "exports": {
     ".": "./src/runtime/entrypoint.ts",
-    "./stream-only": "./src/index.ts",
+    "./stream-only": "./src/lib.ts",
     "./launcher": "./src/launcher/server.ts"
   },
   "scripts": {

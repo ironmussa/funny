@@ -785,6 +785,12 @@ const migrations: Migration[] = [
       await addColumn('tool_calls', 'parent_tool_call_id', 'TEXT');
     },
   },
+  {
+    name: '047_provider_keys',
+    async up() {
+      await addColumn('user_profiles', 'provider_keys', 'TEXT');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

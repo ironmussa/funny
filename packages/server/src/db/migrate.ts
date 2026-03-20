@@ -819,6 +819,12 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    name: '032_provider_keys',
+    async up() {
+      await ctx().addColumn('user_profiles', 'provider_keys', 'TEXT');
+    },
+  },
 ];
 
 export async function autoMigrate() {

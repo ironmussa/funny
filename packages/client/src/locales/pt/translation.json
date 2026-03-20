@@ -63,7 +63,11 @@
       "gemini3pro": "Gemini 3 Pro",
       "gemini25flash": "Gemini 2.5 Flash",
       "gemini25pro": "Gemini 2.5 Pro",
-      "gemini20flash": "Gemini 2.0 Flash"
+      "gemini20flash": "Gemini 2.0 Flash",
+      "minimaxM27": "MiniMax M2.7",
+      "minimaxM27Highspeed": "MiniMax M2.7 Highspeed",
+      "deepagentGpt4o": "GPT-4o",
+      "deepagentSonnet": "Sonnet 4.5"
     },
     "createdBy": "Criado por {{creator}}",
     "readyToLaunch": "Pronto para lançar",

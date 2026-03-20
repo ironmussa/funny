@@ -1,11 +1,13 @@
-import { ChevronRight, Bot } from 'lucide-react';
+import { ChevronRight, Bot, Loader2 } from 'lucide-react';
 import { Suspense, lazy, useState, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { remarkPlugins, baseMarkdownComponents } from '@/lib/markdown-components';
+import { groupConsecutiveToolCalls } from '@/lib/render-items';
 import { cn } from '@/lib/utils';
 
 import { ToolCallCard } from '../ToolCallCard';
+import { ToolCallGroup } from '../ToolCallGroup';
 
 const LazyMarkdown = lazy(() =>
   import('react-markdown').then(({ default: ReactMarkdown }) => ({
@@ -54,13 +56,19 @@ export const TaskCard = memo(function TaskCard({
   childToolCalls,
 }: TaskCardProps) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  const isRunning = !rawOutput;
+  const [expanded, setExpanded] = useState(isRunning);
   const description = (parsed.description as string) ?? '';
   const hasChildren = childToolCalls && childToolCalls.length > 0;
 
   const output = useMemo(
     () => (rawOutput ? normalizeTaskOutput(rawOutput) : undefined),
     [rawOutput],
+  );
+
+  const groupedChildren = useMemo(
+    () => (hasChildren ? groupConsecutiveToolCalls(childToolCalls.map((tc: any) => ({ tc }))) : []),
+    [hasChildren, childToolCalls],
   );
 
   return (
@@ -92,22 +100,35 @@ export const TaskCard = memo(function TaskCard({
         </span>
         {hasChildren && (
           <span className="flex-shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
-            {childToolCalls.length} tools
+            {childToolCalls!.length} tools
           </span>
         )}
         {!output && (
-          <span className="mr-1 h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-status-info" />
+          <Loader2 className="h-3 w-3 flex-shrink-0 animate-spin text-muted-foreground" />
         )}
       </button>
 
       {expanded && (
         <div className="max-h-[60vh] overflow-y-auto border-t border-border/40">
-          {/* Child tool calls from the subagent */}
+          {/* Child tool calls from the subagent (grouped like main thread) */}
           {hasChildren && (
             <div className="space-y-1 px-3 py-2">
-              {childToolCalls.map((tc: any) => (
-                <ToolCallCard key={tc.id} name={tc.name} input={tc.input} output={tc.output} />
-              ))}
+              {groupedChildren.map((item, idx) =>
+                item.type === 'toolcall-group' ? (
+                  <ToolCallGroup
+                    key={`group-${item.name}-${idx}`}
+                    name={item.name}
+                    calls={item.calls}
+                  />
+                ) : (
+                  <ToolCallCard
+                    key={item.tc.id}
+                    name={item.tc.name}
+                    input={item.tc.input}
+                    output={item.tc.output}
+                  />
+                ),
+              )}
             </div>
           )}
 

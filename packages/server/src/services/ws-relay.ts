@@ -2,116 +2,80 @@
  * WebSocket relay for the central server.
  * Routes events between runners and browser clients.
  *
- * - Browser clients connect via /ws (session cookie auth)
- * - Runners connect via /ws/runner (bearer token auth)
- * - When a runner sends agent events, they're relayed to the appropriate browser
- * - When a browser needs to start/stop an agent, a task is created for the runner
+ * Now backed by Socket.IO rooms instead of manual Maps.
+ * The runnerSockets map is kept as a lightweight index for quick lookups
+ * (isRunnerConnected, getAnyConnectedRunnerId).
  */
+
+import type { Server as SocketIOServer } from 'socket.io';
 
 import { log } from '../lib/logger.js';
 
-type WebSocketLike = {
-  send(data: string): void;
-  close(): void;
-};
+// ── Socket.IO reference ─────────────────────────────────
+// Set by socketio.ts after initialization to avoid circular imports
 
-// ── Connection tracking ─────────────────────────────────
+let _io: SocketIOServer | null = null;
 
-/** userId → Set of browser WebSockets */
-const browserClients = new Map<string, Set<WebSocketLike>>();
-
-/** runnerId → WebSocket */
-const runnerClients = new Map<string, WebSocketLike>();
-
-// ── Browser client management ───────────────────────────
-
-export function addBrowserClient(userId: string, ws: WebSocketLike): void {
-  let clients = browserClients.get(userId);
-  if (!clients) {
-    clients = new Set();
-    browserClients.set(userId, clients);
-  }
-  clients.add(ws);
-  log.info('Browser client connected', { namespace: 'ws-relay', userId });
+export function setIO(io: SocketIOServer): void {
+  _io = io;
 }
 
-export function removeBrowserClient(userId: string, ws: WebSocketLike): void {
-  const clients = browserClients.get(userId);
-  if (clients) {
-    clients.delete(ws);
-    if (clients.size === 0) browserClients.delete(userId);
-  }
-}
+// ── Connection tracking (lightweight index) ──────────────
+
+/** runnerId → socketId (for quick isRunnerConnected check) */
+const runnerSockets = new Map<string, string>();
 
 // ── Runner client management ────────────────────────────
 
-export function addRunnerClient(runnerId: string, ws: WebSocketLike): void {
-  runnerClients.set(runnerId, ws);
+export function addRunnerClient(runnerId: string, socketId: string): void {
+  runnerSockets.set(runnerId, socketId);
   log.info('Runner connected', { namespace: 'ws-relay', runnerId });
 }
 
 export function removeRunnerClient(runnerId: string): void {
-  runnerClients.delete(runnerId);
+  runnerSockets.delete(runnerId);
   log.info('Runner disconnected', { namespace: 'ws-relay', runnerId });
 }
 
-/** Check if a runner is actually connected via WebSocket (in-memory check). */
+/** Check if a runner is connected via Socket.IO. */
 export function isRunnerConnected(runnerId: string): boolean {
-  return runnerClients.has(runnerId);
+  return runnerSockets.has(runnerId);
 }
 
 // ── Event relay ─────────────────────────────────────────
 
 /**
  * Relay an event from a runner to all browser clients of a specific user.
+ * Uses Socket.IO rooms for delivery.
  */
 export function relayToUser(userId: string, event: Record<string, unknown>): void {
-  const clients = browserClients.get(userId);
-  if (!clients || clients.size === 0) return;
-
-  const data = JSON.stringify(event);
-  for (const ws of clients) {
-    try {
-      ws.send(data);
-    } catch {
-      // Client disconnected
-    }
-  }
+  if (!_io) return;
+  const eventType = (event.type as string) || 'event';
+  _io.of('/').to(`user:${userId}`).emit(eventType, event);
 }
 
 /**
  * Relay an event to all browser clients (broadcast).
  */
 export function broadcast(event: Record<string, unknown>): void {
-  const data = JSON.stringify(event);
-  for (const [, clients] of browserClients) {
-    for (const ws of clients) {
-      try {
-        ws.send(data);
-      } catch {}
-    }
-  }
+  if (!_io) return;
+  const eventType = (event.type as string) || 'event';
+  _io.of('/').emit(eventType, event);
 }
 
 /**
- * Send a command to a specific runner.
+ * Send a command to a specific runner via Socket.IO.
  */
 export function sendToRunner(runnerId: string, command: Record<string, unknown>): boolean {
-  const ws = runnerClients.get(runnerId);
-  if (!ws) return false;
-
-  try {
-    ws.send(JSON.stringify(command));
-    return true;
-  } catch {
-    return false;
-  }
+  if (!_io) return false;
+  const eventType = (command.type as string) || 'command';
+  _io.of('/runner').to(`runner:${runnerId}`).emit(eventType, command);
+  return true;
 }
 
 /**
  * Forward a browser WS message to a runner for local handling.
- * Used for PTY commands (pty:spawn, pty:write, etc.) and other
- * browser → runner real-time messages.
+ * Used for PTY commands and other browser → runner real-time messages.
  */
 export function forwardBrowserMessageToRunner(
   runnerId: string,
@@ -132,16 +96,22 @@ export function forwardBrowserMessageToRunner(
  * Used as a fallback when no project/thread context is available.
  */
 export function getAnyConnectedRunnerId(): string | null {
-  const first = runnerClients.keys().next();
+  const first = runnerSockets.keys().next();
   return first.done ? null : first.value;
 }
 
 /**
  * Get all connected browser user IDs.
- * Used to push PTY session lists when a runner (re)connects.
+ * Uses Socket.IO rooms to find user rooms.
  */
 export function getConnectedBrowserUserIds(): string[] {
-  return Array.from(browserClients.keys());
+  if (!_io) return [];
+  const rooms = _io.of('/').adapter.rooms;
+  const userIds: string[] = [];
+  for (const [room] of rooms) {
+    if (room.startsWith('user:')) userIds.push(room.slice(5));
+  }
+  return userIds;
 }
 
 /**
@@ -152,13 +122,18 @@ export function getRelayStats(): {
   browserUsers: number;
   runners: number;
 } {
-  let totalBrowserClients = 0;
-  for (const [, clients] of browserClients) {
-    totalBrowserClients += clients.size;
+  let browserClients = 0;
+  let browserUsers = 0;
+  if (_io) {
+    browserClients = _io.of('/').sockets.size;
+    const rooms = _io.of('/').adapter.rooms;
+    for (const [room] of rooms) {
+      if (room.startsWith('user:')) browserUsers++;
+    }
   }
   return {
-    browserClients: totalBrowserClients,
-    browserUsers: browserClients.size,
-    runners: runnerClients.size,
+    browserClients,
+    browserUsers,
+    runners: runnerSockets.size,
   };
 }

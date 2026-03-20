@@ -8,26 +8,28 @@
  * Activated when TEAM_SERVER_URL is set, which configures this runtime
  * as a runner that executes agent work on behalf of the server.
  *
+ * Uses Socket.IO for all real-time communication (replaces raw WebSocket
+ * + HTTP long-polling). Socket.IO provides automatic reconnection,
+ * heartbeat, and transport fallback.
+ *
  * Responsibilities:
- * - Authenticate with the central server
- * - Register as a runner
+ * - Authenticate with the central server (HTTP registration)
+ * - Maintain Socket.IO connection for events + tunnel + data persistence
  * - Heartbeat (every 15s)
  * - Poll for pending tasks (every 5s)
  * - Assign local projects to the server (on startup + when created)
- * - Connect WebSocket for agent event streaming and tunneled HTTP requests
  */
 
 import { hostname } from 'os';
 
 import type { Project, WSEvent } from '@funny/shared';
 import type {
-  CentralWSTunnelRequest,
   DataInsertMessage,
   DataInsertToolCall,
   RunnerRegisterResponse,
   RunnerTask,
 } from '@funny/shared/runner-protocol';
-import { nanoid } from 'nanoid';
+import { io, type Socket } from 'socket.io-client';
 
 import { log } from '../lib/logger.js';
 import { getServices } from './service-registry.js';
@@ -45,16 +47,8 @@ export type BrowserWSHandler = (
 /** A Hono-like app that can handle fetch requests */
 type FetchableApp = { fetch: (request: Request) => Promise<Response> | Response };
 
-/** WebSocket reconnection with exponential backoff */
-const WS_RECONNECT = {
-  BASE_DELAY_MS: 1_000,
-  MAX_DELAY_MS: 30_000,
-  BACKOFF_FACTOR: 2,
-  /** How often we send a protocol-level ping (ms) */
-  PING_INTERVAL_MS: 10_000,
-  /** If no pong arrives within this window, consider the connection dead (ms) */
-  PONG_TIMEOUT_MS: 5_000,
-} as const;
+/** Timeout for data requests awaiting server response (ms) */
+const DATA_REQUEST_TIMEOUT = 15_000;
 
 interface TeamClientState {
   serverUrl: string;
@@ -62,20 +56,11 @@ interface TeamClientState {
   runnerToken: string | null;
   heartbeatTimer: ReturnType<typeof setInterval> | null;
   pollTimer: ReturnType<typeof setInterval> | null;
-  wsPingTimer: ReturnType<typeof setInterval> | null;
-  wsPongTimeout: ReturnType<typeof setTimeout> | null;
-  wsReconnectAttempt: number;
-  ws: WebSocket | null;
+  socket: Socket | null;
   unsubscribeBroker: (() => void) | null;
   browserWSHandler: BrowserWSHandler | null;
   /** Reference to the local Hono app for handling tunnel requests */
   localApp: FetchableApp | null;
-  /** Pending data requests awaiting server responses, keyed by requestId */
-  pendingDataRequests: Map<string, { resolve: (value: any) => void; reject: (err: Error) => void }>;
-  /** Whether the tunnel poll loop is running */
-  tunnelPollRunning: boolean;
-  /** Set of requestIds already processed, for dedup between WS push and HTTP poll */
-  processedRequestIds: Set<string>;
 }
 
 const state: TeamClientState = {
@@ -84,37 +69,11 @@ const state: TeamClientState = {
   runnerToken: null,
   heartbeatTimer: null,
   pollTimer: null,
-  wsPingTimer: null,
-  wsPongTimeout: null,
-  wsReconnectAttempt: 0,
-  ws: null,
+  socket: null,
   unsubscribeBroker: null,
   browserWSHandler: null,
   localApp: null,
-  pendingDataRequests: new Map(),
-  tunnelPollRunning: false,
-  processedRequestIds: new Set(),
 };
-
-// ── Deduplication ─────────────────────────────────────────
-// Requests may arrive via both WS push and HTTP poll. Track processed IDs
-// to avoid handling the same request twice.
-
-const DEDUP_TTL_MS = 60_000;
-const dedupTimers = new Map<string, ReturnType<typeof setTimeout>>();
-
-/** Returns true if this is the first time seeing this requestId. */
-function markProcessed(requestId: string): boolean {
-  if (state.processedRequestIds.has(requestId)) return false;
-  state.processedRequestIds.add(requestId);
-  const timer = setTimeout(() => {
-    state.processedRequestIds.delete(requestId);
-    dedupTimers.delete(requestId);
-  }, DEDUP_TTL_MS);
-  if (timer.unref) timer.unref();
-  dedupTimers.set(requestId, timer);
-  return true;
-}
 
 // ── HTTP helpers ─────────────────────────────────────────
 
@@ -147,8 +106,6 @@ async function register(): Promise<boolean> {
       ? ''
       : (process.env.RUNNER_HTTP_URL ?? `http://127.0.0.1:${runnerPort}`);
 
-    // When using a user invite token (RUNNER_INVITE_TOKEN), send it as a header
-    // so the server can associate this runner with the user's account.
     const inviteToken = process.env.RUNNER_INVITE_TOKEN;
     const extraHeaders: Record<string, string> = inviteToken
       ? { 'X-Runner-Invite-Token': inviteToken }
@@ -185,7 +142,7 @@ async function register(): Promise<boolean> {
     log.info('Registered with central server', {
       namespace: 'runner',
       runnerId: data.runnerId,
-      transport: httpUrl ? 'http+tunnel' : 'tunnel-only',
+      transport: httpUrl ? 'http+socketio' : 'socketio-only',
     });
 
     return true;
@@ -207,7 +164,7 @@ async function registerWithRetry(): Promise<boolean> {
     const ok = await register();
     if (ok) return true;
 
-    const delay = Math.min(2000 * attempt, 15_000); // 2s, 4s, 6s, ... cap at 15s
+    const delay = Math.min(2000 * attempt, 15_000);
     log.warn(`Registration failed, retrying in ${delay / 1000}s (attempt ${attempt})`, {
       namespace: 'runner',
     });
@@ -235,49 +192,16 @@ async function sendHeartbeat(): Promise<void> {
       state.runnerToken = null;
       const ok = await register();
       if (ok) {
-        // Re-establish WS connection with new token
-        if (state.ws) {
-          try {
-            state.ws.close();
-          } catch {}
+        // Reconnect Socket.IO with new token
+        if (state.socket) {
+          state.socket.disconnect();
         }
-        connectWebSocket();
-        // Re-assign projects
+        connectSocket();
         await assignLocalProjects();
         log.info('Runner re-registered after server restart', {
           namespace: 'runner',
           runnerId: state.runnerId,
         });
-      }
-    }
-    // WS health check — reconnect if WS is locally dead OR the server says it's not connected.
-    // The server includes `wsConnected` in the heartbeat response so the runner can detect
-    // stale connections (e.g. after server restart where the TCP close was never delivered).
-    if (res.ok) {
-      let serverSaysDisconnected = false;
-      try {
-        const hbData = await res.clone().json();
-        serverSaysDisconnected = hbData.wsConnected === false;
-      } catch {}
-
-      const locallyDead = !state.ws || state.ws.readyState !== WebSocket.OPEN;
-
-      if (locallyDead || serverSaysDisconnected) {
-        log.warn('WS tunnel stale — reconnecting', {
-          namespace: 'runner',
-          locallyDead,
-          serverSaysDisconnected,
-          wsState: state.ws?.readyState ?? 'null',
-        });
-        if (state.ws) {
-          try {
-            state.ws.close();
-          } catch {}
-          state.ws = null;
-        }
-        clearWsTimers();
-        state.wsReconnectAttempt = 0;
-        connectWebSocket();
       }
     }
   } catch (err) {
@@ -289,28 +213,9 @@ async function sendHeartbeat(): Promise<void> {
 
 async function sendHeartbeatWS(): Promise<void> {
   try {
-    const response = await sendDataMessage({
-      type: 'runner:heartbeat',
-      requestId: nanoid(),
-      payload: { activeThreadIds: [] },
+    const response = await sendDataMessage('runner:heartbeat', {
+      activeThreadIds: [],
     });
-
-    // WS health check — if the server says our WS is not connected,
-    // something is wrong (should not happen in WS-only mode, but be safe)
-    if (response?.wsConnected === false) {
-      log.warn('Server reports WS not connected despite WS heartbeat — reconnecting', {
-        namespace: 'runner',
-      });
-      if (state.ws) {
-        try {
-          state.ws.close();
-        } catch {}
-        state.ws = null;
-      }
-      clearWsTimers();
-      state.wsReconnectAttempt = 0;
-      connectWebSocket();
-    }
 
     // Handle re-registration if runner not found
     if (response?.code === 'RUNNER_NOT_FOUND') {
@@ -319,12 +224,10 @@ async function sendHeartbeatWS(): Promise<void> {
       state.runnerToken = null;
       const ok = await register();
       if (ok) {
-        if (state.ws) {
-          try {
-            state.ws.close();
-          } catch {}
+        if (state.socket) {
+          state.socket.disconnect();
         }
-        connectWebSocket();
+        connectSocket();
         await assignLocalProjects();
       }
     }
@@ -337,10 +240,7 @@ async function sendHeartbeatWS(): Promise<void> {
 
 async function pollTasksWS(): Promise<void> {
   try {
-    const response = await sendDataMessage({
-      type: 'runner:poll_tasks',
-      requestId: nanoid(),
-    });
+    const response = await sendDataMessage('runner:poll_tasks', {});
 
     const tasks = response?.tasks ?? [];
     for (const task of tasks) {
@@ -352,7 +252,7 @@ async function pollTasksWS(): Promise<void> {
       });
     }
   } catch {
-    // Silent — WS may be temporarily disconnected
+    // Silent — Socket.IO may be temporarily disconnected
   }
 }
 
@@ -361,11 +261,10 @@ async function pollTasksWS(): Promise<void> {
 async function assignProjectWS(projectId: string, localPath: string): Promise<void> {
   if (!state.runnerId) return;
   try {
-    await sendDataMessage({
-      type: 'runner:assign_project',
-      requestId: nanoid(),
+    await sendDataMessage('runner:assign_project', {
       runnerId: state.runnerId,
-      payload: { projectId, localPath },
+      projectId,
+      localPath,
     });
   } catch {
     // Non-fatal
@@ -398,16 +297,10 @@ async function pollTasks(): Promise<void> {
 
 // ── Project Assignment ───────────────────────────────────
 
-/**
- * Assign all local projects to this runner on the central server.
- * This populates the server's runnerProjectAssignments table so it
- * can route requests by projectId to this runner.
- */
 async function assignLocalProjects(): Promise<void> {
   if (!state.runnerId) return;
 
   try {
-    // Query all local projects (using '__local__' to get all in local DB)
     const projects = await getServices().projects.listProjects('__local__');
 
     for (const project of projects) {
@@ -442,7 +335,6 @@ async function assignLocalProjects(): Promise<void> {
 
 /**
  * Assign a single project to this runner on the central server.
- * Called when a new project is created on the Runtime.
  */
 export async function assignProjectToRunner(project: Project): Promise<void> {
   if (!state.runnerId) return;
@@ -468,170 +360,102 @@ export async function assignProjectToRunner(project: Project): Promise<void> {
   }
 }
 
-// ── WebSocket Connection ─────────────────────────────────
+// ── Socket.IO Connection ─────────────────────────────────
 
-/** Clear all keepalive timers */
-function clearWsTimers(): void {
-  if (state.wsPingTimer) {
-    clearInterval(state.wsPingTimer);
-    state.wsPingTimer = null;
+/**
+ * Connect to the central server via Socket.IO.
+ * Socket.IO handles: reconnection, heartbeat, transport fallback.
+ */
+function connectSocket(): void {
+  if (!state.runnerToken) {
+    log.warn('Cannot connect Socket.IO — no runner token', { namespace: 'runner' });
+    return;
   }
-  if (state.wsPongTimeout) {
-    clearTimeout(state.wsPongTimeout);
-    state.wsPongTimeout = null;
-  }
-}
 
-/** Schedule a reconnect with exponential backoff */
-function scheduleReconnect(): void {
-  const delay = Math.min(
-    WS_RECONNECT.BASE_DELAY_MS * Math.pow(WS_RECONNECT.BACKOFF_FACTOR, state.wsReconnectAttempt),
-    WS_RECONNECT.MAX_DELAY_MS,
-  );
-  state.wsReconnectAttempt++;
-  log.warn(
-    `WebSocket disconnected from central, reconnecting in ${(delay / 1000).toFixed(1)}s...`,
-    {
+  const serverUrl = state.serverUrl;
+
+  log.info('Connecting via Socket.IO', { namespace: 'runner', url: serverUrl });
+
+  const socket = io(`${serverUrl}/runner`, {
+    auth: { token: state.runnerToken },
+    // Socket.IO handles reconnection automatically
+    reconnection: true,
+    reconnectionDelay: 1_000,
+    reconnectionDelayMax: 30_000,
+    reconnectionAttempts: Infinity,
+    // Socket.IO handles transport negotiation (WS + polling fallback)
+    transports: ['websocket', 'polling'],
+    // Timeout for the initial connection
+    timeout: 20_000,
+  });
+
+  socket.on('connect', () => {
+    log.info('Socket.IO connected to server', {
       namespace: 'runner',
-      attempt: state.wsReconnectAttempt,
-    },
-  );
-  setTimeout(connectWebSocket, delay);
-}
+      transport: socket.io.engine?.transport?.name ?? 'unknown',
+    });
+  });
 
-/** Send a ping and arm a pong timeout — if no pong arrives, force-close */
-function sendWsPing(ws: WebSocket): void {
-  if (ws.readyState !== WebSocket.OPEN) return;
+  socket.on('disconnect', (reason) => {
+    log.warn('Socket.IO disconnected from server', {
+      namespace: 'runner',
+      reason,
+    });
+  });
 
-  ws.send(JSON.stringify({ type: 'runner:ping' }));
+  socket.on('connect_error', (err) => {
+    log.warn('Socket.IO connection error', {
+      namespace: 'runner',
+      error: err.message,
+    });
+  });
 
-  // Arm a pong timeout — if the server doesn't respond, the connection is dead
-  if (state.wsPongTimeout) clearTimeout(state.wsPongTimeout);
-  state.wsPongTimeout = setTimeout(() => {
-    log.warn('WebSocket pong timeout — closing stale connection', { namespace: 'runner' });
-    try {
-      ws.close(4000, 'Pong timeout');
-    } catch {}
-  }, WS_RECONNECT.PONG_TIMEOUT_MS);
-}
+  socket.io.on('reconnect', (attempt) => {
+    log.info('Socket.IO reconnected', {
+      namespace: 'runner',
+      attempt,
+    });
+  });
 
-function connectWebSocket(): void {
-  const wsUrl = state.serverUrl.replace(/^http/, 'ws') + '/ws/runner';
-
-  log.info('Attempting WebSocket connection', { namespace: 'runner', url: wsUrl });
-
-  try {
-    const ws = new WebSocket(wsUrl);
-
-    ws.onopen = () => {
-      // Authenticate
-      ws.send(JSON.stringify({ type: 'runner:auth', token: state.runnerToken }));
-      log.info('WebSocket connected to central', { namespace: 'runner' });
-
-      // Reset backoff on successful connection
-      state.wsReconnectAttempt = 0;
-
-      // Start periodic ping keepalive
-      clearWsTimers();
-      state.wsPingTimer = setInterval(() => sendWsPing(ws), WS_RECONNECT.PING_INTERVAL_MS);
-      if (state.wsPingTimer.unref) state.wsPingTimer.unref();
-    };
-
-    ws.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data as string);
-
-        // Any message from the server proves liveness — clear pong timeout
-        if (state.wsPongTimeout) {
-          clearTimeout(state.wsPongTimeout);
-          state.wsPongTimeout = null;
-        }
-
-        if (data.type === 'runner:auth_ok') {
-          log.info('WebSocket authenticated', { namespace: 'runner' });
-
-          // In WS-only mode, assign projects now that WS is ready
-          if (WS_ONLY) {
-            assignLocalProjects().catch(() => {});
-          }
-        }
-
-        // Pong response — already handled above (timeout cleared)
-        if (data.type === 'runner:pong') return;
-
-        // Handle browser WS messages forwarded through the central server
-        if (data.type === 'central:browser_ws' && data.userId && data.data) {
-          handleBrowserWSMessage(data.userId, data.data);
-        }
-
-        // Handle task commands from central
-        if (data.type === 'central:command' && data.task) {
-          log.info('Received command from central', {
-            namespace: 'runner',
-            taskId: data.task.taskId,
-            type: data.task.type,
-          });
-          // TODO: Execute task locally and report result
-        }
-
-        // Handle tunneled HTTP requests from the server
-        if (data.type === 'tunnel:request') {
-          handleTunnelRequest(data as CentralWSTunnelRequest);
-        }
-
-        // Handle data persistence and runner operation responses from the server
-        if (
-          data.requestId &&
-          (data.type?.startsWith('data:') || data.type?.startsWith('runner:'))
-        ) {
-          handleDataResponse(data);
-        }
-      } catch {}
-    };
-
-    ws.onclose = (event) => {
-      log.warn('WebSocket closed', {
+  socket.io.on('reconnect_attempt', (attempt) => {
+    if (attempt % 5 === 0) {
+      log.warn('Socket.IO reconnect attempt', {
         namespace: 'runner',
-        code: event.code,
-        reason: event.reason || 'none',
-        wasClean: event.wasClean,
+        attempt,
       });
+    }
+  });
 
-      state.ws = null;
-      clearWsTimers();
+  // Handle tunnel requests with ack callback
+  socket.on('tunnel:request', async (data: any, ack: (response: any) => void) => {
+    const response = await handleTunnelRequest(data);
+    ack(response);
+  });
 
-      // Immediately reject all pending data requests — the WS is gone,
-      // no point waiting for the 15s timeout to fire as unhandled rejections.
-      for (const [id, pending] of state.pendingDataRequests) {
-        state.pendingDataRequests.delete(id);
-        pending.reject(new Error('WebSocket disconnected before response'));
-      }
+  // Handle browser WS messages forwarded through the central server
+  socket.on('central:browser_ws', (data: any) => {
+    if (data.userId && data.data) {
+      handleBrowserWSMessage(data.userId, data.data);
+    }
+  });
 
-      scheduleReconnect();
-    };
-
-    ws.onerror = (event) => {
-      log.error('WebSocket connection error', {
+  // Handle task commands from central
+  socket.on('central:command', (data: any) => {
+    if (data.task) {
+      log.info('Received command from central', {
         namespace: 'runner',
-        url: wsUrl,
-        message: (event as any)?.message || 'unknown',
+        taskId: data.task.taskId,
+        type: data.task.type,
       });
-      // onclose will fire after onerror
-    };
+      // TODO: Execute task locally and report result
+    }
+  });
 
-    state.ws = ws;
-  } catch (err) {
-    log.error('Failed to connect WebSocket to central', { namespace: 'runner', error: err as any });
-    scheduleReconnect();
-  }
+  state.socket = socket;
 }
 
 // ── Browser WS Message Handling ─────────────────────────
 
-/**
- * Handle a browser WS message forwarded through the central server.
- * Delegates to the registered handler (set by runtime's index.ts).
- */
 function handleBrowserWSMessage(userId: string, data: unknown): void {
   if (!state.browserWSHandler) {
     log.warn('No browser WS handler registered', { namespace: 'runner' });
@@ -639,17 +463,8 @@ function handleBrowserWSMessage(userId: string, data: unknown): void {
   }
 
   const respond = (responseData: unknown) => {
-    // Send the response back to the central server for relay to the browser
-    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
-    try {
-      state.ws.send(
-        JSON.stringify({
-          type: 'runner:browser_relay',
-          userId,
-          data: responseData,
-        }),
-      );
-    } catch {}
+    if (!state.socket?.connected) return;
+    state.socket.emit('runner:browser_relay', { userId, data: responseData });
   };
 
   state.browserWSHandler(userId, data, respond);
@@ -657,13 +472,9 @@ function handleBrowserWSMessage(userId: string, data: unknown): void {
 
 // ── Event Forwarding ────────────────────────────────────
 
-/**
- * Forward a local wsBroker event to the central server via WebSocket.
- * The server relays it to the appropriate browser client.
- */
 function forwardEventToCentral(event: WSEvent, userId?: string): void {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-    log.warn('Cannot forward event — WS not connected to central', {
+  if (!state.socket?.connected) {
+    log.warn('Cannot forward event — Socket.IO not connected', {
       namespace: 'runner',
       eventType: event.type,
       threadId: (event as any).threadId,
@@ -679,38 +490,31 @@ function forwardEventToCentral(event: WSEvent, userId?: string): void {
     });
   }
 
-  try {
-    state.ws.send(
-      JSON.stringify({
-        type: 'runner:agent_event',
-        threadId: (event as any).threadId,
-        userId,
-        event,
-      }),
-    );
-  } catch {
-    // WS may have closed between the check and send — ignore
-  }
+  state.socket.emit('runner:agent_event', {
+    threadId: (event as any).threadId,
+    userId,
+    event,
+  });
 }
 
 // ── Tunnel Request Handling ──────────────────────────────
 
 /**
  * Handle a tunneled HTTP request from the server.
- * Forwards the request to the local Hono app and sends the response back.
+ * Returns the response (used as Socket.IO ack callback data).
  */
-async function handleTunnelRequest(data: CentralWSTunnelRequest): Promise<void> {
-  // Dedup: skip if already handled via the other channel (WS push or HTTP poll)
-  if (!markProcessed(data.requestId)) return;
-
+async function handleTunnelRequest(data: {
+  method: string;
+  path: string;
+  headers: Record<string, string>;
+  body: string | null;
+}): Promise<{ status: number; headers: Record<string, string>; body: string | null }> {
   if (!state.localApp) {
     log.warn('Received tunnel:request but no local app registered', { namespace: 'runner' });
-    sendTunnelResponse(data.requestId, 503, {}, 'Local app not initialized');
-    return;
+    return { status: 503, headers: {}, body: 'Local app not initialized' };
   }
 
   try {
-    // Build a Request object for the local Hono app
     const url = `http://localhost${data.path}`;
     const init: RequestInit = {
       method: data.method,
@@ -723,294 +527,77 @@ async function handleTunnelRequest(data: CentralWSTunnelRequest): Promise<void> 
     const request = new Request(url, init);
     const response = await state.localApp.fetch(request);
 
-    // Serialize the response
     const responseBody = await response.text();
     const responseHeaders: Record<string, string> = {};
     response.headers.forEach((value, key) => {
       responseHeaders[key] = value;
     });
 
-    sendTunnelResponse(data.requestId, response.status, responseHeaders, responseBody);
+    return { status: response.status, headers: responseHeaders, body: responseBody };
   } catch (err) {
     log.error('Failed to handle tunnel request', {
       namespace: 'runner',
-      requestId: data.requestId,
       path: data.path,
       error: (err as Error).message,
     });
-    sendTunnelResponse(data.requestId, 500, {}, JSON.stringify({ error: 'Internal runner error' }));
+    return { status: 500, headers: {}, body: JSON.stringify({ error: 'Internal runner error' }) };
   }
-}
-
-function sendTunnelResponse(
-  requestId: string,
-  status: number,
-  headers: Record<string, string>,
-  body: string | null,
-): void {
-  // Try WS first (lower latency)
-  if (state.ws && state.ws.readyState === WebSocket.OPEN) {
-    try {
-      state.ws.send(
-        JSON.stringify({
-          type: 'tunnel:response',
-          requestId,
-          status,
-          headers,
-          body,
-        }),
-      );
-      return; // WS send succeeded
-    } catch {
-      // WS send failed — fall through to HTTP
-    }
-  }
-
-  // Fallback: send result via HTTP POST (skip in WS-only mode)
-  if (!WS_ONLY) {
-    sendTunnelResponseHttp(requestId, status, headers, body).catch(() => {});
-  }
-}
-
-/** Send tunnel result via HTTP when WS is unavailable */
-async function sendTunnelResponseHttp(
-  requestId: string,
-  status: number,
-  headers: Record<string, string>,
-  body: string | null,
-): Promise<void> {
-  try {
-    const res = await centralFetch('/api/runners/tunnel/result', {
-      method: 'POST',
-      body: JSON.stringify({ requestId, status, headers, body }),
-    });
-    if (!res.ok) {
-      log.warn('HTTP tunnel result rejected', {
-        namespace: 'runner',
-        requestId,
-        status: res.status,
-      });
-    }
-  } catch (err) {
-    log.warn('Failed to send tunnel result via HTTP', {
-      namespace: 'runner',
-      requestId,
-      error: (err as Error).message,
-    });
-  }
-}
-
-// ── HTTP Tunnel Poll Loop ────────────────────────────────
-
-/**
- * Long-poll loop that pulls queued tunnel requests from the server.
- * This is the reliable baseline transport — runs continuously alongside WS.
- * Requests may also arrive via WS push (deduped by requestId).
- */
-async function tunnelPollLoop(): Promise<void> {
-  if (state.tunnelPollRunning) return;
-  state.tunnelPollRunning = true;
-
-  log.info('Tunnel poll loop started', { namespace: 'runner' });
-
-  while (state.tunnelPollRunning && state.runnerId) {
-    try {
-      const res = await centralFetch('/api/runners/tunnel/poll');
-      if (!res.ok) {
-        // Server error — back off briefly
-        await new Promise((r) => setTimeout(r, 2_000));
-        continue;
-      }
-
-      const { requests } = (await res.json()) as {
-        requests: Array<{
-          requestId: string;
-          method: string;
-          path: string;
-          headers: Record<string, string>;
-          body: string | null;
-        }>;
-      };
-
-      for (const req of requests) {
-        // handleTunnelRequest dedupes internally via markProcessed()
-        handleTunnelRequest({
-          type: 'tunnel:request',
-          requestId: req.requestId,
-          method: req.method,
-          path: req.path,
-          headers: req.headers,
-          body: req.body,
-        });
-      }
-    } catch {
-      // Network error — back off before retrying
-      if (state.tunnelPollRunning) {
-        await new Promise((r) => setTimeout(r, 3_000));
-      }
-    }
-  }
-
-  log.info('Tunnel poll loop stopped', { namespace: 'runner' });
 }
 
 // ── Data Persistence (Runner → Server) ──────────────────
 
-/** Timeout for data requests awaiting server response (ms) */
-const DATA_REQUEST_TIMEOUT = 15_000;
-
 /**
- * Handle a data response from the server.
- * Resolves the pending promise for the matching requestId.
+ * Send a data message to the server using Socket.IO emit + ack.
+ * Socket.IO's acknowledgement callback handles request/response correlation.
  */
-function handleDataResponse(data: any): void {
-  const pending = state.pendingDataRequests.get(data.requestId);
-  if (!pending) return;
-
-  state.pendingDataRequests.delete(data.requestId);
-
-  switch (data.type) {
-    case 'data:insert_message_response':
-      pending.resolve({ messageId: data.messageId });
-      break;
-    case 'data:insert_tool_call_response':
-      pending.resolve({ toolCallId: data.toolCallId });
-      break;
-    case 'data:ack':
-      if (data.success) {
-        pending.resolve({ success: true });
-      } else {
-        pending.reject(new Error(data.error ?? 'Server returned error'));
-      }
-      break;
-    case 'data:update_thread_response':
-      pending.resolve({ ok: true });
-      break;
-    case 'data:get_thread_response':
-      pending.resolve(data.thread);
-      break;
-    case 'data:get_tool_call_response':
-      pending.resolve(data.toolCall);
-      break;
-    case 'data:find_tool_call_response':
-      pending.resolve(data.toolCall);
-      break;
-    case 'data:get_project_response':
-      pending.resolve(data.project);
-      break;
-    case 'data:list_projects_response':
-      pending.resolve(data.projects);
-      break;
-    case 'data:resolve_project_path_response':
-      pending.resolve({ ok: data.ok, path: data.path, error: data.error });
-      break;
-    case 'data:enqueue_message_response':
-      pending.resolve(data.queued);
-      break;
-    case 'data:get_arc_response':
-      pending.resolve(data.arc);
-      break;
-    case 'data:get_profile_response':
-      pending.resolve(data.profile);
-      break;
-    case 'data:get_github_token_response':
-      pending.resolve({ token: data.token });
-      break;
-    case 'data:update_profile_response':
-      pending.resolve(data.profile);
-      break;
-    default:
-      pending.resolve(data);
-  }
-}
-
-/** Max retries when the WS is temporarily disconnected */
-const SEND_RETRY_MAX = 3;
-/** Delay between retries (ms) — should be enough for a reconnect cycle */
-const SEND_RETRY_DELAY_MS = 2_000;
-
-/**
- * Send a data message to the server and wait for a response.
- * Creates a pending promise keyed by requestId that is resolved
- * when the server sends the corresponding response.
- *
- * If the WebSocket is temporarily disconnected, retries up to
- * SEND_RETRY_MAX times with a delay, giving the reconnect logic
- * time to re-establish the connection.
- */
-async function sendDataMessage(message: Record<string, any>, attempt = 0): Promise<any> {
-  return new Promise((resolve, reject) => {
-    if (!state.ws || state.ws.readyState !== WebSocket.OPEN) {
-      if (attempt < SEND_RETRY_MAX) {
-        // Wait for the WS to reconnect and retry
-        log.debug(
-          `sendDataMessage: WS not connected, retrying in ${SEND_RETRY_DELAY_MS}ms (attempt ${attempt + 1}/${SEND_RETRY_MAX})`,
-          {
-            namespace: 'runner',
-            messageType: message.type,
-          },
-        );
-        setTimeout(() => {
-          sendDataMessage(message, attempt + 1).then(resolve, reject);
-        }, SEND_RETRY_DELAY_MS);
+async function sendDataMessage(eventType: string, payload: Record<string, any>): Promise<any> {
+  if (!state.socket?.connected) {
+    // Wait briefly for reconnection (Socket.IO handles this automatically)
+    await new Promise<void>((resolve, reject) => {
+      if (!state.socket) {
+        reject(new Error('Socket.IO not initialized'));
         return;
       }
-      reject(new Error('WebSocket not connected to central server'));
-      return;
-    }
+      const timeout = setTimeout(() => {
+        reject(new Error('Socket.IO not connected to central server'));
+      }, 5_000);
 
-    const requestId = message.requestId as string;
-    if (!requestId) {
-      reject(new Error('Data message must have a requestId'));
-      return;
-    }
-
-    // Set up timeout
-    const timer = setTimeout(() => {
-      state.pendingDataRequests.delete(requestId);
-      reject(new Error(`Data request timed out after ${DATA_REQUEST_TIMEOUT}ms (${message.type})`));
-    }, DATA_REQUEST_TIMEOUT);
-
-    state.pendingDataRequests.set(requestId, {
-      resolve: (value: any) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      reject: (err: Error) => {
-        clearTimeout(timer);
-        reject(err);
-      },
+      if (state.socket.connected) {
+        clearTimeout(timeout);
+        resolve();
+      } else {
+        state.socket.once('connect', () => {
+          clearTimeout(timeout);
+          resolve();
+        });
+      }
     });
+  }
 
-    try {
-      state.ws.send(JSON.stringify(message));
-    } catch (err) {
-      clearTimeout(timer);
-      state.pendingDataRequests.delete(requestId);
-      reject(err);
-    }
+  return new Promise((resolve, reject) => {
+    state
+      .socket!.timeout(DATA_REQUEST_TIMEOUT)
+      .emit(eventType, payload, (err: Error | null, response: any) => {
+        if (err) {
+          reject(new Error(`Data request timed out (${eventType})`));
+        } else if (response?.success === false && response?.error) {
+          reject(new Error(response.error));
+        } else {
+          resolve(response);
+        }
+      });
   });
 }
 
 /** Insert a message on the server, returns the server-generated messageId */
 export async function remoteInsertMessage(data: DataInsertMessage['payload']): Promise<string> {
-  const requestId = nanoid();
-  const response = await sendDataMessage({
-    type: 'data:insert_message',
-    requestId,
-    payload: data,
-  });
+  const response = await sendDataMessage('data:insert_message', { payload: data });
   return response.messageId;
 }
 
 /** Insert a tool call on the server, returns the server-generated toolCallId */
 export async function remoteInsertToolCall(data: DataInsertToolCall['payload']): Promise<string> {
-  const requestId = nanoid();
-  const response = await sendDataMessage({
-    type: 'data:insert_tool_call',
-    requestId,
-    payload: data,
-  });
+  const response = await sendDataMessage('data:insert_tool_call', { payload: data });
   return response.toolCallId;
 }
 
@@ -1019,25 +606,13 @@ export async function remoteUpdateThread(
   threadId: string,
   updates: Record<string, any>,
 ): Promise<void> {
-  const requestId = nanoid();
-  await sendDataMessage({
-    type: 'data:update_thread',
-    requestId,
-    payload: { threadId, updates },
-  });
+  await sendDataMessage('data:update_thread', { payload: { threadId, updates } });
 }
 
 /** Update message content on the server (fire-and-forget) */
 export async function remoteUpdateMessage(messageId: string, content: string): Promise<void> {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
-  try {
-    state.ws.send(
-      JSON.stringify({
-        type: 'data:update_message',
-        payload: { messageId, content },
-      }),
-    );
-  } catch {}
+  if (!state.socket?.connected) return;
+  state.socket.emit('data:update_message', { payload: { messageId, content } });
 }
 
 /** Save a thread event on the server (fire-and-forget) */
@@ -1046,15 +621,8 @@ export async function remoteSaveThreadEvent(
   type: string,
   data: Record<string, unknown>,
 ): Promise<void> {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
-  try {
-    state.ws.send(
-      JSON.stringify({
-        type: 'data:save_thread_event',
-        payload: { threadId, eventType: type, data },
-      }),
-    );
-  } catch {}
+  if (!state.socket?.connected) return;
+  state.socket.emit('data:save_thread_event', { payload: { threadId, eventType: type, data } });
 }
 
 /** Update tool call output on the server (fire-and-forget) */
@@ -1062,35 +630,18 @@ export async function remoteUpdateToolCallOutput(
   toolCallId: string,
   output: string,
 ): Promise<void> {
-  if (!state.ws || state.ws.readyState !== WebSocket.OPEN) return;
-  try {
-    state.ws.send(
-      JSON.stringify({
-        type: 'data:update_tool_call_output',
-        payload: { toolCallId, output },
-      }),
-    );
-  } catch {}
+  if (!state.socket?.connected) return;
+  state.socket.emit('data:update_tool_call_output', { payload: { toolCallId, output } });
 }
 
 /** Get a thread from the server by ID */
 export async function remoteGetThread(threadId: string): Promise<any> {
-  const requestId = nanoid();
-  return sendDataMessage({
-    type: 'data:get_thread',
-    requestId,
-    threadId,
-  });
+  return sendDataMessage('data:get_thread', { threadId });
 }
 
 /** Get a tool call from the server by ID */
 export async function remoteGetToolCall(toolCallId: string): Promise<any> {
-  const requestId = nanoid();
-  return sendDataMessage({
-    type: 'data:get_tool_call',
-    requestId,
-    toolCallId,
-  });
+  return sendDataMessage('data:get_tool_call', { toolCallId });
 }
 
 /** Find a tool call on the server by messageId + name + input (dedup) */
@@ -1099,45 +650,25 @@ export async function remoteFindToolCall(
   name: string,
   input: string,
 ): Promise<any> {
-  const requestId = nanoid();
-  return sendDataMessage({
-    type: 'data:find_tool_call',
-    requestId,
-    payload: { messageId, name, input },
-  });
+  return sendDataMessage('data:find_tool_call', { payload: { messageId, name, input } });
 }
 
 // ── Project operations ──────────────────────────────────
 
 /** Get a project from the server by ID */
 export async function remoteGetProject(projectId: string): Promise<any> {
-  const requestId = nanoid();
-  return sendDataMessage({
-    type: 'data:get_project',
-    requestId,
-    projectId,
-  });
+  return sendDataMessage('data:get_project', { projectId });
 }
 
 /** Get an arc from the server by ID */
 export async function remoteGetArc(arcId: string): Promise<any> {
-  const requestId = nanoid();
-  return sendDataMessage({
-    type: 'data:get_arc',
-    requestId,
-    arcId,
-  });
+  return sendDataMessage('data:get_arc', { arcId });
 }
 
 /** List projects for a user on the server */
 export async function remoteListProjects(userId: string): Promise<any[]> {
-  const requestId = nanoid();
-  const result = await sendDataMessage({
-    type: 'data:list_projects',
-    requestId,
-    userId,
-  });
-  return result ?? [];
+  const result = await sendDataMessage('data:list_projects', { userId });
+  return result?.projects ?? result ?? [];
 }
 
 /** Resolve project path for a user on the server */
@@ -1145,69 +676,37 @@ export async function remoteResolveProjectPath(
   projectId: string,
   userId: string,
 ): Promise<{ ok: boolean; path?: string; error?: string }> {
-  const requestId = nanoid();
-  return sendDataMessage({
-    type: 'data:resolve_project_path',
-    requestId,
-    projectId,
-    userId,
-  });
+  return sendDataMessage('data:resolve_project_path', { projectId, userId });
 }
 
 // ── Profile operations ──────────────────────────────────
 
 /** Get a user profile from the server */
 export async function remoteGetProfile(userId: string): Promise<any> {
-  const requestId = nanoid();
-  return sendDataMessage({
-    type: 'data:get_profile',
-    requestId,
-    userId,
-  });
+  return sendDataMessage('data:get_profile', { userId });
 }
 
 /** Get a user's decrypted GitHub token from the server */
 export async function remoteGetGithubToken(userId: string): Promise<string | null> {
-  const requestId = nanoid();
-  const result = await sendDataMessage({
-    type: 'data:get_github_token',
-    requestId,
-    userId,
-  });
+  const result = await sendDataMessage('data:get_github_token', { userId });
   return result?.token ?? null;
 }
 
 /** Update a user profile on the server */
 export async function remoteUpdateProfile(userId: string, data: Record<string, any>): Promise<any> {
-  const requestId = nanoid();
-  return sendDataMessage({
-    type: 'data:update_profile',
-    requestId,
-    userId,
-    payload: data,
-  });
+  return sendDataMessage('data:update_profile', { userId, payload: data });
 }
 
 // ── Thread creation/deletion ────────────────────────────
 
 /** Create a thread record on the server */
 export async function remoteCreateThread(data: Record<string, any>): Promise<void> {
-  const requestId = nanoid();
-  await sendDataMessage({
-    type: 'data:create_thread',
-    requestId,
-    payload: data,
-  });
+  await sendDataMessage('data:create_thread', { payload: data });
 }
 
 /** Delete a thread on the server */
 export async function remoteDeleteThread(threadId: string): Promise<void> {
-  const requestId = nanoid();
-  await sendDataMessage({
-    type: 'data:delete_thread',
-    requestId,
-    threadId,
-  });
+  await sendDataMessage('data:delete_thread', { threadId });
 }
 
 // ── Message queue ───────────────────────────────────────
@@ -1217,29 +716,21 @@ export async function remoteEnqueueMessage(
   threadId: string,
   data: Record<string, any>,
 ): Promise<any> {
-  const requestId = nanoid();
-  return sendDataMessage({
-    type: 'data:enqueue_message',
-    requestId,
-    threadId,
-    payload: data,
-  });
+  return sendDataMessage('data:enqueue_message', { threadId, payload: data });
 }
 
 // ── Lifecycle ────────────────────────────────────────────
 
 /**
  * Initialize runner mode — connect to the central server.
- * Called from app.ts init() when TEAM_SERVER_URL is set,
- * configuring this runtime as a runner for the server.
+ * Called from app.ts init() when TEAM_SERVER_URL is set.
  */
 export async function initTeamMode(serverUrl: string): Promise<void> {
-  state.serverUrl = serverUrl.replace(/\/$/, ''); // Remove trailing slash
+  state.serverUrl = serverUrl.replace(/\/$/, '');
 
   log.info(`Connecting to server at ${state.serverUrl}`, { namespace: 'runner' });
 
-  // Subscribe to local wsBroker events early — even before registration succeeds,
-  // so events are forwarded as soon as the WS connection is established.
+  // Subscribe to local wsBroker events early
   state.unsubscribeBroker = wsBroker.onEvent(forwardEventToCentral);
 
   // Register as a runner (with retries if the server is not yet available)
@@ -1259,13 +750,8 @@ export async function initTeamMode(serverUrl: string): Promise<void> {
   state.pollTimer = setInterval(pollTasks, 5_000);
   if (state.pollTimer.unref) state.pollTimer.unref();
 
-  // Connect WebSocket for event streaming
-  connectWebSocket();
-
-  // Start HTTP tunnel poll loop (reliable baseline transport) — skip in WS-only mode
-  if (!WS_ONLY) {
-    tunnelPollLoop();
-  }
+  // Connect Socket.IO (handles reconnection, heartbeat, transport fallback)
+  connectSocket();
 
   // In WS-only mode, defer project assignment until WS is authenticated.
   // The WS onopen handler sends runner:auth, and after auth_ok we assign projects.
@@ -1287,28 +773,18 @@ export function shutdownTeamMode(): void {
   if (state.heartbeatTimer) clearInterval(state.heartbeatTimer);
   if (state.pollTimer) clearInterval(state.pollTimer);
   if (state.unsubscribeBroker) state.unsubscribeBroker();
-  if (state.ws) state.ws.close();
 
-  // Stop tunnel poll loop
-  state.tunnelPollRunning = false;
-
-  // Clean up dedup state
-  state.processedRequestIds.clear();
-  for (const [, timer] of dedupTimers) clearTimeout(timer);
-  dedupTimers.clear();
+  // Disconnect Socket.IO (handles cleanup automatically)
+  if (state.socket) {
+    state.socket.disconnect();
+    state.socket = null;
+  }
 
   state.heartbeatTimer = null;
   state.pollTimer = null;
   state.unsubscribeBroker = null;
-  state.ws = null;
   state.runnerId = null;
   state.runnerToken = null;
-
-  // Reject any pending data requests
-  for (const [, pending] of state.pendingDataRequests) {
-    pending.reject(new Error('Runner mode shutting down'));
-  }
-  state.pendingDataRequests.clear();
 
   log.info('Runner mode shutdown', { namespace: 'runner' });
 }
@@ -1320,7 +796,6 @@ export function getTeamServerUrl(): string | null {
 
 /**
  * Register a handler for browser WS messages forwarded through the server.
- * Called by runtime's app.ts to handle PTY commands, etc.
  */
 export function setBrowserWSHandler(handler: BrowserWSHandler): void {
   state.browserWSHandler = handler;
@@ -1328,8 +803,6 @@ export function setBrowserWSHandler(handler: BrowserWSHandler): void {
 
 /**
  * Register the local Hono app for handling tunneled HTTP requests from the server.
- * Called by runtime's app.ts after creating the app, so tunnel:request
- * messages can be forwarded to the app's routes.
  */
 export function setLocalApp(app: FetchableApp): void {
   state.localApp = app;

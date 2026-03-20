@@ -21,7 +21,6 @@ import { and, eq } from 'drizzle-orm';
 import { db } from '../db/index.js';
 import { runnerProjectAssignments, runners } from '../db/schema.js';
 import { log } from '../lib/logger.js';
-import { isPolling } from './http-tunnel.js';
 import { getRunnerForThread } from './thread-registry.js';
 import { isRunnerConnected } from './ws-relay.js';
 
@@ -41,8 +40,8 @@ const threadRunnerCache = new Map<string, ResolvedRunner>();
 const WS_ONLY = process.env.WS_TUNNEL_ONLY === 'true' || process.env.WS_TUNNEL_ONLY === '1';
 
 function isReachable(runnerId: string, httpUrl: string | null): boolean {
-  if (WS_ONLY) return isRunnerConnected(runnerId) || isPolling(runnerId);
-  return isRunnerConnected(runnerId) || isPolling(runnerId) || !!httpUrl;
+  if (WS_ONLY) return isRunnerConnected(runnerId);
+  return isRunnerConnected(runnerId) || !!httpUrl;
 }
 
 /**
@@ -111,8 +110,7 @@ export async function resolveRunner(
     runnersInDb: allRunners.map((r) => ({
       id: r.id,
       userId: r.userId ?? 'null',
-      wsConnected: isRunnerConnected(r.id),
-      polling: isPolling(r.id),
+      connected: isRunnerConnected(r.id),
       hasHttpUrl: !!r.httpUrl,
     })),
   });
@@ -188,9 +186,9 @@ async function resolveUserRunner(userId: string): Promise<ResolvedRunner | null>
     .from(runners)
     .where(eq(runners.userId, userId));
 
-  // First pass: prefer WS-connected or actively polling runners
+  // First pass: prefer Socket.IO-connected runners
   for (const r of userRunners) {
-    if (isRunnerConnected(r.id) || isPolling(r.id)) {
+    if (isRunnerConnected(r.id)) {
       return { runnerId: r.id, httpUrl: WS_ONLY ? null : (r.httpUrl ?? null) };
     }
   }
@@ -221,9 +219,9 @@ async function resolveByProject(projectId: string, userId: string): Promise<Reso
     .innerJoin(runners, eq(runners.id, runnerProjectAssignments.runnerId))
     .where(and(eq(runnerProjectAssignments.projectId, projectId), eq(runners.userId, userId)));
 
-  // Prefer WS-connected or actively polling, fall back to httpUrl
+  // Prefer Socket.IO-connected runners, fall back to httpUrl
   for (const a of assignments) {
-    if (a.runnerId && (isRunnerConnected(a.runnerId) || isPolling(a.runnerId))) {
+    if (a.runnerId && isRunnerConnected(a.runnerId)) {
       return { runnerId: a.runnerId, httpUrl: WS_ONLY ? null : (a.httpUrl ?? null) };
     }
   }

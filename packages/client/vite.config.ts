@@ -10,7 +10,6 @@ export default defineConfig(({ mode }) => {
   const clientPort = Number(env.VITE_PORT) || 5173;
   const serverPort = Number(env.VITE_SERVER_PORT) || 3001;
   const serverTarget = `http://127.0.0.1:${serverPort}`;
-  const wsTarget = `ws://127.0.0.1:${serverPort}`;
 
   return {
     envDir: monorepoRoot,
@@ -48,9 +47,11 @@ export default defineConfig(({ mode }) => {
           changeOrigin: true,
           timeout: 60_000,
         },
-        '/ws': {
-          target: wsTarget,
+        // Socket.IO requests (polling + WebSocket upgrade)
+        '/socket.io': {
+          target: serverTarget,
           ws: true,
+          changeOrigin: true,
         },
       },
     },

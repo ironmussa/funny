@@ -24,13 +24,11 @@ import type { Context } from 'hono';
 
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
-import { isPolling } from '../services/http-tunnel.js';
 import { resolveRunner } from '../services/runner-resolver.js';
 import { isRunnerConnected } from '../services/ws-relay.js';
 import { tunnelFetch } from '../services/ws-tunnel.js';
 
 const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET!;
-const WS_TUNNEL_ONLY = process.env.WS_TUNNEL_ONLY === 'true' || process.env.WS_TUNNEL_ONLY === '1';
 
 /**
  * Hono handler that proxies the request to the appropriate runner.
@@ -93,23 +91,9 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
   }
 
   const tunnelPath = `${path}${url.search}`;
+  const tunnelActive = isRunnerConnected(runnerId);
 
-  // Strategy 1: Direct HTTP — preferred (simple, reliable, no serialization overhead)
-  if (!WS_TUNNEL_ONLY && httpUrl) {
-    try {
-      return await directHttpFetch(c, httpUrl, path, url.search, forwardedHeaders, body);
-    } catch (httpErr) {
-      log.warn('Direct HTTP to runner failed, trying WS tunnel', {
-        namespace: 'proxy',
-        runnerId,
-        error: (httpErr as Error).message,
-      });
-      // Fall through to tunnel
-    }
-  }
-
-  // Strategy 2: WS tunnel — for runners behind NAT or when direct HTTP fails
-  const tunnelActive = isRunnerConnected(runnerId) || isPolling(runnerId);
+  // If the runner is connected via Socket.IO, use the tunnel as primary
   if (tunnelActive) {
     try {
       const tunnelResp = await tunnelFetch(runnerId, {
@@ -130,6 +114,11 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
         error: (tunnelErr as Error).message,
       });
     }
+  }
+
+  // Runner not connected via Socket.IO — try direct HTTP if available
+  if (httpUrl) {
+    return await directHttpFetch(c, httpUrl, path, url.search, forwardedHeaders, body);
   }
 
   return c.json({ error: 'No runner connected. Check that your runner is online.' }, 502);

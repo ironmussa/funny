@@ -69,6 +69,7 @@
     "nodemailer": "^8.0.2",
     "pg": "^8.20.0",
     "postgres": "^3.4.8",
+    "socket.io-client": "4",
     "winston": "^3.19.0",
     "winston-daily-rotate-file": "^5.0.0",
     "winston-transport": "^4.9.0",

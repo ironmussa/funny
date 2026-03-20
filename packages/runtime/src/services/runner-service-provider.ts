@@ -284,23 +284,29 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         const { remoteEnqueueMessage } = await import('./team-client.js');
         return remoteEnqueueMessage(threadId, data);
       },
-      async peek() {
-        return null;
+      async peek(threadId) {
+        const { remotePeekMessage } = await import('./team-client.js');
+        return remotePeekMessage(threadId);
       },
-      async dequeue() {
-        return null;
+      async dequeue(threadId) {
+        const { remoteDequeueMessage } = await import('./team-client.js');
+        return remoteDequeueMessage(threadId);
       },
-      async cancel() {
-        return false;
+      async cancel(messageId) {
+        const { remoteCancelQueuedMessage } = await import('./team-client.js');
+        return remoteCancelQueuedMessage(messageId);
       },
-      async update() {
-        return null;
+      async update(messageId, content) {
+        const { remoteUpdateQueuedMessage } = await import('./team-client.js');
+        return remoteUpdateQueuedMessage(messageId, content);
       },
-      async listQueue() {
-        return [];
+      async listQueue(threadId) {
+        const { remoteListQueue } = await import('./team-client.js');
+        return remoteListQueue(threadId);
       },
-      async queueCount() {
-        return 0;
+      async queueCount(threadId) {
+        const { remoteQueueCount } = await import('./team-client.js');
+        return remoteQueueCount(threadId);
       },
       async clearQueue() {},
     },

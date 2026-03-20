@@ -794,6 +794,45 @@ export async function remoteEnqueueMessage(
   return sendDataMessage('data:enqueue_message', { threadId, payload: data });
 }
 
+/** Dequeue the next message from the server's queue */
+export async function remoteDequeueMessage(threadId: string): Promise<any | null> {
+  const result = await sendDataMessage('data:dequeue_message', { threadId });
+  return result?.dequeued ?? null;
+}
+
+/** Peek at the next message in the server's queue */
+export async function remotePeekMessage(threadId: string): Promise<any | null> {
+  const result = await sendDataMessage('data:peek_message', { threadId });
+  return result?.peeked ?? null;
+}
+
+/** Get the count of queued messages from the server */
+export async function remoteQueueCount(threadId: string): Promise<number> {
+  const result = await sendDataMessage('data:queue_count', { threadId });
+  return result?.count ?? 0;
+}
+
+/** List all queued messages for a thread */
+export async function remoteListQueue(threadId: string): Promise<any[]> {
+  const result = await sendDataMessage('data:list_queue', { threadId });
+  return result?.items ?? [];
+}
+
+/** Cancel a queued message */
+export async function remoteCancelQueuedMessage(messageId: string): Promise<boolean> {
+  const result = await sendDataMessage('data:cancel_queued_message', { messageId });
+  return result?.success ?? false;
+}
+
+/** Update a queued message */
+export async function remoteUpdateQueuedMessage(
+  messageId: string,
+  content: string,
+): Promise<any | null> {
+  const result = await sendDataMessage('data:update_queued_message', { messageId, content });
+  return result?.updated ?? null;
+}
+
 // ── Lifecycle ────────────────────────────────────────────
 
 /**

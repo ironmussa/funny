@@ -106,7 +106,7 @@ export const baseMarkdownComponents = {
       return <HighlightedCode code={code} language={language} />;
     }
     return (
-      <code className="rounded bg-muted px-1 py-0.5 font-mono text-xs" {...props}>
+      <code className="rounded bg-muted-foreground/35 px-1 py-0.5 font-mono text-xs" {...props}>
         {children}
       </code>
     );
@@ -121,7 +121,7 @@ export const baseMarkdownComponents = {
 
     if (isMarkdown) {
       return (
-        <div className="my-2 rounded border border-border bg-muted/30 p-4 prose prose-sm max-w-none">
+        <div className="prose prose-sm my-2 max-w-none rounded border border-border bg-muted/30 p-4">
           <Suspense fallback={<div className="whitespace-pre-wrap text-sm">{text}</div>}>
             <LazyNestedMarkdown content={text} />
           </Suspense>

@@ -181,6 +181,30 @@ export async function handleDataMessageWithAck(runnerId: string, data: any): Pro
         const queued = await messageQueueRepo.enqueue(data.threadId, data.payload);
         return { type: 'data:enqueue_message_response', queued };
       }
+      case 'data:dequeue_message': {
+        const dequeued = await messageQueueRepo.dequeue(data.threadId);
+        return { type: 'data:dequeue_message_response', dequeued };
+      }
+      case 'data:peek_message': {
+        const peeked = await messageQueueRepo.peek(data.threadId);
+        return { type: 'data:peek_message_response', peeked };
+      }
+      case 'data:queue_count': {
+        const count = await messageQueueRepo.queueCount(data.threadId);
+        return { type: 'data:queue_count_response', count };
+      }
+      case 'data:list_queue': {
+        const items = await messageQueueRepo.listQueue(data.threadId);
+        return { type: 'data:list_queue_response', items };
+      }
+      case 'data:cancel_queued_message': {
+        const success = await messageQueueRepo.cancel(data.messageId);
+        return { type: 'data:cancel_queued_message_response', success };
+      }
+      case 'data:update_queued_message': {
+        const updated = await messageQueueRepo.update(data.messageId, data.content);
+        return { type: 'data:update_queued_message_response', updated };
+      }
       case 'data:save_thread_event': {
         const { saveThreadEvent } = await import('./thread-event-repository.js');
         await saveThreadEvent(data.payload.threadId, data.payload.eventType, data.payload.data);
@@ -392,6 +416,66 @@ export async function handleDataMessage(runnerId: string, data: any): Promise<vo
           type: 'data:enqueue_message_response',
           requestId: data.requestId,
           queued,
+        });
+        break;
+      }
+
+      case 'data:dequeue_message': {
+        const dequeued = await messageQueueRepo.dequeue(data.threadId);
+        sendToRunner(runnerId, {
+          type: 'data:dequeue_message_response',
+          requestId: data.requestId,
+          dequeued,
+        });
+        break;
+      }
+
+      case 'data:peek_message': {
+        const peeked = await messageQueueRepo.peek(data.threadId);
+        sendToRunner(runnerId, {
+          type: 'data:peek_message_response',
+          requestId: data.requestId,
+          peeked,
+        });
+        break;
+      }
+
+      case 'data:queue_count': {
+        const count = await messageQueueRepo.queueCount(data.threadId);
+        sendToRunner(runnerId, {
+          type: 'data:queue_count_response',
+          requestId: data.requestId,
+          count,
+        });
+        break;
+      }
+
+      case 'data:list_queue': {
+        const items = await messageQueueRepo.listQueue(data.threadId);
+        sendToRunner(runnerId, {
+          type: 'data:list_queue_response',
+          requestId: data.requestId,
+          items,
+        });
+        break;
+      }
+
+      case 'data:cancel_queued_message': {
+        const success = await messageQueueRepo.cancel(data.messageId);
+        sendToRunner(runnerId, {
+          type: 'data:cancel_queued_message_response',
+          requestId: data.requestId,
+          success,
+        });
+        break;
+      }
+
+      case 'data:update_queued_message': {
+        const updated = await messageQueueRepo.update(data.messageId, data.content);
+        sendToRunner(runnerId, {
+          type: 'data:update_queued_message_response',
+          requestId: data.requestId,
+          updated,
         });
         break;
       }

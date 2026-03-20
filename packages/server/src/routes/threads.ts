@@ -18,6 +18,7 @@ import * as schema from '../db/schema.js';
 import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
+import * as messageQueueRepo from '../services/message-queue-repository.js';
 import { findRunnerForProject } from '../services/runner-manager.js';
 import * as runnerResolver from '../services/runner-resolver.js';
 import type { ResolvedRunner } from '../services/runner-resolver.js';
@@ -382,14 +383,33 @@ threadRoutes.get('/:id/events', async (c) => {
   return c.json({ events });
 });
 
-// GET /api/threads/:id/queue — proxy to runner (message queue is in-memory on runner)
-threadRoutes.get('/:id/queue', proxyToRunner);
+// GET /api/threads/:id/queue — message queue is in the server's DB
+threadRoutes.get('/:id/queue', async (c) => {
+  const id = c.req.param('id');
+  return c.json(await messageQueueRepo.listQueue(id));
+});
 
-// DELETE /api/threads/:id/queue/:messageId — proxy to runner
-threadRoutes.delete('/:id/queue/:messageId', proxyToRunner);
+// DELETE /api/threads/:id/queue/:messageId — cancel a queued message
+threadRoutes.delete('/:id/queue/:messageId', async (c) => {
+  const id = c.req.param('id');
+  const messageId = c.req.param('messageId');
+  const success = await messageQueueRepo.cancel(messageId);
+  const queuedCount = await messageQueueRepo.queueCount(id);
+  return c.json({ ok: success, queuedCount });
+});
 
-// PATCH /api/threads/:id/queue/:messageId — proxy to runner
-threadRoutes.patch('/:id/queue/:messageId', proxyToRunner);
+// PATCH /api/threads/:id/queue/:messageId — update a queued message
+threadRoutes.patch('/:id/queue/:messageId', async (c) => {
+  const id = c.req.param('id');
+  const messageId = c.req.param('messageId');
+  const { content } = await c.req.json();
+  if (!content || typeof content !== 'string') {
+    return c.json({ error: 'content is required' }, 400);
+  }
+  const updated = await messageQueueRepo.update(messageId, content);
+  const queuedCount = await messageQueueRepo.queueCount(id);
+  return c.json({ ok: !!updated, queuedCount, message: updated });
+});
 
 // ── Delete thread (native + proxy cleanup) ───────────────────────
 

@@ -111,7 +111,7 @@ function UserMessageContent({
       <pre
         ref={preRef}
         className={cn(
-          'whitespace-pre-wrap font-mono text-xs leading-relaxed break-words overflow-x-auto',
+          'whitespace-pre-wrap font-sans text-xs leading-relaxed break-words overflow-x-auto',
           !expanded && isOverflowing && 'overflow-hidden',
           expanded && 'max-h-[40vh] overflow-y-auto',
         )}

@@ -182,9 +182,6 @@ export const userProfiles = sqliteTable('user_profiles', {
   userId: text('user_id').notNull().unique(),
   gitName: text('git_name'),
   gitEmail: text('git_email'),
-  githubToken: text('github_token'), // legacy — migrated to providerKeys
-  assemblyaiApiKey: text('assemblyai_api_key'), // legacy — migrated to providerKeys
-  minimaxApiKey: text('minimax_api_key'), // legacy — migrated to providerKeys
   providerKeys: text('provider_keys'), // JSON: Record<string, encrypted_string>
   setupCompleted: integer('setup_completed').notNull().default(0),
   defaultEditor: text('default_editor'),

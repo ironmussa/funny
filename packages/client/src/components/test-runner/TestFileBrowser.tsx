@@ -4,6 +4,7 @@ import {
   Folder,
   FolderOpen,
   Play,
+  Square,
   Loader2,
   CheckCircle2,
   XCircle,
@@ -289,6 +290,7 @@ interface TestFileBrowserProps {
   onRunSpec: (file: string, line: number) => void;
   onExpandFile: (file: string) => void;
   onRunAll: () => void;
+  onStop: () => void;
 }
 
 export function TestFileBrowser({
@@ -302,6 +304,7 @@ export function TestFileBrowser({
   onRunSpec,
   onExpandFile,
   onRunAll,
+  onStop,
 }: TestFileBrowserProps) {
   const [search, setSearch] = useState('');
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
@@ -362,17 +365,30 @@ export function TestFileBrowser({
           onChange={(e) => setSearch(e.target.value)}
           className="h-7 text-xs"
         />
-        <Button
-          data-testid="test-run-all"
-          variant="ghost"
-          size="sm"
-          className="h-7 shrink-0 gap-1 px-2 text-xs"
-          disabled={isRunning || files.length === 0}
-          onClick={onRunAll}
-        >
-          <Play className="h-3 w-3" />
-          Run All
-        </Button>
+        {isRunning ? (
+          <Button
+            data-testid="test-stop"
+            variant="destructive"
+            size="sm"
+            className="h-7 shrink-0 gap-1 px-2 text-xs"
+            onClick={onStop}
+          >
+            <Square className="h-3 w-3" />
+            Stop
+          </Button>
+        ) : (
+          <Button
+            data-testid="test-run-all"
+            variant="ghost"
+            size="sm"
+            className="h-7 shrink-0 gap-1 px-2 text-xs"
+            disabled={files.length === 0}
+            onClick={onRunAll}
+          >
+            <Play className="h-3 w-3" />
+            Run All
+          </Button>
+        )}
       </div>
 
       {/* File tree */}

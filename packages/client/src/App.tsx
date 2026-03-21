@@ -2,6 +2,7 @@ import { PanelLeft } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
@@ -134,46 +135,29 @@ export function App() {
   const navigate = useNavigate();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   // --- Right sidebar resize handle ---
-  const rpDragging = useRef(false);
-  const rpStartX = useRef(0);
   const rpStartWidth = useRef(0);
-  const [rpResizing, setRpResizing] = useState(false);
-
   // Track which setter to use during a drag (captured at pointer-down)
   const rpActiveSetWidth = useRef<(w: number) => void>(setReviewPaneWidth);
 
-  const handleRpPointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      rpDragging.current = true;
-      rpStartX.current = e.clientX;
+  const {
+    resizing: rpResizing,
+    handlePointerDown: handleRpPointerDown,
+    handlePointerMove: handleRpPointerMove,
+    handlePointerUp: handleRpPointerUp,
+  } = useResizeHandle({
+    direction: 'horizontal',
+    onResizeStart: () => {
       const state = useUIStore.getState();
       const isTests = state.rightPaneTab === 'tests';
       rpStartWidth.current = isTests ? state.testPaneWidth : state.reviewPaneWidth;
       rpActiveSetWidth.current = isTests ? setTestPaneWidth : setReviewPaneWidth;
-      setRpResizing(true);
-      document.body.style.cursor = 'col-resize';
-      document.body.style.userSelect = 'none';
-      (e.target as HTMLElement).setPointerCapture(e.pointerId);
     },
-    [setReviewPaneWidth, setTestPaneWidth],
-  );
-
-  const handleRpPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!rpDragging.current) return;
-    // Dragging left increases width, dragging right decreases
-    const deltaPx = rpStartX.current - e.clientX;
-    const deltaVw = (deltaPx / window.innerWidth) * 100;
-    rpActiveSetWidth.current(rpStartWidth.current + deltaVw);
-  }, []);
-
-  const handleRpPointerUp = useCallback((e: React.PointerEvent) => {
-    if (!rpDragging.current) return;
-    rpDragging.current = false;
-    setRpResizing(false);
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-  }, []);
+    onResize: (deltaPx) => {
+      // Dragging left increases width, dragging right decreases
+      const deltaVw = (-deltaPx / window.innerWidth) * 100;
+      rpActiveSetWidth.current(rpStartWidth.current + deltaVw);
+    },
+  });
 
   // Eagerly mount ReviewPane (hidden) after initial load so first toggle is instant.
   // Deferred via requestIdleCallback to avoid blocking the initial render.
@@ -259,11 +243,9 @@ export function App() {
           ~500ms first-open delay from lazy loading + mount + diff fetch. */}
       <div
         className={cn(
-          'relative h-full overflow-hidden flex-shrink-0 border-l border-border bg-sidebar',
+          'relative flex h-full overflow-hidden flex-shrink-0 bg-sidebar',
           !rpResizing && 'transition-[width,opacity] duration-200 ease-out',
-          reviewPaneOpen && !settingsOpen && !allThreadsProjectId
-            ? 'opacity-100'
-            : 'w-0 opacity-0 border-l-0',
+          reviewPaneOpen && !settingsOpen && !allThreadsProjectId ? 'opacity-100' : 'w-0 opacity-0',
         )}
         style={{
           contain: 'layout style',
@@ -274,20 +256,18 @@ export function App() {
       >
         {/* Resize handle */}
         {reviewPaneOpen && !settingsOpen && !allThreadsProjectId && (
-          <button
-            aria-label="Resize review pane"
-            tabIndex={-1}
+          <ResizeHandle
+            direction="horizontal"
+            resizing={rpResizing}
             onPointerDown={handleRpPointerDown}
             onPointerMove={handleRpPointerMove}
             onPointerUp={handleRpPointerUp}
-            className="absolute inset-y-0 left-0 z-20 w-3 -translate-x-1/2 cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-px after:bg-transparent hover:after:bg-sidebar-border"
           />
         )}
         {(reviewPaneReady || reviewPaneOpen) && (
           <div
-            className="flex h-full flex-col"
+            className="flex h-full min-w-0 flex-1 flex-col"
             style={{
-              width: `${activeWidth}vw`,
               ...(!(reviewPaneOpen && !settingsOpen && !allThreadsProjectId)
                 ? { visibility: 'hidden' as const }
                 : {}),

@@ -1,9 +1,10 @@
-import { PanelRightClose, Square } from 'lucide-react';
+import { PanelRightClose } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { BrowserPreview } from '@/components/test-runner/BrowserPreview';
 import { TestFileBrowser } from '@/components/test-runner/TestFileBrowser';
 import { Button } from '@/components/ui/button';
+import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjectStore } from '@/stores/project-store';
 import { useTestStore } from '@/stores/test-store';
@@ -87,36 +88,24 @@ export function TestRunnerPane() {
     }
   });
   const containerRef = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
-  const [resizing, setResizing] = useState(false);
+  const startPct = useRef(splitPct);
 
-  const handleSplitPointerDown = useCallback((e: React.PointerEvent) => {
-    dragging.current = true;
-    setResizing(true);
-    document.body.style.cursor = 'col-resize';
-    document.body.style.userSelect = 'none';
-    (e.target as HTMLElement).setPointerCapture(e.pointerId);
-  }, []);
-
-  const handleSplitPointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragging.current || !containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const pct = ((e.clientX - rect.left) / rect.width) * 100;
-    const clamped = Math.max(MIN_SPLIT, Math.min(MAX_SPLIT, pct));
-    setSplitPct(clamped);
-    try {
-      localStorage.setItem(TEST_VIEWER_WIDTH_KEY, String(clamped));
-    } catch {}
-  }, []);
-
-  const handleSplitPointerUp = useCallback((e: React.PointerEvent) => {
-    if (!dragging.current) return;
-    dragging.current = false;
-    setResizing(false);
-    document.body.style.cursor = '';
-    document.body.style.userSelect = '';
-    (e.target as HTMLElement).releasePointerCapture(e.pointerId);
-  }, []);
+  const { resizing, handlePointerDown, handlePointerMove, handlePointerUp } = useResizeHandle({
+    direction: 'horizontal',
+    onResizeStart: () => {
+      startPct.current = splitPct;
+    },
+    onResize: (deltaPx) => {
+      if (!containerRef.current) return;
+      const width = containerRef.current.getBoundingClientRect().width;
+      const deltaPct = (deltaPx / width) * 100;
+      const clamped = Math.max(MIN_SPLIT, Math.min(MAX_SPLIT, startPct.current + deltaPct));
+      setSplitPct(clamped);
+      try {
+        localStorage.setItem(TEST_VIEWER_WIDTH_KEY, String(clamped));
+      } catch {}
+    },
+  });
 
   if (!selectedProjectId) {
     return (
@@ -130,23 +119,9 @@ export function TestRunnerPane() {
     <div className="flex h-full flex-col overflow-hidden">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-3">
-        <div className="flex items-center gap-2">
-          <h3 className="text-xs font-semibold uppercase tracking-wider text-sidebar-foreground">
-            Test Runner
-          </h3>
-          {isRunning && (
-            <Button
-              data-testid="test-stop"
-              variant="destructive"
-              size="sm"
-              className="h-5 gap-1 px-1.5 text-[10px]"
-              onClick={handleStop}
-            >
-              <Square className="h-2.5 w-2.5" />
-              Stop
-            </Button>
-          )}
-        </div>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-sidebar-foreground">
+          Test Runner
+        </h3>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -175,13 +150,12 @@ export function TestRunnerPane() {
         </div>
 
         {/* Resize handle */}
-        <button
-          aria-label="Resize test viewer"
-          tabIndex={-1}
-          onPointerDown={handleSplitPointerDown}
-          onPointerMove={handleSplitPointerMove}
-          onPointerUp={handleSplitPointerUp}
-          className={`relative z-10 w-1.5 flex-shrink-0 cursor-col-resize border-x border-border bg-sidebar hover:bg-sidebar-accent ${!resizing ? 'transition-colors' : ''}`}
+        <ResizeHandle
+          direction="horizontal"
+          resizing={resizing}
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
           data-testid="test-viewer-resize"
         />
 
@@ -198,6 +172,7 @@ export function TestRunnerPane() {
             onRunSpec={handleRunSpec}
             onExpandFile={handleExpandFile}
             onRunAll={handleRunAll}
+            onStop={handleStop}
           />
         </div>
       </div>

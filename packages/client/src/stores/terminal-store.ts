@@ -24,6 +24,10 @@ export interface TerminalTab {
   restored?: boolean;
 }
 
+// Buffer for pty:data that arrives before a callback is registered.
+// Stored outside Zustand to avoid re-renders on every data chunk.
+const pendingPtyData = new Map<string, string[]>();
+
 interface TerminalState {
   tabs: TerminalTab[];
   activeTabId: string | null;
@@ -134,21 +138,43 @@ export const useTerminalStore = create<TerminalState>()(
           tabs: state.tabs.map((t) => (t.id === ptyId ? { ...t, error, alive: false } : t)),
         })),
 
-      registerPtyCallback: (ptyId, callback) =>
+      registerPtyCallback: (ptyId, callback) => {
+        // Replay any data that arrived before the callback was registered
+        // (e.g. pty:restore response arriving while xterm was still loading)
+        const buffered = pendingPtyData.get(ptyId);
+        if (buffered && buffered.length > 0) {
+          const joined = buffered.join('');
+          pendingPtyData.delete(ptyId);
+          // Replay in a microtask so the callback is set in state first
+          queueMicrotask(() => callback(joined));
+        }
         set((state) => ({
           ptyDataCallbacks: { ...state.ptyDataCallbacks, [ptyId]: callback },
-        })),
+        }));
+      },
 
-      unregisterPtyCallback: (ptyId) =>
+      unregisterPtyCallback: (ptyId) => {
+        pendingPtyData.delete(ptyId);
         set((state) => {
           const { [ptyId]: _, ...rest } = state.ptyDataCallbacks;
           return { ptyDataCallbacks: rest };
-        }),
+        });
+      },
 
       emitPtyData: (ptyId, data) => {
         const callback = get().ptyDataCallbacks[ptyId];
         if (callback) {
           callback(data);
+        } else {
+          // Buffer data until the xterm callback is registered.
+          // This happens when pty:restore response arrives before the
+          // terminal component has finished mounting.
+          let buf = pendingPtyData.get(ptyId);
+          if (!buf) {
+            buf = [];
+            pendingPtyData.set(ptyId, buf);
+          }
+          buf.push(data);
         }
       },
 

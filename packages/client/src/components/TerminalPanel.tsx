@@ -11,6 +11,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
+import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { getActiveWS } from '@/hooks/use-ws';
 import { api } from '@/lib/api';
@@ -21,6 +22,35 @@ import { useTerminalStore } from '@/stores/terminal-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
+
+// ── Pre-cache xterm.js modules ──────────────────────────────────────
+// Import once on module load so that individual tab mounts don't each
+// pay the dynamic-import cost. The promise is shared across all tabs.
+let xtermModulesPromise: Promise<{
+  Terminal: typeof import('@xterm/xterm').Terminal;
+  FitAddon: typeof import('@xterm/addon-fit').FitAddon;
+  WebLinksAddon: typeof import('@xterm/addon-web-links').WebLinksAddon;
+}> | null = null;
+
+function getXtermModules() {
+  if (!xtermModulesPromise) {
+    xtermModulesPromise = Promise.all([
+      import('@xterm/xterm'),
+      import('@xterm/addon-fit'),
+      import('@xterm/addon-web-links'),
+      // @ts-ignore - CSS import handled by Vite bundler
+      import('@xterm/xterm/css/xterm.css'),
+    ]).then(([xterm, fit, webLinks]) => ({
+      Terminal: xterm.Terminal,
+      FitAddon: fit.FitAddon,
+      WebLinksAddon: webLinks.WebLinksAddon,
+    }));
+  }
+  return xtermModulesPromise;
+}
+
+// Eagerly start loading xterm modules
+if (!isTauri) getXtermModules();
 
 /** Resolve a CSS variable (HSL) to a hex-like string for xterm/ansi-to-html. */
 function getCssVar(name: string): string {
@@ -238,13 +268,7 @@ function WebTerminalTabContent({
     let cleanup: (() => void) | null = null;
 
     (async () => {
-      const [{ Terminal }, { FitAddon }, { WebLinksAddon }] = await Promise.all([
-        import('@xterm/xterm'),
-        import('@xterm/addon-fit'),
-        import('@xterm/addon-web-links'),
-      ]);
-      // @ts-ignore - CSS import handled by Vite bundler
-      await import('@xterm/xterm/css/xterm.css');
+      const { Terminal, FitAddon, WebLinksAddon } = await getXtermModules();
       if (cancelled || !containerRef.current) return;
 
       const terminal = new Terminal({
@@ -295,6 +319,9 @@ function WebTerminalTabContent({
 
       if (cancelled || !containerRef.current) return;
 
+      // Register the PTY data callback. Any data that arrived before
+      // registration (e.g. from an early pty:restore response) is replayed
+      // immediately via the store's pending buffer.
       registerPtyCallback(id, (data: string) => {
         if (!cancelled) {
           setLoading(false);
@@ -363,24 +390,11 @@ function WebTerminalTabContent({
   // Separate effect for spawn/restore decision — waits for sessionsChecked
   // so that tabs loaded from localStorage don't prematurely spawn a new PTY
   // before the server confirms whether the session still exists.
-  // Also waits for panelVisible so we don't propose dimensions while the
-  // container is hidden/collapsed (which yields tiny values like 11x6).
+  // New spawns wait for panelVisible (need real dimensions); restored tabs
+  // fire pty:restore immediately (no dimensions needed for history capture).
   useEffect(() => {
     if (spawnedRef.current) return;
     if (!termReady || !termRef.current) return;
-    // Don't spawn while the panel is hidden — dimensions will be wrong
-    if (!panelVisible) return;
-
-    const { fitAddon } = termRef.current;
-    // Re-fit now that the panel is visible, then read correct dimensions
-    fitAddon.fit();
-    const dims = fitAddon.proposeDimensions();
-
-    // Use proposed dimensions with sensible fallbacks
-    const cols = dims?.cols ?? 80;
-    const rows = dims?.rows ?? 24;
-    const MIN_COLS = 20;
-    const MIN_ROWS = 4;
 
     const ws = getActiveWS();
 
@@ -403,22 +417,40 @@ function WebTerminalTabContent({
 
     if (restored) {
       // Restored tab: server confirmed the session exists.
-      // Only send resize if we have real dimensions (active tab); for inactive
-      // tabs the container is hidden so measured dims are zero — sending a
-      // resize with fallback 80x24 would shrink the daemon's headless xterm
-      // and cause the shell to wrap output at the wrong width.
+      // Send pty:restore immediately — no need to wait for panel visibility
+      // since we only need the server to capture and send back terminal state.
+      // Don't send resize here — dimensions may be wrong if panel is collapsed.
       // The correct resize happens when the user switches to this tab (see
       // the active+panelVisible effect below).
-      const hasGoodDims = cols >= MIN_COLS && rows >= MIN_ROWS;
       const cleanup = sendWhenReady((ws: any) => {
-        if (hasGoodDims) {
-          ws.emit('pty:resize', { id, cols, rows });
-        }
         ws.emit('pty:restore', { id });
       });
-      setLoading(false);
-      return cleanup;
-    } else if (wasAliveOnMount || sessionsChecked) {
+      // Don't setLoading(false) here — wait for pty:data callback to clear it
+      // so the user sees a loading spinner until history actually arrives.
+      // Safety timeout: if no data arrives within 3s, clear loading anyway
+      // (the session may have no output yet or the capture returned empty).
+      const restoreTimeout = setTimeout(() => setLoading(false), 3000);
+      return () => {
+        cleanup?.();
+        clearTimeout(restoreTimeout);
+      };
+    }
+
+    // For new spawns, wait for panelVisible to get correct dimensions
+    if (!panelVisible) return;
+
+    const { fitAddon } = termRef.current;
+    // Re-fit now that the panel is visible, then read correct dimensions
+    fitAddon.fit();
+    const dims = fitAddon.proposeDimensions();
+
+    // Use proposed dimensions with sensible fallbacks
+    const cols = dims?.cols ?? 80;
+    const rows = dims?.rows ?? 24;
+    const MIN_COLS = 20;
+    const MIN_ROWS = 4;
+
+    if (wasAliveOnMount || sessionsChecked) {
       // Guard against unreasonably small dimensions (container still animating)
       // Only applies to new PTY spawns where correct initial size matters.
       if (cols < MIN_COLS || rows < MIN_ROWS) return;
@@ -661,10 +693,26 @@ export function TerminalPanel() {
     fetchAvailableShells();
   }, [fetchAvailableShells]);
 
-  const [dragging, setDragging] = useState(false);
   const [panelHeight, setPanelHeight] = useState(PANEL_HEIGHT);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const [tooltipOpen, setTooltipOpen] = useState(false);
+  const startHeight = useRef(panelHeight);
+
+  const {
+    resizing: dragging,
+    handlePointerDown: handleDragPointerDown,
+    handlePointerMove: handleDragPointerMove,
+    handlePointerUp: handleDragPointerUp,
+  } = useResizeHandle({
+    direction: 'vertical',
+    onResizeStart: () => {
+      startHeight.current = panelHeight;
+    },
+    onResize: (deltaPx) => {
+      // Dragging up (negative delta) increases height
+      setPanelHeight(Math.max(150, Math.min(startHeight.current - deltaPx, 600)));
+    },
+  });
 
   const visibleTabs = useMemo(
     () => tabs.filter((t) => t.projectId === selectedProjectId),
@@ -677,30 +725,6 @@ export function TerminalPanel() {
     }
     return visibleTabs[visibleTabs.length - 1]?.id ?? null;
   }, [activeTabId, visibleTabs]);
-
-  const handleMouseDown = useCallback(
-    (e: React.MouseEvent) => {
-      e.preventDefault();
-      setDragging(true);
-      const startY = e.clientY;
-      const startHeight = panelHeight;
-
-      const onMouseMove = (ev: MouseEvent) => {
-        const delta = startY - ev.clientY;
-        setPanelHeight(Math.max(150, Math.min(startHeight + delta, 600)));
-      };
-
-      const onMouseUp = () => {
-        setDragging(false);
-        document.removeEventListener('mousemove', onMouseMove);
-        document.removeEventListener('mouseup', onMouseUp);
-      };
-
-      document.addEventListener('mousemove', onMouseMove);
-      document.addEventListener('mouseup', onMouseUp);
-    },
-    [panelHeight],
-  );
 
   const handleNewTerminal = useCallback(
     (shell: TerminalShell) => {
@@ -753,12 +777,12 @@ export function TerminalPanel() {
       {/* Inner wrapper always keeps full height so xterm terminals preserve their buffer */}
       <div className="flex flex-col bg-background" style={{ height: panelHeight }}>
         {/* Drag handle — matches sidebar rail style */}
-        <div
-          className={cn(
-            'relative h-1.5 cursor-row-resize flex-shrink-0 after:absolute after:inset-x-0 after:top-1/2 after:h-[1px] after:-translate-y-1/2 after:bg-border after:transition-colors hover:after:bg-sidebar-border',
-            dragging && 'after:bg-sidebar-border',
-          )}
-          onMouseDown={handleMouseDown}
+        <ResizeHandle
+          direction="vertical"
+          resizing={dragging}
+          onPointerDown={handleDragPointerDown}
+          onPointerMove={handleDragPointerMove}
+          onPointerUp={handleDragPointerUp}
         />
 
         {/* Tab bar */}

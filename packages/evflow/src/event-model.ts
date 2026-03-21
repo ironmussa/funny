@@ -94,6 +94,7 @@ export class EventModel {
       from: resolveRefs(opts.from),
       fields: opts.fields,
       description: opts.description,
+      source: opts.source,
     };
     this._elements.set(name, def);
     return createRef(name, 'readModel');
@@ -115,6 +116,7 @@ export class EventModel {
       emits: resolveRefs(opts.emits),
       invariants: opts.invariants ?? [],
       description: opts.description,
+      source: opts.source,
     };
     this._elements.set(name, def);
     return createRef(name, 'aggregate');
@@ -128,6 +130,7 @@ export class EventModel {
       displays: resolveRefs(opts.displays),
       triggers: resolveRefs(opts.triggers),
       description: opts.description,
+      source: opts.source,
     };
     this._elements.set(name, def);
     return createRef(name, 'screen');
@@ -141,6 +144,7 @@ export class EventModel {
       receives: resolveRefs(opts.receives ?? []),
       emits: resolveRefs(opts.emits ?? []),
       description: opts.description,
+      source: opts.source,
     };
     this._elements.set(name, def);
     return createRef(name, 'external');
@@ -157,6 +161,7 @@ export class EventModel {
       when: opts.when,
       triggers,
       description: opts.description,
+      source: opts.source,
     };
     this._elements.set(name, def);
     return createRef(name, 'saga');

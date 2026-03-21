@@ -3,7 +3,7 @@ import { memo } from 'react';
 
 import { cn } from '@/lib/utils';
 
-import type { ElementKind } from '../../../src/types';
+import type { ElementKind, SourceRef } from '../../../src/types';
 
 const KIND_BORDERS: Record<ElementKind, string> = {
   command: 'border-blue-500',
@@ -45,6 +45,7 @@ export interface EvflowNodeData {
   slices: string[];
   fields?: Record<string, string>;
   invariants?: string[];
+  source?: SourceRef;
   highlighted?: boolean;
   dimmed?: boolean;
 }
@@ -74,13 +75,26 @@ export const EvflowNode = memo(function EvflowNode({
       <Handle type="target" position={Position.Left} className="!h-2 !w-2 !bg-zinc-400" />
 
       <div className="flex flex-col gap-0.5">
-        <div
-          className={cn(
-            'text-xs font-semibold truncate',
-            data.dimmed ? 'text-muted-foreground' : 'text-foreground',
+        <div className="flex items-center gap-1">
+          <div
+            className={cn(
+              'text-xs font-semibold truncate flex-1',
+              data.dimmed ? 'text-muted-foreground' : 'text-foreground',
+            )}
+          >
+            {data.label}
+          </div>
+          {data.source && (
+            <span
+              className={cn(
+                'text-[10px] shrink-0',
+                data.dimmed ? 'text-muted-foreground/30' : 'text-muted-foreground/60',
+              )}
+              title={data.source.file}
+            >
+              {'</>'}
+            </span>
           )}
-        >
-          {data.label}
         </div>
         <div
           className={cn(

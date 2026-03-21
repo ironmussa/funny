@@ -67,3 +67,12 @@
 .react-flow__attribution {
   display: none !important;
 }
+
+.source-highlight-line {
+  background: rgba(59, 130, 246, 0.15);
+}
+.source-highlight-gutter {
+  background: rgba(59, 130, 246, 0.4);
+  width: 3px !important;
+  margin-left: 3px;
+}

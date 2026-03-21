@@ -21,6 +21,7 @@
     "neverthrow": "^8.2.0"
   },
   "devDependencies": {
+    "@funny/shared": "workspace:*",
     "@types/bun": "^1.3.8",
     "typescript": "^5.8.2"
   }

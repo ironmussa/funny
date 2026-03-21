@@ -7,6 +7,7 @@ import type {
   AutomationDef,
   SagaDef,
   ReadModelDef,
+  SourceRef,
 } from '../types.js';
 
 // ── React Flow types (minimal, no runtime dependency) ─────
@@ -22,6 +23,7 @@ export interface RFNode {
     slices: string[];
     fields?: Record<string, string>;
     invariants?: string[];
+    source?: SourceRef;
   };
   parentId?: string;
   extent?: 'parent';
@@ -179,6 +181,9 @@ export function generateReactFlowGraph(
     }
     if (el.kind === 'aggregate') {
       node.data.invariants = (el as AggregateDef).invariants;
+    }
+    if (el.source) {
+      node.data.source = el.source;
     }
 
     // Assign to slice group if single-slice and grouping enabled

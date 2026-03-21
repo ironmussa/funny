@@ -342,3 +342,109 @@ describe('EventModel', () => {
     expect(data.slices[0].sagas).toEqual(['S']);
   });
 });
+
+describe('source references', () => {
+  test('command accepts optional source field', () => {
+    const sys = new EventModel('Shop');
+    sys.command('AddItem', {
+      fields: { id: 'string' },
+      source: { file: 'src/handlers/add-item.ts', exportName: 'handleAddItem' },
+    });
+    const el = sys.getElement('AddItem');
+    expect(el?.source).toBeDefined();
+    expect(el!.source!.file).toBe('src/handlers/add-item.ts');
+    expect(el!.source!.exportName).toBe('handleAddItem');
+  });
+
+  test('event accepts optional source field', () => {
+    const sys = new EventModel('Shop');
+    sys.event('ItemAdded', {
+      fields: { id: 'string' },
+      source: { file: 'src/events/item-added.ts', startLine: 5, endLine: 20 },
+    });
+    const el = sys.getElement('ItemAdded');
+    expect(el!.source!.startLine).toBe(5);
+    expect(el!.source!.endLine).toBe(20);
+  });
+
+  test('readModel passes source through', () => {
+    const sys = new EventModel('Shop');
+    sys.event('E', { fields: {} });
+    sys.readModel('CartView', {
+      from: ['E'],
+      fields: {},
+      source: { file: 'src/projections/cart-view.ts', startLine: 10, endLine: 50 },
+    });
+    const el = sys.getElement('CartView');
+    expect(el!.source!.file).toBe('src/projections/cart-view.ts');
+  });
+
+  test('aggregate passes source through', () => {
+    const sys = new EventModel('Shop');
+    sys.command('Cmd', { fields: {} });
+    sys.event('Evt', { fields: {} });
+    sys.aggregate('Agg', {
+      handles: ['Cmd'],
+      emits: ['Evt'],
+      source: { file: 'src/aggregates/agg.ts' },
+    });
+    const el = sys.getElement('Agg');
+    expect(el!.source!.file).toBe('src/aggregates/agg.ts');
+  });
+
+  test('screen passes source through', () => {
+    const sys = new EventModel('Shop');
+    sys.readModel('RM', { from: [], fields: {} });
+    sys.command('Cmd', { fields: {} });
+    sys.screen('Scr', {
+      displays: ['RM'],
+      triggers: ['Cmd'],
+      source: { file: 'src/screens/scr.tsx' },
+    });
+    const el = sys.getElement('Scr');
+    expect(el!.source!.file).toBe('src/screens/scr.tsx');
+  });
+
+  test('external passes source through', () => {
+    const sys = new EventModel('Shop');
+    sys.external('Ext', {
+      source: { file: 'src/external/stripe.ts', exportName: 'StripeAdapter' },
+    });
+    const el = sys.getElement('Ext');
+    expect(el!.source!.exportName).toBe('StripeAdapter');
+  });
+
+  test('saga passes source through', () => {
+    const sys = new EventModel('Shop');
+    sys.event('Evt', { fields: {} });
+    sys.command('Cmd', { fields: {} });
+    sys.saga('S', {
+      on: ['Evt'],
+      correlationKey: 'id',
+      when: 'all',
+      triggers: 'Cmd',
+      source: { file: 'src/sagas/s.ts' },
+    });
+    const el = sys.getElement('S');
+    expect(el!.source!.file).toBe('src/sagas/s.ts');
+  });
+
+  test('source field survives JSON roundtrip', () => {
+    const sys = new EventModel('Shop');
+    sys.command('Cmd', {
+      fields: {},
+      source: { file: 'src/cmd.ts', exportName: 'handler', content: 'const x = 1;' },
+    });
+    const json = sys.toJSON();
+    const parsed = JSON.parse(json);
+    expect(parsed.elements.Cmd.source.file).toBe('src/cmd.ts');
+    expect(parsed.elements.Cmd.source.content).toBe('const x = 1;');
+  });
+
+  test('elements without source have undefined source', () => {
+    const sys = new EventModel('Shop');
+    sys.command('Cmd', { fields: {} });
+    const el = sys.getElement('Cmd');
+    expect(el!.source).toBeUndefined();
+  });
+});

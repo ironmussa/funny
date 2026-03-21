@@ -1,6 +1,6 @@
+import { createRuntimeModel } from '@funny/shared/evflow-model';
 import { describe, test, expect } from 'vitest';
 
-import { createRuntimeModel } from '../../services/evflow.model.js';
 import type { ThreadEventMap } from '../../services/thread-event-bus.js';
 
 describe('Runtime evflow model', () => {
@@ -102,7 +102,7 @@ describe('Runtime evflow model', () => {
     const readModels = elements.filter((e: any) => e.kind === 'readModel');
 
     expect(commands.length).toBeGreaterThanOrEqual(15);
-    expect(events.length).toBe(16); // All 16 ThreadEventMap events
+    expect(events.length).toBeGreaterThanOrEqual(16); // At least 16 ThreadEventMap events + PTY events
     expect(automations.length).toBeGreaterThanOrEqual(15);
     expect(readModels.length).toBeGreaterThanOrEqual(4);
   });
@@ -167,7 +167,7 @@ describe('Runtime evflow model', () => {
     const seqNames = data.sequences.map((s) => s.name);
 
     expect(seqNames).toContain('Thread Happy Path');
-    expect(seqNames).toContain('Follow-up Message');
+    expect(seqNames).toContain('Follow-up via Saga');
     expect(seqNames).toContain('Stage and Commit');
     expect(seqNames).toContain('Full PR Flow');
   });

@@ -7,12 +7,14 @@ import { ElementsView } from './components/elements-view';
 import { GraphView } from './components/graph-view';
 import { SequencesView } from './components/sequences-view';
 import { Sidebar } from './components/sidebar';
+import { SourcePanel } from './components/source-panel';
 import { useViewerStore } from './stores/viewer-store';
 
 export function App() {
   const model = useViewerStore((s) => s.model);
   const activeTab = useViewerStore((s) => s.activeTab);
   const setActiveTab = useViewerStore((s) => s.setActiveTab);
+  const sourcePanelOpen = useViewerStore((s) => s.sourcePanelOpen);
 
   if (!model) {
     return (
@@ -27,7 +29,7 @@ export function App() {
       <div className="flex h-screen w-screen">
         <Sidebar />
 
-        <div className="flex flex-1 flex-col overflow-hidden">
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
           <Tabs
             value={activeTab}
             onValueChange={(v) => setActiveTab(v as 'graph' | 'elements' | 'sequences')}
@@ -64,6 +66,12 @@ export function App() {
             </TabsContent>
           </Tabs>
         </div>
+
+        {sourcePanelOpen && (
+          <div className="flex h-full w-96 shrink-0 flex-col border-l">
+            <SourcePanel />
+          </div>
+        )}
       </div>
     </ReactFlowProvider>
   );

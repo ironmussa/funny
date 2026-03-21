@@ -10,10 +10,12 @@ import type {
   CLIUserMessage,
 } from '@funny/core/agents';
 import type { WSEvent } from '@funny/shared';
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 
 import { AgentRunner } from '../../services/agent-runner.js';
 import type { IThreadManager, IWSBroker } from '../../services/server-interfaces.js';
+import type { RuntimeServiceProvider } from '../../services/service-provider.js';
+import { setServices, resetServices } from '../../services/service-registry.js';
 
 // ── Mock helpers ────────────────────────────────────────────────
 
@@ -141,6 +143,80 @@ function createMockWSBroker(): IWSBroker & { events: WSEvent[] } {
   };
 }
 
+/** Flush pending microtasks so fire-and-forget async handlers complete. */
+const flush = () => new Promise<void>((r) => setTimeout(r, 0));
+
+/**
+ * Build a minimal RuntimeServiceProvider that delegates thread operations
+ * back to the given mock thread manager and stubs everything else.
+ */
+function createMockServiceProvider(
+  tm: ReturnType<typeof createMockThreadManager>,
+  ws: ReturnType<typeof createMockWSBroker>,
+): RuntimeServiceProvider {
+  const notImpl = () => {
+    throw new Error('not implemented in test');
+  };
+  return {
+    threads: {
+      getThread: (id: string) => Promise.resolve(tm.getThread(id)),
+      getThreadWithMessages: (id: string) => Promise.resolve(tm.getThreadWithMessages(id)),
+      updateThread: (id: string, u: Record<string, any>) => Promise.resolve(tm.updateThread(id, u)),
+      insertMessage: (d: any) => Promise.resolve(tm.insertMessage(d)),
+      updateMessage: (id: string, c: string) => Promise.resolve(tm.updateMessage(id, c)),
+      insertToolCall: (d: any) => Promise.resolve(tm.insertToolCall(d)),
+      updateToolCallOutput: (id: string, o: string) =>
+        Promise.resolve(tm.updateToolCallOutput(id, o)),
+      findToolCall: (mid: string, n: string, i: string) =>
+        Promise.resolve(tm.findToolCall(mid, n, i)),
+      getToolCall: (id: string) => Promise.resolve(tm.getToolCall(id)),
+      // Stubs for IThreadRepository methods not needed by startAgent:
+      listThreads: () => Promise.resolve([]),
+      listArchivedThreads: () => Promise.resolve([]),
+      getThreadByExternalRequestId: () => Promise.resolve(undefined),
+      createThread: () => Promise.resolve({}),
+      deleteThread: () => Promise.resolve(),
+      markStaleThreadsInterrupted: () => Promise.resolve(),
+      markStaleExternalThreadsStopped: () => Promise.resolve(),
+      getThreadMessages: () => Promise.resolve([]),
+      insertComment: () => Promise.resolve({}),
+      listComments: () => Promise.resolve([]),
+      deleteComment: () => Promise.resolve(),
+      getCommentCounts: () => Promise.resolve({}),
+      searchThreadIdsByContent: () => Promise.resolve(new Map()),
+      findLastUnansweredInteractiveToolCall: () => Promise.resolve(undefined),
+    } as any,
+    projects: {
+      getProject: () => Promise.resolve(undefined),
+      listProjects: () => Promise.resolve([]),
+      listProjectsByOrg: () => Promise.resolve([]),
+      isProjectInOrg: () => Promise.resolve(false),
+      projectNameExists: () => Promise.resolve(false),
+      createProject: notImpl,
+      updateProject: notImpl,
+      deleteProject: notImpl,
+      addProjectToOrg: notImpl,
+      getMemberLocalPath: () => Promise.resolve(null),
+      resolveProjectPath: notImpl,
+      reorderProjects: notImpl,
+    } as any,
+    profile: {
+      getProviderKey: () => Promise.resolve(null),
+    } as any,
+    wsBroker: ws,
+    // Remaining services stubbed as empty objects — not used by startAgent
+    automations: {} as any,
+    pipelines: {} as any,
+    analytics: {} as any,
+    search: {} as any,
+    startupCommands: {} as any,
+    threadEvents: {} as any,
+    messageQueue: {} as any,
+    mcpOauth: {} as any,
+    stageHistory: {} as any,
+  };
+}
+
 // ── Tests ───────────────────────────────────────────────────────
 
 describe('AgentRunner class', () => {
@@ -151,6 +227,7 @@ describe('AgentRunner class', () => {
   let factory: IClaudeProcessFactory;
 
   beforeEach(() => {
+    resetServices();
     tmMock = createMockThreadManager();
     wsMock = createMockWSBroker();
     lastProcess = null as any;
@@ -160,7 +237,12 @@ describe('AgentRunner class', () => {
         return lastProcess;
       },
     };
+    setServices(createMockServiceProvider(tmMock, wsMock));
     runner = new AgentRunner(tmMock, wsMock, factory, () => undefined);
+  });
+
+  afterEach(() => {
+    resetServices();
   });
 
   // ── startAgent ──────────────────────────────────────────────
@@ -235,6 +317,7 @@ describe('AgentRunner class', () => {
     test('saves session_id and emits agent:init', async () => {
       tmMock.threads.set('t1', { sessionId: null });
       await runner.startAgent('t1', 'test', '/tmp');
+      await flush(); // let the auto-init from MockClaudeProcess.start() settle
       wsMock.events.length = 0;
 
       const msg: CLISystemMessage = {
@@ -247,6 +330,7 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(msg);
+      await flush();
 
       expect(tmMock.threads.get('t1')?.sessionId).toBe('sess-xyz');
 
@@ -278,6 +362,7 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(msg);
+      await flush();
 
       const msgs = [...tmMock.messages.values()];
       expect(msgs).toHaveLength(startupMsgCount + 1);
@@ -311,7 +396,9 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(msg1);
+      await flush();
       lastProcess.simulateMessage(msg2);
+      await flush();
 
       // Should only have 1 new message, not 2
       const msgs = [...tmMock.messages.values()];
@@ -335,6 +422,7 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(msg);
+      await flush();
 
       const msgs = [...tmMock.messages.values()];
       expect(msgs[msgs.length - 1].content).toBe('First paragraph\n\nSecond paragraph');
@@ -353,6 +441,7 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(msg);
+      await flush();
 
       const msgs = [...tmMock.messages.values()];
       expect(msgs[msgs.length - 1].content).toBe('café');
@@ -376,6 +465,7 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(msg);
+      await flush();
 
       const tcs = [...tmMock.toolCalls.values()];
       expect(tcs).toHaveLength(1);
@@ -404,7 +494,9 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(msg1);
+      await flush();
       lastProcess.simulateMessage(msg2);
+      await flush();
 
       const tcs = [...tmMock.toolCalls.values()];
       expect(tcs).toHaveLength(1);
@@ -424,6 +516,7 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(msg);
+      await flush();
 
       // Should have an empty assistant message as parent (in addition to startup messages)
       const msgs = [...tmMock.messages.values()];
@@ -449,6 +542,7 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(msg);
+      await flush();
 
       const tcs = [...tmMock.toolCalls.values()];
       expect(tcs).toHaveLength(2);
@@ -478,6 +572,7 @@ describe('AgentRunner class', () => {
 
       // We need a result after this to check the waiting status
       lastProcess.simulateMessage(msg);
+      await flush();
 
       const resultMsg: CLIResultMessage = {
         type: 'result',
@@ -490,6 +585,7 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(resultMsg);
+      await flush();
 
       expect(tmMock.threads.get('t1')?.status).toBe('waiting');
       const resultEvent = wsMock.events.find((e) => e.type === 'agent:result');
@@ -510,6 +606,7 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(msg);
+      await flush();
 
       const resultMsg: CLIResultMessage = {
         type: 'result',
@@ -522,6 +619,7 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(resultMsg);
+      await flush();
 
       expect(tmMock.threads.get('t1')?.status).toBe('waiting');
       const resultEvent = wsMock.events.find((e) => e.type === 'agent:result');
@@ -546,6 +644,7 @@ describe('AgentRunner class', () => {
         },
       };
       lastProcess.simulateMessage(assistantMsg);
+      await flush();
 
       const tcId = [...tmMock.toolCalls.values()][0].id;
 
@@ -557,6 +656,7 @@ describe('AgentRunner class', () => {
         },
       };
       lastProcess.simulateMessage(userMsg);
+      await flush();
 
       expect(tmMock.toolCalls.get(tcId)?.output).toBe('file contents here');
 
@@ -577,6 +677,7 @@ describe('AgentRunner class', () => {
         },
       };
       lastProcess.simulateMessage(assistantMsg);
+      await flush();
 
       const userMsg: CLIUserMessage = {
         type: 'user',
@@ -585,6 +686,7 @@ describe('AgentRunner class', () => {
         },
       };
       lastProcess.simulateMessage(userMsg);
+      await flush();
 
       const tc = [...tmMock.toolCalls.values()][0];
       expect(tc.output).toBe('café');
@@ -611,6 +713,7 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(msg);
+      await flush();
 
       expect(tmMock.threads.get('t1')?.status).toBe('completed');
       expect(tmMock.threads.get('t1')?.cost).toBe(0.05);
@@ -639,6 +742,7 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(msg);
+      await flush();
 
       expect(tmMock.threads.get('t1')?.status).toBe('failed');
     });
@@ -659,7 +763,9 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(msg);
+      await flush();
       lastProcess.simulateMessage(msg);
+      await flush();
 
       const resultEvents = wsMock.events.filter((e) => e.type === 'agent:result');
       expect(resultEvents).toHaveLength(1);
@@ -682,6 +788,7 @@ describe('AgentRunner class', () => {
       };
 
       lastProcess.simulateMessage(msg);
+      await flush();
 
       const resultEvent = wsMock.events.find((e) => e.type === 'agent:result');
       expect(resultEvent!.data).toMatchObject({ result: 'café' });
@@ -721,6 +828,7 @@ describe('AgentRunner class', () => {
 
       // Simulate the exit that happens after kill
       proc.simulateExit(null);
+      await flush();
 
       // Status should remain stopped, not failed
       expect(tmMock.threads.get('t1')?.status).toBe('stopped');
@@ -761,6 +869,7 @@ describe('AgentRunner class', () => {
         },
       };
       lastProcess.simulateMessage(assistantMsg);
+      await flush();
 
       expect(runner.isAgentRunning('t1')).toBe(true);
 
@@ -783,6 +892,7 @@ describe('AgentRunner class', () => {
       await runner.startAgent('t1', 'test', '/tmp');
 
       lastProcess.simulateExit(1);
+      await flush();
 
       expect(tmMock.threads.get('t1')?.status).toBe('failed');
       const errorEvents = wsMock.events.filter((e) => e.type === 'agent:error');
@@ -803,9 +913,11 @@ describe('AgentRunner class', () => {
         total_cost_usd: 0.01,
         session_id: 'sess-1',
       });
+      await flush();
 
       // Then exit
       lastProcess.simulateExit(0);
+      await flush();
 
       expect(tmMock.threads.get('t1')?.status).toBe('completed');
     });
@@ -815,6 +927,7 @@ describe('AgentRunner class', () => {
       await runner.startAgent('t1', 'test', '/tmp');
 
       lastProcess.simulateError(new Error('process crashed'));
+      await flush();
 
       expect(tmMock.threads.get('t1')?.status).toBe('failed');
     });
@@ -829,6 +942,7 @@ describe('AgentRunner class', () => {
 
       // Now simulate an error from the dying process
       proc.simulateError(new Error('killed'));
+      await flush();
 
       // Status should remain 'stopped', not 'failed'
       expect(tmMock.threads.get('t1')?.status).toBe('stopped');
@@ -853,6 +967,7 @@ describe('AgentRunner class', () => {
           content: [{ type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'a.ts' } }],
         },
       });
+      await flush();
 
       const tcCountAfterFirst = tmMock.toolCalls.size;
 
@@ -866,7 +981,9 @@ describe('AgentRunner class', () => {
         total_cost_usd: 0.01,
         session_id: 'sess-1',
       });
+      await flush();
       proc1.simulateExit(0);
+      await flush();
 
       // Second session (resume) — same tool call re-sent by CLI
       await runner.startAgent('t1', 'follow up', '/tmp');
@@ -879,6 +996,7 @@ describe('AgentRunner class', () => {
           content: [{ type: 'tool_use', id: 'tu-1', name: 'Read', input: { file: 'a.ts' } }],
         },
       });
+      await flush();
 
       // Should not create a duplicate tool call
       expect(tmMock.toolCalls.size).toBe(tcCountAfterFirst);
@@ -900,6 +1018,7 @@ describe('AgentRunner class', () => {
         tools: ['Read'],
         cwd: '/tmp',
       });
+      await flush();
 
       // Assistant text + tool_use
       lastProcess.simulateMessage({
@@ -912,6 +1031,7 @@ describe('AgentRunner class', () => {
           ],
         },
       });
+      await flush();
 
       // Tool result
       lastProcess.simulateMessage({
@@ -920,6 +1040,7 @@ describe('AgentRunner class', () => {
           content: [{ type: 'tool_result', tool_use_id: 'tu-1', content: 'file contents...' }],
         },
       });
+      await flush();
 
       // Final assistant text
       lastProcess.simulateMessage({
@@ -929,6 +1050,7 @@ describe('AgentRunner class', () => {
           content: [{ type: 'text', text: 'I found and fixed the bug' }],
         },
       });
+      await flush();
 
       // Result
       lastProcess.simulateMessage({
@@ -941,8 +1063,10 @@ describe('AgentRunner class', () => {
         total_cost_usd: 0.08,
         session_id: 'sess-new',
       });
+      await flush();
 
       lastProcess.simulateExit(0);
+      await flush();
 
       // Verify final state
       expect(tmMock.threads.get('t1')?.status).toBe('completed');

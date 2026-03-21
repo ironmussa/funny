@@ -23,12 +23,14 @@
     "./db/adapters/sqlite": "./src/db/adapters/sqlite.ts",
     "./db/adapters/pg": "./src/db/adapters/pg.ts",
     "./db/migrate": "./src/db/migrate.ts",
-    "./repositories": "./src/repositories/index.ts"
+    "./repositories": "./src/repositories/index.ts",
+    "./evflow-model": "./src/evflow.model.ts"
   },
   "scripts": {
     "test": "bun test"
   },
   "dependencies": {
+    "@funny/evflow": "workspace:*",
     "drizzle-orm": "^0.45.1",
     "nanoid": "^5.1.5",
     "pg": "^8.20.0",

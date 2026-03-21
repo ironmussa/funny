@@ -12,6 +12,22 @@ export type FieldType =
 /** A map of field names to their types */
 export type FieldMap = Record<string, FieldType>;
 
+/** Reference to implementation source code */
+export interface SourceRef {
+  /** Relative file path to the source file */
+  file: string;
+  /** Optional exported function/class/handler name */
+  exportName?: string;
+  /** Optional 1-based start line number */
+  startLine?: number;
+  /** Optional 1-based end line number */
+  endLine?: number;
+  /** Pre-embedded source content (used when viewer has no filesystem access) */
+  content?: string;
+  /** Language hint for syntax highlighting (inferred from file extension if omitted) */
+  language?: string;
+}
+
 /** Discriminator for element kinds */
 export type ElementKind =
   | 'command'
@@ -32,6 +48,7 @@ export interface CommandDef {
   fields: FieldMap;
   description?: string;
   version?: number;
+  source?: SourceRef;
 }
 
 export interface EventDef {
@@ -40,6 +57,7 @@ export interface EventDef {
   fields: FieldMap;
   description?: string;
   version?: number;
+  source?: SourceRef;
 }
 
 export interface ReadModelDef {
@@ -48,6 +66,7 @@ export interface ReadModelDef {
   from: string[];
   fields: FieldMap;
   description?: string;
+  source?: SourceRef;
 }
 
 export interface AutomationDef {
@@ -56,6 +75,7 @@ export interface AutomationDef {
   on: string;
   triggers: string | string[];
   description?: string;
+  source?: SourceRef;
 }
 
 export interface AggregateDef {
@@ -65,6 +85,7 @@ export interface AggregateDef {
   emits: string[];
   invariants: string[];
   description?: string;
+  source?: SourceRef;
 }
 
 export interface ScreenDef {
@@ -73,6 +94,7 @@ export interface ScreenDef {
   displays: string[];
   triggers: string[];
   description?: string;
+  source?: SourceRef;
 }
 
 export interface ExternalDef {
@@ -81,6 +103,7 @@ export interface ExternalDef {
   receives: string[];
   emits: string[];
   description?: string;
+  source?: SourceRef;
 }
 
 export interface SagaDef {
@@ -91,6 +114,7 @@ export interface SagaDef {
   when: string;
   triggers: string | string[];
   description?: string;
+  source?: SourceRef;
 }
 
 /** Union of all element definitions */
@@ -111,24 +135,28 @@ export interface CommandOptions {
   fields: FieldMap;
   description?: string;
   version?: number;
+  source?: SourceRef;
 }
 
 export interface EventOptions {
   fields: FieldMap;
   description?: string;
   version?: number;
+  source?: SourceRef;
 }
 
 export interface ReadModelOptions {
   from: Array<ElementRef | string>;
   fields: FieldMap;
   description?: string;
+  source?: SourceRef;
 }
 
 export interface AutomationOptions {
   on: string;
   triggers: string | string[];
   description?: string;
+  source?: SourceRef;
 }
 
 export interface AggregateOptions {
@@ -136,18 +164,21 @@ export interface AggregateOptions {
   emits: Array<ElementRef | string>;
   invariants?: string[];
   description?: string;
+  source?: SourceRef;
 }
 
 export interface ScreenOptions {
   displays: Array<ElementRef | string>;
   triggers: Array<ElementRef | string>;
   description?: string;
+  source?: SourceRef;
 }
 
 export interface ExternalOptions {
   receives?: Array<ElementRef | string>;
   emits?: Array<ElementRef | string>;
   description?: string;
+  source?: SourceRef;
 }
 
 export interface SagaOptions {
@@ -156,6 +187,7 @@ export interface SagaOptions {
   when: string;
   triggers: string | Array<ElementRef | string>;
   description?: string;
+  source?: SourceRef;
 }
 
 // ── Element Reference ───────────────────────────────────────

@@ -21,6 +21,7 @@ export type {
 export type {
   FieldType,
   FieldMap,
+  SourceRef,
   ElementKind,
   CommandDef,
   CommandOptions,

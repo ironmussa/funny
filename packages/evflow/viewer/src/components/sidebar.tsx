@@ -1,4 +1,4 @@
-import { X } from 'lucide-react';
+import { Code, X } from 'lucide-react';
 import { useMemo } from 'react';
 
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +43,7 @@ export function Sidebar() {
   const setSearchQuery = useViewerStore((s) => s.setSearchQuery);
   const selectedNode = useViewerStore((s) => s.selectedNode);
   const setSelectedNode = useViewerStore((s) => s.setSelectedNode);
+  const fetchSource = useViewerStore((s) => s.fetchSource);
 
   const kindCounts = useMemo(() => {
     if (!model) return new Map<ElementKind, number>();
@@ -374,6 +375,21 @@ export function Sidebar() {
                       {o}
                     </p>
                   ))}
+                </div>
+              )}
+              {selectedEl[1].source && (
+                <div>
+                  <Separator className="my-2" />
+                  <Button
+                    variant="outline"
+                    size="xs"
+                    onClick={() => fetchSource(selectedEl[1].source!)}
+                    className="w-full gap-1.5"
+                    data-testid="viewer-source-open"
+                  >
+                    <Code className="h-3 w-3" />
+                    <span className="truncate text-[10px]">{selectedEl[1].source.file}</span>
+                  </Button>
                 </div>
               )}
             </div>

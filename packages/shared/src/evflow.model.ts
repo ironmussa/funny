@@ -3,14 +3,14 @@
  * @domain type: event-model
  * @domain layer: domain
  *
- * Event Model for the funny runtime domain.
+ * Event Model for the funny system.
  *
- * Describes the full event-driven architecture of packages/runtime using
- * the evflow DSL: commands, events, aggregates, read models, screens,
- * external systems, automations, sagas, sequences, and slices.
+ * Describes the full event-driven architecture using the evflow DSL:
+ * commands, events, aggregates, read models, screens, external systems,
+ * automations, sagas, sequences, and slices.
  *
- * This is a living specification — keep it in sync with thread-event-bus.ts
- * and handler-registry.ts.
+ * This is a living specification — keep it in sync with
+ * packages/runtime/src/services/thread-event-bus.ts and handler-registry.ts.
  */
 
 import { EventModel } from '@funny/evflow';

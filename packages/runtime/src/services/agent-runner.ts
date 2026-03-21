@@ -297,7 +297,7 @@ export class AgentRunner {
     // choose the correct system prefix for the Claude session resume.
     const currentThread = await this.threadManager.getThread(threadId);
 
-    // Pre-cache userId so emitWS doesn't hit the DB on every streaming event
+    // Pre-cache userId so emitWSToUser doesn't hit the DB on every streaming event
     if (currentThread?.userId) {
       this.state.threadUserIds.set(threadId, currentThread.userId);
     }
@@ -459,7 +459,7 @@ export class AgentRunner {
       await this.threadManager.updateThread(threadId, { permissionMode: 'autoEdit' });
     }
 
-    await this.emitWS(threadId, 'agent:status', {
+    this.emitWSToUser(threadId, currentThread?.userId, 'agent:status', {
       status: 'running',
       ...(isPlanResume ? { permissionMode: 'autoEdit' as PermissionMode } : {}),
     });
@@ -527,10 +527,10 @@ export class AgentRunner {
         status: 'failed',
         completedAt: new Date().toISOString(),
       });
-      await this.emitWS(threadId, 'agent:error', {
+      this.emitWSToUser(threadId, currentThread?.userId, 'agent:error', {
         error: err.message || `Failed to start ${provider} agent process`,
       });
-      await this.emitWS(threadId, 'agent:status', { status: 'failed' });
+      this.emitWSToUser(threadId, currentThread?.userId, 'agent:status', { status: 'failed' });
       throw err;
     }
   }

@@ -4,6 +4,7 @@ import { defineConfig } from 'vitest/config';
 
 const shared = path.resolve(__dirname, '../shared/src');
 const pipelines = path.resolve(__dirname, '../pipelines/src');
+const evflow = path.resolve(__dirname, '../evflow/src');
 
 export default defineConfig({
   resolve: {
@@ -20,7 +21,9 @@ export default defineConfig({
       '@funny/shared/db/migrate': path.join(shared, 'db/migrate.ts'),
       '@funny/shared/repositories': path.join(shared, 'repositories/index.ts'),
       '@funny/shared/runner-protocol': path.join(shared, 'runner-protocol.ts'),
+      '@funny/shared/evflow-model': path.join(shared, 'evflow.model.ts'),
       '@funny/shared': path.join(shared, 'types.ts'),
+      '@funny/evflow': path.join(evflow, 'index.ts'),
       '@funny/pipelines/engine': path.join(pipelines, 'engine.ts'),
       '@funny/pipelines/pipelines/code-review.pipeline': path.join(
         pipelines,

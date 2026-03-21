@@ -739,4 +739,26 @@ describe('toReactFlowGraph()', () => {
     expect(graph.nodes).toHaveLength(0);
     expect(graph.edges).toHaveLength(0);
   });
+
+  test('source is passed through to React Flow node data', () => {
+    const sys = new EventModel('Test');
+    sys.command('Cmd', {
+      fields: {},
+      source: { file: 'src/cmd.ts', exportName: 'handle', startLine: 10 },
+    });
+    const graph = sys.toReactFlowGraph({ groupBySlice: false });
+    const node = graph.nodes.find((n) => n.id === 'Cmd');
+    expect(node!.data.source).toBeDefined();
+    expect(node!.data.source!.file).toBe('src/cmd.ts');
+    expect(node!.data.source!.exportName).toBe('handle');
+    expect(node!.data.source!.startLine).toBe(10);
+  });
+
+  test('nodes without source have undefined source in data', () => {
+    const sys = new EventModel('Test');
+    sys.command('Cmd', { fields: {} });
+    const graph = sys.toReactFlowGraph({ groupBySlice: false });
+    const node = graph.nodes.find((n) => n.id === 'Cmd');
+    expect(node!.data.source).toBeUndefined();
+  });
 });

@@ -148,6 +148,7 @@ export function seedProject(db: any, overrides: Partial<typeof schema.projects.$
     id: overrides.id ?? 'p1',
     name: overrides.name ?? 'Test Project',
     path: overrides.path ?? '/tmp/test-repo',
+    userId: overrides.userId ?? 'user-1',
     createdAt: overrides.createdAt ?? new Date().toISOString(),
   };
   db.insert(schema.projects).values(project).run();

@@ -6,21 +6,42 @@ import {
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { Thread, ThreadStage, Project, GitStatusInfo } from '@funny/shared';
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
-import { Pin, Plus, Search, Trash2, Chrome, Bot, Webhook, Terminal, User } from 'lucide-react';
+import {
+  Pin,
+  Plus,
+  Search,
+  Trash2,
+  Chrome,
+  Bot,
+  Webhook,
+  Terminal,
+  GitBranch,
+  FolderOpen,
+  MoreVertical,
+  Square,
+  User,
+} from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useCallback, memo, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
-import { BranchBadge } from '@/components/BranchBadge';
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DiffStats } from '@/components/DiffStats';
 import { SlideUpPrompt } from '@/components/SlideUpPrompt';
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
+import { Button } from '@/components/ui/button';
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { ProjectChip, colorFromName } from '@/components/ui/project-chip';
+import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
+import { colorFromName } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { stageConfig, statusConfig, timeAgo } from '@/lib/thread-utils';
@@ -53,40 +74,6 @@ const SOURCE_ICON: Record<string, typeof Chrome | undefined> = {
 
 const AUTOMATED_SOURCES = new Set(['automation', 'pipeline', 'external']);
 
-function ThreadAvatar({ thread }: { thread: Thread }) {
-  const authUser = useAuthStore((s) => s.user);
-
-  // Automated/non-user creator → bot icon
-  if (thread.createdBy && AUTOMATED_SOURCES.has(thread.createdBy)) {
-    return (
-      <Avatar size="sm" className="mt-0.5 shrink-0" data-testid={`kanban-card-avatar-${thread.id}`}>
-        <AvatarFallback className="bg-muted text-xs text-muted-foreground">
-          <Bot className="h-4 w-4" />
-        </AvatarFallback>
-      </Avatar>
-    );
-  }
-
-  // Current user's thread → show initials
-  const initials = authUser?.displayName
-    ?.split(' ')
-    .map((n) => n[0])
-    .join('')
-    .slice(0, 2)
-    .toUpperCase();
-
-  return (
-    <Avatar size="sm" className="mt-0.5 shrink-0" data-testid={`kanban-card-avatar-${thread.id}`}>
-      <AvatarFallback
-        className="text-xs font-medium text-primary"
-        name={authUser?.displayName || undefined}
-      >
-        {initials || <User className="h-4 w-4" />}
-      </AvatarFallback>
-    </Avatar>
-  );
-}
-
 export const KanbanCard = memo(function KanbanCard({
   thread,
   projectInfo,
@@ -114,6 +101,7 @@ export const KanbanCard = memo(function KanbanCard({
   const navigate = useNavigate();
   const setKanbanContext = useUIStore((s) => s.setKanbanContext);
   const pinThread = useThreadStore((s) => s.pinThread);
+  const authUser = useAuthStore((s) => s.user);
   const ref = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -143,15 +131,19 @@ export const KanbanCard = memo(function KanbanCard({
 
   const StatusIcon = statusConfig[thread.status].icon;
   const statusClassName = statusConfig[thread.status].className;
+  const isRunning = thread.status === 'running';
+  const isBusy = isRunning || thread.status === 'setting_up';
 
   const displayBranch = thread.branch || thread.baseBranch;
+  const [openDropdown, setOpenDropdown] = useState(false);
+  const handleDropdownChange = useCallback((open: boolean) => setOpenDropdown(open), []);
 
   return (
     <div
       ref={ref}
       data-testid={`kanban-card-${thread.id}`}
       className={cn(
-        'group/card relative rounded-md border bg-card p-2.5 cursor-pointer transition-[opacity,box-shadow] duration-300',
+        'group/card flex items-stretch rounded-md border bg-card cursor-pointer transition-[opacity,box-shadow] duration-300',
         isDragging && 'opacity-40',
         ghost && !isDragging && 'opacity-50 hover:opacity-80',
         highlighted && 'ring-2 ring-ring shadow-md',
@@ -165,118 +157,152 @@ export const KanbanCard = memo(function KanbanCard({
         }
       }}
     >
-      <div className="absolute right-1.5 top-1.5 flex items-center gap-0.5">
-        {thread.pinned ? (
-          <button
-            className="rounded p-1 text-primary transition-opacity hover:bg-primary/10"
-            data-testid={`kanban-card-pin-${thread.id}`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              await pinThread(thread.id, thread.projectId, false);
-            }}
-            aria-label="Unpin thread"
-          >
-            <Pin className="h-3 w-3 rotate-45" />
-          </button>
-        ) : (
-          <button
-            className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-primary/10 hover:text-primary group-hover/card:opacity-100"
-            data-testid={`kanban-card-pin-${thread.id}`}
-            onClick={async (e) => {
-              e.stopPropagation();
-              await pinThread(thread.id, thread.projectId, true);
-            }}
-            aria-label="Pin thread"
-          >
-            <Pin className="h-3 w-3" />
-          </button>
-        )}
-        <button
-          className="rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-destructive/10 hover:text-destructive group-hover/card:opacity-100"
-          data-testid={`kanban-card-delete-${thread.id}`}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(thread);
-          }}
-          aria-label="Delete thread"
-        >
-          <Trash2 className="h-3.5 w-3.5" />
-        </button>
-      </div>
-
-      {(projectInfo || displayBranch) && (
-        <div className="mb-1 flex min-w-0 items-center gap-1.5">
-          {projectInfo && (
-            <ProjectChip
-              name={projectInfo.name}
-              color={projectInfo.color}
-              size="sm"
-              className="flex-shrink-0"
-            />
-          )}
-          {displayBranch && <BranchBadge branch={displayBranch} size="xs" />}
-          {gitStatusProp &&
-            (gitStatusProp.linesAdded > 0 ||
-              gitStatusProp.linesDeleted > 0 ||
-              gitStatusProp.dirtyFileCount > 0) && (
-              <DiffStats
-                linesAdded={gitStatusProp.linesAdded}
-                linesDeleted={gitStatusProp.linesDeleted}
-                dirtyFileCount={gitStatusProp.dirtyFileCount}
-                size="xxs"
-              />
-            )}
+      {/* Left: main content */}
+      <div className="min-w-0 flex-1 px-3.5 py-3">
+        <div className="mb-2 flex min-w-0 items-start gap-2">
+          <StatusIcon className={cn('mt-1 h-4 w-4 shrink-0', statusClassName)} />
+          <HighlightText
+            text={thread.title}
+            query={search || ''}
+            className="line-clamp-6 text-sm font-medium leading-relaxed"
+          />
         </div>
-      )}
 
-      <div className="mb-1 flex items-start gap-1.5 pr-5">
-        <ThreadAvatar thread={thread} />
-        <HighlightText
-          text={thread.title}
-          query={search || ''}
-          className="line-clamp-3 text-xs font-medium"
-        />
+        {(projectInfo || displayBranch) && (
+          <div className="mb-2 flex min-w-0 items-center gap-1.5">
+            <PowerlineBar
+              data-testid={`kanban-card-powerline-${thread.id}`}
+              size="sm"
+              segments={[
+                ...(authUser
+                  ? [
+                      {
+                        key: 'user',
+                        icon: User,
+                        label: authUser.displayName || authUser.username,
+                        color: '#A8D5A2',
+                      } satisfies PowerlineSegmentData,
+                    ]
+                  : []),
+                ...(projectInfo
+                  ? [
+                      {
+                        key: 'project',
+                        icon: FolderOpen,
+                        label: projectInfo.name,
+                        color: projectInfo.color || colorFromName(projectInfo.name),
+                      } satisfies PowerlineSegmentData,
+                    ]
+                  : []),
+                ...(displayBranch
+                  ? [
+                      {
+                        key: 'branch',
+                        icon: GitBranch,
+                        label: displayBranch,
+                        color: '#C3A6E0',
+                      } satisfies PowerlineSegmentData,
+                    ]
+                  : []),
+              ]}
+            />
+            {gitStatusProp &&
+              (gitStatusProp.linesAdded > 0 ||
+                gitStatusProp.linesDeleted > 0 ||
+                gitStatusProp.dirtyFileCount > 0) && (
+                <DiffStats
+                  linesAdded={gitStatusProp.linesAdded}
+                  linesDeleted={gitStatusProp.linesDeleted}
+                  dirtyFileCount={gitStatusProp.dirtyFileCount}
+                  size="xxs"
+                />
+              )}
+          </div>
+        )}
+
+        {contentSnippet && search && !normalize(thread.title).includes(normalize(search)) && (
+          <HighlightText
+            text={contentSnippet}
+            query={search}
+            className="mb-1 line-clamp-2 block text-[11px] italic text-muted-foreground"
+          />
+        )}
       </div>
-      {contentSnippet && search && !normalize(thread.title).includes(normalize(search)) && (
-        <HighlightText
-          text={contentSnippet}
-          query={search}
-          className="mb-1.5 line-clamp-2 block text-[11px] italic text-muted-foreground"
-        />
-      )}
 
-      <div className="flex items-center justify-between gap-1.5">
-        <div className="flex min-w-0 items-center gap-1">
-          {thread.status !== 'completed' && (
-            <>
-              <StatusIcon className={cn('h-3 w-3 shrink-0', statusClassName)} />
-              <span className="truncate text-xs text-muted-foreground">
-                {t(`thread.status.${thread.status}`)}
-              </span>
-            </>
-          )}
-          {thread.source &&
-            thread.source !== 'web' &&
-            SOURCE_ICON[thread.source] &&
-            (() => {
-              const SourceIcon = SOURCE_ICON[thread.source]!;
-              return (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <SourceIcon className="h-3 w-3 shrink-0 text-muted-foreground" />
-                  </TooltipTrigger>
-                  <TooltipContent side="top" className="text-xs">
-                    {t(`thread.source.${thread.source}`)}
-                  </TooltipContent>
-                </Tooltip>
-              );
-            })()}
-          <span className="text-xs text-muted-foreground">
+      {/* Right: time / more menu overlay */}
+      <div className="flex shrink-0 items-center px-1.5">
+        <div className="grid min-w-[2.5rem] place-items-center justify-items-center">
+          <span
+            className={cn(
+              'col-start-1 row-start-1 text-xs text-muted-foreground leading-4 h-4 group-hover/card:opacity-0 group-hover/card:pointer-events-none',
+              openDropdown && 'opacity-0 pointer-events-none',
+            )}
+          >
             {timeAgo(thread.completedAt || thread.createdAt, t)}
           </span>
-          {thread.cost > 0 && (
-            <span className="text-xs text-muted-foreground">${thread.cost.toFixed(3)}</span>
-          )}
+          <div
+            className={cn(
+              'col-start-1 row-start-1 flex items-center opacity-0 group-hover/card:opacity-100',
+              openDropdown && '!opacity-100',
+            )}
+          >
+            <DropdownMenu onOpenChange={handleDropdownChange}>
+              <DropdownMenuTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  tabIndex={-1}
+                  data-testid={`kanban-card-more-${thread.id}`}
+                  onClick={(e) => e.stopPropagation()}
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <MoreVertical className="h-3.5 w-3.5" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" side="bottom">
+                <DropdownMenuItem
+                  data-testid={`kanban-card-pin-${thread.id}`}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    await pinThread(thread.id, thread.projectId, !thread.pinned);
+                  }}
+                >
+                  <Pin className="h-3.5 w-3.5" />
+                  {thread.pinned ? t('sidebar.unpin', 'Unpin') : t('sidebar.pin', 'Pin')}
+                </DropdownMenuItem>
+                {isRunning && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        const result = await api.stopThread(thread.id);
+                        if (result.isErr()) {
+                          console.error('Failed to stop thread:', result.error);
+                        }
+                      }}
+                      className="text-status-error focus:text-status-error"
+                    >
+                      <Square className="h-3.5 w-3.5" />
+                      {t('common.stop')}
+                    </DropdownMenuItem>
+                  </>
+                )}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem
+                  data-testid={`kanban-card-delete-${thread.id}`}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onDelete(thread);
+                  }}
+                  className="text-status-error focus:text-status-error"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                  {t('common.delete')}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </div>
         </div>
       </div>
     </div>
@@ -332,28 +358,28 @@ function AddThreadButton({
           <Plus className="h-4 w-4" />
         </button>
       </PopoverTrigger>
-      <PopoverContent align="start" className="w-56 p-0">
-        <div className="flex items-center gap-2 border-b border-border/50 px-2.5 py-2">
-          <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+      <PopoverContent align="start" className="w-64 p-0">
+        <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
+          <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
           <Input
             ref={inputRef}
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('kanban.searchProject')}
-            className="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-xs shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
+            className="h-auto flex-1 rounded-none border-0 bg-transparent px-0 py-0 text-sm shadow-none placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
             autoFocus
           />
         </div>
-        <div className="max-h-48 overflow-y-auto py-1">
+        <div className="max-h-56 overflow-y-auto py-1">
           {filtered.length === 0 ? (
-            <div className="py-3 text-center text-xs text-muted-foreground">
+            <div className="py-3 text-center text-sm text-muted-foreground">
               {t('commandPalette.noResults')}
             </div>
           ) : (
             filtered.map((p) => (
               <button
                 key={p.id}
-                className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-accent"
+                className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
                 onClick={() => {
                   setOpen(false);
                   setSearch('');
@@ -361,7 +387,7 @@ function AddThreadButton({
                 }}
               >
                 <span
-                  className="h-2 w-2 shrink-0 rounded-full"
+                  className="h-2.5 w-2.5 shrink-0 rounded-full"
                   style={{ backgroundColor: p.color || colorFromName(p.name) }}
                 />
                 <span className="truncate">{p.name}</span>
@@ -446,7 +472,7 @@ const KanbanColumn = memo(function KanbanColumn({
     <div
       ref={ref}
       className={cn(
-        'flex flex-col w-80 min-w-[20rem] flex-shrink-0 rounded-lg bg-secondary/30 transition-colors',
+        'flex flex-col w-[23rem] min-w-[23rem] flex-shrink-0 rounded-lg bg-secondary/30 transition-colors',
         isDraggedOver && 'ring-2 ring-ring bg-secondary/50',
       )}
     >

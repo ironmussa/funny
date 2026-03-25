@@ -39,7 +39,7 @@ function luminance(r: number, g: number, b: number): number {
 }
 
 /** Return '#ffffff' or '#000000' for best contrast against the given background. */
-function contrastText(bgHex: string): string {
+export function contrastText(bgHex: string): string {
   const [r, g, b] = hexToRgb(bgHex);
   return luminance(r, g, b) > 0.4 ? '#000000' : '#ffffff';
 }

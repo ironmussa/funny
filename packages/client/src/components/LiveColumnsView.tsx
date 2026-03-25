@@ -1,26 +1,14 @@
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
-import { Loader2, Columns3, Grid2x2, Plus, Search, FileText, FolderOpen, X } from 'lucide-react';
-import { useReducedMotion } from 'motion/react';
-import {
-  useState,
-  useEffect,
-  useRef,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  memo,
-  startTransition,
-} from 'react';
+import { Loader2, Columns3, Grid2x2, Plus, Search, FolderOpen, X, GitBranch } from 'lucide-react';
+import { useState, useEffect, useRef, useCallback, useMemo, memo, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
-import ReactMarkdown from 'react-markdown';
 import { toast } from 'sonner';
 
-import { BranchBadge } from '@/components/BranchBadge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { ProjectChip, colorFromName } from '@/components/ui/project-chip';
-import { ScrollArea } from '@/components/ui/scroll-area';
+import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
+import { colorFromName } from '@/components/ui/project-chip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
@@ -31,9 +19,6 @@ import {
   getAssignedThreadIds,
   type GridCellAssignments,
 } from '@/lib/grid-storage';
-import { remarkPlugins, baseMarkdownComponents } from '@/lib/markdown-components';
-import { parseReferencedFiles } from '@/lib/parse-referenced-files';
-import { buildGroupedRenderItems, type ToolItem } from '@/lib/render-items';
 import { statusConfig } from '@/lib/thread-utils';
 import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
@@ -42,12 +27,10 @@ import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { useThreadStore, type ThreadWithMessages } from '@/stores/thread-store';
 
-import { D4CAnimation } from './D4CAnimation';
 import { PromptInput } from './PromptInput';
 import { SlideUpPrompt } from './SlideUpPrompt';
+import { MessageStream, type MessageStreamHandle } from './thread/MessageStream';
 import { ThreadPickerDialog } from './ThreadPickerDialog';
-import { ToolCallCard } from './ToolCallCard';
-import { ToolCallGroup } from './ToolCallGroup';
 
 const ACTIVE_STATUSES = new Set(['running', 'waiting', 'pending']);
 
@@ -129,12 +112,9 @@ const ThreadColumn = memo(function ThreadColumn({
   onRemove?: () => void;
 }) {
   const { t } = useTranslation();
-  const _prefersReducedMotion = useReducedMotion();
   const [thread, setThread] = useState<ThreadWithMessages | null>(null);
   const [loading, setLoading] = useState(true);
-  const scrollViewportRef = useRef<HTMLDivElement>(null);
-  const userHasScrolledUp = useRef(false);
-  const smoothScrollPending = useRef(false);
+  const streamRef = useRef<MessageStreamHandle>(null);
   const projects = useProjectStore((s) => s.projects);
 
   // Subscribe only to this thread's status — avoids re-rendering when other threads change
@@ -175,41 +155,6 @@ const ThreadColumn = memo(function ThreadColumn({
     return () => clearInterval(interval);
   }, [threadId, isActive]);
 
-  // Auto-scroll to bottom
-  const messagesLength = thread?.messages?.length;
-  const lastMessageContentLength = thread?.messages?.at(-1)?.content?.length;
-  const lastMessageToolCallsLength = thread?.messages?.at(-1)?.toolCalls?.length;
-  useLayoutEffect(() => {
-    const viewport = scrollViewportRef.current;
-    if (!viewport || !thread) return;
-    if (!userHasScrolledUp.current) {
-      if (smoothScrollPending.current) {
-        smoothScrollPending.current = false;
-        requestAnimationFrame(() => {
-          viewport.scrollTo({ top: viewport.scrollHeight, behavior: 'smooth' });
-        });
-      } else {
-        viewport.scrollTop = viewport.scrollHeight;
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- thread is used only for null-check; actual deps are the extracted length values
-  }, [messagesLength, lastMessageContentLength, lastMessageToolCallsLength]);
-
-  const handleScroll = useCallback(() => {
-    const viewport = scrollViewportRef.current;
-    if (!viewport) return;
-    const { scrollTop, scrollHeight, clientHeight } = viewport;
-    const isAtBottom = scrollHeight - scrollTop - clientHeight <= 80;
-    userHasScrolledUp.current = !isAtBottom;
-  }, []);
-
-  useEffect(() => {
-    const viewport = scrollViewportRef.current;
-    if (!viewport) return;
-    viewport.addEventListener('scroll', handleScroll, { passive: true });
-    return () => viewport.removeEventListener('scroll', handleScroll);
-  }, [handleScroll]);
-
   const threadProjectId = thread?.projectId;
   const threadProject = useMemo(() => {
     if (!threadProjectId) return null;
@@ -232,9 +177,8 @@ const ThreadColumn = memo(function ThreadColumn({
     ) => {
       if (sending || !thread) return;
       setSending(true);
-      // Always scroll to bottom when the user sends a message (smooth)
-      userHasScrolledUp.current = false;
-      smoothScrollPending.current = true;
+      // Scroll to bottom when user sends
+      streamRef.current?.scrollToBottom();
       startTransition(() => {
         useAppStore
           .getState()
@@ -325,164 +269,66 @@ const ThreadColumn = memo(function ThreadColumn({
             </TooltipIconButton>
           )}
         </div>
-        <div className="mt-1 flex min-w-0 items-center gap-1.5">
-          {projectName && (
-            <ProjectChip
-              name={projectName}
-              color={threadProject?.color}
+        {(projectName || thread.branch || thread.baseBranch) && (
+          <div className="mt-1 min-w-0 overflow-hidden">
+            <PowerlineBar
+              data-testid={`grid-column-powerline-${threadId}`}
               size="sm"
-              className="flex-shrink-0"
+              segments={[
+                ...(projectName
+                  ? [
+                      {
+                        key: 'project',
+                        icon: FolderOpen,
+                        label: projectName,
+                        color: threadProject?.color || colorFromName(projectName),
+                      } satisfies PowerlineSegmentData,
+                    ]
+                  : []),
+                ...(thread.branch || thread.baseBranch
+                  ? [
+                      {
+                        key: 'branch',
+                        icon: GitBranch,
+                        label: (thread.branch || thread.baseBranch)!,
+                        color: '#C3A6E0',
+                      } satisfies PowerlineSegmentData,
+                    ]
+                  : []),
+              ]}
             />
-          )}
-          {(thread.branch || thread.baseBranch) && (
-            <BranchBadge
-              branch={(thread.branch || thread.baseBranch)!}
-              size="xs"
-              className="min-w-0 flex-1"
-            />
-          )}
-        </div>
+          </div>
+        )}
       </div>
 
-      {/* Messages */}
-      <ScrollArea
-        className="min-h-0 flex-1 px-2 [&_[data-radix-scroll-area-viewport]>div]:!flex [&_[data-radix-scroll-area-viewport]>div]:min-h-full [&_[data-radix-scroll-area-viewport]>div]:!flex-col"
-        viewportRef={scrollViewportRef}
-      >
-        <div className="mt-auto space-y-2 py-2">
-          {buildGroupedRenderItems(thread.messages ?? []).map((item) => {
-            const renderToolItem = (ti: ToolItem) => {
-              if (ti.type === 'toolcall') {
-                return (
-                  <div key={ti.tc.id}>
-                    <ToolCallCard
-                      name={ti.tc.name}
-                      input={ti.tc.input}
-                      output={ti.tc.output}
-                      planText={ti.tc._planText}
-                    />
-                  </div>
-                );
-              }
-              if (ti.type === 'toolcall-group') {
-                return (
-                  <div key={ti.calls[0].id}>
-                    <ToolCallGroup name={ti.name} calls={ti.calls} />
-                  </div>
-                );
-              }
-              return null;
-            };
-
-            if (item.type === 'message') {
-              const msg = item.msg;
-              return (
-                <div
-                  key={msg.id}
-                  className={cn(
-                    'text-sm leading-relaxed',
-                    msg.role === 'user'
-                      ? 'max-w-[90%] ml-auto rounded-md px-2 py-1.5 bg-foreground text-background'
-                      : 'w-full text-foreground',
-                  )}
-                >
-                  {msg.role === 'user' ? (
-                    (() => {
-                      const { inlineContent, fileMap } = parseReferencedFiles(msg.content);
-                      const text = inlineContent.trim();
-                      let inlineNodes: React.ReactNode[];
-                      if (fileMap.size === 0) {
-                        inlineNodes = [text];
-                      } else {
-                        const escapedPaths = Array.from(fileMap.keys())
-                          .sort((a, b) => b.length - a.length)
-                          .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-                        const pattern = new RegExp(`@(${escapedPaths.join('|')})`, 'g');
-                        inlineNodes = [];
-                        let lastIdx = 0;
-                        let m: RegExpExecArray | null;
-                        while ((m = pattern.exec(text)) !== null) {
-                          if (m.index > lastIdx) inlineNodes.push(text.slice(lastIdx, m.index));
-                          const fi = fileMap.get(m[1]);
-                          if (fi) {
-                            inlineNodes.push(
-                              <span
-                                key={`chip-${m.index}`}
-                                className="mx-0.5 inline-flex items-center gap-1 rounded bg-background/20 px-1.5 py-0.5 align-middle font-mono text-xs text-background/70"
-                                title={fi.path}
-                              >
-                                {fi.type === 'folder' ? (
-                                  <FolderOpen className="h-3 w-3 shrink-0" />
-                                ) : (
-                                  <FileText className="h-3 w-3 shrink-0" />
-                                )}
-                                {fi.path.split('/').pop()}
-                              </span>,
-                            );
-                          }
-                          lastIdx = m.index + m[0].length;
-                        }
-                        if (lastIdx < text.length) inlineNodes.push(text.slice(lastIdx));
-                      }
-                      return (
-                        <pre className="max-h-80 overflow-x-auto overflow-y-auto whitespace-pre-wrap break-words font-mono text-xs">
-                          {inlineNodes}
-                        </pre>
-                      );
-                    })()
-                  ) : (
-                    <div className="prose prose-sm max-w-none overflow-x-auto break-words">
-                      <ReactMarkdown
-                        remarkPlugins={remarkPlugins}
-                        components={baseMarkdownComponents}
-                      >
-                        {msg.content.trim()}
-                      </ReactMarkdown>
-                    </div>
-                  )}
-                </div>
-              );
-            }
-
-            if (item.type === 'toolcall' || item.type === 'toolcall-group') {
-              return renderToolItem(item);
-            }
-
-            if (item.type === 'toolcall-run') {
-              return (
-                <div
-                  key={
-                    item.items[0].type === 'toolcall'
-                      ? item.items[0].tc.id
-                      : item.items[0].calls[0].id
-                  }
-                  className="space-y-0.5"
-                >
-                  {item.items.map(renderToolItem)}
-                </div>
-              );
-            }
-
-            return null;
-          })}
-
-          {isRunning && (
-            <div className="flex items-center gap-1.5 py-0.5 text-xs text-muted-foreground">
-              <D4CAnimation size="sm" />
-              <span>{t('thread.agentWorking')}</span>
-            </div>
-          )}
-        </div>
-      </ScrollArea>
-
-      {/* Prompt input */}
-      <PromptInput
-        onSubmit={handleSend}
-        onStop={handleStop}
-        loading={sending}
-        running={isRunning}
+      {/* Messages — uses the same MessageStream as the main ThreadView */}
+      <MessageStream
+        ref={streamRef}
+        compact
         threadId={thread.id}
-        placeholder={t('thread.nextPrompt')}
+        status={status}
+        messages={thread.messages ?? []}
+        threadEvents={thread.threadEvents}
+        compactionEvents={thread.compactionEvents}
+        initInfo={thread.initInfo}
+        resultInfo={thread.resultInfo}
+        waitingReason={thread.waitingReason}
+        pendingPermission={thread.pendingPermission}
+        isExternal={thread.provider === 'external'}
+        model={thread.model}
+        permissionMode={thread.permissionMode}
+        onSend={handleSend}
+        className="min-h-0 flex-1"
+        footer={
+          <PromptInput
+            onSubmit={handleSend}
+            onStop={handleStop}
+            loading={sending}
+            running={isRunning}
+            threadId={thread.id}
+            placeholder={t('thread.nextPrompt')}
+          />
+        }
       />
     </div>
   );
@@ -638,36 +484,31 @@ export function LiveColumnsView() {
           }}
         >
           <PopoverTrigger asChild>
-            <Button
-              variant="ghost"
-              className="h-6 min-w-0 gap-1.5 px-2 text-[10px]"
-              data-testid="grid-new-thread"
-            >
-              <Plus className="h-3.5 w-3.5" />
-              {t('sidebar.newThread', 'New thread')}
+            <Button variant="ghost" size="icon" className="h-7 w-7" data-testid="grid-new-thread">
+              <Plus className="h-4 w-4" />
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="start" className="w-56 p-0">
-            <div className="flex items-center gap-2 border-b border-border/50 px-2.5 py-2">
-              <Search className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+          <PopoverContent align="start" className="w-64 p-0">
+            <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
+              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
               <Input
                 value={projectSearch}
                 onChange={(e) => setProjectSearch(e.target.value)}
                 placeholder={t('kanban.searchProject', 'Search project...')}
-                className="h-auto flex-1 border-0 bg-transparent px-0 py-0 text-xs shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
+                className="h-auto flex-1 rounded-none border-0 bg-transparent px-0 py-0 text-sm shadow-none placeholder:text-muted-foreground focus-visible:ring-0 focus-visible:ring-offset-0"
                 autoFocus
               />
             </div>
-            <div className="max-h-48 overflow-y-auto py-1">
+            <div className="max-h-56 overflow-y-auto py-1">
               {filteredProjects.length === 0 ? (
-                <div className="py-3 text-center text-xs text-muted-foreground">
+                <div className="py-3 text-center text-sm text-muted-foreground">
                   {t('commandPalette.noResults', 'No results')}
                 </div>
               ) : (
                 filteredProjects.map((p) => (
                   <button
                     key={p.id}
-                    className="flex w-full items-center gap-2 px-2.5 py-1.5 text-left text-xs transition-colors hover:bg-accent"
+                    className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm transition-colors hover:bg-accent"
                     onClick={() => {
                       setProjectPickerOpen(false);
                       setProjectSearch('');
@@ -675,7 +516,7 @@ export function LiveColumnsView() {
                     }}
                   >
                     <span
-                      className="h-2 w-2 shrink-0 rounded-full"
+                      className="h-2.5 w-2.5 shrink-0 rounded-full"
                       style={{ backgroundColor: p.color || colorFromName(p.name) }}
                     />
                     <span className="truncate">{p.name}</span>

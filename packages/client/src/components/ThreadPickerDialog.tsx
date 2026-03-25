@@ -30,6 +30,29 @@ export function ThreadPickerDialog({
   onSelect,
   excludeIds = [],
 }: ThreadPickerDialogProps) {
+  // Skip store subscriptions and all computation when the dialog is closed.
+  // This avoids re-rendering on every threadsByProject update and prevents
+  // cmdk from mounting/scoring all items while invisible.
+  if (!open) {
+    return null;
+  }
+
+  return (
+    <ThreadPickerDialogContent
+      open={open}
+      onOpenChange={onOpenChange}
+      onSelect={onSelect}
+      excludeIds={excludeIds}
+    />
+  );
+}
+
+function ThreadPickerDialogContent({
+  open,
+  onOpenChange,
+  onSelect,
+  excludeIds,
+}: ThreadPickerDialogProps) {
   const { t } = useTranslation();
   const threadsByProject = useThreadStore((s) => s.threadsByProject);
   const projects = useProjectStore((s) => s.projects);

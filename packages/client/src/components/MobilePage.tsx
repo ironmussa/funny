@@ -20,7 +20,8 @@ import { D4CAnimation } from './D4CAnimation';
 import { PromptInput } from './PromptInput';
 import { StatusBadge } from './StatusBadge';
 import { AgentResultCard, AgentInterruptedCard } from './thread/AgentStatusCards';
-import { MessageContent, CopyButton, WaitingActions } from './ThreadView';
+import { MessageContent, CopyButton } from './thread/MessageContent';
+import { WaitingActions } from './thread/WaitingCards';
 import { ToolCallCard } from './ToolCallCard';
 
 type MobileView =

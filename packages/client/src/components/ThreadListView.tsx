@@ -155,7 +155,7 @@ export function ThreadListView({
       {!hideSearch && (
         <div className="flex flex-shrink-0 items-center gap-2">
           <div className="relative flex-1">
-            <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+            <Search className="icon-sm absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
               ref={searchInputRef}
               type="text"
@@ -186,7 +186,7 @@ export function ThreadListView({
       {/* Thread list */}
       {loading ? (
         <div className="flex h-32 flex-shrink-0 items-center justify-center text-xs text-muted-foreground">
-          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          <Loader2 className="icon-base mr-2 animate-spin" />
           {t('common.loading')}
         </div>
       ) : threads.length === 0 ? (
@@ -219,12 +219,12 @@ export function ThreadListView({
                   i === highlightIndex && 'bg-accent/50',
                 )}
               >
-                <Icon className={cn('h-4 w-4 flex-shrink-0', s.className)} />
+                <Icon className={cn('icon-base flex-shrink-0', s.className)} />
                 <div className="min-w-0 flex-1">
                   <HighlightText
                     text={thread.title}
                     query={search}
-                    className="block truncate text-xs font-medium"
+                    className="block truncate text-sm font-medium"
                   />
                   {contentSnippets?.get(thread.id) &&
                     search &&
@@ -269,7 +269,7 @@ export function ThreadListView({
               onClick={() => onPageChange(currentPage - 1)}
               tooltip={t('common.previousPage')}
             >
-              <ChevronLeft className="h-3.5 w-3.5" />
+              <ChevronLeft className="icon-sm" />
             </TooltipIconButton>
             <span className="px-2 text-sm text-muted-foreground">
               {currentPage} / {totalPages}
@@ -280,7 +280,7 @@ export function ThreadListView({
               onClick={() => onPageChange(currentPage + 1)}
               tooltip={t('common.nextPage')}
             >
-              <ChevronRight className="h-3.5 w-3.5" />
+              <ChevronRight className="icon-sm" />
             </TooltipIconButton>
           </div>
         </div>

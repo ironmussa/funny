@@ -1,5 +1,5 @@
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
-import { Loader2, Columns3, Grid2x2, Plus, Search, FolderOpen, X, GitBranch } from 'lucide-react';
+import { Loader2, LayoutGrid, Grid2x2, Plus, Search, FolderOpen, X, GitBranch } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo, memo, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -57,7 +57,7 @@ function GridPicker({
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <Button variant="ghost" className="h-6 min-w-0 gap-1.5 px-2 text-[10px]">
-          <Grid2x2 className="h-3.5 w-3.5" />
+          <Grid2x2 className="icon-sm" />
           {cols}×{rows}
         </Button>
       </PopoverTrigger>
@@ -231,7 +231,7 @@ const ThreadColumn = memo(function ThreadColumn({
   if (loading) {
     return (
       <div className="flex min-h-0 items-center justify-center rounded-sm border border-border">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <Loader2 className="icon-lg animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -254,7 +254,7 @@ const ThreadColumn = memo(function ThreadColumn({
       {/* Column header */}
       <div className="flex-shrink-0 border-b border-border bg-sidebar/50 px-3 py-2">
         <div className="flex min-w-0 items-center gap-2">
-          <StatusIcon className={cn('h-3.5 w-3.5 shrink-0', statusClass)} />
+          <StatusIcon className={cn('icon-sm shrink-0', statusClass)} />
           <span className="flex-1 truncate text-sm font-medium" title={thread.title}>
             {thread.title}
           </span>
@@ -265,7 +265,7 @@ const ThreadColumn = memo(function ThreadColumn({
               className="h-5 w-5 shrink-0 opacity-0 transition-opacity group-hover/col:opacity-100"
               data-testid={`grid-remove-${threadId}`}
             >
-              <X className="h-3 w-3" />
+              <X className="icon-xs" />
             </TooltipIconButton>
           )}
         </div>
@@ -473,8 +473,9 @@ export function LiveColumnsView() {
     <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden" data-testid="grid-view">
       {/* Header */}
       <div className="flex flex-shrink-0 items-center gap-2 border-b border-border px-4 py-2">
-        <Columns3 className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium">{t('live.title', 'Grid')}</span>
+        <span className="flex items-center gap-2 text-sm font-medium">
+          <LayoutGrid className="icon-sm text-muted-foreground" /> {t('live.title', 'Grid')}
+        </span>
         {/* Create new thread */}
         <Popover
           open={projectPickerOpen}
@@ -485,12 +486,12 @@ export function LiveColumnsView() {
         >
           <PopoverTrigger asChild>
             <Button variant="ghost" size="icon" className="h-7 w-7" data-testid="grid-new-thread">
-              <Plus className="h-4 w-4" />
+              <Plus className="icon-base" />
             </Button>
           </PopoverTrigger>
           <PopoverContent align="start" className="w-64 p-0">
             <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
-              <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+              <Search className="icon-base shrink-0 text-muted-foreground" />
               <Input
                 value={projectSearch}
                 onChange={(e) => setProjectSearch(e.target.value)}

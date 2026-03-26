@@ -24,7 +24,7 @@ export function AddProjectForm() {
               onClick={() => setAddProjectOpen(true)}
               className="text-muted-foreground"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="icon-sm" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top">{t('sidebar.addProject')}</TooltipContent>

@@ -46,7 +46,7 @@ function InstalledSkillCard({
       style={{ borderLeftWidth: 3, borderLeftColor: colorFromName(skill.name) }}
     >
       <div className="flex min-w-0 items-center gap-3">
-        <Sparkles className="h-4 w-4 flex-shrink-0 text-status-warning" />
+        <Sparkles className="icon-base flex-shrink-0 text-status-warning" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-medium">{skill.name}</span>
@@ -63,7 +63,7 @@ function InstalledSkillCard({
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-0.5 text-xs text-muted-foreground/70 hover:text-foreground"
               >
-                <ExternalLink className="h-2.5 w-2.5" />
+                <ExternalLink className="icon-2xs" />
               </a>
             )}
             {skill.installedAt && (
@@ -81,11 +81,7 @@ function InstalledSkillCard({
           className="flex-shrink-0 text-muted-foreground hover:text-destructive"
           tooltip={t('common.remove')}
         >
-          {removing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Trash2 className="h-3.5 w-3.5" />
-          )}
+          {removing ? <Loader2 className="icon-sm animate-spin" /> : <Trash2 className="icon-sm" />}
         </TooltipIconButton>
       )}
     </div>
@@ -125,9 +121,9 @@ function RecommendedSkillCard({
         className="flex-shrink-0"
       >
         {installing ? (
-          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+          <Loader2 className="icon-xs mr-1 animate-spin" />
         ) : installed ? null : (
-          <Download className="mr-1 h-3 w-3" />
+          <Download className="icon-xs mr-1" />
         )}
         {installed
           ? t('skills.installed')
@@ -167,7 +163,7 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
             disabled={!hasCommands}
           >
             <div className="flex min-w-0 items-center gap-3">
-              <Puzzle className="h-4 w-4 flex-shrink-0 text-purple-500" />
+              <Puzzle className="icon-base flex-shrink-0 text-purple-500" />
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="truncate text-sm font-medium">{plugin.name}</span>
@@ -200,7 +196,7 @@ function PluginCard({ plugin }: { plugin: Plugin }) {
             {hasCommands && (
               <ChevronDown
                 className={cn(
-                  'h-3.5 w-3.5 text-muted-foreground transition-transform flex-shrink-0',
+                  'icon-sm text-muted-foreground transition-transform flex-shrink-0',
                   open && 'rotate-180',
                 )}
               />
@@ -360,9 +356,9 @@ export function SkillsSettings() {
             className="px-2"
           >
             {showCustom ? (
-              <ChevronUp className="mr-1 h-3 w-3" />
+              <ChevronUp className="icon-xs mr-1" />
             ) : (
-              <Plus className="mr-1 h-3 w-3" />
+              <Plus className="icon-xs mr-1" />
             )}
             {showCustom ? t('skills.cancel') : t('skills.addCustom')}
           </Button>
@@ -391,9 +387,9 @@ export function SkillsSettings() {
                 className="h-8 text-xs"
               >
                 {addingCustom ? (
-                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  <Loader2 className="icon-xs mr-1 animate-spin" />
                 ) : (
-                  <Plus className="mr-1 h-3 w-3" />
+                  <Plus className="icon-xs mr-1" />
                 )}
                 {t('skills.install')}
               </Button>
@@ -403,7 +399,7 @@ export function SkillsSettings() {
 
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="icon-base animate-spin" />
             {t('skills.loadingSkills')}
           </div>
         ) : globalSkills.length === 0 ? (
@@ -437,7 +433,7 @@ export function SkillsSettings() {
 
         {loadingPlugins ? (
           <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="icon-base animate-spin" />
             {t('plugins.loadingPlugins')}
           </div>
         ) : plugins.length === 0 ? (

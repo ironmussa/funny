@@ -63,7 +63,7 @@ function WelcomeSlide({ onNext }: { onNext: () => void }) {
 
       <Button className="w-full" onClick={onNext}>
         Get Started
-        <ArrowRight className="ml-1 h-4 w-4" />
+        <ArrowRight className="icon-base ml-1" />
       </Button>
     </>
   );
@@ -105,13 +105,13 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
       <div className="space-y-3 rounded-lg border border-border bg-muted/30 p-4">
         {checking ? (
           <div className="flex items-center justify-center gap-2 py-2">
-            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            <Loader2 className="icon-lg animate-spin text-muted-foreground" />
             <span className="text-sm text-muted-foreground">Checking...</span>
           </div>
         ) : status?.available ? (
           <>
             <div className="flex items-center gap-2">
-              <CheckCircle2 className="h-5 w-5 text-status-success" />
+              <CheckCircle2 className="icon-lg text-status-success" />
               <span className="text-sm font-medium text-foreground">Claude CLI found</span>
             </div>
             {status.version && (
@@ -124,7 +124,7 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
         ) : status?.error === 'server_unreachable' ? (
           <>
             <div className="flex items-center gap-2">
-              <XCircle className="h-5 w-5 text-status-error" />
+              <XCircle className="icon-lg text-status-error" />
               <span className="text-sm font-medium text-foreground">Server not reachable</span>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -134,7 +134,7 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
         ) : (
           <>
             <div className="flex items-center gap-2">
-              <XCircle className="h-5 w-5 text-status-error" />
+              <XCircle className="icon-lg text-status-error" />
               <span className="text-sm font-medium text-foreground">Claude CLI not found</span>
             </div>
             <p className="text-xs text-muted-foreground">
@@ -148,7 +148,7 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
               className="inline-flex items-center gap-1.5 text-xs text-primary hover:underline"
             >
               Installation Guide
-              <ExternalLink className="h-3 w-3" />
+              <ExternalLink className="icon-xs" />
             </a>
           </>
         )}
@@ -166,7 +166,7 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
           onClick={onNext}
         >
           Continue
-          <ArrowRight className="ml-1 h-4 w-4" />
+          <ArrowRight className="icon-base ml-1" />
         </Button>
       </div>
     </>
@@ -186,7 +186,7 @@ function DoneSlide({ onFinish }: { onFinish: () => void }) {
 
       <Button className="w-full" onClick={onFinish}>
         Enter funny
-        <ArrowRight className="ml-1 h-4 w-4" />
+        <ArrowRight className="icon-base ml-1" />
       </Button>
     </>
   );

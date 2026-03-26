@@ -40,11 +40,11 @@ export function WriteFileCard({
       >
         <ChevronRight
           className={cn(
-            'h-3 w-3 flex-shrink-0 text-muted-foreground transition-transform duration-150',
+            'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
             expanded && 'rotate-90',
           )}
         />
-        {!hideLabel && <FileText className="h-3 w-3 flex-shrink-0 text-muted-foreground" />}
+        {!hideLabel && <FileText className="icon-xs flex-shrink-0 text-muted-foreground" />}
         {!hideLabel && (
           <span className="flex-shrink-0 font-mono font-medium text-foreground">
             {t('tools.writeFile')}

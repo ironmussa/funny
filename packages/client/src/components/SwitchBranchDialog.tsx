@@ -47,7 +47,7 @@ export function SwitchBranchDialog({
       <DialogContent className="max-w-md" data-testid="switch-branch-dialog">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <GitBranch className="h-4 w-4" />
+            <GitBranch className="icon-base" />
             {t('switchBranch.title', 'Switch branch')}
           </DialogTitle>
           <DialogDescription>
@@ -132,7 +132,7 @@ export function SwitchBranchDialog({
             disabled={loading}
             data-testid="switch-branch-confirm"
           >
-            {loading && <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />}
+            {loading && <Loader2 className="icon-sm mr-1.5 animate-spin" />}
             {t('switchBranch.switchButton', 'Switch branch')}
           </Button>
         </div>

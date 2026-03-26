@@ -34,7 +34,7 @@ export function PlanCard({
       {!hideLabel && (
         <div className="flex items-center justify-between px-3 py-1.5 text-xs">
           <div className="flex items-center gap-2">
-            <FileCode2 className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+            <FileCode2 className="icon-xs flex-shrink-0 text-muted-foreground" />
             <span className="font-medium text-foreground">{t('tools.plan')}</span>
           </div>
           <TooltipIconButton
@@ -45,9 +45,9 @@ export function PlanCard({
             tooltip={copied ? t('common.copied') : t('common.copy')}
           >
             {copied ? (
-              <Check className="h-3 w-3 text-green-500" />
+              <Check className="icon-xs text-green-500" />
             ) : (
-              <Copy className="h-3 w-3 text-muted-foreground" />
+              <Copy className="icon-xs text-muted-foreground" />
             )}
           </TooltipIconButton>
         </div>

@@ -140,7 +140,7 @@ function ModelCombobox({
           className="h-8 w-[160px] justify-between text-xs"
         >
           <span className="truncate">{selected?.label ?? placeholder}</span>
-          <ChevronsUpDown className="ml-1 h-3 w-3 shrink-0 opacity-50" />
+          <ChevronsUpDown className="icon-xs ml-1 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
       <PopoverContent className="w-[200px] p-0" align="start">
@@ -331,7 +331,7 @@ function ProjectUrlPatterns({
               }}
               tooltip={t('common.delete')}
             >
-              <X className="h-3.5 w-3.5" />
+              <X className="icon-sm" />
             </TooltipIconButton>
           </div>
         ))}
@@ -341,7 +341,7 @@ function ProjectUrlPatterns({
           onClick={() => setUrls([...urls, ''])}
           data-testid="settings-url-pattern-add"
         >
-          <Plus className="mr-1.5 h-3 w-3" />
+          <Plus className="icon-xs mr-1.5" />
           {t('settings.addUrl', 'Add URL')}
         </Button>
       </div>
@@ -375,7 +375,7 @@ function ProjectSystemPrompt({
     <div className="flex flex-col gap-3 border-b border-border/50 px-4 py-3.5 last:border-b-0">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
-          <MessageSquareText className="h-4 w-4 text-muted-foreground" />
+          <MessageSquareText className="icon-base text-muted-foreground" />
           <p className="text-sm font-medium text-foreground">
             {t('settings.systemPrompt', 'System Prompt')}
           </p>
@@ -696,13 +696,13 @@ function GeneralSettings() {
                   {
                     value: 'local',
                     label: t('thread.mode.local'),
-                    icon: <Monitor className="h-3 w-3" />,
+                    icon: <Monitor className="icon-xs" />,
                     testId: 'settings-thread-mode-local',
                   },
                   {
                     value: 'worktree',
                     label: t('thread.mode.worktree'),
-                    icon: <GitBranch className="h-3 w-3" />,
+                    icon: <GitBranch className="icon-xs" />,
                     testId: 'settings-thread-mode-worktree',
                   },
                 ]}
@@ -815,7 +815,7 @@ function GeneralSettings() {
               data-testid="settings-reset-defaults"
               className="flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
             >
-              <RotateCcw className="h-3 w-3" />
+              <RotateCcw className="icon-xs" />
               {t('settings.resetDefaults')}
             </button>
           </div>

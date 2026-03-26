@@ -334,7 +334,7 @@ export function AskQuestionCard({
       {/* Header */}
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
         {!hideLabel && (
-          <MessageCircleQuestion className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+          <MessageCircleQuestion className="icon-xs flex-shrink-0 text-muted-foreground" />
         )}
         {!hideLabel && <span className="font-medium text-foreground">{t('tools.question')}</span>}
         <span className="text-sm text-muted-foreground">
@@ -375,7 +375,7 @@ export function AskQuestionCard({
                   >
                     {q.header}
                     {selections.get(i)?.size ? (
-                      <Check className="ml-1 inline h-2.5 w-2.5 text-status-success/80" />
+                      <Check className="icon-2xs ml-1 inline text-status-success/80" />
                     ) : null}
                     {i === activeTab && (
                       <div className="absolute bottom-0 left-0 right-0 h-[2px] rounded-full bg-primary" />
@@ -456,7 +456,7 @@ export function AskQuestionCard({
                   <div className="flex min-w-0 items-center gap-1.5">
                     <PenLine
                       className={cn(
-                        'h-3 w-3 flex-shrink-0 transition-colors',
+                        'icon-xs flex-shrink-0 transition-colors',
                         isOtherSelected ? 'text-primary' : 'text-muted-foreground',
                       )}
                     />
@@ -481,7 +481,7 @@ export function AskQuestionCard({
                         onChange={handleOtherEditorChange}
                         cwd={cwd}
                         loadSkills={loadSkillsForEditor}
-                        className="min-h-[40px] max-h-[120px] overflow-y-auto text-sm"
+                        className="max-h-[120px] min-h-[40px] overflow-y-auto text-sm"
                       />
                     </div>
                     {hasAssemblyaiKey && (
@@ -506,11 +506,11 @@ export function AskQuestionCard({
                               )}
                             >
                               {isTranscribing ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <Loader2 className="icon-xs animate-spin" />
                               ) : isRecording ? (
-                                <MicOff className="h-3 w-3" />
+                                <MicOff className="icon-xs" />
                               ) : (
-                                <Mic className="h-3 w-3" />
+                                <Mic className="icon-xs" />
                               )}
                             </Button>
                           </TooltipTrigger>
@@ -549,7 +549,7 @@ export function AskQuestionCard({
                       )}
                     >
                       {t('tools.continue')}
-                      <ChevronRight className="h-3 w-3" />
+                      <ChevronRight className="icon-xs" />
                     </button>
                   )}
 
@@ -564,7 +564,7 @@ export function AskQuestionCard({
                         : 'bg-muted text-muted-foreground cursor-not-allowed',
                     )}
                   >
-                    <Send className="h-3 w-3" />
+                    <Send className="icon-xs" />
                     {t('tools.respond')}
                   </button>
                 </div>

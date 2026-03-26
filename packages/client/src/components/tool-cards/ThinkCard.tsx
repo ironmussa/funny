@@ -41,11 +41,11 @@ export function ThinkCard({
         <div className="flex w-full items-center gap-2 overflow-hidden px-3 py-1.5 text-left text-xs">
           <ChevronRight
             className={cn(
-              'h-3 w-3 flex-shrink-0 text-muted-foreground transition-transform duration-150',
+              'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
               expanded && 'rotate-90',
             )}
           />
-          {!hideLabel && <Brain className="h-3 w-3 flex-shrink-0 text-muted-foreground" />}
+          {!hideLabel && <Brain className="icon-xs flex-shrink-0 text-muted-foreground" />}
           {!hideLabel && (
             <span className="flex-shrink-0 font-mono font-medium text-foreground">
               {t('tools.thinking')}

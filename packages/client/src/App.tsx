@@ -48,7 +48,7 @@ function CollapsedSidebarStrip() {
       className="flex h-full w-10 flex-shrink-0 cursor-pointer items-start justify-center border-r border-border bg-sidebar pt-3 transition-colors hover:bg-sidebar-accent"
       title="Expand sidebar"
     >
-      <PanelLeft className="h-4 w-4 text-muted-foreground" />
+      <PanelLeft className="icon-base text-muted-foreground" />
     </button>
   );
 }

@@ -24,7 +24,7 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
   return (
     <div className="space-y-2.5 rounded-lg border border-status-warning/20 bg-status-warning/5 p-3">
       <div className="flex items-center gap-2 text-xs text-status-warning/80">
-        <Clock className="h-3.5 w-3.5" />
+        <Clock className="icon-sm" />
         {t('thread.waitingForResponse')}
       </div>
 
@@ -34,7 +34,7 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
           onClick={() => onSend('Continue')}
           className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
         >
-          <CheckCircle2 className="h-3.5 w-3.5" />
+          <CheckCircle2 className="icon-sm" />
           {t('thread.acceptContinue')}
         </button>
         <button
@@ -42,7 +42,7 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
           onClick={() => onSend('No, do not proceed with that action.')}
           className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
         >
-          <XCircle className="h-3.5 w-3.5" />
+          <XCircle className="icon-sm" />
           {t('thread.reject')}
         </button>
       </div>
@@ -74,7 +74,7 @@ export function WaitingActions({ onSend }: { onSend: (text: string) => void }) {
               : 'bg-muted text-muted-foreground cursor-not-allowed',
           )}
         >
-          <Send className="h-3 w-3" />
+          <Send className="icon-xs" />
           {t('thread.send')}
         </button>
       </div>
@@ -107,7 +107,7 @@ export function PermissionApprovalCard({
   return (
     <div className="space-y-2.5 rounded-lg border border-status-warning/20 bg-status-warning/5 p-3">
       <div className="flex items-center gap-2 text-xs text-status-warning/80">
-        <ShieldQuestion className="h-3.5 w-3.5" />
+        <ShieldQuestion className="icon-sm" />
         {t('thread.permissionRequired')}
       </div>
       <p className="text-xs text-foreground">{t('thread.permissionMessage', { tool: toolName })}</p>
@@ -122,9 +122,9 @@ export function PermissionApprovalCard({
           )}
         >
           {loading === 'approve' ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Loader2 className="icon-sm animate-spin" />
           ) : (
-            <CheckCircle2 className="h-3.5 w-3.5" />
+            <CheckCircle2 className="icon-sm" />
           )}
           {t('thread.approvePermission')}
         </button>
@@ -138,9 +138,9 @@ export function PermissionApprovalCard({
           )}
         >
           {loading === 'deny' ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+            <Loader2 className="icon-sm animate-spin" />
           ) : (
-            <XCircle className="h-3.5 w-3.5" />
+            <XCircle className="icon-sm" />
           )}
           {t('thread.denyPermission')}
         </button>

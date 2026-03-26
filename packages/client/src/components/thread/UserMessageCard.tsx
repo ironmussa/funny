@@ -38,9 +38,9 @@ function FileChip({ item }: { item: ReferencedItem }) {
       title={item.path}
     >
       {item.type === 'folder' ? (
-        <FolderOpen className="h-3 w-3 shrink-0" />
+        <FolderOpen className="icon-xs shrink-0" />
       ) : (
-        <FileText className="h-3 w-3 shrink-0" />
+        <FileText className="icon-xs shrink-0" />
       )}
       {item.path.split('/').pop()}
     </span>
@@ -133,12 +133,12 @@ function UserMessageContent({
         >
           {expanded ? (
             <>
-              <ChevronRight className="h-3 w-3 -rotate-90" />
+              <ChevronRight className="icon-xs -rotate-90" />
               {t('thread.showLess', 'Show less')}
             </>
           ) : (
             <>
-              <ChevronDown className="h-3 w-3" />
+              <ChevronDown className="icon-xs" />
               {t('thread.showMore', 'Show more')}
             </>
           )}

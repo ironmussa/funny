@@ -25,6 +25,8 @@ import {
   getStatusSummary,
   deriveGitSyncState,
   getLog,
+  getCommitFiles,
+  getCommitFileDiff,
   stash,
   stashPop,
   stashList,
@@ -324,10 +326,40 @@ gitRoutes.get('/project/:projectId/log', async (c) => {
   const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const limitRaw = c.req.query('limit');
-  const limit = limitRaw ? Math.min(parseInt(limitRaw, 10) || 20, 100) : 20;
-  const result = await getLog(cwdResult.value, limit);
+  const limit = limitRaw ? Math.min(parseInt(limitRaw, 10) || 20, 200) : 50;
+  const skipRaw = c.req.query('skip');
+  const skip = skipRaw ? Math.max(parseInt(skipRaw, 10) || 0, 0) : 0;
+  const result = await getLog(cwdResult.value, limit + 1, undefined, skip);
   if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ entries: result.value });
+  const entries = result.value;
+  const hasMore = entries.length > limit;
+  return c.json({ entries: hasMore ? entries.slice(0, limit) : entries, hasMore });
+});
+
+// GET /api/git/project/:projectId/commit/:hash/files
+gitRoutes.get('/project/:projectId/commit/:hash/files', async (c) => {
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const result = await getCommitFiles(cwdResult.value, c.req.param('hash'));
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ files: result.value });
+});
+
+// GET /api/git/project/:projectId/commit/:hash/diff
+gitRoutes.get('/project/:projectId/commit/:hash/diff', async (c) => {
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const filePath = c.req.query('path');
+  if (!filePath) {
+    return resultToResponse(c, err(badRequest('Missing required query parameter: path')));
+  }
+  const result = await getCommitFileDiff(cwdResult.value, c.req.param('hash'), filePath);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ diff: result.value });
 });
 
 // GET /api/git/project/:projectId/stash/list
@@ -1207,11 +1239,43 @@ gitRoutes.get('/:threadId/log', async (c) => {
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
   const limitRaw = c.req.query('limit');
-  const limit = limitRaw ? Math.min(parseInt(limitRaw, 10) || 20, 100) : 20;
+  const limit = limitRaw ? Math.min(parseInt(limitRaw, 10) || 20, 200) : 50;
+  const skipRaw = c.req.query('skip');
+  const skip = skipRaw ? Math.max(parseInt(skipRaw, 10) || 0, 0) : 0;
 
-  const result = await getLog(cwdResult.value, limit, thread.baseBranch);
+  const all = c.req.query('all') === 'true';
+  const baseBranch = all ? undefined : thread.baseBranch;
+  const result = await getLog(cwdResult.value, limit + 1, baseBranch, skip);
   if (result.isErr()) return resultToResponse(c, result);
-  return c.json({ entries: result.value });
+  const entries = result.value;
+  const hasMore = entries.length > limit;
+  return c.json({ entries: hasMore ? entries.slice(0, limit) : entries, hasMore });
+});
+
+// GET /api/git/:threadId/commit/:hash/files
+gitRoutes.get('/:threadId/commit/:hash/files', async (c) => {
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const result = await getCommitFiles(cwdResult.value, c.req.param('hash'));
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ files: result.value });
+});
+
+// GET /api/git/:threadId/commit/:hash/diff
+gitRoutes.get('/:threadId/commit/:hash/diff', async (c) => {
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const filePath = c.req.query('path');
+  if (!filePath) {
+    return resultToResponse(c, err(badRequest('Missing required query parameter: path')));
+  }
+  const result = await getCommitFileDiff(cwdResult.value, c.req.param('hash'), filePath);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ diff: result.value });
 });
 
 // POST /api/git/:threadId/pull

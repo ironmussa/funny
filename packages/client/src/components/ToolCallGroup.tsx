@@ -49,14 +49,14 @@ export const ToolCallGroup = memo(function ToolCallGroup({
         <div className="flex items-center gap-2">
           <ChevronRight
             className={cn(
-              'h-3 w-3 flex-shrink-0 text-muted-foreground transition-transform duration-150',
+              'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
               expanded && 'rotate-90',
             )}
           />
           {isTodo ? (
-            <ListTodo className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+            <ListTodo className="icon-xs flex-shrink-0 text-muted-foreground" />
           ) : (
-            <Wrench className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+            <Wrench className="icon-xs flex-shrink-0 text-muted-foreground" />
           )}
           <span className="flex-shrink-0 font-mono font-medium text-foreground">{label}</span>
           <span className="inline-flex items-center justify-center rounded-full bg-muted-foreground/20 px-1.5 text-xs font-medium leading-4 text-muted-foreground">

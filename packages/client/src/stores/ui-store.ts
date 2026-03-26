@@ -10,8 +10,17 @@ const DEFAULT_TEST_PANE_WIDTH = 50;
 const MIN_REVIEW_PANE_WIDTH = 20;
 const MAX_REVIEW_PANE_WIDTH = 70;
 const TIMELINE_VISIBLE_KEY = 'timeline_visible';
+const RIGHT_PANE_OPEN_KEY = 'right_pane_open';
+const RIGHT_PANE_TAB_KEY = 'right_pane_tab';
 
 export type RightPaneTab = 'review' | 'tests' | 'tasks' | 'activity';
+
+function persistRightPane(open: boolean, tab?: RightPaneTab) {
+  try {
+    localStorage.setItem(RIGHT_PANE_OPEN_KEY, String(open));
+    if (tab) localStorage.setItem(RIGHT_PANE_TAB_KEY, tab);
+  } catch {}
+}
 
 interface UIState {
   reviewPaneOpen: boolean;
@@ -58,8 +67,25 @@ interface UIState {
 }
 
 export const useUIStore = create<UIState>((set) => ({
-  reviewPaneOpen: false,
-  rightPaneTab: 'review' as RightPaneTab,
+  reviewPaneOpen: (() => {
+    try {
+      const stored = localStorage.getItem(RIGHT_PANE_OPEN_KEY);
+      return stored === 'true';
+    } catch {
+      return false;
+    }
+  })(),
+  rightPaneTab: (() => {
+    try {
+      const stored = localStorage.getItem(RIGHT_PANE_TAB_KEY);
+      if (stored && ['review', 'tests', 'tasks', 'activity'].includes(stored)) {
+        return stored as RightPaneTab;
+      }
+      return 'review' as RightPaneTab;
+    } catch {
+      return 'review' as RightPaneTab;
+    }
+  })(),
   reviewPaneWidth: (() => {
     try {
       const stored = localStorage.getItem(REVIEW_PANE_WIDTH_KEY);
@@ -96,31 +122,42 @@ export const useUIStore = create<UIState>((set) => ({
     }
   })(),
   kanbanContext: null,
-  setReviewPaneOpen: (open) =>
+  setReviewPaneOpen: (open) => {
+    persistRightPane(open, open ? 'review' : undefined);
     set(
       open
         ? { reviewPaneOpen: true, rightPaneTab: 'review' as RightPaneTab }
         : { reviewPaneOpen: false },
-    ),
-  setTestPaneOpen: (open) =>
+    );
+  },
+  setTestPaneOpen: (open) => {
+    persistRightPane(open, open ? 'tests' : undefined);
     set(
       open
         ? { reviewPaneOpen: true, rightPaneTab: 'tests' as RightPaneTab }
         : { reviewPaneOpen: false },
-    ),
-  setTasksPaneOpen: (open) =>
+    );
+  },
+  setTasksPaneOpen: (open) => {
+    persistRightPane(open, open ? 'tasks' : undefined);
     set(
       open
         ? { reviewPaneOpen: true, rightPaneTab: 'tasks' as RightPaneTab }
         : { reviewPaneOpen: false },
-    ),
-  setActivityPaneOpen: (open) =>
+    );
+  },
+  setActivityPaneOpen: (open) => {
+    persistRightPane(open, open ? 'activity' : undefined);
     set(
       open
         ? { reviewPaneOpen: true, rightPaneTab: 'activity' as RightPaneTab }
         : { reviewPaneOpen: false },
-    ),
-  setRightPaneTab: (tab) => set({ rightPaneTab: tab, reviewPaneOpen: true }),
+    );
+  },
+  setRightPaneTab: (tab) => {
+    persistRightPane(true, tab);
+    set({ rightPaneTab: tab, reviewPaneOpen: true });
+  },
   setReviewPaneWidth: (width) => {
     const clamped = Math.max(MIN_REVIEW_PANE_WIDTH, Math.min(MAX_REVIEW_PANE_WIDTH, width));
     try {
@@ -146,6 +183,7 @@ export const useUIStore = create<UIState>((set) => ({
     if (open) {
       invalidateSelectThread();
       useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+      persistRightPane(false);
     }
     set(
       open
@@ -168,6 +206,7 @@ export const useUIStore = create<UIState>((set) => ({
     if (open) {
       invalidateSelectThread();
       useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+      persistRightPane(false);
     }
     set(
       open
@@ -207,6 +246,7 @@ export const useUIStore = create<UIState>((set) => ({
     invalidateSelectThread();
     useProjectStore.getState().selectProject(projectId);
     useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+    persistRightPane(false);
     set({
       newThreadProjectId: projectId,
       newThreadIdleOnly: idleOnly ?? false,
@@ -228,6 +268,7 @@ export const useUIStore = create<UIState>((set) => ({
   showGlobalSearch: () => {
     invalidateSelectThread();
     useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+    persistRightPane(false);
     set({
       allThreadsProjectId: '__all__',
       newThreadProjectId: null,
@@ -244,6 +285,7 @@ export const useUIStore = create<UIState>((set) => ({
     if (open) {
       invalidateSelectThread();
       useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+      persistRightPane(false);
     }
     set(
       open
@@ -265,6 +307,7 @@ export const useUIStore = create<UIState>((set) => ({
     if (open) {
       invalidateSelectThread();
       useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+      persistRightPane(false);
     }
     set(
       open

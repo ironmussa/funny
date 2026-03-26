@@ -121,7 +121,7 @@ export function TasksPanel() {
     <div data-testid="tasks-pane" className="flex h-full flex-col">
       {/* Header */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-3">
-        <ListChecks className="h-4 w-4 text-muted-foreground" />
+        <ListChecks className="icon-base text-muted-foreground" />
         <span className="flex-1 text-sm font-medium">Tasks</span>
         <span
           data-testid="tasks-pane-progress"
@@ -172,11 +172,11 @@ export function TasksPanel() {
                       )}
                     >
                       {task.done ? (
-                        <CircleCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-status-success/80" />
+                        <CircleCheck className="icon-base mt-0.5 flex-shrink-0 text-status-success/80" />
                       ) : isActive ? (
-                        <CircleDot className="mt-0.5 h-4 w-4 flex-shrink-0 animate-pulse text-status-info" />
+                        <CircleDot className="icon-base mt-0.5 flex-shrink-0 animate-pulse text-status-info" />
                       ) : (
-                        <Circle className="mt-0.5 h-4 w-4 flex-shrink-0 text-muted-foreground/40" />
+                        <Circle className="icon-base mt-0.5 flex-shrink-0 text-muted-foreground/40" />
                       )}
                       <span
                         className={cn(

@@ -317,7 +317,7 @@ export const Minimal: StoryObj = {
               placeholder="Type instructions or feedback..."
               onSubmit={handleSubmit}
               onChange={handleChange}
-              className="min-h-[40px] max-h-[120px] overflow-y-auto text-sm"
+              className="max-h-[120px] min-h-[40px] overflow-y-auto text-sm"
             />
           </div>
           <div className="flex items-center justify-end gap-1 border-t border-border/20 px-1.5 py-0.5">
@@ -330,7 +330,7 @@ export const Minimal: StoryObj = {
                   tabIndex={-1}
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  <Mic className="h-3 w-3" />
+                  <Mic className="icon-xs" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Start dictation</TooltipContent>
@@ -349,7 +349,7 @@ export const Minimal: StoryObj = {
                     hasContent && 'text-primary hover:text-primary',
                   )}
                 >
-                  <Send className="h-3 w-3" />
+                  <Send className="icon-xs" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>Send</TooltipContent>

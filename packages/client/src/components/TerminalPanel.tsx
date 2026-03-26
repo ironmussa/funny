@@ -551,7 +551,7 @@ function WebTerminalTabContent({
       {tabError ? (
         <div className="absolute inset-0 flex items-center justify-center bg-background">
           <div className="flex items-center gap-2 text-xs text-destructive">
-            <AlertCircle className="h-4 w-4 flex-shrink-0" />
+            <AlertCircle className="icon-base flex-shrink-0" />
             <span>{tabError}</span>
           </div>
         </div>
@@ -564,14 +564,14 @@ function WebTerminalTabContent({
             className="gap-1.5 text-xs"
             data-testid="terminal-restart"
           >
-            <RotateCcw className="h-3 w-3" />
+            <RotateCcw className="icon-xs" />
             {t('terminal.restart', 'Restart')}
           </Button>
         </div>
       ) : loading ? (
         <div className="absolute inset-0 flex items-center justify-center bg-background">
           <div className="flex items-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="icon-base animate-spin" />
             <span>{t('terminal.loading')}</span>
           </div>
         </div>
@@ -641,7 +641,7 @@ function CommandTabContent({
                 onClick={handleStop}
                 className="text-status-error hover:text-status-error/80"
               >
-                <Square className="h-3 w-3" />
+                <Square className="icon-xs" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>{t('terminal.stop')}</TooltipContent>
@@ -807,7 +807,7 @@ export function TerminalPanel() {
                   <span className="text-xs text-status-pending">{t('terminal.exited')}</span>
                 )}
                 <X
-                  className="ml-1 h-3 w-3 opacity-60 hover:opacity-100"
+                  className="icon-xs ml-1 opacity-60 hover:opacity-100"
                   onClick={(e) => {
                     e.stopPropagation();
                     handleCloseTab(tab.id);
@@ -822,7 +822,7 @@ export function TerminalPanel() {
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon-xs">
-                    <Plus className="h-3.5 w-3.5" />
+                    <Plus className="icon-sm" />
                   </Button>
                 </DropdownMenuTrigger>
               </TooltipTrigger>
@@ -849,7 +849,7 @@ export function TerminalPanel() {
           <Tooltip>
             <TooltipTrigger asChild>
               <Button variant="ghost" size="icon-xs" className="ml-auto" onClick={togglePanel}>
-                <X className="h-3.5 w-3.5" />
+                <X className="icon-sm" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>{t('terminal.hideTerminal')}</TooltipContent>

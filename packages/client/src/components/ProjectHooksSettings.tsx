@@ -164,7 +164,7 @@ function HookItem({
         className="flex-shrink-0 cursor-grab text-muted-foreground/40 hover:text-muted-foreground active:cursor-grabbing"
         data-testid={`hook-drag-${key}`}
       >
-        <GripVertical className="h-3.5 w-3.5" />
+        <GripVertical className="icon-sm" />
       </div>
 
       {/* Content */}
@@ -198,7 +198,7 @@ function HookItem({
                 className="text-muted-foreground"
                 data-testid={`hook-edit-${key}`}
               >
-                <Pencil className="h-3 w-3" />
+                <Pencil className="icon-xs" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>{t('hooks.edit')}</TooltipContent>
@@ -212,7 +212,7 @@ function HookItem({
                 className="text-muted-foreground hover:text-status-error"
                 data-testid={`hook-delete-${key}`}
               >
-                <Trash2 className="h-3 w-3" />
+                <Trash2 className="icon-xs" />
               </Button>
             </TooltipTrigger>
             <TooltipContent>{t('hooks.delete')}</TooltipContent>
@@ -411,7 +411,7 @@ export function ProjectHooksSettings() {
             setAdding(true);
           }}
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="icon-sm" />
           {t('hooks.addHook')}
         </Button>
       </div>
@@ -421,7 +421,7 @@ export function ProjectHooksSettings() {
         <div className="py-8 text-center">
           <p className="mb-3 text-sm text-muted-foreground">{t('hooks.noHooks')}</p>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="icon-sm" />
             {t('hooks.addFirst')}
           </Button>
         </div>
@@ -474,11 +474,11 @@ export function ProjectHooksSettings() {
                   </div>
                   <div className="flex items-center justify-end gap-2 pt-1">
                     <Button variant="ghost" size="sm" onClick={cancelEdit}>
-                      <X className="mr-1 h-3.5 w-3.5" />
+                      <X className="icon-sm mr-1" />
                       {t('common.cancel')}
                     </Button>
                     <Button size="sm" onClick={() => handleUpdate(hook)}>
-                      <Check className="mr-1 h-3.5 w-3.5" />
+                      <Check className="icon-sm mr-1" />
                       {t('common.save')}
                     </Button>
                   </div>
@@ -535,11 +535,11 @@ export function ProjectHooksSettings() {
           </div>
           <div className="flex items-center justify-end gap-2 pt-1">
             <Button variant="ghost" size="sm" onClick={cancelEdit}>
-              <X className="mr-1 h-3.5 w-3.5" />
+              <X className="icon-sm mr-1" />
               {t('common.cancel')}
             </Button>
             <Button size="sm" onClick={handleAdd}>
-              <Check className="mr-1 h-3.5 w-3.5" />
+              <Check className="icon-sm mr-1" />
               {t('hooks.addHook')}
             </Button>
           </div>

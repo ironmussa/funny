@@ -100,7 +100,7 @@ export function AutomationInboxView() {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-6 py-4">
         <div className="flex items-center gap-2">
-          <Inbox className="h-4 w-4 text-muted-foreground" />
+          <Inbox className="icon-base text-muted-foreground" />
           <h2 className="text-sm font-medium">Automation Inbox</h2>
           {inboxCount > 0 && (
             <Badge variant="secondary" className="h-5 min-w-5 px-1 leading-none">
@@ -115,7 +115,7 @@ export function AutomationInboxView() {
           data-testid="inbox-manage-automations"
           onClick={handleGoToSettings}
         >
-          <Settings className="h-3.5 w-3.5" />
+          <Settings className="icon-sm" />
           Manage Automations
         </Button>
       </div>
@@ -160,7 +160,7 @@ export function AutomationInboxView() {
       {/* Search Bar */}
       <div className="border-b border-border px-6 py-3">
         <div className="relative">
-          <Search className="absolute left-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search className="icon-sm absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             type="text"
             data-testid="inbox-search"
@@ -187,7 +187,7 @@ export function AutomationInboxView() {
                 {filterProjectId
                   ? projectsWithItems.find((p) => p.id === filterProjectId)?.name
                   : 'All projects'}
-                <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
+                <ChevronsUpDown className="icon-xs ml-2 shrink-0 opacity-50" />
               </Button>
             </PopoverTrigger>
             <PopoverContent className="w-[200px] p-0" align="start">
@@ -206,7 +206,7 @@ export function AutomationInboxView() {
                     >
                       <Check
                         className={cn(
-                          'mr-2 h-3 w-3',
+                          'mr-2 icon-xs',
                           !filterProjectId ? 'opacity-100' : 'opacity-0',
                         )}
                       />
@@ -224,7 +224,7 @@ export function AutomationInboxView() {
                       >
                         <Check
                           className={cn(
-                            'mr-2 h-3 w-3',
+                            'mr-2 icon-xs',
                             filterProjectId === p.id ? 'opacity-100' : 'opacity-0',
                           )}
                         />

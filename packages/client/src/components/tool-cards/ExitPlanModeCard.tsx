@@ -153,7 +153,7 @@ export function ExitPlanModeCard({
   return (
     <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
       <div className="flex items-center gap-2 px-3 py-1.5 text-xs">
-        <FileCode2 className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+        <FileCode2 className="icon-xs flex-shrink-0 text-muted-foreground" />
         <span className="font-medium text-foreground">{t('tools.plan')}</span>
         {!submitted && (
           <span className="text-muted-foreground">{t('thread.planWaitingForResponse')}</span>
@@ -173,9 +173,9 @@ export function ExitPlanModeCard({
               data-testid="plan-copy-button"
             >
               {copied ? (
-                <Check className="h-3 w-3 text-green-500" />
+                <Check className="icon-xs text-green-500" />
               ) : (
-                <Copy className="h-3 w-3 text-muted-foreground" />
+                <Copy className="icon-xs text-muted-foreground" />
               )}
             </Button>
           )}
@@ -203,14 +203,14 @@ export function ExitPlanModeCard({
               onClick={handleAccept}
               className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
             >
-              <CheckCircle2 className="h-3.5 w-3.5" />
+              <CheckCircle2 className="icon-sm" />
               {t('tools.acceptPlan')}
             </button>
             <button
               onClick={handleReject}
               className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
             >
-              <XCircle className="h-3.5 w-3.5" />
+              <XCircle className="icon-sm" />
               {t('thread.rejectPlan')}
             </button>
           </div>
@@ -224,7 +224,7 @@ export function ExitPlanModeCard({
                 onChange={handleEditorChange}
                 cwd={cwd}
                 loadSkills={loadSkillsForEditor}
-                className="min-h-[40px] max-h-[120px] overflow-y-auto text-sm"
+                className="max-h-[120px] min-h-[40px] overflow-y-auto text-sm"
               />
             </div>
             <div className="flex items-center justify-end gap-1 border-t border-border/20 px-1.5 py-0.5">
@@ -249,11 +249,11 @@ export function ExitPlanModeCard({
                       )}
                     >
                       {isTranscribing ? (
-                        <Loader2 className="h-3 w-3 animate-spin" />
+                        <Loader2 className="icon-xs animate-spin" />
                       ) : isRecording ? (
-                        <MicOff className="h-3 w-3" />
+                        <MicOff className="icon-xs" />
                       ) : (
-                        <Mic className="h-3 w-3" />
+                        <Mic className="icon-xs" />
                       )}
                     </Button>
                   </TooltipTrigger>
@@ -280,7 +280,7 @@ export function ExitPlanModeCard({
                       hasContent && 'text-primary hover:text-primary',
                     )}
                   >
-                    <Send className="h-3 w-3" />
+                    <Send className="icon-xs" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t('prompt.send', 'Send')}</TooltipContent>

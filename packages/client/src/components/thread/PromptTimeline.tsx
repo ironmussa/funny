@@ -450,9 +450,9 @@ function TimelineMilestone({
       {/* Vertical line + dot/icon */}
       <div className="flex w-4 flex-shrink-0 flex-col items-center">
         {milestone.inProgress ? (
-          <Loader2 className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 animate-spin text-blue-400" />
+          <Loader2 className="icon-sm mt-0.5 flex-shrink-0 animate-spin text-blue-400" />
         ) : Icon ? (
-          <Icon className={cn('w-3.5 h-3.5 flex-shrink-0 mt-0.5', colors.icon)} />
+          <Icon className={cn('icon-sm flex-shrink-0 mt-0.5', colors.icon)} />
         ) : (
           <div
             className={cn(

@@ -57,7 +57,7 @@ export function ConfirmDialog({
             variant="destructive"
             className="border-status-warning/30 bg-status-warning/10 text-status-warning [&>svg]:text-status-warning"
           >
-            <AlertTriangle className="h-4 w-4" />
+            <AlertTriangle className="icon-base" />
             <AlertDescription className="text-xs">{warning}</AlertDescription>
           </Alert>
         )}

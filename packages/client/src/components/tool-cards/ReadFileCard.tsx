@@ -28,7 +28,7 @@ export function ReadFileCard({
   return (
     <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
       <div className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-left text-xs">
-        {!hideLabel && <FileSearch className="h-3 w-3 flex-shrink-0 text-muted-foreground" />}
+        {!hideLabel && <FileSearch className="icon-xs flex-shrink-0 text-muted-foreground" />}
         {!hideLabel && (
           <span className="flex-shrink-0 font-mono font-medium text-foreground">
             {t('tools.readFile')}

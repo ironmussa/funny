@@ -55,15 +55,15 @@ function buildTree(files: TestFile[]): TreeNode[] {
 function StatusDot({ status }: { status: TestFileStatus | undefined }) {
   switch (status) {
     case 'running':
-      return <Loader2 className="h-3 w-3 animate-spin text-blue-500" />;
+      return <Loader2 className="icon-xs animate-spin text-blue-500" />;
     case 'passed':
-      return <CheckCircle2 className="h-3 w-3 text-green-500" />;
+      return <CheckCircle2 className="icon-xs text-green-500" />;
     case 'failed':
-      return <XCircle className="h-3 w-3 text-red-500" />;
+      return <XCircle className="icon-xs text-red-500" />;
     case 'stopped':
-      return <Circle className="h-3 w-3 text-yellow-500" />;
+      return <Circle className="icon-xs text-yellow-500" />;
     default:
-      return <Circle className="h-3 w-3 text-muted-foreground/30" />;
+      return <Circle className="icon-xs text-muted-foreground/30" />;
   }
 }
 
@@ -87,7 +87,7 @@ function SpecItem({
       className="group flex h-6 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50"
       style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
     >
-      <Circle className="h-2.5 w-2.5 flex-shrink-0 text-muted-foreground/30" />
+      <Circle className="icon-2xs flex-shrink-0 text-muted-foreground/30" />
       <span className="flex-1 truncate font-mono-explorer text-xs" title={spec.title}>
         {spec.title}
       </span>
@@ -99,7 +99,7 @@ function SpecItem({
         onClick={() => onRunSpec(spec.file, spec.line)}
         tooltip={t('common.run')}
       >
-        <Play className="h-2.5 w-2.5" />
+        <Play className="icon-2xs" />
       </TooltipIconButton>
     </div>
   );
@@ -153,15 +153,12 @@ function TreeItem({
           style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
         >
           <ChevronRight
-            className={cn(
-              'h-3.5 w-3.5 flex-shrink-0 transition-transform',
-              isExpanded && 'rotate-90',
-            )}
+            className={cn('icon-sm flex-shrink-0 transition-transform', isExpanded && 'rotate-90')}
           />
           {isExpanded ? (
-            <FolderOpen className="h-4 w-4 flex-shrink-0 text-muted-foreground/70" />
+            <FolderOpen className="icon-base flex-shrink-0 text-muted-foreground/70" />
           ) : (
-            <Folder className="h-4 w-4 flex-shrink-0 text-muted-foreground/70" />
+            <Folder className="icon-base flex-shrink-0 text-muted-foreground/70" />
           )}
           <span className="flex-1 truncate font-mono-explorer text-xs">{node.name}</span>
         </div>
@@ -222,7 +219,7 @@ function TreeItem({
         >
           <ChevronRight
             className={cn(
-              'h-3.5 w-3.5 flex-shrink-0 transition-transform text-muted-foreground',
+              'icon-sm flex-shrink-0 transition-transform text-muted-foreground',
               isFileExpanded && 'rotate-90',
             )}
           />
@@ -244,7 +241,7 @@ function TreeItem({
             onRunFile(node.path);
           }}
         >
-          <Play className="h-3 w-3" />
+          <Play className="icon-xs" />
         </Button>
       </div>
 
@@ -255,7 +252,7 @@ function TreeItem({
             className="flex h-6 items-center gap-2 text-xs text-muted-foreground"
             style={{ paddingLeft: `${8 + (depth + 1) * INDENT_PX}px` }}
           >
-            <Loader2 className="h-3 w-3 animate-spin" />
+            <Loader2 className="icon-xs animate-spin" />
             Discovering tests...
           </div>
         ) : specs && specs.length > 0 ? (
@@ -376,7 +373,7 @@ export function TestFileBrowser({
             className="h-7 shrink-0 gap-1 px-2 text-xs"
             onClick={onStop}
           >
-            <Square className="h-3 w-3" />
+            <Square className="icon-xs" />
             Stop
           </Button>
         ) : (
@@ -388,7 +385,7 @@ export function TestFileBrowser({
             disabled={files.length === 0}
             onClick={onRunAll}
           >
-            <Play className="h-3 w-3" />
+            <Play className="icon-xs" />
             Run All
           </Button>
         )}
@@ -398,7 +395,7 @@ export function TestFileBrowser({
       <div className="flex-1 overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
-            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            <Loader2 className="icon-base mr-2 animate-spin" />
             Loading tests...
           </div>
         ) : files.length === 0 ? (

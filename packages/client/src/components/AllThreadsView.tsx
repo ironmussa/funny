@@ -5,23 +5,25 @@ import {
   Search,
   ArrowUp,
   ArrowDown,
-  LayoutList,
   Columns3,
   ChevronDown,
   Check,
   X,
+  FolderOpen,
+  GitBranch,
 } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { BranchBadge } from '@/components/BranchBadge';
+import { DiffStats } from '@/components/DiffStats';
 import { KanbanView } from '@/components/KanbanView';
 import { ThreadListView } from '@/components/ThreadListView';
 import { normalize } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { ProjectChip } from '@/components/ui/project-chip';
+import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
+import { colorFromName } from '@/components/ui/project-chip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
 import { gitSyncStateConfig, getStatusLabels } from '@/lib/thread-utils';
@@ -73,7 +75,7 @@ function FilterDropdown({
           )}
         >
           {triggerLabel}
-          <ChevronDown className="h-3 w-3 opacity-50" />
+          <ChevronDown className="icon-xs opacity-50" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-auto min-w-[160px] p-1">
@@ -98,7 +100,7 @@ function FilterDropdown({
                     : 'border-muted-foreground/30',
                 )}
               >
-                {isActive && <Check className="h-2.5 w-2.5" />}
+                {isActive && <Check className="icon-2xs" />}
               </span>
               <span className="flex-1">{opt.label}</span>
               {count != null && count > 0 && (
@@ -416,21 +418,24 @@ export function AllThreadsView() {
     <div className="flex h-full min-w-0 flex-1 flex-col">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-        <TooltipIconButton
-          onClick={() => {
-            if (projectFilter) {
+        {projectFilter && (
+          <TooltipIconButton
+            onClick={() => {
               navigate(buildPath(`/projects/${projectFilter}`));
-            } else {
-              navigate(buildPath('/'));
-            }
-          }}
-          className="text-muted-foreground hover:text-foreground"
-          tooltip={t('common.back')}
-        >
-          {projectFilter ? <ChevronLeft className="h-4 w-4" /> : <Search className="h-4 w-4" />}
-        </TooltipIconButton>
+            }}
+            className="text-muted-foreground hover:text-foreground"
+            tooltip={t('common.back')}
+          >
+            <ChevronLeft className="icon-base" />
+          </TooltipIconButton>
+        )}
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-medium">
+          <h2 className="flex items-center gap-2 text-sm font-medium">
+            {viewMode === 'board' ? (
+              <Columns3 className="icon-sm text-muted-foreground" />
+            ) : (
+              <Search className="icon-sm text-muted-foreground" />
+            )}
             {projectFilter && filteredProject ? t('allThreads.title') : t('allThreads.globalTitle')}
           </h2>
           <p className="text-sm text-muted-foreground">
@@ -439,37 +444,13 @@ export function AllThreadsView() {
               : `${projects.length} ${t('allThreads.projects')} · ${allThreads.length} ${t('allThreads.threads')}`}
           </p>
         </div>
-
-        <div className="flex items-center gap-2">
-          {/* View mode toggle */}
-          <div className="flex items-center gap-1 rounded-md bg-secondary/50 p-0.5">
-            <TooltipIconButton
-              variant={viewMode === 'list' ? 'secondary' : 'ghost'}
-              onClick={() => handleViewModeChange('list')}
-              className="h-6 w-6"
-              data-testid="all-threads-list-view"
-              tooltip={t('kanban.listView')}
-            >
-              <LayoutList className="h-3.5 w-3.5" />
-            </TooltipIconButton>
-            <TooltipIconButton
-              variant={viewMode === 'board' ? 'secondary' : 'ghost'}
-              onClick={() => handleViewModeChange('board')}
-              className="h-6 w-6"
-              data-testid="all-threads-board-view"
-              tooltip={t('kanban.boardView')}
-            >
-              <Columns3 className="h-3.5 w-3.5" />
-            </TooltipIconButton>
-          </div>
-        </div>
       </div>
 
       {/* Filters */}
       <div className="flex items-center gap-2 border-b border-border/50 px-4 py-2">
         {/* Search input (compact, inline) */}
         <div className="relative flex-shrink-0">
-          <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-sm text-muted-foreground" />
+          <Search className="icon-xs absolute left-2 top-1/2 -translate-y-1/2 text-sm text-muted-foreground" />
           <Input
             ref={searchInputRef}
             type="text"
@@ -490,7 +471,7 @@ export function AllThreadsView() {
               data-testid="all-threads-clear-search"
               className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
-              <X className="h-3 w-3" />
+              <X className="icon-xs" />
             </button>
           )}
         </div>
@@ -512,7 +493,7 @@ export function AllThreadsView() {
               {projectFilter && filteredProject
                 ? filteredProject.name
                 : t('allThreads.filterProject')}
-              <ChevronDown className="h-3 w-3 opacity-50" />
+              <ChevronDown className="icon-xs opacity-50" />
             </button>
           </PopoverTrigger>
           <PopoverContent
@@ -535,7 +516,7 @@ export function AllThreadsView() {
                     : 'border-muted-foreground/30',
                 )}
               >
-                {!projectFilter && <Check className="h-2.5 w-2.5" />}
+                {!projectFilter && <Check className="icon-2xs" />}
               </span>
               <span className="flex-1">{t('allThreads.allProjects')}</span>
             </button>
@@ -559,7 +540,7 @@ export function AllThreadsView() {
                         : 'border-muted-foreground/30',
                     )}
                   >
-                    {isActive && <Check className="h-2.5 w-2.5" />}
+                    {isActive && <Check className="icon-2xs" />}
                   </span>
                   <span className="flex-1 truncate">{p.name}</span>
                 </button>
@@ -615,9 +596,9 @@ export function AllThreadsView() {
               {t('allThreads.sortLabel')}:{' '}
               {sortField === 'updated' ? t('allThreads.sortUpdated') : t('allThreads.sortCreated')}
               {sortDir === 'desc' ? (
-                <ArrowDown className="h-3 w-3" />
+                <ArrowDown className="icon-xs" />
               ) : (
-                <ArrowUp className="h-3 w-3" />
+                <ArrowUp className="icon-xs" />
               )}
             </button>
           </PopoverTrigger>
@@ -640,7 +621,7 @@ export function AllThreadsView() {
                     : 'border-muted-foreground/30',
                 )}
               >
-                {sortField === 'updated' && <Check className="h-2.5 w-2.5" />}
+                {sortField === 'updated' && <Check className="icon-2xs" />}
               </span>
               {t('allThreads.sortUpdated')}
             </button>
@@ -662,7 +643,7 @@ export function AllThreadsView() {
                     : 'border-muted-foreground/30',
                 )}
               >
-                {sortField === 'created' && <Check className="h-2.5 w-2.5" />}
+                {sortField === 'created' && <Check className="icon-2xs" />}
               </span>
               {t('allThreads.sortCreated')}
             </button>
@@ -677,12 +658,12 @@ export function AllThreadsView() {
             >
               {sortDir === 'desc' ? (
                 <>
-                  <ArrowDown className="h-3 w-3" />
+                  <ArrowDown className="icon-xs" />
                   {t('allThreads.sortDesc')}
                 </>
               ) : (
                 <>
-                  <ArrowUp className="h-3 w-3" />
+                  <ArrowUp className="icon-xs" />
                   {t('allThreads.sortAsc')}
                 </>
               )}
@@ -704,7 +685,7 @@ export function AllThreadsView() {
               : 'bg-transparent text-muted-foreground border-border hover:bg-accent/50 hover:text-foreground',
           )}
         >
-          <Archive className="h-3 w-3" />
+          <Archive className="icon-xs" />
           {t('allThreads.showArchived')}
         </button>
 
@@ -766,41 +747,48 @@ export function AllThreadsView() {
               renderExtraBadges={(thread) => {
                 const gs = statusByBranch[computeBranchKey(thread)];
                 const gitConf = gs ? gitSyncStateConfig[gs.state] : null;
+                const pInfo = projectInfoById[thread.projectId];
+                const displayBranch = thread.branch || thread.baseBranch;
+                const powerlineSegments: PowerlineSegmentData[] = [];
+                if (!projectFilter && pInfo) {
+                  powerlineSegments.push({
+                    key: 'project',
+                    icon: FolderOpen,
+                    label: pInfo.name,
+                    color: pInfo.color || colorFromName(pInfo.name),
+                  });
+                }
+                if (displayBranch) {
+                  powerlineSegments.push({
+                    key: 'branch',
+                    icon: GitBranch,
+                    label: displayBranch,
+                    color: '#C3A6E0',
+                  });
+                }
                 return (
                   <>
-                    {!projectFilter && projectInfoById[thread.projectId] && (
-                      <ProjectChip
-                        name={projectInfoById[thread.projectId].name}
-                        color={projectInfoById[thread.projectId].color}
+                    {powerlineSegments.length > 0 && (
+                      <PowerlineBar
+                        data-testid={`list-thread-powerline-${thread.id}`}
                         size="sm"
-                      />
-                    )}
-                    {(thread.branch || thread.baseBranch) && (
-                      <BranchBadge
-                        branch={(thread.branch || thread.baseBranch)!}
-                        size="xs"
-                        className="max-w-[150px]"
+                        segments={powerlineSegments}
                       />
                     )}
                     {!!thread.archived && (
                       <span className="inline-flex items-center gap-0.5 rounded bg-muted px-1 py-px text-[10px] font-medium leading-tight text-status-warning/80">
-                        <Archive className="h-2.5 w-2.5" />
+                        <Archive className="icon-2xs" />
                         {t('allThreads.archived')}
                       </span>
                     )}
-                    {gitConf && (
-                      <span
-                        className={cn(
-                          'rounded bg-muted px-1 py-px text-[10px] font-medium leading-tight text-muted-foreground',
-                          gitConf.className,
-                        )}
-                      >
-                        {t(gitConf.labelKey)}
-                      </span>
+                    {gs && (
+                      <DiffStats
+                        linesAdded={gs.linesAdded}
+                        linesDeleted={gs.linesDeleted}
+                        dirtyFileCount={gs.dirtyFileCount}
+                        size="xxs"
+                      />
                     )}
-                    <span className="rounded bg-muted px-1 py-px text-[10px] font-medium leading-tight text-muted-foreground">
-                      {t(`thread.mode.${thread.mode}`)}
-                    </span>
                   </>
                 );
               }}

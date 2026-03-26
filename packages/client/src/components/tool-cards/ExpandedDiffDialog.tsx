@@ -160,7 +160,7 @@ function DiffContent({
   if (loading) {
     return (
       <div className="flex items-center gap-2 p-4 text-xs text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
+        <Loader2 className="icon-base animate-spin" />
         Loading diff…
       </div>
     );
@@ -271,7 +271,7 @@ export function ExpandedDiffDialog({
       >
         <DialogHeader className="flex-shrink-0 overflow-hidden border-b border-border px-4 py-3">
           <DialogTitle className="flex min-w-0 items-center gap-2 overflow-hidden font-mono text-sm">
-            <Icon className="h-4 w-4 flex-shrink-0" />
+            <Icon className="icon-base flex-shrink-0" />
             <span
               className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
               style={{ direction: 'rtl', textAlign: 'left' }}
@@ -288,7 +288,7 @@ export function ExpandedDiffDialog({
                 className="flex-shrink-0 text-muted-foreground"
                 data-testid="diff-toggle-split-view"
               >
-                {splitView ? <Rows2 className="h-4 w-4" /> : <Columns2 className="h-4 w-4" />}
+                {splitView ? <Rows2 className="icon-base" /> : <Columns2 className="icon-base" />}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">

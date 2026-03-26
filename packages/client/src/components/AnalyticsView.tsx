@@ -1,5 +1,5 @@
 import {
-  ChevronLeft,
+  BarChart3,
   Plus,
   CheckCircle2,
   Eye,
@@ -8,22 +8,16 @@ import {
   DollarSign,
   Archive,
   Loader2,
+  ChevronDown,
+  Check,
 } from 'lucide-react';
 import { useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
-import { buildPath } from '@/lib/url';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
 import { MetricCard } from './analytics/MetricCard';
@@ -55,7 +49,6 @@ interface TimelineData {
 
 export function AnalyticsView() {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const projects = useAppStore((s) => s.projects);
   const selectedProjectId = useAppStore((s) => s.selectedProjectId);
 
@@ -65,7 +58,7 @@ export function AnalyticsView() {
   const [timeline, setTimeline] = useState<TimelineData | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const _selectedProject = useMemo(
+  const selectedProject = useMemo(
     () => projects.find((p) => p.id === projectId),
     [projects, projectId],
   );
@@ -99,33 +92,84 @@ export function AnalyticsView() {
     <div className="flex h-full min-w-0 flex-1 flex-col">
       {/* Header */}
       <div className="flex items-center gap-3 border-b border-border px-4 py-3">
-        <TooltipIconButton
-          onClick={() => navigate(buildPath('/'))}
-          className="text-muted-foreground hover:text-foreground"
-          tooltip={t('common.back')}
-        >
-          <ChevronLeft className="h-4 w-4" />
-        </TooltipIconButton>
         <div className="min-w-0 flex-1">
-          <h2 className="text-sm font-medium">{t('analytics.title')}</h2>
+          <h2 className="flex items-center gap-2 text-sm font-medium">
+            <BarChart3 className="icon-sm text-muted-foreground" /> {t('analytics.title')}
+          </h2>
         </div>
       </div>
 
       {/* Filters */}
       <div className="flex items-center gap-2 border-b border-border/50 px-4 py-2">
-        <Select value={projectId} onValueChange={setProjectId}>
-          <SelectTrigger className="h-7 w-[180px] text-xs" data-testid="analytics-project-filter">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="__all__">{t('analytics.allProjects')}</SelectItem>
-            {projects.map((p) => (
-              <SelectItem key={p.id} value={p.id}>
-                {p.name}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              data-testid="analytics-project-filter"
+              className={cn(
+                'inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-colors whitespace-nowrap',
+                projectId !== '__all__'
+                  ? 'bg-accent text-accent-foreground border-accent-foreground/20'
+                  : 'bg-transparent text-muted-foreground border-border hover:bg-accent/50 hover:text-foreground',
+              )}
+            >
+              {projectId !== '__all__' && selectedProject
+                ? selectedProject.name
+                : t('analytics.allProjects')}
+              <ChevronDown className="icon-xs opacity-50" />
+            </button>
+          </PopoverTrigger>
+          <PopoverContent
+            align="start"
+            className="max-h-[300px] w-auto min-w-[180px] overflow-y-auto p-1"
+          >
+            <button
+              onClick={() => setProjectId('__all__')}
+              className={cn(
+                'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
+                'hover:bg-accent hover:text-accent-foreground',
+                projectId === '__all__' && 'text-accent-foreground',
+              )}
+            >
+              <span
+                className={cn(
+                  'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
+                  projectId === '__all__'
+                    ? 'bg-primary border-primary text-primary-foreground'
+                    : 'border-muted-foreground/30',
+                )}
+              >
+                {projectId === '__all__' && <Check className="icon-2xs" />}
+              </span>
+              <span className="flex-1">{t('analytics.allProjects')}</span>
+            </button>
+            {projects.map((p) => {
+              const isActive = projectId === p.id;
+              return (
+                <button
+                  key={p.id}
+                  onClick={() => setProjectId(p.id)}
+                  className={cn(
+                    'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
+                    'hover:bg-accent hover:text-accent-foreground',
+                    isActive && 'text-accent-foreground',
+                  )}
+                >
+                  <span
+                    className={cn(
+                      'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
+                      isActive
+                        ? 'bg-primary border-primary text-primary-foreground'
+                        : 'border-muted-foreground/30',
+                    )}
+                  >
+                    {isActive && <Check className="icon-2xs" />}
+                  </span>
+                  <span className="flex-1 truncate">{p.name}</span>
+                </button>
+              );
+            })}
+          </PopoverContent>
+        </Popover>
 
         <div className="h-4 w-px bg-border" />
 
@@ -138,7 +182,7 @@ export function AnalyticsView() {
           className="flex flex-1 items-center justify-center text-muted-foreground"
           data-testid="analytics-loading"
         >
-          <Loader2 className="h-5 w-5 animate-spin" />
+          <Loader2 className="icon-lg animate-spin" />
         </div>
       ) : (
         <ScrollArea className="min-h-0 flex-1">
@@ -160,37 +204,37 @@ export function AnalyticsView() {
                   <MetricCard
                     title={t('analytics.tasksCreated')}
                     value={overview.createdCount}
-                    icon={<Plus className="h-3.5 w-3.5" />}
+                    icon={<Plus className="icon-sm" />}
                     color="blue"
                   />
                   <MetricCard
                     title={t('analytics.tasksCompleted')}
                     value={overview.completedCount}
-                    icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+                    icon={<CheckCircle2 className="icon-sm" />}
                     color="green"
                   />
                   <MetricCard
                     title={t('analytics.movedToPlanning')}
                     value={overview.movedToPlanningCount}
-                    icon={<ClipboardList className="h-3.5 w-3.5" />}
+                    icon={<ClipboardList className="icon-sm" />}
                     color="violet"
                   />
                   <MetricCard
                     title={t('analytics.movedToReview')}
                     value={overview.movedToReviewCount}
-                    icon={<Eye className="h-3.5 w-3.5" />}
+                    icon={<Eye className="icon-sm" />}
                     color="amber"
                   />
                   <MetricCard
                     title={t('analytics.movedToDone')}
                     value={overview.movedToDoneCount}
-                    icon={<LayoutList className="h-3.5 w-3.5" />}
+                    icon={<LayoutList className="icon-sm" />}
                     color="violet"
                   />
                   <MetricCard
                     title={t('analytics.movedToArchived')}
                     value={overview.movedToArchivedCount}
-                    icon={<Archive className="h-3.5 w-3.5" />}
+                    icon={<Archive className="icon-sm" />}
                     color="red"
                   />
                 </div>
@@ -206,7 +250,7 @@ export function AnalyticsView() {
                       <p className="mt-1 text-xl font-bold">${overview.totalCost.toFixed(4)}</p>
                     </div>
                     <div className="rounded-md bg-status-success/10 p-2 text-status-success/80">
-                      <DollarSign className="h-4 w-4" />
+                      <DollarSign className="icon-base" />
                     </div>
                   </div>
                 )}

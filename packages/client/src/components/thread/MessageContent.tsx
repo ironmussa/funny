@@ -94,7 +94,7 @@ export function CopyButton({ content }: { content: string }) {
       aria-label="Copy message"
       data-testid="message-copy"
     >
-      {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+      {copied ? <Check className="icon-sm" /> : <Copy className="icon-sm" />}
     </button>
   );
 }

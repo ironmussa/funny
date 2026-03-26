@@ -26,7 +26,6 @@ import {
   ClipboardCopy,
   ExternalLink,
   AlertTriangle,
-  History,
   Archive,
   ArchiveRestore,
   PenLine,
@@ -59,7 +58,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
 import { api } from '@/lib/api';
@@ -76,6 +75,7 @@ import { editorLabels } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
+import { CommitHistoryTab } from './CommitHistoryTab';
 import { DiffStats } from './DiffStats';
 import { buildTreeRows, type TreeRow } from './FileTree';
 import { InlineProgressSteps } from './InlineProgressSteps';
@@ -212,17 +212,6 @@ export function ReviewPane() {
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);
 
   // New git operations state
-  const [logEntries, setLogEntries] = useState<
-    Array<{
-      hash: string;
-      shortHash: string;
-      author: string;
-      relativeDate: string;
-      message: string;
-    }>
-  >([]);
-  const [logOpen, setLogOpen] = useState(false);
-  const [logLoading, setLogLoading] = useState(false);
   const [pullInProgress, setPullInProgress] = useState(false);
   const [fetchInProgress, setFetchInProgress] = useState(false);
   const [stashInProgress, setStashInProgress] = useState(false);
@@ -875,25 +864,6 @@ export function ReviewPane() {
 
   // ── New git operation handlers ──
 
-  const handleLoadLog = async () => {
-    if (!hasGitContext || logLoading) return;
-    setLogLoading(true);
-    const result = effectiveThreadId
-      ? await api.getGitLog(effectiveThreadId, 20)
-      : await api.projectGitLog(projectModeId!, 20);
-    if (result.isOk()) {
-      setLogEntries(result.value.entries);
-    } else {
-      toast.error(
-        t('review.logFailed', {
-          message: result.error.message,
-          defaultValue: `Failed to load log: ${result.error.message}`,
-        }),
-      );
-    }
-    setLogLoading(false);
-  };
-
   const handlePull = async () => {
     if (!hasGitContext || pullInProgress) return;
     setPullInProgress(true);
@@ -1027,6 +997,22 @@ export function ReviewPane() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshStashList is a non-memoized function; only trigger on context/visibility change
   }, [gitContextKey, reviewPaneOpen]);
 
+  // ── Persist active sub-tab (changes / history) ──
+  const REVIEW_SUB_TAB_KEY = 'review_sub_tab';
+  const [reviewSubTab, setReviewSubTabRaw] = useState<'changes' | 'history'>(() => {
+    try {
+      const stored = localStorage.getItem(REVIEW_SUB_TAB_KEY);
+      if (stored === 'changes' || stored === 'history') return stored;
+    } catch {}
+    return 'changes';
+  });
+  const setReviewSubTab = useCallback((tab: 'changes' | 'history') => {
+    try {
+      localStorage.setItem(REVIEW_SUB_TAB_KEY, tab);
+    } catch {}
+    setReviewSubTabRaw(tab);
+  }, []);
+
   // When a thread is active, commits are delegated to the agent, so allow even if agent is running
   const canCommit =
     checkedFiles.size > 0 &&
@@ -1035,14 +1021,30 @@ export function ReviewPane() {
     (effectiveThreadId ? true : !isAgentRunning);
 
   return (
-    <div className="flex h-full flex-col text-xs" style={{ contain: 'strict' }}>
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-3">
-        <div className="flex items-center gap-1">
-          <h3 className="mr-1 text-xs font-semibold uppercase tracking-wider text-sidebar-foreground">
-            {t('review.title')}
-          </h3>
-        </div>
+    <Tabs
+      value={reviewSubTab}
+      onValueChange={(v) => setReviewSubTab(v as 'changes' | 'history')}
+      className="flex h-full flex-col text-xs"
+      style={{ contain: 'strict' }}
+    >
+      {/* Header with tabs */}
+      <div className="flex items-center justify-between border-b border-sidebar-border px-2 py-1.5">
+        <TabsList className="h-7 bg-sidebar-accent/50 p-0.5">
+          <TabsTrigger
+            value="changes"
+            className="h-6 px-2.5 text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            data-testid="review-tab-changes"
+          >
+            {t('review.changes', 'Changes')}
+          </TabsTrigger>
+          <TabsTrigger
+            value="history"
+            className="h-6 px-2.5 text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            data-testid="review-tab-history"
+          >
+            {t('review.history', 'History')}
+          </TabsTrigger>
+        </TabsList>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -1052,310 +1054,310 @@ export function ReviewPane() {
               className="text-muted-foreground"
               data-testid="review-close"
             >
-              <PanelRightClose className="h-3.5 w-3.5" />
+              <PanelRightClose className="icon-sm" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top">{t('review.close', 'Close')}</TooltipContent>
         </Tooltip>
       </div>
 
-      {/* File list panel */}
-      <div className="flex min-h-0 flex-1">
-        <div className="flex min-w-0 flex-1 flex-col">
-          {/* Truncation warning */}
-          {truncatedInfo.truncated && (
-            <div className="border-b border-sidebar-border bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-600 dark:text-yellow-400">
-              {t('review.truncatedWarning', {
-                shown: summaries.length,
-                total: truncatedInfo.total,
-                defaultValue: `Showing ${summaries.length} of ${truncatedInfo.total} files. Some files were excluded.`,
-              })}
-            </div>
-          )}
+      {/* Changes tab */}
+      <TabsContent
+        value="changes"
+        className="flex min-h-0 flex-1 data-[state=inactive]:hidden"
+        forceMount
+      >
+        <div className="flex min-h-0 flex-1">
+          <div className="flex min-w-0 flex-1 flex-col">
+            {/* Truncation warning */}
+            {truncatedInfo.truncated && (
+              <div className="border-b border-sidebar-border bg-yellow-500/10 px-3 py-1.5 text-xs text-yellow-600 dark:text-yellow-400">
+                {t('review.truncatedWarning', {
+                  shown: summaries.length,
+                  total: truncatedInfo.total,
+                  defaultValue: `Showing ${summaries.length} of ${truncatedInfo.total} files. Some files were excluded.`,
+                })}
+              </div>
+            )}
 
-          {/* Toolbar icons */}
-          <div className="flex items-center gap-0.5 border-b border-sidebar-border px-2 py-1">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={refresh}
-                  className="text-muted-foreground"
-                  data-testid="review-refresh"
-                >
-                  <RefreshCw className={cn('h-3.5 w-3.5', loading && 'animate-spin')} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">{t('review.refresh')}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handlePull}
-                  disabled={pullInProgress}
-                  className="text-muted-foreground"
-                  data-testid="review-pull"
-                >
-                  <Download className={cn('h-3.5 w-3.5', pullInProgress && 'animate-pulse')} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">{t('review.pull', 'Pull')}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handleFetchOrigin}
-                  disabled={fetchInProgress}
-                  className="text-muted-foreground"
-                  data-testid="review-fetch-origin"
-                >
-                  <CloudDownload
-                    className={cn('h-3.5 w-3.5', fetchInProgress && 'animate-pulse')}
-                  />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {t('review.fetchOrigin', 'Fetch from origin')}
-              </TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  onClick={handlePushOnly}
-                  disabled={pushInProgress || !gitStatus || gitStatus.unpushedCommitCount === 0}
-                  className="text-muted-foreground"
-                  data-testid="review-push-toolbar"
-                >
-                  <Upload className={cn('h-3.5 w-3.5', pushInProgress && 'animate-pulse')} />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent side="top">
-                {gitStatus && gitStatus.unpushedCommitCount > 0
-                  ? t('review.readyToPush', {
-                      count: gitStatus.unpushedCommitCount,
-                      defaultValue: `${gitStatus.unpushedCommitCount} commit(s) ready to push`,
-                    })
-                  : t('review.pushToOrigin', 'Push to origin')}
-              </TooltipContent>
-            </Tooltip>
-            <Popover
-              open={logOpen}
-              onOpenChange={(open) => {
-                setLogOpen(open);
-                if (open) handleLoadLog();
-              }}
-            >
+            {/* Toolbar icons */}
+            <div className="flex items-center gap-0.5 border-b border-sidebar-border px-2 py-1">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <PopoverTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={refresh}
+                    className="text-muted-foreground"
+                    data-testid="review-refresh"
+                  >
+                    <RefreshCw className={cn('icon-sm', loading && 'animate-spin')} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t('review.refresh')}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={handlePull}
+                    disabled={pullInProgress}
+                    className="text-muted-foreground"
+                    data-testid="review-pull"
+                  >
+                    <Download className={cn('icon-sm', pullInProgress && 'animate-pulse')} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">{t('review.pull', 'Pull')}</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={handleFetchOrigin}
+                    disabled={fetchInProgress}
+                    className="text-muted-foreground"
+                    data-testid="review-fetch-origin"
+                  >
+                    <CloudDownload className={cn('icon-sm', fetchInProgress && 'animate-pulse')} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {t('review.fetchOrigin', 'Fetch from origin')}
+                </TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={handlePushOnly}
+                    disabled={pushInProgress || !gitStatus || gitStatus.unpushedCommitCount === 0}
+                    className="text-muted-foreground"
+                    data-testid="review-push-toolbar"
+                  >
+                    <Upload className={cn('icon-sm', pushInProgress && 'animate-pulse')} />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="top">
+                  {gitStatus && gitStatus.unpushedCommitCount > 0
+                    ? t('review.readyToPush', {
+                        count: gitStatus.unpushedCommitCount,
+                        defaultValue: `${gitStatus.unpushedCommitCount} commit(s) ready to push`,
+                      })
+                    : t('review.pushToOrigin', 'Push to origin')}
+                </TooltipContent>
+              </Tooltip>
+              {summaries.length > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
                       size="icon-xs"
+                      onClick={handleStash}
+                      disabled={stashInProgress || !!isAgentRunning}
                       className="text-muted-foreground"
-                      data-testid="review-commit-log"
+                      data-testid="review-stash"
                     >
-                      <History className="h-3.5 w-3.5" />
+                      <Archive className={cn('icon-sm', stashInProgress && 'animate-pulse')} />
                     </Button>
-                  </PopoverTrigger>
-                </TooltipTrigger>
-                <TooltipContent side="top">{t('review.log', 'Commit log')}</TooltipContent>
-              </Tooltip>
-              <PopoverContent align="start" className="max-h-[360px] w-[400px] overflow-auto p-0">
-                {logLoading ? (
-                  <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    {t('review.loadingLog', 'Loading commits\u2026')}
-                  </div>
-                ) : logEntries.length === 0 ? (
-                  <p className="p-3 text-xs text-muted-foreground">
-                    {t('review.noCommits', 'No commits yet')}
-                  </p>
-                ) : (
-                  <div className="divide-y divide-border">
-                    {logEntries.map((entry) => (
-                      <div key={entry.hash} className="px-3 py-2 text-xs hover:bg-accent/50">
-                        <div className="flex items-center gap-2">
-                          <code className="font-mono text-xs text-primary">{entry.shortHash}</code>
-                          <span className="text-muted-foreground">{entry.relativeDate}</span>
-                        </div>
-                        <p className="mt-0.5 truncate text-foreground">{entry.message}</p>
-                        <p className="text-xs text-muted-foreground">{entry.author}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </PopoverContent>
-            </Popover>
-            {summaries.length > 0 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={handleStash}
-                    disabled={stashInProgress || !!isAgentRunning}
-                    className="text-muted-foreground"
-                    data-testid="review-stash"
-                  >
-                    <Archive className={cn('h-3.5 w-3.5', stashInProgress && 'animate-pulse')} />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  {isAgentRunning
-                    ? t('review.agentRunningTooltip')
-                    : t('review.stash', 'Stash changes')}
-                </TooltipContent>
-              </Tooltip>
-            )}
-            {summaries.length > 0 && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon-xs"
-                    onClick={handleDiscardAll}
-                    disabled={!!actionInProgress || !!isAgentRunning}
-                    className="text-muted-foreground"
-                    data-testid="review-discard-all"
-                  >
-                    <Undo2 className="h-3.5 w-3.5" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent side="top">
-                  {isAgentRunning
-                    ? t('review.agentRunningTooltip')
-                    : t('review.discard', 'Discard')}
-                </TooltipContent>
-              </Tooltip>
-            )}
-          </div>
-
-          {/* File search */}
-          {(summaries.length > 0 || loading) && (
-            <div className="border-b border-sidebar-border px-2 py-2">
-              {loading && summaries.length === 0 ? (
-                <div className="h-7 w-full animate-pulse rounded bg-sidebar-accent/20" />
-              ) : summaries.length > 0 ? (
-                <div className="relative">
-                  <Search className="pointer-events-none absolute left-2 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    type="text"
-                    placeholder={t('review.searchFiles', 'Filter files\u2026')}
-                    aria-label={t('review.searchFiles', 'Filter files')}
-                    data-testid="review-file-filter"
-                    value={fileSearch}
-                    onChange={(e) => setFileSearch(e.target.value)}
-                    className="h-7 pl-7 pr-7 text-xs md:text-xs"
-                  />
-                  {fileSearch && (
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {isAgentRunning
+                      ? t('review.agentRunningTooltip')
+                      : t('review.stash', 'Stash changes')}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              {summaries.length > 0 && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
                     <Button
                       variant="ghost"
                       size="icon-xs"
-                      onClick={() => setFileSearch('')}
-                      aria-label={t('review.clearSearch', 'Clear search')}
-                      data-testid="review-file-filter-clear"
-                      className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      onClick={handleDiscardAll}
+                      disabled={!!actionInProgress || !!isAgentRunning}
+                      className="text-muted-foreground"
+                      data-testid="review-discard-all"
                     >
-                      <X className="h-3 w-3" />
+                      <Undo2 className="icon-sm" />
                     </Button>
-                  )}
-                </div>
-              ) : null}
+                  </TooltipTrigger>
+                  <TooltipContent side="top">
+                    {isAgentRunning
+                      ? t('review.agentRunningTooltip')
+                      : t('review.discard', 'Discard')}
+                  </TooltipContent>
+                </Tooltip>
+              )}
             </div>
-          )}
 
-          {/* Select all / count */}
-          {(summaries.length > 0 || loading) && (
-            <div className="flex h-8 items-center gap-1.5 border-b border-sidebar-border py-1.5 pl-2 pr-4">
-              {loading && summaries.length === 0 ? (
-                <div className="h-3 w-24 animate-pulse rounded bg-sidebar-accent/20" />
-              ) : summaries.length > 0 ? (
-                <>
-                  <button
-                    role="checkbox"
-                    aria-checked={
-                      checkedCount === totalCount && totalCount > 0
-                        ? true
-                        : checkedCount > 0
-                          ? 'mixed'
-                          : false
-                    }
-                    aria-label={t('review.selectAll', 'Select all files')}
-                    data-testid="review-select-all"
-                    onClick={toggleAll}
-                    className={cn(
-                      'flex items-center justify-center h-3.5 w-3.5 rounded border transition-colors flex-shrink-0',
-                      checkedCount === totalCount && totalCount > 0
-                        ? 'bg-primary border-primary text-primary-foreground'
-                        : checkedCount > 0
-                          ? 'bg-primary/50 border-primary text-primary-foreground'
-                          : 'border-muted-foreground/40',
+            {/* File search */}
+            {(summaries.length > 0 || loading) && (
+              <div className="border-b border-sidebar-border px-2 py-2">
+                {loading && summaries.length === 0 ? (
+                  <div className="h-7 w-full animate-pulse rounded bg-sidebar-accent/20" />
+                ) : summaries.length > 0 ? (
+                  <div className="relative">
+                    <Search className="icon-sm pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      type="text"
+                      placeholder={t('review.searchFiles', 'Filter files\u2026')}
+                      aria-label={t('review.searchFiles', 'Filter files')}
+                      data-testid="review-file-filter"
+                      value={fileSearch}
+                      onChange={(e) => setFileSearch(e.target.value)}
+                      className="h-7 pl-7 pr-7 text-xs md:text-xs"
+                    />
+                    {fileSearch && (
+                      <Button
+                        variant="ghost"
+                        size="icon-xs"
+                        onClick={() => setFileSearch('')}
+                        aria-label={t('review.clearSearch', 'Clear search')}
+                        data-testid="review-file-filter-clear"
+                        className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
+                      >
+                        <X className="icon-xs" />
+                      </Button>
                     )}
+                  </div>
+                ) : null}
+              </div>
+            )}
+
+            {/* Select all / count */}
+            {(summaries.length > 0 || loading) && (
+              <div className="flex h-8 items-center gap-1.5 border-b border-sidebar-border py-1.5 pl-2 pr-4">
+                {loading && summaries.length === 0 ? (
+                  <div className="h-3 w-24 animate-pulse rounded bg-sidebar-accent/20" />
+                ) : summaries.length > 0 ? (
+                  <>
+                    <button
+                      role="checkbox"
+                      aria-checked={
+                        checkedCount === totalCount && totalCount > 0
+                          ? true
+                          : checkedCount > 0
+                            ? 'mixed'
+                            : false
+                      }
+                      aria-label={t('review.selectAll', 'Select all files')}
+                      data-testid="review-select-all"
+                      onClick={toggleAll}
+                      className={cn(
+                        'flex items-center justify-center h-3.5 w-3.5 rounded border transition-colors flex-shrink-0',
+                        checkedCount === totalCount && totalCount > 0
+                          ? 'bg-primary border-primary text-primary-foreground'
+                          : checkedCount > 0
+                            ? 'bg-primary/50 border-primary text-primary-foreground'
+                            : 'border-muted-foreground/40',
+                      )}
+                    >
+                      {checkedCount > 0 && <Check className="icon-2xs" />}
+                    </button>
+                    <span className="text-xs text-muted-foreground">
+                      {checkedCount}/{totalCount} {t('review.selected', 'selected')}
+                    </span>
+                  </>
+                ) : null}
+              </div>
+            )}
+
+            {/* File list (virtualized) — wrapper ensures flex-1 so commit area stays pinned to bottom */}
+            <div ref={fileListRef} className="min-h-0 flex-1 overflow-auto">
+              {loading && summaries.length === 0 ? (
+                <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
+                  <Loader2 className="icon-sm animate-spin" />
+                  {t('review.loading', 'Loading changes\u2026')}
+                </div>
+              ) : loadError ? (
+                <div className="flex flex-col items-center gap-2 p-4 text-xs text-muted-foreground">
+                  <AlertTriangle className="icon-base text-status-error" />
+                  <p>{t('review.loadFailed', 'Failed to load changes')}</p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={refresh}
+                    className="mt-1 gap-1.5"
+                    data-testid="review-retry"
                   >
-                    {checkedCount > 0 && <Check className="h-2.5 w-2.5" />}
-                  </button>
-                  <span className="text-xs text-muted-foreground">
-                    {checkedCount}/{totalCount} {t('review.selected', 'selected')}
-                  </span>
-                </>
-              ) : null}
-            </div>
-          )}
+                    <RotateCcw className="icon-xs" />
+                    {t('common.retry', 'Retry')}
+                  </Button>
+                </div>
+              ) : summaries.length === 0 && !loading ? (
+                <p className="p-3 text-xs text-muted-foreground">{t('review.noChanges')}</p>
+              ) : filteredDiffs.length === 0 && !loading ? (
+                <p className="p-3 text-xs text-muted-foreground">
+                  {t('review.noMatchingFiles', 'No matching files')}
+                </p>
+              ) : (
+                <div className={cn(loading && 'opacity-60 pointer-events-none')}>
+                  <div
+                    style={{
+                      height: `${virtualizer.getTotalSize()}px`,
+                      width: '100%',
+                      position: 'relative',
+                    }}
+                  >
+                    {virtualizer.getVirtualItems().map((virtualRow) => {
+                      const row = treeRows[virtualRow.index];
+                      const paddingLeft = `${8 + row.depth * INDENT_PX}px`;
 
-          {/* File list (virtualized) — wrapper ensures flex-1 so commit area stays pinned to bottom */}
-          <div ref={fileListRef} className="min-h-0 flex-1 overflow-auto">
-            {loading && summaries.length === 0 ? (
-              <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
-                <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                {t('review.loading', 'Loading changes\u2026')}
-              </div>
-            ) : loadError ? (
-              <div className="flex flex-col items-center gap-2 p-4 text-xs text-muted-foreground">
-                <AlertTriangle className="h-4 w-4 text-status-error" />
-                <p>{t('review.loadFailed', 'Failed to load changes')}</p>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={refresh}
-                  className="mt-1 gap-1.5"
-                  data-testid="review-retry"
-                >
-                  <RotateCcw className="h-3 w-3" />
-                  {t('common.retry', 'Retry')}
-                </Button>
-              </div>
-            ) : summaries.length === 0 && !loading ? (
-              <p className="p-3 text-xs text-muted-foreground">{t('review.noChanges')}</p>
-            ) : filteredDiffs.length === 0 && !loading ? (
-              <p className="p-3 text-xs text-muted-foreground">
-                {t('review.noMatchingFiles', 'No matching files')}
-              </p>
-            ) : (
-              <div className={cn(loading && 'opacity-60 pointer-events-none')}>
-                <div
-                  style={{
-                    height: `${virtualizer.getTotalSize()}px`,
-                    width: '100%',
-                    position: 'relative',
-                  }}
-                >
-                  {virtualizer.getVirtualItems().map((virtualRow) => {
-                    const row = treeRows[virtualRow.index];
-                    const paddingLeft = `${8 + row.depth * INDENT_PX}px`;
+                      if (row.kind === 'folder') {
+                        const isCollapsed = collapsedFolders.has(row.path);
+                        return (
+                          <div
+                            key={`folder-${row.path}`}
+                            className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50"
+                            style={{
+                              position: 'absolute',
+                              top: 0,
+                              left: 0,
+                              width: '100%',
+                              height: `${virtualRow.size}px`,
+                              transform: `translateY(${virtualRow.start}px)`,
+                              paddingLeft,
+                            }}
+                            onClick={() => toggleFolder(row.path)}
+                            data-testid={`review-folder-${row.path}`}
+                          >
+                            <ChevronRight
+                              className={cn(
+                                'icon-sm flex-shrink-0 transition-transform',
+                                !isCollapsed && 'rotate-90',
+                              )}
+                            />
+                            {isCollapsed ? (
+                              <Folder className="icon-base flex-shrink-0 text-muted-foreground/70" />
+                            ) : (
+                              <FolderOpen className="icon-base flex-shrink-0 text-muted-foreground/70" />
+                            )}
+                            <HighlightText
+                              text={row.label}
+                              query={fileSearch}
+                              className="flex-1 truncate font-mono-explorer text-xs"
+                            />
+                            <DiffStats
+                              linesAdded={row.additions}
+                              linesDeleted={row.deletions}
+                              size="xs"
+                            />
+                            {/* Spacers to align with file rows (status letter + 3-dot menu) */}
+                            <span className="invisible flex-shrink-0 text-xs font-medium">M</span>
+                            <span className="h-6 w-6 flex-shrink-0" />
+                          </div>
+                        );
+                      }
 
-                    if (row.kind === 'folder') {
-                      const isCollapsed = collapsedFolders.has(row.path);
+                      const f = row.file;
+                      const isChecked = checkedFiles.has(f.path);
                       return (
                         <div
-                          key={`folder-${row.path}`}
-                          className="flex cursor-pointer select-none items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50"
+                          key={f.path}
                           style={{
                             position: 'absolute',
                             top: 0,
@@ -1365,597 +1367,355 @@ export function ReviewPane() {
                             transform: `translateY(${virtualRow.start}px)`,
                             paddingLeft,
                           }}
-                          onClick={() => toggleFolder(row.path)}
-                          data-testid={`review-folder-${row.path}`}
-                        >
-                          <ChevronRight
-                            className={cn(
-                              'h-3.5 w-3.5 flex-shrink-0 transition-transform',
-                              !isCollapsed && 'rotate-90',
-                            )}
-                          />
-                          {isCollapsed ? (
-                            <Folder className="h-4 w-4 flex-shrink-0 text-muted-foreground/70" />
-                          ) : (
-                            <FolderOpen className="h-4 w-4 flex-shrink-0 text-muted-foreground/70" />
+                          className={cn(
+                            'group flex items-center gap-1.5 text-xs cursor-pointer transition-colors',
+                            selectedFile === f.path
+                              ? 'bg-sidebar-accent text-sidebar-accent-foreground'
+                              : 'hover:bg-sidebar-accent/50 text-muted-foreground',
                           )}
+                          onClick={() => {
+                            if (Date.now() - dropdownCloseRef.current < 400) return;
+                            setSelectedFile(f.path);
+                            setExpandedFile(f.path);
+                          }}
+                        >
+                          <button
+                            role="checkbox"
+                            aria-checked={isChecked}
+                            aria-label={t('review.selectFile', {
+                              file: f.path,
+                              defaultValue: `Select ${f.path}`,
+                            })}
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              toggleFile(f.path);
+                            }}
+                            className={cn(
+                              'flex items-center justify-center h-3.5 w-3.5 rounded border transition-colors flex-shrink-0',
+                              isChecked
+                                ? 'bg-primary border-primary text-primary-foreground'
+                                : 'border-muted-foreground/40',
+                            )}
+                          >
+                            {isChecked && <Check className="icon-2xs" />}
+                          </button>
+                          <FileExtensionIcon
+                            filePath={f.path}
+                            className="icon-base flex-shrink-0 text-muted-foreground/80"
+                          />
                           <HighlightText
-                            text={row.label}
+                            text={f.path.split('/').pop() || ''}
                             query={fileSearch}
                             className="flex-1 truncate font-mono-explorer text-xs"
                           />
                           <DiffStats
-                            linesAdded={row.additions}
-                            linesDeleted={row.deletions}
+                            linesAdded={f.additions ?? 0}
+                            linesDeleted={f.deletions ?? 0}
                             size="xs"
                           />
-                          {/* Spacers to align with file rows (status letter + 3-dot menu) */}
-                          <span className="invisible flex-shrink-0 text-xs font-medium">M</span>
-                          <span className="h-6 w-6 flex-shrink-0" />
-                        </div>
-                      );
-                    }
-
-                    const f = row.file;
-                    const isChecked = checkedFiles.has(f.path);
-                    return (
-                      <div
-                        key={f.path}
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          width: '100%',
-                          height: `${virtualRow.size}px`,
-                          transform: `translateY(${virtualRow.start}px)`,
-                          paddingLeft,
-                        }}
-                        className={cn(
-                          'group flex items-center gap-1.5 text-xs cursor-pointer transition-colors',
-                          selectedFile === f.path
-                            ? 'bg-sidebar-accent text-sidebar-accent-foreground'
-                            : 'hover:bg-sidebar-accent/50 text-muted-foreground',
-                        )}
-                        onClick={() => {
-                          if (Date.now() - dropdownCloseRef.current < 400) return;
-                          setSelectedFile(f.path);
-                          setExpandedFile(f.path);
-                        }}
-                      >
-                        <button
-                          role="checkbox"
-                          aria-checked={isChecked}
-                          aria-label={t('review.selectFile', {
-                            file: f.path,
-                            defaultValue: `Select ${f.path}`,
-                          })}
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            toggleFile(f.path);
-                          }}
-                          className={cn(
-                            'flex items-center justify-center h-3.5 w-3.5 rounded border transition-colors flex-shrink-0',
-                            isChecked
-                              ? 'bg-primary border-primary text-primary-foreground'
-                              : 'border-muted-foreground/40',
-                          )}
-                        >
-                          {isChecked && <Check className="h-2.5 w-2.5" />}
-                        </button>
-                        <FileExtensionIcon
-                          filePath={f.path}
-                          className="h-4 w-4 flex-shrink-0 text-muted-foreground/80"
-                        />
-                        <HighlightText
-                          text={f.path.split('/').pop() || ''}
-                          query={fileSearch}
-                          className="flex-1 truncate font-mono-explorer text-xs"
-                        />
-                        <DiffStats
-                          linesAdded={f.additions ?? 0}
-                          linesDeleted={f.deletions ?? 0}
-                          size="xs"
-                        />
-                        <span
-                          className="flex-shrink-0 text-xs font-medium"
-                          style={{
-                            color:
-                              f.status === 'added'
-                                ? 'hsl(142 40% 45%)'
-                                : f.status === 'modified'
-                                  ? 'hsl(30 90% 55%)'
-                                  : f.status === 'deleted'
-                                    ? 'hsl(0 45% 55%)'
-                                    : 'hsl(200 80% 60%)',
-                          }}
-                        >
-                          {f.status === 'added'
-                            ? 'A'
-                            : f.status === 'modified'
-                              ? 'M'
-                              : f.status === 'deleted'
-                                ? 'D'
-                                : 'R'}
-                        </span>
-                        <DropdownMenu
-                          onOpenChange={(open) => {
-                            if (!open) dropdownCloseRef.current = Date.now();
-                          }}
-                        >
-                          <DropdownMenuTrigger asChild>
-                            <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                              }}
-                              onPointerDown={(e) => {
-                                e.stopPropagation();
-                              }}
-                              aria-label={t('review.moreActions', 'More actions')}
-                              className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
-                            >
-                              <MoreHorizontal className="h-3.5 w-3.5" />
-                            </button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent
-                            align="end"
-                            className="min-w-[220px]"
-                            onCloseAutoFocus={(e) => e.preventDefault()}
+                          <span
+                            className="flex-shrink-0 text-xs font-medium"
+                            style={{
+                              color:
+                                f.status === 'added'
+                                  ? 'hsl(142 40% 45%)'
+                                  : f.status === 'modified'
+                                    ? 'hsl(30 90% 55%)'
+                                    : f.status === 'deleted'
+                                      ? 'hsl(0 45% 55%)'
+                                      : 'hsl(200 80% 60%)',
+                            }}
                           >
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                const fullPath = basePath ? `${basePath}/${f.path}` : f.path;
-                                openFileInExternalEditor(fullPath);
-                              }}
+                            {f.status === 'added'
+                              ? 'A'
+                              : f.status === 'modified'
+                                ? 'M'
+                                : f.status === 'deleted'
+                                  ? 'D'
+                                  : 'R'}
+                          </span>
+                          <DropdownMenu
+                            onOpenChange={(open) => {
+                              if (!open) dropdownCloseRef.current = Date.now();
+                            }}
+                          >
+                            <DropdownMenuTrigger asChild>
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                }}
+                                onPointerDown={(e) => {
+                                  e.stopPropagation();
+                                }}
+                                aria-label={t('review.moreActions', 'More actions')}
+                                className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                              >
+                                <MoreHorizontal className="icon-sm" />
+                              </button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent
+                              align="end"
+                              className="min-w-[220px]"
+                              onCloseAutoFocus={(e) => e.preventDefault()}
                             >
-                              <ExternalLink />
-                              {t('review.openInEditor', { editor: getEditorLabel() })}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleRevertFile(f.path);
-                              }}
-                              className="text-destructive focus:text-destructive"
-                            >
-                              <Undo2 />
-                              {t('review.discardChanges')}
-                            </DropdownMenuItem>
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleIgnore(f.path);
-                              }}
-                            >
-                              <EyeOff />
-                              {t('review.ignoreFile')}
-                            </DropdownMenuItem>
-                            {(() => {
-                              const folders = getParentFolders(f.path);
-                              if (folders.length === 0) return null;
-                              if (folders.length === 1) {
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const fullPath = basePath ? `${basePath}/${f.path}` : f.path;
+                                  openFileInExternalEditor(fullPath);
+                                }}
+                              >
+                                <ExternalLink />
+                                {t('review.openInEditor', { editor: getEditorLabel() })}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleRevertFile(f.path);
+                                }}
+                                className="text-destructive focus:text-destructive"
+                              >
+                                <Undo2 />
+                                {t('review.discardChanges')}
+                              </DropdownMenuItem>
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleIgnore(f.path);
+                                }}
+                              >
+                                <EyeOff />
+                                {t('review.ignoreFile')}
+                              </DropdownMenuItem>
+                              {(() => {
+                                const folders = getParentFolders(f.path);
+                                if (folders.length === 0) return null;
+                                if (folders.length === 1) {
+                                  return (
+                                    <DropdownMenuItem
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleIgnore(folders[0]);
+                                      }}
+                                    >
+                                      <FolderX />
+                                      {t('review.ignoreFolder')}
+                                    </DropdownMenuItem>
+                                  );
+                                }
+                                return (
+                                  <DropdownMenuSub>
+                                    <DropdownMenuSubTrigger
+                                      onClick={(e) => e.stopPropagation()}
+                                      onPointerDown={(e) => e.stopPropagation()}
+                                    >
+                                      <FolderX />
+                                      {t('review.ignoreFolder')}
+                                    </DropdownMenuSubTrigger>
+                                    <DropdownMenuSubContent
+                                      onClick={(e) => e.stopPropagation()}
+                                      onPointerDown={(e) => e.stopPropagation()}
+                                    >
+                                      {folders.map((folder) => (
+                                        <DropdownMenuItem
+                                          key={folder}
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            handleIgnore(folder);
+                                          }}
+                                        >
+                                          {folder}
+                                        </DropdownMenuItem>
+                                      ))}
+                                    </DropdownMenuSubContent>
+                                  </DropdownMenuSub>
+                                );
+                              })()}
+                              {(() => {
+                                const ext = getFileExtension(f.path);
+                                if (!ext) return null;
                                 return (
                                   <DropdownMenuItem
                                     onClick={(e) => {
                                       e.stopPropagation();
-                                      handleIgnore(folders[0]);
+                                      handleIgnore(`*${ext}`);
                                     }}
                                   >
-                                    <FolderX />
-                                    {t('review.ignoreFolder')}
+                                    <EyeOff />
+                                    {t('review.ignoreExtension', { ext })}
                                   </DropdownMenuItem>
                                 );
-                              }
-                              return (
-                                <DropdownMenuSub>
-                                  <DropdownMenuSubTrigger
-                                    onClick={(e) => e.stopPropagation()}
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                  >
-                                    <FolderX />
-                                    {t('review.ignoreFolder')}
-                                  </DropdownMenuSubTrigger>
-                                  <DropdownMenuSubContent
-                                    onClick={(e) => e.stopPropagation()}
-                                    onPointerDown={(e) => e.stopPropagation()}
-                                  >
-                                    {folders.map((folder) => (
-                                      <DropdownMenuItem
-                                        key={folder}
-                                        onClick={(e) => {
-                                          e.stopPropagation();
-                                          handleIgnore(folder);
-                                        }}
-                                      >
-                                        {folder}
-                                      </DropdownMenuItem>
-                                    ))}
-                                  </DropdownMenuSubContent>
-                                </DropdownMenuSub>
-                              );
-                            })()}
-                            {(() => {
-                              const ext = getFileExtension(f.path);
-                              if (!ext) return null;
-                              return (
-                                <DropdownMenuItem
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    handleIgnore(`*${ext}`);
-                                  }}
-                                >
-                                  <EyeOff />
-                                  {t('review.ignoreExtension', { ext })}
-                                </DropdownMenuItem>
-                              );
-                            })()}
-                            <DropdownMenuSeparator />
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCopyPath(f.path, false);
-                              }}
-                            >
-                              <Copy />
-                              {t('review.copyFilePath')}
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                handleCopyPath(f.path, true);
-                              }}
-                            >
-                              <ClipboardCopy />
-                              {t('review.copyRelativePath')}
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </div>
-                    );
-                  })}
+                              })()}
+                              <DropdownMenuSeparator />
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyPath(f.path, false);
+                                }}
+                              >
+                                <Copy />
+                                {t('review.copyFilePath')}
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleCopyPath(f.path, true);
+                                }}
+                              >
+                                <ClipboardCopy />
+                                {t('review.copyRelativePath')}
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      );
+                    })}
+                  </div>
                 </div>
+              )}
+            </div>
+
+            {/* Commit controls */}
+            {summaries.length > 0 && commitInProgress && (
+              <div className="flex-shrink-0 space-y-2 border-t border-sidebar-border p-2">
+                <p className="text-xs font-medium text-foreground">{commitEntry.title}</p>
+                <InlineProgressSteps steps={commitEntry.steps} />
+                {(() => {
+                  const hasFailed = commitEntry.steps.some((s) => s.status === 'failed');
+                  const isRunning = commitEntry.steps.some((s) => s.status === 'running');
+                  const isFinished =
+                    !isRunning &&
+                    (commitEntry.steps.every(
+                      (s) => s.status === 'completed' || s.status === 'failed',
+                    ) ||
+                      hasFailed);
+                  if (isFinished && hasFailed) {
+                    return (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        onClick={() => {
+                          useCommitProgressStore.getState().finishCommit(commitProgressId);
+                          setActionInProgress(null);
+                        }}
+                      >
+                        {t('review.progress.dismiss', 'Dismiss')}
+                      </Button>
+                    );
+                  }
+                  return null;
+                })()}
               </div>
             )}
-          </div>
-
-          {/* Commit controls */}
-          {summaries.length > 0 && commitInProgress && (
-            <div className="flex-shrink-0 space-y-2 border-t border-sidebar-border p-2">
-              <p className="text-xs font-medium text-foreground">{commitEntry.title}</p>
-              <InlineProgressSteps steps={commitEntry.steps} />
-              {(() => {
-                const hasFailed = commitEntry.steps.some((s) => s.status === 'failed');
-                const isRunning = commitEntry.steps.some((s) => s.status === 'running');
-                const isFinished =
-                  !isRunning &&
-                  (commitEntry.steps.every(
-                    (s) => s.status === 'completed' || s.status === 'failed',
-                  ) ||
-                    hasFailed);
-                if (isFinished && hasFailed) {
-                  return (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => {
-                        useCommitProgressStore.getState().finishCommit(commitProgressId);
-                        setActionInProgress(null);
-                      }}
-                    >
-                      {t('review.progress.dismiss', 'Dismiss')}
-                    </Button>
-                  );
-                }
-                return null;
-              })()}
-            </div>
-          )}
-          {summaries.length > 0 && !commitInProgress && (
-            <div className="flex-shrink-0 space-y-1.5 border-t border-sidebar-border p-2">
-              <input
-                type="text"
-                placeholder={t('review.commitTitle')}
-                aria-label={t('review.commitTitle', 'Commit title')}
-                data-testid="review-commit-title"
-                value={commitTitle}
-                onChange={(e) => setCommitTitle(e.target.value)}
-                disabled={!!actionInProgress || generatingMsg}
-                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
-              />
-              <div className="rounded-md border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
-                <textarea
-                  className="w-full resize-none bg-transparent px-2 py-1.5 text-xs placeholder:text-muted-foreground focus-visible:outline-none"
-                  rows={7}
-                  aria-label={t('review.commitBody', 'Commit body')}
-                  data-testid="review-commit-body"
-                  placeholder={t('review.commitBody')}
-                  value={commitBody}
-                  onChange={(e) => setCommitBody(e.target.value)}
+            {summaries.length > 0 && !commitInProgress && (
+              <div className="flex-shrink-0 space-y-1.5 border-t border-sidebar-border p-2">
+                <input
+                  type="text"
+                  placeholder={t('review.commitTitle')}
+                  aria-label={t('review.commitTitle', 'Commit title')}
+                  data-testid="review-commit-title"
+                  value={commitTitle}
+                  onChange={(e) => setCommitTitle(e.target.value)}
                   disabled={!!actionInProgress || generatingMsg}
+                  className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
                 />
-                <div className="flex items-center px-1.5 py-1">
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={handleGenerateCommitMsg}
-                        disabled={summaries.length === 0 || generatingMsg || !!actionInProgress}
-                        data-testid="review-generate-commit-msg"
-                      >
-                        <Sparkles className={cn('h-2.5 w-2.5', generatingMsg && 'animate-pulse')} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {generatingMsg
-                        ? t('review.generatingCommitMsg')
-                        : t('review.generateCommitMsg')}
-                    </TooltipContent>
-                  </Tooltip>
-                </div>
-              </div>
-              <div
-                className={cn(
-                  'grid gap-1 mt-2',
-                  isOnDifferentBranch ? 'grid-cols-5' : 'grid-cols-3',
-                )}
-              >
-                {[
-                  {
-                    value: 'commit' as const,
-                    icon: GitCommit,
-                    label: t('review.commit', 'Commit'),
-                    testId: 'review-action-commit',
-                  },
-                  {
-                    value: 'amend' as const,
-                    icon: PenLine,
-                    label: t('review.amend', 'Amend'),
-                    testId: 'review-action-amend',
-                  },
-                  {
-                    value: 'commit-push' as const,
-                    icon: Upload,
-                    label: t('review.commitAndPush', 'Commit & Push'),
-                    testId: 'review-action-commit-push',
-                  },
-                  ...(isOnDifferentBranch
-                    ? [
-                        {
-                          value: 'commit-pr' as const,
-                          icon: GitPullRequest,
-                          label: t('review.commitAndCreatePR', 'Commit & Create PR'),
-                          testId: 'review-action-commit-pr',
-                        },
-                        {
-                          value: 'commit-merge' as const,
-                          icon: GitMerge,
-                          label: t('review.commitAndMerge', 'Commit & Merge'),
-                          testId: 'review-action-commit-merge',
-                        },
-                      ]
-                    : []),
-                ].map(({ value, icon: ActionIcon, label, testId }) => (
-                  <Tooltip key={value}>
-                    <TooltipTrigger asChild>
-                      <button
-                        type="button"
-                        onClick={() => setSelectedAction(value)}
-                        disabled={!!actionInProgress || (!!isAgentRunning && !effectiveThreadId)}
-                        data-testid={testId}
-                        className={cn(
-                          'flex flex-col items-center gap-1 rounded-md border p-2 text-center transition-all',
-                          'hover:bg-accent/50 disabled:opacity-50 disabled:cursor-not-allowed',
-                          selectedAction === value
-                            ? 'border-primary bg-primary/5 text-foreground'
-                            : 'border-border text-muted-foreground',
-                        )}
-                      >
-                        <ActionIcon
-                          className={cn('h-4 w-4', selectedAction === value && 'text-primary')}
-                        />
-                        <span className="text-xs font-medium leading-tight">{label}</span>
-                      </button>
-                    </TooltipTrigger>
-                    {isAgentRunning && (
-                      <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
-                    )}
-                  </Tooltip>
-                ))}
-              </div>
-              <div className="flex gap-1.5">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <div className="flex-1">
-                      <Button
-                        className="w-full"
-                        size="sm"
-                        onClick={handleCommitAction}
-                        disabled={!canCommit}
-                        data-testid="review-commit-execute"
-                      >
-                        {actionInProgress ? (
-                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                        ) : null}
-                        {t('review.continue', 'Continue')}
-                      </Button>
-                    </div>
-                  </TooltipTrigger>
-                  {isAgentRunning && (
-                    <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
-                  )}
-                </Tooltip>
-              </div>
-            </div>
-          )}
-
-          {/* Standalone push button — shown when no dirty files but there are unpushed commits */}
-          {showPushOnly && (
-            <div className="flex-shrink-0 space-y-2 border-t border-sidebar-border p-3">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <Upload className="h-3.5 w-3.5" />
-                <span>
-                  {t('review.readyToPush', {
-                    count: gitStatus!.unpushedCommitCount,
-                    defaultValue: `${gitStatus!.unpushedCommitCount} commit(s) ready to push`,
-                  })}
-                </span>
-              </div>
-              <div className="flex gap-1.5">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="flex-1">
-                      <Button
-                        className="w-full"
-                        size="sm"
-                        onClick={handlePushOnly}
-                        disabled={pushInProgress || !!isAgentRunning}
-                        data-testid="review-push"
-                      >
-                        {pushInProgress ? (
-                          <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Upload className="mr-1.5 h-3.5 w-3.5" />
-                        )}
-                        {t('review.pushToOrigin', 'Push to origin')}
-                      </Button>
-                    </span>
-                  </TooltipTrigger>
-                  {isAgentRunning && (
-                    <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
-                  )}
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={handleResetSoft}
-                      disabled={resetInProgress || !!isAgentRunning}
-                      data-testid="review-undo-commit"
-                    >
-                      {resetInProgress ? (
-                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                      ) : (
-                        <RotateCcw className="h-3.5 w-3.5" />
-                      )}
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    {isAgentRunning
-                      ? t('review.agentRunningTooltip')
-                      : t('review.undoLastCommit', 'Undo last commit')}
-                  </TooltipContent>
-                </Tooltip>
-              </div>
-            </div>
-          )}
-
-          {/* Stash pop — shown when no dirty files but there are stashed changes */}
-          {summaries.length === 0 && !loading && stashEntries.length > 0 && (
-            <div className="flex-shrink-0 space-y-3 border-t border-sidebar-border p-3">
-              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                <ArchiveRestore className="h-3.5 w-3.5" />
-                <span>
-                  {t('review.stashedChanges', {
-                    count: stashEntries.length,
-                    defaultValue: `${stashEntries.length} stash(es) saved`,
-                  })}
-                </span>
-              </div>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    className="w-full"
-                    size="sm"
-                    variant="outline"
-                    onClick={handleStashPop}
-                    disabled={stashPopInProgress || !!isAgentRunning}
-                    data-testid="review-pop-stash"
-                  >
-                    {stashPopInProgress ? (
-                      <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                    ) : (
-                      <ArchiveRestore className="mr-1.5 h-3.5 w-3.5" />
-                    )}
-                    {t('review.popStash', 'Pop stash')}
-                  </Button>
-                </TooltipTrigger>
-                {isAgentRunning && (
-                  <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
-                )}
-              </Tooltip>
-            </div>
-          )}
-
-          {/* Standalone merge / create PR buttons — shown when no dirty files but worktree has unmerged commits */}
-          {showMergeOnly && (
-            <div className="flex-shrink-0 space-y-3 border-t border-sidebar-border p-3">
-              {commitInProgress && commitEntry?.action === 'merge' ? (
-                <>
-                  <p className="text-xs font-medium text-foreground">{commitEntry.title}</p>
-                  <InlineProgressSteps steps={commitEntry.steps} />
-                  {(() => {
-                    const hasFailed = commitEntry.steps.some((s) => s.status === 'failed');
-                    const isRunning = commitEntry.steps.some((s) => s.status === 'running');
-                    const isFinished =
-                      !isRunning &&
-                      (commitEntry.steps.every(
-                        (s) => s.status === 'completed' || s.status === 'failed',
-                      ) ||
-                        hasFailed);
-                    if (isFinished && hasFailed) {
-                      return (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="w-full"
-                          onClick={() => {
-                            useCommitProgressStore.getState().finishCommit(commitProgressId);
-                          }}
-                          data-testid="review-merge-dismiss"
-                        >
-                          {t('review.progress.dismiss', 'Dismiss')}
-                        </Button>
-                      );
-                    }
-                    return null;
-                  })()}
-                </>
-              ) : (
-                <>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                    <GitMerge className="h-3.5 w-3.5" />
-                    <span>
-                      {t('review.readyToMerge', {
-                        target: baseBranch || 'base',
-                        defaultValue: `Ready to merge into ${baseBranch || 'base'}`,
-                      })}
-                    </span>
-                  </div>
-                  <div className="flex gap-1.5">
+                <div className="rounded-md border border-input bg-background focus-within:ring-1 focus-within:ring-ring">
+                  <textarea
+                    className="w-full resize-none bg-transparent px-2 py-1.5 text-xs placeholder:text-muted-foreground focus-visible:outline-none"
+                    rows={7}
+                    aria-label={t('review.commitBody', 'Commit body')}
+                    data-testid="review-commit-body"
+                    placeholder={t('review.commitBody')}
+                    value={commitBody}
+                    onChange={(e) => setCommitBody(e.target.value)}
+                    disabled={!!actionInProgress || generatingMsg}
+                  />
+                  <div className="flex items-center px-1.5 py-1">
                     <Tooltip>
                       <TooltipTrigger asChild>
                         <Button
-                          className="flex-1"
-                          size="sm"
-                          onClick={handleMergeOnly}
-                          disabled={mergeInProgress || (!!isAgentRunning && !effectiveThreadId)}
-                          data-testid="review-merge"
+                          variant="ghost"
+                          size="icon-xs"
+                          onClick={handleGenerateCommitMsg}
+                          disabled={summaries.length === 0 || generatingMsg || !!actionInProgress}
+                          data-testid="review-generate-commit-msg"
                         >
-                          {mergeInProgress ? (
-                            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <GitMerge className="mr-1.5 h-3.5 w-3.5" />
-                          )}
-                          {t('review.mergeIntoBranch', {
-                            target: baseBranch || 'base',
-                            defaultValue: `Merge into ${baseBranch || 'base'}`,
-                          })}
+                          <Sparkles className={cn('icon-2xs', generatingMsg && 'animate-pulse')} />
                         </Button>
+                      </TooltipTrigger>
+                      <TooltipContent side="top">
+                        {generatingMsg
+                          ? t('review.generatingCommitMsg')
+                          : t('review.generateCommitMsg')}
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </div>
+                <div
+                  className={cn(
+                    'grid gap-1 mt-2',
+                    isOnDifferentBranch ? 'grid-cols-5' : 'grid-cols-3',
+                  )}
+                >
+                  {[
+                    {
+                      value: 'commit' as const,
+                      icon: GitCommit,
+                      label: t('review.commit', 'Commit'),
+                      testId: 'review-action-commit',
+                    },
+                    {
+                      value: 'amend' as const,
+                      icon: PenLine,
+                      label: t('review.amend', 'Amend'),
+                      testId: 'review-action-amend',
+                    },
+                    {
+                      value: 'commit-push' as const,
+                      icon: Upload,
+                      label: t('review.commitAndPush', 'Commit & Push'),
+                      testId: 'review-action-commit-push',
+                    },
+                    ...(isOnDifferentBranch
+                      ? [
+                          {
+                            value: 'commit-pr' as const,
+                            icon: GitPullRequest,
+                            label: t('review.commitAndCreatePR', 'Commit & Create PR'),
+                            testId: 'review-action-commit-pr',
+                          },
+                          {
+                            value: 'commit-merge' as const,
+                            icon: GitMerge,
+                            label: t('review.commitAndMerge', 'Commit & Merge'),
+                            testId: 'review-action-commit-merge',
+                          },
+                        ]
+                      : []),
+                  ].map(({ value, icon: ActionIcon, label, testId }) => (
+                    <Tooltip key={value}>
+                      <TooltipTrigger asChild>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedAction(value)}
+                          disabled={!!actionInProgress || (!!isAgentRunning && !effectiveThreadId)}
+                          data-testid={testId}
+                          className={cn(
+                            'flex flex-col items-center gap-1 rounded-md border p-2 text-center transition-all',
+                            'hover:bg-accent/50 disabled:opacity-50 disabled:cursor-not-allowed',
+                            selectedAction === value
+                              ? 'border-primary bg-primary/5 text-foreground'
+                              : 'border-border text-muted-foreground',
+                          )}
+                        >
+                          <ActionIcon
+                            className={cn('icon-base', selectedAction === value && 'text-primary')}
+                          />
+                          <span className="text-xs font-medium leading-tight">{label}</span>
+                        </button>
                       </TooltipTrigger>
                       {isAgentRunning && (
                         <TooltipContent side="top">
@@ -1963,61 +1723,270 @@ export function ReviewPane() {
                         </TooltipContent>
                       )}
                     </Tooltip>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
+                  ))}
+                </div>
+                <div className="flex gap-1.5">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className="flex-1">
                         <Button
+                          className="w-full"
                           size="sm"
-                          variant="outline"
-                          onClick={() => setPrDialog({ title: threadBranch || '', body: '' })}
-                          disabled={!!isAgentRunning}
-                          data-testid="review-create-pr"
+                          onClick={handleCommitAction}
+                          disabled={!canCommit}
+                          data-testid="review-commit-execute"
                         >
-                          <GitPullRequest className="h-3.5 w-3.5" />
+                          {actionInProgress ? (
+                            <Loader2 className="icon-sm mr-1.5 animate-spin" />
+                          ) : null}
+                          {t('review.continue', 'Continue')}
                         </Button>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">
-                        {isAgentRunning
-                          ? t('review.agentRunningTooltip')
-                          : t('review.createPRTooltip', {
-                              branch: threadBranch,
-                              target: baseBranch || 'base',
-                            })}
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
-                </>
-              )}
-            </div>
-          )}
-
-          {/* Rebase conflict resolution — shown when merge/rebase failed with conflicts */}
-          {hasRebaseConflict && (
-            <div className="flex-shrink-0 space-y-2 border-t border-sidebar-border p-3">
-              <div className="flex items-center gap-2 text-xs text-destructive">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                <span>{t('review.mergeConflict', { target: baseBranch || 'main' })}</span>
+                      </div>
+                    </TooltipTrigger>
+                    {isAgentRunning && (
+                      <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
+                    )}
+                  </Tooltip>
+                </div>
               </div>
-              {isWorktree && (
-                <Button
-                  className="w-full"
-                  size="sm"
-                  variant="outline"
-                  onClick={handleOpenInEditorConflict}
-                >
-                  <ExternalLink className="mr-1.5 h-3.5 w-3.5" />
-                  {t('review.openInEditor', {
-                    editor: editorLabels[useSettingsStore.getState().defaultEditor],
-                  })}
+            )}
+
+            {/* Standalone push button — shown when no dirty files but there are unpushed commits */}
+            {showPushOnly && (
+              <div className="flex-shrink-0 space-y-2 border-t border-sidebar-border p-3">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <Upload className="icon-sm" />
+                  <span>
+                    {t('review.readyToPush', {
+                      count: gitStatus!.unpushedCommitCount,
+                      defaultValue: `${gitStatus!.unpushedCommitCount} commit(s) ready to push`,
+                    })}
+                  </span>
+                </div>
+                <div className="flex gap-1.5">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="flex-1">
+                        <Button
+                          className="w-full"
+                          size="sm"
+                          onClick={handlePushOnly}
+                          disabled={pushInProgress || !!isAgentRunning}
+                          data-testid="review-push"
+                        >
+                          {pushInProgress ? (
+                            <Loader2 className="icon-sm mr-1.5 animate-spin" />
+                          ) : (
+                            <Upload className="icon-sm mr-1.5" />
+                          )}
+                          {t('review.pushToOrigin', 'Push to origin')}
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    {isAgentRunning && (
+                      <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
+                    )}
+                  </Tooltip>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={handleResetSoft}
+                        disabled={resetInProgress || !!isAgentRunning}
+                        data-testid="review-undo-commit"
+                      >
+                        {resetInProgress ? (
+                          <Loader2 className="icon-sm animate-spin" />
+                        ) : (
+                          <RotateCcw className="icon-sm" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {isAgentRunning
+                        ? t('review.agentRunningTooltip')
+                        : t('review.undoLastCommit', 'Undo last commit')}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              </div>
+            )}
+
+            {/* Stash pop — shown when no dirty files but there are stashed changes */}
+            {summaries.length === 0 && !loading && stashEntries.length > 0 && (
+              <div className="flex-shrink-0 space-y-3 border-t border-sidebar-border p-3">
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <ArchiveRestore className="icon-sm" />
+                  <span>
+                    {t('review.stashedChanges', {
+                      count: stashEntries.length,
+                      defaultValue: `${stashEntries.length} stash(es) saved`,
+                    })}
+                  </span>
+                </div>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      className="w-full"
+                      size="sm"
+                      variant="outline"
+                      onClick={handleStashPop}
+                      disabled={stashPopInProgress || !!isAgentRunning}
+                      data-testid="review-pop-stash"
+                    >
+                      {stashPopInProgress ? (
+                        <Loader2 className="icon-sm mr-1.5 animate-spin" />
+                      ) : (
+                        <ArchiveRestore className="icon-sm mr-1.5" />
+                      )}
+                      {t('review.popStash', 'Pop stash')}
+                    </Button>
+                  </TooltipTrigger>
+                  {isAgentRunning && (
+                    <TooltipContent side="top">{t('review.agentRunningTooltip')}</TooltipContent>
+                  )}
+                </Tooltip>
+              </div>
+            )}
+
+            {/* Standalone merge / create PR buttons — shown when no dirty files but worktree has unmerged commits */}
+            {showMergeOnly && (
+              <div className="flex-shrink-0 space-y-3 border-t border-sidebar-border p-3">
+                {commitInProgress && commitEntry?.action === 'merge' ? (
+                  <>
+                    <p className="text-xs font-medium text-foreground">{commitEntry.title}</p>
+                    <InlineProgressSteps steps={commitEntry.steps} />
+                    {(() => {
+                      const hasFailed = commitEntry.steps.some((s) => s.status === 'failed');
+                      const isRunning = commitEntry.steps.some((s) => s.status === 'running');
+                      const isFinished =
+                        !isRunning &&
+                        (commitEntry.steps.every(
+                          (s) => s.status === 'completed' || s.status === 'failed',
+                        ) ||
+                          hasFailed);
+                      if (isFinished && hasFailed) {
+                        return (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full"
+                            onClick={() => {
+                              useCommitProgressStore.getState().finishCommit(commitProgressId);
+                            }}
+                            data-testid="review-merge-dismiss"
+                          >
+                            {t('review.progress.dismiss', 'Dismiss')}
+                          </Button>
+                        );
+                      }
+                      return null;
+                    })()}
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                      <GitMerge className="icon-sm" />
+                      <span>
+                        {t('review.readyToMerge', {
+                          target: baseBranch || 'base',
+                          defaultValue: `Ready to merge into ${baseBranch || 'base'}`,
+                        })}
+                      </span>
+                    </div>
+                    <div className="flex gap-1.5">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            className="flex-1"
+                            size="sm"
+                            onClick={handleMergeOnly}
+                            disabled={mergeInProgress || (!!isAgentRunning && !effectiveThreadId)}
+                            data-testid="review-merge"
+                          >
+                            {mergeInProgress ? (
+                              <Loader2 className="icon-sm mr-1.5 animate-spin" />
+                            ) : (
+                              <GitMerge className="icon-sm mr-1.5" />
+                            )}
+                            {t('review.mergeIntoBranch', {
+                              target: baseBranch || 'base',
+                              defaultValue: `Merge into ${baseBranch || 'base'}`,
+                            })}
+                          </Button>
+                        </TooltipTrigger>
+                        {isAgentRunning && (
+                          <TooltipContent side="top">
+                            {t('review.agentRunningTooltip')}
+                          </TooltipContent>
+                        )}
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setPrDialog({ title: threadBranch || '', body: '' })}
+                            disabled={!!isAgentRunning}
+                            data-testid="review-create-pr"
+                          >
+                            <GitPullRequest className="icon-sm" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          {isAgentRunning
+                            ? t('review.agentRunningTooltip')
+                            : t('review.createPRTooltip', {
+                                branch: threadBranch,
+                                target: baseBranch || 'base',
+                              })}
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </>
+                )}
+              </div>
+            )}
+
+            {/* Rebase conflict resolution — shown when merge/rebase failed with conflicts */}
+            {hasRebaseConflict && (
+              <div className="flex-shrink-0 space-y-2 border-t border-sidebar-border p-3">
+                <div className="flex items-center gap-2 text-xs text-destructive">
+                  <AlertTriangle className="icon-sm" />
+                  <span>{t('review.mergeConflict', { target: baseBranch || 'main' })}</span>
+                </div>
+                {isWorktree && (
+                  <Button
+                    className="w-full"
+                    size="sm"
+                    variant="outline"
+                    onClick={handleOpenInEditorConflict}
+                  >
+                    <ExternalLink className="icon-sm mr-1.5" />
+                    {t('review.openInEditor', {
+                      editor: editorLabels[useSettingsStore.getState().defaultEditor],
+                    })}
+                  </Button>
+                )}
+                <Button className="w-full" size="sm" onClick={handleAskAgentResolve}>
+                  <Sparkles className="icon-sm mr-1.5" />
+                  {t('review.askAgentResolve')}
                 </Button>
-              )}
-              <Button className="w-full" size="sm" onClick={handleAskAgentResolve}>
-                <Sparkles className="mr-1.5 h-3.5 w-3.5" />
-                {t('review.askAgentResolve')}
-              </Button>
-            </div>
-          )}
+              </div>
+            )}
+          </div>
         </div>
-      </div>
+      </TabsContent>
+
+      {/* History tab */}
+      <TabsContent
+        value="history"
+        className="flex min-h-0 flex-1 data-[state=inactive]:hidden"
+        forceMount
+      >
+        <CommitHistoryTab />
+      </TabsContent>
 
       {/* Confirmation dialog for destructive actions */}
       <ConfirmDialog
@@ -2107,9 +2076,9 @@ export function ReviewPane() {
               data-testid="review-pr-create"
             >
               {prInProgress ? (
-                <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="icon-sm mr-1.5 animate-spin" />
               ) : (
-                <GitPullRequest className="mr-1.5 h-3.5 w-3.5" />
+                <GitPullRequest className="icon-sm mr-1.5" />
               )}
               {t('review.createPR')}
             </Button>
@@ -2161,6 +2130,6 @@ export function ReviewPane() {
           />
         );
       })()}
-    </div>
+    </Tabs>
   );
 }

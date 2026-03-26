@@ -57,7 +57,7 @@ export const GitEventCard = memo(function GitEventCard({ event }: { event: Threa
 
   return (
     <div className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-accent/30">
-      <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
+      <Icon className="icon-xs shrink-0 text-muted-foreground" />
       <span className="shrink-0 font-mono font-medium text-foreground">{config.label}</span>
       {metadata.message && (
         <span className="min-w-0 truncate font-mono text-muted-foreground">{metadata.message}</span>

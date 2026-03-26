@@ -325,7 +325,7 @@ export function CloneRepoView() {
   if (view === 'checking') {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        <Loader2 className="icon-lg animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -335,7 +335,7 @@ export function CloneRepoView() {
     return (
       <div className="flex flex-col items-center gap-4 py-8">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
-          <Github className="h-6 w-6 text-destructive" />
+          <Github className="icon-xl text-destructive" />
         </div>
         <div className="space-y-1 text-center">
           <h3 className="font-medium">
@@ -366,7 +366,7 @@ export function CloneRepoView() {
     return (
       <div className="flex flex-col items-center gap-4 py-8">
         <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
-          <Github className="h-6 w-6" />
+          <Github className="icon-xl" />
         </div>
         <div className="space-y-1 text-center">
           <h3 className="font-medium">{t('github.connectGithub')}</h3>
@@ -374,7 +374,7 @@ export function CloneRepoView() {
         </div>
         <div className="flex w-full max-w-xs flex-col gap-2">
           <Button className="w-full" onClick={startDeviceFlow}>
-            <Github className="mr-2 h-4 w-4" />
+            <Github className="icon-base mr-2" />
             {t('github.connectGithub')}
           </Button>
           <div className="flex items-center gap-3">
@@ -387,7 +387,7 @@ export function CloneRepoView() {
             className="w-full"
             onClick={() => navigate(buildPath('/preferences/github'))}
           >
-            <Settings className="mr-2 h-4 w-4" />
+            <Settings className="icon-base mr-2" />
             {t('github.useToken')}
           </Button>
           <p className="text-center text-xs text-muted-foreground">
@@ -425,19 +425,19 @@ export function CloneRepoView() {
             {userCode}
           </code>
           <Button variant="outline" size="sm" onClick={() => copyCode(userCode)}>
-            {codeCopied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
+            {codeCopied ? <Check className="icon-base" /> : <Copy className="icon-base" />}
           </Button>
         </div>
 
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => window.open(verificationUri, '_blank')}>
-            <ExternalLink className="mr-2 h-4 w-4" />
+            <ExternalLink className="icon-base mr-2" />
             {t('github.deviceFlow.openGithub')}
           </Button>
         </div>
 
         <div className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Loader2 className="h-4 w-4 animate-spin" />
+          <Loader2 className="icon-base animate-spin" />
           {t('github.deviceFlow.waitingAuth')}
         </div>
 
@@ -471,7 +471,7 @@ export function CloneRepoView() {
               className="ml-auto h-7 text-xs text-muted-foreground"
               onClick={disconnect}
             >
-              <LogOut className="mr-1 h-3 w-3" />
+              <LogOut className="icon-xs mr-1" />
               {t('github.disconnect')}
             </Button>
           </div>
@@ -479,7 +479,7 @@ export function CloneRepoView() {
 
         {/* Search */}
         <div className="relative mb-3">
-          <Search className="absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted-foreground" />
+          <Search className="icon-sm absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="h-auto w-full py-1.5 pl-8 pr-3"
             placeholder={t('github.repos.searchPlaceholder')}
@@ -507,9 +507,9 @@ export function CloneRepoView() {
               <div className="flex items-center gap-2">
                 <span className="truncate text-sm font-medium">{repo.full_name}</span>
                 {repo.private ? (
-                  <Lock className="h-3 w-3 flex-shrink-0 text-status-pending" />
+                  <Lock className="icon-xs flex-shrink-0 text-status-pending" />
                 ) : (
-                  <Globe className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                  <Globe className="icon-xs flex-shrink-0 text-muted-foreground" />
                 )}
               </div>
               {repo.description && (
@@ -524,7 +524,7 @@ export function CloneRepoView() {
 
           {loadingRepos && (
             <div className="flex justify-center py-4">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <Loader2 className="icon-base animate-spin text-muted-foreground" />
             </div>
           )}
 
@@ -564,7 +564,7 @@ export function CloneRepoView() {
           className="-ml-2 text-muted-foreground"
           onClick={() => setView('repos')}
         >
-          <ArrowLeft className="mr-1 h-3.5 w-3.5" />
+          <ArrowLeft className="icon-sm mr-1" />
           {t('github.repos.title')}
         </Button>
 
@@ -572,7 +572,7 @@ export function CloneRepoView() {
         <div className="space-y-1 rounded-md border border-border p-3">
           <div className="flex items-center gap-2">
             <span className="text-sm font-medium">{selectedRepo.full_name}</span>
-            {selectedRepo.private && <Lock className="h-3 w-3 text-status-pending" />}
+            {selectedRepo.private && <Lock className="icon-xs text-status-pending" />}
           </div>
           {selectedRepo.description && (
             <p className="text-xs text-muted-foreground">{selectedRepo.description}</p>
@@ -600,7 +600,7 @@ export function CloneRepoView() {
               onChange={(e) => setDestinationPath(e.target.value)}
             />
             <Button variant="outline" size="sm" onClick={() => setFolderPickerOpen(true)}>
-              <FolderOpen className="h-4 w-4" />
+              <FolderOpen className="icon-base" />
             </Button>
           </div>
         </div>

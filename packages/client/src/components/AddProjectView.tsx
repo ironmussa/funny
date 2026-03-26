@@ -93,7 +93,7 @@ export function AddProjectView() {
       <div className="w-full max-w-md space-y-6 px-4 pb-8">
         <div className="space-y-2 text-center">
           <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Plus className="h-6 w-6 text-primary" />
+            <Plus className="icon-xl text-primary" />
           </div>
           <h2 className="text-xl font-semibold">{t('sidebar.addProject')}</h2>
         </div>
@@ -109,7 +109,7 @@ export function AddProjectView() {
             data-testid="add-project-tab-local"
             onClick={() => setMode('local')}
           >
-            <FolderOpen className="h-3.5 w-3.5" />
+            <FolderOpen className="icon-sm" />
             {t('github.localFolder')}
           </button>
           <button
@@ -121,7 +121,7 @@ export function AddProjectView() {
             data-testid="add-project-tab-clone"
             onClick={() => setMode('github')}
           >
-            <Github className="h-3.5 w-3.5" />
+            <Github className="icon-sm" />
             {t('github.cloneFromGithub')}
           </button>
         </div>
@@ -162,7 +162,7 @@ export function AddProjectView() {
                   onClick={() => setFolderPickerOpen(true)}
                   title={t('sidebar.browseFolder')}
                 >
-                  <FolderOpen className="h-4 w-4" />
+                  <FolderOpen className="icon-base" />
                 </Button>
               </div>
             </div>
@@ -183,7 +183,7 @@ export function AddProjectView() {
               >
                 {isCreating ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <Loader2 className="icon-base mr-2 animate-spin" />
                     {t('common.loading')}
                   </>
                 ) : (

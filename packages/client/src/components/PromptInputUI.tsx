@@ -151,7 +151,7 @@ export const PurposeSelect = memo(function PurposeSelect({
           return (
             <SelectItem key={opt.value} value={opt.value} size="xs">
               <span className="flex items-center gap-1.5">
-                <Icon className="h-3 w-3" />
+                <Icon className="icon-xs" />
                 {opt.label}
               </span>
             </SelectItem>
@@ -638,7 +638,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                   className="absolute -right-1 -top-1 rounded-full bg-destructive p-0.5 text-destructive-foreground opacity-0 transition-opacity group-hover:opacity-100"
                   disabled={loading}
                 >
-                  <X className="h-3 w-3" />
+                  <X className="icon-xs" />
                 </button>
               </div>
             ))}
@@ -663,7 +663,7 @@ export const PromptInputUI = memo(function PromptInputUI({
             className="mb-2 space-y-2 rounded-md border border-border/40 px-2.5 py-2"
           >
             <div className="flex items-center gap-1.5">
-              <ListOrdered className="h-3 w-3 shrink-0 text-muted-foreground" />
+              <ListOrdered className="icon-xs shrink-0 text-muted-foreground" />
               <span className="text-xs text-muted-foreground">
                 {(queuedMessagesProp.length > 0 ? queuedMessagesProp.length : queuedCount) === 1
                   ? t('prompt.queuedOne', '1 message in queue')
@@ -676,7 +676,7 @@ export const PromptInputUI = memo(function PromptInputUI({
 
             {queueLoading ? (
               <div className="flex items-center gap-2 rounded-md border border-dashed border-border/60 bg-background/60 px-3 py-2 text-xs text-muted-foreground">
-                <Loader2 className="h-3 w-3 animate-spin" />
+                <Loader2 className="icon-xs animate-spin" />
                 {t('prompt.loadingQueuedMessages', 'Loading queued messages...')}
               </div>
             ) : (
@@ -715,9 +715,9 @@ export const PromptInputUI = memo(function PromptInputUI({
                               className="text-muted-foreground hover:text-foreground"
                             >
                               {isBusy ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <Loader2 className="icon-xs animate-spin" />
                               ) : (
-                                <Check className="h-3 w-3" />
+                                <Check className="icon-xs" />
                               )}
                             </Button>
                             <Button
@@ -731,7 +731,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                               title={t('prompt.cancelQueuedEdit', 'Cancel')}
                               className="text-muted-foreground hover:text-foreground"
                             >
-                              <X className="h-3 w-3" />
+                              <X className="icon-xs" />
                             </Button>
                           </div>
                         </div>
@@ -758,7 +758,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                               title={t('prompt.editQueuedMessage', 'Edit')}
                               className="text-muted-foreground hover:text-foreground"
                             >
-                              <Pencil className="h-3 w-3" />
+                              <Pencil className="icon-xs" />
                             </Button>
                             <Button
                               data-testid={`queue-delete-${message.id}`}
@@ -772,9 +772,9 @@ export const PromptInputUI = memo(function PromptInputUI({
                               className="text-destructive hover:text-destructive"
                             >
                               {isBusy ? (
-                                <Loader2 className="h-3 w-3 animate-spin" />
+                                <Loader2 className="icon-xs animate-spin" />
                               ) : (
-                                <Trash2 className="h-3 w-3" />
+                                <Trash2 className="icon-xs" />
                               )}
                             </Button>
                           </div>
@@ -841,7 +841,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                 disabled={loading}
                 className="text-muted-foreground hover:text-foreground"
               >
-                <Paperclip className="h-4 w-4" />
+                <Paperclip className="icon-base" />
               </Button>
               {isNewThread && (
                 <PurposeSelect
@@ -884,11 +884,11 @@ export const PromptInputUI = memo(function PromptInputUI({
                         )}
                       >
                         {isTranscribing ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          <Loader2 className="icon-sm animate-spin" />
                         ) : isRecording ? (
-                          <MicOff className="h-3.5 w-3.5" />
+                          <MicOff className="icon-sm" />
                         ) : (
-                          <Mic className="h-3.5 w-3.5" />
+                          <Mic className="icon-sm" />
                         )}
                       </Button>
                     </TooltipTrigger>
@@ -910,7 +910,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                     tabIndex={-1}
                     aria-label={t('prompt.stopAgent')}
                   >
-                    <Square className="h-3.5 w-3.5" />
+                    <Square className="icon-sm" />
                   </Button>
                 ) : (
                   <Button
@@ -926,9 +926,9 @@ export const PromptInputUI = memo(function PromptInputUI({
                     }
                   >
                     {loading ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <Loader2 className="icon-sm animate-spin" />
                     ) : (
-                      <ArrowUp className="h-3.5 w-3.5" />
+                      <ArrowUp className="icon-sm" />
                     )}
                   </Button>
                 )}
@@ -942,17 +942,17 @@ export const PromptInputUI = memo(function PromptInputUI({
                 {remoteUrl && (
                   <span className="flex max-w-[200px] shrink-0 items-center gap-1 truncate px-2 py-1 text-xs text-muted-foreground">
                     {remoteUrl.includes('github.com') ? (
-                      <Github className="h-3 w-3 shrink-0" />
+                      <Github className="icon-xs shrink-0" />
                     ) : (
-                      <Globe className="h-3 w-3 shrink-0" />
+                      <Globe className="icon-xs shrink-0" />
                     )}
                     <span className="truncate font-mono">{formatRemoteUrl(remoteUrl)}</span>
                   </span>
                 )}
                 {branchesLoading ? (
                   <span className="flex items-center gap-1 px-2 py-1 text-xs text-muted-foreground">
-                    <GitBranch className="h-3 w-3 shrink-0" />
-                    <Loader2 className="h-3 w-3 animate-spin" />
+                    <GitBranch className="icon-xs shrink-0" />
+                    <Loader2 className="icon-xs animate-spin" />
                   </span>
                 ) : (
                   branches.length > 0 && (
@@ -1000,7 +1000,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                     )}
                     title={t('prompt.sendToBacklog')}
                   >
-                    <Inbox className="h-3 w-3" />
+                    <Inbox className="icon-xs" />
                     {t('prompt.backlog')}
                   </button>
                 )}
@@ -1010,7 +1010,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                 {effectiveCwd && (
                   <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
                     <span className="group/cwd flex max-w-[400px] shrink-0 items-center gap-1 truncate px-2 py-1 text-xs text-muted-foreground">
-                      <FolderOpen className="h-3 w-3 shrink-0" />
+                      <FolderOpen className="icon-xs shrink-0" />
                       <span className="truncate font-mono">{effectiveCwd}</span>
                       <button
                         type="button"
@@ -1020,7 +1020,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                           toast.success('Path copied');
                         }}
                       >
-                        <Copy className="h-3 w-3" />
+                        <Copy className="icon-xs" />
                       </button>
                     </span>
                   </div>
@@ -1037,7 +1037,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                       />
                     )}
                     {activeThreadBranch && followUpBranches.length > 0 && (
-                      <ArrowLeft className="h-3 w-3 shrink-0 text-muted-foreground" />
+                      <ArrowLeft className="icon-xs shrink-0 text-muted-foreground" />
                     )}
                     {activeThreadBranch && (
                       <button
@@ -1048,7 +1048,7 @@ export const PromptInputUI = memo(function PromptInputUI({
                           toast.success(t('prompt.branchCopied', 'Branch copied'));
                         }}
                       >
-                        <GitBranch className="h-3 w-3 shrink-0" />
+                        <GitBranch className="icon-xs shrink-0" />
                         <span className="font-mono font-medium text-foreground">
                           {activeThreadBranch}
                         </span>

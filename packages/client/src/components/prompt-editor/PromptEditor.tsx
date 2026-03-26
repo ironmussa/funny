@@ -185,7 +185,7 @@ function SuggestionPopup({
         )}
       >
         <div className="flex items-center gap-2 px-3 py-2 text-xs text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" />
+          <Loader2 className="icon-xs animate-spin" />
           {type === 'file'
             ? t('prompt.loadingFiles', 'Loading files\u2026')
             : t('prompt.loadingSkills', 'Loading skills\u2026')}
@@ -241,12 +241,12 @@ function SuggestionPopup({
         >
           {type === 'file' ? (
             item.fileType === 'folder' ? (
-              <FolderOpen className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <FolderOpen className="icon-sm mt-0.5 shrink-0 text-muted-foreground" />
             ) : (
-              <FileText className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <FileText className="icon-sm mt-0.5 shrink-0 text-muted-foreground" />
             )
           ) : (
-            <Zap className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+            <Zap className="icon-base mt-0.5 shrink-0 text-muted-foreground" />
           )}
           <div className="min-w-0">
             <HighlightText

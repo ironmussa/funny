@@ -2,7 +2,7 @@ import { cva } from 'class-variance-authority';
 import type { LucideIcon } from 'lucide-react';
 
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
+import { cn, ICON_SIZE } from '@/lib/utils';
 
 const navItemVariants = cva('flex w-full items-center gap-2 rounded-md transition-colors', {
   variants: {
@@ -22,8 +22,8 @@ const navItemVariants = cva('flex w-full items-center gap-2 rounded-md transitio
 });
 
 const iconSizes = {
-  sm: 'h-3.5 w-3.5',
-  md: 'h-4 w-4',
+  sm: ICON_SIZE.sm,
+  md: ICON_SIZE.base,
 } as const;
 
 interface NavItemProps {

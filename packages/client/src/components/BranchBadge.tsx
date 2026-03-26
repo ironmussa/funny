@@ -1,6 +1,6 @@
 import { GitBranch } from 'lucide-react';
 
-import { cn } from '@/lib/utils';
+import { cn, ICON_SIZE } from '@/lib/utils';
 
 interface BranchBadgeProps {
   branch: string;
@@ -10,15 +10,15 @@ interface BranchBadgeProps {
 
 const sizeStyles = {
   xs: {
-    icon: 'h-2.5 w-2.5',
+    icon: ICON_SIZE['2xs'],
     text: 'text-[10px]',
   },
   sm: {
-    icon: 'h-3 w-3',
+    icon: ICON_SIZE.xs,
     text: 'text-xs',
   },
   md: {
-    icon: 'h-3.5 w-3.5',
+    icon: ICON_SIZE.sm,
     text: 'text-sm',
   },
 };

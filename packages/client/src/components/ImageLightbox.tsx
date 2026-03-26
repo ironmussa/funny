@@ -54,7 +54,7 @@ export function ImageLightbox({ images, initialIndex = 0, open, onClose }: Image
         onClick={onClose}
         className="absolute right-4 top-4 z-10 rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70"
       >
-        <X className="h-5 w-5" />
+        <X className="icon-lg" />
       </button>
 
       {/* Previous button */}
@@ -66,7 +66,7 @@ export function ImageLightbox({ images, initialIndex = 0, open, onClose }: Image
           }}
           className="absolute left-4 z-10 rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70"
         >
-          <ChevronLeft className="h-6 w-6" />
+          <ChevronLeft className="icon-xl" />
         </button>
       )}
 
@@ -87,7 +87,7 @@ export function ImageLightbox({ images, initialIndex = 0, open, onClose }: Image
           }}
           className="absolute right-4 z-10 rounded-full bg-black/50 p-2 text-white transition-colors hover:bg-black/70"
         >
-          <ChevronRight className="h-6 w-6" />
+          <ChevronRight className="icon-xl" />
         </button>
       )}
 

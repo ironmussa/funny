@@ -139,15 +139,15 @@ export const ToolCallCard = memo(
           <div className="flex w-full items-center gap-2 overflow-hidden px-3 py-1.5 text-left text-xs">
             <ChevronRight
               className={cn(
-                'h-3 w-3 flex-shrink-0 text-muted-foreground transition-transform duration-150',
+                'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
                 expanded && 'rotate-90',
               )}
             />
             {!hideLabel &&
               (isTodo ? (
-                <ListTodo className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                <ListTodo className="icon-xs flex-shrink-0 text-muted-foreground" />
               ) : (
-                <Wrench className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                <Wrench className="icon-xs flex-shrink-0 text-muted-foreground" />
               ))}
             {!hideLabel && (
               <span className="flex-shrink-0 font-mono font-medium text-foreground">{label}</span>
@@ -237,7 +237,7 @@ export const ToolCallCard = memo(
                       onClick={() => onRespond('Accepted')}
                       className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1 text-sm font-medium text-primary-foreground transition-colors hover:bg-primary/90"
                     >
-                      <Check className="h-3 w-3" />
+                      <Check className="icon-xs" />
                       {t('tools.respond')}
                     </button>
                   </div>

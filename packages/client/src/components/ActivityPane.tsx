@@ -32,6 +32,11 @@ import { useUIStore } from '@/stores/ui-store';
 
 import { ExpandedDiffDialog } from './tool-cards/ExpandedDiffDialog';
 
+// ─── Constants ────────────────────────────────────────────
+
+/** Stable empty Set so that referential equality is preserved across renders. */
+const EMPTY_SET = new Set<string>();
+
 // ─── Diff helpers ─────────────────────────────────────────
 
 const fileStatusIcons: Record<string, typeof FileCode> = {
@@ -136,16 +141,16 @@ function useRunningAgents(): RunningAgent[] {
 function useThreadTouchedPaths(): Set<string> {
   const threadId = useThreadStore((s) => s.activeThread?.id);
   const isRunning = useThreadStore((s) => s.activeThread?.status === 'running');
-  const [paths, setPaths] = useState<Set<string>>(new Set());
-  const prevRef = useRef<Set<string>>(new Set());
+  const [paths, setPaths] = useState<Set<string>>(EMPTY_SET);
+  const prevRef = useRef<Set<string>>(EMPTY_SET);
   const prevThreadIdRef = useRef<string | undefined>(undefined);
 
   useEffect(() => {
     // Clear when switching threads
     if (threadId !== prevThreadIdRef.current) {
       prevThreadIdRef.current = threadId;
-      setPaths(new Set());
-      prevRef.current = new Set();
+      setPaths(EMPTY_SET);
+      prevRef.current = EMPTY_SET;
     }
 
     if (!threadId) return;
@@ -156,7 +161,16 @@ function useThreadTouchedPaths(): Set<string> {
       const result = await api.getTouchedFiles(threadId);
       if (cancelled) return;
       if (result.isOk()) {
-        const newPaths = new Set(result.value.files);
+        const files = result.value.files;
+        // Use stable EMPTY_SET for empty results to avoid unnecessary re-renders
+        if (files.length === 0) {
+          if (prevRef.current.size !== 0) {
+            prevRef.current = EMPTY_SET;
+            setPaths(EMPTY_SET);
+          }
+          return;
+        }
+        const newPaths = new Set(files);
         const prev = prevRef.current;
         // Stable reference check
         if (newPaths.size !== prev.size || ![...newPaths].every((p) => prev.has(p))) {
@@ -206,6 +220,14 @@ function useActivityFiles() {
   useEffect(() => {
     if (!threadId) {
       setFiles([]);
+      return;
+    }
+
+    // No touched paths → no modified files to show; skip the diff API call entirely.
+    // This prevents unnecessary loading flickers for idle threads.
+    if (touchedPaths.size === 0) {
+      setFiles([]);
+      setLoading(false);
       return;
     }
 
@@ -311,11 +333,11 @@ function InlineTodoList({
             className="flex items-start gap-2"
           >
             {todo.status === 'completed' ? (
-              <CircleCheck className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-status-success/80" />
+              <CircleCheck className="icon-sm mt-0.5 flex-shrink-0 text-status-success/80" />
             ) : todo.status === 'in_progress' ? (
-              <CircleDot className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 animate-pulse text-status-info" />
+              <CircleDot className="icon-sm mt-0.5 flex-shrink-0 animate-pulse text-status-info" />
             ) : (
-              <Circle className="mt-0.5 h-3.5 w-3.5 flex-shrink-0 text-muted-foreground/50" />
+              <Circle className="icon-sm mt-0.5 flex-shrink-0 text-muted-foreground/50" />
             )}
             <span
               className={cn(
@@ -356,7 +378,10 @@ function AgentCard({
     <div data-testid={testId} className="rounded-md border border-border/50 px-2.5 py-2">
       {/* Agent header */}
       <div className="flex items-center gap-2">
-        <Icon className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+        {isRunning && (
+          <Loader2 className="icon-xs flex-shrink-0 animate-spin text-muted-foreground" />
+        )}
+        <Icon className="icon-sm flex-shrink-0 text-muted-foreground" />
         <span className="min-w-0 flex-1 truncate text-xs font-medium text-muted-foreground">
           {label}
         </span>
@@ -364,9 +389,6 @@ function AgentCard({
           <span className="flex-shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
             {childToolCallCount} {t('activity.tools', 'tools')}
           </span>
-        )}
-        {isRunning && (
-          <Loader2 className="h-3 w-3 flex-shrink-0 animate-spin text-muted-foreground" />
         )}
       </div>
 
@@ -488,7 +510,7 @@ export function ActivityPane() {
       {/* Header */}
       <div className="flex shrink-0 items-center justify-between border-b border-sidebar-border px-4 py-3">
         <div className="flex items-center gap-2">
-          <Activity className="h-4 w-4 text-muted-foreground" />
+          <Activity className="icon-base text-muted-foreground" />
           <h3 className="text-xs font-semibold uppercase tracking-wider text-sidebar-foreground">
             {t('activity.title', 'Activity')}
           </h3>
@@ -502,7 +524,7 @@ export function ActivityPane() {
               className="text-muted-foreground"
               data-testid="activity-close"
             >
-              <PanelRightClose className="h-3.5 w-3.5" />
+              <PanelRightClose className="icon-sm" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="bottom">{t('common.close', 'Close')}</TooltipContent>

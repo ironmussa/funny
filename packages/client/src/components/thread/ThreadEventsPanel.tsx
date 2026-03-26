@@ -23,11 +23,11 @@ function formatTimestamp(timestamp: string) {
 function EventIcon({ type }: { type: ThreadEvent['type'] }) {
   switch (type) {
     case 'git:commit':
-      return <GitCommit className="h-4 w-4" />;
+      return <GitCommit className="icon-base" />;
     case 'git:push':
-      return <Upload className="h-4 w-4" />;
+      return <Upload className="icon-base" />;
     case 'git:merge':
-      return <GitMerge className="h-4 w-4" />;
+      return <GitMerge className="icon-base" />;
     default:
       return null;
   }
@@ -100,7 +100,7 @@ export function ThreadEventsPanel({ threadId }: ThreadEventsPanelProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center p-8">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <Loader2 className="icon-xl animate-spin text-muted-foreground" />
       </div>
     );
   }

@@ -140,7 +140,7 @@ export function AcceptInvitePage({ token }: Props) {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
-      <div className="w-full max-w-sm space-y-6 rounded-lg border border-border bg-card p-8 shadow-lg text-center">
+      <div className="w-full max-w-sm space-y-6 rounded-lg border border-border bg-card p-8 text-center shadow-lg">
         {/* Verifying token */}
         {step === 'verifying' && (
           <>
@@ -188,7 +188,7 @@ export function AcceptInvitePage({ token }: Props) {
                     className="text-sm font-medium text-foreground"
                   >
                     Display Name
-                    <span className="ml-1 text-muted-foreground font-normal">(optional)</span>
+                    <span className="ml-1 font-normal text-muted-foreground">(optional)</span>
                   </label>
                   <Input
                     id="invite-display-name"
@@ -224,7 +224,7 @@ export function AcceptInvitePage({ token }: Props) {
                 disabled={formLoading || !username || !password}
                 data-testid="invite-submit"
               >
-                {formLoading ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
+                {formLoading ? <Loader2 className="icon-base mr-2 animate-spin" /> : null}
                 {isLoginMode ? 'Sign In & Join' : 'Create Account & Join'}
               </Button>
             </form>

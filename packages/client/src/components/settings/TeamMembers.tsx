@@ -250,7 +250,7 @@ export function TeamMembers() {
               className="mb-3 flex items-start gap-2 rounded-md border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-700 dark:text-amber-400"
               data-testid="team-invite-smtp-warning"
             >
-              <MailWarning className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <MailWarning className="icon-sm mt-0.5 shrink-0" />
               <span>
                 Email is not configured. Configure SMTP in <strong>Settings &gt; Email</strong> to
                 send invitations, or use an invite link below.
@@ -295,7 +295,7 @@ export function TeamMembers() {
               disabled={!inviteEmail.trim() || sending || smtpConfigured === false}
               data-testid="team-invite-send"
             >
-              <Send className="mr-1.5 h-3.5 w-3.5" />
+              <Send className="icon-sm mr-1.5" />
               Invite
             </Button>
           </div>
@@ -328,7 +328,7 @@ export function TeamMembers() {
               disabled={creatingLink}
               data-testid="team-link-create"
             >
-              <Link className="mr-1.5 h-3.5 w-3.5" />
+              <Link className="icon-sm mr-1.5" />
               Generate Link
             </Button>
           </div>
@@ -376,9 +376,9 @@ export function TeamMembers() {
                       tooltip={t('common.copyLink')}
                     >
                       {copiedId === link.id ? (
-                        <Check className="h-3.5 w-3.5 text-green-500" />
+                        <Check className="icon-sm text-green-500" />
                       ) : (
-                        <Copy className="h-3.5 w-3.5" />
+                        <Copy className="icon-sm" />
                       )}
                     </TooltipIconButton>
                     <TooltipIconButton
@@ -388,7 +388,7 @@ export function TeamMembers() {
                       data-testid={`team-link-revoke-${link.id}`}
                       tooltip={t('common.revoke')}
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="icon-sm" />
                     </TooltipIconButton>
                   </div>
                 );
@@ -457,7 +457,7 @@ export function TeamMembers() {
                   disabled={isLastOwner}
                   data-testid={`team-member-remove-${member.userId}`}
                 >
-                  <UserMinus className="h-4 w-4" />
+                  <UserMinus className="icon-base" />
                 </Button>
               </div>
             </div>
@@ -487,7 +487,7 @@ export function TeamMembers() {
                     onClick={() => handleCancelInvitation(inv.id)}
                     data-testid={`team-invitation-cancel-${inv.id}`}
                   >
-                    <X className="h-3.5 w-3.5" />
+                    <X className="icon-sm" />
                   </Button>
                 </div>
               </div>

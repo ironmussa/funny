@@ -491,7 +491,7 @@ export const api = {
   getGitStatuses: (projectId: string) =>
     request<{ statuses: GitStatusInfo[] }>(`/git/status?projectId=${projectId}`),
   getGitStatus: (threadId: string) => request<GitStatusInfo>(`/git/${threadId}/status`),
-  getGitLog: (threadId: string, limit = 20) =>
+  getGitLog: (threadId: string, limit = 50, all = false, skip = 0) =>
     request<{
       entries: Array<{
         hash: string;
@@ -500,7 +500,23 @@ export const api = {
         relativeDate: string;
         message: string;
       }>;
-    }>(`/git/${threadId}/log?limit=${limit}`),
+      hasMore: boolean;
+    }>(
+      `/git/${threadId}/log?limit=${limit}${all ? '&all=true' : ''}${skip > 0 ? `&skip=${skip}` : ''}`,
+    ),
+  getCommitFiles: (threadId: string, hash: string) =>
+    request<{
+      files: Array<{
+        path: string;
+        status: string;
+        additions: number;
+        deletions: number;
+      }>;
+    }>(`/git/${threadId}/commit/${hash}/files`),
+  getCommitFileDiff: (threadId: string, hash: string, filePath: string) =>
+    request<{ diff: string }>(
+      `/git/${threadId}/commit/${hash}/diff?path=${encodeURIComponent(filePath)}`,
+    ),
   pull: (threadId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/pull`, { method: 'POST' }),
   fetchOrigin: (threadId: string) =>
@@ -581,7 +597,7 @@ export const api = {
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/reset-soft`, {
       method: 'POST',
     }),
-  projectGitLog: (projectId: string, limit = 20) =>
+  projectGitLog: (projectId: string, limit = 50, skip = 0) =>
     request<{
       entries: Array<{
         hash: string;
@@ -590,7 +606,21 @@ export const api = {
         relativeDate: string;
         message: string;
       }>;
-    }>(`/git/project/${projectId}/log?limit=${limit}`),
+      hasMore: boolean;
+    }>(`/git/project/${projectId}/log?limit=${limit}${skip > 0 ? `&skip=${skip}` : ''}`),
+  projectCommitFiles: (projectId: string, hash: string) =>
+    request<{
+      files: Array<{
+        path: string;
+        status: string;
+        additions: number;
+        deletions: number;
+      }>;
+    }>(`/git/project/${projectId}/commit/${hash}/files`),
+  projectCommitFileDiff: (projectId: string, hash: string, filePath: string) =>
+    request<{ diff: string }>(
+      `/git/project/${projectId}/commit/${hash}/diff?path=${encodeURIComponent(filePath)}`,
+    ),
   projectGenerateCommitMessage: (projectId: string, includeUnstaged?: boolean) =>
     request<{ title: string; body: string }>(`/git/project/${projectId}/generate-commit-message`, {
       method: 'POST',

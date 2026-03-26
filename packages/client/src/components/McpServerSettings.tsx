@@ -51,7 +51,7 @@ function TypeBadge({ type }: { type: McpServerType }) {
             : 'bg-status-success/10 text-status-success/80',
       )}
     >
-      {type === 'stdio' ? <Terminal className="h-2.5 w-2.5" /> : <Globe className="h-2.5 w-2.5" />}
+      {type === 'stdio' ? <Terminal className="icon-2xs" /> : <Globe className="icon-2xs" />}
       {type}
     </span>
   );
@@ -87,14 +87,14 @@ function InstalledServerCard({
     >
       <div className="flex items-center justify-between gap-3">
         <div className="flex min-w-0 items-center gap-3">
-          <Server className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+          <Server className="icon-base flex-shrink-0 text-muted-foreground" />
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="truncate text-sm font-medium">{server.name}</span>
               <TypeBadge type={server.type} />
               {server.status === 'needs_auth' && (
                 <span className="inline-flex items-center gap-1 rounded bg-status-warning/10 px-1.5 py-0.5 text-xs font-medium text-status-warning/80">
-                  <ShieldAlert className="h-2.5 w-2.5" />
+                  <ShieldAlert className="icon-2xs" />
                   {t('mcp.needsAuth')}
                 </span>
               )}
@@ -110,11 +110,7 @@ function InstalledServerCard({
           className="flex-shrink-0 text-muted-foreground hover:text-destructive"
           tooltip={t('common.delete')}
         >
-          {removing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Trash2 className="h-3.5 w-3.5" />
-          )}
+          {removing ? <Loader2 className="icon-sm animate-spin" /> : <Trash2 className="icon-sm" />}
         </TooltipIconButton>
       </div>
       {server.status === 'needs_auth' && (
@@ -128,9 +124,9 @@ function InstalledServerCard({
               className="h-6 border-status-warning/30 px-2 text-xs text-status-warning/80 hover:bg-status-warning/10"
             >
               {authenticating ? (
-                <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                <Loader2 className="icon-xs mr-1 animate-spin" />
               ) : (
-                <ShieldAlert className="mr-1 h-3 w-3" />
+                <ShieldAlert className="icon-xs mr-1" />
               )}
               {authenticating ? t('mcp.authenticating') : 'OAuth'}
             </Button>
@@ -141,7 +137,7 @@ function InstalledServerCard({
               disabled={authenticating || settingToken}
               className="h-6 px-2 text-xs"
             >
-              <KeyRound className="mr-1 h-3 w-3" />
+              <KeyRound className="icon-xs mr-1" />
               {t('mcp.manualToken')}
             </Button>
           </div>
@@ -168,9 +164,9 @@ function InstalledServerCard({
                 className="h-7 px-2 text-xs"
               >
                 {settingToken ? (
-                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <Loader2 className="icon-xs animate-spin" />
                 ) : (
-                  <Check className="h-3 w-3" />
+                  <Check className="icon-xs" />
                 )}
               </Button>
             </div>
@@ -211,9 +207,9 @@ function RecommendedServerCard({
         className="flex-shrink-0"
       >
         {installing ? (
-          <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+          <Loader2 className="icon-xs mr-1 animate-spin" />
         ) : installed ? null : (
-          <Download className="mr-1 h-3 w-3" />
+          <Download className="icon-xs mr-1" />
         )}
         {installed ? t('mcp.installed') : installing ? t('mcp.installing') : t('mcp.install')}
       </Button>
@@ -410,7 +406,7 @@ export function McpServerSettings() {
   if (!projectPath) {
     return (
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <AlertCircle className="h-4 w-4" />
+        <AlertCircle className="icon-base" />
         {t('mcp.selectProject')}
       </div>
     );
@@ -421,7 +417,7 @@ export function McpServerSettings() {
       {/* Error banner */}
       {error && (
         <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+          <AlertCircle className="icon-sm flex-shrink-0" />
           <span>{error}</span>
           <button onClick={() => setError(null)} className="ml-auto text-xs underline">
             {t('mcp.dismiss')}
@@ -440,9 +436,9 @@ export function McpServerSettings() {
             className="px-2"
           >
             {showAddForm ? (
-              <ChevronUp className="mr-1 h-3 w-3" />
+              <ChevronUp className="icon-xs mr-1" />
             ) : (
-              <Plus className="mr-1 h-3 w-3" />
+              <Plus className="icon-xs mr-1" />
             )}
             {showAddForm ? t('mcp.cancel') : t('mcp.addCustom')}
           </Button>
@@ -516,9 +512,9 @@ export function McpServerSettings() {
             <div className="flex justify-end">
               <Button size="sm" onClick={handleAddCustom} disabled={!addName || adding}>
                 {adding ? (
-                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  <Loader2 className="icon-xs mr-1 animate-spin" />
                 ) : (
-                  <Plus className="mr-1 h-3 w-3" />
+                  <Plus className="icon-xs mr-1" />
                 )}
                 {t('mcp.addServer')}
               </Button>
@@ -528,7 +524,7 @@ export function McpServerSettings() {
 
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="icon-base animate-spin" />
             {t('mcp.loadingServers')}
           </div>
         ) : servers.length === 0 ? (

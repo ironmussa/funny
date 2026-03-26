@@ -96,7 +96,7 @@ export function SettingsPanel() {
             data-testid="settings-back"
             tooltip={t('common.back')}
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
+            <ArrowLeft className="icon-sm" />
           </TooltipIconButton>
           <h1 className="text-sm font-medium">{t('settings.title')}</h1>
         </div>
@@ -114,7 +114,7 @@ export function SettingsPanel() {
                   onClick={() => navigate(buildPath(settingsPath(item.id)))}
                   data-testid={`settings-nav-${item.id}`}
                 >
-                  <Icon className="h-4 w-4" />
+                  <Icon className="icon-base" />
                   <span>{t(settingsLabelKeys[item.id] ?? item.label)}</span>
                 </SidebarMenuButton>
               </SidebarMenuItem>

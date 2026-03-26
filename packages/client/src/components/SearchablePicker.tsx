@@ -186,7 +186,7 @@ export function SearchablePicker({
           title={triggerTitle}
           tabIndex={-1}
         >
-          {icon ?? <GitBranch className="h-3 w-3 shrink-0" />}
+          {icon ?? <GitBranch className="icon-xs shrink-0" />}
           <span className="truncate font-mono">{displayValue}</span>
         </button>
       </PopoverTrigger>
@@ -277,7 +277,7 @@ export function SearchablePicker({
                           </span>
                         )}
                       </div>
-                      {item.isSelected && <Check className="h-3 w-3 shrink-0 text-status-info" />}
+                      {item.isSelected && <Check className="icon-xs shrink-0 text-status-info" />}
                     </button>
                     {onCopy && (
                       <button
@@ -289,7 +289,7 @@ export function SearchablePicker({
                         }}
                         tabIndex={-1}
                       >
-                        <Copy className="h-3 w-3" />
+                        <Copy className="icon-xs" />
                       </button>
                     )}
                   </div>

@@ -37,11 +37,11 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
             )}
           >
             <div className="mt-0.5 flex-shrink-0">
-              {step.status === 'completed' && <Check className="h-4 w-4 text-emerald-500" />}
+              {step.status === 'completed' && <Check className="icon-base text-emerald-500" />}
               {step.status === 'running' && (
-                <Loader2 className="h-4 w-4 animate-spin text-primary" />
+                <Loader2 className="icon-base animate-spin text-primary" />
               )}
-              {step.status === 'failed' && <X className="h-4 w-4 text-destructive" />}
+              {step.status === 'failed' && <X className="icon-base text-destructive" />}
             </div>
             <div className="min-w-0 flex-1">
               <div className="flex items-center justify-between gap-2">
@@ -68,7 +68,7 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
                   rel="noopener noreferrer"
                   className="mt-0.5 flex items-center gap-1 text-[11px] text-primary hover:underline"
                 >
-                  <ExternalLink className="h-3 w-3" />
+                  <ExternalLink className="icon-xs" />
                   {step.url}
                 </a>
               )}

@@ -76,14 +76,14 @@ export const PipelineEventGroup = memo(function PipelineEventGroup({
       >
         <ChevronRight
           className={cn(
-            'h-3 w-3 flex-shrink-0 text-muted-foreground transition-transform duration-150',
+            'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
             expanded && 'rotate-90',
           )}
         />
         {status.running ? (
-          <Loader2 className="h-3 w-3 flex-shrink-0 animate-spin text-muted-foreground" />
+          <Loader2 className="icon-xs flex-shrink-0 animate-spin text-muted-foreground" />
         ) : (
-          <StatusIcon className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+          <StatusIcon className="icon-xs flex-shrink-0 text-muted-foreground" />
         )}
         <span className="flex-shrink-0 font-mono font-medium text-foreground">Pipeline</span>
         <span className="font-mono font-medium text-muted-foreground">{status.label}</span>

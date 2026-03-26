@@ -127,7 +127,7 @@ export function PreviewBrowser() {
                 }}
                 className="ml-auto flex-shrink-0 opacity-0 transition-opacity hover:text-status-error group-hover:opacity-100"
               >
-                <X className="h-3 w-3" />
+                <X className="icon-xs" />
               </button>
             </div>
           ))}
@@ -144,14 +144,14 @@ export function PreviewBrowser() {
               className="rounded p-1 text-muted-foreground hover:text-foreground"
               title="Refresh"
             >
-              <RefreshCw className="h-3.5 w-3.5" />
+              <RefreshCw className="icon-sm" />
             </button>
             <button
               onClick={handleOpenExternal}
               className="rounded p-1 text-muted-foreground hover:text-foreground"
               title="Open in browser"
             >
-              <ExternalLink className="h-3.5 w-3.5" />
+              <ExternalLink className="icon-sm" />
             </button>
           </div>
         )}

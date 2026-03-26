@@ -319,17 +319,14 @@ export const ProjectItem = memo(function ProjectItem({
             }}
           >
             <ChevronRight
-              className={cn(
-                'h-3.5 w-3.5 transition-transform duration-200',
-                isExpanded && 'rotate-90',
-              )}
+              className={cn('icon-sm transition-transform duration-200', isExpanded && 'rotate-90')}
             />
           </CollapsibleTrigger>
           <span
             data-testid={`project-name-${project.id}`}
             className="ml-1.5 flex min-w-0 flex-1 items-center gap-1.5"
           >
-            <Folder className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+            <Folder className="icon-sm flex-shrink-0 text-muted-foreground" />
             <span className="truncate text-sm font-medium">{project.name}</span>
             {project.needsSetup && (
               <Tooltip>
@@ -342,7 +339,7 @@ export const ProjectItem = memo(function ProjectItem({
                       setSetupDialogOpen(true);
                     }}
                   >
-                    <AlertTriangle className="h-3.5 w-3.5 text-status-warning" />
+                    <AlertTriangle className="icon-sm text-status-warning" />
                   </button>
                 </TooltipTrigger>
                 <TooltipContent side="right">Local directory not configured</TooltipContent>
@@ -369,7 +366,7 @@ export const ProjectItem = memo(function ProjectItem({
                   onClick={(e) => e.stopPropagation()}
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  <MoreVertical className="h-3.5 w-3.5" />
+                  <MoreVertical className="icon-sm" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="bottom">
@@ -383,7 +380,7 @@ export const ProjectItem = memo(function ProjectItem({
                     }
                   }}
                 >
-                  <FolderOpenDot className="h-3.5 w-3.5" />
+                  <FolderOpenDot className="icon-sm" />
                   {t('sidebar.openDirectory')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -396,7 +393,7 @@ export const ProjectItem = memo(function ProjectItem({
                     }
                   }}
                 >
-                  <Terminal className="h-3.5 w-3.5" />
+                  <Terminal className="icon-sm" />
                   {t('sidebar.openTerminal')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -406,7 +403,7 @@ export const ProjectItem = memo(function ProjectItem({
                     openDirectoryInEditor(project.path, defaultEditor);
                   }}
                 >
-                  <SquareTerminal className="h-3.5 w-3.5" />
+                  <SquareTerminal className="icon-sm" />
                   {t('sidebar.openInEditor', { editor: getEditorLabel() })}
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -417,7 +414,7 @@ export const ProjectItem = memo(function ProjectItem({
                     navigate(buildPath(`/projects/${project.id}/settings/general`));
                   }}
                 >
-                  <Settings className="h-3.5 w-3.5" />
+                  <Settings className="icon-sm" />
                   {t('sidebar.settings')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -428,7 +425,7 @@ export const ProjectItem = memo(function ProjectItem({
                     navigate(buildPath(`/projects/${project.id}/analytics`));
                   }}
                 >
-                  <BarChart3 className="h-3.5 w-3.5" />
+                  <BarChart3 className="icon-sm" />
                   {t('sidebar.analytics')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -439,7 +436,7 @@ export const ProjectItem = memo(function ProjectItem({
                     onShowIssues(project.id);
                   }}
                 >
-                  <CircleDot className="h-3.5 w-3.5" />
+                  <CircleDot className="icon-sm" />
                   {t('sidebar.githubIssues')}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
@@ -451,7 +448,7 @@ export const ProjectItem = memo(function ProjectItem({
                     onRenameProject(project.id, project.name);
                   }}
                 >
-                  <Pencil className="h-3.5 w-3.5" />
+                  <Pencil className="icon-sm" />
                   {t('sidebar.renameProject')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -463,7 +460,7 @@ export const ProjectItem = memo(function ProjectItem({
                   }}
                   className="text-status-error focus:text-status-error"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="icon-sm" />
                   {t('sidebar.deleteProject')}
                 </DropdownMenuItem>
               </DropdownMenuContent>

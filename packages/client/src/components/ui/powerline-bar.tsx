@@ -1,6 +1,6 @@
 import * as React from 'react';
 
-import { cn } from '@/lib/utils';
+import { cn, ICON_SIZE } from '@/lib/utils';
 
 import { contrastText } from './project-chip';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
@@ -35,13 +35,13 @@ const sizeConfig = {
     arrow: 8,
     padding: 'px-1.5 py-px',
     text: 'text-[10px] leading-tight',
-    icon: 'h-2.5 w-2.5',
+    icon: ICON_SIZE['2xs'],
   },
   md: {
     arrow: 10,
     padding: 'px-2 py-0.5',
     text: 'text-[11px] leading-tight',
-    icon: 'h-3 w-3',
+    icon: ICON_SIZE.xs,
   },
 } as const;
 

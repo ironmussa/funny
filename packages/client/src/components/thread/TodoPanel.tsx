@@ -45,7 +45,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
     >
       {/* Header */}
       <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2">
-        <ListTodo className="h-3.5 w-3.5 text-muted-foreground" />
+        <ListTodo className="icon-sm text-muted-foreground" />
         <span className="flex-1 text-xs font-medium">{t('todoPanel.title')}</span>
         <motion.span
           key={`${progress.completed}/${progress.total}`}
@@ -66,14 +66,14 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
           className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted"
           title={minimized ? t('todoPanel.expand') : t('todoPanel.minimize')}
         >
-          {minimized ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
+          {minimized ? <ChevronDown className="icon-xs" /> : <ChevronUp className="icon-xs" />}
         </button>
         <button
           onClick={onDismiss}
           className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted"
           title={t('todoPanel.dismiss')}
         >
-          <X className="h-3 w-3" />
+          <X className="icon-xs" />
         </button>
       </div>
 
@@ -113,11 +113,11 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
                     transition={{ duration: 0.25, ease: 'easeOut' }}
                   >
                     {todo.status === 'completed' ? (
-                      <CircleCheck className="h-3.5 w-3.5 text-status-success/80" />
+                      <CircleCheck className="icon-sm text-status-success/80" />
                     ) : todo.status === 'in_progress' ? (
-                      <CircleDot className="h-3.5 w-3.5 animate-pulse text-status-info" />
+                      <CircleDot className="icon-sm animate-pulse text-status-info" />
                     ) : (
-                      <Circle className="h-3.5 w-3.5 text-muted-foreground/50" />
+                      <Circle className="icon-sm text-muted-foreground/50" />
                     )}
                   </motion.div>
                   <span

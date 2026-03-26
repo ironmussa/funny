@@ -1,45 +1,74 @@
-# Plan: Add Slice Descriptions + merge() to evflow
+# Plan: Add "Changes" / "History" Tabs to ReviewPane (GitHub Desktop-style)
 
-## Summary
+## Overview
 
-Add `description` field to slices in the evflow DSL, add descriptions to all 5 slices in the shared model, add `merge()` for future model composition, and update generators.
+Replace the current ReviewPane header with two internal tabs:
+1. **Changes** (current behavior) — file list, checkboxes, commit form
+2. **History** (new) — commit list with expandable file diffs per commit, like GitHub Desktop
 
-## Changes
+The existing commit log popover (History icon button) will be removed since its functionality moves into the dedicated History tab.
 
-### 1. evflow DSL: Add `description` to slices
+## Changes Required
 
-**`packages/evflow/src/types.ts`**
-- Add `description?: string` to `SliceDef` (after `name`)
-- Add `description?: string` to `SliceOptions` (after `ui`)
+### 1. Install shadcn Tabs component
+- Run `cd packages/client && bunx shadcn@latest add tabs`
+- This gives us `Tabs`, `TabsList`, `TabsTrigger`, `TabsContent` components
 
-**`packages/evflow/src/event-model.ts`**
-- Pass `opts.description` through in `slice()` method
+### 2. Backend: Add `getCommitShow` core function (`packages/core/src/git/git.ts`)
+- New function: `getCommitShow(cwd, hash)` → returns changed files + stats for a specific commit
+- Uses `git diff-tree --no-commit-id -r --name-status <hash>` for file list + `git diff-tree --no-commit-id -r --numstat <hash>` for additions/deletions
+- Returns: `{ files: Array<{ path: string; status: string; additions: number; deletions: number }> }`
+- New function: `getCommitFileDiff(cwd, hash, filePath)` → returns the unified diff for one file in a commit
+- Uses `git diff <hash>~1 <hash> -- <filePath>` (or `git show <hash> -- <filePath>` for the diff)
 
-### 2. evflow DSL: Add `merge()` method
+### 3. Backend: Add API routes (`packages/runtime/src/routes/git.ts`)
+- `GET /api/git/:threadId/commit/:hash/files` — returns changed files for a commit
+- `GET /api/git/:threadId/commit/:hash/diff?path=...` — returns diff for one file in a commit
+- `GET /api/git/project/:projectId/commit/:hash/files` — project-scoped variant
+- `GET /api/git/project/:projectId/commit/:hash/diff?path=...` — project-scoped variant
 
-**`packages/evflow/src/event-model.ts`**
-- Add `merge(other: EventModel): void` — copies all elements, sequences, slices, and contexts from another model into this one
+### 4. Client: Add API methods (`packages/client/src/lib/api.ts`)
+- `getCommitFiles(threadId, hash)` — calls the new files endpoint
+- `getCommitFileDiff(threadId, hash, filePath)` — calls the new diff endpoint
+- `projectCommitFiles(projectId, hash)` — project-scoped variant
+- `projectCommitFileDiff(projectId, hash, filePath)` — project-scoped variant
 
-### 3. Update generators
+### 5. Client: Create `CommitHistoryTab` component (`packages/client/src/components/CommitHistoryTab.tsx`)
+- Left/main area: list of commits (reuses existing `handleLoadLog` data shape)
+- When a commit is selected: shows the list of changed files below/beside it
+- When a file is clicked: opens the `ExpandedDiffDialog` with the commit's file diff
+- Includes loading states, empty states
+- Auto-loads commits when the tab is activated
 
-**`packages/evflow/src/generators/ai-prompt.ts`**
-- Render `slice.description` after `### ${slice.name}` heading
+### 6. Client: Refactor `ReviewPane.tsx` to add tabs
+- Wrap the header with `Tabs` / `TabsList` containing "Changes" and "History" triggers
+- Current file list + commit form goes into `TabsContent value="changes"`
+- New `CommitHistoryTab` goes into `TabsContent value="history"`
+- Remove the existing `Popover`-based commit log (History button) from the toolbar since it's now a full tab
+- Keep the close button in the header, outside the tabs
 
-**`packages/evflow/src/generators/react-flow.ts`**
-- Include `description` in slice group node data
+### 7. Layout structure (approximate)
 
-### 4. Add slice descriptions to the shared model
+```
+┌─────────────────────────────────┐
+│ [Changes] [History]        [X]  │  ← Tabs header + close button
+├─────────────────────────────────┤
+│                                 │
+│  (TabsContent for active tab)   │
+│                                 │
+│  Changes: file list + commit    │
+│  History: commit list + files   │
+│                                 │
+└─────────────────────────────────┘
+```
 
-**`packages/shared/src/evflow.model.ts`**
-- Add `description` to all 5 `system.slice()` calls:
-  - Thread Management
-  - Git Operations
-  - Pipeline
-  - Watcher Lifecycle
-  - Terminal Management
+## Files Modified
 
-### 5. Tests
-
-**`packages/evflow/src/__tests__/event-model.test.ts`**
-- Add test: slice description is stored and returned in getData()
-- Add test: merge() combines elements, sequences, slices, and contexts
+| File | Change |
+|------|--------|
+| `packages/core/src/git/git.ts` | Add `getCommitShow()` and `getCommitFileDiff()` functions |
+| `packages/runtime/src/routes/git.ts` | Add 4 new route handlers, import new functions |
+| `packages/client/src/lib/api.ts` | Add 4 new API client methods |
+| `packages/client/src/components/CommitHistoryTab.tsx` | **New file** — History tab content |
+| `packages/client/src/components/ReviewPane.tsx` | Wrap with Tabs, move current content into Changes tab, add History tab |
+| `packages/client/src/components/ui/tabs.tsx` | **New file** (auto-generated by shadcn) |

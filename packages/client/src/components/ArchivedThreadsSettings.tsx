@@ -112,14 +112,14 @@ export function ArchivedThreadsSettings() {
               className="text-muted-foreground hover:text-foreground"
               tooltip={t('archived.restore')}
             >
-              <ArchiveRestore className="h-3.5 w-3.5" />
+              <ArchiveRestore className="icon-sm" />
             </TooltipIconButton>
             <TooltipIconButton
               onClick={() => handleDelete(thread)}
               className="text-muted-foreground hover:text-destructive"
               tooltip={t('common.delete')}
             >
-              <Trash2 className="h-3.5 w-3.5" />
+              <Trash2 className="icon-sm" />
             </TooltipIconButton>
           </div>
         )}

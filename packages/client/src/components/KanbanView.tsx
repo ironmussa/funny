@@ -8,6 +8,7 @@ import type { Thread, ThreadStage, Project, GitStatusInfo } from '@funny/shared'
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
 import {
   Pin,
+  PinOff,
   Plus,
   Search,
   Trash2,
@@ -17,8 +18,10 @@ import {
   Terminal,
   GitBranch,
   FolderOpen,
+  FolderOpenDot,
   MoreVertical,
   Square,
+  Archive,
   User,
 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useCallback, memo, startTransition } from 'react';
@@ -78,6 +81,7 @@ export const KanbanCard = memo(function KanbanCard({
   thread,
   projectInfo,
   onDelete,
+  onArchive,
   search,
   ghost,
   contentSnippet,
@@ -87,8 +91,9 @@ export const KanbanCard = memo(function KanbanCard({
   gitStatus: gitStatusProp,
 }: {
   thread: Thread;
-  projectInfo?: { name: string; color?: string };
+  projectInfo?: { name: string; color?: string; path?: string };
   onDelete: (thread: Thread) => void;
+  onArchive?: (thread: Thread) => void;
   search?: string;
   ghost?: boolean;
   contentSnippet?: string;
@@ -160,11 +165,35 @@ export const KanbanCard = memo(function KanbanCard({
       {/* Left: main content */}
       <div className="min-w-0 flex-1 px-3.5 py-3">
         <div className="mb-2 flex min-w-0 items-start gap-2">
-          <StatusIcon className={cn('mt-1 h-4 w-4 shrink-0', statusClassName)} />
+          <div className="relative mt-0.5 h-3.5 w-3.5 shrink-0">
+            {thread.pinned && !isBusy ? (
+              <span
+                className={cn(
+                  'absolute inset-0 flex items-center justify-center text-muted-foreground',
+                  'group-hover/card:hidden',
+                )}
+              >
+                <Pin className="icon-sm" />
+              </span>
+            ) : (
+              <span className={cn('absolute inset-0', 'group-hover/card:hidden')}>
+                <StatusIcon className={cn('icon-sm', statusClassName)} />
+              </span>
+            )}
+            <span
+              className="absolute inset-0 hidden cursor-pointer items-center justify-center text-muted-foreground hover:text-foreground group-hover/card:flex"
+              onClick={(e) => {
+                e.stopPropagation();
+                pinThread(thread.id, thread.projectId, !thread.pinned);
+              }}
+            >
+              {thread.pinned ? <PinOff className="icon-sm" /> : <Pin className="icon-sm" />}
+            </span>
+          </div>
           <HighlightText
             text={thread.title}
             query={search || ''}
-            className="line-clamp-6 text-sm font-medium leading-relaxed"
+            className="line-clamp-6 text-sm font-medium leading-relaxed text-muted-foreground transition-colors group-hover/card:text-foreground"
           />
         </div>
 
@@ -256,19 +285,37 @@ export const KanbanCard = memo(function KanbanCard({
                   onClick={(e) => e.stopPropagation()}
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  <MoreVertical className="h-3.5 w-3.5" />
+                  <MoreVertical className="icon-sm" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" side="bottom">
                 <DropdownMenuItem
-                  data-testid={`kanban-card-pin-${thread.id}`}
                   onClick={async (e) => {
                     e.stopPropagation();
-                    await pinThread(thread.id, thread.projectId, !thread.pinned);
+                    const folderPath = thread.worktreePath || projectInfo?.path;
+                    if (!folderPath) return;
+                    const result = await api.openDirectory(folderPath);
+                    if (result.isErr()) {
+                      toastError(result.error);
+                    }
                   }}
                 >
-                  <Pin className="h-3.5 w-3.5" />
-                  {thread.pinned ? t('sidebar.unpin', 'Unpin') : t('sidebar.pin', 'Pin')}
+                  <FolderOpenDot className="icon-sm" />
+                  {t('sidebar.openDirectory')}
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const folderPath = thread.worktreePath || projectInfo?.path;
+                    if (!folderPath) return;
+                    const result = await api.openTerminal(folderPath);
+                    if (result.isErr()) {
+                      toastError(result.error);
+                    }
+                  }}
+                >
+                  <Terminal className="icon-sm" />
+                  {t('sidebar.openTerminal')}
                 </DropdownMenuItem>
                 {isRunning && (
                   <>
@@ -283,10 +330,21 @@ export const KanbanCard = memo(function KanbanCard({
                       }}
                       className="text-status-error focus:text-status-error"
                     >
-                      <Square className="h-3.5 w-3.5" />
+                      <Square className="icon-sm" />
                       {t('common.stop')}
                     </DropdownMenuItem>
                   </>
+                )}
+                {onArchive && !isBusy && (
+                  <DropdownMenuItem
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      onArchive(thread);
+                    }}
+                  >
+                    <Archive className="icon-sm" />
+                    {t('sidebar.archive')}
+                  </DropdownMenuItem>
                 )}
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
@@ -297,7 +355,7 @@ export const KanbanCard = memo(function KanbanCard({
                   }}
                   className="text-status-error focus:text-status-error"
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="icon-sm" />
                   {t('common.delete')}
                 </DropdownMenuItem>
               </DropdownMenuContent>
@@ -332,7 +390,7 @@ function AddThreadButton({
         onClick={() => onSelect(projectId)}
         title={t('kanban.addThread')}
       >
-        <Plus className="h-4 w-4" />
+        <Plus className="icon-base" />
       </button>
     );
   }
@@ -355,12 +413,12 @@ function AddThreadButton({
           className="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           title={t('kanban.addThread')}
         >
-          <Plus className="h-4 w-4" />
+          <Plus className="icon-base" />
         </button>
       </PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-0">
         <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
-          <Search className="h-4 w-4 shrink-0 text-muted-foreground" />
+          <Search className="icon-base shrink-0 text-muted-foreground" />
           <Input
             ref={inputRef}
             value={search}
@@ -405,6 +463,7 @@ const KanbanColumn = memo(function KanbanColumn({
   threads,
   projectInfoById,
   onDelete,
+  onArchive,
   projectId,
   projects,
   onAddThread,
@@ -415,8 +474,9 @@ const KanbanColumn = memo(function KanbanColumn({
 }: {
   stage: ThreadStage;
   threads: Thread[];
-  projectInfoById?: Record<string, { name: string; color?: string }>;
+  projectInfoById?: Record<string, { name: string; color?: string; path?: string }>;
   onDelete: (thread: Thread) => void;
+  onArchive: (thread: Thread) => void;
   projectId?: string;
   projects: Project[];
   onAddThread: (projectId: string, stage: ThreadStage) => void;
@@ -501,6 +561,7 @@ const KanbanColumn = memo(function KanbanColumn({
                 thread={thread}
                 projectInfo={projectInfoById?.[thread.projectId]}
                 onDelete={onDelete}
+                onArchive={stage !== 'archived' ? onArchive : undefined}
                 search={search}
                 ghost={stage === 'archived'}
                 contentSnippet={contentSnippets?.get(thread.id)}
@@ -601,6 +662,14 @@ export function KanbanView({
       isWorktree: thread.mode === 'worktree' && !!thread.branch,
     });
   }, []);
+
+  const handleArchiveRequest = useCallback(
+    (thread: Thread) => {
+      archiveThread(thread.id, thread.projectId);
+      toast.success(t('toast.threadArchived', { title: thread.title }));
+    },
+    [archiveThread, t],
+  );
 
   const handleDeleteConfirm = useCallback(async () => {
     if (!deleteConfirm) return;
@@ -704,11 +773,10 @@ export function KanbanView({
   );
 
   const projectInfoById = useMemo(() => {
-    if (projectId) return undefined;
-    const map: Record<string, { name: string; color?: string }> = {};
-    for (const p of projects) map[p.id] = { name: p.name, color: p.color };
+    const map: Record<string, { name: string; color?: string; path?: string }> = {};
+    for (const p of projects) map[p.id] = { name: p.name, color: p.color, path: p.path };
     return map;
-  }, [projectId, projects]);
+  }, [projects]);
 
   const threadsByStage = useMemo(() => {
     const map: Record<ThreadStage, Thread[]> = {
@@ -818,6 +886,7 @@ export function KanbanView({
             threads={threadsByStage[stage]}
             projectInfoById={projectInfoById}
             onDelete={handleDeleteRequest}
+            onArchive={handleArchiveRequest}
             projectId={projectId}
             projects={projects}
             onAddThread={handleAddThread}

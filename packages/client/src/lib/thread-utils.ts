@@ -18,14 +18,14 @@ import {
 } from 'lucide-react';
 
 export const statusConfig: Record<ThreadStatus, { icon: typeof Clock; className: string }> = {
-  setting_up: { icon: Loader2, className: 'text-blue-400 animate-spin' },
+  setting_up: { icon: Loader2, className: 'text-gray-400 animate-spin' },
   idle: { icon: CircleDot, className: 'text-gray-400' },
   pending: { icon: Clock, className: 'text-yellow-400' },
-  running: { icon: Loader2, className: 'text-muted-foreground animate-spin' },
-  waiting: { icon: Clock, className: 'text-amber-400' },
-  completed: { icon: CheckCircle2, className: 'text-green-400' },
+  running: { icon: Loader2, className: 'text-gray-400 animate-spin' },
+  waiting: { icon: Clock, className: 'text-yellow-400' },
+  completed: { icon: CheckCircle2, className: 'text-gray-400' },
   failed: { icon: XCircle, className: 'text-red-400' },
-  stopped: { icon: CircleStop, className: 'text-gray-400' },
+  stopped: { icon: CircleStop, className: 'text-red-400' },
   interrupted: { icon: AlertTriangle, className: 'text-orange-400' },
 };
 

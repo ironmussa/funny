@@ -122,11 +122,11 @@ const eventConfig: Record<string, PipelineEventConfig> = {
 function HookStatusIcon({ status }: { status: string }) {
   switch (status) {
     case 'completed':
-      return <Check className="h-3 w-3 text-muted-foreground" />;
+      return <Check className="icon-xs text-muted-foreground" />;
     case 'failed':
-      return <X className="h-3 w-3 text-muted-foreground" />;
+      return <X className="icon-xs text-muted-foreground" />;
     default:
-      return <Minus className="h-3 w-3 text-muted-foreground/30" />;
+      return <Minus className="icon-xs text-muted-foreground/30" />;
   }
 }
 
@@ -164,7 +164,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
       const max = metadata.maxIterations;
       detail = (
         <span className="inline-flex items-center gap-0.5 text-muted-foreground">
-          <Repeat className="h-2.5 w-2.5" />
+          <Repeat className="icon-2xs" />
           {iter}/{max}
         </span>
       );
@@ -177,7 +177,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
               className="ml-1 inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:underline"
               onClick={() => navigateToThread(metadata.reviewerThreadId)}
             >
-              <ExternalLink className="h-2.5 w-2.5" />
+              <ExternalLink className="icon-2xs" />
               <span>view</span>
             </button>
           </>
@@ -189,9 +189,9 @@ export const PipelineEventCard = memo(function PipelineEventCard({
     case 'pipeline:review_verdict': {
       const isPassing = metadata.verdict === 'pass';
       statusIcon = isPassing ? (
-        <CheckCircle2 className="h-3 w-3 text-muted-foreground" />
+        <CheckCircle2 className="icon-xs text-muted-foreground" />
       ) : (
-        <AlertTriangle className="h-3 w-3 text-muted-foreground" />
+        <AlertTriangle className="icon-xs text-muted-foreground" />
       );
       detail = (
         <span className="font-medium text-muted-foreground">
@@ -209,7 +209,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
     case 'pipeline:corrector_started': {
       detail = (
         <span className="inline-flex items-center gap-0.5 text-muted-foreground">
-          <Repeat className="h-2.5 w-2.5" />
+          <Repeat className="icon-2xs" />
           {metadata.iteration}
         </span>
       );
@@ -222,7 +222,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
               className="ml-1 inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:underline"
               onClick={() => navigateToThread(metadata.correctorThreadId)}
             >
-              <ExternalLink className="h-2.5 w-2.5" />
+              <ExternalLink className="icon-2xs" />
               <span>view</span>
             </button>
           </>
@@ -234,9 +234,9 @@ export const PipelineEventCard = memo(function PipelineEventCard({
     case 'pipeline:fix_applied': {
       detail = (
         <span className="inline-flex items-center gap-0.5 text-muted-foreground">
-          <Repeat className="h-2.5 w-2.5" />
+          <Repeat className="icon-2xs" />
           {metadata.iteration}
-          <ArrowRight className="mx-1 inline h-2.5 w-2.5" />
+          <ArrowRight className="icon-2xs mx-1 inline" />
           re-reviewing
         </span>
       );
@@ -247,16 +247,16 @@ export const PipelineEventCard = memo(function PipelineEventCard({
       const status = metadata.status;
       const isPassed = status === 'completed';
       statusIcon = isPassed ? (
-        <CheckCircle2 className="h-3 w-3 text-muted-foreground" />
+        <CheckCircle2 className="icon-xs text-muted-foreground" />
       ) : (
-        <XCircle className="h-3 w-3 text-muted-foreground" />
+        <XCircle className="icon-xs text-muted-foreground" />
       );
       detail = (
         <span className="font-medium text-muted-foreground">
           {isPassed ? 'passed' : status === 'failed' ? 'failed' : 'skipped'}
           {metadata.totalIterations > 0 && (
             <span className="ml-1 font-normal text-muted-foreground/70">
-              (<Repeat className="mr-0.5 inline h-2.5 w-2.5" />
+              (<Repeat className="icon-2xs mr-0.5 inline" />
               {metadata.totalIterations})
             </span>
           )}
@@ -283,7 +283,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
               className="ml-1 inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:underline"
               onClick={() => navigateToThread(metadata.fixerThreadId)}
             >
-              <ExternalLink className="h-2.5 w-2.5" />
+              <ExternalLink className="icon-2xs" />
               <span>view</span>
             </button>
           </>
@@ -325,7 +325,7 @@ export const PipelineEventCard = memo(function PipelineEventCard({
       data-testid={`pipeline-event-${event.type}`}
       className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-accent/30"
     >
-      {statusIcon || <Icon className={cn('h-3 w-3 shrink-0', config.color)} />}
+      {statusIcon || <Icon className={cn('icon-xs shrink-0', config.color)} />}
       <span className={cn('shrink-0 font-mono font-medium', config.color)}>{config.label}</span>
       {detail}
       {event.createdAt && (
@@ -392,11 +392,11 @@ function PrecommitHooksCard({
       >
         <ChevronRight
           className={cn(
-            'h-3 w-3 shrink-0 text-muted-foreground transition-transform',
+            'icon-xs shrink-0 text-muted-foreground transition-transform',
             isOpen && 'rotate-90',
           )}
         />
-        <Icon className="h-3 w-3 shrink-0 text-muted-foreground" />
+        <Icon className="icon-xs shrink-0 text-muted-foreground" />
         <span className="shrink-0 font-mono font-medium text-muted-foreground">
           Pre-commit hooks
         </span>

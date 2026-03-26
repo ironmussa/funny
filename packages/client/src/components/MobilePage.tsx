@@ -1,6 +1,6 @@
 import type { Project } from '@funny/shared';
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
-import { ArrowLeft, Plus, Folder, Loader2, ShieldQuestion } from 'lucide-react';
+import { ArrowLeft, Plus, Folder, Loader2, Clock } from 'lucide-react';
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -49,7 +49,7 @@ export function MobilePage() {
   if (!ready) {
     return (
       <div className="flex h-[100dvh] items-center justify-center bg-background text-foreground">
-        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+        <Loader2 className="icon-xl animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -124,7 +124,7 @@ function ProjectListView({
                 onClick={() => onSelect(project.id)}
                 className="flex w-full items-center gap-3 rounded-lg px-4 py-3 text-left transition-colors hover:bg-accent active:bg-accent/80"
               >
-                <Folder className="h-5 w-5 shrink-0 text-muted-foreground" />
+                <Folder className="icon-lg shrink-0 text-muted-foreground" />
                 <div className="min-w-0">
                   <div className="truncate text-sm font-medium">{project.name}</div>
                   <div className="truncate text-xs text-muted-foreground">{project.path}</div>
@@ -182,14 +182,14 @@ function ThreadListView({
           aria-label={t('common.back', 'Back')}
           className="-ml-1 rounded p-1 hover:bg-accent"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="icon-lg" />
         </button>
         <h1 className="flex-1 truncate text-base font-semibold">{project?.name ?? 'Project'}</h1>
         <button
           onClick={onNewThread}
           className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground active:bg-primary/80"
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="icon-sm" />
           {t('sidebar.newThread', 'New')}
         </button>
       </header>
@@ -280,7 +280,7 @@ function NewThreadView({
           aria-label={t('common.back', 'Back')}
           className="-ml-1 rounded p-1 hover:bg-accent"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="icon-lg" />
         </button>
         <h1 className="text-base font-semibold">{t('thread.newThread', 'New Thread')}</h1>
       </header>
@@ -460,7 +460,7 @@ function ChatView({
           aria-label={t('common.back', 'Back')}
           className="-ml-1 rounded p-1 hover:bg-accent"
         >
-          <ArrowLeft className="h-5 w-5" />
+          <ArrowLeft className="icon-lg" />
         </button>
         <div className="min-w-0 flex-1">
           <h1 className="truncate text-sm font-semibold">
@@ -472,7 +472,7 @@ function ChatView({
 
       {!activeThread ? (
         <div className="flex flex-1 items-center justify-center">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          <Loader2 className="icon-lg animate-spin text-muted-foreground" />
         </div>
       ) : (
         <>
@@ -584,7 +584,7 @@ function ChatView({
 
               {activeThread.status === 'waiting' && activeThread.waitingReason === 'question' && (
                 <div className="flex items-center gap-2 text-xs text-status-warning/80">
-                  <ShieldQuestion className="h-3.5 w-3.5 animate-pulse" />
+                  <Clock className="h-3.5 w-3.5 animate-pulse text-yellow-400" />
                   {t('thread.waitingForResponse')}
                 </div>
               )}

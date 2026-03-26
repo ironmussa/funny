@@ -45,7 +45,7 @@ const ModelSelect = memo(function ModelSelect({
           className="flex h-7 cursor-pointer items-center gap-1 rounded-md border border-border bg-background px-2 py-1 text-xs text-foreground hover:bg-accent hover:text-accent-foreground"
         >
           <span>{currentLabel}</span>
-          <ChevronDown className="h-3 w-3 opacity-50" />
+          <ChevronDown className="icon-xs opacity-50" />
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -352,7 +352,7 @@ export function PipelineSettings() {
             <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Custom Prompts
             </p>
-            <ChevronDown className="h-3.5 w-3.5 text-muted-foreground transition-transform [[data-state=open]_&]:rotate-180" />
+            <ChevronDown className="icon-sm text-muted-foreground transition-transform [[data-state=open]_&]:rotate-180" />
           </CollapsibleTrigger>
           <CollapsibleContent>
             <div className="space-y-3 p-3">

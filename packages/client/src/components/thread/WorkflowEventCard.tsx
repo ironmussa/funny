@@ -123,9 +123,9 @@ const HooksEventCard = memo(function HooksEventCard({
         disabled={!hasError}
       >
         {hasFailed ? (
-          <XCircle className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <XCircle className="icon-xs shrink-0 text-muted-foreground" />
         ) : (
-          <CheckCircle2 className="h-3 w-3 shrink-0 text-muted-foreground" />
+          <CheckCircle2 className="icon-xs shrink-0 text-muted-foreground" />
         )}
         <span className="shrink-0 font-mono font-medium text-muted-foreground">
           Pre-commit hooks
@@ -143,7 +143,7 @@ const HooksEventCard = memo(function HooksEventCard({
         {hasError && (
           <ChevronRight
             className={cn(
-              'ml-auto h-3 w-3 shrink-0 text-muted-foreground transition-transform',
+              'ml-auto icon-xs shrink-0 text-muted-foreground transition-transform',
               expanded && 'rotate-90',
             )}
           />
@@ -194,9 +194,9 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
     case 'workflow:completed': {
       const isPassed = metadata.status === 'completed';
       statusIcon = isPassed ? (
-        <CheckCircle2 className="h-3 w-3 text-muted-foreground" />
+        <CheckCircle2 className="icon-xs text-muted-foreground" />
       ) : (
-        <XCircle className="h-3 w-3 text-destructive" />
+        <XCircle className="icon-xs text-destructive" />
       );
       detail = (
         <>
@@ -222,9 +222,9 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
     case 'workflow:review': {
       const isPassing = metadata.verdict === 'pass';
       statusIcon = isPassing ? (
-        <CheckCircle2 className="h-3 w-3 text-muted-foreground" />
+        <CheckCircle2 className="icon-xs text-muted-foreground" />
       ) : (
-        <AlertTriangle className="h-3 w-3 text-muted-foreground" />
+        <AlertTriangle className="icon-xs text-muted-foreground" />
       );
       detail = (
         <>
@@ -241,7 +241,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
             </span>
           )}
           <span className="inline-flex items-center gap-0.5 text-muted-foreground">
-            <Repeat className="h-2.5 w-2.5" />
+            <Repeat className="icon-2xs" />
             {metadata.iteration}
           </span>
           {metadata.reviewerThreadId && (
@@ -250,7 +250,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
               className="ml-1 inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:underline"
               onClick={() => navigateToThread(metadata.reviewerThreadId)}
             >
-              <ExternalLink className="h-2.5 w-2.5" />
+              <ExternalLink className="icon-2xs" />
               <span>view</span>
             </button>
           )}
@@ -263,7 +263,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
       detail = (
         <>
           <span className="inline-flex items-center gap-0.5 text-muted-foreground">
-            <Repeat className="h-2.5 w-2.5" />
+            <Repeat className="icon-2xs" />
             {metadata.iteration}
             {metadata.hasChanges === false && (
               <span className="ml-1 text-muted-foreground/70">(no changes)</span>
@@ -275,7 +275,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
               className="ml-1 inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:underline"
               onClick={() => navigateToThread(metadata.correctorThreadId)}
             >
-              <ExternalLink className="h-2.5 w-2.5" />
+              <ExternalLink className="icon-2xs" />
               <span>view</span>
             </button>
           )}
@@ -287,9 +287,9 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
     case 'workflow:precommit_fix': {
       const isRunning = metadata.status === 'running';
       statusIcon = isRunning ? (
-        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+        <Loader2 className="icon-xs animate-spin text-muted-foreground" />
       ) : (
-        <CheckCircle2 className="h-3 w-3 text-muted-foreground" />
+        <CheckCircle2 className="icon-xs text-muted-foreground" />
       );
       detail = (
         <>
@@ -303,7 +303,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
               className="ml-1 inline-flex items-center gap-0.5 text-muted-foreground hover:text-foreground hover:underline"
               onClick={() => navigateToThread(metadata.fixerThreadId)}
             >
-              <ExternalLink className="h-2.5 w-2.5" />
+              <ExternalLink className="icon-2xs" />
               <span>view</span>
             </button>
           )}
@@ -357,7 +357,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
       data-testid={`workflow-event-${event.type}`}
       className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-accent/30"
     >
-      {statusIcon || <Icon className={cn('h-3 w-3 shrink-0 text-muted-foreground')} />}
+      {statusIcon || <Icon className={cn('icon-xs shrink-0 text-muted-foreground')} />}
       <span className="shrink-0 font-mono font-medium text-muted-foreground">{config.label}</span>
       {detail}
       {event.createdAt && (

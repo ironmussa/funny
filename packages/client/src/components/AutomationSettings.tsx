@@ -173,7 +173,7 @@ export function AutomationSettings() {
       {/* Header */}
       <div className="flex items-center justify-end">
         <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="icon-sm" />
           Create
         </Button>
       </div>
@@ -183,7 +183,7 @@ export function AutomationSettings() {
         <div className="py-8 text-center">
           <p className="mb-3 text-sm text-muted-foreground">No automations yet.</p>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={openCreateDialog}>
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="icon-sm" />
             Create your first automation
           </Button>
         </div>
@@ -224,7 +224,7 @@ export function AutomationSettings() {
                       onClick={() => handleTrigger(a)}
                       className="text-status-success/80 hover:text-status-success"
                     >
-                      <Play className="h-3.5 w-3.5" />
+                      <Play className="icon-sm" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Run Now</TooltipContent>
@@ -237,11 +237,7 @@ export function AutomationSettings() {
                       onClick={() => handleToggleEnabled(a)}
                       className="text-muted-foreground"
                     >
-                      {a.enabled ? (
-                        <Pause className="h-3.5 w-3.5" />
-                      ) : (
-                        <Play className="h-3.5 w-3.5" />
-                      )}
+                      {a.enabled ? <Pause className="icon-sm" /> : <Play className="icon-sm" />}
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>{a.enabled ? 'Pause' : 'Enable'}</TooltipContent>
@@ -254,7 +250,7 @@ export function AutomationSettings() {
                       onClick={() => handleViewRuns(a.id)}
                       className="text-muted-foreground"
                     >
-                      <History className="h-3.5 w-3.5" />
+                      <History className="icon-sm" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Run History</TooltipContent>
@@ -267,7 +263,7 @@ export function AutomationSettings() {
                       onClick={() => openEditDialog(a)}
                       className="text-muted-foreground"
                     >
-                      <Pencil className="h-3.5 w-3.5" />
+                      <Pencil className="icon-sm" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Edit</TooltipContent>
@@ -280,7 +276,7 @@ export function AutomationSettings() {
                       onClick={() => handleDelete(a)}
                       className="text-muted-foreground hover:text-status-error"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="icon-sm" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Delete</TooltipContent>
@@ -433,7 +429,7 @@ export function AutomationSettings() {
               disabled={!form.name.trim() || !form.prompt.trim()}
               className="gap-1.5"
             >
-              <Play className="h-3 w-3" />
+              <Play className="icon-xs" />
               {editingId ? 'Save & Test' : 'Create & Test'}
             </Button>
             <Button

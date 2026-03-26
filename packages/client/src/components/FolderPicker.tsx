@@ -203,7 +203,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             className="h-6 w-6 flex-shrink-0"
             tooltip={t('folderPicker.back')}
           >
-            <ArrowLeft className="h-3.5 w-3.5" />
+            <ArrowLeft className="icon-sm" />
           </TooltipIconButton>
           <TooltipIconButton
             size="icon"
@@ -212,7 +212,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             className="h-6 w-6 flex-shrink-0"
             tooltip={t('folderPicker.forward')}
           >
-            <ArrowRight className="h-3.5 w-3.5" />
+            <ArrowRight className="icon-sm" />
           </TooltipIconButton>
 
           {/* Breadcrumb path */}
@@ -223,7 +223,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             {breadcrumbs.map((crumb, i) => (
               <div key={crumb.path} className="flex flex-shrink-0 items-center gap-0.5">
                 {i > 0 && (
-                  <ChevronRight className="h-3 w-3 flex-shrink-0 text-muted-foreground/50" />
+                  <ChevronRight className="icon-xs flex-shrink-0 text-muted-foreground/50" />
                 )}
                 <button
                   onClick={() => loadDir(crumb.path)}
@@ -249,7 +249,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             onClick={() => loadDir(home)}
             className="h-6 px-2 text-xs text-muted-foreground"
           >
-            <Home className="mr-1 h-3 w-3" />
+            <Home className="icon-xs mr-1" />
             {t('folderPicker.home')}
           </Button>
           {roots.map((root) => (
@@ -261,7 +261,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
               className="h-6 px-2 text-xs text-muted-foreground"
               title={root}
             >
-              <HardDrive className="mr-1 h-3 w-3" />
+              <HardDrive className="icon-xs mr-1" />
               {root.replace(':\\', '')}
             </Button>
           ))}
@@ -271,7 +271,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
         {!loading && dirs.length > 0 && (
           <div className="border-b border-border px-4 py-2">
             <div className="relative">
-              <Search className="absolute left-2 top-1/2 h-3 w-3 -translate-y-1/2 text-muted-foreground" />
+              <Search className="icon-xs absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
               <Input
                 type="text"
                 value={search}
@@ -308,9 +308,9 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
               onClick={() => loadDir(dir.path)}
               className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-xs text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
             >
-              <Folder className="h-3.5 w-3.5 flex-shrink-0 text-status-info" />
+              <Folder className="icon-sm flex-shrink-0 text-status-info" />
               <span className="truncate font-mono-explorer">{dir.name}</span>
-              <ChevronRight className="ml-auto h-3 w-3 flex-shrink-0 opacity-40" />
+              <ChevronRight className="icon-xs ml-auto flex-shrink-0 opacity-40" />
             </button>
           ))}
         </ScrollArea>

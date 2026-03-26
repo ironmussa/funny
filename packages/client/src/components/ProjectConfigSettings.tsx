@@ -173,7 +173,7 @@ export function ProjectConfigSettings() {
       {/* ── Env Files ── */}
       <section>
         <div className="mb-3 flex items-center gap-2">
-          <FileText className="h-4 w-4 text-muted-foreground" />
+          <FileText className="icon-base text-muted-foreground" />
           <h3 className="text-sm font-semibold">{t('projectConfig.envFiles')}</h3>
         </div>
         <p className="mb-3 text-xs text-muted-foreground">
@@ -198,7 +198,7 @@ export function ProjectConfigSettings() {
                 data-testid={`env-file-remove-${i}`}
                 tooltip={t('common.delete')}
               >
-                <Trash2 className="h-3 w-3" />
+                <Trash2 className="icon-xs" />
               </TooltipIconButton>
             </div>
           ))}
@@ -220,7 +220,7 @@ export function ProjectConfigSettings() {
             onClick={addEnvFile}
             data-testid="env-file-add"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="icon-sm" />
           </Button>
         </div>
       </section>
@@ -230,7 +230,7 @@ export function ProjectConfigSettings() {
       {/* ── Port Groups ── */}
       <section>
         <div className="mb-3 flex items-center gap-2">
-          <Network className="h-4 w-4 text-muted-foreground" />
+          <Network className="icon-base text-muted-foreground" />
           <h3 className="text-sm font-semibold">{t('projectConfig.portGroups')}</h3>
         </div>
         <p className="mb-3 text-xs text-muted-foreground">
@@ -272,7 +272,7 @@ export function ProjectConfigSettings() {
                   data-testid={`port-group-remove-${gi}`}
                   tooltip={t('common.delete')}
                 >
-                  <Trash2 className="h-3 w-3" />
+                  <Trash2 className="icon-xs" />
                 </TooltipIconButton>
               </div>
 
@@ -286,7 +286,7 @@ export function ProjectConfigSettings() {
                     data-testid={`port-group-${gi}-var-${vi}`}
                   >
                     {v}
-                    <Trash2 className="h-2.5 w-2.5" />
+                    <Trash2 className="icon-2xs" />
                   </Badge>
                 ))}
                 <div className="flex items-center gap-1">
@@ -305,7 +305,7 @@ export function ProjectConfigSettings() {
                     data-testid={`port-group-${gi}-var-add`}
                     tooltip={t('common.add')}
                   >
-                    <Plus className="h-3 w-3" />
+                    <Plus className="icon-xs" />
                   </TooltipIconButton>
                 </div>
               </div>
@@ -339,7 +339,7 @@ export function ProjectConfigSettings() {
               onClick={addPortGroup}
               data-testid="port-group-add-confirm"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="icon-sm" />
             </Button>
             <Button
               variant="ghost"
@@ -363,7 +363,7 @@ export function ProjectConfigSettings() {
             onClick={() => setAddingGroup(true)}
             data-testid="port-group-add"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="icon-sm" />
             {t('projectConfig.addPortGroup')}
           </Button>
         )}
@@ -374,7 +374,7 @@ export function ProjectConfigSettings() {
       {/* ── Post Create ── */}
       <section>
         <div className="mb-3 flex items-center gap-2">
-          <Terminal className="h-4 w-4 text-muted-foreground" />
+          <Terminal className="icon-base text-muted-foreground" />
           <h3 className="text-sm font-semibold">{t('projectConfig.postCreate')}</h3>
         </div>
         <p className="mb-3 text-xs text-muted-foreground">
@@ -400,7 +400,7 @@ export function ProjectConfigSettings() {
                 className="text-muted-foreground opacity-0 hover:text-status-error group-hover:opacity-100"
                 data-testid={`post-create-remove-${i}`}
               >
-                <Trash2 className="h-3 w-3" />
+                <Trash2 className="icon-xs" />
               </Button>
             </div>
           ))}
@@ -422,7 +422,7 @@ export function ProjectConfigSettings() {
             onClick={addPostCreate}
             data-testid="post-create-add"
           >
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="icon-sm" />
           </Button>
         </div>
       </section>

@@ -1,5 +1,5 @@
 import type { ThreadEvent, WaitingReason } from '@funny/shared';
-import { Loader2, ArrowDown, ShieldQuestion } from 'lucide-react';
+import { Loader2, ArrowDown, Clock } from 'lucide-react';
 import { motion, useReducedMotion } from 'motion/react';
 import {
   useState,
@@ -479,7 +479,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
           {/* Loading indicator (pagination) */}
           {pagination?.loadingMore && (
             <div className="flex items-center justify-center py-3">
-              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+              <Loader2 className="icon-base animate-spin text-muted-foreground" />
               <span className="ml-2 text-xs text-muted-foreground">
                 {t('thread.loadingOlder', 'Loading older messages\u2026')}
               </span>
@@ -555,7 +555,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
               transition={{ duration: 0.25, ease: 'easeOut' }}
               className="flex items-center gap-2 text-xs text-status-warning/80"
             >
-              <ShieldQuestion className="h-3.5 w-3.5 animate-pulse" />
+              <Clock className="h-3.5 w-3.5 animate-pulse text-yellow-400" />
               {t('thread.waitingForResponse')}
             </motion.div>
           )}
@@ -649,7 +649,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
               aria-label={t('thread.scrollToBottom', 'Scroll to bottom')}
               className="absolute bottom-full left-1/2 mb-2 flex -translate-x-1/2 items-center gap-1 rounded-full border border-muted-foreground/40 bg-secondary px-3 py-1.5 text-xs text-muted-foreground shadow-md transition-colors hover:bg-muted"
             >
-              <ArrowDown className="h-3 w-3" />
+              <ArrowDown className="icon-xs" />
               {t('thread.scrollToBottom', 'Scroll to bottom')}
             </button>
           </div>

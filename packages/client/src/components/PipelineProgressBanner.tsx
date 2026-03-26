@@ -39,11 +39,11 @@ export function PipelineProgressBanner({ threadId }: { threadId: string }) {
     >
       {/* Status icon */}
       {isDone ? (
-        <CheckCircle2 className="h-3.5 w-3.5" />
+        <CheckCircle2 className="icon-sm" />
       ) : isFailed ? (
-        <XCircle className="h-3.5 w-3.5" />
+        <XCircle className="icon-sm" />
       ) : (
-        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        <Loader2 className="icon-sm animate-spin" />
       )}
 
       {/* Pipeline label */}
@@ -53,7 +53,7 @@ export function PipelineProgressBanner({ threadId }: { threadId: string }) {
       {isRunning && (
         <>
           <span className="text-muted-foreground">·</span>
-          <StageIcon className="h-3 w-3" />
+          <StageIcon className="icon-xs" />
           <span>{stageLabel}</span>
         </>
       )}

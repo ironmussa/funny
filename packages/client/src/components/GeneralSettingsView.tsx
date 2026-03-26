@@ -163,7 +163,7 @@ function ThemeCard({
       </div>
       <div className="flex items-center justify-between px-2.5 py-1.5">
         <span className="text-xs font-medium">{t(option.label)}</span>
-        {selected && <Check className="h-3 w-3 text-primary" />}
+        {selected && <Check className="icon-xs text-primary" />}
       </div>
     </button>
   );
@@ -368,7 +368,7 @@ export function GeneralSettingsView() {
               data-testid="preferences-back"
               tooltip={t('common.back')}
             >
-              <ArrowLeft className="h-3.5 w-3.5" />
+              <ArrowLeft className="icon-sm" />
             </TooltipIconButton>
             <h1 className="text-sm font-medium">{t('settings.title')}</h1>
           </div>
@@ -385,7 +385,7 @@ export function GeneralSettingsView() {
                     onClick={() => navigate(buildPath(`/preferences/${item.id}`))}
                     data-testid={`preferences-nav-${item.id}`}
                   >
-                    <Icon className="h-4 w-4" />
+                    <Icon className="icon-base" />
                     <span>{item.label.startsWith('settings.') ? t(item.label) : item.label}</span>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
@@ -765,7 +765,7 @@ export function GeneralSettingsView() {
                     disabled={!smtpHost || !smtpUser || smtpSaving}
                     data-testid="preferences-smtp-save"
                   >
-                    <Mail className="mr-1.5 h-3.5 w-3.5" />
+                    <Mail className="icon-sm mr-1.5" />
                     {smtpSaving ? 'Saving...' : 'Save SMTP'}
                   </Button>
                   <Button
@@ -775,7 +775,7 @@ export function GeneralSettingsView() {
                     disabled={smtpSource === 'none' || smtpTesting}
                     data-testid="preferences-smtp-test"
                   >
-                    <Send className="mr-1.5 h-3.5 w-3.5" />
+                    <Send className="icon-sm mr-1.5" />
                     {smtpTesting ? 'Sending...' : 'Send Test Email'}
                   </Button>
                 </div>

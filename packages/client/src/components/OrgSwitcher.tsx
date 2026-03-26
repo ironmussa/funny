@@ -128,7 +128,7 @@ export function OrgSwitcher() {
       <SelectContent>
         <SelectItem value={PERSONAL_VALUE} size="sm" data-testid="org-switcher-item-personal">
           <span className="flex items-center gap-2">
-            <User className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+            <User className="icon-sm shrink-0 text-muted-foreground" />
             <span>Personal</span>
           </span>
         </SelectItem>
@@ -140,7 +140,7 @@ export function OrgSwitcher() {
             data-testid={`org-switcher-item-${org.id}`}
           >
             <span className="flex items-center gap-2">
-              <Building2 className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
+              <Building2 className="icon-sm shrink-0 text-muted-foreground" />
               <span className="truncate">{org.name}</span>
             </span>
           </SelectItem>

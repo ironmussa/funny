@@ -223,7 +223,7 @@ export function OrganizationManagement() {
               <div key={org.id} className="settings-row" data-testid={`org-item-${org.id}`}>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <Building2 className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <Building2 className="icon-base shrink-0 text-muted-foreground" />
                     <p className="truncate text-sm font-medium text-foreground">{org.name}</p>
                     <Badge variant="secondary" className="text-xs">
                       {role}
@@ -247,7 +247,7 @@ export function OrganizationManagement() {
                       onClick={() => handleSetActive(org.id)}
                       data-testid={`org-set-active-${org.id}`}
                     >
-                      <Check className="mr-1.5 h-3.5 w-3.5" />
+                      <Check className="icon-sm mr-1.5" />
                       Set Active
                     </Button>
                   )}
@@ -259,7 +259,7 @@ export function OrganizationManagement() {
                       onClick={() => setDeleteConfirm(org)}
                       data-testid={`org-delete-${org.id}`}
                     >
-                      <Trash2 className="h-4 w-4" />
+                      <Trash2 className="icon-base" />
                     </Button>
                   )}
                 </div>

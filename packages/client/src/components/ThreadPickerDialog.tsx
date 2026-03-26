@@ -1,8 +1,8 @@
 import type { Thread } from '@funny/shared';
-import { useMemo } from 'react';
+import { FolderOpen, GitBranch } from 'lucide-react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { BranchBadge } from '@/components/BranchBadge';
 import {
   CommandDialog,
   CommandInput,
@@ -11,11 +11,18 @@ import {
   CommandGroup,
   CommandItem,
 } from '@/components/ui/command';
-import { ProjectChip, colorFromName } from '@/components/ui/project-chip';
+import { HighlightText } from '@/components/ui/highlight-text';
+import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
+import { colorFromName } from '@/components/ui/project-chip';
 import { statusConfig } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
+
+/** Return the most recent activity timestamp for a thread (completedAt > createdAt). */
+function threadActivityTime(thread: Thread): number {
+  return new Date(thread.completedAt ?? thread.createdAt).getTime();
+}
 
 interface ThreadPickerDialogProps {
   open: boolean;
@@ -56,6 +63,7 @@ function ThreadPickerDialogContent({
   const { t } = useTranslation();
   const threadsByProject = useThreadStore((s) => s.threadsByProject);
   const projects = useProjectStore((s) => s.projects);
+  const [search, setSearch] = useState('');
 
   const excludeSet = useMemo(() => new Set(excludeIds), [excludeIds]);
 
@@ -63,13 +71,16 @@ function ThreadPickerDialogContent({
     const groups: { project: (typeof projects)[0]; threads: Thread[] }[] = [];
 
     for (const project of projects) {
-      const threads = (threadsByProject[project.id] ?? []).filter(
-        (th) => !th.archived && !excludeSet.has(th.id),
-      );
+      const threads = (threadsByProject[project.id] ?? [])
+        .filter((th) => !th.archived && !excludeSet.has(th.id))
+        .sort((a, b) => threadActivityTime(b) - threadActivityTime(a));
       if (threads.length > 0) {
         groups.push({ project, threads });
       }
     }
+
+    // Sort groups so the project with the most recently active thread comes first
+    groups.sort((a, b) => threadActivityTime(b.threads[0]) - threadActivityTime(a.threads[0]));
 
     return groups;
   }, [projects, threadsByProject, excludeSet]);
@@ -81,6 +92,7 @@ function ThreadPickerDialogContent({
       <CommandInput
         data-testid="thread-picker-search"
         placeholder={t('live.searchThreads', 'Search threads...')}
+        onValueChange={setSearch}
       />
       <CommandList>
         <CommandEmpty>
@@ -114,24 +126,34 @@ function ThreadPickerDialogContent({
                     onOpenChange(false);
                   }}
                 >
-                  {StatusIcon && <StatusIcon className={cn('h-3.5 w-3.5 shrink-0', statusClass)} />}
+                  {StatusIcon && <StatusIcon className={cn('icon-sm shrink-0', statusClass)} />}
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <span className="truncate text-sm">{thread.title}</span>
-                    <div className="flex items-center gap-1.5">
-                      <ProjectChip
-                        name={project.name}
-                        color={project.color}
-                        size="sm"
-                        className="flex-shrink-0"
-                      />
-                      {(thread.branch || thread.baseBranch) && (
-                        <BranchBadge
-                          branch={(thread.branch || thread.baseBranch)!}
-                          size="xs"
-                          className="min-w-0"
-                        />
-                      )}
-                    </div>
+                    <HighlightText
+                      text={thread.title}
+                      query={search}
+                      className="truncate text-sm"
+                    />
+                    <PowerlineBar
+                      size="sm"
+                      segments={[
+                        {
+                          key: 'project',
+                          icon: FolderOpen,
+                          label: project.name,
+                          color: project.color || colorFromName(project.name),
+                        } satisfies PowerlineSegmentData,
+                        ...(thread.branch || thread.baseBranch
+                          ? [
+                              {
+                                key: 'branch',
+                                icon: GitBranch,
+                                label: (thread.branch || thread.baseBranch)!,
+                                color: '#C3A6E0',
+                              } satisfies PowerlineSegmentData,
+                            ]
+                          : []),
+                      ]}
+                    />
                   </div>
                 </CommandItem>
               );

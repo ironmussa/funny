@@ -131,7 +131,7 @@ export function TestRunnerPane() {
               className="text-muted-foreground"
               data-testid="test-runner-close"
             >
-              <PanelRightClose className="h-3.5 w-3.5" />
+              <PanelRightClose className="icon-sm" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="top">Close</TooltipContent>

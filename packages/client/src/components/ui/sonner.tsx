@@ -14,11 +14,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
       className="toaster group"
       visibleToasts={5}
       icons={{
-        success: <CircleCheck className="h-4 w-4" />,
-        info: <Info className="h-4 w-4" />,
-        warning: <TriangleAlert className="h-4 w-4" />,
-        error: <OctagonX className="h-4 w-4" />,
-        loading: <LoaderCircle className="h-4 w-4 animate-spin" />,
+        success: <CircleCheck className="icon-base" />,
+        info: <Info className="icon-base" />,
+        warning: <TriangleAlert className="icon-base" />,
+        error: <OctagonX className="icon-base" />,
+        loading: <LoaderCircle className="icon-base animate-spin" />,
       }}
       toastOptions={{
         classNames: {

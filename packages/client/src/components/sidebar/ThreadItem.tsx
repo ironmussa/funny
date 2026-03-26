@@ -88,10 +88,6 @@ export const ThreadItem = memo(function ThreadItem({
   const isRunning = thread.status === 'running';
   const isSettingUp = thread.status === 'setting_up';
   const isBusy = isRunning || isSettingUp;
-  // Sidebar icons: no color, only keep animate-spin for busy states
-  const statusIconClassName = isBusy
-    ? 'text-muted-foreground animate-spin'
-    : 'text-muted-foreground';
   const displayTime = timeValue ?? timeAgo(thread.createdAt, t);
 
   // Keep the last known git status so the widget doesn't flicker away
@@ -143,13 +139,13 @@ export const ThreadItem = memo(function ThreadItem({
                   'group-hover/thread:hidden',
                 )}
               >
-                <Pin className="h-3.5 w-3.5" />
+                <Pin className="icon-sm" />
               </span>
             ) : (
               <span className={cn('absolute inset-0', onPin && 'group-hover/thread:hidden')}>
                 <Tooltip>
                   <TooltipTrigger asChild>
-                    <StatusIcon className={cn('h-3.5 w-3.5', statusIconClassName)} />
+                    <StatusIcon className={cn('icon-sm', threadStatusCfg.className)} />
                   </TooltipTrigger>
                   <TooltipContent side="top" className="text-xs">
                     {t(`thread.status.${thread.status}`)}
@@ -165,11 +161,7 @@ export const ThreadItem = memo(function ThreadItem({
                   onPin();
                 }}
               >
-                {thread.pinned ? (
-                  <PinOff className="h-3.5 w-3.5" />
-                ) : (
-                  <Pin className="h-3.5 w-3.5" />
-                )}
+                {thread.pinned ? <PinOff className="icon-sm" /> : <Pin className="icon-sm" />}
               </span>
             )}
           </div>
@@ -178,7 +170,7 @@ export const ThreadItem = memo(function ThreadItem({
           {thread.createdBy && thread.createdBy !== 'user' && (
             <Tooltip>
               <TooltipTrigger asChild>
-                <Bot className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                <Bot className="icon-xs flex-shrink-0 text-muted-foreground" />
               </TooltipTrigger>
               <TooltipContent side="top" className="text-xs">
                 {t('thread.createdBy', { creator: thread.createdBy })}
@@ -265,7 +257,7 @@ export const ThreadItem = memo(function ThreadItem({
                   onClick={(e) => e.stopPropagation()}
                   className="text-muted-foreground hover:text-foreground"
                 >
-                  <MoreVertical className="h-3.5 w-3.5" />
+                  <MoreVertical className="icon-sm" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="start" side="bottom">
@@ -279,7 +271,7 @@ export const ThreadItem = memo(function ThreadItem({
                     }
                   }}
                 >
-                  <FolderOpenDot className="h-3.5 w-3.5" />
+                  <FolderOpenDot className="icon-sm" />
                   {t('sidebar.openDirectory')}
                 </DropdownMenuItem>
                 <DropdownMenuItem
@@ -292,7 +284,7 @@ export const ThreadItem = memo(function ThreadItem({
                     }
                   }}
                 >
-                  <Terminal className="h-3.5 w-3.5" />
+                  <Terminal className="icon-sm" />
                   {t('sidebar.openTerminal')}
                 </DropdownMenuItem>
                 {onRename && (
@@ -303,7 +295,7 @@ export const ThreadItem = memo(function ThreadItem({
                       onRename();
                     }}
                   >
-                    <Pencil className="h-3.5 w-3.5" />
+                    <Pencil className="icon-sm" />
                     {t('sidebar.rename')}
                   </DropdownMenuItem>
                 )}
@@ -320,7 +312,7 @@ export const ThreadItem = memo(function ThreadItem({
                       }}
                       className="text-status-error focus:text-status-error"
                     >
-                      <Square className="h-3.5 w-3.5" />
+                      <Square className="icon-sm" />
                       {t('common.stop')}
                     </DropdownMenuItem>
                   </>
@@ -332,7 +324,7 @@ export const ThreadItem = memo(function ThreadItem({
                       onArchive();
                     }}
                   >
-                    <Archive className="h-3.5 w-3.5" />
+                    <Archive className="icon-sm" />
                     {t('sidebar.archive')}
                   </DropdownMenuItem>
                 )}
@@ -347,7 +339,7 @@ export const ThreadItem = memo(function ThreadItem({
                       }}
                       className="text-status-error focus:text-status-error"
                     >
-                      <Trash2 className="h-3.5 w-3.5" />
+                      <Trash2 className="icon-sm" />
                       {t('common.delete')}
                     </DropdownMenuItem>
                   </>

@@ -103,11 +103,11 @@ function useActiveProgress(
 function StepStatusIcon({ status }: { status: string }) {
   switch (status) {
     case 'running':
-      return <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />;
+      return <Loader2 className="icon-xs animate-spin text-muted-foreground" />;
     case 'completed':
-      return <Check className="h-3 w-3 text-muted-foreground" />;
+      return <Check className="icon-xs text-muted-foreground" />;
     case 'failed':
-      return <X className="h-3 w-3 text-destructive" />;
+      return <X className="icon-xs text-destructive" />;
     default:
       return null;
   }
@@ -214,14 +214,14 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
       >
         <ChevronRight
           className={cn(
-            'h-3 w-3 flex-shrink-0 text-muted-foreground transition-transform duration-150',
+            'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
             expanded && 'rotate-90',
           )}
         />
         {status.running ? (
-          <Loader2 className="h-3 w-3 flex-shrink-0 animate-spin text-muted-foreground" />
+          <Loader2 className="icon-xs flex-shrink-0 animate-spin text-muted-foreground" />
         ) : (
-          <StatusIcon className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+          <StatusIcon className="icon-xs flex-shrink-0 text-muted-foreground" />
         )}
         <span className="flex-shrink-0 font-mono font-medium text-foreground">
           {status.action || 'Workflow'}

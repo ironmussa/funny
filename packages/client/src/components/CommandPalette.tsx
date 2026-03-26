@@ -63,7 +63,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 value={`${project.name} ${project.path}`}
                 onSelect={() => handleProjectSelect(project.id)}
               >
-                <FolderOpen className="h-4 w-4 flex-shrink-0" />
+                <FolderOpen className="icon-base flex-shrink-0" />
                 <div className="flex min-w-0 flex-col">
                   <span className="truncate">{project.name}</span>
                   <span className="truncate text-xs text-muted-foreground">{project.path}</span>
@@ -83,7 +83,7 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                 value={item.label}
                 onSelect={() => handleSettingsSelect(item.id)}
               >
-                <Icon className="h-4 w-4" />
+                <Icon className="icon-base" />
                 <span>{t(settingsLabelKeys[item.id] ?? item.label)}</span>
               </CommandItem>
             );

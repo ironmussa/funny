@@ -21,7 +21,7 @@ export function CompactionEventCard({ event }: { event: CompactionEvent }) {
         'border-amber-500/20 bg-amber-500/5',
       )}
     >
-      <Minimize2 className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+      <Minimize2 className="icon-sm shrink-0 text-amber-600" />
       <span className="shrink-0 font-medium text-amber-600">Context compacted</span>
       <span className="text-muted-foreground">
         {tokenK}K tokens → summarized ({event.trigger})

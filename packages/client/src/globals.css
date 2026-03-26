@@ -990,6 +990,23 @@
 }
 
 @layer utilities {
+  /* ── Icon size tokens ─────────────────────────────────────────
+   * Named to mirror the Tailwind text-* scale so devs can pair
+   * icon-sm with text-sm, icon-xs with text-xs, etc.
+   *
+   * Usage:  <Search className="icon-sm" />
+   *         <ChevronDown className={cn('icon-xs', 'text-muted-foreground')} />
+   *
+   * For hero/display icons (32px+), use native Tailwind: size-8, size-10.
+   * For status dots (6px), keep using h-1.5 w-1.5 rounded-full directly.
+   * ─────────────────────────────────────────────────────────────── */
+  .icon-2xs  { width: 0.625rem; height: 0.625rem; }  /* 10px — pairs with text-[10px] */
+  .icon-xs   { width: 0.75rem;  height: 0.75rem;  }  /* 12px — pairs with text-xs */
+  .icon-sm   { width: 0.875rem; height: 0.875rem; }  /* 14px — pairs with text-sm */
+  .icon-base { width: 1rem;     height: 1rem;     }  /* 16px — pairs with text-base */
+  .icon-lg   { width: 1.25rem;  height: 1.25rem;  }  /* 20px — pairs with text-lg/xl */
+  .icon-xl   { width: 1.5rem;   height: 1.5rem;   }  /* 24px — pairs with text-2xl */
+
   .no-scrollbar {
     -ms-overflow-style: none;
     scrollbar-width: none;

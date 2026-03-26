@@ -44,11 +44,11 @@ export function BashCard({
       >
         <ChevronRight
           className={cn(
-            'h-3 w-3 flex-shrink-0 text-muted-foreground transition-transform duration-150',
+            'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
             expanded && 'rotate-90',
           )}
         />
-        {!hideLabel && <Terminal className="h-3 w-3 flex-shrink-0 text-muted-foreground" />}
+        {!hideLabel && <Terminal className="icon-xs flex-shrink-0 text-muted-foreground" />}
         {!hideLabel && (
           <span className="flex-shrink-0 font-mono font-medium text-foreground">
             {t('tools.runCommand')}

@@ -52,11 +52,11 @@ export function EditFileCard({
         >
           <ChevronRight
             className={cn(
-              'h-3 w-3 flex-shrink-0 text-muted-foreground transition-transform duration-150',
+              'icon-xs flex-shrink-0 text-muted-foreground transition-transform duration-150',
               expanded && 'rotate-90',
             )}
           />
-          {!hideLabel && <FilePen className="h-3 w-3 flex-shrink-0 text-muted-foreground" />}
+          {!hideLabel && <FilePen className="icon-xs flex-shrink-0 text-muted-foreground" />}
           {!hideLabel && (
             <span className="flex-shrink-0 font-mono font-medium text-foreground">
               {t('tools.editFile')}
@@ -109,7 +109,7 @@ export function EditFileCard({
                 onClick={() => setShowExpandedDiff(true)}
                 className="mr-1 flex-shrink-0 text-muted-foreground hover:text-foreground"
               >
-                <Maximize2 className="h-3.5 w-3.5" />
+                <Maximize2 className="icon-sm" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="left">{t('review.expand', 'Expand')}</TooltipContent>

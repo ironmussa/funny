@@ -83,7 +83,7 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
       <DialogContent className="flex max-h-[80vh] max-w-lg flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CircleDot className="h-4 w-4" />
+            <CircleDot className="icon-base" />
             {t('issues.title')}
           </DialogTitle>
           <DialogDescription className="sr-only">{t('issues.title')}</DialogDescription>
@@ -97,7 +97,7 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
             onClick={() => setState('open')}
             className="h-7 text-xs"
           >
-            <CircleDot className="mr-1 h-3 w-3 text-green-500" />
+            <CircleDot className="icon-xs mr-1 text-green-500" />
             {t('issues.open')}
           </Button>
           <Button
@@ -106,7 +106,7 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
             onClick={() => setState('closed')}
             className="h-7 text-xs"
           >
-            <CircleCheck className="mr-1 h-3 w-3 text-purple-500" />
+            <CircleCheck className="icon-xs mr-1 text-purple-500" />
             {t('issues.closed')}
           </Button>
         </div>
@@ -115,7 +115,7 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
         <ScrollArea className="-mx-6 min-h-0 flex-1 px-6">
           {loading && issues.length === 0 ? (
             <div className="flex items-center justify-center py-12">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              <Loader2 className="icon-lg animate-spin text-muted-foreground" />
             </div>
           ) : error ? (
             <div className="py-12 text-center text-sm text-muted-foreground">
@@ -137,9 +137,9 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
                   className="group flex items-start gap-2 rounded-md p-2 transition-colors hover:bg-accent/50"
                 >
                   {issue.state === 'open' ? (
-                    <CircleDot className="mt-0.5 h-4 w-4 flex-shrink-0 text-green-500" />
+                    <CircleDot className="icon-base mt-0.5 flex-shrink-0 text-green-500" />
                   ) : (
-                    <CircleCheck className="mt-0.5 h-4 w-4 flex-shrink-0 text-purple-500" />
+                    <CircleCheck className="icon-base mt-0.5 flex-shrink-0 text-purple-500" />
                   )}
                   <div className="min-w-0 flex-1">
                     <div className="flex items-baseline gap-1.5">
@@ -170,7 +170,7 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
                       )}
                       {issue.comments > 0 && (
                         <span className="flex items-center gap-0.5 text-xs text-muted-foreground">
-                          <MessageSquare className="h-3 w-3" />
+                          <MessageSquare className="icon-xs" />
                           {issue.comments}
                         </span>
                       )}
@@ -191,7 +191,7 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
                     disabled={loading}
                     className="text-xs"
                   >
-                    {loading ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : null}
+                    {loading ? <Loader2 className="icon-xs mr-1 animate-spin" /> : null}
                     {t('issues.loadMore')}
                   </Button>
                 </div>
@@ -210,7 +210,7 @@ export function IssuesDialog({ projectId, open, onOpenChange }: IssuesDialogProp
               className="flex items-center gap-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
             >
               {t('issues.viewOnGithub')}
-              <ExternalLink className="h-3 w-3" />
+              <ExternalLink className="icon-xs" />
             </a>
           </div>
         )}

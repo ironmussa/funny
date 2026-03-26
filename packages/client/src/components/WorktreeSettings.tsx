@@ -30,13 +30,13 @@ function WorktreeCard({
   return (
     <div className="flex items-center justify-between gap-3 rounded-md border border-border/50 bg-card px-3 py-2.5">
       <div className="flex min-w-0 items-center gap-3">
-        <GitFork className="h-4 w-4 flex-shrink-0 text-status-info" />
+        <GitFork className="icon-base flex-shrink-0 text-status-info" />
         <div className="min-w-0">
           <div className="flex items-center gap-2">
             <span className="truncate text-sm font-medium">{worktree.branch}</span>
           </div>
           <div className="mt-0.5 flex items-center gap-2">
-            <FolderOpen className="h-3 w-3 flex-shrink-0 text-muted-foreground/70" />
+            <FolderOpen className="icon-xs flex-shrink-0 text-muted-foreground/70" />
             <span className="truncate font-mono text-xs text-muted-foreground/70">
               {worktree.path}
             </span>
@@ -56,11 +56,7 @@ function WorktreeCard({
           disabled={removing}
           className="flex-shrink-0 text-muted-foreground hover:text-destructive"
         >
-          {removing ? (
-            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <Trash2 className="h-3.5 w-3.5" />
-          )}
+          {removing ? <Loader2 className="icon-sm animate-spin" /> : <Trash2 className="icon-sm" />}
         </Button>
       )}
     </div>
@@ -173,7 +169,7 @@ export function WorktreeSettings() {
       {/* Error banner */}
       {error && (
         <div className="flex items-center gap-2 rounded-md bg-destructive/10 px-3 py-2 text-xs text-destructive">
-          <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+          <AlertCircle className="icon-sm flex-shrink-0" />
           <span>{error}</span>
           <button onClick={() => setError(null)} className="ml-auto text-xs underline">
             {t('worktreeSettings.dismiss')}
@@ -194,9 +190,9 @@ export function WorktreeSettings() {
             className="px-2"
           >
             {showCreate ? (
-              <ChevronUp className="mr-1 h-3 w-3" />
+              <ChevronUp className="icon-xs mr-1" />
             ) : (
-              <Plus className="mr-1 h-3 w-3" />
+              <Plus className="icon-xs mr-1" />
             )}
             {showCreate ? t('worktreeSettings.cancel') : t('worktreeSettings.createWorktree')}
           </Button>
@@ -206,7 +202,7 @@ export function WorktreeSettings() {
         {showCreate &&
           (branches.length === 0 ? (
             <div className="mb-3 flex items-center gap-2 rounded-md bg-status-pending/10 px-3 py-2 text-xs text-status-pending/80">
-              <AlertCircle className="h-3.5 w-3.5 flex-shrink-0" />
+              <AlertCircle className="icon-sm flex-shrink-0" />
               <span>No branches found. Make sure the project has at least one commit.</span>
             </div>
           ) : (
@@ -248,9 +244,9 @@ export function WorktreeSettings() {
                 className="w-full"
               >
                 {creating ? (
-                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
+                  <Loader2 className="icon-xs mr-1 animate-spin" />
                 ) : (
-                  <Plus className="mr-1 h-3 w-3" />
+                  <Plus className="icon-xs mr-1" />
                 )}
                 {creating ? t('worktreeSettings.creating') : t('worktreeSettings.createWorktree')}
               </Button>
@@ -259,7 +255,7 @@ export function WorktreeSettings() {
 
         {loading ? (
           <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
+            <Loader2 className="icon-base animate-spin" />
             {t('worktreeSettings.loadingWorktrees')}
           </div>
         ) : worktrees.length === 0 ? (

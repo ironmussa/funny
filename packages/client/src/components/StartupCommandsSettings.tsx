@@ -154,7 +154,7 @@ export function StartupCommandsSettings() {
             setAdding(true);
           }}
         >
-          <Plus className="h-3.5 w-3.5" />
+          <Plus className="icon-sm" />
           {t('startup.addCommand')}
         </Button>
       </div>
@@ -164,7 +164,7 @@ export function StartupCommandsSettings() {
         <div className="py-8 text-center">
           <p className="mb-3 text-sm text-muted-foreground">{t('startup.noCommands')}</p>
           <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setAdding(true)}>
-            <Plus className="h-3.5 w-3.5" />
+            <Plus className="icon-sm" />
             {t('startup.addFirst')}
           </Button>
         </div>
@@ -203,11 +203,11 @@ export function StartupCommandsSettings() {
               </div>
               <div className="flex items-center justify-end gap-2 pt-1">
                 <Button variant="ghost" size="sm" onClick={cancelEdit}>
-                  <X className="mr-1 h-3.5 w-3.5" />
+                  <X className="icon-sm mr-1" />
                   {t('common.cancel')}
                 </Button>
                 <Button size="sm" onClick={() => handleUpdate(cmd.id)}>
-                  <Check className="mr-1 h-3.5 w-3.5" />
+                  <Check className="icon-sm mr-1" />
                   {t('common.save')}
                 </Button>
               </div>
@@ -223,7 +223,7 @@ export function StartupCommandsSettings() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2">
                 {isRunning && (
-                  <Loader2 className="h-3.5 w-3.5 flex-shrink-0 animate-spin text-status-success" />
+                  <Loader2 className="icon-sm flex-shrink-0 animate-spin text-status-success" />
                 )}
                 <span className="truncate text-sm font-medium">{cmd.label}</span>
               </div>
@@ -241,7 +241,7 @@ export function StartupCommandsSettings() {
                       onClick={() => handleStop(cmd)}
                       className="text-status-error hover:text-status-error/80"
                     >
-                      <Square className="h-3.5 w-3.5" />
+                      <Square className="icon-sm" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>{t('startup.stop')}</TooltipContent>
@@ -255,7 +255,7 @@ export function StartupCommandsSettings() {
                       onClick={() => handleRun(cmd)}
                       className="text-status-success hover:text-status-success/80"
                     >
-                      <Play className="h-3.5 w-3.5" />
+                      <Play className="icon-sm" />
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>{t('startup.run')}</TooltipContent>
@@ -269,7 +269,7 @@ export function StartupCommandsSettings() {
                     onClick={() => startEditing(cmd)}
                     className="text-muted-foreground"
                   >
-                    <Pencil className="h-3.5 w-3.5" />
+                    <Pencil className="icon-sm" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t('startup.edit')}</TooltipContent>
@@ -282,7 +282,7 @@ export function StartupCommandsSettings() {
                     onClick={() => handleDelete(cmd.id)}
                     className="text-muted-foreground hover:text-status-error"
                   >
-                    <Trash2 className="h-3.5 w-3.5" />
+                    <Trash2 className="icon-sm" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t('startup.delete')}</TooltipContent>
@@ -322,11 +322,11 @@ export function StartupCommandsSettings() {
           </div>
           <div className="flex items-center justify-end gap-2 pt-1">
             <Button variant="ghost" size="sm" onClick={cancelEdit}>
-              <X className="mr-1 h-3.5 w-3.5" />
+              <X className="icon-sm mr-1" />
               {t('common.cancel')}
             </Button>
             <Button size="sm" onClick={handleAdd}>
-              <Check className="mr-1 h-3.5 w-3.5" />
+              <Check className="icon-sm mr-1" />
               {t('startup.addCommand')}
             </Button>
           </div>

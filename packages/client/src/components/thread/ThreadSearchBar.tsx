@@ -156,7 +156,7 @@ export function ThreadSearchBar({
         data-testid="thread-search-input"
       />
 
-      {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+      {loading && <Loader2 className="icon-sm animate-spin text-muted-foreground" />}
 
       <span
         className="whitespace-nowrap text-xs text-muted-foreground"
@@ -174,7 +174,7 @@ export function ThreadSearchBar({
         data-testid="thread-search-prev"
         aria-label={t('thread.searchPrev', 'Previous result')}
       >
-        <ChevronUp className="h-3.5 w-3.5" />
+        <ChevronUp className="icon-sm" />
       </Button>
       <Button
         variant="ghost"
@@ -185,7 +185,7 @@ export function ThreadSearchBar({
         data-testid="thread-search-next"
         aria-label={t('thread.searchNext', 'Next result')}
       >
-        <ChevronDown className="h-3.5 w-3.5" />
+        <ChevronDown className="icon-sm" />
       </Button>
       <Button
         variant="ghost"
@@ -195,7 +195,7 @@ export function ThreadSearchBar({
         data-testid="thread-search-close"
         aria-label={t('thread.searchClose', 'Close search')}
       >
-        <X className="h-3.5 w-3.5" />
+        <X className="icon-sm" />
       </Button>
     </div>
   );

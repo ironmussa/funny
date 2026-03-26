@@ -121,7 +121,7 @@ export function MonacoEditorDialog({
       >
         <DialogHeader className="flex-shrink-0 overflow-hidden border-b border-border px-4 py-3">
           <DialogTitle className="flex min-w-0 items-center gap-2 overflow-hidden font-mono text-sm">
-            <FileCode className="h-4 w-4 flex-shrink-0" />
+            <FileCode className="icon-base flex-shrink-0" />
             <span
               className="min-w-0 overflow-hidden text-ellipsis whitespace-nowrap"
               style={{ direction: 'rtl', textAlign: 'left' }}
@@ -140,7 +140,11 @@ export function MonacoEditorDialog({
                   className="flex-shrink-0 text-muted-foreground"
                   data-testid="editor-toggle-preview"
                 >
-                  {showPreview ? <Code className="h-4 w-4" /> : <BookOpen className="h-4 w-4" />}
+                  {showPreview ? (
+                    <Code className="icon-base" />
+                  ) : (
+                    <BookOpen className="icon-base" />
+                  )}
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="bottom">
@@ -160,7 +164,7 @@ export function MonacoEditorDialog({
                 className="flex-shrink-0 text-muted-foreground"
                 data-testid="editor-toggle-minimap"
               >
-                {showMinimap ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                {showMinimap ? <EyeOff className="icon-base" /> : <Eye className="icon-base" />}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
@@ -178,9 +182,9 @@ export function MonacoEditorDialog({
                 data-testid="editor-toggle-fullscreen"
               >
                 {isFullscreen ? (
-                  <Minimize2 className="h-4 w-4" />
+                  <Minimize2 className="icon-base" />
                 ) : (
-                  <Maximize2 className="h-4 w-4" />
+                  <Maximize2 className="icon-base" />
                 )}
               </Button>
             </TooltipTrigger>
@@ -230,9 +234,9 @@ export function MonacoEditorDialog({
             </span>
             <Button size="sm" onClick={handleSave} disabled={saving} data-testid="editor-save">
               {saving ? (
-                <Loader2 className="mr-1 h-3.5 w-3.5 animate-spin" />
+                <Loader2 className="icon-sm mr-1 animate-spin" />
               ) : (
-                <Save className="mr-1 h-3.5 w-3.5" />
+                <Save className="icon-sm mr-1" />
               )}
               {t('common.save', 'Save')}
             </Button>

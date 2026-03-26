@@ -167,7 +167,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
                 size="icon-sm"
                 className="text-muted-foreground"
               >
-                <EllipsisVertical className="h-4 w-4" />
+                <EllipsisVertical className="icon-base" />
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
@@ -180,7 +180,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
               onClick={() => setTimelineVisible(!timelineVisible)}
               className="cursor-pointer"
             >
-              <Milestone className={`mr-2 h-4 w-4 ${timelineVisible ? 'text-primary' : ''}`} />
+              <Milestone className={`icon-base mr-2 ${timelineVisible ? 'text-primary' : ''}`} />
               {t('thread.toggleTimeline', 'Toggle Timeline')}
             </DropdownMenuItem>
           )}
@@ -191,7 +191,11 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
             disabled={!hasMessages}
             className="cursor-pointer"
           >
-            {copiedText ? <Check className="mr-2 h-4 w-4" /> : <Copy className="mr-2 h-4 w-4" />}
+            {copiedText ? (
+              <Check className="icon-base mr-2" />
+            ) : (
+              <Copy className="icon-base mr-2" />
+            )}
             {t('thread.copyText', 'Copy text only')}
           </DropdownMenuItem>
           <DropdownMenuItem
@@ -201,9 +205,9 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
             className="cursor-pointer"
           >
             {copiedTools ? (
-              <Check className="mr-2 h-4 w-4" />
+              <Check className="icon-base mr-2" />
             ) : (
-              <ClipboardList className="mr-2 h-4 w-4" />
+              <ClipboardList className="icon-base mr-2" />
             )}
             {t('thread.copyWithTools', 'Copy with tool calls')}
           </DropdownMenuItem>
@@ -217,12 +221,12 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
               >
                 {threadPinned ? (
                   <>
-                    <PinOff className="mr-2 h-4 w-4" />
+                    <PinOff className="icon-base mr-2" />
                     {t('sidebar.unpin', 'Unpin')}
                   </>
                 ) : (
                   <>
-                    <Pin className="mr-2 h-4 w-4" />
+                    <Pin className="icon-base mr-2" />
                     {t('sidebar.pin', 'Pin')}
                   </>
                 )}
@@ -233,7 +237,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
                 onClick={() => setDeleteOpen(true)}
                 className="cursor-pointer text-status-error focus:text-status-error"
               >
-                <Trash2 className="mr-2 h-4 w-4" />
+                <Trash2 className="icon-base mr-2" />
                 {t('common.delete', 'Delete')}
               </DropdownMenuItem>
             </>
@@ -311,7 +315,7 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
               size="icon-sm"
               className={anyRunning ? 'text-status-success' : 'text-muted-foreground'}
             >
-              <Rocket className="h-4 w-4" />
+              <Rocket className="icon-base" />
             </Button>
           </PopoverTrigger>
         </TooltipTrigger>
@@ -334,7 +338,7 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-1.5">
                       {isRunning && (
-                        <Loader2 className="h-3 w-3 flex-shrink-0 animate-spin text-status-success" />
+                        <Loader2 className="icon-xs flex-shrink-0 animate-spin text-status-success" />
                       )}
                       <span className="truncate text-sm">{cmd.label}</span>
                     </div>
@@ -349,7 +353,7 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
                       onClick={() => handleStop(cmd)}
                       className="flex-shrink-0 text-status-error hover:text-status-error/80"
                     >
-                      <Square className="h-3 w-3" />
+                      <Square className="icon-xs" />
                     </Button>
                   ) : (
                     <Button
@@ -358,7 +362,7 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
                       onClick={() => handleRun(cmd)}
                       className="flex-shrink-0 text-status-success hover:text-status-success/80"
                     >
-                      <Play className="h-3 w-3" />
+                      <Play className="icon-xs" />
                     </Button>
                   )}
                 </div>
@@ -519,7 +523,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                   onClick={handleBackToKanban}
                   className="shrink-0 text-muted-foreground hover:text-foreground"
                 >
-                  <ArrowLeft className="h-4 w-4" />
+                  <ArrowLeft className="icon-base" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{t('kanban.backToBoard', 'Back to Kanban')}</TooltipContent>
@@ -541,7 +545,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                   }
                   className="shrink-0 text-muted-foreground hover:text-foreground"
                 >
-                  <ArrowLeft className="h-4 w-4" />
+                  <ArrowLeft className="icon-base" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{t('thread.backToParent', 'Back to parent thread')}</TooltipContent>
@@ -552,7 +556,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
               {project && (
                 <BreadcrumbItem className="flex-shrink-0">
                   <BreadcrumbLink className="flex cursor-default items-center gap-1.5 whitespace-nowrap text-sm">
-                    <FolderOpen className="h-3.5 w-3.5 text-muted-foreground" />
+                    <FolderOpen className="icon-sm text-muted-foreground" />
                     {project.name}
                   </BreadcrumbLink>
                 </BreadcrumbItem>
@@ -597,7 +601,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                     }}
                     className="h-8 w-8 text-muted-foreground"
                   >
-                    <Columns3 className="h-4 w-4" />
+                    <Columns3 className="icon-base" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t('kanban.viewOnBoard', 'View on Board')}</TooltipContent>
@@ -622,7 +626,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                     }}
                     className="text-status-info hover:text-status-info/80"
                   >
-                    <Globe className="h-4 w-4" />
+                    <Globe className="icon-base" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>{t('preview.openPreview')}</TooltipContent>
@@ -638,7 +642,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                       size="icon-sm"
                       className="text-muted-foreground"
                     >
-                      <ExternalLink className="h-4 w-4" />
+                      <ExternalLink className="icon-base" />
                     </Button>
                   </DropdownMenuTrigger>
                 </TooltipTrigger>
@@ -687,7 +691,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                   data-testid="header-toggle-terminal"
                   className={terminalPanelVisible ? 'text-foreground' : 'text-muted-foreground'}
                 >
-                  <Terminal className="h-4 w-4" />
+                  <Terminal className="icon-base" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{t('terminal.toggle', 'Toggle Terminal')}</TooltipContent>
@@ -718,7 +722,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                       className="font-semibold"
                     />
                   ) : (
-                    <GitCompare className="h-4 w-4" />
+                    <GitCompare className="icon-base" />
                   )}
                 </Button>
               </TooltipTrigger>
@@ -745,7 +749,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                       : 'text-muted-foreground'
                   }
                 >
-                  <FlaskConical className="h-4 w-4" />
+                  <FlaskConical className="icon-base" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{t('tests.title', 'Tests')}</TooltipContent>
@@ -771,7 +775,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                       : 'text-muted-foreground'
                   }
                 >
-                  <Activity className="h-4 w-4" />
+                  <Activity className="icon-base" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{t('activity.title', 'Activity')}</TooltipContent>
@@ -798,7 +802,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                         : 'text-muted-foreground'
                     }
                   >
-                    <ListChecks className="h-4 w-4" />
+                    <ListChecks className="icon-base" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>Tasks</TooltipContent>

@@ -366,32 +366,40 @@ const SidebarRail = React.forwardRef<HTMLButtonElement, React.ComponentProps<'bu
     );
 
     return (
-      <button
-        ref={ref}
-        data-sidebar="rail"
-        aria-label="Toggle Sidebar"
-        tabIndex={-1}
-        onClick={(e) => {
-          // Only toggle if it wasn't a drag
-          if (Math.abs(e.clientX - startX.current) < 5) {
-            toggleSidebar();
-          }
-        }}
-        onPointerDown={handlePointerDown}
-        onPointerMove={handlePointerMove}
-        onPointerUp={handlePointerUp}
-        title="Drag to resize, click to toggle"
-        className={cn(
-          'absolute inset-y-0 z-20 hidden w-2 translate-x-full transition-all ease-linear after:absolute after:inset-y-0 after:left-0 after:w-px after:bg-border hover:after:bg-sidebar-border group-data-[side=left]:right-0 group-data-[side=right]:left-0 sm:flex',
-          'cursor-col-resize',
-          'group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full group-data-[collapsible=offcanvas]:hover:bg-sidebar',
-          '[[data-side=left][data-collapsible=offcanvas]_&]:-right-2',
-          '[[data-side=right][data-collapsible=offcanvas]_&]:-left-2',
-          'group-data-[state=collapsed]:!hidden',
-          className,
-        )}
-        {...props}
-      />
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              ref={ref}
+              data-sidebar="rail"
+              aria-label="Toggle Sidebar"
+              tabIndex={-1}
+              onClick={(e) => {
+                // Only toggle if it wasn't a drag
+                if (Math.abs(e.clientX - startX.current) < 5) {
+                  toggleSidebar();
+                }
+              }}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              className={cn(
+                'absolute inset-y-0 z-20 hidden w-2 translate-x-full transition-all ease-linear after:absolute after:inset-y-0 after:left-0 after:w-px after:bg-border hover:after:bg-sidebar-border group-data-[side=left]:right-0 group-data-[side=right]:left-0 sm:flex',
+                'cursor-col-resize',
+                'group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full group-data-[collapsible=offcanvas]:hover:bg-sidebar',
+                '[[data-side=left][data-collapsible=offcanvas]_&]:-right-2',
+                '[[data-side=right][data-collapsible=offcanvas]_&]:-left-2',
+                'group-data-[state=collapsed]:!hidden',
+                className,
+              )}
+              {...props}
+            />
+          </TooltipTrigger>
+          <TooltipContent side="right" sideOffset={8}>
+            Drag to resize, click to toggle
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   },
 );

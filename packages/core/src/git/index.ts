@@ -47,6 +47,8 @@ export {
   invalidateStatusCache,
   deriveGitSyncState,
   getLog,
+  getCommitFiles,
+  getCommitFileDiff,
   stash,
   stashPop,
   stashList,
@@ -56,6 +58,7 @@ export {
   type GitIdentityOptions,
   type GitStatusSummary,
   type GitLogEntry,
+  type CommitFileEntry,
   type StashEntry,
 } from './git.js';
 

@@ -128,7 +128,7 @@ export function TeamInvitations() {
               disabled={!email.trim() || sending}
               data-testid="team-invite-send"
             >
-              <Send className="mr-1.5 h-3.5 w-3.5" />
+              <Send className="icon-sm mr-1.5" />
               Invite
             </Button>
           </div>
@@ -168,7 +168,7 @@ export function TeamInvitations() {
                   data-testid={`team-invitation-cancel-${inv.id}`}
                   tooltip={t('common.cancel')}
                 >
-                  <X className="h-3.5 w-3.5" />
+                  <X className="icon-sm" />
                 </TooltipIconButton>
               </div>
             </div>

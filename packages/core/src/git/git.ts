@@ -1471,9 +1471,10 @@ export function getLog(
   cwd: string,
   limit = 20,
   baseBranch?: string | null,
+  skip = 0,
 ): ResultAsync<GitLogEntry[], DomainError> {
   const native = getNativeGit();
-  if (native && !baseBranch) {
+  if (native && !baseBranch && skip === 0) {
     return ResultAsync.fromPromise(native.getLog(cwd, limit), (error) =>
       processError(String(error), 1, ''),
     );
@@ -1481,6 +1482,9 @@ export function getLog(
   const SEP = '@@SEP@@';
   const format = `%H${SEP}%h${SEP}%an${SEP}%ar${SEP}%s`;
   const args = ['log', `--format=${format}`, `-n`, String(limit)];
+  if (skip > 0) {
+    args.push(`--skip=${skip}`);
+  }
   if (baseBranch) {
     args.push(`${baseBranch}..HEAD`);
   }
@@ -1494,6 +1498,100 @@ export function getLog(
         return { hash, shortHash, author, relativeDate, message };
       });
   });
+}
+
+// ─── Commit details ──────────────────────────────────────
+
+export interface CommitFileEntry {
+  path: string;
+  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'copied';
+  additions: number;
+  deletions: number;
+}
+
+const STATUS_MAP: Record<string, CommitFileEntry['status']> = {
+  A: 'added',
+  M: 'modified',
+  D: 'deleted',
+  R: 'renamed',
+  C: 'copied',
+};
+
+/**
+ * Get changed files for a specific commit (file list + line stats).
+ */
+export function getCommitFiles(
+  cwd: string,
+  hash: string,
+): ResultAsync<CommitFileEntry[], DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      // Run both commands in parallel
+      const [nameStatusResult, numstatResult] = await Promise.all([
+        gitRead(['diff-tree', '--no-commit-id', '-r', '--name-status', hash], {
+          cwd,
+          reject: false,
+        }),
+        gitRead(['diff-tree', '--no-commit-id', '-r', '--numstat', hash], {
+          cwd,
+          reject: false,
+        }),
+      ]);
+
+      if (nameStatusResult.exitCode !== 0) return [];
+
+      // Parse numstat into a map: path → { additions, deletions }
+      const statMap = new Map<string, { additions: number; deletions: number }>();
+      if (numstatResult.exitCode === 0 && numstatResult.stdout.trim()) {
+        for (const line of numstatResult.stdout.trim().split('\n')) {
+          const parts = line.split('\t');
+          if (parts.length >= 3) {
+            const additions = parts[0] === '-' ? 0 : parseInt(parts[0], 10) || 0;
+            const deletions = parts[1] === '-' ? 0 : parseInt(parts[1], 10) || 0;
+            const path = parts.slice(2).join('\t'); // handle paths with tabs
+            statMap.set(path, { additions, deletions });
+          }
+        }
+      }
+
+      // Parse name-status
+      const files: CommitFileEntry[] = [];
+      for (const line of nameStatusResult.stdout.trim().split('\n')) {
+        if (!line) continue;
+        const parts = line.split('\t');
+        if (parts.length < 2) continue;
+        const statusChar = parts[0][0]; // R100 → R, etc.
+        const status = STATUS_MAP[statusChar] || 'modified';
+        // For renames/copies, use the destination path (parts[2])
+        const path =
+          parts.length >= 3 && (statusChar === 'R' || statusChar === 'C') ? parts[2] : parts[1];
+        const stats = statMap.get(path) || { additions: 0, deletions: 0 };
+        files.push({ path, status, ...stats });
+      }
+      return files;
+    })(),
+    (error) => processError(String(error), 1, ''),
+  );
+}
+
+/**
+ * Get the diff for a single file within a specific commit.
+ */
+export function getCommitFileDiff(
+  cwd: string,
+  hash: string,
+  filePath: string,
+): ResultAsync<string, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const result = await gitRead(['diff-tree', '-p', '--no-commit-id', hash, '--', filePath], {
+        cwd,
+        reject: false,
+      });
+      return result.exitCode === 0 ? result.stdout : '';
+    })(),
+    (error) => processError(String(error), 1, ''),
+  );
 }
 
 // ─── Pull ────────────────────────────────────────────────

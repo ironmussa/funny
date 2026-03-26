@@ -262,7 +262,7 @@ export function FileTree({
         <div
           key={`folder-${row.path}`}
           className={cn(
-            'flex h-6 cursor-pointer select-none items-center gap-1.5',
+            'flex h-6 cursor-pointer select-none items-center gap-1.5 overflow-hidden pr-1',
             fontSize,
             'text-muted-foreground transition-colors',
             hoverClass,
@@ -276,16 +276,18 @@ export function FileTree({
         >
           <ChevronRight
             className={cn(
-              'h-3.5 w-3.5 flex-shrink-0 transition-transform',
+              'icon-sm flex-shrink-0 transition-transform',
               !isCollapsed && 'rotate-90',
             )}
           />
           {isCollapsed ? (
-            <Folder className="h-4 w-4 flex-shrink-0 text-muted-foreground/70" />
+            <Folder className="icon-base flex-shrink-0 text-muted-foreground/70" />
           ) : (
-            <FolderOpen className="h-4 w-4 flex-shrink-0 text-muted-foreground/70" />
+            <FolderOpen className="icon-base flex-shrink-0 text-muted-foreground/70" />
           )}
-          <span className={cn('flex-1 truncate font-mono-explorer', fontSize)}>{row.label}</span>
+          <span className={cn('min-w-0 flex-1 truncate font-mono-explorer', fontSize)}>
+            {row.label}
+          </span>
           <DiffStats linesAdded={row.additions} linesDeleted={row.deletions} size={diffStatsSize} />
           {/* Spacers to align with file rows (status letter + 3-dot menu) */}
           <span className={cn('invisible flex-shrink-0 font-medium', fontSize)}>M</span>
@@ -303,7 +305,7 @@ export function FileTree({
       <div
         key={f.path}
         className={cn(
-          'group flex h-6 items-center gap-1.5 cursor-pointer transition-colors',
+          'group flex h-6 items-center gap-1.5 cursor-pointer transition-colors overflow-hidden pr-1',
           fontSize,
           isActive ? activeClass : hoverClass,
         )}
@@ -337,14 +339,16 @@ export function FileTree({
             )}
             data-testid={`${testIdPrefix}-check-${f.path}`}
           >
-            {isChecked && <Check className="h-2.5 w-2.5" />}
+            {isChecked && <Check className="icon-2xs" />}
           </button>
         )}
         <FileExtensionIcon
           filePath={f.path}
           className="h-4 w-4 flex-shrink-0 text-muted-foreground/80"
         />
-        <span className={cn('flex-1 truncate font-mono-explorer', fontSize)}>{fileName}</span>
+        <span className={cn('min-w-0 flex-1 truncate font-mono-explorer', fontSize)}>
+          {fileName}
+        </span>
         <DiffStats
           linesAdded={f.additions ?? 0}
           linesDeleted={f.deletions ?? 0}
@@ -369,7 +373,7 @@ export function FileTree({
               className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
               data-testid={`${testIdPrefix}-menu-${f.path}`}
             >
-              <MoreHorizontal className="h-3.5 w-3.5" />
+              <MoreHorizontal className="icon-sm" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent

@@ -51,11 +51,11 @@ export function ThreadGroup({
       >
         <ChevronRight
           className={cn(
-            'h-3 w-3 flex-shrink-0 transition-transform duration-200',
+            'icon-xs flex-shrink-0 transition-transform duration-200',
             isExpanded && 'rotate-90',
           )}
         />
-        {iconElement ?? (Icon && <Icon className="h-3.5 w-3.5 flex-shrink-0" />)}
+        {iconElement ?? (Icon && <Icon className="icon-sm flex-shrink-0" />)}
         <span className="truncate font-medium">
           {title}
           {count !== undefined && ` (${count})`}

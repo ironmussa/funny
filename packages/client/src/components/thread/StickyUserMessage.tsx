@@ -19,9 +19,9 @@ function StickyFileChip({ item }: { item: ReferencedItem }) {
       title={item.path}
     >
       {item.type === 'folder' ? (
-        <FolderOpen className="h-3 w-3 shrink-0" />
+        <FolderOpen className="icon-xs shrink-0" />
       ) : (
-        <FileText className="h-3 w-3 shrink-0" />
+        <FileText className="icon-xs shrink-0" />
       )}
       {item.path.split('/').pop()}
     </span>
@@ -86,7 +86,7 @@ export const StickyUserMessage = memo(function StickyUserMessage({
           onClick={onScrollTo}
           className="flex w-full cursor-pointer items-start gap-2 rounded-b-lg border border-t-0 bg-foreground/95 px-3 py-2 text-left font-['Noto_Sans'] text-background shadow-lg backdrop-blur-sm transition-colors hover:bg-foreground"
         >
-          <User className="mt-0.5 h-3 w-3 flex-shrink-0 text-background/60" />
+          <User className="icon-xs mt-0.5 flex-shrink-0 text-background/60" />
           <div className="min-w-0 flex-1">
             <p className="line-clamp-5 whitespace-pre-wrap break-words font-sans text-xs leading-relaxed text-background">
               {inlineNodes}
@@ -103,7 +103,7 @@ export const StickyUserMessage = memo(function StickyUserMessage({
                 ))}
                 {images.length > 3 && (
                   <span className="inline-flex items-center gap-0.5 text-[10px] text-background/60">
-                    <ImageIcon className="h-3 w-3" />+{images.length - 3}
+                    <ImageIcon className="icon-xs" />+{images.length - 3}
                   </span>
                 )}
               </div>

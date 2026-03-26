@@ -400,7 +400,7 @@ export function AppSidebar() {
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 tabIndex={-1}
                 data-testid="sidebar-search"
                 onClick={() => {
@@ -408,7 +408,7 @@ export function AppSidebar() {
                 }}
                 className="text-muted-foreground"
               >
-                <Search className="h-3.5 w-3.5" />
+                <Search className="icon-base" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">{t('sidebar.search', 'Search')}</TooltipContent>
@@ -417,7 +417,7 @@ export function AppSidebar() {
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 tabIndex={-1}
                 data-testid="sidebar-kanban"
                 onClick={() => {
@@ -425,7 +425,7 @@ export function AppSidebar() {
                 }}
                 className="text-muted-foreground"
               >
-                <Columns3 className="h-3.5 w-3.5" />
+                <Columns3 className="icon-base" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">Kanban</TooltipContent>
@@ -434,13 +434,13 @@ export function AppSidebar() {
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 tabIndex={-1}
                 data-testid="sidebar-grid"
                 onClick={() => navigate(buildPath('/grid'))}
                 className="text-muted-foreground"
               >
-                <LayoutGrid className="h-3.5 w-3.5" />
+                <LayoutGrid className="icon-base" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">Grid</TooltipContent>
@@ -449,13 +449,13 @@ export function AppSidebar() {
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 tabIndex={-1}
                 data-testid="sidebar-analytics"
                 onClick={() => navigate(buildPath('/analytics'))}
                 className="text-muted-foreground"
               >
-                <BarChart3 className="h-3.5 w-3.5" />
+                <BarChart3 className="icon-base" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">{t('sidebar.analytics')}</TooltipContent>
@@ -464,13 +464,13 @@ export function AppSidebar() {
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
-                size="icon-xs"
+                size="icon-sm"
                 tabIndex={-1}
                 data-testid="sidebar-collapse"
                 onClick={toggleSidebar}
                 className="text-muted-foreground"
               >
-                <PanelLeftClose className="h-3.5 w-3.5" />
+                <PanelLeftClose className="icon-base" />
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
@@ -516,7 +516,7 @@ export function AppSidebar() {
               className="h-5 w-5 text-muted-foreground hover:text-foreground"
               onClick={() => navigate(buildPath('/new'))}
             >
-              <FolderPlus className="h-3.5 w-3.5" />
+              <FolderPlus className="icon-sm" />
             </Button>
           </TooltipTrigger>
           <TooltipContent side="right">{t('sidebar.addProject')}</TooltipContent>
@@ -580,7 +580,7 @@ export function AppSidebar() {
                     .map((n) => n[0])
                     .join('')
                     .slice(0, 2)
-                    .toUpperCase() || <User className="h-3.5 w-3.5" />}
+                    .toUpperCase() || <User className="icon-sm" />}
                 </AvatarFallback>
               </Avatar>
               <div className="min-w-0 flex-1">
@@ -597,7 +597,7 @@ export function AppSidebar() {
                     data-testid="sidebar-user-menu"
                     className="h-7 w-7 shrink-0 text-muted-foreground"
                   >
-                    <MoreVertical className="h-4 w-4" />
+                    <MoreVertical className="icon-base" />
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent side="top" align="end" className="w-48">
@@ -605,12 +605,12 @@ export function AppSidebar() {
                     data-testid="sidebar-user-settings"
                     onClick={() => navigate(buildPath('/preferences/general'))}
                   >
-                    <Settings className="h-3.5 w-3.5" />
+                    <Settings className="icon-sm" />
                     {t('settings.title')}
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem data-testid="sidebar-logout" onClick={logout}>
-                    <LogOut className="h-3.5 w-3.5" />
+                    <LogOut className="icon-sm" />
                     {t('auth.logout')}
                   </DropdownMenuItem>
                 </DropdownMenuContent>
@@ -626,7 +626,7 @@ export function AppSidebar() {
                   onClick={() => navigate(buildPath('/preferences/general'))}
                   className="ml-auto h-7 w-7 text-muted-foreground"
                 >
-                  <Settings className="h-4 w-4" />
+                  <Settings className="icon-base" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent side="top">{t('settings.title')}</TooltipContent>

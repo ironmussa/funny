@@ -106,7 +106,7 @@ export function TeamProjects() {
               size="sm"
               data-testid="team-project-add-btn"
             >
-              <FolderKanban className="mr-1 h-4 w-4" />
+              <FolderKanban className="icon-base mr-1" />
               Share
             </Button>
           </div>
@@ -151,7 +151,7 @@ export function TeamProjects() {
                   data-testid={`team-project-remove-${project.id}`}
                   tooltip={t('common.remove')}
                 >
-                  <Trash2 className="h-3.5 w-3.5" />
+                  <Trash2 className="icon-sm" />
                 </TooltipIconButton>
               </div>
             ))

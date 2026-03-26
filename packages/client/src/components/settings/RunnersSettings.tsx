@@ -237,9 +237,9 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
                   data-testid={`runner-item-${runner.runnerId}-expand`}
                 >
                   {open ? (
-                    <ChevronDown className="h-3.5 w-3.5" />
+                    <ChevronDown className="icon-sm" />
                   ) : (
-                    <ChevronRight className="h-3.5 w-3.5" />
+                    <ChevronRight className="icon-sm" />
                   )}
                 </Button>
               </CollapsibleTrigger>
@@ -254,7 +254,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
             data-testid={`runner-item-${runner.runnerId}-delete`}
             tooltip={t('common.delete')}
           >
-            <Trash2 className="h-3.5 w-3.5" />
+            <Trash2 className="icon-sm" />
           </TooltipIconButton>
         </div>
       </div>
@@ -279,7 +279,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
                     data-testid={`runner-item-${runner.runnerId}-unassign-${a.projectId}`}
                     tooltip={t('common.unassign')}
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 className="icon-xs" />
                   </TooltipIconButton>
                 </div>
               );
@@ -291,7 +291,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
             onClick={() => setShowAssignForm((v) => !v)}
             data-testid={`runner-item-${runner.runnerId}-add-project`}
           >
-            <FolderPlus className="h-3.5 w-3.5" />
+            <FolderPlus className="icon-sm" />
             Assign a project
           </button>
           {showAssignForm && (
@@ -399,13 +399,13 @@ export function RunnersSettings() {
             className="h-8 shrink-0"
             data-testid="runners-copy-command"
           >
-            {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? <Check className="icon-sm" /> : <Copy className="icon-sm" />}
           </Button>
         </div>
 
         <div className="flex items-center justify-between">
           <p className="text-xs text-muted-foreground">
-            <Server className="mr-1 inline h-3 w-3" />
+            <Server className="icon-xs mr-1 inline" />
             The token is specific to your account. Anyone with this token can register a runner
             under your name.
           </p>
@@ -417,7 +417,7 @@ export function RunnersSettings() {
             className="h-6 text-xs text-muted-foreground hover:text-foreground"
             data-testid="runners-rotate-token"
           >
-            <RefreshCw className={cn('mr-1 h-3 w-3', rotating && 'animate-spin')} />
+            <RefreshCw className={cn('mr-1 icon-xs', rotating && 'animate-spin')} />
             Rotate token
           </Button>
         </div>
@@ -435,7 +435,7 @@ export function RunnersSettings() {
             className="h-6 text-xs"
             data-testid="runners-refresh"
           >
-            <RefreshCw className={cn('mr-1 h-3 w-3', loadingRunners && 'animate-spin')} />
+            <RefreshCw className={cn('mr-1 icon-xs', loadingRunners && 'animate-spin')} />
             Refresh
           </Button>
         </div>

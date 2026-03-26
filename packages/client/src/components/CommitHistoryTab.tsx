@@ -424,7 +424,8 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
       );
       setPushInProgress(false);
     } else {
-      toast.success(t('review.pushSuccess', 'Pushed successfully'));
+      // Don't toast here — the workflow runs async. Success/failure
+      // will be reported via git:workflow_progress WebSocket events.
       setPushInProgress(false);
       loadedRef.current = false;
       loadLog(0, false);

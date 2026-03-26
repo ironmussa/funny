@@ -282,6 +282,10 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
           }
         } else if (wfStatus === 'completed') {
           store.replaceSteps(threadId, steps);
+          // Show success toast for push workflows (covers both ReviewPane and CommitHistoryTab triggers)
+          if (action === 'push') {
+            toast.success('Pushed successfully');
+          }
           setTimeout(() => store.finishCommit(threadId), 1500);
         } else if (wfStatus === 'failed') {
           store.replaceSteps(threadId, steps);

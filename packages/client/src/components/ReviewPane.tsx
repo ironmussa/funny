@@ -320,9 +320,10 @@ export function ReviewPane() {
 
     if (allCompleted && prev && !prev.steps.every((s) => s.status === 'completed')) {
       // Just transitioned to all-completed — show success toast
+      // Note: push toast is handled in use-ws.ts to avoid duplication
       const action = commitEntry.action;
       if (action === 'push') {
-        toast.success(t('review.pushSuccess', 'Pushed successfully'));
+        // handled in use-ws.ts
       } else if (action === 'merge') {
         toast.success(t('review.mergeSuccess', 'Merged successfully'));
       } else if (action === 'create-pr') {

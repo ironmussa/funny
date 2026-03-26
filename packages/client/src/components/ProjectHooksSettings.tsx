@@ -38,6 +38,17 @@ const handleBeforeMount: BeforeMount = (monaco) => {
     colors: {
       'editor.background': '#0a0a0a',
       'editorGutter.background': '#0a0a0a',
+      // Find widget
+      'editorWidget.background': '#1e1e1e',
+      'editorWidget.border': '#454545',
+      'editorWidget.foreground': '#cccccc',
+      'input.background': '#2a2a2a',
+      'input.foreground': '#cccccc',
+      'input.border': '#454545',
+      'inputOption.activeBorder': '#007acc',
+      'inputOption.activeBackground': '#007acc44',
+      'inputOption.activeForeground': '#ffffff',
+      focusBorder: '#007acc',
     },
   });
 };

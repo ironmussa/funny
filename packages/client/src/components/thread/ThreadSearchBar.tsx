@@ -142,7 +142,7 @@ export function ThreadSearchBar({
   return (
     <div
       className={cn(
-        'absolute right-4 top-0 z-30 flex items-center gap-2 rounded-b-lg border border-t-0 bg-background px-2 py-1.5 shadow-md',
+        'absolute right-4 top-0 z-30 flex items-center gap-1.5 rounded-b-lg border border-t-0 border-border bg-popover px-2 py-1.5 shadow-md',
       )}
       data-testid="thread-search-bar"
     >
@@ -167,8 +167,7 @@ export function ThreadSearchBar({
 
       <Button
         variant="ghost"
-        size="icon"
-        className="h-6 w-6"
+        size="icon-xs"
         onClick={navigatePrev}
         disabled={results.length === 0}
         data-testid="thread-search-prev"
@@ -178,8 +177,7 @@ export function ThreadSearchBar({
       </Button>
       <Button
         variant="ghost"
-        size="icon"
-        className="h-6 w-6"
+        size="icon-xs"
         onClick={navigateNext}
         disabled={results.length === 0}
         data-testid="thread-search-next"
@@ -189,8 +187,7 @@ export function ThreadSearchBar({
       </Button>
       <Button
         variant="ghost"
-        size="icon"
-        className="h-6 w-6"
+        size="icon-xs"
         onClick={onClose}
         data-testid="thread-search-close"
         aria-label={t('thread.searchClose', 'Close search')}

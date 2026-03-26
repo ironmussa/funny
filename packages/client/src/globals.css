@@ -814,6 +814,64 @@
   .xterm .xterm-scrollable-element > .shadow {
     display: none !important;
   }
+
+  /* ── Monaco editor find widget overrides ────────────────────── */
+
+  /* Use app theme variables for the find widget background/border */
+  .monaco-editor .find-widget {
+    background-color: hsl(var(--popover)) !important;
+    border: 1px solid hsl(var(--border)) !important;
+    border-radius: 0.375rem;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  }
+
+  /* Find widget input fields */
+  .monaco-editor .find-widget .input {
+    background-color: hsl(var(--input)) !important;
+    color: hsl(var(--foreground)) !important;
+    border-color: hsl(var(--border)) !important;
+  }
+
+  .monaco-editor .find-widget .monaco-inputbox {
+    background-color: hsl(var(--input)) !important;
+    border-color: hsl(var(--border)) !important;
+  }
+
+  .monaco-editor .find-widget .monaco-inputbox .input {
+    color: hsl(var(--foreground)) !important;
+  }
+
+  .monaco-editor .find-widget .monaco-inputbox.synthetic-focus {
+    outline-color: hsl(var(--ring)) !important;
+  }
+
+  /* Match count label */
+  .monaco-editor .find-widget .matchesCount {
+    color: hsl(var(--muted-foreground)) !important;
+  }
+
+  /* Buttons inside find widget */
+  .monaco-editor .find-widget .button {
+    color: hsl(var(--muted-foreground)) !important;
+  }
+
+  .monaco-editor .find-widget .button:hover {
+    background-color: hsl(var(--accent)) !important;
+    color: hsl(var(--foreground)) !important;
+  }
+
+  /* Toggle buttons (Aa, .*, etc.) when active */
+  .monaco-editor .find-widget .button.checked {
+    background-color: hsl(var(--accent)) !important;
+    color: hsl(var(--foreground)) !important;
+  }
+
+  /* Fix close button (X) vertical alignment */
+  .monaco-editor .find-widget .close-fw {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  }
 }
 
 /* Shiki code viewer */

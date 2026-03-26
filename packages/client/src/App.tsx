@@ -93,10 +93,16 @@ const LiveColumnsView = lazy(() =>
 const commandPaletteImport = () =>
   import('@/components/CommandPalette').then((m) => ({ default: m.CommandPalette }));
 const CommandPalette = lazy(commandPaletteImport);
+const fileSearchImport = () =>
+  import('@/components/FileSearchDialog').then((m) => ({ default: m.FileSearchDialog }));
+const FileSearchDialog = lazy(fileSearchImport);
 // Prefetch the CommandPalette and ReviewPane chunks on idle so they open instantly
 if (typeof requestIdleCallback === 'function') {
   requestIdleCallback(() => {
     commandPaletteImport();
+  });
+  requestIdleCallback(() => {
+    fileSearchImport();
   });
   requestIdleCallback(() => {
     reviewPaneImport();
@@ -105,6 +111,9 @@ if (typeof requestIdleCallback === 'function') {
   setTimeout(() => {
     commandPaletteImport();
   }, 2000);
+  setTimeout(() => {
+    fileSearchImport();
+  }, 2500);
   setTimeout(() => {
     reviewPaneImport();
   }, 3000);
@@ -137,6 +146,7 @@ export function App() {
   const internalEditorContent = useInternalEditorStore((s) => s.initialContent);
   const navigate = useNavigate();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
+  const [fileSearchOpen, setFileSearchOpen] = useState(false);
   // --- Right sidebar resize handle ---
   const rpStartWidth = useRef(0);
   // Track which setter to use during a drag (captured at pointer-down)
@@ -196,7 +206,10 @@ export function App() {
   const toggleCommandPalette = useCallback(() => {
     setCommandPaletteOpen((prev) => !prev);
   }, []);
-  useGlobalShortcuts(toggleCommandPalette);
+  const toggleFileSearch = useCallback(() => {
+    setFileSearchOpen((prev) => !prev);
+  }, []);
+  useGlobalShortcuts(toggleCommandPalette, toggleFileSearch);
 
   return (
     <SidebarProvider defaultOpen={true} className="h-screen overflow-hidden">
@@ -300,6 +313,9 @@ export function App() {
       </Suspense>
       <Suspense>
         <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
+      </Suspense>
+      <Suspense>
+        <FileSearchDialog open={fileSearchOpen} onOpenChange={setFileSearchOpen} />
       </Suspense>
 
       {/* Internal Monaco Editor Dialog (global, lazy-loaded) */}

@@ -5,7 +5,10 @@ import { buildPath } from '@/lib/url';
 import { useProjectStore } from '@/stores/project-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 
-export function useGlobalShortcuts(onToggleCommandPalette: () => void) {
+export function useGlobalShortcuts(
+  onToggleCommandPalette: () => void,
+  onToggleFileSearch: () => void,
+) {
   const navigate = useNavigate();
 
   useEffect(() => {
@@ -18,6 +21,16 @@ export function useGlobalShortcuts(onToggleCommandPalette: () => void) {
         e.stopPropagation();
         startTransition(() => {
           onToggleCommandPalette();
+        });
+        return;
+      }
+
+      // Ctrl+P for file search (toggle)
+      if (e.ctrlKey && e.key === 'p') {
+        e.preventDefault();
+        e.stopPropagation();
+        startTransition(() => {
+          onToggleFileSearch();
         });
         return;
       }
@@ -55,5 +68,5 @@ export function useGlobalShortcuts(onToggleCommandPalette: () => void) {
     };
     window.addEventListener('keydown', handler);
     return () => window.removeEventListener('keydown', handler);
-  }, [navigate, onToggleCommandPalette]);
+  }, [navigate, onToggleCommandPalette, onToggleFileSearch]);
 }

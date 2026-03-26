@@ -95,6 +95,11 @@ export function ThreadView() {
         e.preventDefault();
         e.stopPropagation();
         setSearchOpen(true);
+        // If already open, re-focus the search input
+        const input = document.querySelector<HTMLInputElement>(
+          '[data-testid="thread-search-input"]',
+        );
+        if (input) requestAnimationFrame(() => input.focus());
       }
     };
     window.addEventListener('keydown', handler, true);

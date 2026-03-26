@@ -518,8 +518,12 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
           </TooltipContent>
         </Tooltip>
         {hasUnpushed && (
-          <span className="ml-1 text-xs text-muted-foreground" data-testid="history-unpushed-count">
-            {unpushedHashes.size}↑
+          <span
+            className="ml-1 flex items-center gap-0.5 text-xs text-amber-500"
+            data-testid="history-unpushed-count"
+          >
+            {unpushedHashes.size}
+            <ArrowUp className="icon-xs" />
           </span>
         )}
       </div>

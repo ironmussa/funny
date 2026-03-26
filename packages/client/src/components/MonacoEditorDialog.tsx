@@ -1,18 +1,8 @@
-import { Editor, type BeforeMount } from '@monaco-editor/react';
-import {
-  Loader2,
-  Save,
-  Maximize2,
-  Minimize2,
-  Eye,
-  EyeOff,
-  BookOpen,
-  Code,
-  FileCode,
-} from 'lucide-react';
+import { Editor, type BeforeMount, type OnMount } from '@monaco-editor/react';
+import { Maximize2, Minimize2, Eye, EyeOff, BookOpen, Code, FileCode } from 'lucide-react';
 import mermaid from 'mermaid';
 import { useTheme } from 'next-themes';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -48,7 +38,6 @@ export function MonacoEditorDialog({
   const { resolvedTheme } = useTheme();
   const [content, setContent] = useState<string>('');
   const [originalContent, setOriginalContent] = useState<string>('');
-  const [saving, setSaving] = useState(false);
   const [showMinimap, setShowMinimap] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const ext = getFileExtension(filePath);
@@ -57,12 +46,14 @@ export function MonacoEditorDialog({
 
   const [showPreview, setShowPreview] = useState(isMarkdown);
 
+  const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+
   const isDirty = content !== originalContent;
 
   // Derive Monaco theme — monochrome (light) uses VS, everything else is dark-based
   const monacoTheme = resolvedTheme === 'monochrome' ? 'vs' : 'funny-dark';
 
-  // Define custom dark theme with black background
+  // Define custom dark theme and disable TS/JS diagnostics (no tsconfig / node_modules in browser)
   const handleBeforeMount: BeforeMount = (monaco) => {
     monaco.editor.defineTheme('funny-dark', {
       base: 'vs-dark',
@@ -74,6 +65,31 @@ export function MonacoEditorDialog({
         'minimap.background': '#0a0a0a',
       },
     });
+
+    // Configure compiler to understand JSX — must come before diagnostics
+    const compilerOptions: import('monaco-editor').languages.typescript.CompilerOptions = {
+      jsx: monaco.languages.typescript.JsxEmit.React,
+      jsxFactory: 'React.createElement',
+      reactNamespace: 'React',
+      allowJs: true,
+      allowNonTsExtensions: true,
+      target: monaco.languages.typescript.ScriptTarget.ESNext,
+      module: monaco.languages.typescript.ModuleKind.ESNext,
+      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
+      noEmit: true,
+    };
+    monaco.languages.typescript.typescriptDefaults.setCompilerOptions(compilerOptions);
+    monaco.languages.typescript.javascriptDefaults.setCompilerOptions(compilerOptions);
+
+    // Keep syntax validation (good highlighting) but disable semantic (unresolved imports, types)
+    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: true,
+      noSyntaxValidation: false,
+    });
+    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
+      noSemanticValidation: true,
+      noSyntaxValidation: false,
+    });
   };
 
   // Set initial content when dialog opens
@@ -83,30 +99,50 @@ export function MonacoEditorDialog({
     setOriginalContent(initialContent);
   }, [open, initialContent]);
 
-  const handleSave = async () => {
-    setSaving(true);
-    const result = await api.writeFile(filePath, content);
-    setSaving(false);
-
-    if (result.isOk()) {
-      setOriginalContent(content);
-      toast.success(t('editor.saved', 'File saved'));
-    } else {
-      toast.error(t('editor.failedToSave', 'Failed to save file'), {
-        description: result.error.message,
-      });
-    }
-  };
+  // Auto-save with debounce (1s after last keystroke)
+  const autoSaveRef = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => {
+    if (!open || !isDirty) return;
+    clearTimeout(autoSaveRef.current);
+    autoSaveRef.current = setTimeout(async () => {
+      const result = await api.writeFile(filePath, content);
+      if (result.isOk()) {
+        setOriginalContent(content);
+        toast.success(t('editor.saved', 'File saved'));
+      } else {
+        toast.error(t('editor.failedToSave', 'Failed to save file'), {
+          description: result.error.message,
+        });
+      }
+    }, 1000);
+    return () => clearTimeout(autoSaveRef.current);
+  }, [open, isDirty, filePath, content, t]);
 
   const handleClose = () => {
-    if (isDirty) {
-      const confirmed = confirm(
-        t('editor.unsavedChanges', 'You have unsaved changes. Close without saving?'),
-      );
-      if (!confirmed) return;
-    }
     onOpenChange(false);
   };
+
+  const handleEditorMount: OnMount = useCallback((editor) => {
+    editorRef.current = editor;
+  }, []);
+
+  // Ctrl+F → open Monaco find widget
+  useEffect(() => {
+    if (!open) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.key === 'f') {
+        e.preventDefault();
+        e.stopPropagation();
+        const editor = editorRef.current;
+        if (editor) {
+          editor.focus();
+          editor.getAction('actions.find')?.run();
+        }
+      }
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -212,6 +248,7 @@ export function MonacoEditorDialog({
               language={language}
               theme={monacoTheme}
               beforeMount={handleBeforeMount}
+              onMount={handleEditorMount}
               value={content}
               onChange={(value) => setContent(value || '')}
               options={{
@@ -225,23 +262,6 @@ export function MonacoEditorDialog({
             />
           )}
         </div>
-
-        {/* Footer with save */}
-        {isDirty && (
-          <div className="flex items-center justify-between border-t border-border px-4 py-2">
-            <span className="text-xs text-muted-foreground">
-              {t('editor.modified', 'Modified')}
-            </span>
-            <Button size="sm" onClick={handleSave} disabled={saving} data-testid="editor-save">
-              {saving ? (
-                <Loader2 className="icon-sm mr-1 animate-spin" />
-              ) : (
-                <Save className="icon-sm mr-1" />
-              )}
-              {t('common.save', 'Save')}
-            </Button>
-          </div>
-        )}
       </DialogContent>
     </Dialog>
   );

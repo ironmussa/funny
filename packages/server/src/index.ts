@@ -82,7 +82,11 @@ app.use(
       fontSrc: ["'self'", 'data:'],
       objectSrc: ["'none'"],
       frameAncestors: ["'none'"],
+      baseUri: ["'self'"],
+      formAction: ["'self'"],
+      frameSrc: ["'none'"],
     },
+    strictTransportSecurity: 'max-age=31536000; includeSubDomains',
   }),
 );
 app.use('*', logger());
@@ -101,6 +105,13 @@ app.get('/api/bootstrap', (c) => {
   c.header('Pragma', 'no-cache');
   return c.json({ mode: 'local' });
 });
+
+// ── Rate limiting on auth endpoints ───────────────────────
+const { rateLimit } = await import('./middleware/rate-limit.js');
+// Strict rate limit on auth: 20 requests per minute per IP (login, register, etc.)
+app.use('/api/auth/*', rateLimit({ windowMs: 60_000, max: 20 }));
+// Strict rate limit on invite link registration: 10 per minute per IP
+app.use('/api/invite-links/register', rateLimit({ windowMs: 60_000, max: 10 }));
 
 // ── Public routes (before auth middleware) ────────────────
 const { inviteLinkPublicRoutes, inviteLinkRoutes } = await import('./routes/invite-links.js');

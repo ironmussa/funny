@@ -7,7 +7,7 @@
 
 import { readdirSync, existsSync, statSync, mkdirSync } from 'fs';
 import { homedir, platform } from 'os';
-import { join, parse as parsePath, resolve, normalize } from 'path';
+import { join, parse as parsePath, resolve, normalize, sep } from 'path';
 
 import { getRemoteUrl, extractRepoName, initRepo } from '@funny/core/git';
 import { Hono } from 'hono';
@@ -26,15 +26,29 @@ const app = new Hono<HonoEnv>();
 async function isPathAllowed(targetPath: string, userId: string): Promise<boolean> {
   const normalizedTarget = normalize(resolve(targetPath));
 
+  // Sensitive paths that must never be accessible, even within the home directory
   const home = normalize(resolve(homedir()));
-  if (normalizedTarget.startsWith(home)) return true;
+  const denyList = ['.ssh', '.aws', '.gnupg', '.funny', '.config/gh'].map((p) =>
+    normalize(resolve(home, p)),
+  );
+  for (const denied of denyList) {
+    if (normalizedTarget === denied || normalizedTarget.startsWith(denied + sep)) return false;
+  }
 
   const projects = await getServices().projects.listProjects(userId);
   for (const project of projects) {
     const projectPath = normalize(resolve(project.path));
-    if (normalizedTarget.startsWith(projectPath)) return true;
-    if (projectPath.startsWith(normalizedTarget)) return true;
+    // Use path separator check to prevent sibling directory traversal
+    // e.g., /home/user/app must not match /home/user/app-secrets
+    if (normalizedTarget === projectPath || normalizedTarget.startsWith(projectPath + sep))
+      return true;
+    // Allow browsing parent directories that contain a project (for folder picker)
+    if (projectPath.startsWith(normalizedTarget + sep)) return true;
   }
+
+  // Allow browsing the home directory itself (for folder picker navigation)
+  // but NOT arbitrary subdirectories — only project paths and their parents
+  if (normalizedTarget === home) return true;
 
   return false;
 }
@@ -79,8 +93,8 @@ app.get('/roots', (c) => {
       }
     }
     return c.json({ roots: drives, home: homedir() });
-  } catch (error: any) {
-    return c.json({ error: error.message }, 500);
+  } catch {
+    return c.json({ error: 'Failed to list drive roots' }, 500);
   }
 });
 
@@ -118,10 +132,10 @@ app.get('/list', async (c) => {
     const parent = parsed.dir || null;
 
     return c.json({ path: dirPath, parent, dirs });
-  } catch (error: any) {
+  } catch {
     const parsed = parsePath(dirPath);
     const parent = parsed.dir || null;
-    return c.json({ path: dirPath, parent, dirs: [], error: error.message });
+    return c.json({ path: dirPath, parent, dirs: [], error: 'Failed to read directory' });
   }
 });
 
@@ -202,8 +216,8 @@ app.post('/create-directory', async (c) => {
   try {
     mkdirSync(newPath, { recursive: true });
     return c.json({ ok: true, path: newPath });
-  } catch (error: any) {
-    return c.json({ error: `Failed to create directory: ${error.message}` }, 500);
+  } catch {
+    return c.json({ error: 'Failed to create directory' }, 500);
   }
 });
 
@@ -229,8 +243,8 @@ app.post('/open-directory', async (c) => {
     if (!stat.isDirectory()) {
       return c.json({ error: 'Path is not a directory' }, 400);
     }
-  } catch (error: any) {
-    return c.json({ error: `Cannot access directory: ${error.message}` }, 500);
+  } catch {
+    return c.json({ error: 'Cannot access directory' }, 500);
   }
 
   const os = platform();
@@ -285,8 +299,8 @@ app.post('/open-in-editor', async (c) => {
       stdio: ['ignore', 'ignore', 'ignore'],
     });
     return c.json({ ok: true });
-  } catch (error: any) {
-    return c.json({ error: `Failed to open editor: ${error.message}` }, 500);
+  } catch {
+    return c.json({ error: 'Failed to open editor' }, 500);
   }
 });
 
@@ -312,8 +326,8 @@ app.post('/open-terminal', async (c) => {
     if (!stat.isDirectory()) {
       return c.json({ error: 'Path is not a directory' }, 400);
     }
-  } catch (error: any) {
-    return c.json({ error: `Cannot access directory: ${error.message}` }, 500);
+  } catch {
+    return c.json({ error: 'Cannot access directory' }, 500);
   }
 
   const os = platform();
@@ -417,8 +431,8 @@ app.get('/files', async (c) => {
     const files = scored.slice(0, FILE_SEARCH_LIMIT).map((s) => s.item);
 
     return c.json({ files, truncated });
-  } catch (error: any) {
-    return c.json({ files: [], truncated: false, error: error.message });
+  } catch {
+    return c.json({ files: [], truncated: false, error: 'Failed to search files' });
   }
 });
 

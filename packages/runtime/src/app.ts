@@ -113,8 +113,8 @@ export async function createRuntimeApp(options: RuntimeAppOptions): Promise<Runt
               'https://tauri.localhost',
             ];
             if (allowed.includes(origin)) return origin;
-            if (origin.startsWith('chrome-extension://')) return origin;
-            return undefined;
+            // Reject unknown origins explicitly (returning undefined may be truthy in some middleware)
+            return false as unknown as string;
           },
       credentials: true,
     }),

@@ -18,6 +18,7 @@ const dlog = createDebugLogger('sdk');
 
 export class SDKClaudeProcess extends BaseAgentProcess {
   private activeQuery: Query | null = null;
+  private stderrBuffer: string[] = [];
 
   // ── Overrides ──────────────────────────────────────────────────
 
@@ -84,7 +85,9 @@ export class SDKClaudeProcess extends BaseAgentProcess {
         ],
       },
       stderr: (data: string) => {
-        console.error('[sdk-claude-process:stderr]', data.trimEnd());
+        const trimmed = data.trimEnd();
+        console.error('[sdk-claude-process:stderr]', trimmed);
+        this.stderrBuffer.push(trimmed);
       },
     };
 
@@ -117,7 +120,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // restricting inheritance to only the pipe handles.
     // Same pattern as sandbox-manager.ts createSpawnFn() and pty-manager.ts.
     if (process.platform === 'win32' && !sdkOptions.spawnClaudeCodeProcess) {
-      const { spawn, execSync } = await import('child_process');
+      const { spawn } = await import('child_process');
       sdkOptions.spawnClaudeCodeProcess = (options: {
         command: string;
         args: string[];
@@ -140,7 +143,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
         const killTree = () => {
           if (child.pid != null) {
             try {
-              execSync(`taskkill /F /T /PID ${child.pid} 2>nul`, { windowsHide: true });
+              Bun.spawnSync(['taskkill', '/F', '/T', '/PID', String(child.pid)]);
             } catch {
               // Best-effort: process may have already exited
             }
@@ -157,6 +160,13 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       };
     }
 
+    // Pass effort level to control thinking depth (Claude SDK specific)
+    // Note: 'max' is not available for Claude.ai subscribers (CLI/SDK), only via direct API
+    if (this.options.effort) {
+      const validEfforts = new Set(['low', 'medium', 'high']);
+      sdkOptions.effort = validEfforts.has(this.options.effort) ? this.options.effort : 'high';
+    }
+
     // Pass MCP servers (e.g., CDP browser tools) if provided
     if (this.options.mcpServers) {
       sdkOptions.mcpServers = this.options.mcpServers;
@@ -171,6 +181,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       cwd: sdkOptions.cwd,
       hasResume: !!sdkOptions.resume,
       permissionMode: sdkOptions.permissionMode,
+      effort: sdkOptions.effort ?? 'default',
     });
     const gen = query({ prompt: promptInput, options: sdkOptions });
     this.activeQuery = gen;
@@ -213,8 +224,13 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       if (this.isAborted || err?.name === 'AbortError') {
         dlog.debug('Query cancelled (AbortError)', { aborted: this.isAborted });
       } else {
-        dlog.error('Query error', { error: String(err).slice(0, 300) });
-        this.emit('error', err instanceof Error ? err : new Error(String(err)));
+        // Use captured stderr for a more specific error message when the process
+        // exits with a generic error like "Claude Code process exited with code 1"
+        const stderrText = this.stderrBuffer.join('\n').trim();
+        const parsed = stderrText ? this.parseStderrError(stderrText) : null;
+        const errorMsg = parsed ?? String(err);
+        dlog.error('Query error', { error: errorMsg.slice(0, 300) });
+        this.emit('error', new Error(errorMsg));
       }
     } finally {
       this.activeQuery = null;

@@ -220,10 +220,8 @@ inviteLinkPublicRoutes.post('/register', async (c) => {
     );
   } catch (err: any) {
     log.error('Failed to register via invite link', { namespace: 'invite', error: err?.message });
-    if (err?.message?.includes('already') || err?.message?.includes('exist')) {
-      return c.json({ error: 'Username already taken. Try signing in instead.' }, 409);
-    }
-    return c.json({ error: err?.message || 'Registration failed' }, 500);
+    // Return generic error to prevent user enumeration
+    return c.json({ error: 'Registration failed. The username may already be taken.' }, 400);
   }
 });
 

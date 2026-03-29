@@ -215,7 +215,8 @@ export async function initBetterAuth(): Promise<void> {
         password: hash,
       });
       if (isGeneratedPassword) {
-        log.warn(
+        // Write password to stderr only (NOT to structured logging which may persist in Abbacchio)
+        process.stderr.write(
           `\n` +
             `  ========================================\n` +
             `  GENERATED ADMIN CREDENTIALS\n` +
@@ -223,9 +224,12 @@ export async function initBetterAuth(): Promise<void> {
             `  Password: ${password}\n` +
             `  ========================================\n` +
             `  Change this password after first login.\n` +
-            `  Set ADMIN_PASSWORD env var to use a fixed password.\n`,
-          { namespace: 'auth' },
+            `  Set ADMIN_PASSWORD env var to use a fixed password.\n\n`,
         );
+        log.info('Created admin account with generated password — see stderr for credentials', {
+          namespace: 'auth',
+          username,
+        });
       } else {
         log.info('Created admin account with configured password', {
           namespace: 'auth',

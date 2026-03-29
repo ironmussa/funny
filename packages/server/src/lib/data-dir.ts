@@ -13,5 +13,5 @@ export const DATA_DIR = process.env.FUNNY_DATA_DIR
     ? resolve(process.env.FUNNY_CENTRAL_DATA_DIR)
     : resolve(homedir(), '.funny');
 
-// Ensure the directory exists on import
-mkdirSync(DATA_DIR, { recursive: true });
+// Ensure the directory exists on import with restrictive permissions (owner-only)
+mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });

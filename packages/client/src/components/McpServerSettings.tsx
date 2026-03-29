@@ -365,6 +365,8 @@ export function McpServerSettings() {
     );
 
     const handleMessage = (event: MessageEvent) => {
+      // Validate origin to prevent cross-origin message injection
+      if (event.origin !== window.location.origin) return;
       if (event.data?.type === 'mcp-oauth-callback') {
         window.removeEventListener('message', handleMessage);
         setAuthenticatingName(null);

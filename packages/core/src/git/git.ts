@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync, chmodSync } from 'fs';
 import { tmpdir } from 'os';
-import { join } from 'path';
+import { dirname, join } from 'path';
 
 import type { FileDiff, FileDiffSummary, DiffSummaryResponse, GitSyncState } from '@funny/shared';
 import { processError, internal, badRequest, type DomainError } from '@funny/shared/errors';
@@ -633,9 +633,12 @@ function gitRemote(
     // either the username (with any/empty password) or via the
     // x-access-token convention. By always echoing the token we cover
     // the "Username for ..." prompt that git issues first.
-    askpassPath = join(tmpdir(), `funny-askpass-${crypto.randomUUID()}.sh`);
+    // Create askpass script in a private temporary directory with restrictive permissions
+    const askpassDir = join(tmpdir(), `funny-askpass-${crypto.randomUUID()}`);
+    mkdirSync(askpassDir, { mode: 0o700 });
+    askpassPath = join(askpassDir, 'askpass.sh');
     const safeToken = identity.githubToken.replace(/'/g, "'\\''");
-    writeFileSync(askpassPath, `#!/bin/sh\necho '${safeToken}'\n`, { mode: 0o700 });
+    writeFileSync(askpassPath, `#!/bin/sh\necho '${safeToken}'\n`, { mode: 0o500 });
     env.GIT_ASKPASS = askpassPath;
 
     // Also set the Authorization header directly — this is the most
@@ -650,7 +653,8 @@ function gitRemote(
     gitWrite(args, { cwd, env, timeout }).finally(() => {
       if (askpassPath) {
         try {
-          rmSync(askpassPath);
+          // Remove the entire private askpass directory
+          rmSync(dirname(askpassPath), { recursive: true, force: true });
         } catch {}
       }
     }),
@@ -749,12 +753,15 @@ export function mergeBranch(
         const checkoutResult = await git(['checkout', targetBranch], cwd);
         if (checkoutResult.isErr()) throw checkoutResult.error;
 
+        // Sanitize branch names in commit message to prevent injection via crafted branch names
+        const safeFB = featureBranch.replace(/['\n\r\\]/g, '');
+        const safeTB = targetBranch.replace(/['\n\r\\]/g, '');
         const mergeArgs = [
           'merge',
           '--no-ff',
           featureBranch,
           '-m',
-          `Merge branch '${featureBranch}' into ${targetBranch}`,
+          `Merge branch '${safeFB}' into ${safeTB}`,
         ];
         if (identity?.author) {
           mergeArgs.push('--author', `${identity.author.name} <${identity.author.email}>`);

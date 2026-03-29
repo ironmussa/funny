@@ -58,7 +58,7 @@ const imageAttachmentSchema = z.object({
   source: z.object({
     type: z.literal('base64'),
     media_type: z.enum(['image/jpeg', 'image/png', 'image/gif', 'image/webp']),
-    data: z.string(),
+    data: z.string().max(10_000_000), // ~7.5MB binary after base64 decode
   }),
 });
 
@@ -112,19 +112,21 @@ export const reorderProjectsSchema = z.object({
 });
 
 export const threadPurposeSchema = z.enum(['explore', 'plan', 'implement']);
+export const effortLevelSchema = z.enum(['low', 'medium', 'high']);
 
 export const createThreadSchema = z.object({
   projectId: z.string().min(1),
-  title: z.string().optional().default(''),
+  title: z.string().max(500).optional().default(''),
   mode: threadModeSchema,
   runtime: threadRuntimeSchema.optional().default('local'),
   provider: agentProviderSchema.optional().default(DEFAULT_PROVIDER),
   model: agentModelSchema.optional().default(DEFAULT_MODEL),
   permissionMode: permissionModeSchema.optional().default(DEFAULT_PERMISSION_MODE),
+  effort: effortLevelSchema.optional(),
   source: threadSourceSchema.optional().default('web'),
   baseBranch: z.string().optional(),
-  prompt: z.string().min(1, 'prompt is required'),
-  images: z.array(imageAttachmentSchema).optional(),
+  prompt: z.string().min(1, 'prompt is required').max(500_000),
+  images: z.array(imageAttachmentSchema).max(10).optional(),
   allowedTools: z.array(z.string()).optional(),
   disallowedTools: z.array(z.string()).optional(),
   fileReferences: z.array(fileReferenceSchema).max(20).optional(),
@@ -149,10 +151,11 @@ export const createIdleThreadSchema = z.object({
 });
 
 export const sendMessageSchema = z.object({
-  content: z.string().min(1, 'content is required'),
+  content: z.string().min(1, 'content is required').max(500_000),
   provider: agentProviderSchema.optional(),
   model: agentModelSchema.optional(),
   permissionMode: permissionModeSchema.optional(),
+  effort: effortLevelSchema.optional(),
   images: z.array(imageAttachmentSchema).optional(),
   allowedTools: z.array(z.string()).optional(),
   disallowedTools: z.array(z.string()).optional(),
@@ -178,19 +181,19 @@ export const stageFilesSchema = z.object({
 });
 
 export const commitSchema = z.object({
-  message: z.string().min(1, 'message is required'),
+  message: z.string().min(1, 'message is required').max(50_000),
   amend: z.boolean().optional().default(false),
   noVerify: z.boolean().optional().default(false),
 });
 
 export const createPRSchema = z.object({
-  title: z.string().min(1, 'title is required'),
-  body: z.string(),
+  title: z.string().min(1, 'title is required').max(500),
+  body: z.string().max(100_000),
 });
 
 export const createCommandSchema = z.object({
-  label: z.string().min(1, 'label is required'),
-  command: z.string().min(1, 'command is required'),
+  label: z.string().min(1, 'label is required').max(200),
+  command: z.string().min(1, 'command is required').max(10_000),
   port: z.number().int().optional(),
   portEnvVar: z.string().optional(),
 });
@@ -268,13 +271,13 @@ const gitWorkflowActionSchema = z.enum([
 
 export const workflowSchema = z.object({
   action: gitWorkflowActionSchema,
-  message: z.string().optional(),
-  filesToStage: z.array(z.string()).optional().default([]),
-  filesToUnstage: z.array(z.string()).optional().default([]),
+  message: z.string().max(50_000).optional(),
+  filesToStage: z.array(z.string().max(1000)).max(1000).optional().default([]),
+  filesToUnstage: z.array(z.string().max(1000)).max(1000).optional().default([]),
   amend: z.boolean().optional().default(false),
   noVerify: z.boolean().optional().default(false),
-  prTitle: z.string().optional(),
-  prBody: z.string().optional(),
+  prTitle: z.string().max(500).optional(),
+  prBody: z.string().max(100_000).optional(),
   targetBranch: z.string().optional(),
   cleanup: z.boolean().optional().default(true),
 });
@@ -309,8 +312,8 @@ export const automationModeSchema = z.enum(['default']);
 
 export const createAutomationSchema = z.object({
   projectId: z.string().min(1),
-  name: z.string().min(1, 'name is required'),
-  prompt: z.string().min(1, 'prompt is required'),
+  name: z.string().min(1, 'name is required').max(200),
+  prompt: z.string().min(1, 'prompt is required').max(500_000),
   schedule: automationScheduleSchema,
   provider: agentProviderSchema.optional().default(DEFAULT_PROVIDER),
   model: agentModelSchema.optional().default(DEFAULT_MODEL),

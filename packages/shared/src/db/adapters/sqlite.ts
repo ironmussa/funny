@@ -5,6 +5,8 @@
  * and periodic WAL checkpointing.
  */
 
+import { chmodSync } from 'fs';
+
 import type { BunSQLiteDatabase } from 'drizzle-orm/bun-sqlite';
 
 import type { DatabaseProvider } from '../provider.js';
@@ -29,6 +31,16 @@ export function createSqliteProvider(options: CreateSqliteOptions): DatabaseProv
 
   const logger = options.log ?? noop;
   const sqliteDb = new Database(options.path);
+
+  // Restrict database file permissions to owner-only (0600)
+  try {
+    chmodSync(options.path, 0o600);
+  } catch {
+    logger.warn('Could not set restrictive permissions on database file', {
+      namespace: 'db',
+      path: options.path,
+    });
+  }
 
   sqliteDb.exec('PRAGMA journal_mode = WAL');
   sqliteDb.exec('PRAGMA foreign_keys = ON');

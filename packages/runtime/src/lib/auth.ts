@@ -219,12 +219,13 @@ export async function initBetterAuth(): Promise<void> {
     } as any);
 
     if ((result as any)?.user) {
-      log.info('Created default admin account', {
-        namespace: 'auth',
-        username: 'admin',
-        password,
-        important: 'Change this password immediately!',
-      });
+      log.info(
+        'Created default admin account — change the password immediately after first login',
+        {
+          namespace: 'auth',
+          username: 'admin',
+        },
+      );
     }
   } catch (err: any) {
     // "User already exists" is expected after first boot

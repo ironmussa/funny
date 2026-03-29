@@ -172,19 +172,22 @@ function setupBrowserPtyHandlers(socket: Socket, userId: string): void {
   ];
 
   for (const eventName of ptyEvents) {
-    socket.on(eventName, async (data: any) => {
-      const projectId = data?.projectId;
+    socket.on(eventName, async (data: unknown) => {
+      // Basic schema validation: must be an object (or null/undefined)
+      if (data != null && (typeof data !== 'object' || Array.isArray(data))) return;
+      const payload = (data ?? {}) as Record<string, any>;
+      const projectId = payload.projectId;
 
       const forwardToRunner = async (runnerId: string | null) => {
         if (runnerId) {
           const runnerNsp = getIO().of('/runner');
           runnerNsp.to(`runner:${runnerId}`).emit('central:browser_ws', {
             userId,
-            data: { type: eventName, data },
+            data: { type: eventName, data: payload },
           });
         } else if (eventName === 'pty:spawn') {
           socket.emit('pty:error', {
-            ptyId: data?.id,
+            ptyId: payload.id,
             error: 'No runner available to handle terminal request',
           });
         }
@@ -275,25 +278,29 @@ function setupRunnerNamespace(): void {
     }
 
     // Handle agent events from runner → relay to browser
-    socket.on('runner:agent_event', async (data: any) => {
-      if (!data.userId) return;
-      wsRelay.relayToUser(data.userId, data.event);
+    socket.on('runner:agent_event', async (data: unknown) => {
+      if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+      const msg = data as Record<string, any>;
+      if (!msg.userId || typeof msg.userId !== 'string') return;
+      wsRelay.relayToUser(msg.userId, msg.event);
 
       const threadRegistry = await import('./thread-registry.js');
-      if (data.event?.type === 'agent:status' && data.event?.threadId) {
+      if (msg.event?.type === 'agent:status' && msg.event?.threadId) {
         threadRegistry
-          .updateThreadStatus(data.event.threadId, data.event.data?.status || 'running')
+          .updateThreadStatus(msg.event.threadId, msg.event.data?.status || 'running')
           .catch(() => {});
       }
-      if (data.event?.type === 'agent:result' && data.event?.threadId) {
-        threadRegistry.updateThreadStatus(data.event.threadId, 'completed').catch(() => {});
+      if (msg.event?.type === 'agent:result' && msg.event?.threadId) {
+        threadRegistry.updateThreadStatus(msg.event.threadId, 'completed').catch(() => {});
       }
     });
 
     // Handle browser relay from runner
-    socket.on('runner:browser_relay', (data: any) => {
-      if (data.userId) {
-        wsRelay.relayToUser(data.userId, data.data);
+    socket.on('runner:browser_relay', (data: unknown) => {
+      if (!data || typeof data !== 'object' || Array.isArray(data)) return;
+      const relay = data as Record<string, any>;
+      if (relay.userId && typeof relay.userId === 'string') {
+        wsRelay.relayToUser(relay.userId, relay.data);
       }
     });
 
@@ -353,7 +360,12 @@ function setupRunnerControlHandlers(socket: Socket, runnerId: string): void {
         ack?.({ ok: true, wsConnected: wsRelay.isRunnerConnected(runnerId) });
       }
     } catch (err) {
-      ack?.({ error: (err as Error).message, success: false });
+      log.error('Heartbeat handler error', {
+        namespace: 'socketio',
+        runnerId,
+        error: (err as Error).message,
+      });
+      ack?.({ error: 'Internal error', success: false });
     }
   });
 
@@ -364,7 +376,12 @@ function setupRunnerControlHandlers(socket: Socket, runnerId: string): void {
       const tasks = await rm.getPendingTasks(runnerId);
       ack?.({ tasks });
     } catch (err) {
-      ack?.({ tasks: [], error: (err as Error).message });
+      log.error('Poll tasks handler error', {
+        namespace: 'socketio',
+        runnerId,
+        error: (err as Error).message,
+      });
+      ack?.({ tasks: [], error: 'Internal error' });
     }
   });
 
@@ -381,7 +398,12 @@ function setupRunnerControlHandlers(socket: Socket, runnerId: string): void {
       }
       ack?.({ ok: true });
     } catch (err) {
-      ack?.({ ok: false, error: (err as Error).message });
+      log.error('Assign project handler error', {
+        namespace: 'socketio',
+        runnerId,
+        error: (err as Error).message,
+      });
+      ack?.({ ok: false, error: 'Internal error' });
     }
   });
 }
@@ -428,9 +450,17 @@ function setupRunnerDataHandlers(socket: Socket, runnerId: string): void {
     'data:get_arc',
   ];
 
+  // Regex to validate requestId is a safe identifier (UUID or nanoid-like)
+  const REQUEST_ID_RE = /^[a-zA-Z0-9_-]{1,64}$/;
+
   for (const eventName of dataEvents) {
     socket.on(eventName, async (data: any, ack?: (response: any) => void) => {
       const requestId = data?._requestId;
+      // Validate requestId format to prevent event name injection
+      if (requestId && (typeof requestId !== 'string' || !REQUEST_ID_RE.test(requestId))) {
+        log.warn('Invalid requestId format', { namespace: 'socketio', runnerId, type: eventName });
+        return;
+      }
       try {
         const { handleDataMessageWithAck } = await import('./data-handler.js');
         const response = await handleDataMessageWithAck(runnerId, {

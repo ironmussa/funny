@@ -152,7 +152,7 @@ async function killPort(targetPort: number): Promise<void> {
     }
     console.log(`[kill-port] Killing PID ${pid} on port ${targetPort}`);
     if (isWindows) {
-      Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${pid}`]);
+      Bun.spawnSync(['taskkill', '/F', '/T', '/PID', String(pid)]);
     } else {
       try {
         process.kill(pid, 'SIGKILL');
@@ -170,7 +170,7 @@ async function killPort(targetPort: number): Promise<void> {
       );
       for (const pid of suspects) {
         console.log(`[kill-port] Killing suspect PID ${pid}`);
-        Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${pid}`]);
+        Bun.spawnSync(['taskkill', '/F', '/T', '/PID', String(pid)]);
       }
     }
   }
@@ -188,7 +188,7 @@ async function killPort(targetPort: number): Promise<void> {
       for (const pid of remaining) {
         if (!pidExists(pid)) continue;
         console.log(`[kill-port] Retrying kill for PID ${pid}`);
-        Bun.spawnSync(['cmd', '/c', `taskkill /F /T /PID ${pid}`]);
+        Bun.spawnSync(['taskkill', '/F', '/T', '/PID', String(pid)]);
       }
     }
   }

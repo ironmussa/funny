@@ -5,8 +5,8 @@
  * @domain layer: infrastructure
  */
 
-import { readFile, writeFile, stat } from 'fs/promises';
-import { basename, dirname, normalize, resolve } from 'path';
+import { readFile, writeFile, stat, lstat, realpath } from 'fs/promises';
+import { basename, dirname, normalize, resolve, sep } from 'path';
 
 import { WORKTREE_DIR_NAME } from '@funny/core/git';
 import { badRequest, internal, notFound } from '@funny/shared/errors';
@@ -30,13 +30,15 @@ async function isPathAllowed(targetPath: string, userId: string): Promise<boolea
   const projects = await getServices().projects.listProjects(userId);
   for (const project of projects) {
     const projectPath = normalize(resolve(project.path));
-    // Allow paths within the project directory
-    if (normalizedTarget.startsWith(projectPath)) return true;
+    // Allow paths within the project directory (with separator check to prevent sibling traversal)
+    if (normalizedTarget === projectPath || normalizedTarget.startsWith(projectPath + sep))
+      return true;
     // Allow the project's worktree directory
     const worktreeBase = normalize(
       resolve(dirname(projectPath), WORKTREE_DIR_NAME, basename(projectPath)),
     );
-    if (normalizedTarget.startsWith(worktreeBase)) return true;
+    if (normalizedTarget === worktreeBase || normalizedTarget.startsWith(worktreeBase + sep))
+      return true;
   }
 
   return false;
@@ -108,9 +110,23 @@ app.get('/read', async (c) => {
     return resultToResponse(c, err(badRequest('Cannot edit binary files in internal editor')));
   }
 
+  // Check for symlinks — resolve the real path and re-validate
+  const linkStatResult = await ResultAsync.fromPromise(lstat(filePath), (e: any) =>
+    e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),
+  );
+  if (linkStatResult.isErr()) return resultToResponse(c, linkStatResult);
+  if (linkStatResult.value.isSymbolicLink()) {
+    const realPathResult = await ResultAsync.fromPromise(realpath(filePath), (e: any) =>
+      e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),
+    );
+    if (realPathResult.isErr()) return resultToResponse(c, realPathResult);
+    const denied = await checkAllowedPath(realPathResult.value, userId);
+    if (denied) return denied;
+  }
+
   // Check file size (max 2MB)
   const statsResult = await ResultAsync.fromPromise(stat(filePath), (e: any) =>
-    e.code === 'ENOENT' ? notFound('File not found') : internal(e.message),
+    e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),
   );
   if (statsResult.isErr()) return resultToResponse(c, statsResult);
   if (statsResult.value.size > 2 * 1024 * 1024) {
@@ -118,7 +134,7 @@ app.get('/read', async (c) => {
   }
 
   const contentResult = await ResultAsync.fromPromise(readFile(filePath, 'utf-8'), (e: any) =>
-    e.code === 'ENOENT' ? notFound('File not found') : internal(e.message),
+    e.code === 'ENOENT' ? notFound('File not found') : internal('File read error'),
   );
   if (contentResult.isErr()) return resultToResponse(c, contentResult);
   return c.json({ content: contentResult.value });
@@ -146,7 +162,7 @@ app.post('/write', async (c) => {
 
   const writeResult = await ResultAsync.fromPromise(
     writeFile(filePath, content, 'utf-8'),
-    (e: any) => internal(e.message),
+    (e: any) => internal('File write error'),
   );
   if (writeResult.isErr()) return resultToResponse(c, writeResult);
   return c.json({ ok: true });

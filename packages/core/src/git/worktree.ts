@@ -90,7 +90,12 @@ export function createWorktree(
       }
 
       const base = await getWorktreeBase(projectPath);
-      const worktreePath = resolve(base, branchName.replace(/\//g, '-'));
+      // Sanitize branch name: allow only safe characters, strip path traversal attempts
+      const safeBranchDir = branchName
+        .replace(/\.\./g, '') // Remove path traversal
+        .replace(/[^a-zA-Z0-9._\-/]/g, '-') // Keep only safe chars
+        .replace(/\//g, '-'); // Replace slashes with hyphens
+      const worktreePath = resolve(base, safeBranchDir);
 
       if (existsSync(worktreePath)) {
         throw badRequest(`Worktree already exists: ${worktreePath}`);

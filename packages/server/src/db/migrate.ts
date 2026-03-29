@@ -844,6 +844,65 @@ const migrations: Migration[] = [
     },
   },
   {
+    name: '036_fix_betterauth_pg_columns',
+    async up() {
+      if (ctx().dialect !== 'pg') return;
+
+      // Better Auth may have auto-created tables with camelCase column names
+      // before our migration 027 ran (CREATE TABLE IF NOT EXISTS was then a no-op).
+      // Rename camelCase → snake_case so Drizzle queries work.
+      const renames: Array<{ table: string; from: string; to: string }> = [
+        // "user" table
+        { table: '"user"', from: '"emailVerified"', to: 'email_verified' },
+        { table: '"user"', from: '"createdAt"', to: 'created_at' },
+        { table: '"user"', from: '"updatedAt"', to: 'updated_at' },
+        { table: '"user"', from: '"banReason"', to: 'ban_reason' },
+        { table: '"user"', from: '"banExpires"', to: 'ban_expires' },
+        // session table
+        { table: 'session', from: '"expiresAt"', to: 'expires_at' },
+        { table: 'session', from: '"createdAt"', to: 'created_at' },
+        { table: 'session', from: '"updatedAt"', to: 'updated_at' },
+        { table: 'session', from: '"ipAddress"', to: 'ip_address' },
+        { table: 'session', from: '"userAgent"', to: 'user_agent' },
+        { table: 'session', from: '"userId"', to: 'user_id' },
+        // account table
+        { table: 'account', from: '"accountId"', to: 'account_id' },
+        { table: 'account', from: '"providerId"', to: 'provider_id' },
+        { table: 'account', from: '"userId"', to: 'user_id' },
+        { table: 'account', from: '"accessToken"', to: 'access_token' },
+        { table: 'account', from: '"refreshToken"', to: 'refresh_token' },
+        { table: 'account', from: '"idToken"', to: 'id_token' },
+        { table: 'account', from: '"accessTokenExpiresAt"', to: 'access_token_expires_at' },
+        { table: 'account', from: '"refreshTokenExpiresAt"', to: 'refresh_token_expires_at' },
+        { table: 'account', from: '"createdAt"', to: 'created_at' },
+        { table: 'account', from: '"updatedAt"', to: 'updated_at' },
+        // verification table
+        { table: 'verification', from: '"expiresAt"', to: 'expires_at' },
+        { table: 'verification', from: '"createdAt"', to: 'created_at' },
+        { table: 'verification', from: '"updatedAt"', to: 'updated_at' },
+        // organization table
+        { table: 'organization', from: '"createdAt"', to: 'created_at' },
+        // member table
+        { table: 'member', from: '"organizationId"', to: 'organization_id' },
+        { table: 'member', from: '"userId"', to: 'user_id' },
+        { table: 'member', from: '"createdAt"', to: 'created_at' },
+        // invitation table
+        { table: 'invitation', from: '"organizationId"', to: 'organization_id' },
+        { table: 'invitation', from: '"expiresAt"', to: 'expires_at' },
+        { table: 'invitation', from: '"inviterId"', to: 'inviter_id' },
+      ];
+
+      for (const { table, from, to } of renames) {
+        try {
+          await ctx().exec(sql.raw(`ALTER TABLE ${table} RENAME COLUMN ${from} TO ${to}`));
+        } catch {
+          // Column already has correct name — ignore
+        }
+      }
+    },
+  },
+
+  {
     name: '035_backfill_worktree_branch',
     async up() {
       // Fix threads where mode='worktree' and worktree_path is set but branch is NULL.

@@ -13,6 +13,7 @@ import {
   Upload,
   Download,
   GitPullRequest,
+  GitPullRequestClosed,
   Sparkles,
   Loader2,
   Check,
@@ -1229,15 +1230,32 @@ export function ReviewPane() {
                 <Tooltip>
                   <TooltipTrigger asChild>
                     {gitStatus?.prNumber ? (
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => window.open(gitStatus.prUrl, '_blank')}
-                        className="text-muted-foreground"
-                        data-testid="review-view-pr-toolbar"
-                      >
-                        <GitPullRequest className="icon-base text-green-500" />
-                      </Button>
+                      (() => {
+                        const prState = gitStatus.prState ?? 'OPEN';
+                        const PrIcon =
+                          prState === 'MERGED'
+                            ? GitMerge
+                            : prState === 'CLOSED'
+                              ? GitPullRequestClosed
+                              : GitPullRequest;
+                        const prIconColor =
+                          prState === 'MERGED'
+                            ? 'text-purple-500'
+                            : prState === 'CLOSED'
+                              ? 'text-red-500'
+                              : 'text-green-500';
+                        return (
+                          <Button
+                            variant="ghost"
+                            size="icon-sm"
+                            onClick={() => window.open(gitStatus.prUrl, '_blank')}
+                            className="text-muted-foreground"
+                            data-testid="review-view-pr-toolbar"
+                          >
+                            <PrIcon className={`icon-base ${prIconColor}`} />
+                          </Button>
+                        );
+                      })()
                     ) : (
                       <Button
                         variant="ghost"

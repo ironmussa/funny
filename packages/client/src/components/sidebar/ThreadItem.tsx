@@ -13,6 +13,8 @@ import {
   Pencil,
   GitBranch,
   GitPullRequest,
+  GitPullRequestClosed,
+  GitMerge,
 } from 'lucide-react';
 import { useState, memo, useCallback, useRef, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -316,29 +318,58 @@ export const ThreadItem = memo(function ThreadItem({
                 size="xs"
               />
             )}
-            {hasPR && effectiveGitStatus && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <a
-                    href={effectiveGitStatus.prUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    onClick={(e) => e.stopPropagation()}
-                    className="flex flex-shrink-0 items-center gap-0.5 text-xs text-green-500 hover:text-green-400"
-                    data-testid={`thread-pr-badge-${thread.id}`}
-                  >
-                    <GitPullRequest className="icon-xs" />
-                    <span>#{effectiveGitStatus.prNumber}</span>
-                  </a>
-                </TooltipTrigger>
-                <TooltipContent side="top" className="text-xs">
-                  {t('thread.prOpen', {
-                    number: effectiveGitStatus.prNumber,
-                    defaultValue: `PR #${effectiveGitStatus.prNumber}`,
-                  })}
-                </TooltipContent>
-              </Tooltip>
-            )}
+            {hasPR &&
+              effectiveGitStatus &&
+              (() => {
+                const prState = effectiveGitStatus.prState ?? 'OPEN';
+                const PrIcon =
+                  prState === 'MERGED'
+                    ? GitMerge
+                    : prState === 'CLOSED'
+                      ? GitPullRequestClosed
+                      : GitPullRequest;
+                const prColor =
+                  prState === 'MERGED'
+                    ? 'text-purple-500 hover:text-purple-400'
+                    : prState === 'CLOSED'
+                      ? 'text-red-500 hover:text-red-400'
+                      : 'text-green-500 hover:text-green-400';
+                const prLabel =
+                  prState === 'MERGED'
+                    ? t('thread.prMerged', {
+                        number: effectiveGitStatus.prNumber,
+                        defaultValue: `PR #${effectiveGitStatus.prNumber} (merged)`,
+                      })
+                    : prState === 'CLOSED'
+                      ? t('thread.prClosed', {
+                          number: effectiveGitStatus.prNumber,
+                          defaultValue: `PR #${effectiveGitStatus.prNumber} (closed)`,
+                        })
+                      : t('thread.prOpen', {
+                          number: effectiveGitStatus.prNumber,
+                          defaultValue: `PR #${effectiveGitStatus.prNumber}`,
+                        });
+                return (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <a
+                        href={effectiveGitStatus.prUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        onClick={(e) => e.stopPropagation()}
+                        className={`flex flex-shrink-0 items-center gap-0.5 text-xs ${prColor}`}
+                        data-testid={`thread-pr-badge-${thread.id}`}
+                      >
+                        <PrIcon className="icon-xs" />
+                        <span>#{effectiveGitStatus.prNumber}</span>
+                      </a>
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      {prLabel}
+                    </TooltipContent>
+                  </Tooltip>
+                );
+              })()}
             {hasSnippet ? (
               <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground/50">
                 {thread.lastAssistantMessage}

@@ -78,7 +78,7 @@ export function MonacoEditorDialog({
     });
 
     // Configure compiler to understand JSX — must come before diagnostics
-    const compilerOptions: import('monaco-editor').languages.typescript.CompilerOptions = {
+    const compilerOptions: import('monaco-editor').typescript.CompilerOptions = {
       jsx: monaco.languages.typescript.JsxEmit.React,
       jsxFactory: 'React.createElement',
       reactNamespace: 'React',

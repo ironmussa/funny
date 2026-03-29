@@ -171,7 +171,7 @@ function createMockServiceProvider(
         Promise.resolve(tm.findToolCall(mid, n, i)),
       getToolCall: (id: string) => Promise.resolve(tm.getToolCall(id)),
       // Stubs for IThreadRepository methods not needed by startAgent:
-      listThreads: () => Promise.resolve([]),
+      listThreads: () => Promise.resolve({ threads: [], total: 0 }),
       listArchivedThreads: () => Promise.resolve([]),
       getThreadByExternalRequestId: () => Promise.resolve(undefined),
       createThread: () => Promise.resolve({}),

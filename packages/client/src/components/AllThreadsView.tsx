@@ -11,6 +11,7 @@ import {
   X,
   FolderOpen,
   GitBranch,
+  Loader2,
 } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -19,6 +20,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { DiffStats } from '@/components/DiffStats';
 import { KanbanView } from '@/components/KanbanView';
 import { ThreadListView } from '@/components/ThreadListView';
+import { Button } from '@/components/ui/button';
 import { normalize } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
@@ -121,6 +123,8 @@ export function AllThreadsView() {
   const [searchParams, setSearchParams] = useSearchParams();
   const allThreadsProjectId = useUIStore((s) => s.allThreadsProjectId);
   const threadsByProject = useThreadStore((s) => s.threadsByProject);
+  const threadTotalByProject = useThreadStore((s) => s.threadTotalByProject);
+  const loadMoreThreads = useThreadStore((s) => s.loadMoreThreads);
   const projects = useProjectStore((s) => s.projects);
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);
 
@@ -290,6 +294,31 @@ export function AllThreadsView() {
     }
     return all;
   }, [threadsByProject, projectFilter]);
+
+  // Check if any relevant project has more threads on the server than loaded
+  const hasMoreServerThreads = useMemo(() => {
+    const relevantProjects = projectFilter ? [projectFilter] : projects.map((p) => p.id);
+    return relevantProjects.some((pid) => {
+      const loaded = (threadsByProject[pid] ?? []).length;
+      const total = threadTotalByProject[pid] ?? 0;
+      return loaded < total;
+    });
+  }, [threadsByProject, threadTotalByProject, projectFilter, projects]);
+
+  const [loadingMore, setLoadingMore] = useState(false);
+  const handleLoadMore = async () => {
+    setLoadingMore(true);
+    try {
+      const relevantProjects = projectFilter ? [projectFilter] : projects.map((p) => p.id);
+      await Promise.all(
+        relevantProjects
+          .filter((pid) => (threadsByProject[pid] ?? []).length < (threadTotalByProject[pid] ?? 0))
+          .map((pid) => loadMoreThreads(pid)),
+      );
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const allThreads = useMemo(() => {
     // Board view always includes archived (they appear in the archived column)
@@ -817,6 +846,26 @@ export function AllThreadsView() {
                 );
               }}
             />
+            {hasMoreServerThreads && (
+              <div className="flex justify-center py-3">
+                <Button
+                  data-testid="all-threads-load-more"
+                  variant="outline"
+                  size="sm"
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                >
+                  {loadingMore ? (
+                    <>
+                      <Loader2 className="icon-sm mr-1.5 animate-spin" />
+                      {t('common.loading')}
+                    </>
+                  ) : (
+                    t('allThreads.loadMore')
+                  )}
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </div>

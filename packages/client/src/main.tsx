@@ -175,7 +175,17 @@ function AuthGate() {
   );
 }
 
-ReactDOM.createRoot(document.getElementById('root')!).render(
+// Reuse the existing root on HMR to prevent "createRoot on a container that
+// has already been passed to createRoot" errors.
+// Store the root on import.meta.hot.data so Vite HMR preserves it across module re-executions.
+const rootEl = document.getElementById('root')!;
+const root: ReactDOM.Root =
+  (import.meta.hot?.data?.reactRoot as ReactDOM.Root | undefined) ?? ReactDOM.createRoot(rootEl);
+if (import.meta.hot) {
+  import.meta.hot.data.reactRoot = root;
+}
+
+root.render(
   <React.StrictMode>
     <ThemeProvider
       attribute="class"

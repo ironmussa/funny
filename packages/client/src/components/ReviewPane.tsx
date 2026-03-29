@@ -147,13 +147,17 @@ export function ReviewPane() {
   const hasGitContext = !!(effectiveThreadId || projectModeId);
 
   // The base directory path for constructing absolute file paths (worktree path or project path)
-  const basePath = useThreadStore((s) => {
-    const wt = s.activeThread?.worktreePath;
-    if (wt) return wt;
-    const pid = s.activeThread?.projectId ?? selectedProjectId;
+  // NOTE: Avoid calling useProjectStore.getState() inside a useThreadStore selector —
+  // it triggers "Cannot update a component while rendering a different component" errors.
+  const worktreePath = useThreadStore((s) => s.activeThread?.worktreePath);
+  const threadProjectId = useThreadStore((s) => s.activeThread?.projectId);
+  const projectsForPath = useProjectStore((s) => s.projects);
+  const basePath = useMemo(() => {
+    if (worktreePath) return worktreePath;
+    const pid = threadProjectId ?? selectedProjectId;
     if (!pid) return '';
-    return useProjectStore.getState().projects.find((p) => p.id === pid)?.path ?? '';
-  });
+    return projectsForPath.find((p) => p.id === pid)?.path ?? '';
+  }, [worktreePath, threadProjectId, selectedProjectId, projectsForPath]);
 
   const [summaries, setSummaries] = useState<FileDiffSummary[]>([]);
   const [diffCache, setDiffCache] = useState<Map<string, string>>(new Map());
@@ -172,6 +176,12 @@ export function ReviewPane() {
   const [commitTitle, setCommitTitleRaw] = useState('');
   const [commitBody, setCommitBodyRaw] = useState('');
 
+  // Use refs to read current values without nesting setState calls
+  const commitTitleRef = useRef(commitTitle);
+  commitTitleRef.current = commitTitle;
+  const commitBodyRef = useRef(commitBody);
+  commitBodyRef.current = commitBody;
+
   // Wrap setters to also persist to draft store
   const draftId = effectiveThreadId || projectModeId;
   const setCommitTitle = useCallback(
@@ -179,11 +189,7 @@ export function ReviewPane() {
       setCommitTitleRaw((prev) => {
         const next = typeof v === 'function' ? v(prev) : v;
         if (draftId) {
-          // Read current body from state for sync
-          setCommitBodyRaw((body) => {
-            setCommitDraft(draftId, next, body);
-            return body;
-          });
+          setCommitDraft(draftId, next, commitBodyRef.current);
         }
         return next;
       });
@@ -196,10 +202,7 @@ export function ReviewPane() {
       setCommitBodyRaw((prev) => {
         const next = typeof v === 'function' ? v(prev) : v;
         if (draftId) {
-          setCommitTitleRaw((title) => {
-            setCommitDraft(draftId, title, next);
-            return title;
-          });
+          setCommitDraft(draftId, commitTitleRef.current, next);
         }
         return next;
       });

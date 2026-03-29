@@ -250,6 +250,7 @@ export type DeepAgentModel =
 export type OpenSWEModel = 'openswe-default';
 export type AgentModel = ClaudeModel | CodexModel | GeminiModel | DeepAgentModel | OpenSWEModel;
 export type PermissionMode = 'plan' | 'autoEdit' | 'confirmEdit' | 'ask';
+export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
 
 // ─── Agent Definitions ──────────────────────────────────
 
@@ -308,6 +309,12 @@ export interface Thread {
   createdBy?: string;
   /** Snippet of the last assistant message (populated in list queries) */
   lastAssistantMessage?: string;
+}
+
+export interface PaginatedThreadsResponse {
+  threads: Thread[];
+  total: number;
+  hasMore: boolean;
 }
 
 // ─── Thread Comments ────────────────────────────────────
@@ -850,6 +857,7 @@ export interface CreateThreadRequest {
   provider?: AgentProvider;
   model?: AgentModel;
   permissionMode?: PermissionMode;
+  effort?: EffortLevel;
   source?: ThreadSource;
   baseBranch?: string;
   prompt: string;
@@ -883,6 +891,7 @@ export interface SendMessageRequest {
   provider?: AgentProvider;
   model?: AgentModel;
   permissionMode?: PermissionMode;
+  effort?: EffortLevel;
   images?: ImageAttachment[];
   allowedTools?: string[];
   disallowedTools?: string[];

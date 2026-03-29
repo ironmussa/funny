@@ -115,6 +115,8 @@ export interface ThreadWithMessages extends Thread {
 
 export interface ThreadState {
   threadsByProject: Record<string, Thread[]>;
+  /** Total thread count per project (from server pagination) */
+  threadTotalByProject: Record<string, number>;
   selectedThreadId: string | null;
   activeThread: ThreadWithMessages | null;
   /** Setup progress keyed by threadId — survives thread switches */
@@ -125,6 +127,8 @@ export interface ThreadState {
   queuedCountByThread: Record<string, number>;
 
   loadThreadsForProject: (projectId: string) => Promise<void>;
+  /** Load the next page of threads for a project (appends to existing list) */
+  loadMoreThreads: (projectId: string) => Promise<void>;
   selectThread: (threadId: string | null) => Promise<void>;
   archiveThread: (threadId: string, projectId: string) => Promise<void>;
   unarchiveThread: (threadId: string, projectId: string, stage: ThreadStage) => Promise<void>;
@@ -252,6 +256,7 @@ const _threadLoadPromises = new Map<string, Promise<void>>();
 
 export const useThreadStore = create<ThreadState>((set, get) => ({
   threadsByProject: {},
+  threadTotalByProject: {},
   selectedThreadId: null,
   activeThread: null,
   setupProgressByThread: {},
@@ -265,10 +270,14 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     const promise = (async () => {
       try {
-        const result = await api.listThreads(projectId, true);
+        const result = await api.listThreads(projectId, false, 50);
         if (result.isOk()) {
           set((state) => ({
-            threadsByProject: { ...state.threadsByProject, [projectId]: result.value },
+            threadsByProject: { ...state.threadsByProject, [projectId]: result.value.threads },
+            threadTotalByProject: {
+              ...state.threadTotalByProject,
+              [projectId]: result.value.total,
+            },
           }));
         }
       } finally {
@@ -278,6 +287,22 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     _threadLoadPromises.set(projectId, promise);
     return promise;
+  },
+
+  loadMoreThreads: async (projectId: string) => {
+    const { threadsByProject } = get();
+    const currentThreads = threadsByProject[projectId] ?? [];
+    const offset = currentThreads.length;
+    const result = await api.listThreads(projectId, false, 50, offset);
+    if (result.isOk() && result.value.threads.length > 0) {
+      set((state) => ({
+        threadsByProject: {
+          ...state.threadsByProject,
+          [projectId]: [...(state.threadsByProject[projectId] ?? []), ...result.value.threads],
+        },
+        threadTotalByProject: { ...state.threadTotalByProject, [projectId]: result.value.total },
+      }));
+    }
   },
 
   selectThread: async (threadId) => {
@@ -873,21 +898,28 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // re-renders.
     const results = await Promise.all(
       projectIds.map(async (pid) => {
-        const result = await api.listThreads(pid, true);
-        return { pid, threads: result.isOk() ? result.value : null };
+        const result = await api.listThreads(pid, false, 50);
+        return {
+          pid,
+          threads: result.isOk() ? result.value.threads : null,
+          total: result.isOk() ? result.value.total : 0,
+        };
       }),
     );
 
     const prev = get().threadsByProject;
+    const prevTotals = get().threadTotalByProject;
     let changed = false;
     const next: Record<string, Thread[]> = { ...prev };
-    for (const { pid, threads } of results) {
+    const nextTotals: Record<string, number> = { ...prevTotals };
+    for (const { pid, threads, total } of results) {
       if (threads && threads !== prev[pid]) {
         next[pid] = threads;
+        nextTotals[pid] = total;
         changed = true;
       }
     }
-    if (changed) set({ threadsByProject: next });
+    if (changed) set({ threadsByProject: next, threadTotalByProject: nextTotals });
 
     await refreshActiveThread();
   },

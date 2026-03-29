@@ -62,7 +62,9 @@ describe('AppStore', () => {
         { id: 'p1', name: 'Project 1', path: '/tmp/p1', createdAt: '2024-01-01' },
       ];
       mockApi.listProjects.mockReturnValueOnce(okAsync(mockProjects) as any);
-      mockApi.listThreads.mockReturnValue(okAsync([]) as any);
+      mockApi.listThreads.mockReturnValue(
+        okAsync({ threads: [], total: 0, hasMore: false }) as any,
+      );
 
       await useAppStore.getState().loadProjects();
       expect(useAppStore.getState().projects).toEqual(mockProjects);
@@ -72,7 +74,9 @@ describe('AppStore', () => {
   describe('loadThreadsForProject', () => {
     test('fetches and stores threads', async () => {
       const mockThreads = [{ id: 't1', projectId: 'p1', title: 'Thread 1', status: 'completed' }];
-      mockApi.listThreads.mockReturnValueOnce(okAsync(mockThreads) as any);
+      mockApi.listThreads.mockReturnValueOnce(
+        okAsync({ threads: mockThreads, total: 1, hasMore: false }) as any,
+      );
 
       await useAppStore.getState().loadThreadsForProject('p1');
       expect(useAppStore.getState().threadsByProject['p1']).toEqual(mockThreads);
@@ -81,7 +85,9 @@ describe('AppStore', () => {
 
   describe('toggleProject', () => {
     test('expands a collapsed project', () => {
-      mockApi.listThreads.mockReturnValueOnce(okAsync([]) as any);
+      mockApi.listThreads.mockReturnValueOnce(
+        okAsync({ threads: [], total: 0, hasMore: false }) as any,
+      );
 
       useAppStore.getState().toggleProject('p1');
       expect(useAppStore.getState().expandedProjects.has('p1')).toBe(true);
@@ -97,14 +103,18 @@ describe('AppStore', () => {
 
   describe('selectProject', () => {
     test('sets selectedProjectId', () => {
-      mockApi.listThreads.mockReturnValueOnce(okAsync([]) as any);
+      mockApi.listThreads.mockReturnValueOnce(
+        okAsync({ threads: [], total: 0, hasMore: false }) as any,
+      );
 
       useAppStore.getState().selectProject('p1');
       expect(useAppStore.getState().selectedProjectId).toBe('p1');
     });
 
     test('does not auto-expand the project', () => {
-      mockApi.listThreads.mockReturnValueOnce(okAsync([]) as any);
+      mockApi.listThreads.mockReturnValueOnce(
+        okAsync({ threads: [], total: 0, hasMore: false }) as any,
+      );
 
       useAppStore.getState().selectProject('p1');
       // selectProject no longer auto-expands; it only sets selectedProjectId
@@ -130,7 +140,9 @@ describe('AppStore', () => {
       };
       mockApi.getThread.mockReturnValueOnce(okAsync(mockThread) as any);
       mockApi.getThreadEvents.mockReturnValueOnce(okAsync({ events: [] }) as any);
-      mockApi.listThreads.mockReturnValueOnce(okAsync([]) as any);
+      mockApi.listThreads.mockReturnValueOnce(
+        okAsync({ threads: [], total: 0, hasMore: false }) as any,
+      );
 
       await useAppStore.getState().selectThread('t1');
       // selectThread enriches the thread with initInfo, resultInfo, waitingReason
@@ -548,10 +560,12 @@ describe('AppStore', () => {
     });
 
     test('toggleProject loads threads on first expand', () => {
-      mockApi.listThreads.mockReturnValueOnce(okAsync([]) as any);
+      mockApi.listThreads.mockReturnValueOnce(
+        okAsync({ threads: [], total: 0, hasMore: false }) as any,
+      );
 
       useAppStore.getState().toggleProject('p1');
-      expect(mockApi.listThreads).toHaveBeenCalledWith('p1', true);
+      expect(mockApi.listThreads).toHaveBeenCalledWith('p1', false, 50);
     });
 
     test('toggleProject does not reload threads on re-expand', () => {

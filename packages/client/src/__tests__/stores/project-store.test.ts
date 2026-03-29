@@ -109,7 +109,7 @@ describe('ProjectStore', () => {
       const projects = [makeProject({ id: 'p1' }), makeProject({ id: 'p2' })];
       mockApi.listProjects.mockReturnValueOnce(okAsync(projects) as any);
       // loadProjects now calls api.listThreads directly for each project (batched)
-      mockListThreads.mockReturnValue(okAsync([]) as any);
+      mockListThreads.mockReturnValue(okAsync({ threads: [], total: 0, hasMore: false }) as any);
 
       await useProjectStore.getState().loadProjects();
 
@@ -117,8 +117,8 @@ describe('ProjectStore', () => {
       // so we wait a tick for it to complete
       await new Promise((r) => setTimeout(r, 50));
 
-      expect(mockListThreads).toHaveBeenCalledWith('p1', true);
-      expect(mockListThreads).toHaveBeenCalledWith('p2', true);
+      expect(mockListThreads).toHaveBeenCalledWith('p1', false, 50);
+      expect(mockListThreads).toHaveBeenCalledWith('p2', false, 50);
     });
 
     test('handles API errors gracefully', async () => {

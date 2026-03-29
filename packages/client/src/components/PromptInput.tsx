@@ -9,10 +9,11 @@ import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useDictation } from '@/hooks/use-dictation';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
-import { getUnifiedModelOptions } from '@/lib/providers';
+import { getUnifiedModelOptions, getEffortLevels, parseUnifiedModel } from '@/lib/providers';
 import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
@@ -22,7 +23,6 @@ import { useThreadStore } from '@/stores/thread-store';
 
 import type { PromptEditorHandle } from './prompt-editor/PromptEditor';
 import { PromptInputUI } from './PromptInputUI';
-import { SwitchBranchDialog } from './SwitchBranchDialog';
 
 const piLog = createClientLogger('PromptInput');
 
@@ -35,6 +35,7 @@ interface PromptInputProps {
       provider?: string;
       model: string;
       mode: string;
+      effort?: string;
       threadMode?: string;
       runtime?: string;
       baseBranch?: string;
@@ -122,8 +123,19 @@ export const PromptInput = memo(function PromptInput({
   const [runtime, setRuntime] = useState<'local' | 'remote'>('local');
   const hasLauncher = !!effectiveProject?.launcherUrl;
   const [purpose, setPurpose] = useState<ThreadPurpose>('explore');
+  const [effort, setEffort] = useState<string>('high');
 
   const unifiedModelGroups = useMemo(() => getUnifiedModelOptions(t), [t]);
+
+  // Effort options — available for providers that support reasoning levels (Claude, Codex)
+  const { provider: currentProvider, model: currentModel } = useMemo(
+    () => parseUnifiedModel(unifiedModel),
+    [unifiedModel],
+  );
+  const effortOptions = useMemo(
+    () => getEffortLevels(currentModel, currentProvider),
+    [currentProvider, currentModel],
+  );
   const modes = useMemo(
     () => [
       { value: 'ask', label: t('prompt.ask') },
@@ -404,12 +416,26 @@ export const PromptInput = memo(function PromptInput({
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const effectiveThreadId = threadIdProp ?? selectedThreadId;
   const lastQueueFetchRef = useRef<{ threadId: string; queuedCount: number } | null>(null);
+  // Stable ref for effectiveThreadId — used by queue handlers and draft persistence
+  // to avoid recreating callbacks on every thread switch.
+  const threadIdRef = useRef(effectiveThreadId);
+  threadIdRef.current = effectiveThreadId;
 
   useEffect(() => {
     if (!effectiveThreadId) {
       setQueuedMessages([]);
       setQueueLoading(false);
       lastQueueFetchRef.current = null;
+      return;
+    }
+
+    // When queuedCount is 0, clear locally without hitting the API.
+    // This avoids ~900ms API calls on every thread switch when both threads
+    // have an empty queue.
+    if (queuedCount === 0) {
+      setQueuedMessages([]);
+      setQueueLoading(false);
+      lastQueueFetchRef.current = { threadId: effectiveThreadId, queuedCount: 0 };
       return;
     }
 
@@ -462,30 +488,36 @@ export const PromptInput = memo(function PromptInput({
   }, [effectiveThreadId, queuedCount]);
 
   // ── Queue handlers ──
+  // Use threadIdRef to keep callback identities stable across thread switches,
+  // preventing PromptInputUI re-renders.
   const handleQueueEditSave = useCallback(
     async (messageId: string, content: string) => {
-      if (!effectiveThreadId) return;
-      const result = await api.updateQueuedMessage(effectiveThreadId, messageId, content);
+      const tid = threadIdRef.current;
+      if (!tid) return;
+      const result = await api.updateQueuedMessage(tid, messageId, content);
       if (result.isOk()) {
         setQueuedMessages((prev) => prev.map((m) => (m.id === messageId ? { ...m, content } : m)));
       } else {
         toastError(result.error);
       }
     },
-    [effectiveThreadId],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
 
   const handleQueueDelete = useCallback(
     async (messageId: string) => {
-      if (!effectiveThreadId) return;
-      const result = await api.cancelQueuedMessage(effectiveThreadId, messageId);
+      const tid = threadIdRef.current;
+      if (!tid) return;
+      const result = await api.cancelQueuedMessage(tid, messageId);
       if (result.isOk()) {
         setQueuedMessages((prev) => prev.filter((m) => m.id !== messageId));
       } else {
         toastError(result.error);
       }
     },
-    [effectiveThreadId],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
 
   // ── Draft persistence ──
@@ -493,8 +525,6 @@ export const PromptInput = memo(function PromptInput({
   const prevThreadIdRef = useRef<string | null | undefined>(null);
   const hasSubmittedRef = useRef(false);
   const imagesRef = useRef<ImageAttachment[]>([]);
-  const threadIdRef = useRef(effectiveThreadId);
-  threadIdRef.current = effectiveThreadId;
 
   useEffect(() => {
     const prevId = prevThreadIdRef.current;
@@ -559,85 +589,16 @@ export const PromptInput = memo(function PromptInput({
     }
   }, [initialPromptProp, initialImagesProp]);
 
-  // ── Switch-branch dialog state ──
-  const [switchBranchDialog, setSwitchBranchDialog] = useState<{
-    targetBranch: string;
-    currentBranch: string;
-  } | null>(null);
-  const [switchBranchLoading, setSwitchBranchLoading] = useState(false);
-  const switchBranchResolverRef = useRef<((result: boolean) => void) | null>(null);
+  // ── Branch switch (shared hook) ──
+  const { ensureBranch, branchSwitchDialog } = useBranchSwitch();
 
-  // ── Checkout preflight ──
   const handleCheckoutPreflight = useCallback(
     async (branch: string): Promise<boolean> => {
       if (!effectiveProjectId || !gitCurrentBranch || branch === gitCurrentBranch) return true;
-      const preflight = await api.checkoutPreflight(effectiveProjectId, branch);
-      if (preflight.isOk() && !preflight.value.canCheckout) {
-        if (preflight.value.hasDirtyFiles) {
-          // Show the switch-branch dialog and wait for user's choice
-          return new Promise<boolean>((resolve) => {
-            switchBranchResolverRef.current = resolve;
-            setSwitchBranchDialog({
-              targetBranch: branch,
-              currentBranch: gitCurrentBranch,
-            });
-          });
-        }
-        toast.error(
-          t('prompt.checkoutBlocked', {
-            branch,
-            currentBranch: gitCurrentBranch,
-          }),
-          { duration: 8000 },
-        );
-        return false;
-      }
-      // canCheckout is true and branches differ — perform the checkout now
-      // so the server sees matching branches and skips the setting_up flow
-      const checkoutResult = await api.checkout(effectiveProjectId, branch, 'carry');
-      if (checkoutResult.isErr()) {
-        toast.error(
-          checkoutResult.error.message || t('switchBranch.failed', 'Failed to switch branch'),
-        );
-        return false;
-      }
-      useProjectStore.getState().fetchBranch(effectiveProjectId);
-      useBranchPickerStore.getState().setCurrentBranch(branch);
-      return true;
+      return ensureBranch(effectiveProjectId, branch);
     },
-    [effectiveProjectId, gitCurrentBranch, t],
+    [effectiveProjectId, gitCurrentBranch, ensureBranch],
   );
-
-  const handleSwitchBranch = useCallback(
-    async (strategy: 'stash' | 'carry') => {
-      if (!effectiveProjectId || !switchBranchDialog) return;
-      setSwitchBranchLoading(true);
-      const result = await api.checkout(
-        effectiveProjectId,
-        switchBranchDialog.targetBranch,
-        strategy,
-      );
-      setSwitchBranchLoading(false);
-
-      if (result.isOk()) {
-        // Update the branch in the project store
-        useProjectStore.getState().fetchBranch(effectiveProjectId);
-        useBranchPickerStore.getState().setCurrentBranch(switchBranchDialog.targetBranch);
-        setSwitchBranchDialog(null);
-        switchBranchResolverRef.current?.(true);
-        switchBranchResolverRef.current = null;
-      } else {
-        toast.error(result.error.message || t('switchBranch.failed', 'Failed to switch branch'));
-      }
-    },
-    [effectiveProjectId, switchBranchDialog, t],
-  );
-
-  const handleSwitchBranchCancel = useCallback(() => {
-    setSwitchBranchDialog(null);
-    switchBranchResolverRef.current?.(false);
-    switchBranchResolverRef.current = null;
-  }, []);
 
   // ── Editor change handler (for content tracking) ──
   const handleEditorChange = useCallback(() => {
@@ -659,17 +620,24 @@ export const PromptInput = memo(function PromptInput({
   const threadCwd = activeThreadWorktreePath || projectPath;
 
   // ── Wrapped onSubmit to track submission for draft ──
+  const onSubmitRef = useRef(onSubmit);
+  onSubmitRef.current = onSubmit;
+  const clearPromptDraftRef = useRef(clearPromptDraft);
+  clearPromptDraftRef.current = clearPromptDraft;
+
   const wrappedOnSubmit = useCallback(
     async (prompt: string, opts: Parameters<typeof onSubmit>[1], images?: ImageAttachment[]) => {
       hasSubmittedRef.current = true;
-      if (effectiveThreadId) clearPromptDraft(effectiveThreadId);
-      const result = await onSubmit(prompt, opts, images);
+      const tid = threadIdRef.current;
+      if (tid) clearPromptDraftRef.current(tid);
+      const result = await onSubmitRef.current(prompt, opts, images);
       if (result === false) {
         hasSubmittedRef.current = false;
       }
       return result;
     },
-    [onSubmit, effectiveThreadId, clearPromptDraft],
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
 
   return (
@@ -728,19 +696,12 @@ export const PromptInput = memo(function PromptInput({
         onPurposeChange={setPurpose}
         arcId={activeThreadArcId}
         onPhaseTransition={onPhaseTransition}
+        effort={effortOptions.length > 0 ? effort : undefined}
+        onEffortChange={effortOptions.length > 0 ? setEffort : undefined}
+        effortOptions={effortOptions.length > 0 ? effortOptions : undefined}
       />
 
-      <SwitchBranchDialog
-        open={!!switchBranchDialog}
-        onOpenChange={(open) => {
-          if (!open) handleSwitchBranchCancel();
-        }}
-        currentBranch={switchBranchDialog?.currentBranch ?? ''}
-        targetBranch={switchBranchDialog?.targetBranch ?? ''}
-        loading={switchBranchLoading}
-        onSwitch={handleSwitchBranch}
-        onCancel={handleSwitchBranchCancel}
-      />
+      {branchSwitchDialog}
     </>
   );
 });

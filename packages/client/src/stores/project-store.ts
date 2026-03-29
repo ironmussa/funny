@@ -114,8 +114,12 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         // in a single set() call to avoid N separate re-renders (one per project).
         Promise.all(
           projects.map(async (p) => {
-            const result = await api.listThreads(p.id, true);
-            return { projectId: p.id, threads: result.isOk() ? result.value : null };
+            const result = await api.listThreads(p.id, false, 50);
+            return {
+              projectId: p.id,
+              threads: result.isOk() ? result.value.threads : null,
+              total: result.isOk() ? result.value.total : 0,
+            };
           }),
         )
           .then((results) => {
@@ -123,15 +127,19 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
             // replace entries that actually changed to preserve referential
             // identity for untouched projects (avoids cascading re-renders).
             const prev = useThreadStore.getState().threadsByProject;
+            const prevTotals = useThreadStore.getState().threadTotalByProject;
             let changed = false;
             const next: Record<string, any[]> = { ...prev };
-            for (const { projectId, threads } of results) {
+            const nextTotals: Record<string, number> = { ...prevTotals };
+            for (const { projectId, threads, total } of results) {
               if (threads && threads !== prev[projectId]) {
                 next[projectId] = threads;
+                nextTotals[projectId] = total;
                 changed = true;
               }
             }
-            if (changed) useThreadStore.setState({ threadsByProject: next });
+            if (changed)
+              useThreadStore.setState({ threadsByProject: next, threadTotalByProject: nextTotals });
           })
           .catch(() => {});
       } finally {

@@ -122,21 +122,25 @@ export const threadRoutes = new Hono<ServerEnv>();
 
 // ── Data CRUD routes (handled natively) ──────────────────────────
 
-// GET /api/threads?projectId=xxx&includeArchived=true
+// GET /api/threads?projectId=xxx&includeArchived=true&limit=50&offset=0
 threadRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
   const projectId = c.req.query('projectId');
   const includeArchived = c.req.query('includeArchived') === 'true';
+  const limit = Math.min(200, Math.max(1, parseInt(c.req.query('limit') || '50', 10)));
+  const offset = Math.max(0, parseInt(c.req.query('offset') || '0', 10));
 
-  const threads = await threadRepo.listThreads({
+  const { threads, total } = await threadRepo.listThreads({
     projectId: projectId || undefined,
     userId,
     includeArchived,
     organizationId: orgId,
+    limit,
+    offset,
   });
 
-  return c.json(threads);
+  return c.json({ threads, total, hasMore: offset + threads.length < total });
 });
 
 // GET /api/threads/archived?page=1&limit=100&search=xxx
@@ -153,6 +157,12 @@ threadRoutes.get('/archived', async (c) => {
 // GET /api/threads/:id — get thread with messages
 threadRoutes.get('/:id', async (c) => {
   const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+
+  // Ownership check: verify the thread belongs to the requesting user
+  const thread = await threadRepo.getThread(id);
+  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
+
   const limitParam = c.req.query('messageLimit');
   const messageLimit = limitParam
     ? Math.min(200, Math.max(1, parseInt(limitParam, 10)))
@@ -165,6 +175,11 @@ threadRoutes.get('/:id', async (c) => {
 // GET /api/threads/:id/messages?cursor=<ISO>&limit=50
 threadRoutes.get('/:id/messages', async (c) => {
   const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+
+  const thread = await threadRepo.getThread(id);
+  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
+
   const cursor = c.req.query('cursor');
   const limitParam = c.req.query('limit');
   const limit = Math.min(200, Math.max(1, parseInt(limitParam || '50', 10)));
@@ -180,6 +195,11 @@ threadRoutes.get('/:id/messages', async (c) => {
 // GET /api/threads/:id/messages/search?q=xxx&limit=100
 threadRoutes.get('/:id/messages/search', async (c) => {
   const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+
+  const thread = await threadRepo.getThread(id);
+  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
+
   const q = c.req.query('q') || '';
   const limitParam = c.req.query('limit');
   const limit = Math.min(200, Math.max(1, parseInt(limitParam || '100', 10)));
@@ -194,7 +214,13 @@ threadRoutes.get('/:id/messages/search', async (c) => {
 
 // GET /api/threads/:id/comments
 threadRoutes.get('/:id/comments', async (c) => {
-  const comments = await commentRepo.listComments(c.req.param('id'));
+  const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+
+  const thread = await threadRepo.getThread(id);
+  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
+
+  const comments = await commentRepo.listComments(id);
   return c.json(comments);
 });
 
@@ -202,6 +228,10 @@ threadRoutes.get('/:id/comments', async (c) => {
 threadRoutes.post('/:id/comments', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
+
+  const thread = await threadRepo.getThread(id);
+  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
+
   const { content } = await c.req.json();
 
   if (!content || typeof content !== 'string') {
@@ -219,6 +249,12 @@ threadRoutes.post('/:id/comments', async (c) => {
 
 // DELETE /api/threads/:id/comments/:commentId
 threadRoutes.delete('/:id/comments/:commentId', async (c) => {
+  const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+
+  const thread = await threadRepo.getThread(id);
+  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
+
   const commentId = c.req.param('commentId');
   await commentRepo.deleteComment(commentId);
   return c.json({ ok: true });
@@ -227,10 +263,11 @@ threadRoutes.delete('/:id/comments/:commentId', async (c) => {
 // PATCH /api/threads/:id — update thread data
 threadRoutes.patch('/:id', async (c) => {
   const id = c.req.param('id');
+  const userId = c.get('userId') as string;
   const body = await c.req.json();
 
   const thread = await threadRepo.getThread(id);
-  if (!thread) return c.json({ error: 'Thread not found' }, 404);
+  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
 
   // Extract only valid update fields
   const allowedFields = [
@@ -325,7 +362,7 @@ async function createThreadOnRunner(c: any, runnerPath: string) {
       stack,
       path: runnerPath,
     });
-    return c.json({ error: `Thread creation failed: ${message}` }, 502);
+    return c.json({ error: 'Thread creation failed' }, 502);
   }
 }
 
@@ -355,6 +392,11 @@ threadRoutes.patch('/:id/tool-calls/:toolCallId', proxyToRunner);
 // GET /api/threads/:id/events — served from server DB
 threadRoutes.get('/:id/events', async (c) => {
   const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+
+  const thread = await threadRepo.getThread(id);
+  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
+
   const { getThreadEvents } = await import('../services/thread-event-repository.js');
   const events = await getThreadEvents(id);
   return c.json({ events });
@@ -363,6 +405,11 @@ threadRoutes.get('/:id/events', async (c) => {
 // GET /api/threads/:id/touched-files — all unique file paths modified by Write/Edit/NotebookEdit
 threadRoutes.get('/:id/touched-files', async (c) => {
   const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+
+  const thread = await threadRepo.getThread(id);
+  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
+
   const files = await toolCallRepo.getTouchedFiles(id);
   return c.json({ files });
 });
@@ -370,6 +417,11 @@ threadRoutes.get('/:id/touched-files', async (c) => {
 // GET /api/threads/:id/queue — message queue is in the server's DB
 threadRoutes.get('/:id/queue', async (c) => {
   const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+
+  const thread = await threadRepo.getThread(id);
+  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
+
   return c.json(await messageQueueRepo.listQueue(id));
 });
 
@@ -400,6 +452,10 @@ threadRoutes.patch('/:id/queue/:messageId', async (c) => {
 threadRoutes.delete('/:id', async (c) => {
   const threadId = c.req.param('id');
   const userId = c.get('userId') as string;
+
+  // Ownership check
+  const thread = await threadRepo.getThread(threadId);
+  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
 
   // Delete from local DB
   await threadRepo.deleteThread(threadId);

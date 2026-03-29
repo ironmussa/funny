@@ -38,7 +38,7 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         return null;
       },
       async listThreads() {
-        return [];
+        return { threads: [], total: 0 };
       },
       async listArchivedThreads() {
         return [];

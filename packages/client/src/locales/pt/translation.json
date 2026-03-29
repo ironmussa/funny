@@ -447,7 +447,8 @@
     "sortDesc": "Mais recente",
     "sortAsc": "Mais antigo",
     "filterProject": "Projeto",
-    "allProjects": "Todos os projetos"
+    "allProjects": "Todos os projetos",
+    "loadMore": "Carregar mais threads"
   },
   "archived": {
     "searchPlaceholder": "Buscar threads arquivadas por título, projeto, branch ou status...",

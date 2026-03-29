@@ -25,6 +25,7 @@ import type {
   PipelineRun,
   Arc,
   ArcArtifacts,
+  PaginatedThreadsResponse,
 } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { internal, processError } from '@funny/shared/errors';
@@ -247,12 +248,14 @@ export const api = {
     }),
 
   // Threads
-  listThreads: (projectId?: string, includeArchived?: boolean) => {
+  listThreads: (projectId?: string, includeArchived?: boolean, limit?: number, offset?: number) => {
     const params = new URLSearchParams();
     if (projectId) params.set('projectId', projectId);
     if (includeArchived) params.set('includeArchived', 'true');
+    if (limit != null) params.set('limit', String(limit));
+    if (offset != null) params.set('offset', String(offset));
     const qs = params.toString();
-    return request<Thread[]>(`/threads${qs ? `?${qs}` : ''}`);
+    return request<PaginatedThreadsResponse>(`/threads${qs ? `?${qs}` : ''}`);
   },
   searchThreadContent: (query: string, projectId?: string) => {
     const params = new URLSearchParams({ q: query });
@@ -297,6 +300,7 @@ export const api = {
     provider?: string;
     model?: string;
     permissionMode?: string;
+    effort?: string;
     baseBranch?: string;
     prompt: string;
     images?: ImageAttachment[];
@@ -333,6 +337,7 @@ export const api = {
       provider?: string;
       model?: string;
       permissionMode?: string;
+      effort?: string;
       allowedTools?: string[];
       disallowedTools?: string[];
       fileReferences?: { path: string }[];
@@ -355,6 +360,7 @@ export const api = {
         provider: opts?.provider,
         model: opts?.model,
         permissionMode: opts?.permissionMode,
+        effort: opts?.effort,
         images,
         allowedTools: opts?.allowedTools,
         disallowedTools: opts?.disallowedTools,

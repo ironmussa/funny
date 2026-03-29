@@ -456,7 +456,8 @@
     "sortDesc": "Newest first",
     "sortAsc": "Oldest first",
     "filterProject": "Project",
-    "allProjects": "All projects"
+    "allProjects": "All projects",
+    "loadMore": "Load more threads"
   },
   "archived": {
     "searchPlaceholder": "Search archived threads by title, project, branch, or status...",

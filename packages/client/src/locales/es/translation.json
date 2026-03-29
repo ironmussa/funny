@@ -453,7 +453,8 @@
     "sortDesc": "Más reciente",
     "sortAsc": "Más antiguo",
     "filterProject": "Proyecto",
-    "allProjects": "Todos los proyectos"
+    "allProjects": "Todos los proyectos",
+    "loadMore": "Cargar más hilos"
   },
   "archived": {
     "searchPlaceholder": "Buscar hilos archivados por título, proyecto, rama o estado...",

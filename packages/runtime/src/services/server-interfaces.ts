@@ -134,11 +134,13 @@ export interface IProjectRepository {
 // ── Thread repository (full CRUD beyond IThreadQuery) ───────────
 
 export interface IThreadRepository extends IThreadQuery {
-  listThreads(
-    projectId: string,
-    userId: string,
-    options?: { includeArchived?: boolean },
-  ): Promise<any[]>;
+  listThreads(opts: {
+    projectId?: string;
+    userId: string;
+    includeArchived?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ threads: any[]; total: number }>;
   listArchivedThreads(projectId: string, userId: string): Promise<any[]>;
   getThreadByExternalRequestId(externalRequestId: string): Promise<any | undefined>;
   createThread(data: Record<string, any>): Promise<any>;

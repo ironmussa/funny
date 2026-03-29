@@ -97,14 +97,19 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
     return map;
   }
 
-  /** List threads, optionally filtered by projectId, userId, and archive status */
+  /** List threads, optionally filtered by projectId, userId, and archive status.
+   *  Supports server-side pagination via limit/offset. */
   async function listThreads(opts: {
     projectId?: string;
     userId: string;
     includeArchived?: boolean;
     organizationId?: string | null;
-  }) {
+    limit?: number;
+    offset?: number;
+  }): Promise<{ threads: any[]; total: number }> {
     const { projectId, userId, includeArchived, organizationId } = opts;
+    const limit = opts.limit ?? 50;
+    const offset = opts.offset ?? 0;
     const filters: ReturnType<typeof eq>[] = [];
 
     if (organizationId) {
@@ -122,7 +127,7 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
         filters.push(inArray(schema.threads.projectId, orgProjectIds));
       } else {
         // No projects in this org -- return empty
-        return [];
+        return { threads: [], total: 0 };
       }
     } else {
       filters.push(eq(schema.threads.userId, userId));
@@ -135,26 +140,37 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
     }
 
     const condition = filters.length > 0 ? and(...filters) : undefined;
+
+    // Count total matching threads (cheap indexed query)
+    const [{ total }] = await dbAll(
+      db.select({ total: drizzleCount() }).from(schema.threads).where(condition),
+    );
+
     const activityTime = sql`COALESCE(${schema.threads.updatedAt}, ${schema.threads.completedAt}, ${schema.threads.createdAt})`;
     const threads = await dbAll(
       db
         .select()
         .from(schema.threads)
         .where(condition)
-        .orderBy(desc(schema.threads.pinned), desc(activityTime)),
+        .orderBy(desc(schema.threads.pinned), desc(activityTime))
+        .limit(limit)
+        .offset(offset),
     );
 
     if (threads.length > 0) {
       const ids = threads.map((t: any) => t.id);
       const counts = await getCommentCounts(ids);
       const snippets = await getLastAssistantSnippets(ids);
-      return threads.map((t: any) => ({
-        ...t,
-        commentCount: counts.get(t.id) ?? 0,
-        lastAssistantMessage: snippets.get(t.id),
-      }));
+      return {
+        threads: threads.map((t: any) => ({
+          ...t,
+          commentCount: counts.get(t.id) ?? 0,
+          lastAssistantMessage: snippets.get(t.id),
+        })),
+        total: Number(total),
+      };
     }
-    return threads;
+    return { threads, total: Number(total) };
   }
 
   /** List archived threads with pagination and search */

@@ -68,8 +68,8 @@ describe('Thread Routes (Integration)', () => {
       const res = await t.requestAs('user-1').get('/api/threads?projectId=p1');
       expect(res.status).toBe(200);
       const body = await res.json();
-      expect(body).toHaveLength(1);
-      expect(body[0].title).toBe('Thread 1');
+      expect(body.threads).toHaveLength(1);
+      expect(body.threads[0].title).toBe('Thread 1');
     });
 
     test('scopes threads to the requesting user', async () => {
@@ -79,8 +79,8 @@ describe('Thread Routes (Integration)', () => {
 
       const res = await t.requestAs('user-1').get('/api/threads?projectId=p1');
       const body = await res.json();
-      expect(body).toHaveLength(1);
-      expect(body[0].title).toBe('Mine');
+      expect(body.threads).toHaveLength(1);
+      expect(body.threads[0].title).toBe('Mine');
     });
   });
 

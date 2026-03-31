@@ -75,6 +75,10 @@ export class DaemonPtyBackend implements PtyBackend {
     this.send({ cmd: 'resize', id, cols, rows });
   }
 
+  signal(id: string, sig: number): void {
+    this.send({ cmd: 'signal', id, signal: sig });
+  }
+
   kill(id: string): void {
     this.send({ cmd: 'kill', id });
   }

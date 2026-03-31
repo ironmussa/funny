@@ -184,6 +184,7 @@ export interface IAutomationRepository {
     permissionMode: string;
     enabled: number;
     maxRunHistory: number;
+    source?: string;
     createdAt: string;
     updatedAt: string;
   }): Promise<void>;

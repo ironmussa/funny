@@ -595,7 +595,12 @@
     "exited": "(finalizado)",
     "processExited": "[Proceso finalizado]",
     "stop": "Detener",
-    "loading": "Iniciando terminal..."
+    "loading": "Iniciando terminal...",
+    "bellNotification": "Campana en \"{{label}}\"",
+    "sendSignal": "Enviar señal",
+    "uptime": "Tiempo activo",
+    "memory": "Memoria",
+    "restarts": "Reinicios"
   },
   "worktreeSettings": {
     "noProject": "No hay proyecto seleccionado. Agrega un proyecto primero para gestionar worktrees.",
@@ -632,7 +637,8 @@
     "revoke": "Revocar",
     "unassign": "Desasignar",
     "run": "Ejecutar",
-    "copyLink": "Copiar enlace"
+    "copyLink": "Copiar enlace",
+    "dismiss": "Descartar"
   },
   "editor": {
     "failedToLoad": "No se pudo cargar el archivo",
@@ -664,7 +670,12 @@
     "dirtyChanges": "Cambios sin commitear",
     "dirtyChangesDesc": "El hilo \"{{title}}\" tiene cambios sin commitear. ¿Estás seguro de que quieres marcarlo como Completado?",
     "convertToWorktreeTitle": "Convertir a Worktree",
-    "convertToWorktreeDesc": "Esto creará una nueva rama y worktree para este hilo. El agente se detendrá si está en ejecución. Puedes continuar la conversación en la rama aislada."
+    "convertToWorktreeDesc": "Esto creará una nueva rama y worktree para este hilo. El agente se detendrá si está en ejecución. Puedes continuar la conversación en la rama aislada.",
+    "worktreeStatusLoading": "Verificando estado del worktree...",
+    "unpushedCommitsWarning": "Este worktree tiene {{count}} commit(s) sin push. Se perderán si no se hace push primero.",
+    "dirtyFilesWarning": "Este worktree tiene {{count}} archivo(s) sin commitear.",
+    "noUnpushedCommits": "Todos los commits han sido pusheados o mergeados.",
+    "deleteBranchOption": "También eliminar la rama local \"{{branch}}\""
   },
   "toast": {
     "threadArchived": "Hilo archivado exitosamente",
@@ -897,7 +908,12 @@
     "loadMore": "Cargar más",
     "viewOnGithub": "Ver en GitHub",
     "notGithub": "Este proyecto no está alojado en GitHub",
-    "error": "Error al cargar issues"
+    "error": "Error al cargar issues",
+    "createThread": "Crear hilo",
+    "linkedBranch": "rama",
+    "linkedPR": "PR",
+    "alreadyLinked": "Ya tiene una rama",
+    "creatingFromIssue": "Creando hilo desde issue: {{title}}"
   },
   "users": {
     "title": "Usuarios",

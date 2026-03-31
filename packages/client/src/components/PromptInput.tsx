@@ -72,6 +72,8 @@ interface PromptInputProps {
   onPhaseTransition?: (newPurpose: ThreadPurpose) => void;
   /** Called when the editor content changes — reports whether it has content and the current text */
   onContentChange?: (hasContent: boolean, text: string) => void;
+  /** Called when the worktree mode toggle changes */
+  onWorktreeModeChange?: (enabled: boolean) => void;
 }
 
 // ── Connected wrapper ───────────────────────────────────────────
@@ -93,6 +95,7 @@ export const PromptInput = memo(function PromptInput({
   setPromptRef,
   onPhaseTransition,
   onContentChange,
+  onWorktreeModeChange,
 }: PromptInputProps) {
   const { t } = useTranslation();
 
@@ -119,7 +122,14 @@ export const PromptInput = memo(function PromptInput({
   // ── Model & mode state ──
   const [unifiedModel, setUnifiedModel] = useState<string>(`${defaultProvider}:${defaultModel}`);
   const [mode, setMode] = useState<string>(defaultPermissionMode);
-  const [createWorktree, setCreateWorktree] = useState(defaultThreadMode === 'worktree');
+  const [createWorktree, setCreateWorktreeRaw] = useState(defaultThreadMode === 'worktree');
+  const setCreateWorktree = useCallback(
+    (v: boolean) => {
+      setCreateWorktreeRaw(v);
+      onWorktreeModeChange?.(v);
+    },
+    [onWorktreeModeChange],
+  );
   const [runtime, setRuntime] = useState<'local' | 'remote'>('local');
   const hasLauncher = !!effectiveProject?.launcherUrl;
   const [purpose, setPurpose] = useState<ThreadPurpose>('explore');
@@ -434,7 +444,7 @@ export const PromptInput = memo(function PromptInput({
 
   useEffect(() => {
     if (!effectiveThreadId) {
-      setQueuedMessages([]);
+      setQueuedMessages((prev) => (prev.length === 0 ? prev : []));
       setQueueLoading(false);
       lastQueueFetchRef.current = null;
       return;
@@ -444,7 +454,7 @@ export const PromptInput = memo(function PromptInput({
     // This avoids ~900ms API calls on every thread switch when both threads
     // have an empty queue.
     if (queuedCount === 0) {
-      setQueuedMessages([]);
+      setQueuedMessages((prev) => (prev.length === 0 ? prev : []));
       setQueueLoading(false);
       lastQueueFetchRef.current = { threadId: effectiveThreadId, queuedCount: 0 };
       return;
@@ -458,7 +468,7 @@ export const PromptInput = memo(function PromptInput({
       lastQueueFetchRef.current.threadId === key.threadId &&
       lastQueueFetchRef.current.queuedCount === key.queuedCount
     ) {
-      piLog.info('queue effect: skipped (dedup)', {
+      piLog.debug('queue effect: skipped (dedup)', {
         threadId: effectiveThreadId,
         queuedCount: String(queuedCount),
       });
@@ -488,7 +498,7 @@ export const PromptInput = memo(function PromptInput({
           threadId: effectiveThreadId,
           error: result.error.message,
         });
-        setQueuedMessages([]);
+        setQueuedMessages((prev) => (prev.length === 0 ? prev : []));
       }
       setQueueLoading(false);
     })();
@@ -523,6 +533,27 @@ export const PromptInput = memo(function PromptInput({
       const result = await api.cancelQueuedMessage(tid, messageId);
       if (result.isOk()) {
         setQueuedMessages((prev) => prev.filter((m) => m.id !== messageId));
+
+        // Sync the store's queuedCount with the server's authoritative value
+        const newCount = result.value.queuedCount;
+        const state = useThreadStore.getState();
+        const { queuedCountByThread, activeThread } = state;
+        const updatedMap =
+          newCount > 0
+            ? { ...queuedCountByThread, [tid]: newCount }
+            : (() => {
+                const { [tid]: _, ...rest } = queuedCountByThread;
+                return rest;
+              })();
+
+        if (activeThread?.id === tid) {
+          useThreadStore.setState({
+            activeThread: { ...activeThread, queuedCount: newCount },
+            queuedCountByThread: updatedMap,
+          });
+        } else {
+          useThreadStore.setState({ queuedCountByThread: updatedMap });
+        }
       } else {
         toastError(result.error);
       }

@@ -44,6 +44,8 @@ interface UIState {
   timelineVisible: boolean;
   reviewSubTab: ReviewSubTab;
   kanbanContext: { projectId?: string; search?: string; threadId?: string } | null;
+  /** Pre-fill context for creating a thread from a GitHub issue */
+  newThreadIssueContext: { prompt: string; branchName: string; title: string } | null;
 
   setReviewSubTab: (tab: ReviewSubTab) => void;
   setReviewPaneOpen: (open: boolean) => void;
@@ -69,6 +71,11 @@ interface UIState {
   setKanbanContext: (
     context: { projectId?: string; search?: string; threadId?: string } | null,
   ) => void;
+  startNewThreadFromIssue: (
+    projectId: string,
+    issueContext: { prompt: string; branchName: string; title: string },
+  ) => void;
+  clearIssueContext: () => void;
 }
 
 export const useUIStore = create<UIState>((set) => ({
@@ -137,6 +144,7 @@ export const useUIStore = create<UIState>((set) => ({
     return 'changes' as ReviewSubTab;
   })(),
   kanbanContext: null,
+  newThreadIssueContext: null,
   setReviewSubTab: (tab) => {
     try {
       localStorage.setItem(REVIEW_SUB_TAB_KEY, tab);
@@ -279,7 +287,7 @@ export const useUIStore = create<UIState>((set) => ({
   },
 
   cancelNewThread: () => {
-    set({ newThreadProjectId: null, newThreadIdleOnly: false });
+    set({ newThreadProjectId: null, newThreadIdleOnly: false, newThreadIssueContext: null });
   },
 
   closeAllThreads: () => {
@@ -353,4 +361,13 @@ export const useUIStore = create<UIState>((set) => ({
     set({ timelineVisible: visible });
   },
   setKanbanContext: (context) => set({ kanbanContext: context }),
+
+  startNewThreadFromIssue: (projectId, issueContext) => {
+    // Reuse startNewThread logic but also set the issue context
+    const { startNewThread } = useUIStore.getState();
+    set({ newThreadIssueContext: issueContext });
+    startNewThread(projectId);
+  },
+
+  clearIssueContext: () => set({ newThreadIssueContext: null }),
 }));

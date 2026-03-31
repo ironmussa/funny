@@ -72,6 +72,7 @@ import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useCommitProgressStore } from '@/stores/commit-progress-store';
 import { useDraftStore } from '@/stores/draft-store';
 import { useGitStatusStore, useGitStatusForThread } from '@/stores/git-status-store';
+import { usePRDetail } from '@/stores/pr-detail-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { editorLabels } from '@/stores/settings-store';
@@ -82,6 +83,7 @@ import { CommitHistoryTab } from './CommitHistoryTab';
 import { DiffStats } from './DiffStats';
 import { buildTreeRows } from './FileTree';
 import { InlineProgressSteps } from './InlineProgressSteps';
+import { PRSummaryCard } from './PRSummaryCard';
 import { PullRequestsTab } from './PullRequestsTab';
 import { ExpandedDiffDialog } from './tool-cards/ExpandedDiffDialog';
 
@@ -224,6 +226,11 @@ export function ReviewPane() {
   const _hasWorktreePath = useThreadStore((s) => !!s.activeThread?.worktreePath);
   const isAgentRunning = useThreadStore((s) => s.activeThread?.status === 'running');
   const gitStatus = useGitStatusForThread(effectiveThreadId);
+  const prProjectId = threadProjectId ?? selectedProjectId ?? '';
+  const { threads: prThreads } = usePRDetail(
+    prProjectId || undefined,
+    gitStatus?.prNumber ?? undefined,
+  );
   // Unpushed count fetched directly during refresh via the log endpoint —
   // does not depend on the gitStatus store resolving its branchKey chain
   const [unpushedCommitCount, setUnpushedCommitCount] = useState(0);
@@ -1111,6 +1118,17 @@ export function ReviewPane() {
               </div>
             )}
 
+            {/* PR Summary Card */}
+            {gitStatus?.prNumber && (
+              <PRSummaryCard
+                projectId={threadProjectId ?? selectedProjectId ?? ''}
+                prNumber={gitStatus.prNumber}
+                prUrl={gitStatus.prUrl ?? ''}
+                prState={gitStatus.prState ?? 'OPEN'}
+                visible={reviewSubTab === 'changes' && reviewPaneOpen}
+              />
+            )}
+
             {/* Toolbar icons */}
             <div className="flex items-center gap-1 border-b border-sidebar-border px-2 py-1">
               <Tooltip>
@@ -1753,6 +1771,24 @@ export function ReviewPane() {
                     </Tooltip>
                   </div>
                 </div>
+                {/* Ship PR — prominent single-action button */}
+                {isOnDifferentBranch &&
+                  !gitStatus?.prNumber &&
+                  summaries.length > 0 &&
+                  commitTitle.trim() && (
+                    <Button
+                      className="mt-2 w-full gap-2"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedAction('commit-pr');
+                      }}
+                      disabled={!!actionInProgress}
+                      data-testid="review-ship-pr"
+                    >
+                      <GitPullRequest className="icon-sm" />
+                      {t('review.shipPR', 'Ship PR')}
+                    </Button>
+                  )}
                 <div
                   className={cn(
                     'grid gap-1 mt-2',
@@ -2192,6 +2228,7 @@ export function ReviewPane() {
             onRevertFile={handleRevertFile}
             onIgnore={handleIgnore}
             basePath={basePath}
+            prReviewThreads={prThreads}
           />
         );
       })()}

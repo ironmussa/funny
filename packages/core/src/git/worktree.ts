@@ -1,6 +1,6 @@
-import { existsSync } from 'fs';
-import { mkdir, rm } from 'fs/promises';
-import { resolve, dirname, basename, normalize } from 'path';
+import { existsSync, readFileSync } from 'fs';
+import { mkdir, rm, stat } from 'fs/promises';
+import { resolve, dirname, basename, normalize, join } from 'path';
 
 import type { SetupProgressFn } from '@funny/core/ports';
 import { badRequest, internal, type DomainError } from '@funny/shared/errors';
@@ -33,9 +33,14 @@ async function ensureSafeDirectory(dirPath: string): Promise<void> {
 
 export const WORKTREE_DIR_NAME = '.funny-worktrees';
 
-export async function getWorktreeBase(projectPath: string): Promise<string> {
+/** Compute the worktree base path without creating the directory. */
+export function getWorktreeBasePath(projectPath: string): string {
   const projectName = basename(projectPath);
-  const base = resolve(dirname(projectPath), WORKTREE_DIR_NAME, projectName);
+  return resolve(dirname(projectPath), WORKTREE_DIR_NAME, projectName);
+}
+
+export async function getWorktreeBase(projectPath: string): Promise<string> {
+  const base = getWorktreeBasePath(projectPath);
   await mkdir(base, { recursive: true });
   return base;
 }
@@ -45,6 +50,14 @@ export interface WorktreeInfo {
   branch: string;
   commit: string;
   isMain: boolean;
+  lastActivityMs?: number;
+}
+
+export interface WorktreePreview {
+  sanitizedBranchDir: string;
+  branchName: string;
+  worktreePath: string;
+  alreadyExists: boolean;
 }
 
 export function createWorktree(
@@ -162,8 +175,8 @@ export function createWorktree(
 }
 
 export function listWorktrees(projectPath: string): ResultAsync<WorktreeInfo[], DomainError> {
-  return git(['worktree', 'list', '--porcelain'], projectPath).map((output) => {
-    const entries: WorktreeInfo[] = [];
+  return git(['worktree', 'list', '--porcelain'], projectPath).andThen((output) => {
+    const entries: Array<Omit<WorktreeInfo, 'isMain' | 'lastActivityMs'>> = [];
     let current: Partial<WorktreeInfo> = {};
 
     for (const raw of output.split('\n')) {
@@ -181,10 +194,17 @@ export function listWorktrees(projectPath: string): ResultAsync<WorktreeInfo[], 
     if (current.path) entries.push(current as WorktreeInfo);
 
     const normalizedProject = normalize(projectPath);
-    return entries.map((w) => ({
-      ...w,
-      isMain: normalize(w.path) === normalizedProject,
-    }));
+
+    return ResultAsync.fromPromise(
+      Promise.all(
+        entries.map(async (w) => ({
+          ...w,
+          isMain: normalize(w.path) === normalizedProject,
+          lastActivityMs: (await getLastGitActivity(w.path)) ?? undefined,
+        })),
+      ),
+      (error) => internal(String(error)),
+    );
   });
 }
 
@@ -212,4 +232,69 @@ export async function removeWorktree(projectPath: string, worktreePath: string):
 
 export async function removeBranch(projectPath: string, branchName: string): Promise<void> {
   await gitWrite(['branch', '-D', branchName], { cwd: projectPath, reject: false });
+}
+
+/**
+ * Resolve the actual git directory for a worktree path.
+ * For linked worktrees, `.git` is a file containing `gitdir: <path>`.
+ * For the main worktree, `.git` is the directory itself.
+ */
+function resolveGitDir(worktreePath: string): string {
+  const gitPath = join(worktreePath, '.git');
+  try {
+    const content = readFileSync(gitPath, 'utf-8');
+    const match = content.match(/^gitdir:\s*(.+)/);
+    if (match) return resolve(worktreePath, match[1].trim());
+  } catch {
+    // Not a file — likely the main worktree where .git is a directory
+  }
+  return gitPath;
+}
+
+/**
+ * Get the last git activity timestamp for a worktree by checking
+ * modification times of key git bookkeeping files.
+ * Returns Unix milliseconds or null if no files could be stat'd.
+ */
+export async function getLastGitActivity(worktreePath: string): Promise<number | null> {
+  const gitDir = resolveGitDir(worktreePath);
+  const filesToCheck = [join(gitDir, 'index'), join(gitDir, 'HEAD'), join(gitDir, 'logs', 'HEAD')];
+
+  let latestMs = 0;
+  for (const file of filesToCheck) {
+    try {
+      const st = await stat(file);
+      if (st.mtimeMs > latestMs) latestMs = st.mtimeMs;
+    } catch {
+      // File may not exist
+    }
+  }
+  return latestMs > 0 ? latestMs : null;
+}
+
+/**
+ * Preview a worktree creation without actually creating it.
+ * Returns the sanitized directory name, branch name, path, and whether it already exists.
+ */
+export function previewWorktree(
+  projectPath: string,
+  branchName: string,
+): ResultAsync<WorktreePreview, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const base = getWorktreeBasePath(projectPath);
+      const safeBranchDir = branchName
+        .replace(/\.\./g, '')
+        .replace(/[^a-zA-Z0-9._\-/]/g, '-')
+        .replace(/\//g, '-');
+      const worktreePath = resolve(base, safeBranchDir);
+      return {
+        sanitizedBranchDir: safeBranchDir,
+        branchName,
+        worktreePath,
+        alreadyExists: existsSync(worktreePath),
+      };
+    })(),
+    (error) => internal(String(error)),
+  );
 }

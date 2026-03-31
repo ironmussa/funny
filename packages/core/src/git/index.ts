@@ -71,8 +71,12 @@ export {
   removeWorktree,
   removeBranch,
   getWorktreeBase,
+  getWorktreeBasePath,
+  getLastGitActivity,
+  previewWorktree,
   WORKTREE_DIR_NAME,
   type WorktreeInfo,
+  type WorktreePreview,
 } from './worktree.js';
 
 export { getWeaveStatus, ensureWeaveConfigured } from './weave.js';

@@ -84,7 +84,7 @@ function messageListAreEqual(
     prev.threadEvents === next.threadEvents &&
     prev.compactionEvents === next.compactionEvents &&
     prev.threadId === next.threadId &&
-    prev.threadStatus === next.threadStatus &&
+    (prev.threadStatus === 'waiting') === (next.threadStatus === 'waiting') &&
     prev.snapshotMap === next.snapshotMap &&
     prev.onSend === next.onSend &&
     prev.onOpenLightbox === next.onOpenLightbox &&
@@ -131,6 +131,12 @@ export const MemoizedMessageList = memo(
     ref,
   ) {
     const { t } = useTranslation();
+
+    // Use a ref for threadStatus so renderToolItem's identity stays stable
+    // across non-waiting status changes (running→running, etc.)
+    const threadStatusRef = useRef(threadStatus);
+    threadStatusRef.current = threadStatus;
+    const isWaiting = threadStatus === 'waiting';
 
     const groupedItems = useMemo(
       () => buildGroupedRenderItems(messages, threadEvents, compactionEvents),
@@ -411,7 +417,7 @@ export const MemoizedMessageList = memo(
                 childToolCalls={tc._childToolCalls}
                 onRespond={
                   (tc.name === 'AskUserQuestion' || tc.name === 'ExitPlanMode') &&
-                  threadStatus === 'waiting' &&
+                  isWaiting &&
                   onToolRespond
                     ? (answer: string) => {
                         onToolRespond(tc.id, answer, tc.name);
@@ -439,7 +445,7 @@ export const MemoizedMessageList = memo(
                 calls={ti.calls}
                 onRespond={
                   (ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode') &&
-                  threadStatus === 'waiting' &&
+                  isWaiting &&
                   onToolRespond
                     ? (answer: string) => {
                         for (const call of ti.calls) {
@@ -457,7 +463,7 @@ export const MemoizedMessageList = memo(
         }
         return null;
       },
-      [snapshotMap, threadStatus, onSend, onToolRespond],
+      [snapshotMap, isWaiting, onSend, onToolRespond],
     );
 
     // Group items into sections: each section starts with a user message

@@ -944,6 +944,14 @@ const migrations: Migration[] = [
       }
     },
   },
+  {
+    name: '037_automations_source',
+    async up() {
+      await ctx().exec(
+        sql.raw(`ALTER TABLE automations ADD COLUMN source TEXT NOT NULL DEFAULT 'ui'`),
+      );
+    },
+  },
 ];
 
 export async function autoMigrate() {

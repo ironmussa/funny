@@ -108,8 +108,10 @@ app.get('/api/bootstrap', (c) => {
 
 // ── Rate limiting on auth endpoints ───────────────────────
 const { rateLimit } = await import('./middleware/rate-limit.js');
-// Strict rate limit on auth: 20 requests per minute per IP (login, register, etc.)
-app.use('/api/auth/*', rateLimit({ windowMs: 60_000, max: 20 }));
+// Lenient limit for read-only session checks (get-session is polled after login)
+app.use('/api/auth/get-session', rateLimit({ windowMs: 60_000, max: 600 }));
+// Rate limit on auth mutations (sign-in, sign-up, etc.)
+app.use('/api/auth/*', rateLimit({ windowMs: 60_000, max: 120 }));
 // Strict rate limit on invite link registration: 10 per minute per IP
 app.use('/api/invite-links/register', rateLimit({ windowMs: 60_000, max: 10 }));
 

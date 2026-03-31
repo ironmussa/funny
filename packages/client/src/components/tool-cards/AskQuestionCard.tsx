@@ -9,7 +9,7 @@ import {
   MicOff,
   Loader2,
 } from 'lucide-react';
-import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
+import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -88,7 +88,7 @@ function parseOutputToSelections(
   return { selections, otherTexts };
 }
 
-export function AskQuestionCard({
+export const AskQuestionCard = memo(function AskQuestionCard({
   parsed,
   onRespond,
   output,
@@ -590,4 +590,4 @@ export function AskQuestionCard({
       </div>
     </div>
   );
-}
+});

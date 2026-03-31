@@ -95,6 +95,12 @@ function request<T>(path: string, init?: RequestInit): ResultAsync<T, DomainErro
           credentials: 'include',
         });
       } catch (networkError) {
+        // Aborted requests (AbortController.abort()) are intentional cancellations,
+        // not real failures — don't trip the circuit breaker or show error toasts.
+        if (networkError instanceof DOMException && networkError.name === 'AbortError') {
+          span.end('ERROR');
+          throw internal('Request aborted');
+        }
         // Network error (server down, no connectivity, etc.)
         useCircuitBreakerStore.getState().recordFailure();
         span.end('ERROR');
@@ -226,13 +232,13 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ localPath }),
     }),
-  listBranches: (projectId: string) =>
+  listBranches: (projectId: string, signal?: AbortSignal) =>
     request<{
       branches: string[];
       remoteBranches: string[];
       defaultBranch: string | null;
       currentBranch: string | null;
-    }>(`/projects/${projectId}/branches`),
+    }>(`/projects/${projectId}/branches`, { signal }),
   checkoutPreflight: (projectId: string, branch: string) =>
     request<{
       canCheckout: boolean;
@@ -514,9 +520,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ pattern }),
     }),
-  getGitStatuses: (projectId: string) =>
-    request<{ statuses: GitStatusInfo[] }>(`/git/status?projectId=${projectId}`),
-  getGitStatus: (threadId: string) => request<GitStatusInfo>(`/git/${threadId}/status`),
+  getGitStatuses: (projectId: string, signal?: AbortSignal) =>
+    request<{ statuses: GitStatusInfo[] }>(`/git/status?projectId=${projectId}`, { signal }),
+  getGitStatus: (threadId: string, signal?: AbortSignal) =>
+    request<GitStatusInfo>(`/git/${threadId}/status`, { signal }),
   getGitLog: (threadId: string, limit = 50, all = false, skip = 0) =>
     request<{
       entries: Array<{
@@ -566,9 +573,10 @@ export const api = {
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/reset-soft`, { method: 'POST' }),
 
   // Project-based git (no thread needed — operates on the project's main directory)
-  projectGitStatus: (projectId: string) =>
+  projectGitStatus: (projectId: string, signal?: AbortSignal) =>
     request<Omit<import('@funny/shared').GitStatusInfo, 'threadId'>>(
       `/git/project/${projectId}/status`,
+      { signal },
     ),
   projectDiffSummary: (projectId: string, excludePatterns?: string[], maxFiles?: number) => {
     const params = new URLSearchParams();
@@ -781,18 +789,46 @@ export const api = {
 
   // Worktrees
   listWorktrees: (projectId: string) =>
-    request<Array<{ path: string; branch: string; commit: string; isMain: boolean }>>(
-      `/worktrees?projectId=${projectId}`,
+    request<
+      Array<{
+        path: string;
+        branch: string;
+        commit: string;
+        isMain: boolean;
+        lastActivityMs?: number;
+      }>
+    >(`/worktrees?projectId=${projectId}`),
+  previewWorktree: (projectId: string, branchName: string) =>
+    request<{
+      sanitizedBranchDir: string;
+      branchName: string;
+      worktreePath: string;
+      alreadyExists: boolean;
+    }>(
+      `/worktrees/preview?projectId=${encodeURIComponent(projectId)}&branchName=${encodeURIComponent(branchName)}`,
+    ),
+  worktreeStatus: (projectId: string, worktreePath: string) =>
+    request<{ unpushedCommitCount: number; dirtyFileCount: number; hasRemoteBranch: boolean }>(
+      `/worktrees/status?projectId=${encodeURIComponent(projectId)}&worktreePath=${encodeURIComponent(worktreePath)}`,
     ),
   createWorktree: (data: { projectId: string; branchName: string; baseBranch?: string }) =>
     request<{ path: string; branch: string }>('/worktrees', {
       method: 'POST',
       body: JSON.stringify(data),
     }),
-  removeWorktree: (projectId: string, worktreePath: string) =>
+  removeWorktree: (
+    projectId: string,
+    worktreePath: string,
+    options?: { branchName?: string; deleteBranch?: boolean },
+  ) =>
     request<{ ok: boolean }>('/worktrees', {
       method: 'DELETE',
-      body: JSON.stringify({ projectId, worktreePath }),
+      body: JSON.stringify({
+        projectId,
+        worktreePath,
+        branchName: options?.branchName,
+        deleteBranch: options?.deleteBranch,
+      }),
     }),
 
   // Skills
@@ -1010,6 +1046,22 @@ export const api = {
     }>(`/github/issues?${p.toString()}`);
   },
 
+  githubIssuesEnriched: (
+    projectId: string,
+    params?: { state?: string; page?: number; per_page?: number },
+  ) => {
+    const p = new URLSearchParams({ projectId });
+    if (params?.state) p.set('state', params.state);
+    if (params?.page) p.set('page', String(params.page));
+    if (params?.per_page) p.set('per_page', String(params.per_page));
+    return request<{
+      issues: import('@funny/shared').EnrichedGitHubIssue[];
+      hasMore: boolean;
+      owner: string;
+      repo: string;
+    }>(`/github/issues-enriched?${p.toString()}`);
+  },
+
   githubPRs: (projectId: string, params?: { state?: string; page?: number; per_page?: number }) => {
     const p = new URLSearchParams({ projectId });
     if (params?.state) p.set('state', params.state);
@@ -1022,6 +1074,16 @@ export const api = {
       repo: string;
     }>(`/github/prs?${p.toString()}`);
   },
+
+  githubPRDetail: (projectId: string, prNumber: number) =>
+    request<import('@funny/shared').PRDetail>(
+      `/github/pr-detail?projectId=${projectId}&prNumber=${prNumber}`,
+    ),
+
+  githubPRThreads: (projectId: string, prNumber: number) =>
+    request<{ threads: import('@funny/shared').PRReviewThread[] }>(
+      `/github/pr-threads?projectId=${projectId}&prNumber=${prNumber}`,
+    ),
 
   // Analytics
   analyticsOverview: (projectId?: string, timeRange?: string) => {

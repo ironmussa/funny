@@ -1,5 +1,5 @@
 import AnsiToHtml from 'ansi-to-html';
-import { Plus, X, Square, Loader2, AlertCircle, RotateCcw } from 'lucide-react';
+import { Plus, X, Square, Loader2, AlertCircle, RotateCcw, Zap } from 'lucide-react';
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
@@ -349,6 +349,22 @@ function WebTerminalTabContent({
         }
       });
 
+      // Bell notification — detect \x07 and show browser notification + tab badge
+      const onBellDisposable = terminal.onBell(() => {
+        const state = useTerminalStore.getState();
+        if (state.activeTabId !== id) {
+          state.setBellActive(id);
+          if (Notification.permission === 'granted') {
+            new Notification('Terminal Bell', {
+              body: `Bell in "${label || 'Terminal'}"`,
+              tag: `terminal-bell-${id}`,
+            });
+          } else if (Notification.permission === 'default') {
+            Notification.requestPermission();
+          }
+        }
+      });
+
       // Debounce resize to avoid rapid reflows that cause screen jumping
       let resizeRaf: number | null = null;
       const resizeObserver = new ResizeObserver(() => {
@@ -371,6 +387,7 @@ function WebTerminalTabContent({
         unregisterPtyCallback(id);
         onDataDisposable.dispose();
         onResizeDisposable.dispose();
+        onBellDisposable.dispose();
         termRef.current = null;
         terminal.dispose();
         // NOTE: Do NOT send pty:kill here. Component unmount happens on page
@@ -580,6 +597,16 @@ function WebTerminalTabContent({
   );
 }
 
+/** Format milliseconds as human-readable uptime */
+function formatUptime(ms: number): string {
+  const s = Math.floor(ms / 1000);
+  if (s < 60) return `${s}s`;
+  const m = Math.floor(s / 60);
+  if (m < 60) return `${m}m ${s % 60}s`;
+  const h = Math.floor(m / 60);
+  return `${h}h ${m % 60}m`;
+}
+
 /** Server-managed command tab — uses a <pre> log view */
 function CommandTabContent({
   commandId,
@@ -594,6 +621,7 @@ function CommandTabContent({
 }) {
   const { t } = useTranslation();
   const output = useTerminalStore((s) => s.commandOutput[commandId] ?? '');
+  const metrics = useTerminalStore((s) => s.commandMetrics[commandId]);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   const ansiConverter = useMemo(
@@ -632,14 +660,33 @@ function CommandTabContent({
       )}
     >
       {alive && (
-        <div className="flex flex-shrink-0 items-center justify-end px-2 py-0.5">
+        <div className="flex flex-shrink-0 items-center gap-3 px-2 py-0.5">
+          {metrics && (
+            <div
+              className="flex items-center gap-3 text-[10px] text-muted-foreground"
+              data-testid="command-metrics"
+            >
+              <span>
+                {t('terminal.uptime')}: {formatUptime(metrics.uptime)}
+              </span>
+              <span>
+                {t('terminal.memory')}: {(metrics.memoryUsageKB / 1024).toFixed(1)} MB
+              </span>
+              {metrics.restartCount > 0 && (
+                <span className="text-yellow-500">
+                  {t('terminal.restarts')}: {metrics.restartCount}
+                </span>
+              )}
+            </div>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon-xs"
                 onClick={handleStop}
-                className="text-status-error hover:text-status-error/80"
+                className="ml-auto text-status-error hover:text-status-error/80"
+                data-testid="command-stop"
               >
                 <Square className="icon-xs" />
               </Button>
@@ -749,6 +796,13 @@ export function TerminalPanel() {
     [projects, selectedProjectId, visibleTabs, addTab, activeThreadWorktreePath, availableShells],
   );
 
+  const sendSignal = useCallback((ptyId: string, signal: string) => {
+    const ws = getActiveWS();
+    if (ws && ws.connected) {
+      ws.emit('pty:signal', { id: ptyId, signal });
+    }
+  }, []);
+
   const handleCloseTab = useCallback(
     (tabId: string) => {
       const tab = tabs.find((t) => t.id === tabId);
@@ -801,7 +855,14 @@ export function TerminalPanel() {
                     ? 'bg-accent text-accent-foreground'
                     : 'text-muted-foreground hover:bg-accent/50',
                 )}
+                data-testid={`terminal-tab-${tab.id}`}
               >
+                {tab.hasBell && effectiveActiveTabId !== tab.id && (
+                  <span
+                    className="h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500"
+                    data-testid={`terminal-tab-bell-${tab.id}`}
+                  />
+                )}
                 <span>{tab.label}</span>
                 {!tab.alive && (sessionsChecked || !tab.type || tab.type !== 'pty') && (
                   <span className="text-xs text-status-pending">{t('terminal.exited')}</span>
@@ -845,6 +906,44 @@ export function TerminalPanel() {
               )}
             </DropdownMenuContent>
           </DropdownMenu>
+
+          {effectiveActiveTabId &&
+            visibleTabs.find((t) => t.id === effectiveActiveTabId)?.alive &&
+            visibleTabs.find((t) => t.id === effectiveActiveTabId)?.type === 'pty' && (
+              <DropdownMenu>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="icon-xs" data-testid="terminal-signal-menu">
+                        <Zap className="icon-sm" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('terminal.sendSignal')}</TooltipContent>
+                </Tooltip>
+                <DropdownMenuContent align="end" side="top">
+                  <DropdownMenuItem
+                    onClick={() => sendSignal(effectiveActiveTabId, 'SIGINT')}
+                    data-testid="terminal-signal-sigint"
+                  >
+                    SIGINT (Ctrl+C)
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => sendSignal(effectiveActiveTabId, 'SIGTERM')}
+                    data-testid="terminal-signal-sigterm"
+                  >
+                    SIGTERM
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => sendSignal(effectiveActiveTabId, 'SIGKILL')}
+                    className="text-destructive"
+                    data-testid="terminal-signal-sigkill"
+                  >
+                    SIGKILL (Force)
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
 
           <Tooltip>
             <TooltipTrigger asChild>

@@ -3,11 +3,12 @@
  * @domain subdomain-type: supporting
  * @domain type: app-service
  * @domain layer: application
- * @domain emits: command:status, command:output
+ * @domain emits: command:status, command:output, command:metrics
  * @domain depends: ProjectManager, WSBroker, ShutdownManager
  *
  * CommandRunner — spawns and manages startup command processes.
  * Streams stdout/stderr to clients via WebSocket.
+ * Supports auto-restart with exponential backoff for managed processes.
  */
 
 import { log } from '../lib/logger.js';
@@ -16,6 +17,7 @@ import { wsBroker } from './ws-broker.js';
 
 const KILL_GRACE_MS = 3_000;
 const IS_WINDOWS = process.platform === 'win32';
+const METRICS_INTERVAL_MS = 10_000;
 
 /**
  * Kill a process tree on Windows using taskkill /T /F.
@@ -37,6 +39,14 @@ function killProcessTree(proc: ReturnType<typeof Bun.spawn>, signal?: number): v
   }
 }
 
+export interface RestartOptions {
+  autoRestart?: boolean;
+  maxRestarts?: number;
+  restartWindow?: number;
+  restartCount?: number;
+  restartHistory?: number[];
+}
+
 interface RunningCommand {
   proc: ReturnType<typeof Bun.spawn>;
   commandId: string;
@@ -44,9 +54,28 @@ interface RunningCommand {
   cwd: string;
   label: string;
   exited: boolean;
+  /** Original command string (needed for restart) */
+  command: string;
+  /** Auto-restart on non-zero exit */
+  autoRestart: boolean;
+  /** Timestamp when this instance was started */
+  startedAt: number;
+  /** Total restart count (across all restarts) */
+  restartCount: number;
+  /** Max restarts within the restart window */
+  maxRestarts: number;
+  /** Restart window in ms */
+  restartWindow: number;
+  /** Timestamps of recent restarts (within window) */
+  restartHistory: number[];
+  /** Last sampled memory usage in KB (from ps) */
+  memoryUsageKB: number;
+  /** Whether stop was requested manually (suppresses auto-restart) */
+  manualStop: boolean;
 }
 
 const activeCommands = new Map<string, RunningCommand>();
+let metricsTimer: ReturnType<typeof setInterval> | null = null;
 
 async function emitWS(type: string, data: unknown, projectId?: string) {
   const event = { type, threadId: '', data } as any;
@@ -70,6 +99,7 @@ export async function startCommand(
   cwd: string,
   projectId: string,
   label: string,
+  options?: RestartOptions,
 ): Promise<void> {
   // Kill existing instance of same command if running
   if (activeCommands.has(commandId)) {
@@ -95,9 +125,19 @@ export async function startCommand(
     cwd,
     label,
     exited: false,
+    command,
+    autoRestart: options?.autoRestart ?? false,
+    startedAt: Date.now(),
+    restartCount: options?.restartCount ?? 0,
+    maxRestarts: options?.maxRestarts ?? 5,
+    restartWindow: options?.restartWindow ?? 60_000,
+    restartHistory: options?.restartHistory ?? [],
+    memoryUsageKB: 0,
+    manualStop: false,
   };
 
   activeCommands.set(commandId, entry);
+  ensureMetricsTimer();
 
   await emitWS(
     'command:status',
@@ -106,6 +146,7 @@ export async function startCommand(
       projectId,
       label,
       status: 'running',
+      restartCount: entry.restartCount,
     },
     projectId,
   );
@@ -120,7 +161,62 @@ export async function startCommand(
     .then(async (exitCode) => {
       log.info(`Command "${label}" exited`, { namespace: 'command-runner', exitCode });
       entry.exited = true;
+
+      // Auto-restart logic: restart on non-zero exit if configured
+      if (entry.autoRestart && !entry.manualStop && exitCode !== 0) {
+        const now = Date.now();
+        const window = entry.restartWindow;
+
+        // Clean old restart timestamps outside the window
+        entry.restartHistory = entry.restartHistory.filter((t) => now - t < window);
+
+        if (entry.restartHistory.length < entry.maxRestarts) {
+          entry.restartHistory.push(now);
+          const attempt = entry.restartHistory.length;
+          const backoffMs = Math.min(1000 * Math.pow(2, attempt - 1), 30_000);
+
+          log.info(
+            `Auto-restarting "${label}" in ${backoffMs}ms (restart ${attempt}/${entry.maxRestarts})`,
+            { namespace: 'command-runner' },
+          );
+
+          activeCommands.delete(commandId);
+
+          await emitWS(
+            'command:status',
+            {
+              commandId,
+              projectId,
+              label,
+              status: 'restarting',
+              restartCount: entry.restartCount + 1,
+              nextRestartMs: backoffMs,
+              exitCode,
+            },
+            projectId,
+          );
+
+          setTimeout(() => {
+            // Don't restart if it was manually started in the meantime
+            if (activeCommands.has(commandId)) return;
+            startCommand(commandId, command, cwd, projectId, label, {
+              autoRestart: true,
+              maxRestarts: entry.maxRestarts,
+              restartWindow: entry.restartWindow,
+              restartCount: entry.restartCount + 1,
+              restartHistory: entry.restartHistory,
+            });
+          }, backoffMs);
+          return;
+        }
+
+        log.warn(`Max restarts reached for "${label}" — giving up`, {
+          namespace: 'command-runner',
+        });
+      }
+
       activeCommands.delete(commandId);
+      checkMetricsTimer();
       await emitWS(
         'command:status',
         {
@@ -129,6 +225,7 @@ export async function startCommand(
           label,
           status: 'exited',
           exitCode,
+          restartCount: entry.restartCount,
         },
         projectId,
       );
@@ -137,6 +234,7 @@ export async function startCommand(
       log.error(`Command "${label}" error`, { namespace: 'command-runner', error: err });
       entry.exited = true;
       activeCommands.delete(commandId);
+      checkMetricsTimer();
       await emitWS(
         'command:status',
         {
@@ -179,6 +277,9 @@ export async function stopCommand(commandId: string): Promise<void> {
 
   log.info(`Stopping command "${entry.label}"`, { namespace: 'command-runner' });
 
+  // Mark as manual stop to suppress auto-restart
+  entry.manualStop = true;
+
   // On Windows, taskkill /T /F kills the entire process tree immediately,
   // so no grace period is needed. On Unix, try SIGTERM first, then SIGKILL.
   if (IS_WINDOWS) {
@@ -201,6 +302,7 @@ export async function stopCommand(commandId: string): Promise<void> {
 
   entry.exited = true;
   activeCommands.delete(commandId);
+  checkMetricsTimer();
 
   await emitWS(
     'command:status',
@@ -222,10 +324,76 @@ export function isCommandRunning(commandId: string): boolean {
   return activeCommands.has(commandId);
 }
 
+// ── Process Health Metrics ─────────────────────────────────
+
+export function getCommandMetrics(commandId: string): {
+  uptime: number;
+  restartCount: number;
+  memoryUsageKB: number;
+} | null {
+  const entry = activeCommands.get(commandId);
+  if (!entry || entry.exited) return null;
+  return {
+    uptime: Date.now() - entry.startedAt,
+    restartCount: entry.restartCount,
+    memoryUsageKB: entry.memoryUsageKB,
+  };
+}
+
+async function sampleMetrics(): Promise<void> {
+  for (const [_id, entry] of activeCommands) {
+    if (entry.exited || !entry.proc.pid) continue;
+    try {
+      const result = Bun.spawnSync(['ps', '-o', 'rss=', '-p', String(entry.proc.pid)]);
+      const rss = parseInt(result.stdout.toString().trim(), 10);
+      if (!isNaN(rss)) {
+        entry.memoryUsageKB = rss;
+      }
+    } catch {
+      // Process may have exited between check and ps call
+    }
+  }
+
+  // Emit metrics for all running commands
+  for (const [_id, entry] of activeCommands) {
+    if (entry.exited) continue;
+    void emitWS(
+      'command:metrics',
+      {
+        commandId: entry.commandId,
+        projectId: entry.projectId,
+        uptime: Date.now() - entry.startedAt,
+        restartCount: entry.restartCount,
+        memoryUsageKB: entry.memoryUsageKB,
+      },
+      entry.projectId,
+    );
+  }
+}
+
+function ensureMetricsTimer(): void {
+  if (!metricsTimer) {
+    metricsTimer = setInterval(() => void sampleMetrics(), METRICS_INTERVAL_MS);
+  }
+}
+
+function checkMetricsTimer(): void {
+  if (activeCommands.size === 0 && metricsTimer) {
+    clearInterval(metricsTimer);
+    metricsTimer = null;
+  }
+}
+
+// ── Shutdown ───────────────────────────────────────────────
+
 /** Kill all running commands. Called during shutdown. */
 export async function stopAllCommands(): Promise<void> {
   const ids = [...activeCommands.keys()];
   if (ids.length === 0) return;
+  if (metricsTimer) {
+    clearInterval(metricsTimer);
+    metricsTimer = null;
+  }
   await Promise.allSettled(ids.map((id) => stopCommand(id)));
 }
 

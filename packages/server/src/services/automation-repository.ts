@@ -52,6 +52,7 @@ export async function insertAutomation(data: {
   permissionMode: string;
   enabled: number;
   maxRunHistory: number;
+  source?: string;
   createdAt: string;
   updatedAt: string;
 }) {

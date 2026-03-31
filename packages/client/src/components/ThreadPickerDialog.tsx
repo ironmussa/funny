@@ -1,8 +1,8 @@
 import type { Thread } from '@funny/shared';
-import { FolderOpen, GitBranch } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ThreadPowerline } from '@/components/ThreadPowerline';
 import {
   CommandDialog,
   CommandInput,
@@ -12,8 +12,7 @@ import {
   CommandItem,
 } from '@/components/ui/command';
 import { HighlightText } from '@/components/ui/highlight-text';
-import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
-import { colorFromName, darkenHex } from '@/components/ui/project-chip';
+import { colorFromName } from '@/components/ui/project-chip';
 import { statusConfig } from '@/lib/thread-utils';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
@@ -133,28 +132,10 @@ function ThreadPickerDialogContent({
                       query={search}
                       className="truncate text-sm"
                     />
-                    <PowerlineBar
-                      size="sm"
-                      segments={(() => {
-                        const baseColor = project.color || colorFromName(project.name);
-                        const segs: PowerlineSegmentData[] = [
-                          {
-                            key: 'project',
-                            icon: FolderOpen,
-                            label: project.name,
-                            color: baseColor,
-                          },
-                        ];
-                        if (resolveThreadBranch(thread) || thread.baseBranch) {
-                          segs.push({
-                            key: 'branch',
-                            icon: GitBranch,
-                            label: (resolveThreadBranch(thread) || thread.baseBranch)!,
-                            color: darkenHex(baseColor, 0.12),
-                          });
-                        }
-                        return segs;
-                      })()}
+                    <ThreadPowerline
+                      thread={thread}
+                      projectName={project.name}
+                      projectColor={project.color}
                     />
                   </div>
                 </CommandItem>

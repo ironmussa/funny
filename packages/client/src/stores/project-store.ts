@@ -13,6 +13,7 @@ const EXPANDED_PROJECTS_KEY = 'funny_expanded_projects';
 const BRANCH_COOLDOWN_MS = 10_000;
 const _lastFetchBranch = new Map<string, number>();
 const _inFlightBranch = new Set<string>();
+const _abortBranch = new Map<string, AbortController>();
 
 function loadExpandedProjects(): Set<string> {
   try {
@@ -207,20 +208,26 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   fetchBranch: async (projectId) => {
-    if (_inFlightBranch.has(projectId)) return;
     const now = Date.now();
     const last = _lastFetchBranch.get(projectId) ?? 0;
     if (now - last < BRANCH_COOLDOWN_MS) return;
     _lastFetchBranch.set(projectId, now);
+
+    // Abort any stale in-flight branch listing for this project
+    _abortBranch.get(projectId)?.abort();
+    const ac = new AbortController();
+    _abortBranch.set(projectId, ac);
     _inFlightBranch.add(projectId);
+
     try {
-      const result = await api.listBranches(projectId);
+      const result = await api.listBranches(projectId, ac.signal);
       if (result.isErr()) return;
       const { currentBranch } = result.value;
       if (currentBranch) {
         set({ branchByProject: { ...get().branchByProject, [projectId]: currentBranch } });
       }
     } finally {
+      _abortBranch.delete(projectId);
       _inFlightBranch.delete(projectId);
     }
   },

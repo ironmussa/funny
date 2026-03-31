@@ -166,6 +166,7 @@ function setupBrowserPtyHandlers(socket: Socket, userId: string): void {
     'pty:resize',
     'pty:close',
     'pty:kill',
+    'pty:signal',
     'pty:rename',
     'pty:reconnect',
     'pty:restore',

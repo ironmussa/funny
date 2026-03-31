@@ -159,6 +159,7 @@ export const automations = sqliteTable('automations', {
   maxRunHistory: integer('max_run_history').notNull().default(20),
   lastRunAt: text('last_run_at'),
   nextRunAt: text('next_run_at'),
+  source: text('source').notNull().default('ui'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

@@ -369,6 +369,24 @@ function handlePtyMessage(type: string, data: any, userId: string, send: (msg: a
     case 'pty:kill':
       ptyManager.killPty(data.id);
       break;
+    case 'pty:signal': {
+      const VALID_SIGNALS: Record<string, number> = {
+        SIGINT: 2,
+        SIGTERM: 15,
+        SIGKILL: 9,
+      };
+      const sigNum = VALID_SIGNALS[data.signal];
+      if (sigNum !== undefined) {
+        ptyManager.signalPty(data.id, sigNum);
+      } else {
+        log.warn('Invalid signal requested', {
+          namespace: 'ws',
+          signal: data.signal,
+          ptyId: data.id,
+        });
+      }
+      break;
+    }
     case 'pty:restore': {
       ptyManager.capturePaneAsync(data.id).then((captured) => {
         // Always respond — even with empty string — so the client exits loading state.

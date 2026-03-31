@@ -1,14 +1,14 @@
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
-import { Loader2, LayoutGrid, Grid2x2, Plus, Search, FolderOpen, X, GitBranch } from 'lucide-react';
+import { Loader2, LayoutGrid, Grid2x2, Plus, Search, X } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo, memo, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
-import { colorFromName, darkenHex } from '@/components/ui/project-chip';
+import { colorFromName } from '@/components/ui/project-chip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
@@ -21,7 +21,7 @@ import {
 } from '@/lib/grid-storage';
 import { statusConfig } from '@/lib/thread-utils';
 import { toastError } from '@/lib/toast-error';
-import { cn, resolveThreadBranch } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
@@ -277,36 +277,13 @@ const ThreadColumn = memo(function ThreadColumn({
             </TooltipIconButton>
           )}
         </div>
-        {(projectName || resolveThreadBranch(thread) || thread.baseBranch) && (
-          <div className="mt-1 min-w-0 overflow-hidden">
-            <PowerlineBar
-              data-testid={`grid-column-powerline-${threadId}`}
-              size="sm"
-              segments={(() => {
-                const baseColor =
-                  threadProject?.color || (projectName ? colorFromName(projectName) : '#52525b');
-                const segs: PowerlineSegmentData[] = [];
-                if (projectName) {
-                  segs.push({
-                    key: 'project',
-                    icon: FolderOpen,
-                    label: projectName,
-                    color: baseColor,
-                  });
-                }
-                if (resolveThreadBranch(thread) || thread.baseBranch) {
-                  segs.push({
-                    key: 'branch',
-                    icon: GitBranch,
-                    label: (resolveThreadBranch(thread) || thread.baseBranch)!,
-                    color: projectName ? darkenHex(baseColor, 0.12) : baseColor,
-                  });
-                }
-                return segs;
-              })()}
-            />
-          </div>
-        )}
+        <ThreadPowerline
+          thread={thread}
+          projectName={projectName}
+          projectColor={threadProject?.color}
+          className="mt-1"
+          data-testid={`grid-column-powerline-${threadId}`}
+        />
       </div>
 
       {/* Messages — uses the same MessageStream as the main ThreadView */}

@@ -53,6 +53,7 @@ export async function createAutomation(data: {
   model?: string;
   permissionMode?: string;
   userId?: string;
+  source?: string;
 }) {
   const id = nanoid();
   const now = new Date().toISOString();
@@ -69,6 +70,7 @@ export async function createAutomation(data: {
     permissionMode: data.permissionMode || DEFAULT_PERMISSION_MODE,
     enabled: 1,
     maxRunHistory: 20,
+    source: data.source ?? 'ui',
     createdAt: now,
     updatedAt: now,
   });

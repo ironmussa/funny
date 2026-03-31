@@ -9,28 +9,25 @@ import {
   ChevronDown,
   Check,
   X,
-  FolderOpen,
-  GitBranch,
   Loader2,
 } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { DiffStats } from '@/components/DiffStats';
 import { KanbanView } from '@/components/KanbanView';
 import { ThreadListView } from '@/components/ThreadListView';
+import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { Button } from '@/components/ui/button';
 import { normalize } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
-import { colorFromName, darkenHex } from '@/components/ui/project-chip';
+import { colorFromName } from '@/components/ui/project-chip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
-import { gitSyncStateConfig, getStatusLabels } from '@/lib/thread-utils';
+import { getStatusLabels } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
-import { cn, resolveThreadBranch } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -799,49 +796,22 @@ export function AllThreadsView() {
               onSearchKeyDownRef={searchKeyDownRef}
               renderExtraBadges={(thread) => {
                 const gs = statusByBranch[computeBranchKey(thread)];
-                const gitConf = gs ? gitSyncStateConfig[gs.state] : null;
                 const pInfo = projectInfoById[thread.projectId];
-                const displayBranch = resolveThreadBranch(thread) || thread.baseBranch;
-                const baseColor = pInfo ? pInfo.color || colorFromName(pInfo.name) : '#52525b';
-                const powerlineSegments: PowerlineSegmentData[] = [];
-                if (!projectFilter && pInfo) {
-                  powerlineSegments.push({
-                    key: 'project',
-                    icon: FolderOpen,
-                    label: pInfo.name,
-                    color: baseColor,
-                  });
-                }
-                if (displayBranch) {
-                  powerlineSegments.push({
-                    key: 'branch',
-                    icon: GitBranch,
-                    label: displayBranch,
-                    color: !projectFilter && pInfo ? darkenHex(baseColor, 0.12) : baseColor,
-                  });
-                }
                 return (
                   <>
-                    {powerlineSegments.length > 0 && (
-                      <PowerlineBar
-                        data-testid={`list-thread-powerline-${thread.id}`}
-                        size="sm"
-                        segments={powerlineSegments}
-                      />
-                    )}
+                    <ThreadPowerline
+                      thread={thread}
+                      projectName={!projectFilter ? pInfo?.name : undefined}
+                      projectColor={pInfo?.color}
+                      gitStatus={gs}
+                      diffStatsSize="xxs"
+                      data-testid={`list-thread-powerline-${thread.id}`}
+                    />
                     {!!thread.archived && (
                       <span className="inline-flex items-center gap-0.5 rounded bg-muted px-1 py-px text-[10px] font-medium leading-tight text-status-warning/80">
                         <Archive className="icon-2xs" />
                         {t('allThreads.archived')}
                       </span>
-                    )}
-                    {gs && (
-                      <DiffStats
-                        linesAdded={gs.linesAdded}
-                        linesDeleted={gs.linesDeleted}
-                        dirtyFileCount={gs.dirtyFileCount}
-                        size="xxs"
-                      />
                     )}
                   </>
                 );

@@ -69,11 +69,25 @@ const _lastFetchByProject = new Map<string, number>();
 const _lastFetchByBranch = new Map<string, number>();
 const _lastFetchByProjectStatus = new Map<string, number>();
 
+// ── Abort controllers ────────────────────────────────────────
+// Cancel stale in-flight requests when a new fetch for the same key starts.
+// This prevents pileup of long-running git status requests (avg 5s) that
+// block the browser's connection pool and delay interactive requests.
+const _abortByProject = new Map<string, AbortController>();
+const _abortByBranch = new Map<string, AbortController>();
+const _abortByProjectStatus = new Map<string, AbortController>();
+
 /** @internal Clear cooldown map — only for tests */
 export function _resetCooldowns() {
   _lastFetchByProject.clear();
   _lastFetchByBranch.clear();
   _lastFetchByProjectStatus.clear();
+  for (const ac of _abortByProject.values()) ac.abort();
+  _abortByProject.clear();
+  for (const ac of _abortByBranch.values()) ac.abort();
+  _abortByBranch.clear();
+  for (const ac of _abortByProjectStatus.values()) ac.abort();
+  _abortByProjectStatus.clear();
 }
 
 /**
@@ -164,9 +178,6 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
   _loadingProjectStatus: new Set(),
 
   fetchForProject: async (projectId) => {
-    if (get().loadingProjects.has(projectId)) {
-      return;
-    }
     // Skip if fetched recently (prevents duplicate calls during cascading state updates)
     const now = Date.now();
     const lastFetch = _lastFetchByProject.get(projectId) ?? 0;
@@ -174,6 +185,12 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
       return;
     }
     _lastFetchByProject.set(projectId, now);
+
+    // Abort any stale in-flight request for this project
+    _abortByProject.get(projectId)?.abort();
+    const ac = new AbortController();
+    _abortByProject.set(projectId, ac);
+
     set((s) => {
       if (s.loadingProjects.has(projectId)) return {};
       const next = new Set(s.loadingProjects);
@@ -181,40 +198,44 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
       return { loadingProjects: next };
     });
 
-    const result = await api.getGitStatuses(projectId);
-    if (result.isOk()) {
-      const statuses = result.value.statuses;
-      const updates: Record<string, GitStatusInfo> = {};
-      const keyMap: Record<string, string> = {};
-      for (const s of statuses) {
-        updates[s.branchKey] = s;
-        keyMap[s.threadId] = s.branchKey;
-      }
-      set((state) => {
-        const statusPatch = mergeStatuses(state, updates);
-        let keyMapChanged = false;
-        for (const [tid, bk] of Object.entries(keyMap)) {
-          if (state.threadToBranchKey[tid] !== bk) {
-            keyMapChanged = true;
-            break;
-          }
+    try {
+      const result = await api.getGitStatuses(projectId, ac.signal);
+      if (result.isOk()) {
+        const statuses = result.value.statuses;
+        const updates: Record<string, GitStatusInfo> = {};
+        const keyMap: Record<string, string> = {};
+        for (const s of statuses) {
+          updates[s.branchKey] = s;
+          keyMap[s.threadId] = s.branchKey;
         }
-        if (!Object.keys(statusPatch).length && !keyMapChanged) return {};
-        return {
-          ...statusPatch,
-          ...(keyMapChanged
-            ? { threadToBranchKey: { ...state.threadToBranchKey, ...keyMap } }
-            : {}),
-        };
+        set((state) => {
+          const statusPatch = mergeStatuses(state, updates);
+          let keyMapChanged = false;
+          for (const [tid, bk] of Object.entries(keyMap)) {
+            if (state.threadToBranchKey[tid] !== bk) {
+              keyMapChanged = true;
+              break;
+            }
+          }
+          if (!Object.keys(statusPatch).length && !keyMapChanged) return {};
+          return {
+            ...statusPatch,
+            ...(keyMapChanged
+              ? { threadToBranchKey: { ...state.threadToBranchKey, ...keyMap } }
+              : {}),
+          };
+        });
+      }
+    } finally {
+      _abortByProject.delete(projectId);
+      // Silently ignore errors — git status is best-effort
+      set((s) => {
+        if (!s.loadingProjects.has(projectId)) return {};
+        const next = new Set(s.loadingProjects);
+        next.delete(projectId);
+        return { loadingProjects: next };
       });
     }
-    // Silently ignore errors — git status is best-effort
-    set((s) => {
-      if (!s.loadingProjects.has(projectId)) return {};
-      const next = new Set(s.loadingProjects);
-      next.delete(projectId);
-      return { loadingProjects: next };
-    });
   },
 
   fetchForThread: async (threadId, force) => {
@@ -224,14 +245,14 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
     const pendingKey = `pending:${threadId}`;
     const cooldownKey = bk || pendingKey;
 
-    if (!force && bk && get()._loadingBranchKeys.has(bk)) {
-      return;
-    }
     // Skip if fetched recently (shared cooldown per branch).
     // Check both the resolved key and the pending key to prevent duplicates
     // when the branchKey becomes known mid-flight (race between pending and resolved).
     const now = Date.now();
     if (!force) {
+      if (bk && get()._loadingBranchKeys.has(bk)) {
+        return;
+      }
       const lastFetch = Math.max(
         _lastFetchByBranch.get(cooldownKey) ?? 0,
         bk ? (_lastFetchByBranch.get(pendingKey) ?? 0) : 0,
@@ -244,6 +265,11 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
     // Also stamp the pending key so a concurrent call using the other key sees the cooldown
     if (bk) _lastFetchByBranch.set(pendingKey, now);
 
+    // Abort any stale in-flight request for this thread/branch
+    _abortByBranch.get(cooldownKey)?.abort();
+    const ac = new AbortController();
+    _abortByBranch.set(cooldownKey, ac);
+
     if (bk) {
       set((s) => {
         if (s._loadingBranchKeys.has(bk)) return {};
@@ -253,7 +279,7 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
       });
     }
     try {
-      const result = await api.getGitStatus(threadId);
+      const result = await api.getGitStatus(threadId, ac.signal);
       if (result.isOk()) {
         const status = result.value;
         const key = status.branchKey;
@@ -274,6 +300,7 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
         });
       }
     } finally {
+      _abortByBranch.delete(cooldownKey);
       if (bk) {
         set((s) => {
           if (!s._loadingBranchKeys.has(bk)) return {};
@@ -286,13 +313,19 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
   },
 
   fetchProjectStatus: async (projectId, force) => {
-    if (!force && get()._loadingProjectStatus.has(projectId)) return;
     const now = Date.now();
     if (!force) {
+      if (get()._loadingProjectStatus.has(projectId)) return;
       const lastFetch = _lastFetchByProjectStatus.get(projectId) ?? 0;
       if (now - lastFetch < PROJECT_STATUS_COOLDOWN_MS) return;
     }
     _lastFetchByProjectStatus.set(projectId, now);
+
+    // Abort any stale in-flight request for this project status
+    _abortByProjectStatus.get(projectId)?.abort();
+    const ac = new AbortController();
+    _abortByProjectStatus.set(projectId, ac);
+
     set((s) => {
       if (s._loadingProjectStatus.has(projectId)) return {};
       const next = new Set(s._loadingProjectStatus);
@@ -300,11 +333,12 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
       return { _loadingProjectStatus: next };
     });
     try {
-      const result = await api.projectGitStatus(projectId);
+      const result = await api.projectGitStatus(projectId, ac.signal);
       if (result.isOk()) {
         set((s) => ({ statusByProject: { ...s.statusByProject, [projectId]: result.value } }));
       }
     } finally {
+      _abortByProjectStatus.delete(projectId);
       set((s) => {
         if (!s._loadingProjectStatus.has(projectId)) return {};
         const next = new Set(s._loadingProjectStatus);

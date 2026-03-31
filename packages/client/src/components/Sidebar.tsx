@@ -44,8 +44,10 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { WorktreeDeleteDialog } from '@/components/WorktreeDeleteDialog';
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
+import { api } from '@/lib/api';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { buildPath } from '@/lib/url';
 import { cn, resolveThreadBranch } from '@/lib/utils';
@@ -102,6 +104,8 @@ export function AppSidebar() {
     projectId: string;
     title: string;
     isWorktree?: boolean;
+    worktreePath?: string | null;
+    branchName?: string | null;
   } | null>(null);
   const [renameProjectState, setRenameProjectState] = useState<{
     projectId: string;
@@ -201,17 +205,29 @@ export function AppSidebar() {
     if (wasSelected) navigate(buildPath(`/projects/${projectId}`));
   }, [archiveConfirm, archiveThread, t, navigate]);
 
-  const handleDeleteThreadConfirm = useCallback(async () => {
-    if (!deleteThreadConfirm) return;
-    setActionLoading(true);
-    const { threadId, projectId, title } = deleteThreadConfirm;
-    const wasSelected = useThreadStore.getState().selectedThreadId === threadId;
-    await deleteThread(threadId, projectId);
-    setActionLoading(false);
-    setDeleteThreadConfirm(null);
-    toast.success(t('toast.threadDeleted', { title }));
-    if (wasSelected) navigate(buildPath(`/projects/${projectId}`));
-  }, [deleteThreadConfirm, deleteThread, t, navigate]);
+  const handleDeleteThreadConfirm = useCallback(
+    async (options?: { deleteBranch?: boolean }) => {
+      if (!deleteThreadConfirm) return;
+      setActionLoading(true);
+      const { threadId, projectId, title, worktreePath, branchName } = deleteThreadConfirm;
+      const wasSelected = useThreadStore.getState().selectedThreadId === threadId;
+
+      // If branch cleanup requested, call removeWorktree explicitly before deleteThread
+      if (options?.deleteBranch && worktreePath && branchName) {
+        await api.removeWorktree(projectId, worktreePath, {
+          branchName,
+          deleteBranch: true,
+        });
+      }
+
+      await deleteThread(threadId, projectId);
+      setActionLoading(false);
+      setDeleteThreadConfirm(null);
+      toast.success(t('toast.threadDeleted', { title }));
+      if (wasSelected) navigate(buildPath(`/projects/${projectId}`));
+    },
+    [deleteThreadConfirm, deleteThread, t, navigate],
+  );
 
   const handleRenameProjectConfirm = useCallback(async () => {
     if (!renameProjectState) return;
@@ -337,11 +353,14 @@ export function AppSidebar() {
   const handleDeleteThread = useCallback((projectId: string, threadId: string, title: string) => {
     const threads = useThreadStore.getState().threadsByProject[projectId] ?? [];
     const th = threads.find((t) => t.id === threadId);
+    const isWorktree = th?.mode === 'worktree' && !!th?.branch && th?.provider !== 'external';
     setDeleteThreadConfirm({
       threadId,
       projectId,
       title,
-      isWorktree: th?.mode === 'worktree' && !!th?.branch && th?.provider !== 'external',
+      isWorktree,
+      worktreePath: isWorktree ? th?.worktreePath : undefined,
+      branchName: isWorktree ? th?.branch : undefined,
     });
   }, []);
 
@@ -355,7 +374,16 @@ export function AppSidebar() {
 
   const handleDeleteThreadFromList = useCallback(
     (threadId: string, projectId: string, title: string, isWorktree: boolean) => {
-      setDeleteThreadConfirm({ threadId, projectId, title, isWorktree });
+      const threads = useThreadStore.getState().threadsByProject[projectId] ?? [];
+      const th = threads.find((t) => t.id === threadId);
+      setDeleteThreadConfirm({
+        threadId,
+        projectId,
+        title,
+        isWorktree,
+        worktreePath: isWorktree ? th?.worktreePath : undefined,
+        branchName: isWorktree ? th?.branch : undefined,
+      });
     },
     [],
   );
@@ -656,6 +684,10 @@ export function AppSidebar() {
           onOpenChange={(open) => {
             if (!open) setIssuesProjectId(null);
           }}
+          onCreateThread={(params) => {
+            setIssuesProjectId(null);
+            useUIStore.getState().startNewThreadFromIssue(issuesProjectId, params);
+          }}
         />
       )}
 
@@ -681,26 +713,35 @@ export function AppSidebar() {
         onConfirm={handleArchiveConfirm}
       />
 
-      {/* Delete thread confirmation dialog */}
-      <ConfirmDialog
-        open={!!deleteThreadConfirm}
-        onOpenChange={(open) => {
-          if (!open) setDeleteThreadConfirm(null);
-        }}
-        title={t('dialog.deleteThread')}
-        description={t('dialog.deleteThreadDesc', {
-          title:
-            deleteThreadConfirm?.title && deleteThreadConfirm.title.length > 80
-              ? deleteThreadConfirm.title.slice(0, 80) + '…'
-              : deleteThreadConfirm?.title,
-        })}
-        warning={deleteThreadConfirm?.isWorktree ? t('dialog.worktreeWarning') : undefined}
-        cancelLabel={t('common.cancel')}
-        confirmLabel={t('common.delete')}
-        loading={actionLoading}
-        onCancel={() => setDeleteThreadConfirm(null)}
-        onConfirm={handleDeleteThreadConfirm}
-      />
+      {/* Delete thread confirmation dialog — enhanced for worktree threads */}
+      {deleteThreadConfirm?.isWorktree ? (
+        <WorktreeDeleteDialog
+          open={!!deleteThreadConfirm}
+          target={deleteThreadConfirm}
+          loading={actionLoading}
+          onCancel={() => setDeleteThreadConfirm(null)}
+          onConfirm={({ deleteBranch }) => handleDeleteThreadConfirm({ deleteBranch })}
+        />
+      ) : (
+        <ConfirmDialog
+          open={!!deleteThreadConfirm}
+          onOpenChange={(open) => {
+            if (!open) setDeleteThreadConfirm(null);
+          }}
+          title={t('dialog.deleteThread')}
+          description={t('dialog.deleteThreadDesc', {
+            title:
+              deleteThreadConfirm?.title && deleteThreadConfirm.title.length > 80
+                ? deleteThreadConfirm.title.slice(0, 80) + '…'
+                : deleteThreadConfirm?.title,
+          })}
+          cancelLabel={t('common.cancel')}
+          confirmLabel={t('common.delete')}
+          loading={actionLoading}
+          onCancel={() => setDeleteThreadConfirm(null)}
+          onConfirm={() => handleDeleteThreadConfirm()}
+        />
+      )}
 
       {/* Rename project dialog */}
       <Dialog

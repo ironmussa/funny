@@ -16,13 +16,10 @@ import {
   Bot,
   Webhook,
   Terminal,
-  GitBranch,
-  FolderOpen,
   FolderOpenDot,
   MoreVertical,
   Square,
   Archive,
-  User,
 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useCallback, memo, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -30,8 +27,8 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
-import { DiffStats } from '@/components/DiffStats';
 import { SlideUpPrompt } from '@/components/SlideUpPrompt';
+import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -43,8 +40,7 @@ import {
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
-import { colorFromName, darkenHex } from '@/components/ui/project-chip';
+import { colorFromName } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { stageConfig, statusConfig, timeAgo } from '@/lib/thread-utils';
@@ -52,7 +48,6 @@ import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
-import { useAuthStore } from '@/stores/auth-store';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -106,7 +101,6 @@ export const KanbanCard = memo(function KanbanCard({
   const navigate = useNavigate();
   const setKanbanContext = useUIStore((s) => s.setKanbanContext);
   const pinThread = useThreadStore((s) => s.pinThread);
-  const authUser = useAuthStore((s) => s.user);
   const ref = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
@@ -139,7 +133,6 @@ export const KanbanCard = memo(function KanbanCard({
   const isRunning = thread.status === 'running';
   const isBusy = isRunning || thread.status === 'setting_up';
 
-  const displayBranch = resolveThreadBranch(thread) || thread.baseBranch;
   const [openDropdown, setOpenDropdown] = useState(false);
   const handleDropdownChange = useCallback((open: boolean) => setOpenDropdown(open), []);
 
@@ -197,59 +190,15 @@ export const KanbanCard = memo(function KanbanCard({
           />
         </div>
 
-        {(projectInfo || displayBranch) && (
-          <div className="mb-2 flex min-w-0 items-center gap-1.5">
-            <PowerlineBar
-              data-testid={`kanban-card-powerline-${thread.id}`}
-              size="sm"
-              segments={(() => {
-                const baseColor = projectInfo
-                  ? projectInfo.color || colorFromName(projectInfo.name)
-                  : '#52525b';
-                const segs: PowerlineSegmentData[] = [];
-                if (authUser) {
-                  segs.push({
-                    key: 'user',
-                    icon: User,
-                    label: authUser.displayName || authUser.username,
-                    color: baseColor,
-                  });
-                }
-                if (projectInfo) {
-                  segs.push({
-                    key: 'project',
-                    icon: FolderOpen,
-                    label: projectInfo.name,
-                    color: authUser ? darkenHex(baseColor, 0.12) : baseColor,
-                  });
-                }
-                if (displayBranch) {
-                  segs.push({
-                    key: 'branch',
-                    icon: GitBranch,
-                    label: displayBranch,
-                    color: darkenHex(
-                      baseColor,
-                      authUser && projectInfo ? 0.22 : projectInfo ? 0.12 : 0.12,
-                    ),
-                  });
-                }
-                return segs;
-              })()}
-            />
-            {gitStatusProp &&
-              (gitStatusProp.linesAdded > 0 ||
-                gitStatusProp.linesDeleted > 0 ||
-                gitStatusProp.dirtyFileCount > 0) && (
-                <DiffStats
-                  linesAdded={gitStatusProp.linesAdded}
-                  linesDeleted={gitStatusProp.linesDeleted}
-                  dirtyFileCount={gitStatusProp.dirtyFileCount}
-                  size="xxs"
-                />
-              )}
-          </div>
-        )}
+        <ThreadPowerline
+          thread={thread}
+          projectName={projectInfo?.name}
+          projectColor={projectInfo?.color}
+          gitStatus={gitStatusProp}
+          diffStatsSize="xxs"
+          className="mb-2"
+          data-testid={`kanban-card-powerline-${thread.id}`}
+        />
 
         {contentSnippet && search && !normalize(thread.title).includes(normalize(search)) && (
           <HighlightText

@@ -64,4 +64,10 @@ export interface PtyBackend {
    * Returns the captured content with ANSI escape sequences preserved.
    */
   capturePane?(id: string): string | null;
+
+  /**
+   * Send a signal to a PTY process without killing the session.
+   * Used for SIGINT (2), SIGTERM (15), SIGKILL (9).
+   */
+  signal?(id: string, signal: number): void;
 }

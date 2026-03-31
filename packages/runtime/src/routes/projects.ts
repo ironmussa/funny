@@ -24,7 +24,12 @@ import {
 import { Hono } from 'hono';
 
 import { requireAdmin } from '../middleware/auth.js';
-import { startCommand, stopCommand, isCommandRunning } from '../services/command-runner.js';
+import {
+  startCommand,
+  stopCommand,
+  isCommandRunning,
+  getCommandMetrics,
+} from '../services/command-runner.js';
 import { resolveIdentity } from '../services/git-service.js';
 import * as pc from '../services/project-config-service.js';
 import * as ph from '../services/project-hooks-service.js';
@@ -213,7 +218,22 @@ projectRoutes.post('/:id/commands/:cmdId/start', requireAdmin, async (c) => {
   const cmd = await getServices().startupCommands.getCommand(cmdId);
   if (!cmd) return c.json({ error: 'Command not found' }, 404);
 
-  await startCommand(cmdId, cmd.command, project.path, projectId, cmd.label);
+  // Optional auto-restart options from request body
+  let options: import('../services/command-runner.js').RestartOptions | undefined;
+  try {
+    const body = await c.req.json();
+    if (body?.autoRestart !== undefined) {
+      options = {
+        autoRestart: body.autoRestart,
+        maxRestarts: body.maxRestarts,
+        restartWindow: body.restartWindowSec ? body.restartWindowSec * 1000 : undefined,
+      };
+    }
+  } catch {
+    // No body or invalid JSON — that's fine, defaults will be used
+  }
+
+  await startCommand(cmdId, cmd.command, project.path, projectId, cmd.label, options);
   return c.json({ ok: true });
 });
 
@@ -228,6 +248,76 @@ projectRoutes.post('/:id/commands/:cmdId/stop', async (c) => {
 projectRoutes.get('/:id/commands/:cmdId/status', (c) => {
   const cmdId = c.req.param('cmdId');
   return c.json({ running: isCommandRunning(cmdId) });
+});
+
+// GET /api/projects/:id/commands/:cmdId/metrics
+projectRoutes.get('/:id/commands/:cmdId/metrics', (c) => {
+  const cmdId = c.req.param('cmdId');
+  const metrics = getCommandMetrics(cmdId);
+  if (!metrics) return c.json({ error: 'Command not running' }, 404);
+  return c.json(metrics);
+});
+
+// POST /api/projects/:id/sync-processes — sync .funny.json processes + Procfile with startup commands
+projectRoutes.post('/:id/sync-processes', requireAdmin, async (c) => {
+  const projectId = c.req.param('id');
+  const projectResult = await requireProject(projectId);
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+  const project = projectResult.value;
+
+  const { readProjectConfig } = await import('@funny/core/ports');
+  const { readProcfile } = await import('@funny/core/ports');
+
+  const config = readProjectConfig(project.path);
+  const configProcesses = config?.processes ?? [];
+  const procfileProcesses = readProcfile(project.path);
+
+  // Merge: config processes override Procfile by name
+  const merged = new Map<string, { name: string; command: string }>();
+  for (const p of procfileProcesses) merged.set(p.name, p);
+  for (const p of configProcesses) merged.set(p.name, p);
+
+  const existing = await getServices().startupCommands.listCommands(projectId);
+  let synced = 0;
+
+  for (const proc of merged.values()) {
+    const match = existing.find((e: any) => e.label === proc.name);
+    if (!match) {
+      await getServices().startupCommands.createCommand({
+        projectId,
+        label: proc.name,
+        command: proc.command,
+      });
+      synced++;
+    } else if (match.command !== proc.command) {
+      await getServices().startupCommands.updateCommand(match.id, {
+        label: proc.name,
+        command: proc.command,
+      });
+      synced++;
+    }
+  }
+
+  return c.json({ synced, total: merged.size });
+});
+
+// POST /api/projects/:id/sync-config — sync both processes and automations from .funny.json
+projectRoutes.post('/:id/sync-config', requireAdmin, async (c) => {
+  const projectId = c.req.param('id');
+  const userId = c.get('userId');
+  const projectResult = await requireProject(projectId);
+  if (projectResult.isErr()) return resultToResponse(c, projectResult);
+  const project = projectResult.value;
+
+  const { syncConfigAutomations } = await import('../services/config-automation-sync.js');
+  const automationResult = await syncConfigAutomations(projectId, project.path, userId);
+
+  const { readProjectConfig } = await import('@funny/core/ports');
+  const { readProcfile } = await import('@funny/core/ports');
+  const config = readProjectConfig(project.path);
+  const processCount = (config?.processes?.length ?? 0) + readProcfile(project.path).length;
+
+  return c.json({ automations: automationResult, processes: processCount });
 });
 
 // ─── Project Config (.funny.json) ──────────────────────

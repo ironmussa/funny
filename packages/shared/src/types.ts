@@ -153,6 +153,12 @@ export interface GitHubIssue {
   pull_request?: unknown;
 }
 
+export interface EnrichedGitHubIssue extends GitHubIssue {
+  linkedBranch: string | null;
+  linkedPR: { number: number; url: string; state: string } | null;
+  suggestedBranchName: string;
+}
+
 export interface GitHubPR {
   number: number;
   title: string;
@@ -172,6 +178,81 @@ export interface GitHubPR {
     color: string;
   }>;
   merged_at: string | null;
+}
+
+// ─── PR Detail (rich data for PR Summary Card) ───────────
+
+export type CICheckConclusion =
+  | 'success'
+  | 'failure'
+  | 'neutral'
+  | 'cancelled'
+  | 'skipped'
+  | 'timed_out'
+  | 'action_required'
+  | 'stale'
+  | null;
+
+export interface CICheck {
+  id: number;
+  name: string;
+  status: 'queued' | 'in_progress' | 'completed';
+  conclusion: CICheckConclusion;
+  html_url: string | null;
+  started_at: string | null;
+  completed_at: string | null;
+  app_name: string | null;
+}
+
+export type MergeableState = 'mergeable' | 'conflicting' | 'unknown';
+export type ReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null;
+
+export interface PRDetail {
+  number: number;
+  title: string;
+  body: string;
+  state: 'open' | 'closed';
+  draft: boolean;
+  merged: boolean;
+  mergeable_state: MergeableState;
+  html_url: string;
+  additions: number;
+  deletions: number;
+  changed_files: number;
+  head: { ref: string; sha: string };
+  base: { ref: string };
+  user: { login: string; avatar_url: string } | null;
+  review_decision: ReviewDecision;
+  checks: CICheck[];
+  checks_passed: number;
+  checks_failed: number;
+  checks_pending: number;
+  created_at: string;
+  updated_at: string;
+}
+
+// ─── PR Review Threads (inline comments) ─────────────────
+
+export interface PRThreadComment {
+  id: number;
+  author: string;
+  author_avatar_url: string;
+  body: string;
+  created_at: string;
+  updated_at: string;
+  author_association: string;
+}
+
+export interface PRReviewThread {
+  id: number;
+  path: string;
+  line: number | null;
+  original_line: number | null;
+  side: 'LEFT' | 'RIGHT';
+  start_line: number | null;
+  is_resolved: boolean;
+  is_outdated: boolean;
+  comments: PRThreadComment[];
 }
 
 export interface CloneRepoRequest {
@@ -1060,6 +1141,8 @@ export interface Automation {
   enabled: boolean;
   maxRunHistory: number;
   lastRunAt?: string;
+  /** Whether this automation was created in the UI or synced from .funny.json */
+  source?: AutomationSource;
   createdAt: string;
   updatedAt: string;
 }
@@ -1294,6 +1377,28 @@ export interface FunnyPortGroup {
   envVars: string[];
 }
 
+/** A managed process definition from .funny.json or Procfile */
+export interface FunnyProcessConfig {
+  name: string;
+  command: string;
+  /** Auto-restart on non-zero exit (default: true for Procfile, false for .funny.json) */
+  autoRestart?: boolean;
+  /** Max restarts within restartWindowSec before giving up (default: 5) */
+  maxRestarts?: number;
+  /** Time window in seconds for restart counting (default: 60) */
+  restartWindowSec?: number;
+}
+
+/** An automation definition from .funny.json */
+export interface FunnyAutomationConfig {
+  name: string;
+  prompt: string;
+  schedule: string;
+  provider?: string;
+  model?: string;
+  permissionMode?: string;
+}
+
 export interface FunnyProjectConfig {
   /** Relative paths to .env files to copy into worktrees (e.g. "packages/runtime/.env") */
   envFiles?: string[];
@@ -1301,6 +1406,22 @@ export interface FunnyProjectConfig {
   portGroups?: FunnyPortGroup[];
   /** Shell commands to run in the worktree after creation (e.g. ["bun install"]) */
   postCreate?: string[];
+  /** Managed processes — auto-started with the project, optionally auto-restarted */
+  processes?: FunnyProcessConfig[];
+  /** Automations — synced to DB on project load */
+  automations?: FunnyAutomationConfig[];
+}
+
+/** Source of an automation: created in UI or synced from .funny.json config */
+export type AutomationSource = 'ui' | 'config';
+
+/** Process health metrics emitted via WebSocket */
+export interface WSCommandMetricsData {
+  commandId: string;
+  projectId: string;
+  uptime: number;
+  restartCount: number;
+  memoryUsageKB: number;
 }
 
 // ─── Paisley Park (Project Memory) ──────────────────────

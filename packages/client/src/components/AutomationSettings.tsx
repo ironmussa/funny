@@ -206,6 +206,14 @@ export function AutomationSettings() {
                   <span className="flex-shrink-0 rounded-full bg-muted px-1.5 py-0.5 text-xs text-muted-foreground">
                     {a.model}
                   </span>
+                  {a.source === 'config' && (
+                    <span
+                      className="flex-shrink-0 rounded-full bg-blue-500/15 px-1.5 py-0.5 text-xs text-blue-500"
+                      data-testid={`automation-config-badge-${a.id}`}
+                    >
+                      .funny.json
+                    </span>
+                  )}
                 </div>
                 <p className="mt-0.5 truncate pl-4 text-xs text-muted-foreground">{a.prompt}</p>
                 {a.lastRunAt && (
@@ -255,32 +263,36 @@ export function AutomationSettings() {
                   </TooltipTrigger>
                   <TooltipContent>Run History</TooltipContent>
                 </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => openEditDialog(a)}
-                      className="text-muted-foreground"
-                    >
-                      <Pencil className="icon-sm" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Edit</TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={() => handleDelete(a)}
-                      className="text-muted-foreground hover:text-status-error"
-                    >
-                      <Trash2 className="icon-sm" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Delete</TooltipContent>
-                </Tooltip>
+                {a.source !== 'config' && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => openEditDialog(a)}
+                        className="text-muted-foreground"
+                      >
+                        <Pencil className="icon-sm" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Edit</TooltipContent>
+                  </Tooltip>
+                )}
+                {a.source !== 'config' && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={() => handleDelete(a)}
+                        className="text-muted-foreground hover:text-status-error"
+                      >
+                        <Trash2 className="icon-sm" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Delete</TooltipContent>
+                  </Tooltip>
+                )}
               </div>
             </div>
 

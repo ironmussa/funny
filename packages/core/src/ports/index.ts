@@ -9,6 +9,7 @@ import { allocatePorts } from './port-allocator.js';
 
 export type { PortAllocation } from './port-allocator.js';
 export { readProjectConfig } from './config-reader.js';
+export { readProcfile } from './procfile-reader.js';
 export { isPortAvailable, findAvailablePort, allocatePorts } from './port-allocator.js';
 export { copyAndOverrideEnv, readAllocatedPorts } from './env-writer.js';
 

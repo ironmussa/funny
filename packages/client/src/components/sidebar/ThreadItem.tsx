@@ -4,22 +4,20 @@ import {
   Trash2,
   MoreVertical,
   FolderOpenDot,
-  Folder,
   Terminal,
   Square,
   Pin,
   PinOff,
   Bot,
   Pencil,
-  GitBranch,
   GitPullRequest,
   GitPullRequestClosed,
   GitMerge,
 } from 'lucide-react';
-import { useState, memo, useCallback, useRef, useMemo } from 'react';
+import { useState, memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
-import { DiffStats } from '@/components/DiffStats';
+import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -36,15 +34,12 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import type { PowerlineSegmentData } from '@/components/ui/powerline-bar';
-import { PowerlineBar } from '@/components/ui/powerline-bar';
-import { colorFromName, darkenHex } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { statusConfig, timeAgo } from '@/lib/thread-utils';
 import { toastError } from '@/lib/toast-error';
-import { cn, resolveThreadBranch } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 
 export interface ThreadItemProps {
   thread: Thread;
@@ -128,12 +123,10 @@ export const ThreadItem = memo(function ThreadItem({
   if (gitStatus) lastGitStatusRef.current = gitStatus;
   const effectiveGitStatus = gitStatus ?? lastGitStatusRef.current;
 
-  // Git status — only used for diff stats
-  const showGitIcon = !!effectiveGitStatus && effectiveGitStatus.state !== 'clean';
-
   // Whether to show the second row (has project subtitle or git diff stats)
   const hasDiffStats =
-    showGitIcon &&
+    !!effectiveGitStatus &&
+    effectiveGitStatus.state !== 'clean' &&
     (effectiveGitStatus.linesAdded > 0 ||
       effectiveGitStatus.linesDeleted > 0 ||
       effectiveGitStatus.dirtyFileCount > 0);
@@ -141,62 +134,9 @@ export const ThreadItem = memo(function ThreadItem({
   const hasSnippet = !!thread.lastAssistantMessage;
   const showLaunching = isBusy && !hasSnippet;
   const isBacklog = !hasSnippet && !isBusy && (!thread.stage || thread.stage === 'backlog');
-  const hasMetadataRow = hasDiffStats || hasPR;
+  const hasPowerline = !!subtitle || !!thread.baseBranch || !!thread.branch;
+  const hasMetadataRow = hasDiffStats || hasPR || hasPowerline;
   const hasSnippetRow = hasSnippet || showLaunching || isBacklog;
-
-  // Powerline segments: project → baseBranch → worktree branch (for worktrees)
-  //                      project → branch (for local threads)
-  const isWorktree = thread.mode === 'worktree';
-  const effectiveBranch = resolveThreadBranch(thread);
-  const branchName =
-    isWorktree && thread.baseBranch ? thread.baseBranch : effectiveBranch || thread.baseBranch;
-  const resolvedProjectColor = projectColor || (subtitle ? colorFromName(subtitle) : '#52525b');
-  const worktreeBranchLabel = isWorktree ? (effectiveBranch ?? '') : '';
-  const branchColor = darkenHex(resolvedProjectColor, 0.12);
-  const dirColor = darkenHex(resolvedProjectColor, 0.22);
-  const powerlineSegments = useMemo<PowerlineSegmentData[]>(() => {
-    const segments: PowerlineSegmentData[] = [];
-    if (subtitle) {
-      segments.push({
-        key: 'project',
-        icon: Folder,
-        label: subtitle,
-        color: resolvedProjectColor,
-        textColor: '#000000',
-        tooltip: projectPath,
-      });
-    }
-    if (branchName) {
-      segments.push({
-        key: 'branch',
-        icon: GitBranch,
-        label: branchName,
-        color: subtitle ? branchColor : resolvedProjectColor,
-        textColor: '#000000',
-        tooltip: branchName,
-      });
-    }
-    if (isWorktree && worktreeBranchLabel) {
-      segments.push({
-        key: 'worktree-branch',
-        icon: GitBranch,
-        label: worktreeBranchLabel,
-        color: subtitle ? dirColor : branchColor,
-        textColor: '#000000',
-        tooltip: worktreeBranchLabel,
-      });
-    }
-    return segments;
-  }, [
-    subtitle,
-    resolvedProjectColor,
-    projectPath,
-    branchName,
-    branchColor,
-    isWorktree,
-    worktreeBranchLabel,
-    dirColor,
-  ]);
 
   return (
     <div
@@ -284,24 +224,17 @@ export const ThreadItem = memo(function ThreadItem({
         </div>
 
         {/* Row 2: Powerline (project → branch) + Git status + Snippet + Time */}
-        {(hasMetadataRow || hasSnippetRow || powerlineSegments.length > 0) && (
+        {(hasMetadataRow || hasSnippetRow) && (
           <div className="flex min-w-0 items-center gap-1.5 pl-5">
-            {powerlineSegments.length > 0 && (
-              <PowerlineBar
-                segments={powerlineSegments}
-                size="sm"
-                className="min-w-0 flex-shrink"
-                data-testid={`thread-powerline-${thread.id}`}
-              />
-            )}
-            {hasDiffStats && (
-              <DiffStats
-                linesAdded={effectiveGitStatus.linesAdded}
-                linesDeleted={effectiveGitStatus.linesDeleted}
-                dirtyFileCount={effectiveGitStatus.dirtyFileCount}
-                size="xs"
-              />
-            )}
+            <ThreadPowerline
+              thread={thread}
+              projectName={subtitle}
+              projectColor={projectColor}
+              projectTooltip={projectPath}
+              gitStatus={effectiveGitStatus}
+              diffStatsSize="xs"
+              data-testid={`thread-powerline-${thread.id}`}
+            />
             {hasPR &&
               effectiveGitStatus &&
               (() => {

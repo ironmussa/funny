@@ -589,7 +589,12 @@
     "exited": "(finalizado)",
     "processExited": "[Processo finalizado]",
     "stop": "Parar",
-    "loading": "Iniciando terminal..."
+    "loading": "Iniciando terminal...",
+    "bellNotification": "Bell em \"{{label}}\"",
+    "sendSignal": "Enviar sinal",
+    "uptime": "Tempo ativo",
+    "memory": "Memória",
+    "restarts": "Reinícios"
   },
   "worktreeSettings": {
     "noProject": "Nenhum projeto selecionado. Adicione um projeto primeiro para gerenciar worktrees.",
@@ -626,7 +631,8 @@
     "revoke": "Revogar",
     "unassign": "Desatribuir",
     "run": "Executar",
-    "copyLink": "Copiar link"
+    "copyLink": "Copiar link",
+    "dismiss": "Dispensar"
   },
   "editor": {
     "failedToLoad": "Falha ao carregar o arquivo",
@@ -656,7 +662,12 @@
     "dirtyChanges": "Alterações não commitadas",
     "dirtyChangesDesc": "A thread \"{{title}}\" possui alterações não commitadas. Tem certeza de que deseja marcá-la como Concluída?",
     "convertToWorktreeTitle": "Converter para Worktree",
-    "convertToWorktreeDesc": "Isso criará uma nova branch e worktree para esta thread. O agente será parado se estiver em execução. Você pode continuar a conversa na branch isolada."
+    "convertToWorktreeDesc": "Isso criará uma nova branch e worktree para esta thread. O agente será parado se estiver em execução. Você pode continuar a conversa na branch isolada.",
+    "worktreeStatusLoading": "Verificando status da worktree...",
+    "unpushedCommitsWarning": "Esta worktree tem {{count}} commit(s) não enviado(s). Eles serão perdidos se não forem enviados primeiro.",
+    "dirtyFilesWarning": "Esta worktree tem {{count}} arquivo(s) não commitado(s).",
+    "noUnpushedCommits": "Todos os commits foram enviados ou mergeados.",
+    "deleteBranchOption": "Também excluir a branch local \"{{branch}}\""
   },
   "toast": {
     "threadArchived": "Thread arquivada com sucesso",
@@ -887,7 +898,12 @@
     "loadMore": "Carregar mais",
     "viewOnGithub": "Ver no GitHub",
     "notGithub": "Este projeto não está hospedado no GitHub",
-    "error": "Erro ao carregar issues"
+    "error": "Erro ao carregar issues",
+    "createThread": "Criar thread",
+    "linkedBranch": "branch",
+    "linkedPR": "PR",
+    "alreadyLinked": "Já possui uma branch",
+    "creatingFromIssue": "Criando thread a partir da issue: {{title}}"
   },
   "users": {
     "title": "Usuários",

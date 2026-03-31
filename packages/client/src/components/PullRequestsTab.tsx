@@ -198,14 +198,14 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
       </div>
 
       {/* Content */}
-      <div className="min-h-0 flex-1 overflow-auto">
+      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
         {loading && prs.length === 0 ? (
           <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
             <Loader2 className="icon-sm animate-spin" />
             {t('review.pullRequests.loading', 'Loading pull requests\u2026')}
           </div>
         ) : error ? (
-          <div className="flex flex-col items-center gap-2 p-4 text-xs text-muted-foreground">
+          <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-xs text-muted-foreground">
             <p>{error}</p>
             <Button
               variant="outline"
@@ -271,9 +271,19 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
                       <TooltipTrigger asChild>
                         <div className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
                           <GitBranch className="h-3 w-3 shrink-0" />
-                          <span className="truncate">{pr.head.ref}</span>
+                          <span
+                            className="block max-w-[45%] overflow-hidden text-ellipsis whitespace-nowrap"
+                            dir="rtl"
+                          >
+                            <bdi>{pr.head.ref}</bdi>
+                          </span>
                           <span className="shrink-0">&rarr;</span>
-                          <span className="truncate">{pr.base.ref}</span>
+                          <span
+                            className="block max-w-[35%] overflow-hidden text-ellipsis whitespace-nowrap"
+                            dir="rtl"
+                          >
+                            <bdi>{pr.base.ref}</bdi>
+                          </span>
                         </div>
                       </TooltipTrigger>
                       <TooltipContent side="bottom" className="text-xs">

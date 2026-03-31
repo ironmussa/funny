@@ -1,6 +1,14 @@
-import type { FileDiffSummary } from '@funny/shared';
-import { Columns2, FileCode, Loader2, Rows2 } from 'lucide-react';
-import { type ComponentType, Suspense, useState, useCallback, useRef, useEffect } from 'react';
+import type { FileDiffSummary, PRReviewThread } from '@funny/shared';
+import { Columns2, FileCode, Loader2, MessageSquare, Rows2, X } from 'lucide-react';
+import {
+  type ComponentType,
+  Suspense,
+  useState,
+  useCallback,
+  useRef,
+  useEffect,
+  useMemo,
+} from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -13,7 +21,10 @@ import {
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useDiffHighlight } from '@/hooks/use-diff-highlight';
+import { FileExtensionIcon } from '@/lib/file-icons';
+import { cn } from '@/lib/utils';
 
+import { DiffCommentThread } from '../DiffCommentThread';
 import { FileTree } from '../FileTree';
 import { ReactDiffViewer, DIFF_VIEWER_STYLES, getFileName } from './utils';
 
@@ -49,6 +60,8 @@ interface ExpandedDiffDialogProps {
   onIgnore?: (pattern: string) => void;
   /** Base path for constructing absolute file paths (for open-in-editor) */
   basePath?: string;
+  /** PR review threads for inline comments */
+  prReviewThreads?: PRReviewThread[];
 }
 
 /* ── Diff content (extracted to avoid re-highlighting on sidebar interactions) ── */
@@ -251,13 +264,66 @@ export function ExpandedDiffDialog({
   onRevertFile,
   onIgnore,
   basePath,
+  prReviewThreads,
 }: ExpandedDiffDialogProps) {
   const [splitView, setSplitView] = useState(true);
 
+  // ── Multi-tab state ──
+  const [openTabs, setOpenTabs] = useState<string[]>([filePath]);
+  const activeTab = filePath; // Active tab is always driven by parent's filePath prop
+
+  // Sync tabs: when filePath changes (parent selected a file), ensure it's in the tab list
+  useEffect(() => {
+    setOpenTabs((prev) => (prev.includes(filePath) ? prev : [...prev, filePath]));
+  }, [filePath]);
+
+  // Reset tabs when dialog closes
+  useEffect(() => {
+    if (!open) setOpenTabs([]);
+  }, [open]);
+
+  const handleTabClick = useCallback(
+    (path: string) => {
+      onFileSelect?.(path);
+    },
+    [onFileSelect],
+  );
+
+  const handleTabClose = useCallback(
+    (path: string, e: React.MouseEvent) => {
+      e.stopPropagation();
+      setOpenTabs((prev) => {
+        const next = prev.filter((p) => p !== path);
+        if (next.length === 0) {
+          // Closing last tab closes dialog
+          onOpenChange(false);
+          return prev;
+        }
+        // If closing the active tab, switch to adjacent
+        if (path === filePath) {
+          const idx = prev.indexOf(path);
+          const newActive = next[Math.min(idx, next.length - 1)];
+          onFileSelect?.(newActive);
+        }
+        return next;
+      });
+    },
+    [filePath, onFileSelect, onOpenChange],
+  );
+
+  // Filter review threads for the current file
+  const fileThreads = useMemo(
+    () => (prReviewThreads ?? []).filter((t) => t.path === filePath),
+    [prReviewThreads, filePath],
+  );
+
   const hasFileSidebar = files && files.length > 0 && onFileSelect;
+  const hasMultipleTabs = openTabs.length > 1;
 
   const handleFileClick = useCallback(
     (path: string) => {
+      // Add to tabs if not already there, then switch
+      setOpenTabs((prev) => (prev.includes(path) ? prev : [...prev, path]));
       onFileSelect?.(path);
     },
     [onFileSelect],
@@ -299,6 +365,39 @@ export function ExpandedDiffDialog({
             {description || `Diff for ${getFileName(filePath)}`}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Multi-tab bar — shown when multiple files are open */}
+        {hasMultipleTabs && (
+          <div
+            className="flex items-center overflow-x-auto border-b border-border bg-muted/30"
+            data-testid="diff-tab-bar"
+          >
+            {openTabs.map((tabPath) => (
+              <div
+                key={tabPath}
+                className={cn(
+                  'group flex items-center gap-1.5 border-r border-border px-3 py-1.5 text-[11px] cursor-pointer shrink-0',
+                  activeTab === tabPath
+                    ? 'bg-background text-foreground'
+                    : 'text-muted-foreground hover:bg-muted/50',
+                )}
+                onClick={() => handleTabClick(tabPath)}
+                data-testid={`diff-tab-${getFileName(tabPath)}`}
+              >
+                <FileExtensionIcon filePath={tabPath} className="h-3.5 w-3.5 shrink-0" />
+                <span className="max-w-[120px] truncate">{getFileName(tabPath)}</span>
+                <button
+                  onClick={(e) => handleTabClose(tabPath, e)}
+                  className="ml-0.5 rounded p-0.5 opacity-0 hover:bg-muted group-hover:opacity-100"
+                  data-testid={`diff-tab-close-${getFileName(tabPath)}`}
+                >
+                  <X className="h-3 w-3" />
+                </button>
+              </div>
+            ))}
+          </div>
+        )}
+
         <div className="flex min-h-0 flex-1">
           {/* File tree sidebar — shared FileTree component */}
           {hasFileSidebar && (
@@ -326,7 +425,7 @@ export function ExpandedDiffDialog({
             </div>
           )}
 
-          {/* Diff content */}
+          {/* Diff content + review threads */}
           <ScrollArea className="min-h-0 flex-1">
             <DiffContent
               oldValue={oldValue}
@@ -335,6 +434,27 @@ export function ExpandedDiffDialog({
               splitView={splitView}
               loading={loading}
             />
+            {/* Inline PR review threads for this file */}
+            {fileThreads.length > 0 && (
+              <div
+                className="border-t border-border bg-muted/20 px-4 py-3"
+                data-testid="diff-review-threads"
+              >
+                <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <MessageSquare className="h-3.5 w-3.5" />
+                  {fileThreads.length} review {fileThreads.length === 1 ? 'thread' : 'threads'}
+                </div>
+                <div className="space-y-2">
+                  {fileThreads.map((thread) => (
+                    <DiffCommentThread
+                      key={thread.id}
+                      thread={thread}
+                      className="w-full max-w-none"
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </ScrollArea>
         </div>
       </DialogContent>

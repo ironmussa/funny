@@ -234,6 +234,8 @@ export const createWorktreeSchema = z.object({
 export const deleteWorktreeSchema = z.object({
   projectId: z.string().min(1),
   worktreePath: z.string().min(1),
+  branchName: z.string().optional(),
+  deleteBranch: z.boolean().optional().default(false),
 });
 
 export const addSkillSchema = z.object({

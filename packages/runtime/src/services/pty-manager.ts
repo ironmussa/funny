@@ -375,6 +375,19 @@ export async function capturePaneAsync(id: string): Promise<string | null> {
   return capturePane(id);
 }
 
+export function signalPty(id: string, signal: number): void {
+  if (backend.signal) {
+    backend.signal(id, signal);
+  } else {
+    log.warn('Signal not supported by PTY backend', {
+      namespace: 'pty-manager',
+      ptyId: id,
+      signal,
+      backend: backend.name,
+    });
+  }
+}
+
 export function killPty(id: string): void {
   log.info('Requesting kill PTY', { namespace: 'pty-manager', ptyId: id });
   backend.kill(id);

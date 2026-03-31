@@ -156,6 +156,22 @@ export class HeadlessPtyBackend implements PtyBackend {
     }
   }
 
+  signal(id: string, sig: number): void {
+    const session = this.sessions.get(id);
+    if (session) {
+      try {
+        session.proc.kill(sig);
+      } catch (err: any) {
+        log.error('Failed to signal headless PTY', {
+          namespace: 'pty-headless',
+          ptyId: id,
+          signal: sig,
+          error: err?.message,
+        });
+      }
+    }
+  }
+
   kill(id: string): void {
     const session = this.sessions.get(id);
     if (session) {

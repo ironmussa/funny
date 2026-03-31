@@ -94,6 +94,12 @@ interface PingCmd {
   cmd: 'ping';
 }
 
+interface SignalCmd {
+  cmd: 'signal';
+  id: string;
+  signal: number;
+}
+
 type DaemonCommand =
   | SpawnCmd
   | WriteCmd
@@ -102,7 +108,8 @@ type DaemonCommand =
   | ListCmd
   | CaptureCmd
   | ShutdownCmd
-  | PingCmd;
+  | PingCmd
+  | SignalCmd;
 
 // ── Session Management ───────────────────────────────────────────────
 
@@ -221,6 +228,18 @@ function resizeSession(id: string, cols: number, rows: number): void {
   }
 }
 
+function signalSession(id: string, sig: number): void {
+  const session = sessions.get(id);
+  if (session) {
+    try {
+      session.proc.kill(sig);
+      daemonLog(`[pty-daemon] Signal ${sig} sent to session: ${id}`);
+    } catch (err: any) {
+      daemonLog(`[pty-daemon] Signal failed: ${id}`, err?.message);
+    }
+  }
+}
+
 function killSession(id: string): void {
   const session = sessions.get(id);
   if (session) {
@@ -250,6 +269,18 @@ function listSessions(): Array<{
     cols: s.cols,
     rows: s.rows,
   }));
+}
+
+function signalSession(id: string, sig: number): void {
+  const session = sessions.get(id);
+  if (session) {
+    try {
+      session.proc.kill(sig);
+      daemonLog(`[pty-daemon] Signal ${sig} sent to: ${id}`);
+    } catch (err: any) {
+      daemonLog(`[pty-daemon] Signal failed: ${id}`, err?.message);
+    }
+  }
 }
 
 function captureSession(id: string): string | null {
@@ -291,6 +322,9 @@ function handleCommand(socket: import('bun').Socket, msg: DaemonCommand): void {
       break;
     case 'resize':
       resizeSession(msg.id, msg.cols, msg.rows);
+      break;
+    case 'signal':
+      signalSession(msg.id, msg.signal);
       break;
     case 'kill':
       killSession(msg.id);

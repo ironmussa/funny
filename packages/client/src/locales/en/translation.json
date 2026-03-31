@@ -598,7 +598,12 @@
     "exited": "(exited)",
     "processExited": "[Process exited]",
     "stop": "Stop",
-    "loading": "Starting terminal..."
+    "loading": "Starting terminal...",
+    "bellNotification": "Bell in \"{{label}}\"",
+    "sendSignal": "Send signal",
+    "uptime": "Uptime",
+    "memory": "Memory",
+    "restarts": "Restarts"
   },
   "worktreeSettings": {
     "noProject": "No project selected. Add a project first to manage worktrees.",
@@ -635,7 +640,8 @@
     "revoke": "Revoke",
     "unassign": "Unassign",
     "run": "Run",
-    "copyLink": "Copy link"
+    "copyLink": "Copy link",
+    "dismiss": "Dismiss"
   },
   "editor": {
     "failedToLoad": "Failed to load file",
@@ -669,7 +675,12 @@
     "dirtyChanges": "Uncommitted changes",
     "dirtyChangesDesc": "The thread \"{{title}}\" has uncommitted changes. Are you sure you want to mark it as Done?",
     "convertToWorktreeTitle": "Convert to Worktree",
-    "convertToWorktreeDesc": "This will create a new branch and worktree for this thread. The agent will be stopped if running. You can continue the conversation in the isolated branch."
+    "convertToWorktreeDesc": "This will create a new branch and worktree for this thread. The agent will be stopped if running. You can continue the conversation in the isolated branch.",
+    "worktreeStatusLoading": "Checking worktree status...",
+    "unpushedCommitsWarning": "This worktree has {{count}} unpushed commit(s). They will be lost if not pushed first.",
+    "dirtyFilesWarning": "This worktree has {{count}} uncommitted file(s).",
+    "noUnpushedCommits": "All commits have been pushed or merged.",
+    "deleteBranchOption": "Also delete local branch \"{{branch}}\""
   },
   "toast": {
     "threadArchived": "Thread archived successfully",
@@ -906,7 +917,12 @@
     "loadMore": "Load more",
     "viewOnGithub": "View on GitHub",
     "notGithub": "This project is not hosted on GitHub",
-    "error": "Failed to load issues"
+    "error": "Failed to load issues",
+    "createThread": "Create thread",
+    "linkedBranch": "branch",
+    "linkedPR": "PR",
+    "alreadyLinked": "Already has a branch",
+    "creatingFromIssue": "Creating thread from issue: {{title}}"
   },
   "users": {
     "title": "Users",

@@ -37,7 +37,14 @@ interface BufferedMessage {
 
 let pendingMessages = new Map<string, BufferedMessage>(); // threadId → latest message
 let pendingToolOutputs: Array<{ threadId: string; data: any }> = [];
+let pendingStatuses = new Map<string, BufferedMessage>(); // threadId → latest status
 let rafId: number | null = null;
+
+// ── agent:status dedup ──────────────────────────────────────────
+// The server sometimes emits identical agent:status events within the same
+// millisecond. We keep the last status per thread and skip duplicates to
+// avoid unnecessary Zustand store updates and cascading re-renders.
+const lastStatusByThread = new Map<string, string>(); // threadId → serialized key
 
 /** Tool names that are likely to modify files on disk. */
 const FILE_MODIFYING_TOOLS = new Set(['Write', 'Edit', 'Bash']);
@@ -47,11 +54,17 @@ function flushBatch() {
 
   const msgs = Array.from(pendingMessages.values());
   const toolOutputs = pendingToolOutputs.slice();
+  const statuses = Array.from(pendingStatuses.values());
   pendingMessages.clear();
   pendingToolOutputs = [];
+  pendingStatuses.clear();
 
   startTransition(() => {
     const store = useThreadStore.getState();
+    // Flush statuses first so message handlers see up-to-date thread state
+    for (const entry of statuses) {
+      store.handleWSStatus(entry.threadId, entry.data);
+    }
     for (const entry of msgs) {
       store.handleWSMessage(entry.threadId, entry.data);
     }
@@ -90,18 +103,37 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
         useThreadStore.getState().handleWSInit(threadId, data);
       });
       break;
-    case 'agent:status':
+    case 'agent:status': {
+      // Dedup: skip if this is the exact same status we already processed
+      const statusKey = `${data.status}|${data.waitingReason ?? ''}|${data.permissionRequest?.toolName ?? ''}|${data.stage ?? ''}|${data.permissionMode ?? ''}`;
+      const prev = lastStatusByThread.get(threadId);
+      if (prev === statusKey) break; // duplicate — skip
+      lastStatusByThread.set(threadId, statusKey);
+
       wsLog.info('agent:status', {
         threadId,
         status: data.status,
         waitingReason: data.waitingReason ?? '',
         permissionRequest: data.permissionRequest?.toolName ?? '',
       });
-      startTransition(() => {
-        useThreadStore.getState().handleWSStatus(threadId, data);
-      });
+
+      // Waiting/permission statuses need immediate processing for UX responsiveness
+      // (user sees the permission dialog without delay). Other statuses are batched.
+      if (data.status === 'waiting' || data.permissionRequest) {
+        startTransition(() => {
+          useThreadStore.getState().handleWSStatus(threadId, data);
+        });
+      } else {
+        pendingStatuses.set(threadId, { threadId, data });
+        scheduleFlush();
+      }
       break;
+    }
     case 'agent:result': {
+      // Clear status dedup cache — the agent run finished, next run should
+      // process statuses fresh even if they repeat the same values.
+      lastStatusByThread.delete(threadId);
+
       wsLog.info('agent:result', {
         threadId,
         status: data.status ?? '',
@@ -115,11 +147,14 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       }
       const msgs = Array.from(pendingMessages.values());
       const toolOutputs = pendingToolOutputs.slice();
+      const statuses2 = Array.from(pendingStatuses.values());
       pendingMessages.clear();
       pendingToolOutputs = [];
+      pendingStatuses.clear();
 
-      if (msgs.length > 0 || toolOutputs.length > 0) {
+      if (statuses2.length > 0 || msgs.length > 0 || toolOutputs.length > 0) {
         const store = useThreadStore.getState();
+        for (const entry of statuses2) store.handleWSStatus(entry.threadId, entry.data);
         for (const entry of msgs) store.handleWSMessage(entry.threadId, entry.data);
         for (const entry of toolOutputs) store.handleWSToolOutput(entry.threadId, entry.data);
       }
@@ -191,6 +226,10 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
         termStore2.markCommandExited(data.commandId);
         closePreviewForCommand(data.commandId);
       }
+      break;
+    }
+    case 'command:metrics': {
+      useTerminalStore.getState().updateCommandMetrics(data);
       break;
     }
     case 'automation:run_started': {
@@ -300,6 +339,28 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       if (data.status === 'completed' || data.status === 'failed') {
         import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
           useReviewPaneStore.getState().notifyDirty(threadId);
+        });
+      }
+      // Invalidate PR detail cache after PR-related actions complete
+      if (
+        data.status === 'completed' &&
+        (data.action === 'push' ||
+          data.action === 'create-pr' ||
+          data.action === 'commit-pr' ||
+          data.action === 'commit-merge')
+      ) {
+        import('@/stores/pr-detail-store').then(({ usePRDetailStore }) => {
+          const { activeThread } = useThreadStore.getState();
+          if (activeThread) {
+            const gitStatus = useGitStatusStore.getState();
+            const bk =
+              gitStatus.threadToBranchKey[activeThread.id] ??
+              `${activeThread.projectId}:${activeThread.branch ?? ''}`;
+            const prNum = gitStatus.statusByBranch[bk]?.prNumber;
+            if (prNum) {
+              usePRDetailStore.getState().invalidate(activeThread.projectId, prNum);
+            }
+          }
         });
       }
       break;
@@ -433,6 +494,7 @@ const ALL_EVENT_TYPES = [
   'agent:context_usage',
   'command:output',
   'command:status',
+  'command:metrics',
   'automation:run_started',
   'automation:run_completed',
   'automation:run_updated',
@@ -616,6 +678,8 @@ function teardown() {
   }
   pendingMessages.clear();
   pendingToolOutputs = [];
+  pendingStatuses.clear();
+  lastStatusByThread.clear();
   if (activeSocket) {
     activeSocket.disconnect();
     activeSocket = null;

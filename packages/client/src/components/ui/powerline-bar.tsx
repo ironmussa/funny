@@ -2,7 +2,7 @@ import * as React from 'react';
 
 import { cn, ICON_SIZE } from '@/lib/utils';
 
-import { contrastText } from './project-chip';
+import { contrastText, darkenHex } from './project-chip';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
 
 export interface PowerlineSegmentData {
@@ -47,17 +47,12 @@ const sizeConfig = {
 
 /**
  * Compute a drop-shadow filter that gives the clipped arrow shape a visible
- * edge.  Uses a contrasting semi-transparent color (white on dark backgrounds,
- * black on light backgrounds) so adjacent segments with identical colors still
- * show a clear boundary.
+ * edge.  Uses a darkened shade of the segment's own color so the divider
+ * blends naturally instead of appearing as a harsh white/black line.
  */
 function arrowEdgeShadow(color: string): string {
-  const edge = contrastText(color);
-  // White edges need a bit more opacity to be visible; black edges are naturally heavier
-  const alpha = edge === '#ffffff' ? 0.45 : 0.25;
-  const rgba = edge === '#ffffff' ? `rgba(255,255,255,${alpha})` : `rgba(0,0,0,${alpha})`;
-  // 1px shadow in the arrow direction (positive-x) outlines the right edge
-  return `drop-shadow(1px 0 0 ${rgba})`;
+  const darker = darkenHex(color, 0.35);
+  return `drop-shadow(1px 0 0 ${darker})`;
 }
 
 export function PowerlineBar({ segments, size = 'md', className, ...props }: PowerlineBarProps) {

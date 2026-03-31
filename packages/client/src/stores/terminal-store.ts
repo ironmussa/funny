@@ -22,6 +22,8 @@ export interface TerminalTab {
   error?: string;
   /** Tab was restored from a server-side persistent session (tmux) */
   restored?: boolean;
+  /** True when a bell (\x07) was received while this tab was not active */
+  hasBell?: boolean;
 }
 
 // Buffer for pty:data that arrives before a callback is registered.
@@ -53,6 +55,16 @@ interface TerminalState {
   registerPtyCallback: (ptyId: string, callback: (data: string) => void) => void;
   unregisterPtyCallback: (ptyId: string) => void;
   emitPtyData: (ptyId: string, data: string) => void;
+  setBellActive: (id: string) => void;
+  clearBell: (id: string) => void;
+  /** Metrics for running commands (uptime, memory, restart count) */
+  commandMetrics: Record<string, { uptime: number; restartCount: number; memoryUsageKB: number }>;
+  updateCommandMetrics: (data: {
+    commandId: string;
+    uptime: number;
+    restartCount: number;
+    memoryUsageKB: number;
+  }) => void;
   markSessionsChecked: () => void;
   resetSessionsChecked: () => void;
   restoreTabs: (
@@ -68,6 +80,7 @@ export const useTerminalStore = create<TerminalState>()(
       activeTabId: null,
       panelVisible: false,
       commandOutput: {},
+      commandMetrics: {},
       ptyDataCallbacks: {},
       sessionsChecked: false,
 
@@ -97,7 +110,11 @@ export const useTerminalStore = create<TerminalState>()(
           };
         }),
 
-      setActiveTab: (id) => set({ activeTabId: id }),
+      setActiveTab: (id) =>
+        set((state) => ({
+          activeTabId: id,
+          tabs: state.tabs.map((t) => (t.id === id ? { ...t, hasBell: false } : t)),
+        })),
 
       markExited: (id) =>
         set((state) => ({
@@ -177,6 +194,28 @@ export const useTerminalStore = create<TerminalState>()(
           buf.push(data);
         }
       },
+
+      setBellActive: (id) =>
+        set((state) => ({
+          tabs: state.tabs.map((t) => (t.id === id ? { ...t, hasBell: true } : t)),
+        })),
+
+      clearBell: (id) =>
+        set((state) => ({
+          tabs: state.tabs.map((t) => (t.id === id ? { ...t, hasBell: false } : t)),
+        })),
+
+      updateCommandMetrics: (data) =>
+        set((state) => ({
+          commandMetrics: {
+            ...state.commandMetrics,
+            [data.commandId]: {
+              uptime: data.uptime,
+              restartCount: data.restartCount,
+              memoryUsageKB: data.memoryUsageKB,
+            },
+          },
+        })),
 
       markSessionsChecked: () => set({ sessionsChecked: true }),
       resetSessionsChecked: () => set({ sessionsChecked: false }),

@@ -1,11 +1,12 @@
 import type { ThreadPurpose } from '@funny/shared';
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
-import { FolderOpen, GitBranch, Globe, Github, Loader2 } from 'lucide-react';
+import { CircleDot, FolderOpen, GitBranch, GitFork, Globe, Github, Loader2 } from 'lucide-react';
 import { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
+import { Button } from '@/components/ui/button';
 import { useNavigationBlock } from '@/hooks/use-navigation-block';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
@@ -37,6 +38,20 @@ function generateArcName(prompt: string): string {
   return `${slug}-${suffix}`;
 }
 
+/** Replicate server-side slugifyTitle for branch name preview. */
+function slugifyTitle(title: string, maxLength = 40): string {
+  return (
+    title
+      .toLowerCase()
+      .replace(/[^a-z0-9\s-]/g, '')
+      .trim()
+      .replace(/\s+/g, '-')
+      .replace(/-+/g, '-')
+      .slice(0, maxLength)
+      .replace(/-$/, '') || 'thread'
+  );
+}
+
 export function NewThreadInput() {
   const navigate = useNavigate();
   const { t } = useTranslation();
@@ -44,6 +59,8 @@ export function NewThreadInput() {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const effectiveProjectId = newThreadProjectId || selectedProjectId;
   const newThreadIdleOnly = useUIStore((s) => s.newThreadIdleOnly);
+  const issueContext = useUIStore((s) => s.newThreadIssueContext);
+  const clearIssueContext = useUIStore((s) => s.clearIssueContext);
   const cancelNewThread = useUIStore((s) => s.cancelNewThread);
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
@@ -77,6 +94,10 @@ export function NewThreadInput() {
     }
   }, [projectPath]);
 
+  // ── Worktree preview ──
+  const [previewBranch, setPreviewBranch] = useState<string | null>(null);
+  const [isWorktreeMode, setIsWorktreeMode] = useState(defaultThreadMode === 'worktree');
+
   // ── Save-to-backlog guard ──
   const hasContentRef = useRef(false);
   const latestPromptTextRef = useRef('');
@@ -84,10 +105,21 @@ export function NewThreadInput() {
   // Skip blocking when the user just submitted (created a thread successfully)
   const justSubmittedRef = useRef(false);
 
-  const handleContentChange = useCallback((hasContent: boolean, text: string) => {
-    hasContentRef.current = hasContent;
-    latestPromptTextRef.current = text;
-  }, []);
+  const handleContentChange = useCallback(
+    (hasContent: boolean, text: string) => {
+      hasContentRef.current = hasContent;
+      latestPromptTextRef.current = text;
+      // Update worktree preview branch name (mirrors server-side naming)
+      if (hasContent && text.trim()) {
+        const projectSlug = slugifyTitle(project?.name || 'project');
+        const titleSlug = slugifyTitle(text.slice(0, 200));
+        setPreviewBranch(`${projectSlug}/${titleSlug}-xxxxxx`);
+      } else {
+        setPreviewBranch(null);
+      }
+    },
+    [project?.name],
+  );
 
   // Block navigation when the editor has unsaved content
   const blocker = useNavigationBlock((currentPath, nextPath) => {
@@ -292,14 +324,45 @@ export function NewThreadInput() {
             </>
           )}
         </div>
+        {issueContext && (
+          <div
+            className="mb-1.5 flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2 py-1 text-xs"
+            data-testid="issue-context-banner"
+          >
+            <CircleDot className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+            <span className="truncate text-muted-foreground">
+              {t('issues.creatingFromIssue', { title: issueContext.title })}
+            </span>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto h-5 px-1 text-[10px]"
+              onClick={clearIssueContext}
+              data-testid="issue-context-dismiss"
+            >
+              {t('common.dismiss')}
+            </Button>
+          </div>
+        )}
+        {isWorktreeMode && previewBranch && (
+          <div
+            className="mb-1.5 flex items-center gap-1.5 text-[10px] text-muted-foreground/60"
+            data-testid="worktree-preview"
+          >
+            <GitFork className="h-3 w-3 shrink-0" />
+            <span className="truncate font-mono">{previewBranch}</span>
+          </div>
+        )}
         <PromptInput
-          key={effectiveProjectId}
+          key={issueContext ? `${effectiveProjectId}-issue` : effectiveProjectId}
           onSubmit={handleCreate}
           loading={creating}
           isNewThread
           showBacklog
           projectId={effectiveProjectId || undefined}
+          initialPrompt={issueContext?.prompt}
           onContentChange={handleContentChange}
+          onWorktreeModeChange={setIsWorktreeMode}
         />
       </div>
 

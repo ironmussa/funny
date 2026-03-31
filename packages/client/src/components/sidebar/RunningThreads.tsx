@@ -32,7 +32,10 @@ export function RunningThreads() {
 
     for (const [projectId, threads] of Object.entries(threadsByProject)) {
       for (const thread of threads) {
-        if (thread.status === 'running' || thread.status === 'waiting') {
+        if (
+          (thread.status === 'running' || thread.status === 'waiting') &&
+          thread.stage !== 'done'
+        ) {
           const project = projectMap.get(projectId);
           result.push({
             ...thread,

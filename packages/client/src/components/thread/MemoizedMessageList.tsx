@@ -165,8 +165,16 @@ export const MemoizedMessageList = memo(
 
     // Bump renderCount when effectiveInitialWindow grows (e.g. after
     // messages load asynchronously following a thread switch).
+    // Track that this expansion is window-init-driven so the
+    // windowStart useLayoutEffect can scroll to bottom instead of
+    // relying on a (non-existent) scroll anchor.
+    const initWindowBumpRef = useRef(false);
     useEffect(() => {
-      setRenderCount((prev) => Math.max(prev, effectiveInitialWindow));
+      setRenderCount((prev) => {
+        const next = Math.max(prev, effectiveInitialWindow);
+        if (next > prev) initWindowBumpRef.current = true;
+        return next;
+      });
     }, [effectiveInitialWindow]);
 
     const windowStart = Math.max(0, groupedItems.length - renderCount);
@@ -356,10 +364,20 @@ export const MemoizedMessageList = memo(
       return () => scrollEl.removeEventListener('scroll', onScroll);
     }, [scrollRef, captureScrollAnchor]);
 
-    // After each expansion, restore the scroll anchor
+    // After each expansion, restore the scroll anchor.
+    // If the expansion came from effectiveInitialWindow growth (no anchor
+    // was captured), scroll to bottom so the view stays pinned.
     useLayoutEffect(() => {
-      restoreScrollAnchor();
-    }, [windowStart, restoreScrollAnchor]);
+      if (initWindowBumpRef.current) {
+        initWindowBumpRef.current = false;
+        const viewport = scrollRef.current;
+        if (viewport) {
+          viewport.scrollTop = viewport.scrollHeight;
+        }
+      } else {
+        restoreScrollAnchor();
+      }
+    }, [windowStart, restoreScrollAnchor, scrollRef]);
 
     useEffect(() => {
       if (windowStart <= 0) return;

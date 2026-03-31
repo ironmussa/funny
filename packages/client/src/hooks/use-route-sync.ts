@@ -8,7 +8,7 @@ import { stripOrgPrefix } from '@/lib/url';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore, getSelectingThreadId } from '@/stores/thread-store';
-import { useUIStore } from '@/stores/ui-store';
+import { useUIStore, type ReviewSubTab } from '@/stores/ui-store';
 
 const LAST_ROUTE_KEY = 'funny_last_route';
 
@@ -460,6 +460,17 @@ export function useRouteSync() {
       }
       if (projectId && projectId !== projectStore.selectedProjectId) {
         projectStore.selectProject(projectId);
+      }
+
+      // Sync ?tab= query param → review sub-tab
+      const validTabs: ReviewSubTab[] = ['changes', 'history', 'stash', 'prs'];
+      const tabParam = new URLSearchParams(location.search).get('tab') as ReviewSubTab | null;
+      if (tabParam && validTabs.includes(tabParam) && tabParam !== uiStore.reviewSubTab) {
+        uiStore.setReviewSubTab(tabParam);
+        // Also ensure the right pane is open on the review tab
+        if (!uiStore.reviewPaneOpen || uiStore.rightPaneTab !== 'review') {
+          uiStore.setReviewPaneOpen(true);
+        }
       }
     } else if (projectId) {
       if (threadStore.selectedThreadId) {

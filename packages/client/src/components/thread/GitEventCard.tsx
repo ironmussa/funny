@@ -56,42 +56,46 @@ export const GitEventCard = memo(function GitEventCard({ event }: { event: Threa
   const metadata = parseEventData(event.data);
 
   return (
-    <div className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-accent/30">
-      <Icon className="icon-xs shrink-0 text-muted-foreground" />
-      <span className="shrink-0 font-mono font-medium text-foreground">{config.label}</span>
-      {metadata.message && (
-        <span className="min-w-0 truncate font-mono text-muted-foreground">{metadata.message}</span>
-      )}
-      {metadata.title && metadata.url && (
-        <a
-          href={metadata.url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="min-w-0 truncate font-mono text-muted-foreground hover:text-primary hover:underline"
-        >
-          {metadata.title}
-        </a>
-      )}
-      {metadata.sourceBranch && metadata.targetBranch && (
-        <span className="font-mono text-muted-foreground">
-          {metadata.sourceBranch} → {metadata.targetBranch}
-        </span>
-      )}
-      {metadata.paths && Array.isArray(metadata.paths) && (
-        <span className="min-w-0 truncate font-mono text-muted-foreground">
-          {metadata.paths.length === 1 ? metadata.paths[0] : `${metadata.paths.length} files`}
-        </span>
-      )}
-      {metadata.output && !metadata.paths && !metadata.message && !metadata.title && (
-        <span className="min-w-0 truncate font-mono text-muted-foreground">
-          {metadata.output.split('\n')[0].slice(0, 80)}
-        </span>
-      )}
-      {event.createdAt && (
-        <span className="ml-auto shrink-0 text-muted-foreground">
-          {timeAgo(event.createdAt, t)}
-        </span>
-      )}
+    <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
+      <div className="flex w-full items-center gap-2 overflow-hidden rounded-md px-3 py-1.5 text-xs transition-colors hover:bg-accent/30">
+        <Icon className="icon-xs shrink-0 text-muted-foreground" />
+        <span className="shrink-0 font-mono font-medium text-foreground">{config.label}</span>
+        {metadata.message && (
+          <span className="min-w-0 truncate font-mono text-muted-foreground">
+            {metadata.message}
+          </span>
+        )}
+        {metadata.title && metadata.url && (
+          <a
+            href={metadata.url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="min-w-0 truncate font-mono text-muted-foreground hover:text-primary hover:underline"
+          >
+            {metadata.title}
+          </a>
+        )}
+        {metadata.sourceBranch && metadata.targetBranch && (
+          <span className="font-mono text-muted-foreground">
+            {metadata.sourceBranch} → {metadata.targetBranch}
+          </span>
+        )}
+        {metadata.paths && Array.isArray(metadata.paths) && (
+          <span className="min-w-0 truncate font-mono text-muted-foreground">
+            {metadata.paths.length === 1 ? metadata.paths[0] : `${metadata.paths.length} files`}
+          </span>
+        )}
+        {metadata.output && !metadata.paths && !metadata.message && !metadata.title && (
+          <span className="min-w-0 truncate font-mono text-muted-foreground">
+            {metadata.output.split('\n')[0].slice(0, 80)}
+          </span>
+        )}
+        {event.createdAt && (
+          <span className="ml-auto shrink-0 text-muted-foreground">
+            {timeAgo(event.createdAt, t)}
+          </span>
+        )}
+      </div>
     </div>
   );
 });

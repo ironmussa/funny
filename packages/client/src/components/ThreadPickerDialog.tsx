@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/command';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
-import { colorFromName } from '@/components/ui/project-chip';
+import { colorFromName, darkenHex } from '@/components/ui/project-chip';
 import { statusConfig } from '@/lib/thread-utils';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
@@ -135,24 +135,26 @@ function ThreadPickerDialogContent({
                     />
                     <PowerlineBar
                       size="sm"
-                      segments={[
-                        {
-                          key: 'project',
-                          icon: FolderOpen,
-                          label: project.name,
-                          color: project.color || colorFromName(project.name),
-                        } satisfies PowerlineSegmentData,
-                        ...(resolveThreadBranch(thread) || thread.baseBranch
-                          ? [
-                              {
-                                key: 'branch',
-                                icon: GitBranch,
-                                label: (resolveThreadBranch(thread) || thread.baseBranch)!,
-                                color: '#C3A6E0',
-                              } satisfies PowerlineSegmentData,
-                            ]
-                          : []),
-                      ]}
+                      segments={(() => {
+                        const baseColor = project.color || colorFromName(project.name);
+                        const segs: PowerlineSegmentData[] = [
+                          {
+                            key: 'project',
+                            icon: FolderOpen,
+                            label: project.name,
+                            color: baseColor,
+                          },
+                        ];
+                        if (resolveThreadBranch(thread) || thread.baseBranch) {
+                          segs.push({
+                            key: 'branch',
+                            icon: GitBranch,
+                            label: (resolveThreadBranch(thread) || thread.baseBranch)!,
+                            color: darkenHex(baseColor, 0.12),
+                          });
+                        }
+                        return segs;
+                      })()}
                     />
                   </div>
                 </CommandItem>

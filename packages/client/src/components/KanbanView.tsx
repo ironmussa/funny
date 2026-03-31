@@ -44,7 +44,7 @@ import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
-import { colorFromName } from '@/components/ui/project-chip';
+import { colorFromName, darkenHex } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { stageConfig, statusConfig, timeAgo } from '@/lib/thread-utils';
@@ -202,38 +202,40 @@ export const KanbanCard = memo(function KanbanCard({
             <PowerlineBar
               data-testid={`kanban-card-powerline-${thread.id}`}
               size="sm"
-              segments={[
-                ...(authUser
-                  ? [
-                      {
-                        key: 'user',
-                        icon: User,
-                        label: authUser.displayName || authUser.username,
-                        color: '#A8D5A2',
-                      } satisfies PowerlineSegmentData,
-                    ]
-                  : []),
-                ...(projectInfo
-                  ? [
-                      {
-                        key: 'project',
-                        icon: FolderOpen,
-                        label: projectInfo.name,
-                        color: projectInfo.color || colorFromName(projectInfo.name),
-                      } satisfies PowerlineSegmentData,
-                    ]
-                  : []),
-                ...(displayBranch
-                  ? [
-                      {
-                        key: 'branch',
-                        icon: GitBranch,
-                        label: displayBranch,
-                        color: '#C3A6E0',
-                      } satisfies PowerlineSegmentData,
-                    ]
-                  : []),
-              ]}
+              segments={(() => {
+                const baseColor = projectInfo
+                  ? projectInfo.color || colorFromName(projectInfo.name)
+                  : '#52525b';
+                const segs: PowerlineSegmentData[] = [];
+                if (authUser) {
+                  segs.push({
+                    key: 'user',
+                    icon: User,
+                    label: authUser.displayName || authUser.username,
+                    color: baseColor,
+                  });
+                }
+                if (projectInfo) {
+                  segs.push({
+                    key: 'project',
+                    icon: FolderOpen,
+                    label: projectInfo.name,
+                    color: authUser ? darkenHex(baseColor, 0.12) : baseColor,
+                  });
+                }
+                if (displayBranch) {
+                  segs.push({
+                    key: 'branch',
+                    icon: GitBranch,
+                    label: displayBranch,
+                    color: darkenHex(
+                      baseColor,
+                      authUser && projectInfo ? 0.22 : projectInfo ? 0.12 : 0.12,
+                    ),
+                  });
+                }
+                return segs;
+              })()}
             />
             {gitStatusProp &&
               (gitStatusProp.linesAdded > 0 ||

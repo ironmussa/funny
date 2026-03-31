@@ -44,7 +44,7 @@ const DropdownMenuContent = React.forwardRef<
 DropdownMenuContent.displayName = DropdownMenuPrimitive.Content.displayName;
 
 const dropdownMenuItemVariants = cva(
-  'relative flex cursor-default select-none items-center rounded-sm outline-none transition-colors focus-visible:bg-accent focus-visible:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+  'relative flex cursor-pointer select-none items-center rounded-sm outline-none transition-colors focus-visible:bg-accent focus-visible:text-accent-foreground data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
   {
     variants: {
       size: {
@@ -91,7 +91,7 @@ const DropdownMenuSeparator = React.forwardRef<
 DropdownMenuSeparator.displayName = DropdownMenuPrimitive.Separator.displayName;
 
 const dropdownMenuSubTriggerVariants = cva(
-  'flex cursor-default select-none items-center rounded-sm outline-none focus-visible:bg-accent data-[state=open]:bg-accent',
+  'flex cursor-pointer select-none items-center rounded-sm outline-none focus-visible:bg-accent data-[state=open]:bg-accent',
   {
     variants: {
       size: {

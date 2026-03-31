@@ -12,8 +12,11 @@ const MAX_REVIEW_PANE_WIDTH = 70;
 const TIMELINE_VISIBLE_KEY = 'timeline_visible';
 const RIGHT_PANE_OPEN_KEY = 'right_pane_open';
 const RIGHT_PANE_TAB_KEY = 'right_pane_tab';
+const REVIEW_SUB_TAB_KEY = 'review_sub_tab';
 
 export type RightPaneTab = 'review' | 'tests' | 'tasks' | 'activity';
+export type ReviewSubTab = 'changes' | 'history' | 'stash' | 'prs';
+const VALID_REVIEW_SUB_TABS: ReviewSubTab[] = ['changes', 'history', 'stash', 'prs'];
 
 function persistRightPane(open: boolean, tab?: RightPaneTab) {
   try {
@@ -39,8 +42,10 @@ interface UIState {
   generalSettingsOpen: boolean;
   activePreferencesPage: string | null;
   timelineVisible: boolean;
+  reviewSubTab: ReviewSubTab;
   kanbanContext: { projectId?: string; search?: string; threadId?: string } | null;
 
+  setReviewSubTab: (tab: ReviewSubTab) => void;
   setReviewPaneOpen: (open: boolean) => void;
   setTestPaneOpen: (open: boolean) => void;
   setTasksPaneOpen: (open: boolean) => void;
@@ -70,9 +75,10 @@ export const useUIStore = create<UIState>((set) => ({
   reviewPaneOpen: (() => {
     try {
       const stored = localStorage.getItem(RIGHT_PANE_OPEN_KEY);
-      return stored === 'true';
+      if (stored !== null) return stored === 'true';
+      return true;
     } catch {
-      return false;
+      return true;
     }
   })(),
   rightPaneTab: (() => {
@@ -81,9 +87,9 @@ export const useUIStore = create<UIState>((set) => ({
       if (stored && ['review', 'tests', 'tasks', 'activity'].includes(stored)) {
         return stored as RightPaneTab;
       }
-      return 'review' as RightPaneTab;
+      return 'activity' as RightPaneTab;
     } catch {
-      return 'review' as RightPaneTab;
+      return 'activity' as RightPaneTab;
     }
   })(),
   reviewPaneWidth: (() => {
@@ -121,7 +127,22 @@ export const useUIStore = create<UIState>((set) => ({
       return false;
     }
   })(),
+  reviewSubTab: (() => {
+    try {
+      const stored = localStorage.getItem(REVIEW_SUB_TAB_KEY);
+      if (stored && VALID_REVIEW_SUB_TABS.includes(stored as ReviewSubTab)) {
+        return stored as ReviewSubTab;
+      }
+    } catch {}
+    return 'changes' as ReviewSubTab;
+  })(),
   kanbanContext: null,
+  setReviewSubTab: (tab) => {
+    try {
+      localStorage.setItem(REVIEW_SUB_TAB_KEY, tab);
+    } catch {}
+    set({ reviewSubTab: tab });
+  },
   setReviewPaneOpen: (open) => {
     persistRightPane(open, open ? 'review' : undefined);
     set(

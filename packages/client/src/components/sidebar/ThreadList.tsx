@@ -76,7 +76,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
 
     for (const [projectId, projectThreads] of Object.entries(threadsByProject)) {
       for (const thread of projectThreads) {
-        if (VISIBLE_STATUSES.has(thread.status) && !thread.archived) {
+        if (VISIBLE_STATUSES.has(thread.status) && !thread.archived && thread.stage !== 'done') {
           const project = projectMap.get(projectId);
           const enriched: EnrichedThread = {
             ...thread,

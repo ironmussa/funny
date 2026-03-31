@@ -1010,6 +1010,19 @@ export const api = {
     }>(`/github/issues?${p.toString()}`);
   },
 
+  githubPRs: (projectId: string, params?: { state?: string; page?: number; per_page?: number }) => {
+    const p = new URLSearchParams({ projectId });
+    if (params?.state) p.set('state', params.state);
+    if (params?.page) p.set('page', String(params.page));
+    if (params?.per_page) p.set('per_page', String(params.per_page));
+    return request<{
+      prs: import('@funny/shared').GitHubPR[];
+      hasMore: boolean;
+      owner: string;
+      repo: string;
+    }>(`/github/prs?${p.toString()}`);
+  },
+
   // Analytics
   analyticsOverview: (projectId?: string, timeRange?: string) => {
     const params = new URLSearchParams();

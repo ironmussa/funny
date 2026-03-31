@@ -153,6 +153,27 @@ export interface GitHubIssue {
   pull_request?: unknown;
 }
 
+export interface GitHubPR {
+  number: number;
+  title: string;
+  state: 'open' | 'closed';
+  html_url: string;
+  user: {
+    login: string;
+    avatar_url: string;
+  } | null;
+  created_at: string;
+  updated_at: string;
+  head: { ref: string; label: string };
+  base: { ref: string; label: string };
+  draft: boolean;
+  labels: Array<{
+    name: string;
+    color: string;
+  }>;
+  merged_at: string | null;
+}
+
 export interface CloneRepoRequest {
   cloneUrl: string;
   destinationPath: string;

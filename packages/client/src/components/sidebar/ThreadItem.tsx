@@ -16,11 +16,18 @@ import {
   GitPullRequestClosed,
   GitMerge,
 } from 'lucide-react';
-import { useState, memo, useCallback, useRef, useMemo, useEffect } from 'react';
+import { useState, memo, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { DiffStats } from '@/components/DiffStats';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   DropdownMenu,
   DropdownMenuTrigger,
@@ -28,6 +35,7 @@ import {
   DropdownMenuItem,
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
+import { Input } from '@/components/ui/input';
 import type { PowerlineSegmentData } from '@/components/ui/powerline-bar';
 import { PowerlineBar } from '@/components/ui/powerline-bar';
 import { colorFromName, darkenHex } from '@/components/ui/project-chip';
@@ -89,14 +97,13 @@ export const ThreadItem = memo(function ThreadItem({
   const [openDropdown, setOpenDropdown] = useState(false);
   const handleDropdownChange = useCallback((open: boolean) => setOpenDropdown(open), []);
 
-  // Inline rename state
-  const [isRenaming, setIsRenaming] = useState(false);
+  // Rename dialog state
+  const [isRenameOpen, setIsRenameOpen] = useState(false);
   const [renameValue, setRenameValue] = useState('');
-  const renameInputRef = useRef<HTMLInputElement>(null);
 
-  const startRename = useCallback(() => {
+  const openRenameDialog = useCallback(() => {
     setRenameValue(thread.title);
-    setIsRenaming(true);
+    setIsRenameOpen(true);
   }, [thread.title]);
 
   const commitRename = useCallback(() => {
@@ -104,15 +111,8 @@ export const ThreadItem = memo(function ThreadItem({
     if (trimmed && trimmed !== thread.title && onRename) {
       onRename(trimmed);
     }
-    setIsRenaming(false);
+    setIsRenameOpen(false);
   }, [renameValue, thread.title, onRename]);
-
-  useEffect(() => {
-    if (isRenaming && renameInputRef.current) {
-      renameInputRef.current.focus();
-      renameInputRef.current.select();
-    }
-  }, [isRenaming]);
 
   // Thread status config
   const threadStatusCfg = statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending;
@@ -252,23 +252,7 @@ export const ThreadItem = memo(function ThreadItem({
               </span>
             )}
           </div>
-          {isRenaming ? (
-            <input
-              ref={renameInputRef}
-              data-testid={`thread-rename-input-${thread.id}`}
-              value={renameValue}
-              onChange={(e) => setRenameValue(e.target.value)}
-              onBlur={commitRename}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') commitRename();
-                if (e.key === 'Escape') setIsRenaming(false);
-              }}
-              onClick={(e) => e.stopPropagation()}
-              className="min-w-0 flex-1 truncate rounded border border-border bg-background px-1 text-sm leading-tight text-foreground outline-none focus:ring-1 focus:ring-ring"
-            />
-          ) : (
-            <span className="truncate text-sm leading-tight">{thread.title}</span>
-          )}
+          <span className="truncate text-sm leading-tight">{thread.title}</span>
           {/* External creator icon */}
           {thread.createdBy && thread.createdBy !== 'user' && (
             <Tooltip>
@@ -447,7 +431,7 @@ export const ThreadItem = memo(function ThreadItem({
                     data-testid={`thread-rename-${thread.id}`}
                     onClick={(e) => {
                       e.stopPropagation();
-                      startRename();
+                      openRenameDialog();
                     }}
                   >
                     <Pencil className="icon-sm" />
@@ -504,6 +488,40 @@ export const ThreadItem = memo(function ThreadItem({
           </div>
         </div>
       </div>
+
+      {/* Rename dialog */}
+      <Dialog open={isRenameOpen} onOpenChange={setIsRenameOpen}>
+        <DialogContent className="sm:max-w-md" data-testid={`thread-rename-dialog-${thread.id}`}>
+          <DialogHeader>
+            <DialogTitle>{t('sidebar.rename')}</DialogTitle>
+          </DialogHeader>
+          <Input
+            data-testid={`thread-rename-input-${thread.id}`}
+            value={renameValue}
+            onChange={(e) => setRenameValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') commitRename();
+            }}
+            autoFocus
+          />
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setIsRenameOpen(false)}
+              data-testid="thread-rename-cancel"
+            >
+              {t('common.cancel')}
+            </Button>
+            <Button
+              onClick={commitRename}
+              disabled={!renameValue.trim() || renameValue.trim() === thread.title}
+              data-testid="thread-rename-confirm"
+            >
+              {t('common.save')}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }, threadItemAreEqual);

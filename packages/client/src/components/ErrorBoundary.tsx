@@ -34,7 +34,7 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     if (this.state.hasError) {
       return (
         <div
-          className="flex flex-col items-center justify-center gap-3 p-6 text-center"
+          className="flex h-full w-full flex-1 flex-col items-center justify-center gap-3 p-6 text-center"
           data-testid={`error-boundary-${this.props.area ?? 'unknown'}`}
         >
           <AlertTriangle className="h-8 w-8 text-status-warning" />

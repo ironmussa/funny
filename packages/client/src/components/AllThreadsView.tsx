@@ -25,7 +25,7 @@ import { normalize } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
-import { colorFromName } from '@/components/ui/project-chip';
+import { colorFromName, darkenHex } from '@/components/ui/project-chip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
 import { gitSyncStateConfig, getStatusLabels } from '@/lib/thread-utils';
@@ -802,13 +802,14 @@ export function AllThreadsView() {
                 const gitConf = gs ? gitSyncStateConfig[gs.state] : null;
                 const pInfo = projectInfoById[thread.projectId];
                 const displayBranch = resolveThreadBranch(thread) || thread.baseBranch;
+                const baseColor = pInfo ? pInfo.color || colorFromName(pInfo.name) : '#52525b';
                 const powerlineSegments: PowerlineSegmentData[] = [];
                 if (!projectFilter && pInfo) {
                   powerlineSegments.push({
                     key: 'project',
                     icon: FolderOpen,
                     label: pInfo.name,
-                    color: pInfo.color || colorFromName(pInfo.name),
+                    color: baseColor,
                   });
                 }
                 if (displayBranch) {
@@ -816,7 +817,7 @@ export function AllThreadsView() {
                     key: 'branch',
                     icon: GitBranch,
                     label: displayBranch,
-                    color: '#C3A6E0',
+                    color: !projectFilter && pInfo ? darkenHex(baseColor, 0.12) : baseColor,
                   });
                 }
                 return (

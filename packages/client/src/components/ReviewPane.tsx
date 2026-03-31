@@ -36,6 +36,7 @@ import {
 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
@@ -75,12 +76,13 @@ import { useProjectStore } from '@/stores/project-store';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
 import { editorLabels } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
-import { useUIStore } from '@/stores/ui-store';
+import { useUIStore, type ReviewSubTab } from '@/stores/ui-store';
 
 import { CommitHistoryTab } from './CommitHistoryTab';
 import { DiffStats } from './DiffStats';
 import { buildTreeRows } from './FileTree';
 import { InlineProgressSteps } from './InlineProgressSteps';
+import { PullRequestsTab } from './PullRequestsTab';
 import { ExpandedDiffDialog } from './tool-cards/ExpandedDiffDialog';
 
 const fileStatusIcons: Record<string, typeof FileCode> = {
@@ -96,8 +98,12 @@ const INDENT_PX = 12;
 
 export function ReviewPane() {
   const { t } = useTranslation();
+  const navigate = useNavigate();
+  const location = useLocation();
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
+  const reviewSubTab = useUIStore((s) => s.reviewSubTab);
+  const setReviewSubTabStore = useUIStore((s) => s.setReviewSubTab);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
 
   // Derive effectiveThreadId from the active thread only.
@@ -985,21 +991,22 @@ export function ReviewPane() {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- refreshStashList is a non-memoized function; only trigger on context/visibility change
   }, [gitContextKey, reviewPaneOpen]);
 
-  // ── Persist active sub-tab (changes / history / stash) ──
-  const REVIEW_SUB_TAB_KEY = 'review_sub_tab';
-  const [reviewSubTab, setReviewSubTabRaw] = useState<'changes' | 'history' | 'stash'>(() => {
-    try {
-      const stored = localStorage.getItem(REVIEW_SUB_TAB_KEY);
-      if (stored === 'changes' || stored === 'history' || stored === 'stash') return stored;
-    } catch {}
-    return 'changes';
-  });
-  const setReviewSubTab = useCallback((tab: 'changes' | 'history' | 'stash') => {
-    try {
-      localStorage.setItem(REVIEW_SUB_TAB_KEY, tab);
-    } catch {}
-    setReviewSubTabRaw(tab);
-  }, []);
+  // ── Sync active sub-tab with URL query param ──
+  const setReviewSubTab = useCallback(
+    (tab: ReviewSubTab) => {
+      setReviewSubTabStore(tab);
+      // Update ?tab= query param in URL
+      const params = new URLSearchParams(location.search);
+      if (tab === 'changes') {
+        params.delete('tab');
+      } else {
+        params.set('tab', tab);
+      }
+      const search = params.toString();
+      navigate(`${location.pathname}${search ? `?${search}` : ''}`, { replace: true });
+    },
+    [setReviewSubTabStore, location.pathname, location.search, navigate],
+  );
 
   // ── Stash tab: expanded stash entry to show its files ──
   const [expandedStashIndex, setExpandedStashIndex] = useState<string | null>(null);
@@ -1033,7 +1040,7 @@ export function ReviewPane() {
   return (
     <Tabs
       value={reviewSubTab}
-      onValueChange={(v) => setReviewSubTab(v as 'changes' | 'history' | 'stash')}
+      onValueChange={(v) => setReviewSubTab(v as ReviewSubTab)}
       className="flex h-full flex-col text-xs"
       style={{ contain: 'strict' }}
     >
@@ -1060,6 +1067,13 @@ export function ReviewPane() {
             data-testid="review-tab-stash"
           >
             {t('review.stash', 'Stash')}
+          </TabsTrigger>
+          <TabsTrigger
+            value="prs"
+            className="h-6 px-2.5 text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+            data-testid="review-tab-prs"
+          >
+            {t('review.prs', 'PRs')}
           </TabsTrigger>
         </TabsList>
         <Tooltip>
@@ -2028,6 +2042,15 @@ export function ReviewPane() {
             </div>
           )}
         </div>
+      </TabsContent>
+
+      {/* Pull Requests tab */}
+      <TabsContent
+        value="prs"
+        className="flex min-h-0 flex-1 data-[state=inactive]:hidden"
+        forceMount
+      >
+        <PullRequestsTab visible={reviewSubTab === 'prs'} />
       </TabsContent>
 
       {/* Confirmation dialog for destructive actions */}

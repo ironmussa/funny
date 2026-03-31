@@ -1,6 +1,5 @@
 import type { StartupCommand, Message, ToolCall, ThreadStage } from '@funny/shared';
 import {
-  GitBranch,
   GitCompare,
   Globe,
   Terminal,
@@ -123,12 +122,14 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
   const pinThread = useThreadStore((s) => s.pinThread);
   const timelineVisible = useUIStore((s) => s.timelineVisible);
   const setTimelineVisible = useUIStore((s) => s.setTimelineVisible);
+  const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
+  const rightPaneTab = useUIStore((s) => s.rightPaneTab);
+  const setActivityPaneOpen = useUIStore((s) => s.setActivityPaneOpen);
+  const activityActive = reviewPaneOpen && rightPaneTab === 'activity';
   const [copiedText, copyText] = useCopyToClipboard();
   const [copiedTools, copyTools] = useCopyToClipboard();
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
-  const [convertOpen, setConvertOpen] = useState(false);
-  const [convertLoading, setConvertLoading] = useState(false);
   const isWorktree = threadMode === 'worktree' && !!threadBranch;
 
   const handleDeleteConfirm = useCallback(async () => {
@@ -159,21 +160,6 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
     [copyText, copyTools],
   );
 
-  const handleConvertConfirm = useCallback(async () => {
-    const state = useThreadStore.getState();
-    const id = state.activeThread?.id;
-    if (!id) return;
-    setConvertLoading(true);
-    const result = await api.convertToWorktree(id);
-    setConvertLoading(false);
-    setConvertOpen(false);
-    if (result.isOk()) {
-      toast.success(t('toast.convertToWorktreeStarted', 'Converting to worktree...'));
-    } else {
-      toast.error(result.error.message);
-    }
-  }, [t]);
-
   return (
     <>
       <DropdownMenu>
@@ -193,6 +179,18 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
           <TooltipContent>{t('thread.moreActions', 'More actions')}</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end">
+          <DropdownMenuItem
+            data-testid="header-menu-toggle-activity"
+            onClick={() =>
+              startTransition(() => {
+                setActivityPaneOpen(!activityActive);
+              })
+            }
+            className="cursor-pointer"
+          >
+            <Activity className={`icon-base mr-2 ${activityActive ? 'text-primary' : ''}`} />
+            {t('activity.title', 'Activity')}
+          </DropdownMenuItem>
           {threadId && (
             <DropdownMenuItem
               data-testid="header-menu-toggle-timeline"
@@ -230,24 +228,6 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
             )}
             {t('thread.copyWithTools', 'Copy with tool calls')}
           </DropdownMenuItem>
-          {threadId && !isWorktree && (
-            <>
-              <DropdownMenuSeparator />
-              <DropdownMenuItem
-                data-testid="header-menu-convert-worktree"
-                onClick={() => setConvertOpen(true)}
-                disabled={convertLoading}
-                className="cursor-pointer"
-              >
-                {convertLoading ? (
-                  <Loader2 className="icon-base mr-2 animate-spin" />
-                ) : (
-                  <GitBranch className="icon-base mr-2" />
-                )}
-                {t('thread.convertToWorktree', 'Convert to Worktree')}
-              </DropdownMenuItem>
-            </>
-          )}
           {threadId && (
             <>
               <DropdownMenuSeparator />
@@ -297,23 +277,6 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
         loading={deleteLoading}
         onCancel={() => setDeleteOpen(false)}
         onConfirm={handleDeleteConfirm}
-      />
-      <ConfirmDialog
-        open={convertOpen}
-        onOpenChange={(open) => {
-          if (!open) setConvertOpen(false);
-        }}
-        title={t('dialog.convertToWorktreeTitle', 'Convert to Worktree')}
-        description={t(
-          'dialog.convertToWorktreeDesc',
-          'This will create a new branch and worktree for this thread. The agent will be stopped if running. You can continue the conversation in the isolated branch.',
-        )}
-        variant="default"
-        cancelLabel={t('common.cancel')}
-        confirmLabel={t('thread.convertToWorktree', 'Convert to Worktree')}
-        loading={convertLoading}
-        onCancel={() => setConvertOpen(false)}
-        onConfirm={handleConvertConfirm}
       />
     </>
   );
@@ -807,32 +770,6 @@ export const ProjectHeader = memo(function ProjectHeader() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{t('tests.title', 'Tests')}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() =>
-                    startTransition(() => {
-                      if (reviewPaneOpen && rightPaneTab === 'activity') {
-                        setActivityPaneOpen(false);
-                      } else {
-                        setActivityPaneOpen(true);
-                      }
-                    })
-                  }
-                  data-testid="header-toggle-activity"
-                  className={
-                    reviewPaneOpen && rightPaneTab === 'activity'
-                      ? 'text-foreground'
-                      : 'text-muted-foreground'
-                  }
-                >
-                  <Activity className="icon-base" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t('activity.title', 'Activity')}</TooltipContent>
             </Tooltip>
             {activeThreadArcId && (
               <Tooltip>

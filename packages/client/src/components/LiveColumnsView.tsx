@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { PowerlineBar, type PowerlineSegmentData } from '@/components/ui/powerline-bar';
-import { colorFromName } from '@/components/ui/project-chip';
+import { colorFromName, darkenHex } from '@/components/ui/project-chip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
@@ -282,28 +282,28 @@ const ThreadColumn = memo(function ThreadColumn({
             <PowerlineBar
               data-testid={`grid-column-powerline-${threadId}`}
               size="sm"
-              segments={[
-                ...(projectName
-                  ? [
-                      {
-                        key: 'project',
-                        icon: FolderOpen,
-                        label: projectName,
-                        color: threadProject?.color || colorFromName(projectName),
-                      } satisfies PowerlineSegmentData,
-                    ]
-                  : []),
-                ...(resolveThreadBranch(thread) || thread.baseBranch
-                  ? [
-                      {
-                        key: 'branch',
-                        icon: GitBranch,
-                        label: (resolveThreadBranch(thread) || thread.baseBranch)!,
-                        color: '#C3A6E0',
-                      } satisfies PowerlineSegmentData,
-                    ]
-                  : []),
-              ]}
+              segments={(() => {
+                const baseColor =
+                  threadProject?.color || (projectName ? colorFromName(projectName) : '#52525b');
+                const segs: PowerlineSegmentData[] = [];
+                if (projectName) {
+                  segs.push({
+                    key: 'project',
+                    icon: FolderOpen,
+                    label: projectName,
+                    color: baseColor,
+                  });
+                }
+                if (resolveThreadBranch(thread) || thread.baseBranch) {
+                  segs.push({
+                    key: 'branch',
+                    icon: GitBranch,
+                    label: (resolveThreadBranch(thread) || thread.baseBranch)!,
+                    color: projectName ? darkenHex(baseColor, 0.12) : baseColor,
+                  });
+                }
+                return segs;
+              })()}
             />
           </div>
         )}

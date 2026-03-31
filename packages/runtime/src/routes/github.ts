@@ -14,7 +14,7 @@ import { existsSync } from 'fs';
 import { resolve, isAbsolute, join } from 'path';
 
 import { execute, getRemoteUrl } from '@funny/core/git';
-import type { GitHubRepo, GitHubIssue, WSCloneProgressData } from '@funny/shared';
+import type { GitHubRepo, GitHubIssue, GitHubPR, WSCloneProgressData } from '@funny/shared';
 import { badRequest, conflict, processError } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { err } from 'neverthrow';
@@ -512,6 +512,66 @@ githubRoutes.get('/issues', async (c) => {
     const hasMore = linkHeader.includes('rel="next"');
 
     return c.json({ issues, hasMore, owner: parsed.owner, repo: parsed.repo });
+  } catch (error: any) {
+    return c.json({ error: error.message }, 502);
+  }
+});
+
+// ── GET /prs — list GitHub pull requests for a project ──────
+
+githubRoutes.get('/prs', async (c) => {
+  const userId = c.get('userId') as string;
+  const projectId = c.req.query('projectId');
+  if (!projectId) {
+    return c.json({ error: 'projectId is required' }, 400);
+  }
+
+  const project = await getServices().projects.getProject(projectId);
+  if (!project) {
+    return c.json({ error: 'Project not found' }, 404);
+  }
+
+  const remoteResult = await getRemoteUrl(project.path);
+  if (remoteResult.isErr() || !remoteResult.value) {
+    return c.json({ error: 'Could not determine remote URL for this project' }, 400);
+  }
+
+  const parsed = parseGithubOwnerRepo(remoteResult.value);
+  if (!parsed) {
+    return c.json({ error: 'This project is not hosted on GitHub' }, 400);
+  }
+
+  const state = c.req.query('state') || 'open';
+  const page = Number(c.req.query('page')) || 1;
+  const perPage = Math.min(Number(c.req.query('per_page')) || 30, 100);
+
+  try {
+    const apiPath = `/repos/${parsed.owner}/${parsed.repo}/pulls?state=${state}&page=${page}&per_page=${perPage}&sort=created&direction=desc`;
+    const resolved = await resolveGithubToken(userId);
+    const token = resolved?.token ?? null;
+
+    let res: Response;
+    if (token) {
+      res = await githubApiFetch(apiPath, token);
+    } else {
+      res = await fetch(`${GITHUB_API}${apiPath}`, {
+        headers: {
+          Accept: 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      });
+    }
+
+    if (!res.ok) {
+      const _body = await res.text();
+      return c.json({ error: `GitHub API error: ${res.status}` }, 502);
+    }
+
+    const prs = (await res.json()) as GitHubPR[];
+    const linkHeader = res.headers.get('Link') || '';
+    const hasMore = linkHeader.includes('rel="next"');
+
+    return c.json({ prs, hasMore, owner: parsed.owner, repo: parsed.repo });
   } catch (error: any) {
     return c.json({ error: error.message }, 502);
   }

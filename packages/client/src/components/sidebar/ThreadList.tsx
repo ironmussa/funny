@@ -127,7 +127,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
         for (const [id, bk] of threadBranchKeys) {
           const st = s.statusByBranch[bk];
           if (st)
-            fp += `${id}:${st.state}:${st.dirtyFileCount}:${st.unpushedCommitCount}:${st.linesAdded}:${st.linesDeleted},`;
+            fp += `${id}:${st.state}:${st.dirtyFileCount}:${st.unpushedCommitCount}:${st.unpulledCommitCount}:${st.linesAdded}:${st.linesDeleted},`;
         }
         return fp;
       },
@@ -147,17 +147,9 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
   }, [threadBranchKeys, gitStatusFingerprint]);
 
   // Eagerly fetch git status for visible threads that don't have it yet.
-  // This ensures icons and diff stats show up in the global thread list without requiring a click.
+  // Uses ensureStatusForThreads to deduplicate by branchKey across all callers.
   useEffect(() => {
-    const { fetchForThread, statusByBranch: sbb } = useGitStatusStore.getState();
-    for (const thread of threads) {
-      // Compute branchKey client-side so sibling threads sharing a branch
-      // don't trigger redundant fetches when the server mapping is missing.
-      const bk = computeBranchKey(thread);
-      if (!sbb[bk]) {
-        fetchForThread(thread.id);
-      }
-    }
+    useGitStatusStore.getState().ensureStatusForThreads(threads);
   }, [threads]);
 
   const { ensureBranch, branchSwitchDialog } = useBranchSwitch();

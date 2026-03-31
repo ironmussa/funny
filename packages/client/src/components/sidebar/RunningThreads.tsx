@@ -46,16 +46,12 @@ export function RunningThreads() {
     return result;
   }, [threadsByProject, projects]);
 
-  // Eagerly fetch git status for visible worktree threads that don't have it yet
+  // Eagerly fetch git status for visible worktree threads that don't have it yet.
+  // Uses ensureStatusForThreads to deduplicate by branchKey across all callers.
   useEffect(() => {
-    const { fetchForThread, statusByBranch: sbb } = useGitStatusStore.getState();
-    for (const thread of runningThreads) {
-      if (thread.mode === 'worktree') {
-        const bk = computeBranchKey(thread);
-        if (!sbb[bk]) {
-          fetchForThread(thread.id);
-        }
-      }
+    const worktreeThreads = runningThreads.filter((t) => t.mode === 'worktree');
+    if (worktreeThreads.length > 0) {
+      useGitStatusStore.getState().ensureStatusForThreads(worktreeThreads);
     }
   }, [runningThreads]);
 

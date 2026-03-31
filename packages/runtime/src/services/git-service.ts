@@ -357,6 +357,7 @@ export function merge(params: MergeParams): ResultAsync<string, DomainError> {
                       state: 'merged' as const,
                       dirtyFileCount: 0,
                       unpushedCommitCount,
+                      unpulledCommitCount: 0,
                       hasRemoteBranch: unpushedCommitCount > 0,
                       isMergedIntoBase: true,
                       linesAdded: 0,

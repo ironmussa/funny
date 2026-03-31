@@ -47,13 +47,24 @@ interface GitStatusState {
   fetchForProject: (projectId: string) => Promise<void>;
   fetchForThread: (threadId: string, force?: boolean) => Promise<void>;
   fetchProjectStatus: (projectId: string, force?: boolean) => Promise<void>;
+  /** Batch-ensure git status for a list of threads, deduplicating by branchKey. */
+  ensureStatusForThreads: (
+    threads: Array<{
+      id: string;
+      projectId: string;
+      mode?: string | null;
+      branch?: string | null;
+      worktreePath?: string | null;
+      baseBranch?: string | null;
+    }>,
+  ) => void;
   updateFromWS: (statuses: GitStatusInfo[]) => void;
   clearForBranch: (bk: string) => void;
 }
 
-const FETCH_COOLDOWN_MS = 2_000;
-const BRANCH_FETCH_COOLDOWN_MS = 1_000;
-const PROJECT_STATUS_COOLDOWN_MS = 1_000;
+const FETCH_COOLDOWN_MS = 5_000;
+const BRANCH_FETCH_COOLDOWN_MS = 5_000;
+const PROJECT_STATUS_COOLDOWN_MS = 5_000;
 const _lastFetchByProject = new Map<string, number>();
 const _lastFetchByBranch = new Map<string, number>();
 const _lastFetchByProjectStatus = new Map<string, number>();
@@ -106,6 +117,7 @@ function statusEqual(a: GitStatusInfo, b: GitStatusInfo): boolean {
     a.state === b.state &&
     a.dirtyFileCount === b.dirtyFileCount &&
     a.unpushedCommitCount === b.unpushedCommitCount &&
+    a.unpulledCommitCount === b.unpulledCommitCount &&
     a.hasRemoteBranch === b.hasRemoteBranch &&
     a.isMergedIntoBase === b.isMergedIntoBase &&
     a.linesAdded === b.linesAdded &&
@@ -299,6 +311,18 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
         next.delete(projectId);
         return { _loadingProjectStatus: next };
       });
+    }
+  },
+
+  ensureStatusForThreads: (threads) => {
+    const { statusByBranch } = get();
+    const seenBranches = new Set<string>();
+    for (const thread of threads) {
+      const bk = branchKey(thread);
+      if (!statusByBranch[bk] && !seenBranches.has(bk)) {
+        seenBranches.add(bk);
+        get().fetchForThread(thread.id);
+      }
     }
   },
 

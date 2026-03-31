@@ -14,6 +14,7 @@ import pLimit from 'p-limit';
 export interface NativeGitStatusSummary {
   dirtyFileCount: number;
   unpushedCommitCount: number;
+  unpulledCommitCount: number;
   hasRemoteBranch: boolean;
   isMergedIntoBase: boolean;
   linesAdded: number;

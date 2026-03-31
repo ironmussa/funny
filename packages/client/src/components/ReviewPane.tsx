@@ -63,6 +63,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
 import { api } from '@/lib/api';
+import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import { openFileInExternalEditor, getEditorLabel } from '@/lib/editor-utils';
 import { FileExtensionIcon } from '@/lib/file-icons';
 import { toastError } from '@/lib/toast-error';
@@ -92,42 +93,6 @@ const fileStatusIcons: Record<string, typeof FileCode> = {
 const FILE_ROW_HEIGHT = 24;
 const FOLDER_ROW_HEIGHT = 24;
 const INDENT_PX = 12;
-
-function parseDiffOld(unifiedDiff: string): string {
-  const lines = unifiedDiff.split('\n');
-  const oldLines: string[] = [];
-
-  for (const line of lines) {
-    if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) {
-      continue;
-    }
-    if (line.startsWith('-')) {
-      oldLines.push(line.substring(1));
-    } else if (!line.startsWith('+')) {
-      oldLines.push(line);
-    }
-  }
-
-  return oldLines.join('\n');
-}
-
-function parseDiffNew(unifiedDiff: string): string {
-  const lines = unifiedDiff.split('\n');
-  const newLines: string[] = [];
-
-  for (const line of lines) {
-    if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) {
-      continue;
-    }
-    if (line.startsWith('+')) {
-      newLines.push(line.substring(1));
-    } else if (!line.startsWith('-')) {
-      newLines.push(line);
-    }
-  }
-
-  return newLines.join('\n');
-}
 
 export function ReviewPane() {
   const { t } = useTranslation();
@@ -396,10 +361,10 @@ export function ReviewPane() {
     setLoading(true);
     setLoadError(false);
 
-    // Fire git status refresh in parallel (don't await — it updates its own store)
-    // Use force=true to bypass cooldown so unpushedCommitCount is always fresh
-    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
-    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+    // Fire git status refresh in parallel (don't await — it updates its own store).
+    // Respects cooldowns — WS git:status events invalidate them when data changes.
+    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId);
+    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId);
 
     // Also fetch unpushed count directly via the log endpoint — reliable
     // fallback when gitStatus store hasn't resolved the branchKey yet
@@ -546,6 +511,13 @@ export function ReviewPane() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+refresh on context change only; refresh/reviewPaneOpen are read but not deps (handled separately)
   }, [gitContextKey]);
+
+  // Reset selectedAction if "commit-pr" is selected but a PR already exists.
+  useEffect(() => {
+    if (selectedAction === 'commit-pr' && gitStatus?.prNumber) {
+      setSelectedAction('commit');
+    }
+  }, [selectedAction, gitStatus?.prNumber]);
 
   // Fire deferred refresh when the review pane becomes visible.
   // Uses requestAnimationFrame to yield to the browser first so it can paint
@@ -1088,11 +1060,6 @@ export function ReviewPane() {
             data-testid="review-tab-stash"
           >
             {t('review.stash', 'Stash')}
-            {filteredStashEntries.length > 0 && (
-              <span className="ml-1 inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-blue-500 px-1 text-[10px] font-medium text-white">
-                {filteredStashEntries.length}
-              </span>
-            )}
           </TabsTrigger>
         </TabsList>
         <Tooltip>
@@ -1153,13 +1120,25 @@ export function ReviewPane() {
                     size="icon-sm"
                     onClick={handlePull}
                     disabled={pullInProgress}
-                    className="text-muted-foreground"
+                    className="relative text-muted-foreground"
                     data-testid="review-pull"
                   >
                     <Download className={cn('icon-base', pullInProgress && 'animate-pulse')} />
+                    {(gitStatus?.unpulledCommitCount ?? 0) > 0 && (
+                      <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] font-bold leading-none text-white">
+                        {gitStatus!.unpulledCommitCount}
+                      </span>
+                    )}
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent side="top">{t('review.pull', 'Pull')}</TooltipContent>
+                <TooltipContent side="top">
+                  {(gitStatus?.unpulledCommitCount ?? 0) > 0
+                    ? t('review.readyToPull', {
+                        count: gitStatus!.unpulledCommitCount,
+                        defaultValue: `${gitStatus!.unpulledCommitCount} commit(s) to pull`,
+                      })
+                    : t('review.pull', 'Pull')}
+                </TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -1284,54 +1263,6 @@ export function ReviewPane() {
                             branch: threadBranch,
                             target: baseBranch || 'base',
                           })}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {summaries.length > 0 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={handleStash}
-                      disabled={stashInProgress || !!isAgentRunning}
-                      className="text-muted-foreground"
-                      data-testid="review-stash"
-                    >
-                      <Archive className={cn('icon-base', stashInProgress && 'animate-pulse')} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    {isAgentRunning
-                      ? t('review.agentRunningTooltip')
-                      : t('review.stash', 'Stash changes')}
-                  </TooltipContent>
-                </Tooltip>
-              )}
-              {filteredStashEntries.length > 0 && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={handleStashPop}
-                      disabled={stashPopInProgress || !!isAgentRunning}
-                      className="relative text-muted-foreground"
-                      data-testid="review-pop-stash"
-                    >
-                      <ArchiveRestore
-                        className={cn('icon-base', stashPopInProgress && 'animate-pulse')}
-                      />
-                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-blue-500" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">
-                    {isAgentRunning
-                      ? t('review.agentRunningTooltip')
-                      : t('review.stashedChanges', {
-                          count: filteredStashEntries.length,
-                          defaultValue: `${filteredStashEntries.length} stash(es) saved`,
-                        })}
                   </TooltipContent>
                 </Tooltip>
               )}
@@ -1811,7 +1742,11 @@ export function ReviewPane() {
                 <div
                   className={cn(
                     'grid gap-1 mt-2',
-                    isOnDifferentBranch ? 'grid-cols-5' : 'grid-cols-3',
+                    isOnDifferentBranch
+                      ? gitStatus?.prNumber
+                        ? 'grid-cols-4'
+                        : 'grid-cols-5'
+                      : 'grid-cols-3',
                   )}
                 >
                   {[
@@ -1835,12 +1770,16 @@ export function ReviewPane() {
                     },
                     ...(isOnDifferentBranch
                       ? [
-                          {
-                            value: 'commit-pr' as const,
-                            icon: GitPullRequest,
-                            label: t('review.commitAndCreatePR', 'Commit & Create PR'),
-                            testId: 'review-action-commit-pr',
-                          },
+                          ...(!gitStatus?.prNumber
+                            ? [
+                                {
+                                  value: 'commit-pr' as const,
+                                  icon: GitPullRequest,
+                                  label: t('review.commitAndCreatePR', 'Commit & Create PR'),
+                                  testId: 'review-action-commit-pr',
+                                },
+                              ]
+                            : []),
                           {
                             value: 'commit-merge' as const,
                             icon: GitMerge,

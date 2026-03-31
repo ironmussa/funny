@@ -203,7 +203,7 @@ export const ProjectItem = memo(function ProjectItem({
         for (const [id, bk] of threadBranchKeys) {
           const st = s.statusByBranch[bk];
           if (st)
-            fp += `${id}:${st.state}:${st.dirtyFileCount}:${st.unpushedCommitCount}:${st.linesAdded}:${st.linesDeleted},`;
+            fp += `${id}:${st.state}:${st.dirtyFileCount}:${st.unpushedCommitCount}:${st.unpulledCommitCount}:${st.linesAdded}:${st.linesDeleted},`;
         }
         return fp;
       },
@@ -250,17 +250,9 @@ export const ProjectItem = memo(function ProjectItem({
   }, [threads]);
 
   // Eagerly fetch git status for visible threads that don't have it yet.
-  // Without this, threads only get git status from fetchForProject (called on
-  // project expand/select) which may be throttled by cooldowns or may not have
-  // completed yet when the component first renders.
+  // Uses ensureStatusForThreads to deduplicate by branchKey across all callers.
   useEffect(() => {
-    const { fetchForThread, statusByBranch: sbb } = useGitStatusStore.getState();
-    for (const thread of visibleThreads) {
-      const bk = computeBranchKey(thread);
-      if (!sbb[bk]) {
-        fetchForThread(thread.id);
-      }
-    }
+    useGitStatusStore.getState().ensureStatusForThreads(visibleThreads);
   }, [visibleThreads]);
 
   const dragRef = useRef<HTMLDivElement>(null);

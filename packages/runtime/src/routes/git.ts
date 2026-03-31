@@ -110,6 +110,17 @@ async function countUnpushedCommits(projectPath: string, branch: string): Promis
   return 0;
 }
 
+/** Count unpulled commits on a branch (commits on origin not yet in local). */
+async function countUnpulledCommits(projectPath: string, branch: string): Promise<number> {
+  try {
+    const result = await git(['rev-list', '--count', `${branch}..origin/${branch}`], projectPath);
+    if (result.isOk()) return parseInt(result.value.trim(), 10) || 0;
+  } catch {
+    /* remote tracking branch may not exist */
+  }
+  return 0;
+}
+
 /** Resolve project path from projectId and verify ownership. */
 async function requireProjectCwd(
   projectId: string,
@@ -286,6 +297,7 @@ gitRoutes.get('/status', async (c) => {
             state: 'merged' as const,
             dirtyFileCount: 0,
             unpushedCommitCount: unpushed,
+            unpulledCommitCount: 0,
             hasRemoteBranch: unpushed > 0,
             isMergedIntoBase: true,
             linesAdded: 0,
@@ -813,6 +825,7 @@ gitRoutes.get('/:threadId/status', async (c) => {
       state: 'merged' as const,
       dirtyFileCount: 0,
       unpushedCommitCount: unpushed,
+      unpulledCommitCount: 0,
       hasRemoteBranch: unpushed > 0,
       isMergedIntoBase: true,
       linesAdded: 0,

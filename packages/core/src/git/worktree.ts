@@ -9,6 +9,28 @@ import { ResultAsync } from 'neverthrow';
 import { git } from './git.js';
 import { gitRead, gitWrite } from './process.js';
 
+/**
+ * Ensure a directory is registered as a git safe.directory so that
+ * git doesn't reject operations when the directory owner differs from
+ * the current user (common when the repo was created by a web server
+ * or another process).
+ *
+ * Uses `git config --global --get-all` to check first and only adds
+ * if not already present, so it's idempotent and safe to call repeatedly.
+ */
+async function ensureSafeDirectory(dirPath: string): Promise<void> {
+  // Check if already registered
+  const check = await gitRead(['config', '--global', '--get-all', 'safe.directory'], {
+    reject: false,
+  });
+  if (check.exitCode === 0) {
+    const existing = check.stdout.split('\n').map((l) => l.trim());
+    if (existing.includes(dirPath)) return;
+  }
+  // Add to global config
+  await gitWrite(['config', '--global', '--add', 'safe.directory', dirPath], { reject: false });
+}
+
 export const WORKTREE_DIR_NAME = '.funny-worktrees';
 
 export async function getWorktreeBase(projectPath: string): Promise<string> {
@@ -33,6 +55,10 @@ export function createWorktree(
 ): ResultAsync<string, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
+      // Ensure project path is a git safe.directory so commands don't fail
+      // when the repo owner differs from the current user (e.g. www-data vs argenisleon).
+      await ensureSafeDirectory(projectPath);
+
       // Ensure the repo has at least one commit — git worktree requires it.
       onProgress?.('worktree:init', 'Checking repository', 'running');
       const headResult = await gitRead(['rev-parse', 'HEAD'], {
@@ -100,6 +126,10 @@ export function createWorktree(
       if (existsSync(worktreePath)) {
         throw badRequest(`Worktree already exists: ${worktreePath}`);
       }
+
+      // Pre-register the worktree path as safe so subsequent git commands
+      // inside the worktree don't fail due to ownership mismatch.
+      await ensureSafeDirectory(worktreePath);
 
       onProgress?.(
         'worktree:create',

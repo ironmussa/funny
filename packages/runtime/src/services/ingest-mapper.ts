@@ -685,7 +685,14 @@ async function handleCLIToolResults(
 
     const toolCallId = cliState.processedToolUseIds.get(block.tool_use_id);
     if (toolCallId && block.content) {
-      const decodedOutput = decodeUnicodeEscapes(block.content);
+      // block.content can be a string or an array of content blocks [{type:"text", text:"..."}]
+      const rawContent = Array.isArray(block.content)
+        ? block.content
+            .filter((b: any) => b.type === 'text' && b.text)
+            .map((b: any) => b.text)
+            .join('\n')
+        : block.content;
+      const decodedOutput = decodeUnicodeEscapes(rawContent);
       await tm.updateToolCallOutput(toolCallId, decodedOutput);
 
       emitWS(threadState, {

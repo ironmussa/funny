@@ -654,7 +654,7 @@ export const PromptInputUI = memo(function PromptInputUI({
   // ── Render ──
   return (
     <div className="border-border">
-      <div className="mx-auto w-full min-w-0 max-w-3xl">
+      <div className="mx-auto w-full min-w-0 max-w-3xl pb-4">
         {/* Image previews */}
         {images.length > 0 && (
           <div className="mb-2 flex flex-wrap gap-2">

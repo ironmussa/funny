@@ -850,6 +850,21 @@ async function prNode(ctx: GitPipelineContext): Promise<GitPipelineContext> {
 
   try {
     if (!ctx.threadId) throw new Error('PR creation requires a thread');
+
+    // Pre-check: verify the branch has commits ahead of base before calling GitHub
+    const thread = await tm.getThread(ctx.threadId);
+    const base = thread?.baseBranch;
+    if (base) {
+      const countResult = await gitRead(['rev-list', '--count', `${base}..HEAD`], {
+        cwd: ctx.cwd,
+        reject: false,
+      });
+      const ahead = parseInt(countResult.stdout.trim(), 10) || 0;
+      if (ahead === 0) {
+        throw new Error(`No commits ahead of ${base}. Push new commits before creating a PR.`);
+      }
+    }
+
     const result = await gitServiceCreatePR({
       threadId: ctx.threadId,
       userId: ctx.userId,

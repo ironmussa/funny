@@ -5,11 +5,7 @@ import { toast } from 'sonner';
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
 import { createClientLogger } from '@/lib/client-logger';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
-import {
-  useGitStatusStore,
-  _resetCooldowns,
-  invalidateCooldownsForKeys,
-} from '@/stores/git-status-store';
+import { useGitStatusStore, invalidateCooldownsForKeys } from '@/stores/git-status-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -568,8 +564,9 @@ function connect() {
     useCircuitBreakerStore.getState().recordSuccess();
     // Refresh all loaded threads
     useThreadStore.getState().refreshAllLoadedThreads();
-    // Re-sync git status
-    _resetCooldowns();
+    // Re-sync git status — do NOT reset cooldowns; the increased cooldown (5s)
+    // naturally throttles the thundering herd. WS git:status events will
+    // invalidate specific keys when the server pushes fresh data.
     const loadedProjectIds = Object.keys(useThreadStore.getState().threadsByProject);
     for (const pid of loadedProjectIds) {
       useGitStatusStore.getState().fetchForProject(pid);

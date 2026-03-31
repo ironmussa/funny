@@ -5,6 +5,8 @@ import {
   CloudDownload,
   Download,
   GitCommit,
+  GitMerge,
+  GitPullRequest,
   Loader2,
   RefreshCw,
   Search,
@@ -16,13 +18,23 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
+import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import { shortRelativeDate } from '@/lib/thread-utils';
-import { cn } from '@/lib/utils';
+import { toastError } from '@/lib/toast-error';
+import { cn, resolveThreadBranch } from '@/lib/utils';
+import { useGitStatusForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -53,34 +65,6 @@ const SELECTED_COMMIT_KEY = 'history_selected_commit';
 
 // ── Helpers ──
 
-function parseDiffOld(unifiedDiff: string): string {
-  const lines = unifiedDiff.split('\n');
-  const oldLines: string[] = [];
-  for (const line of lines) {
-    if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) continue;
-    if (line.startsWith('-')) {
-      oldLines.push(line.substring(1));
-    } else if (!line.startsWith('+')) {
-      oldLines.push(line);
-    }
-  }
-  return oldLines.join('\n');
-}
-
-function parseDiffNew(unifiedDiff: string): string {
-  const lines = unifiedDiff.split('\n');
-  const newLines: string[] = [];
-  for (const line of lines) {
-    if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) continue;
-    if (line.startsWith('+')) {
-      newLines.push(line.substring(1));
-    } else if (!line.startsWith('-')) {
-      newLines.push(line);
-    }
-  }
-  return newLines.join('\n');
-}
-
 function getFileName(filePath: string): string {
   return filePath.split('/').pop() || filePath;
 }
@@ -98,6 +82,16 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const projectModeId = !effectiveThreadId ? selectedProjectId : null;
   const hasGitContext = !!(effectiveThreadId || projectModeId);
 
+  // Branch info for PR creation
+  const baseBranch = useThreadStore((s) => s.activeThread?.baseBranch);
+  const threadBranch = useThreadStore((s) =>
+    s.activeThread ? resolveThreadBranch(s.activeThread) : undefined,
+  );
+  const isAgentRunning = useThreadStore((s) => s.activeThread?.status === 'running');
+  const gitStatus = useGitStatusForThread(effectiveThreadId);
+  const isOnDifferentBranch =
+    !!effectiveThreadId && !!baseBranch && !!threadBranch && threadBranch !== baseBranch;
+
   // Log entries (accumulated across pages)
   const [logEntries, setLogEntries] = useState<LogEntry[]>([]);
   const [logLoading, setLogLoading] = useState(false);
@@ -110,6 +104,8 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const [pullInProgress, setPullInProgress] = useState(false);
   const [fetchInProgress, setFetchInProgress] = useState(false);
   const [pushInProgress, setPushInProgress] = useState(false);
+  const [prInProgress, setPrInProgress] = useState(false);
+  const [prDialog, setPrDialog] = useState<{ title: string; body: string } | null>(null);
 
   // Selected commit (persisted per git context)
   const [selectedHash, setSelectedHashRaw] = useState<string | null>(() => {
@@ -375,6 +371,9 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
       toast.success(t('review.pullSuccess', 'Pulled successfully'));
     }
     setPullInProgress(false);
+    // Refresh git status (unpulledCommitCount, etc.) like ReviewPane does
+    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
+    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
     loadedRef.current = false;
     loadLog(0, false);
   }, [hasGitContext, pullInProgress, effectiveThreadId, projectModeId, t, loadLog]);
@@ -405,6 +404,9 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
       toast.success(t('review.fetchSuccess', 'Fetched from origin'));
     }
     setFetchInProgress(false);
+    // Refresh git status (unpulledCommitCount, etc.) like ReviewPane does
+    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
+    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
     loadedRef.current = false;
     loadLog(0, false);
   }, [hasGitContext, fetchInProgress, effectiveThreadId, projectModeId, t, loadLog]);
@@ -431,6 +433,31 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
       loadLog(0, false);
     }
   }, [hasGitContext, pushInProgress, effectiveThreadId, projectModeId, t, loadLog]);
+
+  const handleCreatePR = useCallback(async () => {
+    if (!hasGitContext || prInProgress || !prDialog) return;
+    setPrInProgress(true);
+
+    const result = effectiveThreadId
+      ? await api.startWorkflow(effectiveThreadId, {
+          action: 'create-pr',
+          prTitle: prDialog.title.trim(),
+          prBody: prDialog.body.trim(),
+        })
+      : await api.projectStartWorkflow(projectModeId!, {
+          action: 'create-pr',
+          prTitle: prDialog.title.trim(),
+          prBody: prDialog.body.trim(),
+        });
+
+    if (result.isErr()) {
+      toastError(result.error);
+      setPrInProgress(false);
+      return;
+    }
+    setPrDialog(null);
+    setPrInProgress(false);
+  }, [hasGitContext, prInProgress, prDialog, effectiveThreadId, projectModeId]);
 
   // ── Render ──
 
@@ -473,13 +500,25 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
               size="icon-sm"
               onClick={handlePull}
               disabled={pullInProgress}
-              className="text-muted-foreground"
+              className="relative text-muted-foreground"
               data-testid="history-pull"
             >
               <Download className={cn('icon-base', pullInProgress && 'animate-pulse')} />
+              {(gitStatus?.unpulledCommitCount ?? 0) > 0 && (
+                <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] font-bold leading-none text-white">
+                  {gitStatus!.unpulledCommitCount}
+                </span>
+              )}
             </Button>
           </TooltipTrigger>
-          <TooltipContent side="top">{t('review.pull', 'Pull')}</TooltipContent>
+          <TooltipContent side="top">
+            {(gitStatus?.unpulledCommitCount ?? 0) > 0
+              ? t('review.readyToPull', {
+                  count: gitStatus!.unpulledCommitCount,
+                  defaultValue: `${gitStatus!.unpulledCommitCount} commit(s) to pull`,
+                })
+              : t('review.pull', 'Pull')}
+          </TooltipContent>
         </Tooltip>
         <Tooltip>
           <TooltipTrigger asChild>
@@ -526,6 +565,49 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
             {unpushedHashes.size}
             <ArrowUp className="icon-xs" />
           </span>
+        )}
+        {isOnDifferentBranch && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              {gitStatus?.prNumber ? (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => window.open(gitStatus.prUrl, '_blank')}
+                  className="ml-auto text-muted-foreground"
+                  data-testid="history-view-pr"
+                >
+                  {gitStatus.prState === 'MERGED' ? (
+                    <GitMerge className="icon-base text-purple-500" />
+                  ) : (
+                    <GitPullRequest className="icon-base text-green-500" />
+                  )}
+                </Button>
+              ) : (
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setPrDialog({ title: threadBranch || '', body: '' })}
+                  disabled={!!isAgentRunning}
+                  className="ml-auto text-muted-foreground"
+                  data-testid="history-create-pr"
+                >
+                  <GitPullRequest className="icon-base" />
+                </Button>
+              )}
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {gitStatus?.prNumber
+                ? t('review.viewPR', {
+                    number: gitStatus.prNumber,
+                    defaultValue: `View PR #${gitStatus.prNumber}`,
+                  })
+                : t('review.createPRTooltip', {
+                    branch: threadBranch,
+                    target: baseBranch || 'base',
+                  })}
+            </TooltipContent>
+          </Tooltip>
         )}
       </div>
 
@@ -810,6 +892,67 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
           }
         />
       )}
+
+      {/* Create PR dialog */}
+      <Dialog
+        open={!!prDialog}
+        onOpenChange={(open) => {
+          if (!open) setPrDialog(null);
+        }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{t('review.createPR')}</DialogTitle>
+            <DialogDescription>
+              {t('review.createPRTooltip', { branch: threadBranch, target: baseBranch || 'base' })}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <input
+              className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              placeholder={t('review.prTitle', 'PR title')}
+              data-testid="history-pr-title"
+              value={prDialog?.title ?? ''}
+              onChange={(e) =>
+                setPrDialog((prev) => (prev ? { ...prev, title: e.target.value } : prev))
+              }
+            />
+            <textarea
+              className="w-full resize-none rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring"
+              rows={4}
+              placeholder={t('review.commitBody', 'Description (optional)')}
+              data-testid="history-pr-body"
+              value={prDialog?.body ?? ''}
+              onChange={(e) =>
+                setPrDialog((prev) => (prev ? { ...prev, body: e.target.value } : prev))
+              }
+            />
+          </div>
+          <div className="mt-2 flex justify-end gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setPrDialog(null)}
+              data-testid="history-pr-cancel"
+            >
+              {t('common.cancel', 'Cancel')}
+            </Button>
+            <Button
+              size="sm"
+              disabled={!prDialog?.title.trim() || prInProgress}
+              onClick={handleCreatePR}
+              data-testid="history-pr-create"
+            >
+              {prInProgress ? (
+                <Loader2 className="icon-sm mr-1.5 animate-spin" />
+              ) : (
+                <GitPullRequest className="icon-sm mr-1.5" />
+              )}
+              {t('review.createPR')}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

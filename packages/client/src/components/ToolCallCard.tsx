@@ -248,8 +248,8 @@ export const ToolCallCard = memo(
                     <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
                       {t('tools.output')}
                     </div>
-                    {name === 'WebFetch' ? (
-                      <div className="rounded border border-border/40 bg-background/80 px-2.5 py-1.5 text-sm text-muted-foreground">
+                    {name === 'WebFetch' || name === 'WebSearch' ? (
+                      <div className="rounded border border-border/40 bg-background/80 px-2.5 py-1.5 text-sm text-foreground/80">
                         <MessageContent content={output} />
                       </div>
                     ) : (

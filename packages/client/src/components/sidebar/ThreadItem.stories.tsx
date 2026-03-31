@@ -41,6 +41,7 @@ function makeGitStatus(overrides: Partial<GitStatusInfo> = {}): GitStatusInfo {
     state: 'dirty',
     dirtyFileCount: 48,
     unpushedCommitCount: 0,
+    unpulledCommitCount: 0,
     hasRemoteBranch: false,
     isMergedIntoBase: false,
     linesAdded: 5604,

@@ -9,6 +9,11 @@ import { useThreadStore } from './thread-store';
 
 const EXPANDED_PROJECTS_KEY = 'funny_expanded_projects';
 
+// Branch fetch cooldown — branches change rarely (only on checkout/merge)
+const BRANCH_COOLDOWN_MS = 10_000;
+const _lastFetchBranch = new Map<string, number>();
+const _inFlightBranch = new Set<string>();
+
 function loadExpandedProjects(): Set<string> {
   try {
     const stored = localStorage.getItem(EXPANDED_PROJECTS_KEY);
@@ -202,11 +207,21 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   fetchBranch: async (projectId) => {
-    const result = await api.listBranches(projectId);
-    if (result.isErr()) return;
-    const { currentBranch } = result.value;
-    if (currentBranch) {
-      set({ branchByProject: { ...get().branchByProject, [projectId]: currentBranch } });
+    if (_inFlightBranch.has(projectId)) return;
+    const now = Date.now();
+    const last = _lastFetchBranch.get(projectId) ?? 0;
+    if (now - last < BRANCH_COOLDOWN_MS) return;
+    _lastFetchBranch.set(projectId, now);
+    _inFlightBranch.add(projectId);
+    try {
+      const result = await api.listBranches(projectId);
+      if (result.isErr()) return;
+      const { currentBranch } = result.value;
+      if (currentBranch) {
+        set({ branchByProject: { ...get().branchByProject, [projectId]: currentBranch } });
+      }
+    } finally {
+      _inFlightBranch.delete(projectId);
     }
   },
 

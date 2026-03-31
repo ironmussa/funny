@@ -1100,6 +1100,7 @@ export function getSingleFileDiff(
 export interface GitStatusSummary {
   dirtyFileCount: number;
   unpushedCommitCount: number;
+  unpulledCommitCount: number;
   hasRemoteBranch: boolean;
   isMergedIntoBase: boolean;
   linesAdded: number;
@@ -1329,6 +1330,7 @@ export function getStatusSummary(
         const result: GitStatusSummary = {
           dirtyFileCount,
           unpushedCommitCount: 0,
+          unpulledCommitCount: 0,
           hasRemoteBranch: false,
           isMergedIntoBase: false,
           linesAdded,
@@ -1383,16 +1385,25 @@ export function getStatusSummary(
       const remoteBranch = remoteResult.exitCode === 0 ? remoteResult.stdout.trim() : null;
       const hasRemoteBranch = remoteBranch !== null;
 
-      // If remote exists, we need count against it (one extra command).
+      // If remote exists, we need count against it (two extra commands: ahead + behind).
       // Otherwise, use the speculative baseBranch count from above.
       let unpushedCommitCount = 0;
+      let unpulledCommitCount = 0;
       if (hasRemoteBranch) {
-        const remoteCount = await gitRead(['rev-list', '--count', `${remoteBranch}..HEAD`], {
-          cwd: worktreeCwd,
-          reject: false,
-        });
+        const [remoteCount, behindCount] = await Promise.all([
+          gitRead(['rev-list', '--count', `${remoteBranch}..HEAD`], {
+            cwd: worktreeCwd,
+            reject: false,
+          }),
+          gitRead(['rev-list', '--count', `HEAD..${remoteBranch}`], {
+            cwd: worktreeCwd,
+            reject: false,
+          }),
+        ]);
         unpushedCommitCount =
           remoteCount.exitCode === 0 ? parseInt(remoteCount.stdout.trim(), 10) || 0 : 0;
+        unpulledCommitCount =
+          behindCount.exitCode === 0 ? parseInt(behindCount.stdout.trim(), 10) || 0 : 0;
       } else if (baseCountResult && baseCountResult.exitCode === 0) {
         unpushedCommitCount = parseInt(baseCountResult.stdout.trim(), 10) || 0;
       }
@@ -1440,6 +1451,7 @@ export function getStatusSummary(
       const result: GitStatusSummary = {
         dirtyFileCount,
         unpushedCommitCount,
+        unpulledCommitCount,
         hasRemoteBranch,
         isMergedIntoBase,
         linesAdded,

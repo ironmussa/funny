@@ -24,6 +24,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useTodoSnapshotsByAgent } from '@/hooks/use-todo-panel';
 import type { TodoSnapshot } from '@/hooks/use-todo-panel';
 import { api } from '@/lib/api';
+import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
 import { useReviewPaneStore } from '@/stores/review-pane-store';
@@ -45,28 +46,6 @@ const fileStatusIcons: Record<string, typeof FileCode> = {
   deleted: FileX,
   renamed: FileCode,
 };
-
-function parseDiffOld(unifiedDiff: string): string {
-  const lines = unifiedDiff.split('\n');
-  const oldLines: string[] = [];
-  for (const line of lines) {
-    if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) continue;
-    if (line.startsWith('-')) oldLines.push(line.substring(1));
-    else if (!line.startsWith('+')) oldLines.push(line);
-  }
-  return oldLines.join('\n');
-}
-
-function parseDiffNew(unifiedDiff: string): string {
-  const lines = unifiedDiff.split('\n');
-  const newLines: string[] = [];
-  for (const line of lines) {
-    if (line.startsWith('---') || line.startsWith('+++') || line.startsWith('@@')) continue;
-    if (line.startsWith('+')) newLines.push(line.substring(1));
-    else if (!line.startsWith('-')) newLines.push(line);
-  }
-  return newLines.join('\n');
-}
 
 // ─── Hooks ────────────────────────────────────────────────
 

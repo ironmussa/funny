@@ -44,6 +44,7 @@ export interface GitLogEntry {
 export interface GitStatusSummary {
   dirtyFileCount: number;
   unpushedCommitCount: number;
+  unpulledCommitCount: number;
   hasRemoteBranch: boolean;
   isMergedIntoBase: boolean;
   linesAdded: number;

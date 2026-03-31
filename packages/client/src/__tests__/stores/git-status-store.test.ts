@@ -22,6 +22,7 @@ function makeStatus(
     state: 'dirty',
     dirtyFileCount: 3,
     unpushedCommitCount: 1,
+    unpulledCommitCount: 0,
     hasRemoteBranch: true,
     isMergedIntoBase: false,
     linesAdded: 10,

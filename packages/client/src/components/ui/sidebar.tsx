@@ -384,9 +384,10 @@ const SidebarRail = React.forwardRef<HTMLButtonElement, React.ComponentProps<'bu
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
               className={cn(
-                'absolute inset-y-0 z-20 hidden w-2 translate-x-full transition-all ease-linear after:absolute after:inset-y-0 after:left-0 after:w-px after:bg-border hover:after:bg-sidebar-border group-data-[side=left]:right-0 group-data-[side=right]:left-0 sm:flex',
+                'absolute inset-y-0 z-20 hidden w-px translate-x-full bg-border transition-colors ease-linear hover:bg-sidebar-accent group-data-[side=left]:right-0 group-data-[side=right]:left-0 sm:flex',
                 'cursor-col-resize',
-                'group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:after:left-full group-data-[collapsible=offcanvas]:hover:bg-sidebar',
+                'before:absolute before:inset-y-0 before:-left-1 before:w-2.5 before:content-[""]',
+                'group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:hover:bg-sidebar',
                 '[[data-side=left][data-collapsible=offcanvas]_&]:-right-2',
                 '[[data-side=right][data-collapsible=offcanvas]_&]:-left-2',
                 'group-data-[state=collapsed]:!hidden',

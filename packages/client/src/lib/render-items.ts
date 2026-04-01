@@ -99,6 +99,8 @@ export function buildGroupedRenderItems(
     // Emit Think tool calls BEFORE the message text so the thinking
     // appears above the response in the UI (natural reading order).
     for (const tc of msg.toolCalls ?? []) {
+      // Ensure every tool call has a timestamp (fall back to parent message)
+      if (!tc.timestamp) tc.timestamp = msg.timestamp;
       if (tc.name === 'Think' && !tc.parentToolCallId) {
         flat.push({ type: 'toolcall', tc });
       }

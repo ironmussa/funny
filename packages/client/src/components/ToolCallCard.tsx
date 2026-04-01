@@ -3,6 +3,7 @@ import { ChevronRight, Wrench, ListTodo, Check } from 'lucide-react';
 import { useState, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
 
@@ -41,6 +42,8 @@ interface ToolCallCardProps {
   planText?: string;
   /** Nested tool calls from a subagent (Task tool) */
   childToolCalls?: any[];
+  /** ISO timestamp of when this tool call was executed */
+  timestamp?: string;
 }
 
 export const ToolCallCard = memo(
@@ -52,6 +55,7 @@ export const ToolCallCard = memo(
     hideLabel,
     planText,
     childToolCalls,
+    timestamp,
   }: ToolCallCardProps) {
     const { t } = useTranslation();
     const isTodo = name === 'TodoWrite';
@@ -66,6 +70,7 @@ export const ToolCallCard = memo(
     const defaultEditor = useSettingsStore((s) => s.defaultEditor);
     const projectPath = useCurrentProjectPath();
     const displayPath = filePath ? makeRelativePath(filePath, projectPath) : null;
+    const displayTime = useMemo(() => (timestamp ? timeAgo(timestamp, t) : null), [timestamp, t]);
 
     // SECURITY: escapeXML must remain true to prevent XSS via dangerouslySetInnerHTML
     const ansiConverter = useMemo(
@@ -100,14 +105,30 @@ export const ToolCallCard = memo(
           plan={planText || (typeof parsed.plan === 'string' ? parsed.plan : undefined)}
           onRespond={output ? undefined : onRespond}
           output={output}
+          displayTime={displayTime}
         />
       );
-    if (isPlan) return <PlanCard parsed={parsed} output={output} hideLabel={hideLabel} />;
-    if (name === 'Bash') return <BashCard parsed={parsed} output={output} hideLabel={hideLabel} />;
+    if (isPlan)
+      return (
+        <PlanCard parsed={parsed} output={output} hideLabel={hideLabel} displayTime={displayTime} />
+      );
+    if (name === 'Bash')
+      return (
+        <BashCard parsed={parsed} output={output} hideLabel={hideLabel} displayTime={displayTime} />
+      );
     if (name === 'Read')
-      return <ReadFileCard parsed={parsed} output={output} hideLabel={hideLabel} />;
-    if (name === 'Write') return <WriteFileCard parsed={parsed} hideLabel={hideLabel} />;
-    if (name === 'Edit') return <EditFileCard parsed={parsed} hideLabel={hideLabel} />;
+      return (
+        <ReadFileCard
+          parsed={parsed}
+          output={output}
+          hideLabel={hideLabel}
+          displayTime={displayTime}
+        />
+      );
+    if (name === 'Write')
+      return <WriteFileCard parsed={parsed} hideLabel={hideLabel} displayTime={displayTime} />;
+    if (name === 'Edit')
+      return <EditFileCard parsed={parsed} hideLabel={hideLabel} displayTime={displayTime} />;
     if (name === 'AskUserQuestion')
       return (
         <AskQuestionCard
@@ -115,6 +136,7 @@ export const ToolCallCard = memo(
           onRespond={output ? undefined : onRespond}
           output={output}
           hideLabel={hideLabel}
+          displayTime={displayTime}
         />
       );
     if (name === 'Task')
@@ -124,10 +146,18 @@ export const ToolCallCard = memo(
           output={output}
           hideLabel={hideLabel}
           childToolCalls={childToolCalls}
+          displayTime={displayTime}
         />
       );
     if (name === 'Think')
-      return <ThinkCard parsed={parsed} output={output} hideLabel={hideLabel} />;
+      return (
+        <ThinkCard
+          parsed={parsed}
+          output={output}
+          hideLabel={hideLabel}
+          displayTime={displayTime}
+        />
+      );
 
     return (
       <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
@@ -200,6 +230,11 @@ export const ToolCallCard = memo(
                   {summary}
                 </span>
               ))}
+            {displayTime && (
+              <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
+                {displayTime}
+              </span>
+            )}
           </div>
           {!expanded && outputPreview && (
             <div className="-mt-0.5 px-3 pb-1.5">
@@ -288,7 +323,8 @@ export const ToolCallCard = memo(
       prev.hideLabel === next.hideLabel &&
       !!prev.onRespond === !!next.onRespond &&
       prev.planText === next.planText &&
-      prev.childToolCalls === next.childToolCalls
+      prev.childToolCalls === next.childToolCalls &&
+      prev.timestamp === next.timestamp
     );
   },
 );

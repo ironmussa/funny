@@ -73,9 +73,11 @@ function computeUnifiedDiff(oldValue: string, newValue: string): string {
 export function EditFileCard({
   parsed,
   hideLabel,
+  displayTime,
 }: {
   parsed: Record<string, unknown>;
   hideLabel?: boolean;
+  displayTime?: string | null;
 }) {
   const { t } = useTranslation();
   const defaultEditor = useSettingsStore((s) => s.defaultEditor);
@@ -153,6 +155,11 @@ export function EditFileCard({
                 </span>
               );
             })()}
+          {displayTime && (
+            <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
+              {displayTime}
+            </span>
+          )}
         </button>
         {hasDiff && (
           <Tooltip>

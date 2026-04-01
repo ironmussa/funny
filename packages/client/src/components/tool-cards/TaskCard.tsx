@@ -47,6 +47,7 @@ interface TaskCardProps {
   output?: string;
   hideLabel?: boolean;
   childToolCalls?: any[];
+  displayTime?: string | null;
 }
 
 export const TaskCard = memo(function TaskCard({
@@ -54,6 +55,7 @@ export const TaskCard = memo(function TaskCard({
   output: rawOutput,
   hideLabel,
   childToolCalls,
+  displayTime,
 }: TaskCardProps) {
   const { t } = useTranslation();
   const isRunning = !rawOutput;
@@ -101,6 +103,11 @@ export const TaskCard = memo(function TaskCard({
         {hasChildren && (
           <span className="flex-shrink-0 rounded bg-muted px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">
             {childToolCalls!.length} tools
+          </span>
+        )}
+        {displayTime && (
+          <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
+            {displayTime}
           </span>
         )}
         {!output && (

@@ -14,10 +14,12 @@ import {
 export function ReadFileCard({
   parsed,
   hideLabel,
+  displayTime,
 }: {
   parsed: Record<string, unknown>;
   output?: string;
   hideLabel?: boolean;
+  displayTime?: string | null;
 }) {
   const { t } = useTranslation();
   const defaultEditor = useSettingsStore((s) => s.defaultEditor);
@@ -66,6 +68,11 @@ export function ReadFileCard({
               </span>
             );
           })()}
+        {displayTime && (
+          <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
+            {displayTime}
+          </span>
+        )}
       </div>
     </div>
   );

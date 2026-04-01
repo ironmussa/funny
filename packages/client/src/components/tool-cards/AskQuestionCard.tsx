@@ -94,11 +94,13 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   onRespond,
   output,
   hideLabel,
+  displayTime,
 }: {
   parsed: Record<string, unknown>;
   onRespond?: (answer: string) => void;
   output?: string;
   hideLabel?: boolean;
+  displayTime?: string | null;
 }) {
   const { t } = useTranslation();
   const questions = getQuestions(parsed);
@@ -334,6 +336,9 @@ export const AskQuestionCard = memo(function AskQuestionCard({
           {questions.length}{' '}
           {questions.length > 1 ? t('tools.questionsPlural') : t('tools.questions')}
         </span>
+        {displayTime && (
+          <span className="text-[10px] tabular-nums text-muted-foreground/50">{displayTime}</span>
+        )}
         {submitted && (
           <span className="ml-auto flex-shrink-0 rounded bg-status-success/10 px-1.5 py-0.5 text-xs font-medium text-status-success/80">
             {t('tools.answered')}

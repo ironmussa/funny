@@ -34,10 +34,12 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
   plan,
   onRespond,
   output,
+  displayTime,
 }: {
   plan?: string;
   onRespond?: (answer: string) => void;
   output?: string;
+  displayTime?: string | null;
 }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
@@ -145,6 +147,9 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
         <span className="font-medium text-foreground">{t('tools.plan')}</span>
         {!submitted && (
           <span className="text-muted-foreground">{t('thread.planWaitingForResponse')}</span>
+        )}
+        {displayTime && (
+          <span className="text-[10px] tabular-nums text-muted-foreground/50">{displayTime}</span>
         )}
         <span className="ml-auto flex items-center gap-1.5">
           {submitted && (

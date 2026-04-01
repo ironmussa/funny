@@ -1,7 +1,8 @@
 import { ChevronRight, Wrench, ListTodo } from 'lucide-react';
-import { useState, memo } from 'react';
+import { useState, memo, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
 import { getToolLabel } from './tool-cards/utils';
@@ -18,10 +19,16 @@ export interface ToolCallGroupProps {
   name: string;
   calls: ToolCallItem[];
   onRespond?: (answer: string) => void;
+  timestamp?: string;
 }
 
 function toolCallGroupAreEqual(prev: ToolCallGroupProps, next: ToolCallGroupProps) {
-  if (prev.name !== next.name || prev.onRespond !== next.onRespond) return false;
+  if (
+    prev.name !== next.name ||
+    prev.onRespond !== next.onRespond ||
+    prev.timestamp !== next.timestamp
+  )
+    return false;
   if (prev.calls === next.calls) return true;
   if (prev.calls.length !== next.calls.length) return false;
   for (let i = 0; i < prev.calls.length; i++) {
@@ -34,11 +41,13 @@ export const ToolCallGroup = memo(function ToolCallGroup({
   name,
   calls,
   onRespond,
+  timestamp,
 }: ToolCallGroupProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
   const label = getToolLabel(name, t);
   const isTodo = name === 'TodoWrite';
+  const displayTime = useMemo(() => (timestamp ? timeAgo(timestamp, t) : null), [timestamp, t]);
 
   return (
     <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
@@ -62,6 +71,11 @@ export const ToolCallGroup = memo(function ToolCallGroup({
           <span className="inline-flex items-center justify-center rounded-full bg-muted-foreground/20 px-1.5 text-xs font-medium leading-4 text-muted-foreground">
             ×{calls.length}
           </span>
+          {displayTime && (
+            <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
+              {displayTime}
+            </span>
+          )}
         </div>
       </button>
       {expanded && (

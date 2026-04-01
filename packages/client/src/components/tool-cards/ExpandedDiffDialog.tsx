@@ -1,5 +1,15 @@
 import type { FileDiffSummary, PRReviewThread } from '@funny/shared';
-import { Columns2, FileCode, FileText, Loader2, MessageSquare, Rows2, X } from 'lucide-react';
+import {
+  Columns3,
+  Columns2,
+  FileCode,
+  FileText,
+  Loader2,
+  MessageSquare,
+  Rows2,
+  WrapText,
+  X,
+} from 'lucide-react';
 import {
   type ComponentType,
   useState,
@@ -23,7 +33,7 @@ import { cn } from '@/lib/utils';
 
 import { DiffCommentThread } from '../DiffCommentThread';
 import { FileTree } from '../FileTree';
-import { VirtualDiff } from '../VirtualDiff';
+import { type DiffViewMode, VirtualDiff } from '../VirtualDiff';
 import { getFileName } from './utils';
 
 /* ── Helpers ── */
@@ -125,20 +135,25 @@ interface ExpandedDiffDialogProps {
 function DiffContent({
   filePath,
   splitView,
+  viewMode,
   loading,
   rawDiff,
   oldValue,
   newValue,
   showFullFile,
+  wordWrap,
 }: {
   filePath: string;
+  /** @deprecated Use viewMode instead */
   splitView: boolean;
+  viewMode?: DiffViewMode;
   loading: boolean;
   rawDiff?: string;
   oldValue: string;
   newValue: string;
   /** When true, disable code folding so the entire file is visible */
   showFullFile?: boolean;
+  wordWrap?: boolean;
 }) {
   // Compute unified diff from old/new if rawDiff is not provided
   const unifiedDiff = useMemo(() => {
@@ -163,10 +178,12 @@ function DiffContent({
   return (
     <VirtualDiff
       unifiedDiff={unifiedDiff}
+      viewMode={viewMode}
       splitView={splitView}
       filePath={filePath}
       codeFolding={!showFullFile}
       showMinimap={!!showFullFile}
+      wordWrap={wordWrap}
       className="h-full"
       data-testid="expanded-diff-viewer"
     />
@@ -195,7 +212,8 @@ export function ExpandedDiffDialog({
   prReviewThreads,
   onRequestFullDiff,
 }: ExpandedDiffDialogProps) {
-  const [splitView, setSplitView] = useState(true);
+  const [viewMode, setViewMode] = useState<DiffViewMode>('three-pane');
+  const [wordWrap, setWordWrap] = useState(false);
   const [showFullFile, setShowFullFile] = useState(false);
   const [isPending, startTransition] = useTransition();
   const [fullDiffCache, setFullDiffCache] = useState<
@@ -203,9 +221,13 @@ export function ExpandedDiffDialog({
   >(new Map());
   const [loadingFullDiff, setLoadingFullDiff] = useState(false);
 
-  const toggleSplitView = useCallback(() => {
+  const VIEW_MODE_CYCLE: DiffViewMode[] = ['unified', 'split', 'three-pane'];
+  const cycleViewMode = useCallback(() => {
     startTransition(() => {
-      setSplitView((prev) => !prev);
+      setViewMode((prev) => {
+        const idx = VIEW_MODE_CYCLE.indexOf(prev);
+        return VIEW_MODE_CYCLE[(idx + 1) % VIEW_MODE_CYCLE.length];
+      });
     });
   }, []);
 
@@ -320,22 +342,47 @@ export function ExpandedDiffDialog({
               <Button
                 variant="ghost"
                 size="icon-xs"
-                onClick={toggleSplitView}
+                onClick={cycleViewMode}
                 disabled={isPending}
                 className="flex-shrink-0 text-muted-foreground"
-                data-testid="diff-toggle-split-view"
+                data-testid="diff-toggle-view-mode"
               >
                 {isPending ? (
                   <Loader2 className="icon-base animate-spin" />
-                ) : splitView ? (
+                ) : viewMode === 'unified' ? (
                   <Rows2 className="icon-base" />
-                ) : (
+                ) : viewMode === 'split' ? (
                   <Columns2 className="icon-base" />
+                ) : (
+                  <Columns3 className="icon-base" />
                 )}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">
-              {splitView ? 'Unified view' : 'Split view'}
+              {viewMode === 'three-pane'
+                ? 'Three-pane — click for split'
+                : viewMode === 'split'
+                  ? 'Split — click for unified'
+                  : 'Unified — click for three-pane'}
+            </TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={() => setWordWrap((w) => !w)}
+                className={cn(
+                  'flex-shrink-0 text-muted-foreground',
+                  wordWrap && 'bg-accent text-accent-foreground',
+                )}
+                data-testid="diff-toggle-word-wrap"
+              >
+                <WrapText className="icon-base" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">
+              {wordWrap ? 'Word wrap on' : 'Word wrap off'}
             </TooltipContent>
           </Tooltip>
           <Tooltip>
@@ -431,12 +478,14 @@ export function ExpandedDiffDialog({
             <div className="min-h-0 flex-1 overflow-auto">
               <DiffContent
                 filePath={filePath}
-                splitView={splitView}
+                splitView={viewMode === 'split'}
+                viewMode={viewMode}
                 loading={loading || loadingFullDiff}
                 rawDiff={effectiveRawDiff}
                 oldValue={effectiveOldValue}
                 newValue={effectiveNewValue}
                 showFullFile={showFullFile}
+                wordWrap={wordWrap}
               />
             </div>
             {/* Inline PR review threads */}

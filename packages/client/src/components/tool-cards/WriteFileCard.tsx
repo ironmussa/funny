@@ -18,9 +18,11 @@ import {
 export function WriteFileCard({
   parsed,
   hideLabel,
+  displayTime,
 }: {
   parsed: Record<string, unknown>;
   hideLabel?: boolean;
+  displayTime?: string | null;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -87,6 +89,11 @@ export function WriteFileCard({
               </span>
             );
           })()}
+        {displayTime && (
+          <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
+            {displayTime}
+          </span>
+        )}
       </button>
       {expanded && content != null && (
         <div className="max-h-[50vh] overflow-y-auto border-t border-border/40">

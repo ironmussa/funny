@@ -10,10 +10,12 @@ export function PlanCard({
   parsed,
   output: _output,
   hideLabel,
+  displayTime,
 }: {
   parsed: Record<string, unknown>;
   output?: string;
   hideLabel?: boolean;
+  displayTime?: string | null;
 }) {
   const { t } = useTranslation();
   const [copied, setCopied] = useState(false);
@@ -36,6 +38,11 @@ export function PlanCard({
           <div className="flex items-center gap-2">
             <FileCode2 className="icon-xs flex-shrink-0 text-muted-foreground" />
             <span className="font-medium text-foreground">{t('tools.plan')}</span>
+            {displayTime && (
+              <span className="text-[10px] tabular-nums text-muted-foreground/50">
+                {displayTime}
+              </span>
+            )}
           </div>
           <TooltipIconButton
             size="icon"

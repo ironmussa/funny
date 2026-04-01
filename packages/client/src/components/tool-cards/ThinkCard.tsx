@@ -10,10 +10,12 @@ export function ThinkCard({
   parsed,
   output,
   hideLabel,
+  displayTime,
 }: {
   parsed: Record<string, unknown>;
   output?: string;
   hideLabel?: boolean;
+  displayTime?: string | null;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -54,6 +56,11 @@ export function ThinkCard({
           {!expanded && truncatedPreview && (
             <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
               {truncatedPreview}
+            </span>
+          )}
+          {displayTime && (
+            <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
+              {displayTime}
             </span>
           )}
         </div>

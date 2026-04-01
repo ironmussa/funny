@@ -225,6 +225,7 @@ export function handleWSToolCall(
       messageId: data.messageId || '',
       name: data.name,
       input: JSON.stringify(data.input),
+      timestamp: new Date().toISOString(),
       ...(data.author ? { author: data.author } : {}),
       ...(data.parentToolCallId ? { parentToolCallId: data.parentToolCallId } : {}),
     };

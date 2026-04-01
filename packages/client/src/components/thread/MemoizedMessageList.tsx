@@ -16,6 +16,17 @@ import { useTranslation } from 'react-i18next';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
+  getCachedPrepared,
+  isPretextReady,
+  layoutSync,
+  prepareBatch,
+  PROSE_FONT,
+  PROSE_LINE_HEIGHT,
+  MONO_LINE_HEIGHT,
+  ensurePretextLoaded,
+} from '@/hooks/use-pretext';
+import { analyzeMarkdown } from '@/lib/markdown-to-plaintext';
+import {
   buildGroupedRenderItems,
   getItemKey,
   type ToolItem,
@@ -38,8 +49,34 @@ const EXPAND_BATCH = 20;
 
 export const EMPTY_MESSAGES: any[] = [];
 
-function estimateItemHeight(item: RenderItem): number {
-  if (item.type === 'message') return item.msg.role === 'user' ? 80 : 120;
+/**
+ * Estimate item height. For assistant messages, uses pretext measurements when
+ * available for much more accurate estimates than the flat 120px fallback.
+ * containerWidth = 0 means "use flat fallback" (pretext not ready or width unknown).
+ */
+function estimateItemHeight(item: RenderItem, containerWidth = 0): number {
+  if (item.type === 'message') {
+    if (item.msg.role === 'user') return 80;
+
+    // Try pretext-based measurement for assistant messages
+    const content = item.msg.content?.trim();
+    if (content && containerWidth > 100 && isPretextReady()) {
+      const analysis = analyzeMarkdown(content);
+      const prepared = getCachedPrepared(analysis.plainText, PROSE_FONT);
+      if (prepared) {
+        // Effective text width: container minus avatar(32) + gap(8) + copyBtn(32) + gap(8) + padding(32)
+        const textWidth = containerWidth - 112;
+        const { height: proseHeight } = layoutSync(prepared, textWidth, PROSE_LINE_HEIGHT);
+        // Code blocks: monospace lines + padding per block
+        const codeHeight =
+          analysis.codeBlockLines * MONO_LINE_HEIGHT + analysis.codeBlockCount * 16;
+        // Fixed chrome: timestamp(20px) + gap(8px)
+        const totalHeight = proseHeight + codeHeight + analysis.extraHeightPx + 28;
+        return Math.max(totalHeight, 60);
+      }
+    }
+    return 120;
+  }
   if (item.type === 'toolcall') return 44;
   if (item.type === 'toolcall-group') return 44;
   if (item.type === 'toolcall-run') return 44 * item.items.length;
@@ -269,6 +306,53 @@ export const MemoizedMessageList = memo(
       };
     }, [threadId]);
 
+    // ── Container width for pretext estimation ───────────────────────
+    const [containerWidth, setContainerWidth] = useState(0);
+    useEffect(() => {
+      const el = itemContainerRef.current;
+      if (!el) return;
+      const ro = new ResizeObserver((entries) => {
+        for (const entry of entries) {
+          setContainerWidth(entry.contentRect.width);
+        }
+      });
+      ro.observe(el);
+      setContainerWidth(el.clientWidth);
+      return () => ro.disconnect();
+    }, []);
+
+    // ── Pretext warm-up: prepare assistant message texts in background ──
+    const pretextReadyRef = useRef(false);
+    useEffect(() => {
+      let cancelled = false;
+
+      // Ensure pretext is loaded, then prepare all uncached assistant messages
+      ensurePretextLoaded().then(() => {
+        if (cancelled) return;
+        pretextReadyRef.current = true;
+
+        const toPrepare: string[] = [];
+        for (const item of groupedItems) {
+          if (item.type === 'message' && item.msg.role === 'assistant' && item.msg.content) {
+            const analysis = analyzeMarkdown(item.msg.content.trim());
+            if (analysis.plainText && !getCachedPrepared(analysis.plainText, PROSE_FONT)) {
+              toPrepare.push(analysis.plainText);
+            }
+          }
+        }
+
+        if (toPrepare.length > 0) {
+          prepareBatch(toPrepare, PROSE_FONT, {
+            signal: cancelled ? AbortSignal.abort() : undefined,
+          });
+        }
+      });
+
+      return () => {
+        cancelled = true;
+      };
+    }, [groupedItems]);
+
     // ── Scroll anchor: capture/restore for jank-free scroll preservation ──
     const scrollAnchorRef = useRef<{
       key: string;
@@ -319,11 +403,11 @@ export const MemoizedMessageList = memo(
       const cache = heightCacheRef.current;
       for (let i = 0; i < windowStart; i++) {
         const key = getItemKey(groupedItems[i]);
-        h += cache.get(key) ?? estimateItemHeight(groupedItems[i]);
+        h += cache.get(key) ?? estimateItemHeight(groupedItems[i], containerWidth);
         if (i < windowStart - 1) h += 16; // space-y-4 gap
       }
       return h;
-    }, [groupedItems, windowStart]);
+    }, [groupedItems, windowStart, containerWidth]);
 
     // Refs so the scroll listener always reads fresh values without re-attaching
     const spacerHeightRef = useRef(spacerHeight);
@@ -413,6 +497,7 @@ export const MemoizedMessageList = memo(
                 name={tc.name}
                 input={tc.input}
                 output={tc.output}
+                timestamp={tc.timestamp}
                 planText={tc._planText}
                 childToolCalls={tc._childToolCalls}
                 onRespond={
@@ -443,6 +528,7 @@ export const MemoizedMessageList = memo(
               <ToolCallGroup
                 name={ti.name}
                 calls={ti.calls}
+                timestamp={ti.calls[0]?.timestamp}
                 onRespond={
                   (ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode') &&
                   isWaiting &&
@@ -502,11 +588,15 @@ export const MemoizedMessageList = memo(
 
         if (item.type === 'message') {
           const msg = item.msg;
+          const estimatedH = estimateItemHeight(item, containerWidth);
           return (
             <div
               key={key}
               data-item-key={key}
-              style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 60px' }}
+              style={{
+                contentVisibility: 'auto',
+                containIntrinsicSize: `auto ${estimatedH}px`,
+              }}
               className="group/msg relative w-full text-sm text-foreground"
             >
               <div className="break-words text-sm leading-relaxed">
@@ -560,11 +650,12 @@ export const MemoizedMessageList = memo(
         }
 
         if (item.type === 'toolcall-run') {
+          const runH = 44 * item.items.length;
           return (
             <div
               key={key}
               data-item-key={key}
-              style={{ contentVisibility: 'auto', containIntrinsicSize: 'auto 40px' }}
+              style={{ contentVisibility: 'auto', containIntrinsicSize: `auto ${runH}px` }}
             >
               <div className="space-y-1">{item.items.map(renderToolItem)}</div>
             </div>

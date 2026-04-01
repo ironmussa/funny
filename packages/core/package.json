@@ -20,7 +20,7 @@
   "dependencies": {
     "@ai-sdk/anthropic": "^3.0.46",
     "@ai-sdk/openai": "^3.0.30",
-    "@anthropic-ai/claude-agent-sdk": "^0.2.42",
+    "@anthropic-ai/claude-agent-sdk": "^0.2.89",
     "@funny/shared": "*",
     "ai": "^6.0.97",
     "chrome-remote-interface": "^0.33.2",

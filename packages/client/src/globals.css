@@ -876,6 +876,14 @@
   }
 }
 
+/* Code blocks in markdown messages — override highlight.js theme background
+   so they inherit the bg-muted from the parent <pre> instead of adding
+   the blue-tinted #22272e from github-dark-dimmed */
+.prose pre .hljs,
+.group\/codeblock .hljs {
+  background: transparent !important;
+}
+
 /* Code viewer (highlight.js) */
 .code-viewer .hljs {
   background: transparent !important;

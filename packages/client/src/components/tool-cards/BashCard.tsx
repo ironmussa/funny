@@ -10,10 +10,12 @@ export function BashCard({
   parsed,
   output,
   hideLabel,
+  displayTime,
 }: {
   parsed: Record<string, unknown>;
   output?: string;
   hideLabel?: boolean;
+  displayTime?: string | null;
 }) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -58,6 +60,11 @@ export function BashCard({
         {!expanded && command && (
           <span className="min-w-0 flex-1 truncate font-mono text-xs text-muted-foreground">
             {command}
+          </span>
+        )}
+        {displayTime && (
+          <span className="ml-auto flex-shrink-0 text-[10px] tabular-nums text-muted-foreground/50">
+            {displayTime}
           </span>
         )}
       </button>

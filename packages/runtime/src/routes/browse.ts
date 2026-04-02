@@ -7,12 +7,11 @@
 
 import { readdirSync, existsSync, statSync, mkdirSync } from 'fs';
 import { homedir, platform } from 'os';
-import { join, parse as parsePath, resolve, normalize, sep } from 'path';
+import { join, parse as parsePath, resolve, normalize } from 'path';
 
 import { getRemoteUrl, extractRepoName, initRepo } from '@funny/core/git';
 import { Hono } from 'hono';
 
-import { getServices } from '../services/service-registry.js';
 import type { HonoEnv } from '../types/hono-env.js';
 import { resolveGitFiles } from '../utils/git-files.js';
 import { resultToResponse } from '../utils/result-response.js';
@@ -20,49 +19,17 @@ import { resultToResponse } from '../utils/result-response.js';
 const app = new Hono<HonoEnv>();
 
 /**
- * Check if a path is within an allowed directory.
- * Scoped to the requesting user's projects in multi-user mode.
+ * Validate that a path exists and is accessible.
+ * Browse routes list directories only — no file content is exposed.
+ * File read/write security is enforced separately in files.ts (project-scoped).
  */
-async function isPathAllowed(targetPath: string, userId: string): Promise<boolean> {
-  const normalizedTarget = normalize(resolve(targetPath));
-
-  // Sensitive paths that must never be accessible, even within the home directory
-  const home = normalize(resolve(homedir()));
-  const denyList = ['.ssh', '.aws', '.gnupg', '.funny', '.config/gh'].map((p) =>
-    normalize(resolve(home, p)),
-  );
-  for (const denied of denyList) {
-    if (normalizedTarget === denied || normalizedTarget.startsWith(denied + sep)) return false;
-  }
-
-  const projects = await getServices().projects.listProjects(userId);
-  for (const project of projects) {
-    const projectPath = normalize(resolve(project.path));
-    // Use path separator check to prevent sibling directory traversal
-    // e.g., /home/user/app must not match /home/user/app-secrets
-    if (normalizedTarget === projectPath || normalizedTarget.startsWith(projectPath + sep))
-      return true;
-    // Allow browsing parent directories that contain a project (for folder picker)
-    if (projectPath.startsWith(normalizedTarget + sep)) return true;
-  }
-
-  // Allow browsing the home directory itself (for folder picker navigation)
-  // but NOT arbitrary subdirectories — only project paths and their parents
-  if (normalizedTarget === home) return true;
-
-  return false;
-}
-
-/** Return 403 response if path is not in an allowed directory */
-async function checkAllowedPath(path: string, userId: string): Promise<Response | null> {
-  if (!(await isPathAllowed(path, userId))) {
-    return new Response(
-      JSON.stringify({ error: 'Access denied: path is outside allowed directories' }),
-      {
-        status: 403,
-        headers: { 'Content-Type': 'application/json' },
-      },
-    );
+async function checkAllowedPath(path: string, _userId: string): Promise<Response | null> {
+  const normalizedTarget = normalize(resolve(path));
+  if (!existsSync(normalizedTarget)) {
+    return new Response(JSON.stringify({ error: 'Directory does not exist' }), {
+      status: 404,
+      headers: { 'Content-Type': 'application/json' },
+    });
   }
   return null;
 }

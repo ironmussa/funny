@@ -89,6 +89,10 @@ export const gitRoutes = new Hono<HonoEnv>();
 const _gitStatusCache = new Map<string, { data: any; ts: number }>();
 const GIT_STATUS_CACHE_TTL_MS = 2_000; // 2 seconds
 
+// Throttled fetch: track last fetch time per project so we don't hammer the remote.
+const _lastFetchTs = new Map<string, number>();
+const FETCH_THROTTLE_MS = 30_000; // 30 seconds
+
 /** Invalidate cached git status for a project after mutating git operations. */
 async function invalidateGitStatusCache(threadId: string) {
   const thread = await tm.getThread(threadId);
@@ -170,6 +174,17 @@ gitRoutes.get('/status', async (c) => {
   // Resolve GH_TOKEN for PR detection (runs once per request)
   const identity = await resolveIdentity(userId);
   const ghEnv = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
+
+  // Throttled fetch: update remote tracking refs so unpulledCommitCount is accurate.
+  // Runs at most once every FETCH_THROTTLE_MS per project (non-blocking on failure).
+  const lastFetch = _lastFetchTs.get(projectId) ?? 0;
+  if (Date.now() - lastFetch > FETCH_THROTTLE_MS) {
+    _lastFetchTs.set(projectId, Date.now());
+    await fetchRemote(project.path, identity ?? undefined).match(
+      () => {},
+      () => {},
+    );
+  }
 
   // Collect unique branches for batch PR lookup (deduplicate across all thread types)
   const uniqueBranches = new Set<string>();
@@ -331,12 +346,25 @@ gitRoutes.get('/status', async (c) => {
 gitRoutes.get('/project/:projectId/status', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
-  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
+  const projectId = c.req.param('projectId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   if (!existsSync(cwd)) {
     return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
   }
+
+  // Throttled fetch so unpulledCommitCount is accurate
+  const lastFetch = _lastFetchTs.get(projectId) ?? 0;
+  if (Date.now() - lastFetch > FETCH_THROTTLE_MS) {
+    _lastFetchTs.set(projectId, Date.now());
+    const identity = await resolveIdentity(userId);
+    await fetchRemote(cwd, identity ?? undefined).match(
+      () => {},
+      () => {},
+    );
+  }
+
   const summaryResult = await getStatusSummary(cwd);
   if (summaryResult.isErr()) return resultToResponse(c, summaryResult);
   const summary = summaryResult.value;
@@ -843,6 +871,16 @@ gitRoutes.get('/:threadId/status', async (c) => {
   const projectResult = await requireProject(thread.projectId);
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
+
+  // Throttled fetch: update remote tracking refs so unpulledCommitCount is accurate.
+  const lastFetch = _lastFetchTs.get(thread.projectId) ?? 0;
+  if (Date.now() - lastFetch > FETCH_THROTTLE_MS) {
+    _lastFetchTs.set(thread.projectId, Date.now());
+    await fetchRemote(project.path, identity ?? undefined).match(
+      () => {},
+      () => {},
+    );
+  }
 
   const cwd = thread.worktreePath || project.path;
   const [summaryResult, prInfo] = await Promise.all([

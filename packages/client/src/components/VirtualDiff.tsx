@@ -76,6 +76,12 @@ export interface VirtualDiffProps {
   showMinimap?: boolean;
   /** Enable word wrap for long lines (uses pretext for height measurement). Default: false */
   wordWrap?: boolean;
+  /** Search query to highlight in diff content */
+  searchQuery?: string;
+  /** Index of the current active match (0-based) for "current match" styling */
+  currentMatchIndex?: number;
+  /** Callback reporting total match count when searchQuery changes */
+  onMatchCount?: (count: number) => void;
   className?: string;
   'data-testid'?: string;
 }
@@ -306,16 +312,83 @@ function getCachedHighlight(text: string, lang: string): string {
   return cached;
 }
 
+/* ── Search utilities ── */
+
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function countTextMatches(text: string, query: string): number {
+  if (!query) return 0;
+  const q = query.toLowerCase();
+  const t = text.toLowerCase();
+  let count = 0;
+  let pos = 0;
+  while ((pos = t.indexOf(q, pos)) !== -1) {
+    count++;
+    pos += q.length;
+  }
+  return count;
+}
+
+/**
+ * Inject `<mark>` tags into syntax-highlighted HTML for search matches.
+ * Only replaces inside text nodes (not HTML tag attributes).
+ * `globalOffset` is the number of matches before this text span.
+ * `currentIdx` is the global index of the "current" match (-1 for none).
+ */
+function injectSearchMarks(
+  html: string,
+  query: string,
+  globalOffset: number,
+  currentIdx: number,
+): string {
+  if (!query) return html;
+  const escaped = escapeRegExp(query);
+  const regex = new RegExp(escaped, 'gi');
+  let counter = globalOffset;
+
+  return html.replace(
+    /(<[^>]*>)|([^<]+)/g,
+    (_, tag: string | undefined, text: string | undefined) => {
+      if (tag) return tag;
+      return (text ?? '').replace(regex, (m: string) => {
+        const isCurrent = counter === currentIdx;
+        counter++;
+        return `<mark class="diff-search-hl${isCurrent ? ' diff-search-current' : ''}">${m}</mark>`;
+      });
+    },
+  );
+}
+
+function getSearchHighlight(
+  text: string,
+  lang: string,
+  query?: string,
+  globalOffset = 0,
+  currentIdx = -1,
+): string {
+  const html = getCachedHighlight(text, lang);
+  if (!query) return html;
+  return injectSearchMarks(html, query, globalOffset, currentIdx);
+}
+
 /* ── Row components ── */
 
 const UnifiedRow = memo(function UnifiedRow({
   line,
   lang,
   wrap,
+  searchQuery,
+  matchOffset,
+  currentMatchIdx,
 }: {
   line: DiffLine;
   lang: string;
   wrap?: boolean;
+  searchQuery?: string;
+  matchOffset?: number;
+  currentMatchIdx?: number;
 }) {
   const bgStyle =
     line.type === 'add'
@@ -352,7 +425,15 @@ const UnifiedRow = memo(function UnifiedRow({
           wrap ? 'whitespace-pre-wrap break-all pr-4' : 'whitespace-pre pr-4',
           textClass,
         )}
-        dangerouslySetInnerHTML={{ __html: getCachedHighlight(line.text, lang) }}
+        dangerouslySetInnerHTML={{
+          __html: getSearchHighlight(
+            line.text,
+            lang,
+            searchQuery,
+            matchOffset ?? 0,
+            currentMatchIdx ?? -1,
+          ),
+        }}
       />
     </div>
   );
@@ -371,12 +452,19 @@ const SplitRow = memo(function SplitRow({
   right,
   lang,
   wrap,
+  searchQuery,
+  matchOffset,
+  currentMatchIdx,
 }: {
   left?: DiffLine;
   right?: DiffLine;
   lang: string;
   wrap?: boolean;
+  searchQuery?: string;
+  matchOffset?: number;
+  currentMatchIdx?: number;
 }) {
+  const leftMatches = searchQuery && left ? countTextMatches(left.text, searchQuery) : 0;
   const leftBg = left?.type === 'del' ? 'hsl(var(--diff-removed) / 0.12)' : undefined;
   const rightBg = right?.type === 'add' ? 'hsl(var(--diff-added) / 0.12)' : undefined;
   return (
@@ -412,7 +500,15 @@ const SplitRow = memo(function SplitRow({
               left.type === 'del' ? 'text-diff-removed' : 'text-foreground/80',
             )}
             style={wrap ? undefined : H_SCROLL_STYLE}
-            dangerouslySetInnerHTML={{ __html: getCachedHighlight(left.text, lang) }}
+            dangerouslySetInnerHTML={{
+              __html: getSearchHighlight(
+                left.text,
+                lang,
+                searchQuery,
+                matchOffset ?? 0,
+                currentMatchIdx ?? -1,
+              ),
+            }}
           />
         )}
       </div>
@@ -444,7 +540,15 @@ const SplitRow = memo(function SplitRow({
               right.type === 'add' ? 'text-diff-added' : 'text-foreground/80',
             )}
             style={wrap ? undefined : H_SCROLL_STYLE}
-            dangerouslySetInnerHTML={{ __html: getCachedHighlight(right.text, lang) }}
+            dangerouslySetInnerHTML={{
+              __html: getSearchHighlight(
+                right.text,
+                lang,
+                searchQuery,
+                (matchOffset ?? 0) + leftMatches,
+                currentMatchIdx ?? -1,
+              ),
+            }}
           />
         )}
       </div>
@@ -458,13 +562,21 @@ const ThreePaneRow = memo(function ThreePaneRow({
   right,
   lang,
   wrap,
+  searchQuery,
+  matchOffset,
+  currentMatchIdx,
 }: {
   left?: DiffLine;
   center?: DiffLine;
   right?: DiffLine;
   lang: string;
   wrap?: boolean;
+  searchQuery?: string;
+  matchOffset?: number;
+  currentMatchIdx?: number;
 }) {
+  const leftMatches = searchQuery && left ? countTextMatches(left.text, searchQuery) : 0;
+  const centerMatches = searchQuery && center ? countTextMatches(center.text, searchQuery) : 0;
   const align = wrap ? 'items-start overflow-visible' : 'items-center overflow-hidden';
   const leftBg = left?.type === 'del' ? 'hsl(var(--diff-removed) / 0.12)' : undefined;
   const rightBg = right?.type === 'add' ? 'hsl(var(--diff-added) / 0.12)' : undefined;
@@ -498,7 +610,15 @@ const ThreePaneRow = memo(function ThreePaneRow({
               left.type === 'del' ? 'text-diff-removed' : 'text-foreground/80',
             )}
             style={wrap ? undefined : H_SCROLL_STYLE}
-            dangerouslySetInnerHTML={{ __html: getCachedHighlight(left.text, lang) }}
+            dangerouslySetInnerHTML={{
+              __html: getSearchHighlight(
+                left.text,
+                lang,
+                searchQuery,
+                matchOffset ?? 0,
+                currentMatchIdx ?? -1,
+              ),
+            }}
           />
         )}
       </div>
@@ -517,7 +637,15 @@ const ThreePaneRow = memo(function ThreePaneRow({
                 : 'whitespace-pre pr-2 text-foreground'
             }
             style={wrap ? undefined : H_SCROLL_STYLE}
-            dangerouslySetInnerHTML={{ __html: getCachedHighlight(center.text, lang) }}
+            dangerouslySetInnerHTML={{
+              __html: getSearchHighlight(
+                center.text,
+                lang,
+                searchQuery,
+                (matchOffset ?? 0) + leftMatches,
+                currentMatchIdx ?? -1,
+              ),
+            }}
           />
         )}
       </div>
@@ -546,7 +674,15 @@ const ThreePaneRow = memo(function ThreePaneRow({
               right.type === 'add' ? 'text-diff-added' : 'text-foreground/80',
             )}
             style={wrap ? undefined : H_SCROLL_STYLE}
-            dangerouslySetInnerHTML={{ __html: getCachedHighlight(right.text, lang) }}
+            dangerouslySetInnerHTML={{
+              __html: getSearchHighlight(
+                right.text,
+                lang,
+                searchQuery,
+                (matchOffset ?? 0) + leftMatches + centerMatches,
+                currentMatchIdx ?? -1,
+              ),
+            }}
           />
         )}
       </div>
@@ -825,6 +961,9 @@ export const VirtualDiff = memo(function VirtualDiff({
   contextLines = 3,
   showMinimap = false,
   wordWrap = false,
+  searchQuery,
+  currentMatchIndex = -1,
+  onMatchCount,
   className,
   ...props
 }: VirtualDiffProps) {
@@ -972,6 +1111,60 @@ export const VirtualDiff = memo(function VirtualDiff({
       return { type: 'unified-line', line: parsed.lines[row.lineIdx] };
     });
   }, [viewMode, rows, parsed.lines]);
+
+  // ── Search match computation ──
+  // For each renderRow, count matches in all panes' text (left + right / left + center + right).
+  // Builds a prefix-sum so we can map globalMatchIndex → rowIndex and compute per-row offsets.
+  const searchMatchData = useMemo(() => {
+    if (!searchQuery) return null;
+    const q = searchQuery;
+    const perRow: number[] = [];
+
+    for (const row of renderRows) {
+      let count = 0;
+      if (row.type === 'unified-line') {
+        count = countTextMatches(row.line.text, q);
+      } else if (row.type === 'split-pair') {
+        if (row.pair.left) count += countTextMatches(row.pair.left.text, q);
+        if (row.pair.right) count += countTextMatches(row.pair.right.text, q);
+      } else if (row.type === 'three-pane-triple') {
+        if (row.triple.left) count += countTextMatches(row.triple.left.text, q);
+        if (row.triple.center) count += countTextMatches(row.triple.center.text, q);
+        if (row.triple.right) count += countTextMatches(row.triple.right.text, q);
+      }
+      perRow.push(count);
+    }
+
+    // Prefix sums: prefixSum[i] = total matches in rows 0..i-1
+    const prefixSum: number[] = [0];
+    for (let i = 0; i < perRow.length; i++) {
+      prefixSum.push(prefixSum[i] + perRow[i]);
+    }
+    const total = prefixSum[prefixSum.length - 1];
+
+    // Map globalMatchIndex → rowIndex
+    const matchToRow: number[] = [];
+    for (let i = 0; i < perRow.length; i++) {
+      for (let j = 0; j < perRow[i]; j++) matchToRow.push(i);
+    }
+
+    return { perRow, prefixSum, total, matchToRow };
+  }, [renderRows, searchQuery]);
+
+  // Report match count to parent
+  useEffect(() => {
+    onMatchCount?.(searchMatchData?.total ?? 0);
+  }, [searchMatchData?.total, onMatchCount]);
+
+  // Scroll to the row containing the current match
+  useEffect(() => {
+    if (!searchMatchData || currentMatchIndex < 0 || currentMatchIndex >= searchMatchData.total)
+      return;
+    const rowIdx = searchMatchData.matchToRow[currentMatchIndex];
+    if (rowIdx !== undefined) {
+      virtualizer.scrollToIndex(rowIdx, { align: 'center' });
+    }
+  }, [currentMatchIndex, searchMatchData]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // ── Per-row height map for word-wrap mode ──
   const rowHeightMap = useMemo(() => {
@@ -1163,6 +1356,9 @@ export const VirtualDiff = memo(function VirtualDiff({
                     right={row.triple.right}
                     lang={highlightLang}
                     wrap={wordWrap}
+                    searchQuery={searchQuery}
+                    matchOffset={searchMatchData?.prefixSum[vItem.index]}
+                    currentMatchIdx={currentMatchIndex}
                   />
                 ) : row.type === 'split-pair' ? (
                   <SplitRow
@@ -1170,9 +1366,19 @@ export const VirtualDiff = memo(function VirtualDiff({
                     right={row.pair.right}
                     lang={highlightLang}
                     wrap={wordWrap}
+                    searchQuery={searchQuery}
+                    matchOffset={searchMatchData?.prefixSum[vItem.index]}
+                    currentMatchIdx={currentMatchIndex}
                   />
                 ) : (
-                  <UnifiedRow line={row.line} lang={highlightLang} wrap={wordWrap} />
+                  <UnifiedRow
+                    line={row.line}
+                    lang={highlightLang}
+                    wrap={wordWrap}
+                    searchQuery={searchQuery}
+                    matchOffset={searchMatchData?.prefixSum[vItem.index]}
+                    currentMatchIdx={currentMatchIndex}
+                  />
                 )}
               </div>
             );

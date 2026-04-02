@@ -1,5 +1,7 @@
 import type { FileDiffSummary, PRReviewThread } from '@funny/shared';
 import {
+  ArrowDown,
+  ArrowUp,
   Columns3,
   Columns2,
   FileCode,
@@ -7,6 +9,7 @@ import {
   Loader2,
   MessageSquare,
   Rows2,
+  Search,
   WrapText,
   X,
 } from 'lucide-react';
@@ -16,6 +19,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useTransition,
 } from 'react';
 
@@ -27,6 +31,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { FileExtensionIcon } from '@/lib/file-icons';
 import { cn } from '@/lib/utils';
@@ -142,6 +147,9 @@ function DiffContent({
   newValue,
   showFullFile,
   wordWrap,
+  searchQuery,
+  currentMatchIndex,
+  onMatchCount,
 }: {
   filePath: string;
   /** @deprecated Use viewMode instead */
@@ -154,6 +162,9 @@ function DiffContent({
   /** When true, disable code folding so the entire file is visible */
   showFullFile?: boolean;
   wordWrap?: boolean;
+  searchQuery?: string;
+  currentMatchIndex?: number;
+  onMatchCount?: (count: number) => void;
 }) {
   // Compute unified diff from old/new if rawDiff is not provided
   const unifiedDiff = useMemo(() => {
@@ -184,6 +195,9 @@ function DiffContent({
       codeFolding={!showFullFile}
       showMinimap={!!showFullFile}
       wordWrap={wordWrap}
+      searchQuery={searchQuery}
+      currentMatchIndex={currentMatchIndex}
+      onMatchCount={onMatchCount}
       className="h-full"
       data-testid="expanded-diff-viewer"
     />
@@ -221,6 +235,13 @@ export function ExpandedDiffDialog({
   >(new Map());
   const [loadingFullDiff, setLoadingFullDiff] = useState(false);
 
+  // ── Search state ──
+  const [showSearch, setShowSearch] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
+  const [totalMatches, setTotalMatches] = useState(0);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
   const VIEW_MODE_CYCLE: DiffViewMode[] = ['unified', 'split', 'three-pane'];
   const cycleViewMode = useCallback(() => {
     startTransition(() => {
@@ -252,6 +273,69 @@ export function ExpandedDiffDialog({
       startTransition(() => setShowFullFile(true));
     }
   }, [showFullFile, filePath, fullDiffCache, onRequestFullDiff]);
+
+  // ── Search handlers ──
+  const openSearch = useCallback(() => {
+    setShowSearch(true);
+    setTimeout(() => searchInputRef.current?.focus(), 0);
+  }, []);
+
+  const closeSearch = useCallback(() => {
+    setShowSearch(false);
+    setSearchQuery('');
+    setCurrentMatchIndex(0);
+    setTotalMatches(0);
+  }, []);
+
+  const goToNextMatch = useCallback(() => {
+    if (totalMatches === 0) return;
+    setCurrentMatchIndex((prev) => (prev + 1) % totalMatches);
+  }, [totalMatches]);
+
+  const goToPrevMatch = useCallback(() => {
+    if (totalMatches === 0) return;
+    setCurrentMatchIndex((prev) => (prev - 1 + totalMatches) % totalMatches);
+  }, [totalMatches]);
+
+  const handleMatchCount = useCallback((count: number) => {
+    setTotalMatches(count);
+    setCurrentMatchIndex((prev) => (count === 0 ? 0 : Math.min(prev, count - 1)));
+  }, []);
+
+  const handleSearchKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        closeSearch();
+      } else if (e.key === 'Enter') {
+        if (e.shiftKey) goToPrevMatch();
+        else goToNextMatch();
+      }
+    },
+    [closeSearch, goToNextMatch, goToPrevMatch],
+  );
+
+  // Ctrl+F / Escape handler for the dialog
+  const handleDialogKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+        e.preventDefault();
+        e.stopPropagation();
+        openSearch();
+      } else if (e.key === 'Escape' && showSearch) {
+        e.preventDefault();
+        e.stopPropagation();
+        closeSearch();
+      }
+    },
+    [openSearch, showSearch, closeSearch],
+  );
+
+  // Reset search when file changes
+  useEffect(() => {
+    setSearchQuery('');
+    setCurrentMatchIndex(0);
+    setTotalMatches(0);
+  }, [filePath]);
 
   // ── Multi-tab state ──
   const [openTabs, setOpenTabs] = useState<string[]>([filePath]);
@@ -326,6 +410,10 @@ export function ExpandedDiffDialog({
       <DialogContent
         className="flex h-[85vh] w-[90vw] max-w-[90vw] flex-col gap-0 p-0"
         onOpenAutoFocus={(e) => e.preventDefault()}
+        onKeyDown={handleDialogKeyDown}
+        onEscapeKeyDown={(e) => {
+          if (showSearch) e.preventDefault();
+        }}
       >
         <DialogHeader className="flex-shrink-0 overflow-hidden border-b border-border px-4 py-3">
           <DialogTitle className="flex min-w-0 items-center gap-2 overflow-hidden font-mono text-sm">
@@ -409,10 +497,85 @@ export function ExpandedDiffDialog({
               {showFullFile ? 'Show changes only' : 'Show full file'}
             </TooltipContent>
           </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-xs"
+                onClick={openSearch}
+                className={cn(
+                  'flex-shrink-0 text-muted-foreground',
+                  showSearch && 'bg-accent text-accent-foreground',
+                )}
+                data-testid="diff-toggle-search"
+              >
+                <Search className="icon-base" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">Search (Ctrl+F)</TooltipContent>
+          </Tooltip>
           <DialogDescription className="sr-only">
             {description || `Diff for ${getFileName(filePath)}`}
           </DialogDescription>
         </DialogHeader>
+
+        {/* Search bar */}
+        {showSearch && (
+          <div
+            className="flex items-center gap-2 border-b border-border bg-muted/30 px-4 py-2"
+            data-testid="diff-search-bar"
+          >
+            <Search className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />
+            <Input
+              ref={searchInputRef}
+              value={searchQuery}
+              onChange={(e) => {
+                setSearchQuery(e.target.value);
+                setCurrentMatchIndex(0);
+              }}
+              onKeyDown={handleSearchKeyDown}
+              placeholder="Search in diff..."
+              className="h-7 flex-1 text-xs"
+              data-testid="diff-search-input"
+            />
+            <span
+              className="flex-shrink-0 text-xs tabular-nums text-muted-foreground"
+              data-testid="diff-search-count"
+            >
+              {searchQuery
+                ? totalMatches > 0
+                  ? `${currentMatchIndex + 1}/${totalMatches}`
+                  : 'No results'
+                : ''}
+            </span>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={goToPrevMatch}
+              disabled={totalMatches === 0}
+              data-testid="diff-search-prev"
+            >
+              <ArrowUp className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={goToNextMatch}
+              disabled={totalMatches === 0}
+              data-testid="diff-search-next"
+            >
+              <ArrowDown className="h-3.5 w-3.5" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              onClick={closeSearch}
+              data-testid="diff-search-close"
+            >
+              <X className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        )}
 
         {/* Multi-tab bar */}
         {hasMultipleTabs && (
@@ -486,6 +649,9 @@ export function ExpandedDiffDialog({
                 newValue={effectiveNewValue}
                 showFullFile={showFullFile}
                 wordWrap={wordWrap}
+                searchQuery={showSearch ? searchQuery : undefined}
+                currentMatchIndex={currentMatchIndex}
+                onMatchCount={handleMatchCount}
               />
             </div>
             {/* Inline PR review threads */}

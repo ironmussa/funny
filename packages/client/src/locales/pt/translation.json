@@ -953,6 +953,15 @@
       "unknown": "Algo deu errado. Tente novamente."
     },
     "networkError": "Não foi possível conectar ao servidor. Verifique sua conexão e tente novamente.",
+    "agentNetwork": {
+      "dnsFailure": "Conexão perdida — não foi possível resolver o servidor da API. Verifique sua conexão com a internet e tente novamente.",
+      "noInternet": "Sem conexão com a internet. Verifique sua rede e tente novamente.",
+      "connectionRefused": "Não foi possível conectar ao servidor da API. Ele pode estar temporariamente indisponível — tente novamente em instantes.",
+      "connectionReset": "A conexão foi interrompida. Verifique sua rede e tente novamente.",
+      "timeout": "A solicitação expirou. Verifique sua conexão com a internet e tente novamente.",
+      "fetchFailed": "Conexão perdida. Verifique sua conexão com a internet e tente novamente.",
+      "generic": "Ocorreu um erro de rede. Verifique sua conexão e tente novamente."
+    },
     "transcribeToken": {
       "BAD_REQUEST": "A transcrição de voz não está configurada. Configure sua chave API do AssemblyAI em Configurações > Perfil.",
       "INTERNAL": "O serviço de transcrição de voz está temporariamente indisponível. Tente novamente mais tarde."

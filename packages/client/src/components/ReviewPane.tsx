@@ -227,14 +227,17 @@ export function ReviewPane() {
 
   const _hasWorktreePath = useThreadStore((s) => !!s.activeThread?.worktreePath);
   const isAgentRunning = useThreadStore((s) => s.activeThread?.status === 'running');
-  const gitStatus = useGitStatusForThread(effectiveThreadId);
+  const threadGitStatus = useGitStatusForThread(effectiveThreadId);
+  const projectGitStatus = useGitStatusStore((s) =>
+    projectModeId ? s.statusByProject[projectModeId] : undefined,
+  );
+  const gitStatus = threadGitStatus ?? projectGitStatus;
   const prProjectId = threadProjectId ?? selectedProjectId ?? '';
   const { threads: prThreads } = usePRDetail(
     prProjectId || undefined,
     gitStatus?.prNumber ?? undefined,
   );
   // Derive unpushed count from gitStatus store (populated by git/status endpoint).
-  // Falls back to 0 until gitStatus resolves.
   const unpushedCommitCount = gitStatus?.unpushedCommitCount ?? 0;
   const [mergeInProgress, setMergeInProgress] = useState(false);
   const [pushInProgress, setPushInProgress] = useState(false);
@@ -932,6 +935,9 @@ export function ReviewPane() {
       toast.success(t('review.pullSuccess', 'Pulled successfully'));
     }
     setPullInProgress(false);
+    // Force-refresh git status so unpulled badge clears immediately after pull.
+    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
+    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
     await refresh();
   };
 
@@ -961,6 +967,10 @@ export function ReviewPane() {
       toast.success(t('review.fetchSuccess', 'Fetched from origin'));
     }
     setFetchInProgress(false);
+    // Force-refresh git status to bypass client-side cooldown so unpulled/unpushed
+    // counts update immediately after a manual fetch.
+    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
+    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
     await refresh();
   };
 
@@ -1206,9 +1216,7 @@ export function ReviewPane() {
                   >
                     <Download className={cn('icon-base', pullInProgress && 'animate-pulse')} />
                     {(gitStatus?.unpulledCommitCount ?? 0) > 0 && (
-                      <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] font-bold leading-none text-white">
-                        {gitStatus!.unpulledCommitCount}
-                      </span>
+                      <span className="absolute -right-0.5 -top-0.5 h-2 w-2 rounded-full bg-blue-500" />
                     )}
                   </Button>
                 </TooltipTrigger>

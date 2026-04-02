@@ -643,6 +643,21 @@
     background: transparent;
   }
 
+  /* Diff search highlights */
+  .diff-search-hl {
+    background-color: #FFE500;
+    color: #000;
+    border-radius: 2px;
+    padding: 0 1px;
+    box-decoration-break: clone;
+  }
+
+  .diff-search-current {
+    background-color: #FF9632;
+    color: #000;
+    outline: 1px solid #CC6600;
+  }
+
   /* Message content wrapping */
   pre {
     word-wrap: break-word;

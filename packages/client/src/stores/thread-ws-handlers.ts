@@ -6,6 +6,7 @@
 import type { Thread, MessageRole, ThreadStatus, ImageAttachment } from '@funny/shared';
 import { toast } from 'sonner';
 
+import i18n from '@/i18n/config';
 import { createClientLogger } from '@/lib/client-logger';
 import { buildPath } from '@/lib/url';
 
@@ -710,8 +711,36 @@ export function handleWSError(
     });
   }
 
-  // Show an immediate toast with the error
-  toast.error(errorMessage, { duration: 8000 });
+  // Show an immediate toast with a user-friendly error
+  toast.error(friendlyAgentError(errorMessage), { duration: 8000 });
+}
+
+// ── Network-error humanizer ─────────────────────────────────────
+
+/**
+ * Network-level error codes/messages that indicate connectivity issues.
+ * Maps raw error substrings to i18n keys under `errors.agentNetwork.*`.
+ */
+const NETWORK_ERROR_PATTERNS: [test: RegExp, i18nKey: string][] = [
+  [/EAI_AGAIN/i, 'errors.agentNetwork.dnsFailure'],
+  [/ENOTFOUND/i, 'errors.agentNetwork.dnsFailure'],
+  [/ENETUNREACH/i, 'errors.agentNetwork.noInternet'],
+  [/ECONNREFUSED/i, 'errors.agentNetwork.connectionRefused'],
+  [/ECONNRESET/i, 'errors.agentNetwork.connectionReset'],
+  [/ETIMEDOUT/i, 'errors.agentNetwork.timeout'],
+  [/fetch failed/i, 'errors.agentNetwork.fetchFailed'],
+  [/network\s*(error|failure)/i, 'errors.agentNetwork.generic'],
+];
+
+function friendlyAgentError(raw: string): string {
+  for (const [pattern, key] of NETWORK_ERROR_PATTERNS) {
+    if (pattern.test(raw)) {
+      return i18n.t(key, {
+        defaultValue: 'Connection lost. Please check your internet connection and try again.',
+      });
+    }
+  }
+  return raw;
 }
 
 // ── Toast helper ────────────────────────────────────────────────

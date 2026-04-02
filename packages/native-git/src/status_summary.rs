@@ -13,6 +13,7 @@ const MAX_UNTRACKED_FILE_SIZE: u64 = 512 * 1024; // 512 KB
 pub struct GitStatusSummary {
   pub dirty_file_count: u32,
   pub unpushed_commit_count: u32,
+  pub unpulled_commit_count: u32,
   pub has_remote_branch: bool,
   pub is_merged_into_base: bool,
   pub lines_added: u32,
@@ -141,10 +142,29 @@ fn is_binary_by_attr(
   false
 }
 
+/// Count commits between two refs using `git rev-list --count <range>`.
+/// Falls back to 0 on any error.
+fn rev_list_count(cwd: &Path, range: &str) -> u32 {
+  std::process::Command::new("git")
+    .args(["rev-list", "--count", range])
+    .current_dir(cwd)
+    .output()
+    .ok()
+    .and_then(|o| {
+      if o.status.success() {
+        String::from_utf8(o.stdout).ok()?.trim().parse::<u32>().ok()
+      } else {
+        None
+      }
+    })
+    .unwrap_or(0)
+}
+
 /// Intermediate result from the main status scan (Phase 1 + 2a).
 struct StatusPhaseResult {
   dirty_file_count: u32,
   unpushed_commit_count: u32,
+  unpulled_commit_count: u32,
   has_remote_branch: bool,
   lines_added: u32,
   lines_deleted: u32,
@@ -271,6 +291,7 @@ pub async fn get_status_summary(
         return Ok(StatusPhaseResult {
           dirty_file_count,
           unpushed_commit_count: 0,
+          unpulled_commit_count: 0,
           has_remote_branch: false,
           lines_added,
           lines_deleted,
@@ -283,52 +304,24 @@ pub async fn get_status_summary(
     let upstream_ref_name = format!("refs/remotes/origin/{}", branch);
     let has_remote_branch = repo.find_reference(&upstream_ref_name).is_ok();
 
-    // Count unpushed commits
-    let head_id = head_commit.id();
+    // Count unpushed and unpulled commits using git rev-list --count.
+    // The gix rev_walk approach breaks with merge commits because
+    // topological traversal may reach the merge-base before visiting
+    // all commits on side branches, producing incorrect counts.
     let mut unpushed_commit_count: u32 = 0;
+    let mut unpulled_commit_count: u32 = 0;
 
     if has_remote_branch {
-      if let Ok(upstream_ref) = repo.find_reference(&upstream_ref_name) {
-        if let Ok(upstream_id) = upstream_ref.into_fully_peeled_id() {
-          if let Ok(base_id) = repo.merge_base(head_id, upstream_id) {
-            let walk = repo.rev_walk([head_id]);
-            if let Ok(iter) = walk.all() {
-              for commit_info in iter {
-                if let Ok(info) = commit_info {
-                  if info.id == base_id {
-                    break;
-                  }
-                  unpushed_commit_count += 1;
-                }
-              }
-            }
-          }
-        }
-      }
+      unpushed_commit_count = rev_list_count(&worktree_path, &format!("origin/{}..HEAD", branch));
+      unpulled_commit_count = rev_list_count(&worktree_path, &format!("HEAD..origin/{}", branch));
     } else if let Some(ref base_b) = base_branch {
-      let base_ref_name = format!("refs/heads/{}", base_b);
-      if let Ok(base_ref) = repo.find_reference(&base_ref_name) {
-        if let Ok(base_id) = base_ref.into_fully_peeled_id() {
-          if let Ok(mb_id) = repo.merge_base(head_id, base_id) {
-            let walk = repo.rev_walk([head_id]);
-            if let Ok(iter) = walk.all() {
-              for commit_info in iter {
-                if let Ok(info) = commit_info {
-                  if info.id == mb_id {
-                    break;
-                  }
-                  unpushed_commit_count += 1;
-                }
-              }
-            }
-          }
-        }
-      }
+      unpushed_commit_count = rev_list_count(&worktree_path, &format!("{}..HEAD", base_b));
     }
 
     Ok(StatusPhaseResult {
       dirty_file_count,
       unpushed_commit_count,
+      unpulled_commit_count,
       has_remote_branch,
       lines_added,
       lines_deleted,
@@ -363,6 +356,7 @@ pub async fn get_status_summary(
   Ok(GitStatusSummary {
     dirty_file_count: phase1.dirty_file_count,
     unpushed_commit_count: phase1.unpushed_commit_count,
+    unpulled_commit_count: phase1.unpulled_commit_count,
     has_remote_branch: phase1.has_remote_branch,
     is_merged_into_base,
     lines_added: phase1.lines_added,

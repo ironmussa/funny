@@ -26,6 +26,10 @@ import { shutdownManager, ShutdownPhase } from './services/shutdown-manager.js';
 
 // Strip CLAUDECODE early so the Agent SDK never detects a "nested session",
 // even if the runner was started from inside a Claude Code terminal.
+// Use both delete and explicit empty-string: Bun's process.env Proxy doesn't
+// always propagate `delete` to the real OS environ for child processes.
+delete process.env.CLAUDECODE;
+process.env.CLAUDECODE = '';
 delete process.env.CLAUDECODE;
 
 // Validate required env vars

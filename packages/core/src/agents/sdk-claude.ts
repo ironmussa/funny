@@ -40,11 +40,16 @@ export class SDKClaudeProcess extends BaseAgentProcess {
     // 4 hours = 14_400_000ms — enough for any realistic user response time.
     // Strip CLAUDECODE to prevent "nested session" detection when the runner
     // itself runs inside a Claude Code terminal or after a previous query()
-    // mutated process.env.
+    // mutated process.env. Use both delete and empty-string assignment because
+    // Bun's process.env Proxy doesn't always propagate `delete` to the real
+    // OS environ inherited by child processes.
+    process.env.CLAUDECODE = '';
     delete process.env.CLAUDECODE;
-    const { CLAUDECODE: _cc, ...cleanEnv } = process.env;
+    const { CLAUDECODE: _cc, CLAUDE_CODE_ENTRY_POINT: _ep, ...cleanEnv } = process.env;
     const sdkEnv = {
       ...cleanEnv,
+      CLAUDECODE: undefined,
+      CLAUDE_CODE_ENTRY_POINT: undefined,
       API_TIMEOUT_MS: process.env.API_TIMEOUT_MS ?? '14400000',
     };
 
@@ -132,7 +137,7 @@ export class SDKClaudeProcess extends BaseAgentProcess {
         signal: AbortSignal;
       }) => {
         // Final CLAUDECODE strip — belt-and-suspenders with the earlier env clean
-        const { CLAUDECODE: _stripped, ...spawnEnv } = options.env;
+        const { CLAUDECODE: _stripped, CLAUDE_CODE_ENTRY_POINT: _ep2, ...spawnEnv } = options.env;
         const child = spawn(options.command, options.args, {
           stdio: ['pipe', 'pipe', 'pipe'],
           cwd: options.cwd,

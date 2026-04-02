@@ -972,6 +972,15 @@
       "unknown": "Something went wrong. Please try again."
     },
     "networkError": "Unable to reach the server. Check your connection and try again.",
+    "agentNetwork": {
+      "dnsFailure": "Connection lost — unable to resolve the API server. Check your internet connection and try again.",
+      "noInternet": "No internet connection. Please check your network and try again.",
+      "connectionRefused": "Could not reach the API server. It may be temporarily unavailable — try again in a moment.",
+      "connectionReset": "The connection was interrupted. Please check your network and try again.",
+      "timeout": "The request timed out. Check your internet connection and try again.",
+      "fetchFailed": "Connection lost. Please check your internet connection and try again.",
+      "generic": "A network error occurred. Please check your connection and try again."
+    },
     "transcribeToken": {
       "BAD_REQUEST": "Voice transcription is not configured. Set up your AssemblyAI API key in Settings > Profile.",
       "INTERNAL": "Voice transcription service is temporarily unavailable. Please try again later."

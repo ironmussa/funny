@@ -180,41 +180,23 @@ pub async fn get_unpushed_hashes(cwd: String) -> napi::Result<Vec<String>> {
       }
     }
 
-    // Walk from HEAD collecting ancestors
-    const MAX_WALK: usize = 1000;
-    let mut head_ancestors = Vec::new();
-    let walk = repo.rev_walk([head_commit.id()]);
+    // Use with_hidden to mark remote tips as "uninteresting" — gix will
+    // walk from HEAD and automatically exclude commits reachable from
+    // remote tips. This is equivalent to `git rev-list HEAD --not --remotes`.
+    // The old approach used two separate walks with a shared MAX_WALK=1000
+    // budget, which broke on repos with many remote branches (the budget
+    // was exhausted visiting unique commits across branches).
+    const MAX_UNPUSHED: usize = 1000;
+    let mut unpushed = Vec::new();
+    let walk = repo.rev_walk([head_commit.id()]).with_hidden(remote_tips);
     if let Ok(iter) = walk.all() {
-      for (i, ci) in iter.enumerate() {
-        if i >= MAX_WALK { break; }
+      for ci in iter {
+        if unpushed.len() >= MAX_UNPUSHED { break; }
         if let Ok(info) = ci {
-          head_ancestors.push(info.id);
+          unpushed.push(info.id.to_string());
         }
       }
     }
-
-    if remote_tips.is_empty() {
-      // No remotes: all commits are "unpushed"
-      return Ok(head_ancestors.into_iter().map(|id| id.to_string()).collect());
-    }
-
-    // Walk from all remote refs to find reachable commits
-    let mut remote_reachable = std::collections::HashSet::new();
-    let walk = repo.rev_walk(remote_tips);
-    if let Ok(iter) = walk.all() {
-      for (i, ci) in iter.enumerate() {
-        if i >= MAX_WALK { break; }
-        if let Ok(info) = ci {
-          remote_reachable.insert(info.id);
-        }
-      }
-    }
-
-    let unpushed: Vec<String> = head_ancestors
-      .into_iter()
-      .filter(|id| !remote_reachable.contains(id))
-      .map(|id| id.to_string())
-      .collect();
 
     Ok(unpushed)
   })

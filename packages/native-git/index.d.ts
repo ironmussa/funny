@@ -45,18 +45,19 @@ export declare function getDiffSummary(
   maxFiles?: number | undefined | null,
 ): Promise<DiffSummaryResult>;
 
+/** Full-context diff (equivalent to git diff -U99999). Shows all lines of the file. */
+export declare function getFullContextFileDiff(
+  cwd: string,
+  filePath: string,
+  staged: boolean,
+): Promise<string>;
+
 export declare function getLog(
   cwd: string,
   limit?: number | undefined | null,
 ): Promise<Array<GitLogEntry>>;
 
 export declare function getRemoteUrl(cwd: string): Promise<string | null>;
-
-export declare function getFullContextFileDiff(
-  cwd: string,
-  filePath: string,
-  staged: boolean,
-): Promise<string>;
 
 export declare function getSingleFileDiff(
   cwd: string,
@@ -83,6 +84,7 @@ export interface GitLogEntry {
 export interface GitStatusSummary {
   dirtyFileCount: number;
   unpushedCommitCount: number;
+  unpulledCommitCount: number;
   hasRemoteBranch: boolean;
   isMergedIntoBase: boolean;
   linesAdded: number;

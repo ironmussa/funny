@@ -90,7 +90,11 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
     s.activeThread ? resolveThreadBranch(s.activeThread) : undefined,
   );
   const isAgentRunning = useThreadStore((s) => s.activeThread?.status === 'running');
-  const gitStatus = useGitStatusForThread(effectiveThreadId);
+  const threadGitStatus = useGitStatusForThread(effectiveThreadId);
+  const projectGitStatus = useGitStatusStore((s) =>
+    projectModeId ? s.statusByProject[projectModeId] : undefined,
+  );
+  const gitStatus = threadGitStatus ?? projectGitStatus;
   const isOnDifferentBranch =
     !!effectiveThreadId && !!baseBranch && !!threadBranch && threadBranch !== baseBranch;
 

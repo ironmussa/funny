@@ -8,28 +8,20 @@
  * fact invalidation and evolution.
  */
 
-import type { MemoryFact } from '@funny/shared';
-
-import type {
-  ConflictResult,
-  ConflictRelation,
-  EmbeddingProvider,
-  MemoryFactFile,
-  MemoryFactFrontmatter,
-} from './types.js';
+import type { ConflictResult, ConflictRelation, EmbeddingProvider, MemoryFact } from './types.js';
 import { DECAY_LAMBDAS, DEFAULT_DECAY_CLASS } from './types.js';
 
-// ─── Decay scoring ──────────────────────────────────────
+// ─── Decay scoring ─────────────────────────────────────
 
 /**
  * Calculate the decay score for a fact.
  * Formula: exp(-λ * days_since_last_access)
  * Returns a value between 0 (fully decayed) and 1 (just accessed).
  */
-export function calculateDecayScore(fact: MemoryFactFrontmatter, now: Date = new Date()): number {
-  const lastAccess = new Date(fact.last_accessed);
+export function calculateDecayScore(fact: MemoryFact, now: Date = new Date()): number {
+  const lastAccess = new Date(fact.lastAccessed);
   const daysSinceAccess = (now.getTime() - lastAccess.getTime()) / 86_400_000;
-  const lambda = DECAY_LAMBDAS[fact.decay_class];
+  const lambda = DECAY_LAMBDAS[fact.decayClass];
   return Math.exp(-lambda * daysSinceAccess);
 }
 
@@ -40,18 +32,18 @@ export function inferDecayClass(type: string): 'slow' | 'normal' | 'fast' {
   return DEFAULT_DECAY_CLASS[type as keyof typeof DEFAULT_DECAY_CLASS] ?? 'normal';
 }
 
-// ─── Bi-temporal queries ────────────────────────────────
+// ─── Bi-temporal queries ───────────────────────────────
 
 /**
  * Check if a fact was valid at a given point in time.
  * Uses the valid_from/invalid_at (assertion time) window.
  */
-export function wasValidAt(fact: MemoryFactFrontmatter, asOf: Date): boolean {
-  const validFrom = new Date(fact.valid_from);
+export function wasValidAt(fact: MemoryFact, asOf: Date): boolean {
+  const validFrom = new Date(fact.validFrom);
   if (asOf < validFrom) return false;
 
-  if (fact.invalid_at !== null) {
-    const invalidAt = new Date(fact.invalid_at);
+  if (fact.invalidAt !== null) {
+    const invalidAt = new Date(fact.invalidAt);
     if (asOf >= invalidAt) return false;
   }
 
@@ -61,53 +53,51 @@ export function wasValidAt(fact: MemoryFactFrontmatter, asOf: Date): boolean {
 /**
  * Check if a fact is currently valid (not invalidated).
  */
-export function isCurrentlyValid(fact: MemoryFactFrontmatter): boolean {
-  return fact.invalid_at === null;
+export function isCurrentlyValid(fact: MemoryFact): boolean {
+  return fact.invalidAt === null;
 }
 
-// ─── Invalidation ───────────────────────────────────────
+// ─── Invalidation ──────────────────────────────────────
 
 /**
- * Produce updated frontmatter for invalidating a fact.
+ * Produce updated fields for invalidating a fact.
  */
 export function invalidateFact(
-  fact: MemoryFactFrontmatter,
+  fact: MemoryFact,
   reason?: string,
   supersededById?: string,
-): MemoryFactFrontmatter {
+): Partial<MemoryFact> {
   return {
-    ...fact,
-    invalid_at: new Date().toISOString(),
-    invalidated_by: reason ?? null,
-    superseded_by: supersededById ?? null,
+    invalidAt: new Date().toISOString(),
+    invalidatedBy: reason ?? null,
+    supersededBy: supersededById ?? null,
   };
 }
 
-// ─── Evolution ──────────────────────────────────────────
+// ─── Evolution ─────────────────────────────────────────
 
 /**
  * Check if a fact can be evolved (must not be invalidated).
  */
-export function canEvolve(fact: MemoryFactFrontmatter): boolean {
-  return fact.invalid_at === null;
+export function canEvolve(fact: MemoryFact): boolean {
+  return fact.invalidAt === null;
 }
 
 /**
- * Produce updated frontmatter for an evolved fact.
- * Updates ingested_at to now (new knowledge time).
+ * Produce updated fields for an evolved fact.
+ * Updates ingestedAt to now (new knowledge time).
  */
-export function evolveFact(fact: MemoryFactFrontmatter): MemoryFactFrontmatter {
+export function evolveFact(_fact: MemoryFact): Partial<MemoryFact> {
   return {
-    ...fact,
-    ingested_at: new Date().toISOString(),
+    ingestedAt: new Date().toISOString(),
   };
 }
 
-// ─── Access tracking ────────────────────────────────────
+// ─── Access tracking ───────────────────────────────────
 
 /**
  * In-memory buffer for access tracking updates.
- * Flushes to disk after FLUSH_THRESHOLD facts or FLUSH_INTERVAL_MS.
+ * Flushes to the DB after FLUSH_THRESHOLD facts or FLUSH_INTERVAL_MS.
  */
 export class AccessTracker {
   private pending = new Map<string, { count: number; lastAccessed: string }>();
@@ -159,17 +149,15 @@ export class AccessTracker {
   }
 }
 
-// ─── Conflict detection ─────────────────────────────────
+// ─── Conflict detection ────────────────────────────────
 
 /**
  * Find potential conflicts between a new fact and existing facts.
  * Uses embedding similarity as a first-pass filter.
- *
- * Returns facts with similarity > threshold for further analysis.
  */
 export async function findPotentialConflicts(
   newContent: string,
-  existingFacts: MemoryFactFile[],
+  existingFacts: MemoryFact[],
   embeddingProvider: EmbeddingProvider | null,
   similarityThreshold: number = 0.85,
 ): Promise<ConflictResult[]> {
@@ -184,10 +172,9 @@ export async function findPotentialConflicts(
     for (let i = 0; i < existingFacts.length; i++) {
       const similarity = cosineSimilarity(newEmbedding, existingEmbeddings[i]);
       if (similarity >= similarityThreshold) {
-        // High similarity — classify the relationship
         const relation = classifyRelation(similarity);
         results.push({
-          existingFactId: existingFacts[i].frontmatter.id,
+          existingFactId: existingFacts[i].id,
           relation,
           confidence: similarity,
         });
@@ -195,23 +182,21 @@ export async function findPotentialConflicts(
     }
 
     return results.sort((a, b) => b.confidence - a.confidence);
-  } catch (e) {
-    // If embedding fails, return empty — don't block the write
+  } catch {
     return [];
   }
 }
 
 /**
  * Simple heuristic for classifying the relationship based on similarity.
- * In Phase 3+, this would use an LLM for more accurate classification.
  */
 function classifyRelation(similarity: number): ConflictRelation {
   if (similarity >= 0.98) return 'duplicate';
-  if (similarity >= 0.92) return 'contradicts'; // Could be contradiction or extension
+  if (similarity >= 0.92) return 'contradicts';
   return 'extends';
 }
 
-// ─── Cosine similarity ──────────────────────────────────
+// ─── Cosine similarity ─────────────────────────────────
 
 export function cosineSimilarity(a: Float32Array, b: Float32Array): number {
   if (a.length !== b.length) return 0;

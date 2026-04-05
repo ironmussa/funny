@@ -20,6 +20,7 @@ import {
   useActiveMessages,
   useActiveThreadEvents,
   useActiveCompactionEvents,
+  useActiveThreadCore,
 } from '@/stores/thread-selectors';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
@@ -44,7 +45,9 @@ export function ThreadView() {
   const { t } = useTranslation();
   const navigate = useNavigate();
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
-  const activeThread = useThreadStore((s) => s.activeThread);
+  // Stable core: excludes messages/events arrays so ThreadView doesn't
+  // re-render on every WS message batch (~20×/sec during streaming).
+  const activeThread = useActiveThreadCore();
   // Granular selectors: these return the same reference when only status/cost
   // changed, preventing MemoizedMessageList from re-rendering on status-only updates.
   const stableMessages = useActiveMessages();
@@ -95,8 +98,9 @@ export function ThreadView() {
   const highlightedMsgRef = useRef<string | null>(null);
 
   // Intercept Ctrl+F to open in-thread search instead of browser find
+  const activeThreadId = activeThread?.id ?? null;
   useEffect(() => {
-    if (!activeThread) return;
+    if (!activeThreadId) return;
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && !e.shiftKey && e.key === 'f') {
         e.preventDefault();
@@ -111,7 +115,7 @@ export function ThreadView() {
     };
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [activeThread]);
+  }, [activeThreadId]);
 
   /** Remove all injected <mark> highlights inside the scroll viewport */
   const clearSearchHighlights = useCallback(() => {
@@ -209,8 +213,8 @@ export function ThreadView() {
   if (activeThread?.id !== prevThreadIdRef.current) {
     prevThreadIdRef.current = activeThread?.id ?? null;
     const ids = new Set<string>();
-    if (activeThread?.messages) {
-      for (const m of activeThread.messages) {
+    if (stableMessages) {
+      for (const m of stableMessages) {
         ids.add(m.id);
         if (m.toolCalls) {
           for (const tc of m.toolCalls) ids.add(tc.id);
@@ -716,7 +720,7 @@ export function ThreadView() {
               threadId={activeThread.id}
               initialPrompt={activeThread.initialPrompt}
               initialImages={(() => {
-                const draftMsg = activeThread.messages?.find((m) => m.role === 'user');
+                const draftMsg = stableMessages?.find((m) => m.role === 'user');
                 if (!draftMsg?.images) return undefined;
                 try {
                   const parsed =
@@ -799,13 +803,13 @@ export function ThreadView() {
         </div>
 
         {/* Prompt Timeline — hidden when container < 600px */}
-        {timelineVisible && activeThread.messages.length > 0 && (
+        {timelineVisible && stableMessages && stableMessages.length > 0 && (
           <PromptTimeline
-            messages={activeThread.messages}
+            messages={stableMessages}
             activeMessageId={
               visibleMessageId ??
               activeThread.lastUserMessage?.id ??
-              activeThread.messages.filter((m) => m.role === 'user' && m.content?.trim()).at(-1)?.id
+              stableMessages.filter((m) => m.role === 'user' && m.content?.trim()).at(-1)?.id
             }
             threadStatus={activeThread.status}
             messagesScrollRef={{ current: streamRef.current?.scrollViewport ?? null }}

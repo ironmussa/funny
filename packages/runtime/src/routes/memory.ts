@@ -7,15 +7,31 @@
  * Mounted under /api/projects/:projectId/memory
  */
 
-import { getPaisleyPark } from '@funny/memory';
-import type { AddOptions, SearchFilters, TimelineOptions } from '@funny/shared';
+import {
+  getPaisleyPark,
+  type SearchFilters,
+  type StorageConfig,
+  type TimelineOptions,
+} from '@funny/memory';
 import { Hono } from 'hono';
 
 import { getServices } from '../services/service-registry.js';
 
 export const memoryRoutes = new Hono();
 
-// ─── GET /recall ────────────────────────────────────────
+/** Build a StorageConfig from a project ID + name */
+function memoryConfig(projectId: string, projectName: string): StorageConfig {
+  const url = process.env.MEMORY_DB_URL ?? `file:${projectId}-memory.db`;
+  return {
+    url,
+    syncUrl: process.env.MEMORY_SYNC_URL,
+    authToken: process.env.MEMORY_AUTH_TOKEN,
+    projectId,
+    projectName,
+  };
+}
+
+// ─── GET /recall ───────────────────────────────────────
 
 memoryRoutes.get('/:projectId/memory/recall', async (c) => {
   const projectId = c.req.param('projectId');
@@ -27,14 +43,16 @@ memoryRoutes.get('/:projectId/memory/recall', async (c) => {
   const project = await getServices().projects.getProject(projectId);
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
-  const pp = getPaisleyPark(projectId, project.name);
-  const result = await pp.recall(query, { limit, scope, minConfidence });
-
-  if (result.isErr()) return c.json({ error: result.error }, 500);
-  return c.json(result.value);
+  try {
+    const pp = getPaisleyPark(memoryConfig(projectId, project.name));
+    const result = await pp.recall(query, { limit, scope, minConfidence });
+    return c.json(result);
+  } catch (e) {
+    return c.json({ error: String(e) }, 500);
+  }
 });
 
-// ─── POST /facts ────────────────────────────────────────
+// ─── POST /facts ───────────────────────────────────────
 
 memoryRoutes.post('/:projectId/memory/facts', async (c) => {
   const projectId = c.req.param('projectId');
@@ -55,38 +73,42 @@ memoryRoutes.post('/:projectId/memory/facts', async (c) => {
   const project = await getServices().projects.getProject(projectId);
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
-  const pp = getPaisleyPark(projectId, project.name);
-  const result = await pp.add(body.content, {
-    type: body.type as any,
-    tags: body.tags,
-    confidence: body.confidence,
-    relatedTo: body.relatedTo,
-    sourceAgent: body.sourceAgent,
-    sourceOperator: body.sourceOperator,
-  });
-
-  if (result.isErr()) return c.json({ error: result.error }, 500);
-  return c.json(result.value, 201);
+  try {
+    const pp = getPaisleyPark(memoryConfig(projectId, project.name));
+    const fact = await pp.add(body.content, {
+      type: body.type as any,
+      tags: body.tags,
+      confidence: body.confidence,
+      relatedTo: body.relatedTo,
+      sourceAgent: body.sourceAgent,
+      sourceOperator: body.sourceOperator,
+    });
+    return c.json(fact, 201);
+  } catch (e) {
+    return c.json({ error: String(e) }, 500);
+  }
 });
 
-// ─── PATCH /facts/:factId/invalidate ────────────────────
+// ─── PATCH /facts/:factId/invalidate ───────────────────
 
 memoryRoutes.patch('/:projectId/memory/facts/:factId/invalidate', async (c) => {
   const projectId = c.req.param('projectId');
   const factId = c.req.param('factId');
-  const body = await c.req.json<{ reason?: string }>().catch(() => ({}));
+  const body = await c.req.json<{ reason?: string }>().catch(() => ({}) as { reason?: string });
 
   const project = await getServices().projects.getProject(projectId);
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
-  const pp = getPaisleyPark(projectId, project.name);
-  const result = await pp.invalidate(factId, body.reason);
-
-  if (result.isErr()) return c.json({ error: result.error }, 500);
-  return c.json({ ok: true });
+  try {
+    const pp = getPaisleyPark(memoryConfig(projectId, project.name));
+    await pp.invalidate(factId, body.reason);
+    return c.json({ ok: true });
+  } catch (e) {
+    return c.json({ error: String(e) }, 500);
+  }
 });
 
-// ─── PATCH /facts/:factId/evolve ────────────────────────
+// ─── PATCH /facts/:factId/evolve ───────────────────────
 
 memoryRoutes.patch('/:projectId/memory/facts/:factId/evolve', async (c) => {
   const projectId = c.req.param('projectId');
@@ -98,14 +120,16 @@ memoryRoutes.patch('/:projectId/memory/facts/:factId/evolve', async (c) => {
   const project = await getServices().projects.getProject(projectId);
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
-  const pp = getPaisleyPark(projectId, project.name);
-  const result = await pp.evolve(factId, body.update);
-
-  if (result.isErr()) return c.json({ error: result.error }, 500);
-  return c.json(result.value);
+  try {
+    const pp = getPaisleyPark(memoryConfig(projectId, project.name));
+    const fact = await pp.evolve(factId, body.update);
+    return c.json(fact);
+  } catch (e) {
+    return c.json({ error: String(e) }, 500);
+  }
 });
 
-// ─── GET /search ────────────────────────────────────────
+// ─── GET /search ───────────────────────────────────────
 
 memoryRoutes.get('/:projectId/memory/search', async (c) => {
   const projectId = c.req.param('projectId');
@@ -118,20 +142,22 @@ memoryRoutes.get('/:projectId/memory/search', async (c) => {
   const project = await getServices().projects.getProject(projectId);
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
-  const pp = getPaisleyPark(projectId, project.name);
-  const filters: SearchFilters = {};
-  if (type) filters.type = type as any;
-  if (tags?.length) filters.tags = tags;
-  if (validAt) filters.validAt = validAt;
-  if (minConfidence) filters.minConfidence = minConfidence;
+  try {
+    const pp = getPaisleyPark(memoryConfig(projectId, project.name));
+    const filters: SearchFilters = {};
+    if (type) filters.type = type as any;
+    if (tags?.length) filters.tags = tags;
+    if (validAt) filters.validAt = validAt;
+    if (minConfidence) filters.minConfidence = minConfidence;
 
-  const result = await pp.search(query, filters);
-
-  if (result.isErr()) return c.json({ error: result.error }, 500);
-  return c.json({ facts: result.value });
+    const facts = await pp.search(query, filters);
+    return c.json({ facts });
+  } catch (e) {
+    return c.json({ error: String(e) }, 500);
+  }
 });
 
-// ─── GET /timeline ──────────────────────────────────────
+// ─── GET /timeline ─────────────────────────────────────
 
 memoryRoutes.get('/:projectId/memory/timeline', async (c) => {
   const projectId = c.req.param('projectId');
@@ -142,19 +168,21 @@ memoryRoutes.get('/:projectId/memory/timeline', async (c) => {
   const project = await getServices().projects.getProject(projectId);
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
-  const pp = getPaisleyPark(projectId, project.name);
-  const options: TimelineOptions = { includeInvalidated: true };
-  if (from) options.from = from;
-  if (to) options.to = to;
-  if (type) options.type = type as any;
+  try {
+    const pp = getPaisleyPark(memoryConfig(projectId, project.name));
+    const options: TimelineOptions = { includeInvalidated: true };
+    if (from) options.from = from;
+    if (to) options.to = to;
+    if (type) options.type = type as any;
 
-  const result = await pp.timeline(options);
-
-  if (result.isErr()) return c.json({ error: result.error }, 500);
-  return c.json({ facts: result.value });
+    const facts = await pp.timeline(options);
+    return c.json({ facts });
+  } catch (e) {
+    return c.json({ error: String(e) }, 500);
+  }
 });
 
-// ─── GET /operators/:operatorId ──────────────────────────
+// ─── GET /operators/:operatorId ────────────────────────
 
 memoryRoutes.get('/:projectId/memory/operators/:operatorId', async (c) => {
   const projectId = c.req.param('projectId');
@@ -163,15 +191,16 @@ memoryRoutes.get('/:projectId/memory/operators/:operatorId', async (c) => {
   const project = await getServices().projects.getProject(projectId);
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
-  const pp = getPaisleyPark(projectId, project.name);
-  // Use recall with forOperator to get operator context
-  const result = await pp.recall('', { limit: 0, forOperator: operatorId });
-  if (result.isErr()) return c.json({ error: result.error }, 500);
-
-  return c.json({ operator: operatorId, context: result.value.formattedContext });
+  try {
+    const pp = getPaisleyPark(memoryConfig(projectId, project.name));
+    const result = await pp.recall('', { limit: 0, forOperator: operatorId });
+    return c.json({ operator: operatorId, context: result.formattedContext });
+  } catch (e) {
+    return c.json({ error: String(e) }, 500);
+  }
 });
 
-// ─── POST /gc ───────────────────────────────────────────
+// ─── POST /gc ──────────────────────────────────────────
 
 memoryRoutes.post('/:projectId/memory/gc', async (c) => {
   const projectId = c.req.param('projectId');
@@ -179,10 +208,12 @@ memoryRoutes.post('/:projectId/memory/gc', async (c) => {
   const project = await getServices().projects.getProject(projectId);
   if (!project) return c.json({ error: 'Project not found' }, 404);
 
-  // Lazy import to avoid circular deps
-  const { runGC } = await import('@funny/memory');
-  const result = await runGC(projectId, project.name);
-
-  if (result.isErr()) return c.json({ error: result.error }, 500);
-  return c.json(result.value);
+  try {
+    const { runGC } = await import('@funny/memory');
+    const result = await runGC(memoryConfig(projectId, project.name));
+    if (result.isErr()) return c.json({ error: result.error }, 500);
+    return c.json(result.value);
+  } catch (e) {
+    return c.json({ error: String(e) }, 500);
+  }
 });

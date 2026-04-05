@@ -5,28 +5,28 @@
  * @domain layer: domain
  *
  * In-memory bidirectional adjacency graph for fact relationships.
- * Built from the `related` field in fact frontmatter.
+ * Built from the `related` field in each fact.
  * Supports BFS traversal to find related facts up to N hops.
  */
 
-import type { MemoryFactFile } from './types.js';
+import type { MemoryFact } from './types.js';
 
 export class RelationshipGraph {
   /** fact_id → Set<related_fact_id> */
   private adjacency = new Map<string, Set<string>>();
 
-  // ─── Build from filesystem ──────────────────────────
+  // ─── Build from facts ──────────────────────────────
 
-  buildFromFacts(facts: MemoryFactFile[]) {
+  buildFromFacts(facts: MemoryFact[]) {
     this.adjacency.clear();
 
     for (const fact of facts) {
-      const id = fact.frontmatter.id;
+      const id = fact.id;
       if (!this.adjacency.has(id)) {
         this.adjacency.set(id, new Set());
       }
 
-      for (const related of fact.frontmatter.related) {
+      for (const related of fact.related) {
         // Bidirectional
         this.adjacency.get(id)!.add(related);
         if (!this.adjacency.has(related)) {

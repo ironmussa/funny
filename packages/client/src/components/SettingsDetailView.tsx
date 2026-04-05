@@ -36,6 +36,7 @@ import {
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
@@ -48,6 +49,7 @@ import { useUIStore } from '@/stores/ui-store';
 import { ArchivedThreadsSettings } from './ArchivedThreadsSettings';
 import { AutomationSettings } from './AutomationSettings';
 import { McpServerSettings } from './McpServerSettings';
+import { MemorySettings } from './MemorySettings';
 import { PipelineSettings } from './PipelineSettings';
 import { ProjectConfigSettings } from './ProjectConfigSettings';
 import { ProjectHooksSettings } from './ProjectHooksSettings';
@@ -771,6 +773,22 @@ function GeneralSettings() {
               currentUrl={selectedProject.launcherUrl}
               onSave={saveProject}
             />
+            <SettingRow
+              title={t('settings.memoryEnabled', 'Project Memory')}
+              description={t(
+                'settings.memoryEnabledDesc',
+                'Enable Paisley Park memory system for this project. Agents will recall and store knowledge across sessions.',
+              )}
+            >
+              <Switch
+                data-testid="settings-memory-enabled"
+                size="sm"
+                checked={selectedProject.memoryEnabled ?? false}
+                onCheckedChange={(checked) =>
+                  saveProject(selectedProject.id, { memoryEnabled: checked })
+                }
+              />
+            </SettingRow>
             <WeaveStatusSetting projectId={selectedProject.id} />
           </div>
         </>
@@ -889,6 +907,8 @@ export function SettingsDetailView() {
             <PipelineSettings />
           ) : page === 'archived-threads' ? (
             <ArchivedThreadsSettings />
+          ) : page === 'memory' ? (
+            <MemorySettings />
           ) : page === 'users' ? (
             <UserManagement />
           ) : page === 'team-members' ? (

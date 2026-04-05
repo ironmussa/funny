@@ -28,6 +28,8 @@
     "dev:server": "cd packages/server && bun --env-file ../../.env --watch src/index.ts",
     "dev:runtime": "bun --env-file ../../.env --watch --cwd packages/runtime src/index.ts",
     "dev:client": "cd packages/client && npx vite",
+    "dev:api-acp": "bun --watch --cwd packages/api-acp src/index.ts",
+    "dev:memory": "bun --env-file ../../.env --watch --cwd packages/memory src/server.ts",
     "run": "concurrently --kill-others -n server,runner,client -c blue,green,yellow \"bun run run:server\" \"bun run run:runtime\" \"bun run run:client\"",
     "run:server": "cd packages/server && bun --env-file ../../.env src/index.ts",
     "run:runtime": "bun --env-file ../../.env --cwd packages/runtime src/index.ts",

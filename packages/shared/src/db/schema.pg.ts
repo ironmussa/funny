@@ -58,6 +58,7 @@ export const projects = pgTable('projects', {
   urls: text('urls'),
   systemPrompt: text('system_prompt'),
   launcherUrl: text('launcher_url'),
+  memoryEnabled: integer('memory_enabled').notNull().default(0),
   userId: text('user_id').notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
   createdAt: text('created_at').notNull(),

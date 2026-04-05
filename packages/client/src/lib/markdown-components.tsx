@@ -111,6 +111,15 @@ export const baseMarkdownComponents = {
       const code = extractText(children).replace(/\n$/, '');
       return <HighlightedCode code={code} language={language} />;
     }
+    // Code block without language — don't apply inline code background
+    const text = extractText(children);
+    if (text.includes('\n')) {
+      return (
+        <code className="block overflow-x-auto font-mono text-xs leading-relaxed" {...props}>
+          {children}
+        </code>
+      );
+    }
     return (
       <code
         className="rounded bg-muted-foreground/20 px-1 py-0.5 font-mono text-xs text-foreground"

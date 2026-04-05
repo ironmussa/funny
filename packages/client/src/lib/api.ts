@@ -35,6 +35,30 @@ import i18n from '@/i18n/config';
 import { startSpan, metric } from '@/lib/telemetry';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 
+// ─── Memory types (inlined from @funny/memory to avoid cross-package dep) ──
+export type FactType = 'decision' | 'bug' | 'pattern' | 'convention' | 'insight' | 'context';
+export type DecayClass = 'slow' | 'normal' | 'fast';
+export interface MemoryFact {
+  id: string;
+  type: FactType;
+  confidence: number;
+  sourceAgent: string | null;
+  sourceOperator: string | null;
+  sourceSession: string | null;
+  validFrom: string;
+  invalidAt: string | null;
+  ingestedAt: string;
+  invalidatedBy: string | null;
+  supersededBy: string | null;
+  tags: string[];
+  related: string[];
+  decayClass: DecayClass;
+  accessCount: number;
+  lastAccessed: string;
+  content: string;
+  projectId: string;
+}
+
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
 const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
 // In the browser, always use relative URLs so requests go through the Vite proxy
@@ -222,6 +246,7 @@ export const api = {
       urls?: string[] | null;
       systemPrompt?: string | null;
       launcherUrl?: string | null;
+      memoryEnabled?: boolean;
     },
   ) => request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteProject: (id: string) => request<{ ok: boolean }>(`/projects/${id}`, { method: 'DELETE' }),
@@ -1367,6 +1392,50 @@ export const api = {
       user: { id: string; username: string; displayName: string };
       organizationId: string;
     }>('/invite-links/register', { method: 'POST', body: JSON.stringify(data) }),
+
+  // Memory (Paisley Park)
+  memorySearch: (
+    projectId: string,
+    query: string,
+    filters?: { type?: string; tags?: string[]; minConfidence?: number },
+  ) => {
+    const params = new URLSearchParams();
+    if (query) params.set('query', query);
+    if (filters?.type) params.set('type', filters.type);
+    if (filters?.tags?.length) params.set('tags', filters.tags.join(','));
+    if (filters?.minConfidence != null) params.set('minConfidence', String(filters.minConfidence));
+    return request<{ facts: MemoryFact[] }>(`/projects/${projectId}/memory/search?${params}`);
+  },
+  memoryTimeline: (projectId: string, opts?: { from?: string; to?: string; type?: string }) => {
+    const params = new URLSearchParams();
+    if (opts?.from) params.set('from', opts.from);
+    if (opts?.to) params.set('to', opts.to);
+    if (opts?.type) params.set('type', opts.type);
+    return request<{ facts: MemoryFact[] }>(`/projects/${projectId}/memory/timeline?${params}`);
+  },
+  memoryAddFact: (
+    projectId: string,
+    body: { content: string; type: string; tags?: string[]; confidence?: number },
+  ) =>
+    request<MemoryFact>(`/projects/${projectId}/memory/facts`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  memoryInvalidate: (projectId: string, factId: string, reason?: string) =>
+    request<{ ok: boolean }>(`/projects/${projectId}/memory/facts/${factId}/invalidate`, {
+      method: 'PATCH',
+      body: JSON.stringify({ reason }),
+    }),
+  memoryEvolve: (projectId: string, factId: string, update: string) =>
+    request<MemoryFact>(`/projects/${projectId}/memory/facts/${factId}/evolve`, {
+      method: 'PATCH',
+      body: JSON.stringify({ update }),
+    }),
+  memoryRunGC: (projectId: string) =>
+    request<{ archived: number; deduplicated: number; orphaned: number }>(
+      `/projects/${projectId}/memory/gc`,
+      { method: 'POST' },
+    ),
 
   // Arcs
   listArcs: (projectId: string) => request<Arc[]>(`/projects/${projectId}/arcs`),

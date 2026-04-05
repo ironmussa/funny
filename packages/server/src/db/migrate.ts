@@ -952,6 +952,12 @@ const migrations: Migration[] = [
       );
     },
   },
+  {
+    name: '038_projects_memory_enabled',
+    async up() {
+      await ctx().addColumn('projects', 'memory_enabled', 'INTEGER NOT NULL', '0');
+    },
+  },
 ];
 
 export async function autoMigrate() {

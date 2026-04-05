@@ -267,6 +267,7 @@ export async function updateProject(
     urls?: string[] | null;
     systemPrompt?: string | null;
     launcherUrl?: string | null;
+    memoryEnabled?: boolean;
   },
 ): Promise<Result<Project, DomainError>> {
   const project = await dbGet(db.select().from(schema.projects).where(eq(schema.projects.id, id)));
@@ -296,6 +297,7 @@ export async function updateProject(
   if (fields.urls !== undefined) updateData.urls = fields.urls ? JSON.stringify(fields.urls) : null;
   if (fields.systemPrompt !== undefined) updateData.systemPrompt = fields.systemPrompt;
   if (fields.launcherUrl !== undefined) updateData.launcherUrl = fields.launcherUrl;
+  if (fields.memoryEnabled !== undefined) updateData.memoryEnabled = fields.memoryEnabled;
 
   await dbRun(db.update(schema.projects).set(updateData).where(eq(schema.projects.id, id)));
   return ok(toProject({ ...project, ...updateData } as ProjectRow));

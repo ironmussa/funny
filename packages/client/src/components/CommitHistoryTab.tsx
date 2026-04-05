@@ -8,7 +8,6 @@ import {
   Loader2,
   RefreshCw,
   Search,
-  Upload,
   X,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
@@ -16,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { PullFetchButtons } from '@/components/pull-fetch-buttons';
+import { PushButton } from '@/components/push-button';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -514,37 +514,13 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
           unpulledCommitCount={gitStatus?.unpulledCommitCount ?? 0}
           testIdPrefix="history"
         />
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              onClick={handlePush}
-              disabled={pushInProgress || !hasUnpushed}
-              className="text-muted-foreground"
-              data-testid="history-push"
-            >
-              <Upload className={cn('icon-base', pushInProgress && 'animate-pulse')} />
-            </Button>
-          </TooltipTrigger>
-          <TooltipContent side="top">
-            {hasUnpushed
-              ? t('review.readyToPush', {
-                  count: unpushedHashes.size,
-                  defaultValue: `${unpushedHashes.size} commit(s) ready to push`,
-                })
-              : t('review.pushToOrigin', 'Push to origin')}
-          </TooltipContent>
-        </Tooltip>
-        {hasUnpushed && (
-          <span
-            className="ml-1 flex items-center gap-0.5 text-xs text-amber-500"
-            data-testid="history-unpushed-count"
-          >
-            {unpushedHashes.size}
-            <ArrowUp className="icon-xs" />
-          </span>
-        )}
+        <PushButton
+          onPush={handlePush}
+          pushInProgress={pushInProgress}
+          unpushedCommitCount={unpushedHashes.size}
+          disabled={pushInProgress || !hasUnpushed}
+          testIdPrefix="history"
+        />
         {isOnDifferentBranch && (
           <Tooltip>
             <TooltipTrigger asChild>

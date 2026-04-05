@@ -8,11 +8,9 @@
  * Groups by type, includes confidence and age, enforces token budget.
  */
 
-import type { MemoryFact } from '@funny/shared';
+import type { MemoryFact, OperatorProfile } from './types.js';
 
-import type { OperatorProfile } from './types.js';
-
-// ─── Configuration ──────────────────────────────────────
+// ─── Configuration ─────────────────────────────────────
 
 const MAX_CHARS = 8000; // ~2000 tokens at ~4 chars/token
 
@@ -27,7 +25,7 @@ const TYPE_LABELS: Record<string, string> = {
 
 const TYPE_ORDER = ['decision', 'bug', 'pattern', 'convention', 'insight', 'context'];
 
-// ─── Main formatter ─────────────────────────────────────
+// ─── Main formatter ────────────────────────────────────
 
 export function formatRecallContext(
   facts: MemoryFact[],
@@ -101,15 +99,21 @@ export function formatRecallContext(
     output = truncateToLimit(output, MAX_CHARS);
   }
 
-  // Wrap in tags
+  // Wrap in tags with skepticism disclaimer
   if (output.trim().length > 0) {
-    return `[PROJECT MEMORY]\n${output.trim()}\n[/PROJECT MEMORY]`;
+    return [
+      '[PROJECT MEMORY]',
+      '> These memories may be stale. Verify against current code/state before acting on them.',
+      '',
+      output.trim(),
+      '[/PROJECT MEMORY]',
+    ].join('\n');
   }
 
   return '';
 }
 
-// ─── Helpers ────────────────────────────────────────────
+// ─── Helpers ───────────────────────────────────────────
 
 function formatAge(isoDate: string): string {
   const ms = Date.now() - new Date(isoDate).getTime();

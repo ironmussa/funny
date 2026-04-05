@@ -14,9 +14,16 @@
  */
 
 import { useRef } from 'react';
+import { useShallow } from 'zustand/react/shallow';
 
 import type { AgentInitInfo, ThreadWithMessages } from './thread-store';
 import { useThreadStore } from './thread-store';
+
+/** activeThread minus the high-churn array fields (messages, events). */
+export type ActiveThreadCore = Omit<
+  ThreadWithMessages,
+  'messages' | 'threadEvents' | 'compactionEvents'
+>;
 
 /** Get the last message of a thread, or undefined. */
 export function selectLastMessage(thread: ThreadWithMessages | null) {
@@ -103,4 +110,29 @@ export function useActiveThreadEvents() {
 /** Subscribe to the active thread's compactionEvents array. */
 export function useActiveCompactionEvents() {
   return useThreadStore((s) => s.activeThread?.compactionEvents);
+}
+
+/**
+ * Subscribe to the active thread excluding messages/events arrays.
+ *
+ * During agent streaming, `messages` changes on every WS batch (~20×/sec).
+ * This selector strips those high-churn arrays and uses `useShallow` so the
+ * returned reference stays stable when only messages changed — preventing
+ * the consumer from re-rendering on every batch.
+ *
+ * Pair with `useActiveMessages()` for message data.
+ */
+export function useActiveThreadCore(): ActiveThreadCore | null {
+  return useThreadStore(
+    useShallow((s) => {
+      const t = s.activeThread;
+      if (!t) return null;
+      // Destructure out the high-churn arrays; keep everything else.
+      // useShallow compares remaining keys by reference — stable when
+      // only messages/events changed (spread preserves sibling refs).
+      // eslint-disable-next-line @typescript-eslint/no-unused-vars
+      const { messages, threadEvents, compactionEvents, ...core } = t;
+      return core;
+    }),
+  );
 }

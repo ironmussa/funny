@@ -8,15 +8,21 @@
  * graph traversal, and ranking to produce the most relevant facts.
  */
 
-import type { MemoryFact, MemoryScope, RecallOptions, SearchFilters } from '@funny/shared';
+import type { Client } from '@libsql/client';
 
 import { RelationshipGraph } from './graph.js';
-import { listFacts, readFact } from './storage.js';
-import { calculateDecayScore, isCurrentlyValid, wasValidAt } from './temporal.js';
-import { frontmatterToApi, type MemoryFactFile } from './types.js';
+import { listFacts } from './storage.js';
+import { calculateDecayScore } from './temporal.js';
+import type {
+  MemoryFact,
+  MemoryScope,
+  RecallOptions,
+  SearchFilters,
+  TimelineOptions,
+} from './types.js';
 import { VectorIndex } from './vector-index.js';
 
-// ─── Scored fact for ranking ────────────────────────────
+// ─── Scored fact for ranking ───────────────────────────
 
 interface ScoredFact {
   fact: MemoryFact;
@@ -24,28 +30,25 @@ interface ScoredFact {
   source: 'embedding' | 'keyword' | 'graph';
 }
 
-// ─── Retrieval engine ───────────────────────────────────
+// ─── Retrieval engine ──────────────────────────────────
 
 export class RetrievalEngine {
   constructor(
-    private readonly memoryDir: string,
+    private readonly db: Client,
+    private readonly projectId: string,
     private readonly vectorIndex: VectorIndex,
     private readonly graph: RelationshipGraph,
   ) {}
 
-  // ─── Main recall ────────────────────────────────────
+  // ─── Main recall ───────────────────────────────────
 
   async recall(query: string, options: RecallOptions = {}): Promise<MemoryFact[]> {
-    const {
-      limit = 10,
-      scope = 'all',
-      includeInvalidated = false,
-      minConfidence = 0.5,
-      asOf,
-    } = options;
+    const { limit = 10, includeInvalidated = false, minConfidence = 0.5, asOf } = options;
 
-    // 1. Load all facts from relevant directories
-    const allFacts = await this.loadFacts(scope);
+    // 1. Load all active facts for this project
+    const allResult = await listFacts(this.db, this.projectId, { includeInvalidated });
+    if (allResult.isErr()) return [];
+    const allFacts = allResult.value;
 
     // 2. Run embedding search and keyword search in parallel
     const [embeddingResults, keywordResults] = await Promise.all([
@@ -59,10 +62,10 @@ export class RetrievalEngine {
     // 4. Graph traversal from top results to discover related facts
     const topIds = merged.slice(0, Math.min(5, merged.length)).map((s) => s.fact.id);
     const graphIds = this.graph.traverse(topIds, 2);
-    const graphFacts = await this.loadFactsByIds(graphIds, allFacts);
+    const graphFacts = allFacts.filter((f) => graphIds.has(f.id));
     for (const gf of graphFacts) {
       if (!merged.some((m) => m.fact.id === gf.id)) {
-        merged.push({ fact: gf, score: 0.3, source: 'graph' }); // lower weight for graph-only
+        merged.push({ fact: gf, score: 0.3, source: 'graph' });
       }
     }
 
@@ -77,17 +80,25 @@ export class RetrievalEngine {
     return ranked.slice(0, limit);
   }
 
-  // ─── Search (explicit, no graph traversal) ──────────
+  // ─── Search (explicit, no graph traversal) ─────────
 
   async search(query: string, filters: SearchFilters = {}): Promise<MemoryFact[]> {
-    const allFacts = await this.loadFacts('all');
+    const allResult = await listFacts(this.db, this.projectId, { includeInvalidated: true });
+    if (allResult.isErr()) return [];
+    const allFacts = allResult.value;
 
-    const [embeddingResults, keywordResults] = await Promise.all([
-      this.embeddingSearch(query, allFacts, 50),
-      this.keywordSearch(query, allFacts, 50),
-    ]);
+    let merged: ScoredFact[];
 
-    let merged = this.mergeResults(embeddingResults, keywordResults);
+    if (!query || query.trim().length === 0) {
+      // Empty query — return all facts (filters still apply below)
+      merged = allFacts.map((f) => ({ fact: f, score: 1, source: 'keyword' as const }));
+    } else {
+      const [embeddingResults, keywordResults] = await Promise.all([
+        this.embeddingSearch(query, allFacts, 50),
+        this.keywordSearch(query, allFacts, 50),
+      ]);
+      merged = this.mergeResults(embeddingResults, keywordResults);
+    }
 
     // Apply filters
     merged = merged.filter((s) => {
@@ -125,22 +136,14 @@ export class RetrievalEngine {
     return merged.map((s) => s.fact);
   }
 
-  // ─── Timeline ───────────────────────────────────────
+  // ─── Timeline ──────────────────────────────────────
 
-  async timeline(
-    options: {
-      from?: string;
-      to?: string;
-      type?: string | string[];
-      includeInvalidated?: boolean;
-    } = {},
-  ): Promise<MemoryFact[]> {
-    const allFacts = await this.loadFacts('all');
-    let facts = allFacts.map((f) => frontmatterToApi(f.frontmatter, f.content));
-
-    if (!options.includeInvalidated) {
-      facts = facts.filter((f) => f.invalidAt === null);
-    }
+  async timeline(options: TimelineOptions = {}): Promise<MemoryFact[]> {
+    const allResult = await listFacts(this.db, this.projectId, {
+      includeInvalidated: options.includeInvalidated,
+    });
+    if (allResult.isErr()) return [];
+    let facts = allResult.value;
 
     if (options.type) {
       const types = Array.isArray(options.type) ? options.type : [options.type];
@@ -163,11 +166,11 @@ export class RetrievalEngine {
     return facts;
   }
 
-  // ─── Private: embedding search ──────────────────────
+  // ─── Private: embedding search ─────────────────────
 
   private async embeddingSearch(
     query: string,
-    allFacts: MemoryFactFile[],
+    _allFacts: MemoryFact[],
     topK: number,
   ): Promise<ScoredFact[]> {
     if (!this.vectorIndex.isAvailable()) return [];
@@ -175,24 +178,21 @@ export class RetrievalEngine {
     const results = await this.vectorIndex.searchSimilar(query, topK);
     if (results.isErr()) return [];
 
-    const factMap = new Map(allFacts.map((f) => [f.frontmatter.id, f]));
+    const factMap = new Map(_allFacts.map((f) => [f.id, f]));
     return results.value
       .filter((r) => factMap.has(r.factId))
-      .map((r) => {
-        const f = factMap.get(r.factId)!;
-        return {
-          fact: frontmatterToApi(f.frontmatter, f.content),
-          score: r.score,
-          source: 'embedding' as const,
-        };
-      });
+      .map((r) => ({
+        fact: factMap.get(r.factId)!,
+        score: r.score,
+        source: 'embedding' as const,
+      }));
   }
 
-  // ─── Private: keyword search ────────────────────────
+  // ─── Private: keyword search ───────────────────────
 
   private async keywordSearch(
     query: string,
-    allFacts: MemoryFactFile[],
+    allFacts: MemoryFact[],
     topK: number,
   ): Promise<ScoredFact[]> {
     const terms = query
@@ -204,7 +204,7 @@ export class RetrievalEngine {
     const scored: ScoredFact[] = [];
     for (const fact of allFacts) {
       const content = fact.content.toLowerCase();
-      const tags = fact.frontmatter.tags.map((t) => t.toLowerCase());
+      const tags = fact.tags.map((t) => t.toLowerCase());
       const allText = `${content} ${tags.join(' ')}`;
 
       let matchCount = 0;
@@ -214,47 +214,35 @@ export class RetrievalEngine {
 
       if (matchCount > 0) {
         const score = matchCount / terms.length;
-        scored.push({
-          fact: frontmatterToApi(fact.frontmatter, fact.content),
-          score,
-          source: 'keyword',
-        });
+        scored.push({ fact, score, source: 'keyword' });
       }
     }
 
     return scored.sort((a, b) => b.score - a.score).slice(0, topK);
   }
 
-  // ─── Private: merge results ─────────────────────────
+  // ─── Private: merge results ────────────────────────
 
   private mergeResults(embeddingResults: ScoredFact[], keywordResults: ScoredFact[]): ScoredFact[] {
     const factMap = new Map<string, ScoredFact>();
 
-    // Embedding results weighted 0.7
     for (const r of embeddingResults) {
-      factMap.set(r.fact.id, {
-        ...r,
-        score: r.score * 0.7,
-      });
+      factMap.set(r.fact.id, { ...r, score: r.score * 0.7 });
     }
 
-    // Keyword results weighted 0.3 — add to existing or create new
     for (const r of keywordResults) {
       const existing = factMap.get(r.fact.id);
       if (existing) {
         existing.score += r.score * 0.3;
       } else {
-        factMap.set(r.fact.id, {
-          ...r,
-          score: r.score * 0.3,
-        });
+        factMap.set(r.fact.id, { ...r, score: r.score * 0.3 });
       }
     }
 
     return Array.from(factMap.values()).sort((a, b) => b.score - a.score);
   }
 
-  // ─── Private: ranking ───────────────────────────────
+  // ─── Private: ranking ──────────────────────────────
 
   private rank(
     scored: ScoredFact[],
@@ -265,14 +253,9 @@ export class RetrievalEngine {
     return scored
       .filter((s) => {
         const f = s.fact;
-
-        // Confidence filter
         if (f.confidence < options.minConfidence) return false;
-
-        // Temporal filter
         if (!options.includeInvalidated && f.invalidAt !== null) return false;
 
-        // Point-in-time filter
         if (options.asOf) {
           const validFrom = new Date(f.validFrom);
           if (options.asOf < validFrom) return false;
@@ -282,68 +265,13 @@ export class RetrievalEngine {
         return true;
       })
       .map((s) => {
-        // Apply decay to score
-        const decayScore = calculateDecayScore(
-          {
-            last_accessed: s.fact.lastAccessed,
-            decay_class: s.fact.decayClass,
-          } as any,
-          now,
-        );
+        const decayScore = calculateDecayScore(s.fact, now);
         return {
           ...s,
-          score: s.score * (0.6 + 0.4 * decayScore), // Decay adjusts up to 40% of relevance score
+          score: s.score * (0.6 + 0.4 * decayScore),
         };
       })
       .sort((a, b) => b.score - a.score)
       .map((s) => s.fact);
-  }
-
-  // ─── Private: load facts ────────────────────────────
-
-  private async loadFacts(scope: MemoryScope): Promise<MemoryFactFile[]> {
-    const dirs: string[] = [];
-
-    switch (scope) {
-      case 'project':
-        dirs.push('project/facts');
-        break;
-      case 'operator':
-        dirs.push('operators');
-        break;
-      case 'team':
-        dirs.push('team');
-        break;
-      case 'all':
-        dirs.push('project/facts');
-        break;
-    }
-
-    const allFacts: MemoryFactFile[] = [];
-    for (const dir of dirs) {
-      const result = await listFacts(this.memoryDir, dir);
-      if (result.isOk()) {
-        allFacts.push(...result.value);
-      }
-    }
-
-    return allFacts;
-  }
-
-  private async loadFactsByIds(
-    ids: Set<string>,
-    allFacts: MemoryFactFile[],
-  ): Promise<MemoryFact[]> {
-    const factMap = new Map(allFacts.map((f) => [f.frontmatter.id, f]));
-    const result: MemoryFact[] = [];
-
-    for (const id of ids) {
-      const f = factMap.get(id);
-      if (f) {
-        result.push(frontmatterToApi(f.frontmatter, f.content));
-      }
-    }
-
-    return result;
   }
 }

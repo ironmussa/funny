@@ -279,6 +279,7 @@ export interface Project {
   urls?: string[];
   systemPrompt?: string;
   launcherUrl?: string;
+  memoryEnabled?: boolean;
   userId: string;
   sortOrder: number;
   createdAt: string;

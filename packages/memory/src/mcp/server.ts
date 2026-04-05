@@ -19,13 +19,16 @@ import { getPaisleyPark } from '../index.js';
 
 const PROJECT_ID = process.env.PP_PROJECT_ID ?? 'default';
 const PROJECT_NAME = process.env.PP_PROJECT_NAME ?? 'default';
+const DB_URL = process.env.PP_DB_URL ?? 'file:memory.db';
+const SYNC_URL = process.env.PP_SYNC_URL;
+const AUTH_TOKEN = process.env.PP_AUTH_TOKEN;
 
 const server = new McpServer({
   name: 'paisley-park',
   version: '1.0.0',
 });
 
-// ─── pp_recall ──────────────────────────────────────────
+// ─── pp_recall ─────────────────────────────────────────
 
 server.tool(
   'pp_recall',
@@ -36,25 +39,27 @@ server.tool(
     scope: z.enum(['project', 'operator', 'team', 'all']).optional().describe('Memory scope'),
   },
   async ({ query, limit, scope }) => {
-    const pp = getPaisleyPark(PROJECT_ID, PROJECT_NAME);
+    const pp = getPaisleyPark({
+      url: DB_URL,
+      syncUrl: SYNC_URL,
+      authToken: AUTH_TOKEN,
+      projectId: PROJECT_ID,
+      projectName: PROJECT_NAME,
+    });
     const result = await pp.recall(query, { limit, scope });
-
-    if (result.isErr()) {
-      return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }] };
-    }
 
     return {
       content: [
         {
           type: 'text' as const,
-          text: result.value.formattedContext || 'No relevant memories found.',
+          text: result.formattedContext || 'No relevant memories found.',
         },
       ],
     };
   },
 );
 
-// ─── pp_add ─────────────────────────────────────────────
+// ─── pp_add ────────────────────────────────────────────
 
 server.tool(
   'pp_add',
@@ -67,25 +72,27 @@ server.tool(
     tags: z.array(z.string()).optional().describe('Tags for categorization'),
   },
   async ({ content, type, tags }) => {
-    const pp = getPaisleyPark(PROJECT_ID, PROJECT_NAME);
-    const result = await pp.add(content, { type, tags });
-
-    if (result.isErr()) {
-      return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }] };
-    }
+    const pp = getPaisleyPark({
+      url: DB_URL,
+      syncUrl: SYNC_URL,
+      authToken: AUTH_TOKEN,
+      projectId: PROJECT_ID,
+      projectName: PROJECT_NAME,
+    });
+    const fact = await pp.add(content, { type, tags });
 
     return {
       content: [
         {
           type: 'text' as const,
-          text: `Fact added: ${result.value.id} (type: ${type})`,
+          text: `Fact added: ${fact.id} (type: ${type})`,
         },
       ],
     };
   },
 );
 
-// ─── pp_invalidate ──────────────────────────────────────
+// ─── pp_invalidate ─────────────────────────────────────
 
 server.tool(
   'pp_invalidate',
@@ -95,12 +102,14 @@ server.tool(
     reason: z.string().optional().describe('Why this is no longer valid'),
   },
   async ({ factId, reason }) => {
-    const pp = getPaisleyPark(PROJECT_ID, PROJECT_NAME);
-    const result = await pp.invalidate(factId, reason);
-
-    if (result.isErr()) {
-      return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }] };
-    }
+    const pp = getPaisleyPark({
+      url: DB_URL,
+      syncUrl: SYNC_URL,
+      authToken: AUTH_TOKEN,
+      projectId: PROJECT_ID,
+      projectName: PROJECT_NAME,
+    });
+    await pp.invalidate(factId, reason);
 
     return {
       content: [
@@ -113,7 +122,7 @@ server.tool(
   },
 );
 
-// ─── pp_search ──────────────────────────────────────────
+// ─── pp_search ─────────────────────────────────────────
 
 server.tool(
   'pp_search',
@@ -125,14 +134,15 @@ server.tool(
     validAt: z.string().optional().describe('ISO date — only facts valid at this time'),
   },
   async ({ query, type, tags, validAt }) => {
-    const pp = getPaisleyPark(PROJECT_ID, PROJECT_NAME);
-    const result = await pp.search(query, { type, tags, validAt });
+    const pp = getPaisleyPark({
+      url: DB_URL,
+      syncUrl: SYNC_URL,
+      authToken: AUTH_TOKEN,
+      projectId: PROJECT_ID,
+      projectName: PROJECT_NAME,
+    });
+    const facts = await pp.search(query, { type, tags, validAt });
 
-    if (result.isErr()) {
-      return { content: [{ type: 'text' as const, text: `Error: ${result.error}` }] };
-    }
-
-    const facts = result.value;
     if (facts.length === 0) {
       return { content: [{ type: 'text' as const, text: 'No facts found.' }] };
     }
@@ -148,7 +158,7 @@ server.tool(
   },
 );
 
-// ─── Start server ───────────────────────────────────────
+// ─── Start server ──────────────────────────────────────
 
 async function main() {
   const transport = new StdioServerTransport();

@@ -11,7 +11,7 @@ const meta = {
   argTypes: {
     size: {
       control: 'select',
-      options: ['default', 'sm', 'xs'],
+      options: ['default', 'sm', 'lg'],
     },
   },
 } satisfies Meta<typeof Checkbox>;
@@ -27,12 +27,12 @@ export const Checked: Story = {
   args: { defaultChecked: true },
 };
 
-export const ExtraSmall: Story = {
-  args: { size: 'xs', defaultChecked: true },
-};
-
 export const Small: Story = {
   args: { size: 'sm', defaultChecked: true },
+};
+
+export const Large: Story = {
+  args: { size: 'lg', defaultChecked: true },
 };
 
 export const Disabled: Story = {
@@ -47,16 +47,16 @@ export const AllSizes: Story = {
   render: () => (
     <div className="flex items-center gap-6">
       <div className="flex items-center gap-2">
-        <Checkbox data-testid="checkbox-xs" size="xs" defaultChecked />
-        <span className="text-xs text-muted-foreground">xs</span>
-      </div>
-      <div className="flex items-center gap-2">
         <Checkbox data-testid="checkbox-sm" size="sm" defaultChecked />
         <span className="text-xs text-muted-foreground">sm</span>
       </div>
       <div className="flex items-center gap-2">
         <Checkbox data-testid="checkbox-default" size="default" defaultChecked />
         <span className="text-xs text-muted-foreground">default</span>
+      </div>
+      <div className="flex items-center gap-2">
+        <Checkbox data-testid="checkbox-lg" size="lg" defaultChecked />
+        <span className="text-xs text-muted-foreground">lg</span>
       </div>
     </div>
   ),

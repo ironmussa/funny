@@ -874,6 +874,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
+                  size={showGitStats ? undefined : 'icon-sm'}
                   onClick={() =>
                     startTransition(() => {
                       if (reviewPaneOpen && rightPaneTab === 'review') {
@@ -886,7 +887,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                     })
                   }
                   data-testid="header-toggle-review"
-                  className={`${showGitStats ? 'h-8 px-2' : 'h-8 w-8'} ${reviewPaneOpen && rightPaneTab === 'review' ? 'text-foreground' : 'text-muted-foreground'}`}
+                  className={`${showGitStats ? 'h-8 px-2' : ''} ${reviewPaneOpen && rightPaneTab === 'review' ? 'text-foreground' : 'text-muted-foreground'}`}
                 >
                   {showGitStats ? (
                     <DiffStats

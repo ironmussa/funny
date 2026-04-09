@@ -39,7 +39,7 @@ export class ChromeSession extends EventEmitter {
 
   async connect(): Promise<void> {
     const { host, port } = this.options;
-    console.log(`[ChromeSession] Connecting to Chrome at ${host}:${port}...`);
+    this.emit('log', `Connecting to Chrome at ${host}:${port}...`);
 
     // Connect to the first page-level target rather than the browser-level
     // WebSocket. Chrome only allows one browser-level CDP connection at a time,
@@ -49,10 +49,10 @@ export class ChromeSession extends EventEmitter {
     const pageTarget = targets.find((t) => t.type === 'page');
 
     if (pageTarget?.webSocketDebuggerUrl) {
-      console.log(`[ChromeSession] Using page target: ${pageTarget.id}`);
+      this.emit('log', `Using page target: ${pageTarget.id}`);
       this.client = await CDP({ target: pageTarget.webSocketDebuggerUrl });
     } else {
-      console.log('[ChromeSession] No page target found, connecting at browser level...');
+      this.emit('log', 'No page target found, connecting at browser level...');
       this.client = await CDP({ host, port });
     }
 
@@ -60,7 +60,7 @@ export class ChromeSession extends EventEmitter {
 
     await Page.enable();
     this.connected = true;
-    console.log('[ChromeSession] Connected. Starting screencast...');
+    this.emit('log', 'Connected. Starting screencast...');
 
     await Page.startScreencast({
       format: this.options.format,
@@ -85,7 +85,7 @@ export class ChromeSession extends EventEmitter {
 
     this.client.on('disconnect', () => {
       this.connected = false;
-      console.log('[ChromeSession] Disconnected from Chrome.');
+      this.emit('log', 'Disconnected from Chrome.');
       this.emit('disconnect');
     });
 
@@ -93,13 +93,16 @@ export class ChromeSession extends EventEmitter {
     Page.loadEventFired(() => this.emit('pageLoad'));
     Page.navigatedWithinDocument(({ url }) => this.emit('navigate', url));
 
+    // Enable console, network, and error capture
+    await this.enableDebugDomains();
+
     this.emit('connected');
   }
 
   async navigate(url: string): Promise<void> {
     if (!this.client) throw new Error('Not connected');
     await this.client.Page.navigate({ url });
-    console.log(`[ChromeSession] Navigated to ${url}`);
+    this.emit('log', `Navigated to ${url}`);
   }
 
   async execute(expression: string): Promise<unknown> {
@@ -168,6 +171,176 @@ export class ChromeSession extends EventEmitter {
     });
   }
 
+  private async enableDebugDomains(): Promise<void> {
+    if (!this.client) return;
+    const { Runtime, Network, Log } = this.client;
+
+    // Console messages via Runtime.consoleAPICalled
+    await Runtime.enable().catch(() => {});
+    Runtime.consoleAPICalled(({ type, args, timestamp, stackTrace }) => {
+      const text = args.map((a: any) => a.value ?? a.description ?? '').join(' ');
+      const frame = stackTrace?.callFrames?.[0];
+      this.emit('console', {
+        level: type as string,
+        text,
+        url: frame?.url,
+        line: frame?.lineNumber,
+        column: frame?.columnNumber,
+        timestamp: timestamp ?? Date.now(),
+      });
+    });
+
+    // JavaScript exceptions
+    Runtime.exceptionThrown(({ timestamp, exceptionDetails }) => {
+      const ex = exceptionDetails;
+      const text = ex.exception?.description ?? ex.text ?? 'Unknown error';
+      this.emit('error', {
+        message: text,
+        source: ex.url,
+        line: ex.lineNumber,
+        column: ex.columnNumber,
+        stack: ex.stackTrace
+          ? ex.stackTrace.callFrames
+              .map(
+                (f: any) =>
+                  `  at ${f.functionName || '(anonymous)'} (${f.url}:${f.lineNumber}:${f.columnNumber})`,
+              )
+              .join('\n')
+          : undefined,
+        timestamp: timestamp ?? Date.now(),
+      });
+    });
+
+    // Network requests — register event handlers FIRST so live events are never missed
+    await Network.enable().catch(() => {});
+
+    Network.requestWillBeSent(({ requestId, request, timestamp, type }) => {
+      this.emit('network', {
+        entry: {
+          id: requestId,
+          method: request.method,
+          url: request.url,
+          resourceType: type,
+          startTime: timestamp * 1000,
+          requestHeaders: request.headers as Record<string, string>,
+          postData: request.postData,
+        },
+        phase: 'request' as const,
+      });
+    });
+
+    Network.responseReceived(({ requestId, response, timestamp, type }) => {
+      this.emit('network', {
+        entry: {
+          id: requestId,
+          method: '',
+          url: response.url,
+          status: response.status,
+          statusText: response.statusText,
+          resourceType: type,
+          mimeType: response.mimeType,
+          endTime: timestamp * 1000,
+          responseHeaders: response.headers as Record<string, string>,
+        },
+        phase: 'response' as const,
+      });
+    });
+
+    try {
+      Network.loadingFinished(({ requestId, timestamp, encodedDataLength }: any) => {
+        this.emit('network', {
+          entry: {
+            id: requestId,
+            method: '',
+            url: '',
+            endTime: timestamp * 1000,
+            size: encodedDataLength,
+          },
+          phase: 'completed' as const,
+        });
+
+        // Fetch response body asynchronously (fire-and-forget)
+        Network.getResponseBody({ requestId })
+          .then(({ body, base64Encoded }: any) => {
+            if (body) {
+              this.emit('network', {
+                entry: {
+                  id: requestId,
+                  method: '',
+                  url: '',
+                  startTime: 0,
+                  responseBody: body,
+                  responseBodyBase64: base64Encoded,
+                },
+                phase: 'completed' as const,
+              });
+            }
+          })
+          .catch(() => {
+            // Response body not available (e.g. redirects, cancelled)
+          });
+      });
+    } catch {
+      // loadingFinished may not be available in all CDP implementations
+    }
+
+    Network.loadingFailed(({ requestId, timestamp, errorText, type }) => {
+      this.emit('network', {
+        entry: {
+          id: requestId,
+          method: '',
+          url: '',
+          resourceType: type,
+          startTime: timestamp * 1000,
+          failed: true,
+          errorText,
+        },
+        phase: 'failed' as const,
+      });
+    });
+
+    // Browser-level log entries (e.g. security warnings, deprecation notices)
+    await Log.enable().catch(() => {});
+    Log.entryAdded(({ entry }) => {
+      this.emit('error', {
+        message: entry.text,
+        source: entry.url,
+        line: entry.lineNumber,
+        timestamp: entry.timestamp ?? Date.now(),
+      });
+    });
+
+    // Backfill resources that loaded before CDP connected (JS, CSS, images, etc.)
+    // Fire-and-forget so it never blocks event handler registration above
+    this.backfillResourceTree().catch(() => {});
+  }
+
+  private async backfillResourceTree(): Promise<void> {
+    if (!this.client) return;
+    const { frameTree } = await this.client.Page.getResourceTree();
+    const now = Date.now();
+    const resources = frameTree.resources ?? [];
+    for (const res of resources) {
+      const id = `backfill-${res.url}`;
+      this.emit('network', {
+        entry: {
+          id,
+          method: 'GET',
+          url: res.url,
+          status: res.failed ? 0 : 200,
+          resourceType: res.type,
+          mimeType: res.mimeType,
+          size: (res as any).contentSize ?? undefined,
+          startTime: now,
+          endTime: now,
+          duration: 0,
+          failed: res.failed ?? false,
+        },
+        phase: 'request' as const,
+      });
+    }
+  }
+
   getStats() {
     return {
       connected: this.connected,
@@ -192,13 +365,10 @@ export class ChromeSession extends EventEmitter {
  */
 export async function waitForChrome(host: string, port: number, timeoutMs = 30_000): Promise<void> {
   const start = Date.now();
-  console.log(`[waitForChrome] Waiting for Chrome at ${host}:${port}...`);
-
   while (Date.now() - start < timeoutMs) {
     try {
       const res = await fetch(`http://${host}:${port}/json/version`);
       if (res.ok) {
-        console.log('[waitForChrome] Chrome is ready.');
         return;
       }
     } catch {

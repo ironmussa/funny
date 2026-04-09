@@ -1437,28 +1437,28 @@ export function ReviewPane() {
           <TabsList className="h-7 bg-sidebar-accent/50 p-0.5">
             <TabsTrigger
               value="changes"
-              className="h-6 px-2.5 text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="h-6 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
               data-testid="review-tab-changes"
             >
               {t('review.changes', 'Changes')}
             </TabsTrigger>
             <TabsTrigger
               value="history"
-              className="h-6 px-2.5 text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="h-6 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
               data-testid="review-tab-history"
             >
               {t('review.history', 'History')}
             </TabsTrigger>
             <TabsTrigger
               value="stash"
-              className="h-6 px-2.5 text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="h-6 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
               data-testid="review-tab-stash"
             >
               {t('review.stash', 'Stash')}
             </TabsTrigger>
             <TabsTrigger
               value="prs"
-              className="h-6 px-2.5 text-[11px] font-medium data-[state=active]:bg-background data-[state=active]:shadow-sm"
+              className="h-6 px-2.5 data-[state=active]:bg-background data-[state=active]:shadow-sm"
               data-testid="review-tab-prs"
             >
               {t('review.prs', 'PRs')}
@@ -2108,8 +2108,8 @@ export function ReviewPane() {
                 )}
               </div>
 
-              {/* Commit controls */}
-              {summaries.length > 0 && commitInProgress && (
+              {/* Commit / workflow progress */}
+              {commitInProgress && (
                 <div className="flex-shrink-0 space-y-2 border-t border-sidebar-border p-2">
                   <p className="text-xs font-medium text-foreground">{commitEntry.title}</p>
                   <InlineProgressSteps steps={commitEntry.steps} />
@@ -2218,7 +2218,7 @@ export function ReviewPane() {
                         label: t('review.commitAndPush', 'Commit & Push'),
                         testId: 'review-action-commit-push',
                       },
-                      ...(!gitStatus?.prNumber
+                      ...(!gitStatus?.prNumber && isOnDifferentBranch
                         ? [
                             {
                               value: 'commit-pr' as const,

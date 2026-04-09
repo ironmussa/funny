@@ -26,15 +26,23 @@ export function TestRunnerPane() {
     isLoading,
     fileStatuses,
     fileSpecs,
+    fileSuites,
     specsLoading,
     outputLines,
     isStreaming,
     activeProjectId,
+    activeFile,
+    availableProjects,
+    selectedProjects,
+    consoleEntries,
+    networkEntries,
+    errorEntries,
     loadFiles,
     startRun,
     startSpecRun,
     stopRun,
     discoverSpecs,
+    toggleProject,
   } = useTestStore();
 
   // Load test files when the selected project changes
@@ -53,9 +61,9 @@ export function TestRunnerPane() {
   );
 
   const handleRunSpec = useCallback(
-    (file: string, line: number) => {
+    (file: string, line: number, project?: string) => {
       if (!selectedProjectId) return;
-      startSpecRun(selectedProjectId, file, line);
+      startSpecRun(selectedProjectId, file, line, project);
     },
     [selectedProjectId, startSpecRun],
   );
@@ -149,6 +157,12 @@ export function TestRunnerPane() {
             isRunning={isRunning}
             isStreaming={isStreaming}
             outputLines={outputLines}
+            consoleEntries={consoleEntries}
+            networkEntries={networkEntries}
+            errorEntries={errorEntries}
+            activeFile={activeFile}
+            projectPath={projectPath}
+            onStop={handleStop}
           />
         </div>
 
@@ -168,10 +182,14 @@ export function TestRunnerPane() {
             files={files}
             fileStatuses={fileStatuses}
             fileSpecs={fileSpecs}
+            fileSuites={fileSuites}
             specsLoading={specsLoading}
             isRunning={isRunning}
             isLoading={isLoading}
             projectPath={projectPath}
+            availableProjects={availableProjects}
+            selectedProjects={selectedProjects}
+            onToggleProject={toggleProject}
             onRunFile={handleRunFile}
             onRunSpec={handleRunSpec}
             onExpandFile={handleExpandFile}

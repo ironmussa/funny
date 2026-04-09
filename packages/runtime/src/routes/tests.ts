@@ -53,7 +53,7 @@ testRoutes.get('/:projectId/specs', async (c) => {
   if ('error' in result) {
     return c.json({ error: result.error }, result.status as any);
   }
-  return c.json({ file, specs: result.specs });
+  return c.json({ file, specs: result.specs, suites: result.suites, projects: result.projects });
 });
 
 // POST /api/tests/:projectId/run — run a test file (or a single test at a line)
@@ -70,12 +70,19 @@ testRoutes.post('/:projectId/run', async (c) => {
     return c.json({ error: 'Access denied' }, 403);
   }
 
-  const body = await c.req.json<{ file: string; line?: number }>();
+  const body = await c.req.json<{ file: string; line?: number; projects?: string[] }>();
   if (!body.file) {
     return c.json({ error: 'Missing file parameter' }, 400);
   }
 
-  const result = await runTest(projectId, project.path, body.file, userId, body.line);
+  const result = await runTest(
+    projectId,
+    project.path,
+    body.file,
+    userId,
+    body.line,
+    body.projects,
+  );
 
   if ('error' in result) {
     return c.json({ error: result.error }, result.status as any);

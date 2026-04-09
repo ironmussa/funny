@@ -1363,10 +1363,14 @@ export const api = {
     request<import('@funny/shared').DiscoverTestsResponse>(
       `/tests/${projectId}/specs?file=${encodeURIComponent(file)}`,
     ),
-  runTest: (projectId: string, file: string, line?: number) =>
+  runTest: (projectId: string, file: string, line?: number, projects?: string[]) =>
     request<import('@funny/shared').RunTestResponse>(`/tests/${projectId}/run`, {
       method: 'POST',
-      body: JSON.stringify({ file, ...(line != null && { line }) }),
+      body: JSON.stringify({
+        file,
+        ...(line != null && { line }),
+        ...(projects?.length && { projects }),
+      }),
     }),
   stopTest: (projectId: string) =>
     request<{ ok: boolean }>(`/tests/${projectId}/stop`, { method: 'POST' }),

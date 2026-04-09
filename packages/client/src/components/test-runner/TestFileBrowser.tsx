@@ -1,4 +1,4 @@
-import type { TestFile, TestFileStatus, TestSpec } from '@funny/shared';
+import type { TestFile, TestFileStatus, TestSpec, TestSuite } from '@funny/shared';
 import {
   ChevronRight,
   Folder,
@@ -16,6 +16,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -82,35 +83,191 @@ function SpecItem({
   spec,
   depth,
   isRunning,
+  showProjects,
+  fileStatus,
   onRunSpec,
+  onStop,
 }: {
   spec: TestSpec;
   depth: number;
   isRunning: boolean;
-  onRunSpec: (file: string, line: number) => void;
+  showProjects: boolean;
+  fileStatus?: TestFileStatus;
+  onRunSpec: (file: string, line: number, project?: string) => void;
+  onStop: () => void;
 }) {
   const { t } = useTranslation();
+  const [expanded, setExpanded] = useState(false);
+  const hasMultipleProjects = showProjects && spec.projects.length > 1;
+
   return (
-    <div
-      data-testid={`test-spec-${spec.file}-${spec.line}`}
-      className="group flex h-6 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50"
-      style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
-    >
-      <Circle className="icon-2xs flex-shrink-0 text-muted-foreground/30" />
-      <span className="flex-1 truncate font-mono-explorer text-xs" title={spec.title}>
-        {spec.title}
-      </span>
-      <TooltipIconButton
-        data-testid={`test-spec-play-${spec.file}-${spec.line}`}
-        size="icon"
-        className="h-6 w-6 opacity-0 group-hover:opacity-100"
-        disabled={isRunning}
-        onClick={() => onRunSpec(spec.file, spec.line)}
-        tooltip={t('common.run')}
+    <>
+      <div
+        data-testid={`test-spec-${spec.file}-${spec.line}`}
+        className="group flex h-6 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50"
+        style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
+        onClick={hasMultipleProjects ? () => setExpanded(!expanded) : undefined}
       >
-        <Play className="icon-xs" />
-      </TooltipIconButton>
-    </div>
+        {hasMultipleProjects ? (
+          <ChevronRight
+            className={cn('icon-sm flex-shrink-0 transition-transform', expanded && 'rotate-90')}
+          />
+        ) : (
+          <StatusDot status={fileStatus} />
+        )}
+        <span className="flex-1 truncate font-mono-explorer text-xs" title={spec.title}>
+          {spec.title}
+        </span>
+        {!hasMultipleProjects &&
+          (isRunning && fileStatus === 'running' ? (
+            <TooltipIconButton
+              data-testid={`test-spec-stop-${spec.file}-${spec.line}`}
+              size="icon"
+              className="h-5 w-5 text-destructive opacity-100 hover:text-destructive"
+              onClick={onStop}
+              tooltip={t('common.stop')}
+            >
+              <Square className="icon-2xs fill-current" />
+            </TooltipIconButton>
+          ) : (
+            <TooltipIconButton
+              data-testid={`test-spec-play-${spec.file}-${spec.line}`}
+              size="icon"
+              className="h-5 w-5 opacity-0 group-hover:opacity-100"
+              disabled={isRunning}
+              onClick={() => onRunSpec(spec.file, spec.line)}
+              tooltip={t('common.run')}
+            >
+              <Play className="icon-2xs" />
+            </TooltipIconButton>
+          ))}
+      </div>
+      {hasMultipleProjects &&
+        expanded &&
+        spec.projects.map((project) => (
+          <div
+            key={project}
+            data-testid={`test-spec-${spec.file}-${spec.line}-${project}`}
+            className="group flex h-6 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:bg-sidebar-accent/50"
+            style={{ paddingLeft: `${8 + (depth + 1) * INDENT_PX}px` }}
+          >
+            <StatusDot status={fileStatus} />
+            <span className="flex-1 truncate font-mono-explorer text-xs">{project}</span>
+            <TooltipIconButton
+              data-testid={`test-spec-play-${spec.file}-${spec.line}-${project}`}
+              size="icon"
+              className="h-5 w-5 opacity-0 group-hover:opacity-100"
+              disabled={isRunning}
+              onClick={() => onRunSpec(spec.file, spec.line, project)}
+              tooltip={`${t('common.run')} (${project})`}
+            >
+              <Play className="icon-2xs" />
+            </TooltipIconButton>
+          </div>
+        ))}
+    </>
+  );
+}
+
+/* ─── Suite item (describe block) ──────────────────────── */
+
+function SuiteItem({
+  suite,
+  depth,
+  isRunning,
+  showProjects,
+  fileStatus,
+  onRunSpec,
+  onStop,
+  expandedSuites,
+  toggleSuite,
+}: {
+  suite: TestSuite;
+  depth: number;
+  isRunning: boolean;
+  showProjects: boolean;
+  fileStatus?: TestFileStatus;
+  onRunSpec: (file: string, line: number, project?: string) => void;
+  onStop: () => void;
+  expandedSuites: Set<string>;
+  toggleSuite: (key: string) => void;
+}) {
+  const suiteKey = `${suite.file}:${suite.line}`;
+  const isExpanded = expandedSuites.has(suiteKey);
+
+  // Untitled suite (top-level specs outside describe) — render specs directly
+  if (!suite.title) {
+    return (
+      <>
+        {suite.specs.map((spec) => (
+          <SpecItem
+            key={`${spec.file}:${spec.line}`}
+            spec={spec}
+            depth={depth}
+            isRunning={isRunning}
+            showProjects={showProjects}
+            fileStatus={fileStatus}
+            onRunSpec={onRunSpec}
+            onStop={onStop}
+          />
+        ))}
+      </>
+    );
+  }
+
+  return (
+    <>
+      <div
+        data-testid={`test-suite-${suite.file}-${suite.line}`}
+        className={cn(
+          'flex h-6 cursor-pointer select-none items-center gap-1.5 text-xs',
+          'text-muted-foreground transition-colors hover:bg-sidebar-accent/50',
+        )}
+        style={{ paddingLeft: `${8 + depth * INDENT_PX}px` }}
+        onClick={() => toggleSuite(suiteKey)}
+      >
+        <ChevronRight
+          className={cn('icon-sm flex-shrink-0 transition-transform', isExpanded && 'rotate-90')}
+        />
+        <StatusDot status={fileStatus} />
+        <span
+          className="flex-1 truncate font-mono-explorer text-xs font-medium"
+          title={suite.title}
+        >
+          {suite.title}
+        </span>
+      </div>
+      {isExpanded && (
+        <>
+          {suite.specs.map((spec) => (
+            <SpecItem
+              key={`${spec.file}:${spec.line}`}
+              spec={spec}
+              depth={depth + 1}
+              isRunning={isRunning}
+              showProjects={showProjects}
+              fileStatus={fileStatus}
+              onRunSpec={onRunSpec}
+              onStop={onStop}
+            />
+          ))}
+          {suite.suites.map((child) => (
+            <SuiteItem
+              key={`${child.file}:${child.line}`}
+              suite={child}
+              depth={depth + 1}
+              isRunning={isRunning}
+              showProjects={showProjects}
+              fileStatus={fileStatus}
+              onRunSpec={onRunSpec}
+              onStop={onStop}
+              expandedSuites={expandedSuites}
+              toggleSuite={toggleSuite}
+            />
+          ))}
+        </>
+      )}
+    </>
   );
 }
 
@@ -123,14 +280,19 @@ interface TreeItemProps {
   toggleFolder: (path: string) => void;
   expandedFiles: Set<string>;
   toggleFile: (path: string) => void;
+  expandedSuites: Set<string>;
+  toggleSuite: (key: string) => void;
   fileStatuses: Record<string, TestFileStatus>;
   fileSpecs: Record<string, TestSpec[]>;
+  fileSuites: Record<string, TestSuite[]>;
   specsLoading: Record<string, boolean>;
   isRunning: boolean;
+  showProjects: boolean;
   projectPath?: string;
   onRunFile: (file: string) => void;
-  onRunSpec: (file: string, line: number) => void;
+  onRunSpec: (file: string, line: number, project?: string) => void;
   onExpandFile: (file: string) => void;
+  onStop: () => void;
 }
 
 function TreeItem({
@@ -140,14 +302,19 @@ function TreeItem({
   toggleFolder,
   expandedFiles,
   toggleFile,
+  expandedSuites,
+  toggleSuite,
   fileStatuses,
   fileSpecs,
+  fileSuites,
   specsLoading,
   isRunning,
+  showProjects,
   projectPath,
   onRunFile,
   onRunSpec,
   onExpandFile,
+  onStop,
 }: TreeItemProps) {
   const isExpanded = expandedFolders.has(node.path);
 
@@ -183,14 +350,19 @@ function TreeItem({
               toggleFolder={toggleFolder}
               expandedFiles={expandedFiles}
               toggleFile={toggleFile}
+              expandedSuites={expandedSuites}
+              toggleSuite={toggleSuite}
               fileStatuses={fileStatuses}
               fileSpecs={fileSpecs}
+              fileSuites={fileSuites}
               specsLoading={specsLoading}
               isRunning={isRunning}
+              showProjects={showProjects}
               projectPath={projectPath}
               onRunFile={onRunFile}
               onRunSpec={onRunSpec}
               onExpandFile={onExpandFile}
+              onStop={onStop}
             />
           ))}
       </>
@@ -202,6 +374,7 @@ function TreeItem({
   const status = fileStatuses[node.path];
   const isFileExpanded = expandedFiles.has(node.path);
   const specs = fileSpecs[node.path];
+  const suites = fileSuites[node.path];
   const isSpecsLoading = specsLoading[node.path];
   const [menuOpen, setMenuOpen] = useState(false);
 
@@ -244,19 +417,34 @@ function TreeItem({
         />
         <span className="flex-1 truncate font-mono-explorer text-xs">{node.name}</span>
         <StatusDot status={status} />
-        <Button
-          data-testid={`test-play-${node.path}`}
-          variant="ghost"
-          size="icon"
-          className="h-6 w-6 opacity-0 group-hover:opacity-100"
-          disabled={isRunning}
-          onClick={(e) => {
-            e.stopPropagation();
-            onRunFile(node.path);
-          }}
-        >
-          <Play className="icon-sm" />
-        </Button>
+        {status === 'running' ? (
+          <Button
+            data-testid={`test-stop-${node.path}`}
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 text-destructive opacity-100 hover:text-destructive"
+            onClick={(e) => {
+              e.stopPropagation();
+              onStop();
+            }}
+          >
+            <Square className="icon-xs fill-current" />
+          </Button>
+        ) : (
+          <Button
+            data-testid={`test-play-${node.path}`}
+            variant="ghost"
+            size="icon"
+            className="h-5 w-5 opacity-0 group-hover:opacity-100"
+            disabled={isRunning}
+            onClick={(e) => {
+              e.stopPropagation();
+              onRunFile(node.path);
+            }}
+          >
+            <Play className="icon-xs" />
+          </Button>
+        )}
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
             <button
@@ -287,7 +475,7 @@ function TreeItem({
         </DropdownMenu>
       </div>
 
-      {/* Expanded specs */}
+      {/* Expanded specs / suites */}
       {isFileExpanded &&
         (isSpecsLoading ? (
           <div
@@ -297,6 +485,21 @@ function TreeItem({
             <Loader2 className="icon-xs animate-spin" />
             Discovering tests...
           </div>
+        ) : suites && suites.length > 0 ? (
+          suites.map((suite) => (
+            <SuiteItem
+              key={`${suite.file}:${suite.line}:${suite.title}`}
+              suite={suite}
+              depth={depth + 1}
+              isRunning={isRunning}
+              showProjects={showProjects}
+              fileStatus={status}
+              onRunSpec={onRunSpec}
+              onStop={onStop}
+              expandedSuites={expandedSuites}
+              toggleSuite={toggleSuite}
+            />
+          ))
         ) : specs && specs.length > 0 ? (
           specs.map((spec) => (
             <SpecItem
@@ -304,7 +507,10 @@ function TreeItem({
               spec={spec}
               depth={depth + 1}
               isRunning={isRunning}
+              showProjects={showProjects}
+              fileStatus={status}
               onRunSpec={onRunSpec}
+              onStop={onStop}
             />
           ))
         ) : specs ? (
@@ -325,12 +531,16 @@ interface TestFileBrowserProps {
   files: TestFile[];
   fileStatuses: Record<string, TestFileStatus>;
   fileSpecs: Record<string, TestSpec[]>;
+  fileSuites: Record<string, TestSuite[]>;
   specsLoading: Record<string, boolean>;
   isRunning: boolean;
   isLoading: boolean;
   projectPath?: string;
+  availableProjects: string[];
+  selectedProjects: string[];
+  onToggleProject: (project: string) => void;
   onRunFile: (file: string) => void;
-  onRunSpec: (file: string, line: number) => void;
+  onRunSpec: (file: string, line: number, project?: string) => void;
   onExpandFile: (file: string) => void;
   onRunAll: () => void;
   onStop: () => void;
@@ -340,10 +550,14 @@ export function TestFileBrowser({
   files,
   fileStatuses,
   fileSpecs,
+  fileSuites,
   specsLoading,
   isRunning,
   isLoading,
   projectPath,
+  availableProjects,
+  selectedProjects,
+  onToggleProject,
   onRunFile,
   onRunSpec,
   onExpandFile,
@@ -353,6 +567,7 @@ export function TestFileBrowser({
   const [search, setSearch] = useState('');
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
+  const [expandedSuites, setExpandedSuites] = useState<Set<string>>(new Set());
   const initializedRef = useRef(false);
 
   const filteredFiles = useMemo(() => {
@@ -363,21 +578,43 @@ export function TestFileBrowser({
 
   const tree = useMemo(() => buildTree(filteredFiles), [filteredFiles]);
 
-  // Auto-expand all folders on initial load when there are few files
+  // Always expand root-level folders; auto-expand all folders when there are few files
   useEffect(() => {
-    if (!initializedRef.current && files.length > 0 && files.length <= 20) {
+    if (files.length === 0) return;
+
+    if (!initializedRef.current) {
       initializedRef.current = true;
       const all = new Set<string>();
-      const collectFolders = (nodes: TreeNode[]) => {
-        for (const node of nodes) {
-          if (node.isFolder) {
-            all.add(node.path);
-            collectFolders(node.children);
+      if (files.length <= 20) {
+        const collectFolders = (nodes: TreeNode[]) => {
+          for (const node of nodes) {
+            if (node.isFolder) {
+              all.add(node.path);
+              collectFolders(node.children);
+            }
+          }
+        };
+        collectFolders(tree);
+      } else {
+        // Always expand root-level folders
+        for (const node of tree) {
+          if (node.isFolder) all.add(node.path);
+        }
+      }
+      setExpandedFolders(all);
+    } else {
+      // Ensure root folders stay expanded even after re-renders
+      setExpandedFolders((prev) => {
+        const next = new Set(prev);
+        let changed = false;
+        for (const node of tree) {
+          if (node.isFolder && !next.has(node.path)) {
+            next.add(node.path);
+            changed = true;
           }
         }
-      };
-      collectFolders(tree);
-      setExpandedFolders(all);
+        return changed ? next : prev;
+      });
     }
   }, [files.length, tree]);
 
@@ -413,6 +650,15 @@ export function TestFileBrowser({
       const next = new Set(prev);
       if (next.has(path)) next.delete(path);
       else next.add(path);
+      return next;
+    });
+  };
+
+  const toggleSuite = (key: string) => {
+    setExpandedSuites((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
   };
@@ -454,8 +700,28 @@ export function TestFileBrowser({
         )}
       </div>
 
+      {/* Browser project selector */}
+      {availableProjects.length > 1 && (
+        <div className="flex items-center gap-3 border-b px-3 py-1.5">
+          <span className="text-xs text-muted-foreground">Projects:</span>
+          {availableProjects.map((project) => (
+            <label
+              key={project}
+              data-testid={`test-project-${project}`}
+              className="flex cursor-pointer items-center gap-1.5"
+            >
+              <Checkbox
+                checked={selectedProjects.includes(project)}
+                onCheckedChange={() => onToggleProject(project)}
+              />
+              <span className="text-xs text-muted-foreground">{project}</span>
+            </label>
+          ))}
+        </div>
+      )}
+
       {/* File tree */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto pr-3">
         {isLoading ? (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
             <Loader2 className="icon-base mr-2 animate-spin" />
@@ -479,14 +745,19 @@ export function TestFileBrowser({
               toggleFolder={toggleFolder}
               expandedFiles={expandedFiles}
               toggleFile={toggleFile}
+              expandedSuites={expandedSuites}
+              toggleSuite={toggleSuite}
               fileStatuses={fileStatuses}
               fileSpecs={fileSpecs}
+              fileSuites={fileSuites}
               specsLoading={specsLoading}
               isRunning={isRunning}
+              showProjects={selectedProjects.length > 1}
               projectPath={projectPath}
               onRunFile={onRunFile}
               onRunSpec={onRunSpec}
               onExpandFile={onExpandFile}
+              onStop={onStop}
             />
           ))
         )}

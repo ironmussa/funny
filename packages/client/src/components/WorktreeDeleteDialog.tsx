@@ -153,7 +153,6 @@ export function WorktreeDeleteDialog({
               <Checkbox
                 checked={deleteBranch}
                 onCheckedChange={(v) => setDeleteBranch(v === true)}
-                size="sm"
               />
               <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
               <span className="text-xs">

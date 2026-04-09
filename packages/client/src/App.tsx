@@ -7,6 +7,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
+import { WorkflowErrorModal } from '@/components/WorkflowErrorModal';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useRouteSync } from '@/hooks/use-route-sync';
 import { useWS } from '@/hooks/use-ws';
@@ -328,6 +329,7 @@ export function App() {
       </div>
 
       <Toaster position="bottom-right" duration={TOAST_DURATION} />
+      <WorkflowErrorModal />
       <Suspense>
         <CircuitBreakerDialog />
       </Suspense>

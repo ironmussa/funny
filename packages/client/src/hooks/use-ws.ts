@@ -343,10 +343,13 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
           setTimeout(() => store.finishCommit(threadId), 1500);
         } else if (wfStatus === 'failed') {
           store.replaceSteps(threadId, steps);
-          toast.error('Workflow failed', {
-            description: data.title || 'The git operation failed',
+          // Show the full error in a modal instead of a generic toast
+          store.setFailedWorkflow({
+            title: title || 'Git operation failed',
+            steps: steps ?? [],
+            action: action ?? '',
           });
-          setTimeout(() => store.finishCommit(threadId), 5000);
+          store.finishCommit(threadId);
         }
       });
 
@@ -455,6 +458,9 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       import('@/components/test-runner/BrowserPreview').then(({ renderFrame }) => {
         renderFrame(data.data);
       });
+      import('@/stores/test-store').then(({ useTestStore }) => {
+        useTestStore.getState().addFrameToHistory(data.data, data.timestamp);
+      });
       break;
     }
     case 'test:output': {
@@ -466,6 +472,30 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
     case 'test:status': {
       import('@/stores/test-store').then(({ useTestStore }) => {
         useTestStore.getState().handleTestStatus(data);
+      });
+      break;
+    }
+    case 'test:console': {
+      import('@/stores/test-store').then(({ useTestStore }) => {
+        useTestStore.getState().handleTestConsole(data);
+      });
+      break;
+    }
+    case 'test:network': {
+      import('@/stores/test-store').then(({ useTestStore }) => {
+        useTestStore.getState().handleTestNetwork(data);
+      });
+      break;
+    }
+    case 'test:error': {
+      import('@/stores/test-store').then(({ useTestStore }) => {
+        useTestStore.getState().handleTestError(data);
+      });
+      break;
+    }
+    case 'test:action': {
+      import('@/stores/test-store').then(({ useTestStore }) => {
+        useTestStore.getState().handleTestAction(data);
       });
       break;
     }
@@ -529,6 +559,10 @@ const ALL_EVENT_TYPES = [
   'test:frame',
   'test:output',
   'test:status',
+  'test:console',
+  'test:network',
+  'test:error',
+  'test:action',
   'clone:progress',
   'worktree:setup',
   'worktree:setup_complete',

@@ -9,9 +9,18 @@ export interface CommitProgressEntry {
   workflowId?: string;
 }
 
+export interface FailedWorkflowEntry {
+  title: string;
+  steps: GitProgressStep[];
+  action: string;
+}
+
 interface CommitProgressState {
   /** Active commit operations keyed by threadId (or projectModeId) */
   activeCommits: Record<string, CommitProgressEntry>;
+
+  /** When a workflow fails, store it here so a modal can display the full error */
+  failedWorkflow: FailedWorkflowEntry | null;
 
   startCommit: (
     id: string,
@@ -24,10 +33,15 @@ interface CommitProgressState {
   /** Replace all steps at once (used by server-side workflow progress via WS) */
   replaceSteps: (id: string, steps: GitProgressStep[]) => void;
   finishCommit: (id: string) => void;
+  /** Show a failed workflow in the error modal */
+  setFailedWorkflow: (entry: FailedWorkflowEntry) => void;
+  /** Dismiss the failed workflow modal */
+  clearFailedWorkflow: () => void;
 }
 
 export const useCommitProgressStore = create<CommitProgressState>((set) => ({
   activeCommits: {},
+  failedWorkflow: null,
 
   startCommit: (id, title, steps, action, workflowId) =>
     set((state) => ({
@@ -66,4 +80,7 @@ export const useCommitProgressStore = create<CommitProgressState>((set) => ({
       const { [id]: _, ...rest } = state.activeCommits;
       return { activeCommits: rest };
     }),
+
+  setFailedWorkflow: (entry) => set({ failedWorkflow: entry }),
+  clearFailedWorkflow: () => set({ failedWorkflow: null }),
 }));

@@ -207,7 +207,10 @@ export function GitProgressModal({
   return (
     <Dialog open={open} onOpenChange={isFinished ? onOpenChange : undefined}>
       <DialogContent
-        className={cn('max-w-sm [&>button.absolute]:hidden', hasFailed && 'max-w-lg')}
+        className={cn(
+          'max-w-md overflow-hidden [&>button.absolute]:hidden',
+          hasFailed && 'max-w-lg',
+        )}
         onPointerDownOutside={(e) => {
           if (!isFinished) e.preventDefault();
         }}

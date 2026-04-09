@@ -103,12 +103,12 @@ function SpecItem({
       <TooltipIconButton
         data-testid={`test-spec-play-${spec.file}-${spec.line}`}
         size="icon"
-        className="h-5 w-5 opacity-0 group-hover:opacity-100"
+        className="h-6 w-6 opacity-0 group-hover:opacity-100"
         disabled={isRunning}
         onClick={() => onRunSpec(spec.file, spec.line)}
         tooltip={t('common.run')}
       >
-        <Play className="icon-2xs" />
+        <Play className="icon-xs" />
       </TooltipIconButton>
     </div>
   );
@@ -248,27 +248,27 @@ function TreeItem({
           data-testid={`test-play-${node.path}`}
           variant="ghost"
           size="icon"
-          className="h-5 w-5 opacity-0 group-hover:opacity-100"
+          className="h-6 w-6 opacity-0 group-hover:opacity-100"
           disabled={isRunning}
           onClick={(e) => {
             e.stopPropagation();
             onRunFile(node.path);
           }}
         >
-          <Play className="icon-xs" />
+          <Play className="icon-sm" />
         </Button>
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
           <DropdownMenuTrigger asChild>
             <button
               data-testid={`test-file-menu-${node.path}`}
               className={cn(
-                'flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-sm hover:bg-sidebar-accent',
+                'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm hover:bg-sidebar-accent',
                 menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
               )}
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
             >
-              <MoreHorizontal className="icon-xs" />
+              <MoreHorizontal className="icon-sm" />
             </button>
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="min-w-[180px]">
@@ -280,7 +280,7 @@ function TreeItem({
                 openFileInExternalEditor(fullPath);
               }}
             >
-              <ExternalLink className="icon-xs" />
+              <ExternalLink />
               {t('review.openInEditor', { editor: getEditorLabel() })}
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -436,7 +436,7 @@ export function TestFileBrowser({
             className="h-7 shrink-0 gap-1 px-2 text-xs"
             onClick={onStop}
           >
-            <Square className="icon-xs" />
+            <Square className="icon-sm" />
             Stop
           </Button>
         ) : (
@@ -448,7 +448,7 @@ export function TestFileBrowser({
             disabled={files.length === 0}
             onClick={onRunAll}
           >
-            <Play className="icon-xs" />
+            <Play className="icon-sm" />
             Run All
           </Button>
         )}

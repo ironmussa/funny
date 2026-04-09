@@ -288,8 +288,8 @@ export function merge(params: MergeParams): ResultAsync<string, DomainError> {
   return ResultAsync.fromSafePromise(
     (async () => {
       const thread = await tm.getThread(params.threadId);
-      if (!thread || thread.mode !== 'worktree' || !thread.branch) {
-        return { err: badRequest('Merge is only available for worktree threads') } as const;
+      if (!thread || !thread.branch) {
+        return { err: badRequest('Merge requires a thread with a branch') } as const;
       }
 
       const project = await getServices().projects.getProject(thread.projectId);

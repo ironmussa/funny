@@ -411,13 +411,15 @@ describe('git operations', () => {
       }
     });
 
-    test('counts lines in untracked files as linesAdded', async () => {
+    test('does not count untracked file lines as linesAdded', async () => {
       writeFileSync(resolve(repoPath, 'new-file.txt'), 'line1\nline2\nline3\n');
       writeFileSync(resolve(repoPath, 'another.txt'), 'single line\n');
       const result = await getStatusSummary(repoPath);
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
-        expect(result.value.linesAdded).toBe(4); // 3 + 1
+        // Untracked file content is not included in linesAdded — only actual
+        // diff lines from git diff are counted, consistent with ReviewPane.
+        expect(result.value.linesAdded).toBe(0);
         expect(result.value.linesDeleted).toBe(0);
       }
     });
@@ -432,7 +434,7 @@ describe('git operations', () => {
       }
     });
 
-    test('skips binary untracked files', async () => {
+    test('does not count untracked files even when mixed with binary', async () => {
       writeFileSync(
         resolve(repoPath, 'image.png'),
         Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x00]),
@@ -441,7 +443,8 @@ describe('git operations', () => {
       const result = await getStatusSummary(repoPath);
       expect(result.isOk()).toBe(true);
       if (result.isOk()) {
-        expect(result.value.linesAdded).toBe(1); // only text.txt
+        // Untracked files don't contribute to linesAdded
+        expect(result.value.linesAdded).toBe(0);
       }
     });
   });

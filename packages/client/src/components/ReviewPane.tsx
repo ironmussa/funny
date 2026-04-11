@@ -16,7 +16,6 @@ import {
   GitPullRequestClosed,
   Sparkles,
   Loader2,
-  Check,
   MoreHorizontal,
   Undo2,
   EyeOff,
@@ -27,6 +26,8 @@ import {
   ClipboardCopy,
   ExternalLink,
   AlertTriangle,
+  Plus,
+  Minus,
   Archive,
   ArchiveRestore,
   Trash2,
@@ -72,6 +73,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { TriCheckbox } from '@/components/ui/tri-checkbox';
 import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
 import { useElementLeft } from '@/hooks/use-element-width';
 import { api } from '@/lib/api';
@@ -969,6 +971,53 @@ export function ReviewPane() {
     }
   };
 
+  // ── Partial (line-level) staging ──
+  const [patchStagingInProgress, setPatchStagingInProgress] = useState(false);
+  // Track per-file line selection state for indeterminate checkbox: 'all' | 'partial' | 'none'
+  const [fileSelectionState, setFileSelectionState] = useState<
+    Map<string, 'all' | 'partial' | 'none'>
+  >(new Map());
+  // Increment to signal ExpandedDiffView to re-select all lines
+  const [selectAllSignal, setSelectAllSignal] = useState(0);
+  // Increment to signal ExpandedDiffView to deselect all lines
+  const [deselectAllSignal, setDeselectAllSignal] = useState(0);
+
+  const handleSelectionStateChange = useCallback(
+    (filePath: string, state: 'all' | 'partial' | 'none') => {
+      setFileSelectionState((prev) => {
+        if (prev.get(filePath) === state) return prev;
+        const next = new Map(prev);
+        next.set(filePath, state);
+        return next;
+      });
+    },
+    [],
+  );
+
+  const handleStagePatch = useCallback(
+    async (patch: string) => {
+      if (!hasGitContext) return;
+      setPatchStagingInProgress(true);
+      const result = effectiveThreadId
+        ? await api.stagePatch(effectiveThreadId, patch)
+        : await api.projectStagePatch(projectModeId!, patch);
+      setPatchStagingInProgress(false);
+      if (result.isErr()) {
+        toastError(
+          result.error,
+          t('review.stageFailed', {
+            path: 'selected lines',
+            defaultValue: 'Failed to stage {{path}}',
+          }),
+        );
+      } else {
+        toast.success(t('review.stageLinesSuccess', { defaultValue: 'Selected lines staged' }));
+        await refresh();
+      }
+    },
+    [hasGitContext, effectiveThreadId, projectModeId, refresh, t],
+  );
+
   const handleStageSelected = async () => {
     if (!hasGitContext) return;
     const paths =
@@ -1268,6 +1317,34 @@ export function ReviewPane() {
     refreshStashList();
   };
 
+  const handleStashSelected = async () => {
+    if (!hasGitContext || stashInProgress) return;
+    const paths = checkedFiles.size > 0 ? Array.from(checkedFiles) : summaries.map((f) => f.path);
+    if (paths.length === 0) return;
+    setStashInProgress(true);
+    const result = effectiveThreadId
+      ? await api.stash(effectiveThreadId, paths)
+      : await api.projectStash(projectModeId!, paths);
+    if (result.isErr()) {
+      toast.error(
+        t('review.stashFailed', {
+          message: result.error.message,
+          defaultValue: `Stash failed: ${result.error.message}`,
+        }),
+      );
+    } else {
+      toast.success(
+        t('review.stashSelectedSuccess', {
+          count: paths.length,
+          defaultValue: '{{count}} file(s) stashed',
+        }),
+      );
+    }
+    setStashInProgress(false);
+    await refresh();
+    refreshStashList();
+  };
+
   const handleStashPop = async () => {
     if (!hasGitContext || stashPopInProgress) return;
     setStashPopInProgress(true);
@@ -1443,6 +1520,12 @@ export function ReviewPane() {
               prReviewThreads={prThreads}
               onRequestFullDiff={requestFullDiff}
               onResolveConflict={handleResolveConflict}
+              selectable
+              onStagePatch={handleStagePatch}
+              stagingInProgress={patchStagingInProgress}
+              onSelectionStateChange={handleSelectionStateChange}
+              selectAllSignal={selectAllSignal}
+              deselectAllSignal={deselectAllSignal}
             />
           </div>,
           document.body,
@@ -1672,7 +1755,7 @@ export function ReviewPane() {
                         className="text-muted-foreground"
                         data-testid="review-stage-selected"
                       >
-                        <Archive className="icon-base" />
+                        <Plus className="icon-base" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="top">
@@ -1695,7 +1778,7 @@ export function ReviewPane() {
                         className="text-muted-foreground"
                         data-testid="review-unstage-selected"
                       >
-                        <ArchiveRestore className="icon-base" />
+                        <Minus className="icon-base" />
                       </Button>
                     </TooltipTrigger>
                     <TooltipContent side="top">
@@ -1704,6 +1787,29 @@ export function ReviewPane() {
                         : checkedFiles.size > 0
                           ? t('review.unstageSelected', { defaultValue: 'Unstage selected' })
                           : t('review.unstageAll', { defaultValue: 'Unstage all' })}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
+                {summaries.length > 0 && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={handleStashSelected}
+                        disabled={!!actionInProgress || !!isAgentRunning || stashInProgress}
+                        className="text-muted-foreground"
+                        data-testid="review-stash-selected"
+                      >
+                        <Archive className={cn('icon-base', stashInProgress && 'animate-pulse')} />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {isAgentRunning
+                        ? t('review.agentRunningTooltip')
+                        : checkedFiles.size > 0
+                          ? t('review.stashSelected', { defaultValue: 'Stash selected' })
+                          : t('review.stashAll', { defaultValue: 'Stash all' })}
                     </TooltipContent>
                   </Tooltip>
                 )}
@@ -1763,29 +1869,18 @@ export function ReviewPane() {
               {/* Select all / count */}
               {summaries.length > 0 && (
                 <div className="flex h-8 items-center gap-1.5 border-b border-sidebar-border py-1.5 pl-2 pr-4">
-                  <button
-                    role="checkbox"
-                    aria-checked={
+                  <TriCheckbox
+                    state={
                       checkedCount === totalCount && totalCount > 0
-                        ? true
+                        ? 'checked'
                         : checkedCount > 0
-                          ? 'mixed'
-                          : false
+                          ? 'indeterminate'
+                          : 'unchecked'
                     }
+                    onToggle={toggleAll}
                     aria-label={t('review.selectAll', 'Select all files')}
                     data-testid="review-select-all"
-                    onClick={toggleAll}
-                    className={cn(
-                      'flex items-center justify-center h-3.5 w-3.5 rounded border transition-colors flex-shrink-0',
-                      checkedCount === totalCount && totalCount > 0
-                        ? 'bg-primary border-primary text-primary-foreground'
-                        : checkedCount > 0
-                          ? 'bg-primary/50 border-primary text-primary-foreground'
-                          : 'border-muted-foreground/40',
-                    )}
-                  >
-                    {checkedCount > 0 && <Check className="icon-2xs" />}
-                  </button>
+                  />
                   <span className="text-xs text-muted-foreground">
                     {checkedCount}/{totalCount} {t('review.selected', 'selected')}
                   </span>
@@ -1881,6 +1976,8 @@ export function ReviewPane() {
 
                         const f = row.file;
                         const isChecked = checkedFiles.has(f.path);
+                        const lineSelState = fileSelectionState.get(f.path);
+                        const isPartial = isChecked && lineSelState === 'partial';
                         return (
                           <div
                             key={f.path}
@@ -1905,26 +2002,44 @@ export function ReviewPane() {
                               setExpandedFile(f.path);
                             }}
                           >
-                            <button
-                              role="checkbox"
-                              aria-checked={isChecked}
+                            <TriCheckbox
+                              state={
+                                isPartial ? 'indeterminate' : isChecked ? 'checked' : 'unchecked'
+                              }
+                              onToggle={(e) => {
+                                e.stopPropagation();
+                                // If partial or unchecked → check and re-select all lines
+                                if (isPartial || !isChecked) {
+                                  if (!isChecked) toggleFile(f.path);
+                                  // Signal ExpandedDiffView to re-select all lines
+                                  if (expandedFile === f.path) {
+                                    setSelectAllSignal((s) => s + 1);
+                                  }
+                                  // Clear the partial state immediately
+                                  setFileSelectionState((prev) => {
+                                    const next = new Map(prev);
+                                    next.set(f.path, 'all');
+                                    return next;
+                                  });
+                                } else {
+                                  toggleFile(f.path);
+                                  // Signal ExpandedDiffView to deselect all lines
+                                  if (expandedFile === f.path) {
+                                    setDeselectAllSignal((s) => s + 1);
+                                  }
+                                  setFileSelectionState((prev) => {
+                                    const next = new Map(prev);
+                                    next.set(f.path, 'none');
+                                    return next;
+                                  });
+                                }
+                              }}
                               aria-label={t('review.selectFile', {
                                 file: f.path,
                                 defaultValue: `Select ${f.path}`,
                               })}
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleFile(f.path);
-                              }}
-                              className={cn(
-                                'flex items-center justify-center h-3.5 w-3.5 rounded border transition-colors flex-shrink-0',
-                                isChecked
-                                  ? 'bg-primary border-primary text-primary-foreground'
-                                  : 'border-muted-foreground/40',
-                              )}
-                            >
-                              {isChecked && <Check className="icon-2xs" />}
-                            </button>
+                              data-testid={`review-file-checkbox-${f.path}`}
+                            />
                             <FileExtensionIcon
                               filePath={f.path}
                               className="icon-base flex-shrink-0 text-muted-foreground/80"
@@ -2216,9 +2331,7 @@ export function ReviewPane() {
                         ? gitStatus?.prNumber
                           ? 'grid-cols-4'
                           : 'grid-cols-5'
-                        : gitStatus?.prNumber
-                          ? 'grid-cols-3'
-                          : 'grid-cols-4',
+                        : 'grid-cols-3',
                     )}
                   >
                     {[

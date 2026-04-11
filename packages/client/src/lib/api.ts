@@ -528,6 +528,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ paths }),
     }),
+  stagePatch: (threadId: string, patch: string) =>
+    request<{ ok: boolean }>(`/git/${threadId}/stage-patch`, {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    }),
+  unstagePatch: (threadId: string, patch: string) =>
+    request<{ ok: boolean }>(`/git/${threadId}/unstage-patch`, {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    }),
   revertFiles: (threadId: string, paths: string[]) =>
     request<{ ok: boolean }>(`/git/${threadId}/revert`, {
       method: 'POST',
@@ -614,8 +624,11 @@ export const api = {
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/pull`, { method: 'POST' }),
   fetchOrigin: (threadId: string) =>
     request<{ ok: boolean }>(`/git/${threadId}/fetch`, { method: 'POST' }),
-  stash: (threadId: string) =>
-    request<{ ok: boolean; output?: string }>(`/git/${threadId}/stash`, { method: 'POST' }),
+  stash: (threadId: string, files?: string[]) =>
+    request<{ ok: boolean; output?: string }>(`/git/${threadId}/stash`, {
+      method: 'POST',
+      ...(files?.length ? { body: JSON.stringify({ files }) } : {}),
+    }),
   stashPop: (threadId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/stash/pop`, { method: 'POST' }),
   stashList: (threadId: string, signal?: AbortSignal) =>
@@ -676,6 +689,16 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ paths }),
     }),
+  projectStagePatch: (projectId: string, patch: string) =>
+    request<{ ok: boolean }>(`/git/project/${projectId}/stage-patch`, {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    }),
+  projectUnstagePatch: (projectId: string, patch: string) =>
+    request<{ ok: boolean }>(`/git/project/${projectId}/unstage-patch`, {
+      method: 'POST',
+      body: JSON.stringify({ patch }),
+    }),
   projectRevertFiles: (projectId: string, paths: string[]) =>
     request<{ ok: boolean }>(`/git/project/${projectId}/revert`, {
       method: 'POST',
@@ -722,9 +745,10 @@ export const api = {
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/pull`, { method: 'POST' }),
   projectFetchOrigin: (projectId: string) =>
     request<{ ok: boolean }>(`/git/project/${projectId}/fetch`, { method: 'POST' }),
-  projectStash: (projectId: string) =>
+  projectStash: (projectId: string, files?: string[]) =>
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/stash`, {
       method: 'POST',
+      ...(files?.length ? { body: JSON.stringify({ files }) } : {}),
     }),
   projectStashPop: (projectId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/stash/pop`, {

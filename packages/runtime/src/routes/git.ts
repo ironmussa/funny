@@ -17,6 +17,8 @@ import {
   getFullContextFileDiff,
   stageFiles,
   unstageFiles,
+  stagePatch,
+  unstagePatch,
   revertFiles,
   addToGitignore,
   resolveFileConflict,
@@ -32,6 +34,7 @@ import {
   getCommitFiles,
   getCommitFileDiff,
   stash,
+  stashFiles,
   stashPop,
   stashDrop,
   stashList,
@@ -58,6 +61,7 @@ import {
   pushChanges as gitServicePush,
   pullChanges as gitServicePull,
   stashChanges as gitServiceStash,
+  stashSelectedFiles as gitServiceStashFiles,
   popStash as gitServicePopStash,
   dropStash as gitServiceDropStash,
   softReset as gitServiceSoftReset,
@@ -82,6 +86,7 @@ import {
   validate,
   mergeSchema,
   stageFilesSchema,
+  stagePatchSchema,
   commitSchema,
   createPRSchema,
   workflowSchema,
@@ -548,6 +553,40 @@ gitRoutes.post('/project/:projectId/unstage', async (c) => {
   return c.json({ ok: true });
 });
 
+// POST /api/git/project/:projectId/stage-patch — partial (line-level) staging
+gitRoutes.post('/project/:projectId/stage-patch', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(stagePatchSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const result = await stagePatch(cwd, parsed.value.patch);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true });
+});
+
+// POST /api/git/project/:projectId/unstage-patch — partial (line-level) unstaging
+gitRoutes.post('/project/:projectId/unstage-patch', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(stagePatchSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  const result = await unstagePatch(cwd, parsed.value.patch);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true });
+});
+
 // POST /api/git/project/:projectId/revert
 gitRoutes.post('/project/:projectId/revert', async (c) => {
   const projectId = c.req.param('projectId');
@@ -740,7 +779,10 @@ gitRoutes.post('/project/:projectId/stash', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
-  const result = await stash(cwdResult.value);
+  const body = await c.req.json().catch(() => ({}));
+  const files = Array.isArray(body.files) ? body.files : [];
+  const result =
+    files.length > 0 ? await stashFiles(cwdResult.value, files) : await stash(cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
@@ -1101,6 +1143,46 @@ gitRoutes.post('/:threadId/unstage', async (c) => {
   if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
 
   const result = await gitServiceUnstage(threadId, userId, cwd, parsed.value.paths);
+  if (result.isErr()) return resultToResponse(c, result);
+
+  await invalidateGitStatusCache(threadId);
+  return c.json({ ok: true });
+});
+
+// POST /api/git/:threadId/stage-patch — partial (line-level) staging
+gitRoutes.post('/:threadId/stage-patch', async (c) => {
+  const threadId = c.req.param('threadId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(stagePatchSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+
+  const result = await stagePatch(cwd, parsed.value.patch);
+  if (result.isErr()) return resultToResponse(c, result);
+
+  await invalidateGitStatusCache(threadId);
+  return c.json({ ok: true });
+});
+
+// POST /api/git/:threadId/unstage-patch — partial (line-level) unstaging
+gitRoutes.post('/:threadId/unstage-patch', async (c) => {
+  const threadId = c.req.param('threadId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(stagePatchSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+
+  const result = await unstagePatch(cwd, parsed.value.patch);
   if (result.isErr()) return resultToResponse(c, result);
 
   await invalidateGitStatusCache(threadId);
@@ -1624,7 +1706,12 @@ gitRoutes.post('/:threadId/stash', async (c) => {
   const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
-  const result = await gitServiceStash(threadId, userId, cwdResult.value);
+  const body = await c.req.json().catch(() => ({}));
+  const files = Array.isArray(body.files) ? body.files : [];
+  const result =
+    files.length > 0
+      ? await gitServiceStashFiles(threadId, userId, cwdResult.value, files)
+      : await gitServiceStash(threadId, userId, cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
   await invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });

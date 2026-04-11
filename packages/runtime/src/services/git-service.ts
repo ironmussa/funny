@@ -16,6 +16,7 @@ import {
   pull as gitPull,
   mergeBranch as gitMerge,
   stash as gitStash,
+  stashFiles as gitStashFiles,
   stashPop as gitStashPop,
   stashDrop as gitStashDrop,
   resetSoft as gitResetSoft,
@@ -207,6 +208,25 @@ export function stashChanges(
   cwd: string,
 ): ResultAsync<string, DomainError> {
   return gitStash(cwd).map(async (output) => {
+    threadEventBus.emit('git:stashed', {
+      threadId,
+      userId,
+      projectId: await getProjectId(threadId),
+      cwd,
+      output,
+    });
+    invalidateStatusCache(cwd);
+    return output;
+  });
+}
+
+export function stashSelectedFiles(
+  threadId: string,
+  userId: string,
+  cwd: string,
+  files: string[],
+): ResultAsync<string, DomainError> {
+  return gitStashFiles(cwd, files).map(async (output) => {
     threadEventBus.emit('git:stashed', {
       threadId,
       userId,

@@ -11,7 +11,7 @@ import { ok, err, ResultAsync, type Result } from 'neverthrow';
 
 import { git } from './base.js';
 import { toDomainError } from './errors.js';
-import { gitRead } from './process.js';
+import { gitRead, gitWrite } from './process.js';
 
 /**
  * Stage files for commit.
@@ -43,6 +43,52 @@ export function stageFiles(cwd: string, paths: string[]): ResultAsync<void, Doma
 
       const addResult = await git(['add', ...filteredPaths], cwd);
       if (addResult.isErr()) throw addResult.error;
+    })(),
+    toDomainError,
+  );
+}
+
+/**
+ * Stage a partial diff (selected lines/hunks) via `git apply --cached`.
+ * The caller must supply a valid unified-diff patch string.
+ */
+export function stagePatch(cwd: string, patch: string): ResultAsync<void, DomainError> {
+  if (!patch.trim()) return new ResultAsync(Promise.resolve(ok(undefined)));
+
+  return ResultAsync.fromPromise(
+    (async () => {
+      const result = await gitWrite(['apply', '--cached', '--recount', '--allow-empty', '-'], {
+        cwd,
+        stdin: patch,
+        reject: false,
+      });
+      if (result.exitCode !== 0) {
+        throw new Error(`git apply failed: ${result.stderr || result.stdout}`);
+      }
+    })(),
+    toDomainError,
+  );
+}
+
+/**
+ * Unstage a partial diff (selected lines/hunks) via `git apply --cached --reverse`.
+ */
+export function unstagePatch(cwd: string, patch: string): ResultAsync<void, DomainError> {
+  if (!patch.trim()) return new ResultAsync(Promise.resolve(ok(undefined)));
+
+  return ResultAsync.fromPromise(
+    (async () => {
+      const result = await gitWrite(
+        ['apply', '--cached', '--recount', '--allow-empty', '--reverse', '-'],
+        {
+          cwd,
+          stdin: patch,
+          reject: false,
+        },
+      );
+      if (result.exitCode !== 0) {
+        throw new Error(`git apply --reverse failed: ${result.stderr || result.stdout}`);
+      }
     })(),
     toDomainError,
   );

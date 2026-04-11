@@ -1,6 +1,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import { TriCheckbox } from '@/components/ui/tri-checkbox';
 import {
   ensureLanguage,
   filePathToHljsLang,
@@ -52,15 +53,15 @@ interface DiffSection {
 type VirtualRow =
   | { type: 'line'; lineIdx: number }
   | { type: 'fold'; sectionIdx: number; lineCount: number; oldStart: number; newStart: number }
-  | { type: 'hunk'; text: string }
+  | { type: 'hunk'; text: string; hunkStartIdx: number }
   | { type: 'conflict-actions'; block: ConflictBlock };
 
 type RenderRow =
-  | { type: 'unified-line'; line: DiffLine }
+  | { type: 'unified-line'; line: DiffLine; lineIdx: number }
   | { type: 'split-pair'; pair: SplitPair }
   | { type: 'three-pane-triple'; triple: ThreePaneTriple }
   | { type: 'fold'; sectionIdx: number; lineCount: number; oldStart: number; newStart: number }
-  | { type: 'hunk'; text: string }
+  | { type: 'hunk'; text: string; hunkStartIdx?: number }
   | { type: 'conflict-actions'; block: ConflictBlock };
 
 interface SplitPair {
@@ -103,6 +104,14 @@ export interface VirtualDiffProps {
   onMatchCount?: (count: number) => void;
   /** Callback when user resolves a conflict block. blockId is 0-based index of the conflict. */
   onResolveConflict?: (blockId: number, resolution: ConflictResolution) => void;
+  /** Enable line-level selection checkboxes (GitHub Desktop-style). Default: false */
+  selectable?: boolean;
+  /** Set of selected line indices (from the parsed diff's flat line array). Only meaningful when selectable=true. */
+  selectedLines?: Set<number>;
+  /** Called when user toggles a single line's checkbox. lineIdx is the index in the parsed lines array. */
+  onLineToggle?: (lineIdx: number) => void;
+  /** Called when user toggles a hunk header checkbox. Receives the start/end line indices of the hunk. */
+  onHunkToggle?: (hunkLineIndices: number[]) => void;
   className?: string;
   'data-testid'?: string;
 }
@@ -274,25 +283,32 @@ function buildVirtualRows(
 ): VirtualRow[] {
   const rows: VirtualRow[] = [];
 
+  // Helper: push a hunk header row if one exists at this line index
+  const maybeHunk = (idx: number) => {
+    if (hunkHeaders.has(idx)) {
+      rows.push({ type: 'hunk', text: hunkHeaders.get(idx)!, hunkStartIdx: idx });
+    }
+  };
+
+  // Helper: push line rows for a range, injecting any hunk headers that fall within
+  const pushLinesWithHunks = (from: number, to: number) => {
+    for (let i = from; i <= to; i++) {
+      maybeHunk(i);
+      rows.push({ type: 'line', lineIdx: i });
+    }
+  };
+
   for (let si = 0; si < sections.length; si++) {
     const section = sections[si];
 
-    if (hunkHeaders.has(section.startIdx)) {
-      rows.push({ type: 'hunk', text: hunkHeaders.get(section.startIdx)! });
-    }
-
     if (section.kind === 'change' || !section.collapsed) {
-      for (let i = section.startIdx; i <= section.endIdx; i++) {
-        rows.push({ type: 'line', lineIdx: i });
-      }
+      pushLinesWithHunks(section.startIdx, section.endIdx);
     } else {
       const topEnd = Math.min(section.startIdx + contextLines - 1, section.endIdx);
       const botStart = Math.max(section.endIdx - contextLines + 1, topEnd + 1);
       const foldedCount = botStart - topEnd - 1;
 
-      for (let i = section.startIdx; i <= topEnd; i++) {
-        rows.push({ type: 'line', lineIdx: i });
-      }
+      pushLinesWithHunks(section.startIdx, topEnd);
 
       if (foldedCount > 0) {
         rows.push({
@@ -304,9 +320,7 @@ function buildVirtualRows(
         });
       }
 
-      for (let i = botStart; i <= section.endIdx; i++) {
-        rows.push({ type: 'line', lineIdx: i });
-      }
+      pushLinesWithHunks(botStart, section.endIdx);
     }
   }
 
@@ -552,18 +566,26 @@ const ConflictActionBar = memo(function ConflictActionBar({
 
 const UnifiedRow = memo(function UnifiedRow({
   line,
+  lineIdx,
   lang,
   wrap,
   searchQuery,
   matchOffset,
   currentMatchIdx,
+  selectable,
+  selected,
+  onToggle,
 }: {
   line: DiffLine;
+  lineIdx?: number;
   lang: string;
   wrap?: boolean;
   searchQuery?: string;
   matchOffset?: number;
   currentMatchIdx?: number;
+  selectable?: boolean;
+  selected?: boolean;
+  onToggle?: (lineIdx: number) => void;
 }) {
   const conflictBg = getConflictBg(line.conflictRole);
   const bgStyle = conflictBg
@@ -592,6 +614,7 @@ const UnifiedRow = memo(function UnifiedRow({
             : 'text-foreground/80';
 
   const prefix = line.type === 'add' ? '+' : line.type === 'del' ? '-' : ' ';
+  const isChangeLine = line.type === 'add' || line.type === 'del';
 
   // For conflict markers, show a readable label instead of raw markers
   const displayText = isConflictMarker
@@ -607,6 +630,18 @@ const UnifiedRow = memo(function UnifiedRow({
       className={cn('flex font-mono text-[11px]', wrap ? 'items-start' : 'items-center')}
       style={wrap ? { minHeight: ROW_HEIGHT, ...bgStyle } : { height: ROW_HEIGHT, ...bgStyle }}
     >
+      {selectable && (
+        <span className="flex w-5 flex-shrink-0 items-center justify-center">
+          {isChangeLine && (
+            <TriCheckbox
+              state={selected ? 'checked' : 'unchecked'}
+              onToggle={() => lineIdx != null && onToggle?.(lineIdx)}
+              size="sm"
+              data-testid={`diff-line-checkbox-${lineIdx}`}
+            />
+          )}
+        </span>
+      )}
       <span className="w-11 flex-shrink-0 select-none pr-1 pt-px text-right text-muted-foreground/40">
         {line.oldNo ?? ''}
       </span>
@@ -1205,6 +1240,10 @@ export const VirtualDiff = memo(function VirtualDiff({
   currentMatchIndex = -1,
   onMatchCount,
   onResolveConflict,
+  selectable = false,
+  selectedLines,
+  onLineToggle,
+  onHunkToggle,
   className,
   ...props
 }: VirtualDiffProps) {
@@ -1341,6 +1380,27 @@ export const VirtualDiff = memo(function VirtualDiff({
     }));
   }, [sections, collapsedState, codeFolding]);
 
+  // Build a map from hunk header line-index → all add/del line indices in that hunk
+  // Used for hunk-level checkbox toggling
+  const hunkLineMap = useMemo(() => {
+    if (!selectable) return new Map<number, number[]>();
+    const map = new Map<number, number[]>();
+    const sortedHeaders = [...parsed.hunkHeaders.keys()].sort((a, b) => a - b);
+    for (let h = 0; h < sortedHeaders.length; h++) {
+      const start = sortedHeaders[h];
+      const end = h + 1 < sortedHeaders.length ? sortedHeaders[h + 1] : parsed.lines.length;
+      const changeIndices: number[] = [];
+      for (let i = start; i < end; i++) {
+        const line = parsed.lines[i];
+        if (line && (line.type === 'add' || line.type === 'del')) {
+          changeIndices.push(i);
+        }
+      }
+      map.set(start, changeIndices);
+    }
+    return map;
+  }, [selectable, parsed.hunkHeaders, parsed.lines]);
+
   // Build a set of line indices where conflict action bars should be injected (before the marker-start line)
   const conflictStartLines = useMemo(() => {
     const s = new Map<number, ConflictBlock>();
@@ -1358,7 +1418,11 @@ export const VirtualDiff = memo(function VirtualDiff({
       let nextHunkI = 0;
       for (let i = 0; i < parsed.lines.length; i++) {
         if (nextHunkI < sortedHunks.length && sortedHunks[nextHunkI][0] === i) {
-          r.push({ type: 'hunk', text: sortedHunks[nextHunkI][1] });
+          r.push({
+            type: 'hunk',
+            text: sortedHunks[nextHunkI][1],
+            hunkStartIdx: sortedHunks[nextHunkI][0],
+          });
           nextHunkI++;
         }
         // Inject conflict action bar before the marker-start line
@@ -1408,7 +1472,7 @@ export const VirtualDiff = memo(function VirtualDiff({
       while (i < rows.length) {
         const row = rows[i];
         if (row.type === 'hunk') {
-          result.push({ type: 'hunk', text: row.text });
+          result.push({ type: 'hunk', text: row.text, hunkStartIdx: row.hunkStartIdx });
           i++;
         } else if (row.type === 'fold') {
           result.push(row);
@@ -1441,10 +1505,11 @@ export const VirtualDiff = memo(function VirtualDiff({
     }
 
     return rows.map((row): RenderRow => {
-      if (row.type === 'hunk') return { type: 'hunk', text: row.text };
+      if (row.type === 'hunk')
+        return { type: 'hunk', text: row.text, hunkStartIdx: row.hunkStartIdx };
       if (row.type === 'fold') return row;
       if (row.type === 'conflict-actions') return row;
-      return { type: 'unified-line', line: parsed.lines[row.lineIdx] };
+      return { type: 'unified-line', line: parsed.lines[row.lineIdx], lineIdx: row.lineIdx };
     });
   }, [viewMode, rows, parsed.lines]);
 
@@ -1678,19 +1743,49 @@ export const VirtualDiff = memo(function VirtualDiff({
                   <ConflictActionBar block={row.block} onResolve={onResolveConflict} />
                 ) : row.type === 'hunk' ? (
                   <div
-                    className="flex select-none items-center bg-accent/50 px-2 font-mono text-[11px] text-muted-foreground"
+                    className={cn(
+                      'flex select-none items-center bg-accent font-mono text-[11px] text-muted-foreground',
+                      selectable ? 'pr-2' : 'px-2',
+                    )}
                     style={{ height: ROW_HEIGHT }}
                   >
+                    {selectable && row.hunkStartIdx != null ? (
+                      (() => {
+                        const indices = hunkLineMap.get(row.hunkStartIdx!) ?? [];
+                        const count = indices.filter((idx) => selectedLines?.has(idx)).length;
+                        const allChecked = indices.length > 0 && count === indices.length;
+                        const isPartial = count > 0 && count < indices.length;
+                        return (
+                          <span className="flex w-5 flex-shrink-0 items-center justify-center">
+                            <TriCheckbox
+                              state={
+                                isPartial ? 'indeterminate' : allChecked ? 'checked' : 'unchecked'
+                              }
+                              onToggle={() => {
+                                if (indices.length > 0) onHunkToggle?.(indices);
+                              }}
+                              data-testid={`diff-hunk-checkbox-${row.hunkStartIdx}`}
+                            />
+                          </span>
+                        );
+                      })()
+                    ) : selectable ? (
+                      <span className="w-5 flex-shrink-0" />
+                    ) : null}
                     <span className={cn(gutterWidth, 'flex-shrink-0')} />
                     <span className="truncate">{row.text}</span>
                   </div>
                 ) : row.type === 'fold' ? (
                   <button
-                    className="flex w-full select-none items-center bg-muted/50 px-2 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
+                    className={cn(
+                      'flex w-full select-none items-center bg-muted/50 font-mono text-[11px] text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground',
+                      selectable ? 'pr-2' : 'px-2',
+                    )}
                     style={{ height: ROW_HEIGHT }}
                     onClick={() => toggleFold(row.sectionIdx)}
                     data-testid="diff-fold-toggle"
                   >
+                    {selectable && <span className="w-5 flex-shrink-0" />}
                     <span className={cn(gutterWidth, 'flex-shrink-0')} />
                     <span className="truncate">
                       @@ -{row.oldStart},{row.lineCount} +{row.newStart},{row.lineCount} @@ —{' '}
@@ -1721,11 +1816,15 @@ export const VirtualDiff = memo(function VirtualDiff({
                 ) : (
                   <UnifiedRow
                     line={row.line}
+                    lineIdx={row.lineIdx}
                     lang={highlightLang}
                     wrap={wordWrap}
                     searchQuery={searchQuery}
                     matchOffset={searchMatchData?.prefixSum[vItem.index]}
                     currentMatchIdx={currentMatchIndex}
+                    selectable={selectable}
+                    selected={selectable ? selectedLines?.has(row.lineIdx) : undefined}
+                    onToggle={onLineToggle}
                   />
                 )}
               </div>

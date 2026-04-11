@@ -1,7 +1,7 @@
 import type { FileDiffSummary, FileStatus } from '@funny/shared';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
-  ArrowUp,
+  ArrowUpCircle,
   FileCode,
   GitCommit,
   GitMerge,
@@ -722,8 +722,8 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
                         {unpushedHashes.has(entry.hash) && (
                           <Tooltip>
                             <TooltipTrigger asChild>
-                              <ArrowUp
-                                className="icon-xs flex-shrink-0 text-amber-500"
+                              <ArrowUpCircle
+                                className="icon-xs flex-shrink-0 text-muted-foreground"
                                 data-testid={`history-unpushed-${entry.shortHash}`}
                               />
                             </TooltipTrigger>

@@ -840,11 +840,23 @@ describe('integration: diff accuracy', () => {
   });
 
   test('binary file is skipped in linesAdded count', async () => {
+    // Commit both files so they're tracked — getStatusSummary derives
+    // linesAdded from `git diff HEAD --numstat`, which reports "-\t-" for
+    // binary files and therefore naturally skips them.
     writeFileSync(
       resolve(repoPath, 'image.png'),
       Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0x00]),
     );
     writeFileSync(resolve(repoPath, 'text.txt'), 'hello\n');
+    await stageFiles(repoPath, ['image.png', 'text.txt']);
+    await commit(repoPath, 'add binary and text');
+
+    // Modify both: binary grows, text gains one line
+    writeFileSync(
+      resolve(repoPath, 'image.png'),
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x01, 0x02, 0x03, 0x04]),
+    );
+    writeFileSync(resolve(repoPath, 'text.txt'), 'hello\nworld\n');
 
     const summary = await getDiffSummary(repoPath);
     expect(summary.isOk()).toBe(true);
@@ -856,7 +868,7 @@ describe('integration: diff accuracy', () => {
     const status = await getStatusSummary(repoPath);
     expect(status.isOk()).toBe(true);
     if (status.isOk()) {
-      expect(status.value.linesAdded).toBe(1); // only text.txt
+      expect(status.value.linesAdded).toBe(1); // only text.txt's new line
     }
   });
 

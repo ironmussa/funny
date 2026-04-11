@@ -44,6 +44,8 @@ export {
 export {
   stageFiles,
   unstageFiles,
+  stagePatch,
+  unstagePatch,
   revertFiles,
   addToGitignore,
   resolveFileConflict,
@@ -74,6 +76,7 @@ export {
 
 export {
   stash,
+  stashFiles,
   stashPop,
   stashDrop,
   stashList,

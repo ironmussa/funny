@@ -236,10 +236,8 @@ export function UserMessageCard({
               key={`attachment-${idx}`}
               src={img.src}
               alt={img.alt}
-              width={80}
-              height={80}
               loading="lazy"
-              className="max-h-20 cursor-pointer rounded border border-border transition-opacity hover:opacity-80"
+              className="max-h-10 min-h-10 min-w-10 max-w-24 cursor-pointer rounded border border-border object-cover transition-opacity hover:opacity-80"
               onClick={(e) => {
                 e.stopPropagation();
                 onImageClick?.(allImages, idx);

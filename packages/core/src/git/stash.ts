@@ -20,10 +20,17 @@ export interface StashEntry {
 // ─── Public API ─────────────────────────────────────────
 
 /**
- * Stash current changes.
+ * Stash current changes (all files).
  */
 export function stash(cwd: string): ResultAsync<string, DomainError> {
   return git(['stash', 'push', '-m', 'funny: stashed changes'], cwd);
+}
+
+/**
+ * Stash specific files only.
+ */
+export function stashFiles(cwd: string, files: string[]): ResultAsync<string, DomainError> {
+  return git(['stash', 'push', '-m', 'funny: stashed changes', '--', ...files], cwd);
 }
 
 /**

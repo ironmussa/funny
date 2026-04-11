@@ -1,5 +1,6 @@
 import type { FileDiffSummary, PRReviewThread } from '@funny/shared';
 import {
+  Check,
   Columns3,
   Columns2,
   FileCode,
@@ -17,6 +18,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useTransition,
 } from 'react';
 
@@ -31,6 +33,8 @@ import {
 import { SearchBar } from '@/components/ui/search-bar';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { TriCheckbox } from '@/components/ui/tri-checkbox';
+import { parseRawDiff, buildPatchFromSelection, getChangeableIndices } from '@/lib/patch-builder';
 import { cn } from '@/lib/utils';
 
 import { DiffCommentThread } from '../DiffCommentThread';
@@ -149,6 +153,20 @@ export interface ExpandedDiffViewProps {
   onRequestFullDiff?: (
     filePath: string,
   ) => Promise<{ oldValue: string; newValue: string; rawDiff?: string } | null>;
+  /** Enable line-level selection for partial staging */
+  selectable?: boolean;
+  /** Called with a constructed patch string when user clicks "Stage Selected Lines" */
+  onStagePatch?: (patch: string) => void;
+  /** Called with a constructed patch when user clicks "Unstage Selected Lines" */
+  onUnstagePatch?: (patch: string) => void;
+  /** Whether staging is in progress */
+  stagingInProgress?: boolean;
+  /** Reports selection state changes: 'all' | 'partial' | 'none' for the current file */
+  onSelectionStateChange?: (filePath: string, state: 'all' | 'partial' | 'none') => void;
+  /** Increment this counter to force re-select all lines (used when file checkbox is re-checked) */
+  selectAllSignal?: number;
+  /** Increment this counter to force deselect all lines (used when file checkbox is unchecked) */
+  deselectAllSignal?: number;
 }
 
 /* ── Diff content ── */
@@ -167,6 +185,10 @@ function DiffContent({
   currentMatchIndex,
   onMatchCount,
   onResolveConflict,
+  selectable,
+  selectedLines,
+  onLineToggle,
+  onHunkToggle,
 }: {
   filePath: string;
   /** @deprecated Use viewMode instead */
@@ -183,6 +205,10 @@ function DiffContent({
   currentMatchIndex?: number;
   onMatchCount?: (count: number) => void;
   onResolveConflict?: (blockId: number, resolution: ConflictResolution) => void;
+  selectable?: boolean;
+  selectedLines?: Set<number>;
+  onLineToggle?: (lineIdx: number) => void;
+  onHunkToggle?: (hunkLineIndices: number[]) => void;
 }) {
   // Compute unified diff from old/new if rawDiff is not provided
   const unifiedDiff = useMemo(() => {
@@ -217,6 +243,10 @@ function DiffContent({
       currentMatchIndex={currentMatchIndex}
       onMatchCount={onMatchCount}
       onResolveConflict={onResolveConflict}
+      selectable={selectable}
+      selectedLines={selectedLines}
+      onLineToggle={onLineToggle}
+      onHunkToggle={onHunkToggle}
       className="h-full"
       data-testid="expanded-diff-viewer"
     />
@@ -616,6 +646,13 @@ export function ExpandedDiffView({
   prReviewThreads,
   onResolveConflict,
   onRequestFullDiff,
+  selectable = false,
+  onStagePatch,
+  onUnstagePatch,
+  stagingInProgress = false,
+  onSelectionStateChange,
+  selectAllSignal = 0,
+  deselectAllSignal = 0,
 }: ExpandedDiffViewProps) {
   const [userViewMode, setUserViewMode] = useState<DiffViewMode>('three-pane');
   const [wordWrap, setWordWrap] = useState(false);
@@ -627,8 +664,106 @@ export function ExpandedDiffView({
   const [loadingFullDiff, setLoadingFullDiff] = useState(false);
 
   const currentFileStatus = files?.find((f) => f.path === filePath)?.status;
+  const currentFileStaged = files?.find((f) => f.path === filePath)?.staged ?? false;
   const isOneSided = currentFileStatus === 'deleted' || currentFileStatus === 'added';
-  const viewMode: DiffViewMode = isOneSided ? 'unified' : userViewMode;
+  // Force unified view when selectable — line checkboxes only render in unified mode (like GitHub Desktop)
+  const viewMode: DiffViewMode = isOneSided || selectable ? 'unified' : userViewMode;
+
+  // ── Line selection state ──
+  const [selectedLines, setSelectedLines] = useState<Set<number>>(new Set());
+
+  // Parse the effective diff for selection purposes
+  const effectiveDiffForSelection = rawDiff ?? diffCache?.get(filePath);
+  const parsedDiff = useMemo(() => {
+    if (!selectable || !effectiveDiffForSelection) return null;
+    return parseRawDiff(effectiveDiffForSelection);
+  }, [selectable, effectiveDiffForSelection]);
+
+  const allChangeableIndices = useMemo(() => {
+    if (!parsedDiff) return new Set<number>();
+    return getChangeableIndices(parsedDiff);
+  }, [parsedDiff]);
+
+  // Initialize selection with all changeable lines selected when file changes
+  useEffect(() => {
+    if (selectable && allChangeableIndices.size > 0) {
+      setSelectedLines(new Set(allChangeableIndices));
+    } else {
+      setSelectedLines(new Set());
+    }
+  }, [filePath, selectable, allChangeableIndices]);
+
+  // Track previous signal values so effects only fire on actual changes, not on mount
+  const prevSelectSignal = useRef(selectAllSignal);
+  const prevDeselectSignal = useRef(deselectAllSignal);
+
+  // Re-select all lines when parent signals (e.g. file checkbox re-checked)
+  useEffect(() => {
+    if (selectAllSignal === prevSelectSignal.current) return;
+    prevSelectSignal.current = selectAllSignal;
+    if (selectable && allChangeableIndices.size > 0) {
+      setSelectedLines(new Set(allChangeableIndices));
+    }
+  }, [selectAllSignal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Deselect all lines when parent signals (e.g. file checkbox unchecked)
+  useEffect(() => {
+    if (deselectAllSignal === prevDeselectSignal.current) return;
+    prevDeselectSignal.current = deselectAllSignal;
+    if (selectable) {
+      setSelectedLines(new Set());
+    }
+  }, [deselectAllSignal]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const handleLineToggle = useCallback((lineIdx: number) => {
+    setSelectedLines((prev) => {
+      const next = new Set(prev);
+      if (next.has(lineIdx)) {
+        next.delete(lineIdx);
+      } else {
+        next.add(lineIdx);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleHunkToggle = useCallback((hunkLineIndices: number[]) => {
+    setSelectedLines((prev) => {
+      const next = new Set(prev);
+      const allSelected = hunkLineIndices.every((idx) => next.has(idx));
+      if (allSelected) {
+        for (const idx of hunkLineIndices) next.delete(idx);
+      } else {
+        for (const idx of hunkLineIndices) next.add(idx);
+      }
+      return next;
+    });
+  }, []);
+
+  const handleSelectAll = useCallback(() => {
+    setSelectedLines(new Set(allChangeableIndices));
+  }, [allChangeableIndices]);
+
+  const handleSelectNone = useCallback(() => {
+    setSelectedLines(new Set());
+  }, []);
+
+  const handleStageSelected = useCallback(() => {
+    if (!parsedDiff || !onStagePatch) return;
+    const patch = buildPatchFromSelection(parsedDiff, selectedLines);
+    if (patch) onStagePatch(patch);
+  }, [parsedDiff, selectedLines, onStagePatch]);
+
+  const selectedCount = selectable ? selectedLines.size : 0;
+  const totalChangeable = selectable ? allChangeableIndices.size : 0;
+
+  // Report selection state to parent (for file-level indeterminate checkbox)
+  useEffect(() => {
+    if (!selectable || !onSelectionStateChange) return;
+    const state =
+      selectedCount === 0 ? 'none' : selectedCount === totalChangeable ? 'all' : 'partial';
+    onSelectionStateChange(filePath, state);
+  }, [selectable, filePath, selectedCount, totalChangeable, onSelectionStateChange]);
 
   // ── Search state ──
   const [showSearch, setShowSearch] = useState(false);
@@ -767,7 +902,7 @@ export function ExpandedDiffView({
           size="sm"
           value={viewMode}
           onValueChange={handleViewModeChange}
-          disabled={isPending || isOneSided}
+          disabled={isPending || isOneSided || selectable}
           className="flex-shrink-0 gap-0 rounded-md border border-border"
           data-testid="diff-view-view-mode-group"
         >
@@ -868,6 +1003,53 @@ export function ExpandedDiffView({
           </TooltipTrigger>
           <TooltipContent side="bottom">Search (Ctrl+F)</TooltipContent>
         </Tooltip>
+        {selectable && (
+          <>
+            <div className="mx-1 h-5 w-px bg-border" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <span>
+                  <TriCheckbox
+                    state={
+                      selectedCount === totalChangeable && totalChangeable > 0
+                        ? 'checked'
+                        : selectedCount > 0
+                          ? 'indeterminate'
+                          : 'unchecked'
+                    }
+                    onToggle={
+                      selectedCount === totalChangeable ? handleSelectNone : handleSelectAll
+                    }
+                    data-testid="diff-view-toggle-select-all"
+                    aria-label={
+                      selectedCount === totalChangeable ? 'Deselect all lines' : 'Select all lines'
+                    }
+                  />
+                </span>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {selectedCount === totalChangeable ? 'Deselect all lines' : 'Select all lines'}
+              </TooltipContent>
+            </Tooltip>
+            <span className="flex-shrink-0 text-[10px] text-muted-foreground">
+              {selectedCount}/{totalChangeable}
+            </span>
+            <Button
+              size="sm"
+              disabled={selectedCount === 0 || stagingInProgress}
+              onClick={handleStageSelected}
+              className="ml-1 h-6 gap-1 px-2 text-[11px]"
+              data-testid="diff-view-stage-selected"
+            >
+              {stagingInProgress ? (
+                <Loader2 className="h-3 w-3 animate-spin" />
+              ) : (
+                <Check className="h-3 w-3" />
+              )}
+              Stage selected
+            </Button>
+          </>
+        )}
         {onClose && (
           <Button
             variant="ghost"
@@ -917,6 +1099,10 @@ export function ExpandedDiffView({
             currentMatchIndex={currentMatchIndex}
             onMatchCount={handleMatchCount}
             onResolveConflict={onResolveConflict}
+            selectable={selectable}
+            selectedLines={selectable ? selectedLines : undefined}
+            onLineToggle={selectable ? handleLineToggle : undefined}
+            onHunkToggle={selectable ? handleHunkToggle : undefined}
           />
         </div>
         {fileThreads.length > 0 && (

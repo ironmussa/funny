@@ -2,8 +2,6 @@
  * Git status summary with caching, binary detection, and sync state derivation.
  */
 
-import { join } from 'path';
-
 import type { GitSyncState } from '@funny/shared';
 import { processError, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
@@ -55,47 +53,6 @@ export function invalidateStatusCache(cwd?: string): void {
   } else {
     statusCache.clear();
   }
-}
-
-// ─── Binary detection helpers ───────────────────────────
-
-const MAX_UNTRACKED_TO_COUNT = 200;
-const MAX_UNTRACKED_FILE_SIZE = 512 * 1024; // 512 KB
-
-/**
- * Batch-check `.gitattributes` for a list of paths, returning the set of
- * paths that should be treated as binary (binary=set OR diff=unset).
- *
- * Uses `git check-attr -z --stdin` for NUL-separated I/O to handle paths
- * with special characters. One process spawn for all files.
- */
-async function getBinaryAttrPaths(cwd: string, paths: string[]): Promise<Set<string>> {
-  if (paths.length === 0) return new Set();
-
-  const result = await gitRead(['check-attr', '-z', '--stdin', 'binary', 'diff'], {
-    cwd,
-    reject: false,
-    stdin: paths.join('\0'),
-  });
-
-  const binaryPaths = new Set<string>();
-  if (result.exitCode !== 0 || !result.stdout) return binaryPaths;
-
-  // NUL-separated output format: path\0attr\0value\0path\0attr\0value\0...
-  const parts = result.stdout.split('\0');
-  for (let i = 0; i + 2 < parts.length; i += 3) {
-    const path = parts[i];
-    const attr = parts[i + 1];
-    const value = parts[i + 2];
-
-    if (attr === 'binary' && value === 'set') {
-      binaryPaths.add(path);
-    } else if (attr === 'diff' && value === 'unset') {
-      binaryPaths.add(path);
-    }
-  }
-
-  return binaryPaths;
 }
 
 /** Unquote a path from git's porcelain output (C-style escaping inside double quotes). */
@@ -222,46 +179,10 @@ export function getStatusSummary(
         }
       }
 
-      // Count lines in untracked files (not covered by git diff HEAD --numstat)
-      // Prefer ls-files output (expands directories) over porcelain paths
-      const expandedUntrackedPaths =
-        untrackedResult.exitCode === 0 && untrackedResult.stdout.trim()
-          ? untrackedResult.stdout.trim().split('\n')
-          : untrackedPaths;
-      if (expandedUntrackedPaths.length > 0) {
-        const filesToCount = expandedUntrackedPaths.slice(0, MAX_UNTRACKED_TO_COUNT);
-        // Check .gitattributes for binary markers before counting lines
-        const attrBinaryPaths = await getBinaryAttrPaths(worktreeCwd, filesToCount);
-        const counts = await Promise.all(
-          filesToCount.map(async (relPath) => {
-            try {
-              // Skip files marked as binary in .gitattributes
-              if (attrBinaryPaths.has(relPath)) return 0;
-              const filePath = join(worktreeCwd, relPath);
-              const { stat: fsStat, readFile } = await import('fs/promises');
-              const st = await fsStat(filePath);
-              const size = st.size;
-              if (size === 0 || size > MAX_UNTRACKED_FILE_SIZE) return 0;
-              const buffer = new Uint8Array(await readFile(filePath));
-              // Binary detection fallback: null bytes in first 8KB
-              const checkLen = Math.min(buffer.length, 8192);
-              for (let i = 0; i < checkLen; i++) {
-                if (buffer[i] === 0) return 0;
-              }
-              // Count newlines
-              let n = 0;
-              for (let i = 0; i < buffer.length; i++) {
-                if (buffer[i] === 0x0a) n++;
-              }
-              if (buffer.length > 0 && buffer[buffer.length - 1] !== 0x0a) n++;
-              return n;
-            } catch {
-              return 0;
-            }
-          }),
-        );
-        for (const c of counts) linesAdded += c;
-      }
+      // NOTE: Untracked file line counts are intentionally NOT added to linesAdded.
+      // Counting entire file contents as "additions" inflates the stats and creates
+      // a mismatch with the per-file diff stats shown in the ReviewPane (which only
+      // reports actual diff lines from git diff --numstat).
 
       if (!branch) {
         const result: GitStatusSummary = {
@@ -365,25 +286,27 @@ export function getStatusSummary(
         }
       }
 
-      // Include committed line changes against baseBranch so diff stats persist
-      // after the agent commits. The working-tree diff (git diff HEAD) only shows
-      // uncommitted changes; baseDiffResult adds committed-but-diverged changes.
-      if (baseDiffResult && baseDiffResult.exitCode === 0 && baseDiffResult.stdout.trim()) {
-        let committedAdded = 0;
-        let committedDeleted = 0;
+      // Include committed line changes against baseBranch as a FALLBACK so diff
+      // stats don't drop to zero when the agent commits its changes.
+      // Only use branch-level stats when the working tree has no uncommitted changes;
+      // otherwise the working-tree stats are authoritative (they match the per-file
+      // diff stats shown in the ReviewPane).
+      if (
+        linesAdded === 0 &&
+        linesDeleted === 0 &&
+        baseDiffResult &&
+        baseDiffResult.exitCode === 0 &&
+        baseDiffResult.stdout.trim()
+      ) {
         for (const line of baseDiffResult.stdout.trim().split('\n')) {
           const parts = line.split('\t');
           if (parts.length >= 2) {
             const a = parseInt(parts[0], 10);
             const d = parseInt(parts[1], 10);
-            if (!isNaN(a)) committedAdded += a;
-            if (!isNaN(d)) committedDeleted += d;
+            if (!isNaN(a)) linesAdded += a;
+            if (!isNaN(d)) linesDeleted += d;
           }
         }
-        // Use the larger of working-tree diff and branch diff so stats don't
-        // drop to zero when the agent commits its changes.
-        if (committedAdded > linesAdded) linesAdded = committedAdded;
-        if (committedDeleted > linesDeleted) linesDeleted = committedDeleted;
       }
 
       const result: GitStatusSummary = {

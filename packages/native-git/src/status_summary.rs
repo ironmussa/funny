@@ -258,6 +258,7 @@ pub async fn get_status_summary(
 
     let mut staged_new_paths: Vec<PathBuf> = Vec::new();
     let mut staged_new_rel_paths: Vec<String> = Vec::new();
+    let mut staged_modified_rel_paths: Vec<String> = Vec::new();
 
     for idx_entry in index.entries().iter() {
       let path_str = idx_entry.path(&index).to_str_lossy().to_string();
@@ -265,24 +266,36 @@ pub async fn get_status_summary(
         continue;
       }
 
-      let is_staged = match &head_tree {
+      match &head_tree {
         Some(tree) => match tree.lookup_entry_by_path(&path_str) {
-          Ok(Some(tree_entry)) => tree_entry.object_id() != idx_entry.id,
-          _ => true,
+          Ok(Some(tree_entry)) => {
+            if tree_entry.object_id() != idx_entry.id {
+              // Staged modification: file exists in HEAD but index differs — needs a real diff
+              dirty_file_count += 1;
+              staged_modified_rel_paths.push(path_str);
+            }
+          }
+          _ => {
+            // Staged new file: not in HEAD tree — count all lines as additions
+            dirty_file_count += 1;
+            staged_new_paths.push(worktree_path.join(&path_str));
+            staged_new_rel_paths.push(path_str);
+          }
         },
-        None => true,
+        None => {
+          // No HEAD commit — everything is new
+          dirty_file_count += 1;
+          staged_new_paths.push(worktree_path.join(&path_str));
+          staged_new_rel_paths.push(path_str);
+        }
       };
-
-      if is_staged {
-        dirty_file_count += 1;
-        staged_new_paths.push(worktree_path.join(&path_str));
-        staged_new_rel_paths.push(path_str);
-      }
     }
 
     // Count lines for modified tracked files (only when HEAD exists)
+    // This includes both worktree modifications AND staged modifications
+    // (files where the index differs from HEAD but the worktree matches the index).
     if let Some(ref tree) = head_tree {
-      for rel_path_str in &modified_rel_paths {
+      for rel_path_str in modified_rel_paths.iter().chain(staged_modified_rel_paths.iter()) {
         if let (Some(ref mut stack), Some(ref mut outcome)) = (&mut attr_stack, &mut attr_outcome) {
           if is_binary_by_attr(stack, outcome, rel_path_str, &repo.objects) {
             continue;

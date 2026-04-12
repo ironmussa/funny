@@ -1003,53 +1003,6 @@ export function ExpandedDiffView({
           </TooltipTrigger>
           <TooltipContent side="bottom">Search (Ctrl+F)</TooltipContent>
         </Tooltip>
-        {selectable && (
-          <>
-            <div className="mx-1 h-5 w-px bg-border" />
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span>
-                  <TriCheckbox
-                    state={
-                      selectedCount === totalChangeable && totalChangeable > 0
-                        ? 'checked'
-                        : selectedCount > 0
-                          ? 'indeterminate'
-                          : 'unchecked'
-                    }
-                    onToggle={
-                      selectedCount === totalChangeable ? handleSelectNone : handleSelectAll
-                    }
-                    data-testid="diff-view-toggle-select-all"
-                    aria-label={
-                      selectedCount === totalChangeable ? 'Deselect all lines' : 'Select all lines'
-                    }
-                  />
-                </span>
-              </TooltipTrigger>
-              <TooltipContent side="bottom">
-                {selectedCount === totalChangeable ? 'Deselect all lines' : 'Select all lines'}
-              </TooltipContent>
-            </Tooltip>
-            <span className="flex-shrink-0 text-[10px] text-muted-foreground">
-              {selectedCount}/{totalChangeable}
-            </span>
-            <Button
-              size="sm"
-              disabled={selectedCount === 0 || stagingInProgress}
-              onClick={handleStageSelected}
-              className="ml-1 h-6 gap-1 px-2 text-[11px]"
-              data-testid="diff-view-stage-selected"
-            >
-              {stagingInProgress ? (
-                <Loader2 className="h-3 w-3 animate-spin" />
-              ) : (
-                <Check className="h-3 w-3" />
-              )}
-              Stage selected
-            </Button>
-          </>
-        )}
         {onClose && (
           <Button
             variant="ghost"

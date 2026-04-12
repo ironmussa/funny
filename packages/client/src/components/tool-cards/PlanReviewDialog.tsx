@@ -1,7 +1,7 @@
 import { Editor, type BeforeMount } from '@monaco-editor/react';
 import { BookOpen, Code, MessageSquare, Pencil } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { useState, useRef, useEffect, useLayoutEffect, useCallback, useMemo } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -19,12 +19,14 @@ import { createClientLogger } from '@/lib/client-logger';
 import { parsePlanSections, type PlanSection } from '@/lib/parse-plan-sections';
 import { cn } from '@/lib/utils';
 
+import { AnnotatableContent } from './AnnotatableContent';
+
 const log = createClientLogger('PlanReviewDialog');
 
 const PROSE_CLASSES =
   'prose prose-xs prose-invert prose-headings:text-foreground prose-headings:font-semibold prose-h1:text-xs prose-h1:mb-1.5 prose-h1:mt-0 prose-h2:text-xs prose-h2:mb-1 prose-h2:mt-2.5 prose-h3:text-sm prose-h3:mb-1 prose-h3:mt-2 prose-p:text-xs prose-p:text-muted-foreground prose-p:leading-relaxed prose-p:my-0.5 prose-li:text-sm prose-li:text-muted-foreground prose-li:leading-relaxed prose-li:my-0 prose-ul:my-0.5 prose-ol:my-0.5 prose-code:text-xs prose-code:bg-background/80 prose-code:px-1 prose-code:py-0.5 prose-code:rounded prose-code:text-foreground prose-pre:bg-background/80 prose-pre:rounded prose-pre:p-2 prose-pre:my-1 prose-strong:text-foreground max-w-none';
 
-const EMOJI_OPTIONS = [
+export const EMOJI_OPTIONS = [
   '\u{1F44D}',
   '\u{1F44E}',
   '\u{2764}\u{FE0F}',
@@ -110,7 +112,7 @@ export interface PlanComment {
 
 /* ── Selection popover (appears when user selects text) ────────────────── */
 
-function SelectionPopover({
+export function SelectionPopover({
   position,
   selectedText,
   onComment,
@@ -267,7 +269,7 @@ function PlanOutline({
 /* ── DOM highlighting: find text in container and wrap with <mark> ────── */
 
 /** Collect all text nodes under a container */
-function collectTextNodes(root: HTMLElement): Text[] {
+export function collectTextNodes(root: HTMLElement): Text[] {
   const nodes: Text[] = [];
   const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
   let n: Node | null;
@@ -281,7 +283,7 @@ function collectTextNodes(root: HTMLElement): Text[] {
  * Uses the same highlight style as HighlightText (yellow bg, black text).
  * Returns the first <mark> element created (for positioning margin icons).
  */
-function highlightTextInDom(
+export function highlightTextInDom(
   container: HTMLElement,
   text: string,
   annotationIndex: number,
@@ -387,7 +389,7 @@ function highlightTextInDom(
 
 /* ── Margin annotation indicator ─────────────────────────────────────── */
 
-interface AnnotationPosition {
+export interface AnnotationPosition {
   index: number;
   top: number;
   emoji?: string;
@@ -413,7 +415,7 @@ function groupAnnotationsByRow(annotations: AnnotationPosition[], threshold = 12
   return groups;
 }
 
-function MarginAnnotations({
+export function MarginAnnotations({
   annotations,
   onRemove,
 }: {
@@ -515,7 +517,6 @@ export function PlanReviewDialog({
 
   // ── Active section tracking via scroll ──
   const [activeSectionId, setActiveSectionId] = useState<number | null>(sections[0]?.id ?? null);
-  const contentRef = useRef<HTMLDivElement>(null);
 
   const handleNavigate = useCallback((id: number) => {
     const el = document.getElementById(`plan-review-section-${id}`);
@@ -526,7 +527,9 @@ export function PlanReviewDialog({
   // Scroll spy
   useEffect(() => {
     if (!open || !hasSections) return;
-    const container = contentRef.current;
+    const container = dialogRef.current?.querySelector(
+      '[data-testid="annotatable-content"]',
+    ) as HTMLElement | null;
     if (!container) return;
     const handleScroll = () => {
       const sectionEls = container.querySelectorAll('[data-section-id]');
@@ -544,123 +547,7 @@ export function PlanReviewDialog({
     return () => container.removeEventListener('scroll', handleScroll);
   }, [open, hasSections]);
 
-  // ── Text selection → popover ──
-  const [selection, setSelection] = useState<{
-    text: string;
-    position: { x: number; y: number };
-  } | null>(null);
-
   const dialogRef = useRef<HTMLDivElement>(null);
-
-  const handleMouseUp = useCallback(() => {
-    const sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
-    const text = sel.toString().trim();
-    if (!text) return;
-    const range = sel.getRangeAt(0);
-    const rect = range.getBoundingClientRect();
-    // Convert viewport coords to dialog-relative coords (dialog has CSS transform)
-    const dialogEl = dialogRef.current;
-    const dialogRect = dialogEl?.getBoundingClientRect();
-    const x = rect.left + rect.width / 2 - (dialogRect?.left ?? 0);
-    const y = rect.top - (dialogRect?.top ?? 0);
-    setSelection({ text, position: { x, y } });
-  }, []);
-
-  const clearSelection = useCallback(() => {
-    setSelection(null);
-    window.getSelection()?.removeAllRanges();
-  }, []);
-
-  useEffect(() => {
-    if (!selection) return;
-    const handleClick = (e: MouseEvent) => {
-      const popover = document.querySelector('[data-testid="plan-selection-popover"]');
-      if (popover && popover.contains(e.target as Node)) return;
-      clearSelection();
-    };
-    const timer = setTimeout(() => document.addEventListener('mousedown', handleClick), 100);
-    return () => {
-      clearTimeout(timer);
-      document.removeEventListener('mousedown', handleClick);
-    };
-  }, [selection, clearSelection]);
-
-  // ── Comments & reactions ──
-  const [annotationPositions, setAnnotationPositions] = useState<AnnotationPosition[]>([]);
-
-  const handleAddComment = useCallback(
-    (selectedText: string, comment: string) => {
-      onAddComment(selectedText, comment);
-    },
-    [onAddComment],
-  );
-
-  const handleAddEmoji = useCallback(
-    (selectedText: string, emoji: string) => {
-      onAddEmoji(selectedText, emoji);
-    },
-    [onAddEmoji],
-  );
-
-  const handleRemoveComment = useCallback(
-    (index: number) => {
-      onRemoveComment(index);
-    },
-    [onRemoveComment],
-  );
-
-  // ── Highlight annotations in the DOM after render ──
-  // Re-apply all highlights whenever planComments change or dialog opens
-  useEffect(() => {
-    if (!open) return;
-
-    // Small delay to let Radix mount the DOM on open
-    const timer = setTimeout(() => {
-      const container = contentRef.current;
-      if (!container) {
-        setAnnotationPositions([]);
-        return;
-      }
-
-      // Remove all existing <mark data-annotation-index> elements (unwrap back to text)
-      const existingMarks = container.querySelectorAll('mark[data-annotation-index]');
-      for (const mark of existingMarks) {
-        const parent = mark.parentNode;
-        if (!parent) continue;
-        while (mark.firstChild) parent.insertBefore(mark.firstChild, mark);
-        parent.removeChild(mark);
-      }
-      // Merge adjacent text nodes after unwrapping
-      container.normalize();
-
-      if (planComments.length === 0) {
-        setAnnotationPositions([]);
-        return;
-      }
-
-      const containerRect = container.getBoundingClientRect();
-      const positions: AnnotationPosition[] = [];
-
-      for (let i = 0; i < planComments.length; i++) {
-        const c = planComments[i];
-        const mark = highlightTextInDom(container, c.selectedText, i);
-        if (mark) {
-          const markRect = mark.getBoundingClientRect();
-          positions.push({
-            index: i,
-            top: markRect.top - containerRect.top + container.scrollTop,
-            emoji: c.emoji,
-            comment: c.comment,
-          });
-        }
-      }
-
-      setAnnotationPositions(positions);
-    }, 50);
-
-    return () => clearTimeout(timer);
-  }, [open, planComments]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -738,36 +625,21 @@ export function PlanReviewDialog({
             )}
 
             {/* Main content with right margin for annotation indicators */}
-            <div
-              ref={contentRef}
-              className="min-h-0 flex-1 overflow-y-auto text-sm"
-              onMouseUp={handleMouseUp}
-              data-testid="plan-review-content"
+            <AnnotatableContent
+              className="min-h-0 flex-1 overflow-y-auto px-4 py-3 pr-16 text-sm"
+              planComments={planComments}
+              onAddComment={onAddComment}
+              onAddEmoji={onAddEmoji}
+              onRemoveComment={onRemoveComment}
+              active={open && !isEditing}
+              highlightDeps={[open]}
+              highlightDelay={50}
             >
-              <div className="relative px-4 py-3 pr-16">
-                <div className={PROSE_CLASSES}>
-                  <PlanMarkdownWithAnchors plan={activePlan} sections={sections} />
-                </div>
-
-                {/* Margin icons — inside scrollable content so they scroll with text */}
-                <MarginAnnotations
-                  annotations={annotationPositions}
-                  onRemove={handleRemoveComment}
-                />
+              <div className={PROSE_CLASSES}>
+                <PlanMarkdownWithAnchors plan={activePlan} sections={sections} />
               </div>
-            </div>
+            </AnnotatableContent>
           </div>
-        )}
-
-        {/* Selection popover — inside DialogContent so focus trap allows interaction */}
-        {selection && (
-          <SelectionPopover
-            position={selection.position}
-            selectedText={selection.text}
-            onComment={handleAddComment}
-            onEmoji={handleAddEmoji}
-            onClose={clearSelection}
-          />
         )}
       </DialogContent>
     </Dialog>

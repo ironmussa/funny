@@ -454,7 +454,8 @@
     "approveAndStart": "Aprovar plano e começar a programar",
     "approveWithComments": "Aprovar plano e enviar {{count}} comentário(s)",
     "tellClaude": "Dizer ao agente o que fazer em vez disso",
-    "customPlaceholder": "Descreva o que você quer em vez disso..."
+    "customPlaceholder": "Descreva o que você quer em vez disso...",
+    "sendComments": "Enviar {{count}} comentários"
   },
   "allThreads": {
     "title": "Todas as threads",

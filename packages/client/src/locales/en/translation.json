@@ -463,7 +463,8 @@
     "approveAndStart": "Approve plan and start coding",
     "approveWithComments": "Approve plan and send {{count}} comment(s)",
     "tellClaude": "Tell the agent what to do instead",
-    "customPlaceholder": "Describe what you want instead..."
+    "customPlaceholder": "Describe what you want instead...",
+    "sendComments": "Send {{count}} comments"
   },
   "allThreads": {
     "title": "All threads",

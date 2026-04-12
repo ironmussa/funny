@@ -460,7 +460,8 @@
     "approveAndStart": "Aprobar plan y comenzar a programar",
     "approveWithComments": "Aprobar plan y enviar {{count}} comentario(s)",
     "tellClaude": "Decirle al agente qué hacer en su lugar",
-    "customPlaceholder": "Describe lo que quieres en su lugar..."
+    "customPlaceholder": "Describe lo que quieres en su lugar...",
+    "sendComments": "Enviar {{count}} comentarios"
   },
   "allThreads": {
     "title": "Todos los hilos",

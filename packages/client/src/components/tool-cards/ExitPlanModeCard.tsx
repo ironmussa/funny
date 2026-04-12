@@ -5,6 +5,7 @@ import {
   FileCode2,
   CheckCircle2,
   XCircle,
+  Pencil,
   Send,
   Mic,
   MicOff,
@@ -233,95 +234,124 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
       )}
 
       {onRespond && !submitted && (
-        <div className="space-y-2 border-t border-border/40 px-3 py-2.5">
-          <div className="flex gap-2">
-            <button
-              onClick={handleAccept}
-              className="flex items-center gap-1.5 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground transition-colors hover:bg-primary/90"
-            >
-              <CheckCircle2 className="icon-sm" />
-              {t('tools.acceptPlan')}
-            </button>
-            <button
-              onClick={handleReject}
-              className="flex items-center gap-1.5 rounded-md border border-border bg-muted px-3 py-1.5 text-xs font-medium text-muted-foreground transition-colors hover:border-destructive/30 hover:bg-destructive/10 hover:text-destructive"
-            >
-              <XCircle className="icon-sm" />
-              {t('thread.rejectPlan')}
-            </button>
-          </div>
+        <div className="border-t border-border/40">
+          {/* Row 1: Approve */}
+          <button
+            onClick={handleAccept}
+            data-testid="plan-accept"
+            className="flex w-full items-center gap-3 border-b border-border/40 px-4 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-muted-foreground/60" />
+            <span>{t('plan.approveAndStart', 'Approve plan and start coding')}</span>
+          </button>
 
-          <div className="rounded-md border border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50">
-            <div className="px-2.5 py-1.5">
-              <PromptEditor
-                ref={editorRef}
-                placeholder={t('thread.waitingInputPlaceholder')}
-                onSubmit={handleSubmitInput}
-                onChange={handleEditorChange}
-                cwd={cwd}
-                loadSkills={loadSkillsForEditor}
-                className="max-h-[120px] min-h-[40px] overflow-y-auto text-sm"
-              />
-            </div>
-            <div className="flex items-center justify-end gap-1 border-t border-border/20 px-1.5 py-0.5">
-              {hasAssemblyaiKey && (
+          {/* Row 2: Reject */}
+          <button
+            onClick={handleReject}
+            data-testid="plan-reject"
+            className="flex w-full items-center gap-3 border-b border-border/40 px-4 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+          >
+            <XCircle className="h-4 w-4 flex-shrink-0 text-muted-foreground/60" />
+            <span>{t('thread.rejectPlan', 'Reject plan')}</span>
+          </button>
+
+          {/* Row 3: Custom response — single row with inline editor */}
+          <div className="flex items-center gap-3 px-4 py-2.5">
+            <Pencil className="h-4 w-4 flex-shrink-0 text-muted-foreground/60" />
+            <div className="min-w-0 flex-1 rounded-md border border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50">
+              <div className="px-2.5 py-1.5">
+                <PromptEditor
+                  ref={editorRef}
+                  placeholder={t('plan.tellClaude', 'Tell the agent what to do instead')}
+                  onSubmit={handleSubmitInput}
+                  onChange={handleEditorChange}
+                  cwd={cwd}
+                  loadSkills={loadSkillsForEditor}
+                  className="max-h-[120px] min-h-[20px] overflow-y-auto text-sm"
+                />
+              </div>
+              <div className="flex items-center justify-end gap-1 border-t border-border/20 px-1.5 py-0.5">
+                {hasAssemblyaiKey && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        data-testid="plan-dictate"
+                        onClick={toggleRecording}
+                        variant="ghost"
+                        size="icon-sm"
+                        tabIndex={-1}
+                        aria-label={
+                          isRecording
+                            ? t('prompt.stopDictation', 'Stop dictation')
+                            : t('prompt.startDictation', 'Start dictation')
+                        }
+                        disabled={isTranscribing}
+                        className={cn(
+                          'text-muted-foreground hover:text-foreground',
+                          isRecording && 'text-destructive hover:text-destructive',
+                        )}
+                      >
+                        {isTranscribing ? (
+                          <Loader2 className="icon-xs animate-spin" />
+                        ) : isRecording ? (
+                          <MicOff className="icon-xs" />
+                        ) : (
+                          <Mic className="icon-xs" />
+                        )}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {isTranscribing
+                        ? t('prompt.transcribing', 'Transcribing...')
+                        : isRecording
+                          ? t('prompt.stopDictation', 'Stop dictation')
+                          : t('prompt.startDictation', 'Start dictation')}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      data-testid="plan-dictate"
-                      onClick={toggleRecording}
+                      data-testid="plan-send-feedback"
+                      onClick={handleSubmitInput}
                       variant="ghost"
                       size="icon-sm"
                       tabIndex={-1}
-                      aria-label={
-                        isRecording
-                          ? t('prompt.stopDictation', 'Stop dictation')
-                          : t('prompt.startDictation', 'Start dictation')
-                      }
-                      disabled={isTranscribing}
+                      disabled={!hasContent}
                       className={cn(
                         'text-muted-foreground hover:text-foreground',
-                        isRecording && 'text-destructive hover:text-destructive',
+                        hasContent && 'text-primary hover:text-primary',
                       )}
                     >
-                      {isTranscribing ? (
-                        <Loader2 className="icon-xs animate-spin" />
-                      ) : isRecording ? (
-                        <MicOff className="icon-xs" />
-                      ) : (
-                        <Mic className="icon-xs" />
-                      )}
+                      <Send className="icon-xs" />
                     </Button>
                   </TooltipTrigger>
-                  <TooltipContent>
-                    {isTranscribing
-                      ? t('prompt.transcribing', 'Transcribing...')
-                      : isRecording
-                        ? t('prompt.stopDictation', 'Stop dictation')
-                        : t('prompt.startDictation', 'Start dictation')}
-                  </TooltipContent>
+                  <TooltipContent>{t('prompt.send', 'Send')}</TooltipContent>
                 </Tooltip>
-              )}
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    data-testid="plan-send-feedback"
-                    onClick={handleSubmitInput}
-                    variant="ghost"
-                    size="icon-sm"
-                    tabIndex={-1}
-                    disabled={!hasContent}
-                    className={cn(
-                      'text-muted-foreground hover:text-foreground',
-                      hasContent && 'text-primary hover:text-primary',
-                    )}
-                  >
-                    <Send className="icon-xs" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('prompt.send', 'Send')}</TooltipContent>
-              </Tooltip>
+              </div>
             </div>
+            {planComments.length > 0 && (
+              <Button
+                size="sm"
+                onClick={() => {
+                  const parts = planComments.map((c) => {
+                    const quote =
+                      c.selectedText.length > 100
+                        ? c.selectedText.slice(0, 100) + '...'
+                        : c.selectedText;
+                    if (c.emoji && c.comment) return `> ${quote}\n${c.emoji} ${c.comment}`;
+                    if (c.emoji) return `> ${quote}\n${c.emoji}`;
+                    return `> ${quote}\nComment: ${c.comment}`;
+                  });
+                  onRespond(`Feedback on plan:\n\n${parts.join('\n\n')}`);
+                  setSubmitted(true);
+                }}
+                data-testid="plan-send-comments"
+                className="h-7 shrink-0 bg-primary px-3 text-xs"
+              >
+                {t('plan.sendComments', 'Send {{count}} comments', { count: planComments.length })}
+              </Button>
+            )}
           </div>
         </div>
       )}

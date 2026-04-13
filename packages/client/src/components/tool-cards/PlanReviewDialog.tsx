@@ -16,7 +16,7 @@ import { createClientLogger } from '@/lib/client-logger';
 import { remarkPlugins } from '@/lib/markdown-components';
 import { parsePlanSections, type PlanSection } from '@/lib/parse-plan-sections';
 import { cn } from '@/lib/utils';
-import { useSettingsStore, CODE_FONT_SIZE_PX } from '@/stores/settings-store';
+import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 
 import { AnnotatableContent } from './AnnotatableContent';
 
@@ -491,7 +491,7 @@ export function PlanReviewDialog({
 }) {
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
-  const codeFontSizePx = CODE_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
+  const codeFontSizePx = EDITOR_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
 
   // ── Edit mode ──
   const [isEditing, setIsEditing] = useState(false);

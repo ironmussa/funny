@@ -3,7 +3,7 @@ import { WebLinksAddon } from '@xterm/addon-web-links';
 import { Terminal } from '@xterm/xterm';
 import { useEffect, useRef } from 'react';
 
-import { useSettingsStore, CODE_FONT_SIZE_PX } from '@/stores/settings-store';
+import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 
 const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
@@ -24,7 +24,7 @@ export function useTerminal({ id, cwd, containerRef }: UseTerminalOptions) {
   const terminalRef = useRef<Terminal | null>(null);
   const fitAddonRef = useRef<FitAddon | null>(null);
   const fontSize = useSettingsStore((s) => s.fontSize);
-  const codeFontSizePx = CODE_FONT_SIZE_PX[fontSize];
+  const codeFontSizePx = EDITOR_FONT_SIZE_PX[fontSize];
 
   const getCssVar = (name: string) => {
     const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();

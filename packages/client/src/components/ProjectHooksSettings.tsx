@@ -27,7 +27,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
-import { useSettingsStore, CODE_FONT_SIZE_PX } from '@/stores/settings-store';
+import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 
 /* ── Inline shell editor (Monaco) ── */
 
@@ -64,7 +64,7 @@ function ShellEditor({
   testId?: string;
 }) {
   const { resolvedTheme } = useTheme();
-  const codeFontSizePx = CODE_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
+  const codeFontSizePx = EDITOR_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
   const monacoTheme = resolvedTheme === 'monochrome' ? 'vs' : 'funny-dark';
   const lineCount = Math.max(value.split('\n').length, 3);
   const height = Math.min(Math.max(lineCount * 22 + 16, 100), 400);

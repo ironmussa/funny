@@ -291,7 +291,8 @@ import { Dialog, DialogContent, DialogHeader } from '@/components/ui/dialog';
 
 All UI text — including code in diffs, terminals, Monaco editors, and chat messages — **MUST** scale with the user's font size setting from Settings > Appearance. Never hardcode pixel font sizes (e.g., `fontSize: 13`, `text-[11px]`). Instead:
 
-- **Code / monospace surfaces** (diffs, terminals, editors): use `CODE_FONT_SIZE_PX[fontSize]` and `CODE_LINE_HEIGHT_PX[fontSize]` from `@/stores/settings-store`.
+- **Diff panels** (denser code view): use `CODE_FONT_SIZE_PX[fontSize]` and `CODE_LINE_HEIGHT_PX[fontSize]` from `@/stores/settings-store`.
+- **Terminals and Monaco editors**: use `EDITOR_FONT_SIZE_PX[fontSize]` from `@/stores/settings-store` (larger baseline than diffs).
 - **Diff panel rendering**: use the CSS variables `--diff-font-size` and `--diff-row-height` (e.g., `text-[length:var(--diff-font-size)]`).
 - **Prose / chat messages**: use `PROSE_FONT_SIZE_PX[fontSize]` and `PROSE_LINE_HEIGHT_PX[fontSize]` with the `makeProseFont()` / `makeMonoFont()` helpers from `@/hooks/use-pretext` for pretext layout measurements.
 - **Terminals (xterm.js)**: read font size from the store at creation and add a reactive `useEffect` to sync `terminal.options.fontSize` + `fitAddon.fit()` when the setting changes.

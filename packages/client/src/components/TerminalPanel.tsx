@@ -17,7 +17,7 @@ import { getActiveWS } from '@/hooks/use-ws';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
-import { type TerminalShell, useSettingsStore, CODE_FONT_SIZE_PX } from '@/stores/settings-store';
+import { type TerminalShell, useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useThreadStore } from '@/stores/thread-store';
 
@@ -123,7 +123,7 @@ function TauriTerminalTabContent({
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<{ terminal: any; fitAddon: any } | null>(null);
-  const codeFontSizePx = CODE_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
+  const codeFontSizePx = EDITOR_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
   useThemeSync(termRef);
 
   useEffect(() => {
@@ -272,7 +272,7 @@ function WebTerminalTabContent({
   );
   // Track whether the initial command (startup commands) was sent to avoid re-sending
   const initialCommandSentRef = useRef(false);
-  const codeFontSizePx = CODE_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
+  const codeFontSizePx = EDITOR_FONT_SIZE_PX[useSettingsStore((s) => s.fontSize)];
   useThemeSync(termRef);
 
   useEffect(() => {

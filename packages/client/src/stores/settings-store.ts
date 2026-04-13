@@ -71,18 +71,25 @@ const FONT_SIZE_VALUES: Record<FontSize, string> = {
   large: '16px',
 };
 
-/** Monospace code font size (px) — used for diffs, terminal, and editors. */
+/** Monospace code font size (px) — used for diffs (denser view). */
 export const CODE_FONT_SIZE_PX: Record<FontSize, number> = {
   small: 11,
   default: 11,
   large: 13,
 };
 
-/** Monospace code row/line height (px). */
+/** Monospace code row/line height (px) — for diffs. */
 export const CODE_LINE_HEIGHT_PX: Record<FontSize, number> = {
   small: 20,
   default: 20,
   large: 24,
+};
+
+/** Editor/terminal font size (px) — used for Monaco editors and xterm terminals. */
+export const EDITOR_FONT_SIZE_PX: Record<FontSize, number> = {
+  small: 12,
+  default: 13,
+  large: 15,
 };
 
 /** Prose font size (px) — used for chat messages. */

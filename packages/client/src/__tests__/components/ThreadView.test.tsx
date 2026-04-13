@@ -77,10 +77,16 @@ vi.mock('@/hooks/use-todo-panel', () => ({
   useTodoSnapshots: () => [],
 }));
 
-vi.mock('@/stores/settings-store', () => ({
-  useSettingsStore: Object.assign(() => ({}), { getState: () => ({ toolPermissions: {} }) }),
-  deriveToolLists: () => ({ allowedTools: [], disallowedTools: [] }),
-}));
+vi.mock('@/stores/settings-store', async (importOriginal) => {
+  const actual = (await importOriginal()) as Record<string, unknown>;
+  return {
+    ...actual,
+    useSettingsStore: Object.assign(() => ({ fontSize: 'default' }), {
+      getState: () => ({ toolPermissions: {}, fontSize: 'default' }),
+    }),
+    deriveToolLists: () => ({ allowedTools: [], disallowedTools: [] }),
+  };
+});
 
 vi.mock('@/components/thread/StickyUserMessage', () => ({
   StickyUserMessage: () => null,

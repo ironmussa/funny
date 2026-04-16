@@ -73,6 +73,25 @@ const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThrea
   onPinThread,
   onDeleteThread,
 }) {
+  // Drag support: allow dragging threads into grid cells
+  const dragRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    const el = dragRef.current;
+    if (!el) return;
+    return draggable({
+      element: el,
+      getInitialData: () => ({
+        type: 'grid-thread',
+        threadId: thread.id,
+        projectId,
+      }),
+      onDragStart: () => setIsDragging(true),
+      onDrop: () => setIsDragging(false),
+    });
+  }, [thread.id, projectId]);
+
   const handleSelect = useCallback(
     () => onSelectThread(projectId, thread.id),
     [onSelectThread, projectId, thread.id],
@@ -97,18 +116,20 @@ const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThrea
   const isBusy = thread.status === 'running' || thread.status === 'setting_up';
 
   return (
-    <ThreadItem
-      thread={thread}
-      projectPath={projectPath}
-      projectColor={projectColor}
-      isSelected={isSelected}
-      onSelect={handleSelect}
-      onRename={handleRename}
-      onArchive={isBusy ? undefined : handleArchive}
-      onPin={handlePin}
-      onDelete={isBusy ? undefined : handleDelete}
-      gitStatus={gitStatus}
-    />
+    <div ref={dragRef} className={cn(isDragging && 'opacity-50')}>
+      <ThreadItem
+        thread={thread}
+        projectPath={projectPath}
+        projectColor={projectColor}
+        isSelected={isSelected}
+        onSelect={handleSelect}
+        onRename={handleRename}
+        onArchive={isBusy ? undefined : handleArchive}
+        onPin={handlePin}
+        onDelete={isBusy ? undefined : handleDelete}
+        gitStatus={gitStatus}
+      />
+    </div>
   );
 });
 

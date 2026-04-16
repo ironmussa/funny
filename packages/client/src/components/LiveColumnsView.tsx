@@ -1,3 +1,7 @@
+import {
+  dropTargetForElements,
+  monitorForElements,
+} from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
 import { Loader2, LayoutGrid, Grid2x2, Plus, Search, X } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo, memo, startTransition } from 'react';
@@ -316,6 +320,41 @@ const ThreadColumn = memo(function ThreadColumn({
   );
 });
 
+/** Drop target wrapper for grid cells — highlights when a sidebar thread is dragged over */
+const GridCellDropTarget = memo(function GridCellDropTarget({
+  cellIndex,
+  children,
+}: {
+  cellIndex: number;
+  children: React.ReactNode;
+}) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [isOver, setIsOver] = useState(false);
+
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    return dropTargetForElements({
+      element: el,
+      getData: () => ({ type: 'grid-cell', cellIndex }),
+      canDrop: ({ source }) => source.data.type === 'grid-thread',
+      onDragEnter: () => setIsOver(true),
+      onDragLeave: () => setIsOver(false),
+      onDrop: () => setIsOver(false),
+    });
+  }, [cellIndex]);
+
+  return (
+    <div
+      ref={ref}
+      className={cn('flex min-h-0 flex-col', isOver && 'rounded-sm ring-2 ring-primary')}
+      data-testid={`grid-drop-target-${cellIndex}`}
+    >
+      {children}
+    </div>
+  );
+});
+
 export function LiveColumnsView() {
   const { t } = useTranslation();
   useMinuteTick();
@@ -453,6 +492,35 @@ export function LiveColumnsView() {
     setGridCells(clearGridCell(cellIndex));
   }, []);
 
+  // Monitor drag-and-drop: assign sidebar threads dropped onto grid cells
+  useEffect(() => {
+    return monitorForElements({
+      onDrop: ({ source, location }) => {
+        if (source.data.type !== 'grid-thread') return;
+        const targets = location.current.dropTargets;
+        if (!targets.length) return;
+
+        const targetData = targets[0].data;
+        if (targetData.type !== 'grid-cell') return;
+
+        const threadId = source.data.threadId as string;
+        const cellIndex = targetData.cellIndex as number;
+
+        setGridCells((prev) => {
+          // If thread is already assigned to another cell, remove it first
+          const updated = { ...prev };
+          for (const [key, val] of Object.entries(updated)) {
+            if (val === threadId) delete updated[key];
+          }
+          updated[String(cellIndex)] = threadId;
+          // Persist to localStorage
+          localStorage.setItem('funny:grid-cells', JSON.stringify(updated));
+          return updated;
+        });
+      },
+    });
+  }, []);
+
   return (
     <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden" data-testid="grid-view">
       {/* Header */}
@@ -539,27 +607,23 @@ export function LiveColumnsView() {
       >
         {Array.from({ length: maxSlots }, (_, i) => {
           const threadId = gridCells[String(i)];
-          if (threadId) {
-            return (
-              <ThreadColumn
-                key={threadId}
-                threadId={threadId}
-                onRemove={() => handleRemoveFromGrid(i)}
-              />
-            );
-          }
           return (
-            <button
-              key={`empty-${i}`}
-              onClick={() => handlePickThread(i)}
-              className="flex flex-col items-center justify-center gap-2 rounded-sm border-2 border-dashed border-border/60 bg-muted/10 transition-colors hover:border-primary/50 hover:bg-muted/30"
-              data-testid={`grid-empty-cell-${i}`}
-            >
-              <Plus className="h-8 w-8 text-muted-foreground/40" />
-              <span className="text-xs text-muted-foreground/60">
-                {t('live.addThread', 'Add thread')}
-              </span>
-            </button>
+            <GridCellDropTarget key={threadId ? `col-${threadId}` : `empty-${i}`} cellIndex={i}>
+              {threadId ? (
+                <ThreadColumn threadId={threadId} onRemove={() => handleRemoveFromGrid(i)} />
+              ) : (
+                <button
+                  onClick={() => handlePickThread(i)}
+                  className="flex h-full w-full flex-col items-center justify-center gap-2 rounded-sm border-2 border-dashed border-border/60 bg-muted/10 transition-colors hover:border-primary/50 hover:bg-muted/30"
+                  data-testid={`grid-empty-cell-${i}`}
+                >
+                  <Plus className="h-8 w-8 text-muted-foreground/40" />
+                  <span className="text-xs text-muted-foreground/60">
+                    {t('live.addThread', 'Add thread')}
+                  </span>
+                </button>
+              )}
+            </GridCellDropTarget>
           );
         })}
       </div>

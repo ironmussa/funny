@@ -1,5 +1,7 @@
+import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import type { Thread, ThreadStatus, GitStatusInfo } from '@funny/shared';
 import {
+  useState,
   useEffect,
   useMemo,
   useCallback,
@@ -17,6 +19,7 @@ import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
+import { cn } from '@/lib/utils';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -284,6 +287,25 @@ const ThreadListItem = memo(function ThreadListItem({
   const threadRef = useRef(thread) as MutableRefObject<EnrichedThread>;
   threadRef.current = thread;
 
+  // Drag support: allow dragging threads into grid cells
+  const dragRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false);
+
+  useEffect(() => {
+    const el = dragRef.current;
+    if (!el) return;
+    return draggable({
+      element: el,
+      getInitialData: () => ({
+        type: 'grid-thread',
+        threadId: thread.id,
+        projectId: thread.projectId,
+      }),
+      onDragStart: () => setIsDragging(true),
+      onDrop: () => setIsDragging(false),
+    });
+  }, [thread.id, thread.projectId]);
+
   const handleSelect = useCallback(
     () => onSelect(thread.id, thread.projectId),
     [onSelect, thread.id, thread.projectId],
@@ -296,18 +318,20 @@ const ThreadListItem = memo(function ThreadListItem({
   const handleDelete = useCallback(() => onDelete(threadRef.current), [onDelete, threadRef]);
 
   return (
-    <ThreadItem
-      thread={thread}
-      projectPath={thread.projectPath}
-      isSelected={isSelected}
-      subtitle={thread.projectName}
-      projectColor={thread.projectColor}
-      timeValue={isRunning ? undefined : timeAgo(thread.completedAt ?? thread.createdAt, t)}
-      gitStatus={gitStatus}
-      onSelect={handleSelect}
-      onRename={handleRename}
-      onArchive={isRunning ? undefined : handleArchive}
-      onDelete={handleDelete}
-    />
+    <div ref={dragRef} className={cn(isDragging && 'opacity-50')}>
+      <ThreadItem
+        thread={thread}
+        projectPath={thread.projectPath}
+        isSelected={isSelected}
+        subtitle={thread.projectName}
+        projectColor={thread.projectColor}
+        timeValue={isRunning ? undefined : timeAgo(thread.completedAt ?? thread.createdAt, t)}
+        gitStatus={gitStatus}
+        onSelect={handleSelect}
+        onRename={handleRename}
+        onArchive={isRunning ? undefined : handleArchive}
+        onDelete={handleDelete}
+      />
+    </div>
   );
 });

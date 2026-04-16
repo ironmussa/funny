@@ -1,6 +1,5 @@
 import { Editor, type BeforeMount, type OnMount } from '@monaco-editor/react';
 import { Maximize2, Minimize2, Eye, EyeOff, BookOpen, Code, FileCode } from 'lucide-react';
-import mermaid from 'mermaid';
 import { useTheme } from 'next-themes';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +7,7 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 
+import { MermaidBlock } from '@/components/MermaidBlock';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -278,45 +278,6 @@ export function MonacoEditorDialog({
         </div>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/**
- * Renders a Mermaid diagram from source text
- */
-function MermaidBlock({ chart }: { chart: string }) {
-  const containerRef = useRef<HTMLDivElement>(null);
-  const [svg, setSvg] = useState<string>('');
-  const [error, setError] = useState<string>('');
-
-  useEffect(() => {
-    let cancelled = false;
-    mermaid.initialize({ startOnLoad: false, theme: 'dark' });
-    mermaid
-      .render(`mermaid-${Math.random().toString(36).slice(2)}`, chart)
-      .then(({ svg: renderedSvg }) => {
-        if (!cancelled) setSvg(renderedSvg);
-      })
-      .catch((err) => {
-        if (!cancelled) setError(err instanceof Error ? err.message : String(err));
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [chart]);
-
-  if (error) {
-    return (
-      <pre className="overflow-auto rounded bg-red-950/30 p-3 text-xs text-red-400">{error}</pre>
-    );
-  }
-
-  return (
-    <div
-      ref={containerRef}
-      className="my-4 flex justify-center [&>svg]:max-w-full"
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
   );
 }
 

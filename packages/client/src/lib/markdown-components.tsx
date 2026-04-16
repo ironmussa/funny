@@ -1,7 +1,8 @@
-import { Check, Copy } from 'lucide-react';
+import { Check, Copy, Maximize2 } from 'lucide-react';
 import { lazy, Suspense, useState, useEffect } from 'react';
 import remarkGfm from 'remark-gfm';
 
+import { MermaidBlock, MermaidExpandedDialog } from '@/components/MermaidBlock';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { ensureLanguage, highlightCode } from '@/hooks/use-highlight';
 
@@ -40,6 +41,43 @@ const LazyNestedMarkdown = lazy(() =>
     },
   })),
 );
+
+function MermaidCodeBlock({ chart }: { chart: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const [copied, copy] = useCopyToClipboard();
+
+  return (
+    <>
+      <div className="group/codeblock relative my-2">
+        <div className="overflow-x-auto rounded bg-muted p-2">
+          <div className="mb-1 select-none text-[10px] uppercase tracking-wider text-muted-foreground/80">
+            mermaid
+          </div>
+          <MermaidBlock chart={chart} />
+        </div>
+        {/* Expand button */}
+        <button
+          data-testid="mermaid-expand"
+          onClick={() => setExpanded(true)}
+          className="absolute right-10 top-2 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background/50 hover:text-foreground group-hover/codeblock:opacity-100"
+          aria-label="Expand diagram"
+        >
+          <Maximize2 className="icon-base" />
+        </button>
+        {/* Copy source button */}
+        <button
+          data-testid="code-block-copy"
+          onClick={() => copy(chart)}
+          className="absolute right-2 top-2 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background/50 hover:text-foreground group-hover/codeblock:opacity-100"
+          aria-label="Copy code"
+        >
+          {copied ? <Check className="icon-base" /> : <Copy className="icon-base" />}
+        </button>
+      </div>
+      <MermaidExpandedDialog chart={chart} open={expanded} onClose={() => setExpanded(false)} />
+    </>
+  );
+}
 
 function CopyButton({ text }: { text: string }) {
   const [copied, copy] = useCopyToClipboard();
@@ -106,8 +144,8 @@ export const baseMarkdownComponents = {
     const isBlock = className?.startsWith('language-');
     if (isBlock) {
       const language = className.replace('language-', '');
-      // Markdown blocks are rendered by the pre handler, just pass children through
-      if (MARKDOWN_LANGS.has(language)) return <>{children}</>;
+      // Markdown and mermaid blocks are rendered by the pre handler, just pass children through
+      if (MARKDOWN_LANGS.has(language) || language === 'mermaid') return <>{children}</>;
       const code = extractText(children).replace(/\n$/, '');
       return <HighlightedCode code={code} language={language} />;
     }
@@ -133,6 +171,11 @@ export const baseMarkdownComponents = {
     const text = extractText(children).replace(/\n$/, '');
     const langClass = children?.props?.className;
     const language = langClass?.startsWith('language-') ? langClass.replace('language-', '') : null;
+
+    // Mermaid blocks: render diagram inside a card with expand + copy buttons
+    if (language === 'mermaid') {
+      return <MermaidCodeBlock chart={text} />;
+    }
 
     const isMarkdown =
       (language && MARKDOWN_LANGS.has(language)) || (!language && looksLikeMarkdown(text));

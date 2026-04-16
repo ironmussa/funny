@@ -65,6 +65,9 @@ import {
   popStash as gitServicePopStash,
   dropStash as gitServiceDropStash,
   softReset as gitServiceSoftReset,
+  checkoutHash as gitServiceCheckoutHash,
+  revertCommit as gitServiceRevertCommit,
+  resetHard as gitServiceResetHard,
   merge as gitServiceMerge,
   createPullRequest as gitServiceCreatePR,
   resolveIdentity,
@@ -606,6 +609,57 @@ gitRoutes.post('/project/:projectId/revert', async (c) => {
   return c.json({ ok: true });
 });
 
+// POST /api/git/project/:projectId/checkout-commit
+gitRoutes.post('/project/:projectId/checkout-commit', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const { hash } = await c.req.json().catch(() => ({}));
+  if (!hash) return c.json({ error: 'hash is required' }, 400);
+
+  const result = await gitServiceCheckoutHash(projectId, userId, cwdResult.value, hash);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/project/:projectId/revert-commit
+gitRoutes.post('/project/:projectId/revert-commit', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const { hash } = await c.req.json().catch(() => ({}));
+  if (!hash) return c.json({ error: 'hash is required' }, 400);
+
+  const result = await gitServiceRevertCommit(projectId, userId, cwdResult.value, hash);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/project/:projectId/reset-hard
+gitRoutes.post('/project/:projectId/reset-hard', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const { hash } = await c.req.json().catch(() => ({}));
+  if (!hash) return c.json({ error: 'hash is required' }, 400);
+
+  const result = await gitServiceResetHard(projectId, userId, cwdResult.value, hash);
+  if (result.isErr()) return resultToResponse(c, result);
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true, output: result.value });
+});
+
 // POST /api/git/project/:projectId/conflict/resolve
 gitRoutes.post('/project/:projectId/conflict/resolve', async (c) => {
   const projectId = c.req.param('projectId');
@@ -957,12 +1011,18 @@ gitRoutes.post('/project/:projectId/gitignore', async (c) => {
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const cwd = cwdResult.value;
   const raw = await c.req.json().catch(() => ({}));
-  const pattern = raw?.pattern;
-  if (!pattern || typeof pattern !== 'string') {
-    return c.json({ error: 'pattern is required' }, 400);
+  const patterns: string[] = Array.isArray(raw?.patterns)
+    ? raw.patterns.filter((p: unknown) => typeof p === 'string' && p)
+    : typeof raw?.pattern === 'string' && raw.pattern
+      ? [raw.pattern]
+      : [];
+  if (patterns.length === 0) {
+    return c.json({ error: 'pattern or patterns is required' }, 400);
   }
-  const result = addToGitignore(cwd, pattern);
-  if (result.isErr()) return resultToResponse(c, result);
+  for (const p of patterns) {
+    const result = addToGitignore(cwd, p);
+    if (result.isErr()) return resultToResponse(c, result);
+  }
   return c.json({ ok: true });
 });
 
@@ -1787,6 +1847,57 @@ gitRoutes.post('/:threadId/reset-soft', async (c) => {
   return c.json({ ok: true, output: result.value });
 });
 
+// POST /api/git/:threadId/checkout-commit
+gitRoutes.post('/:threadId/checkout-commit', async (c) => {
+  const threadId = c.req.param('threadId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const { hash } = await c.req.json();
+  if (!hash) return c.json({ error: 'hash is required' }, 400);
+
+  const result = await gitServiceCheckoutHash(threadId, userId, cwdResult.value, hash);
+  if (result.isErr()) return resultToResponse(c, result);
+  await invalidateGitStatusCache(threadId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/:threadId/revert-commit
+gitRoutes.post('/:threadId/revert-commit', async (c) => {
+  const threadId = c.req.param('threadId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const { hash } = await c.req.json();
+  if (!hash) return c.json({ error: 'hash is required' }, 400);
+
+  const result = await gitServiceRevertCommit(threadId, userId, cwdResult.value, hash);
+  if (result.isErr()) return resultToResponse(c, result);
+  await invalidateGitStatusCache(threadId);
+  return c.json({ ok: true, output: result.value });
+});
+
+// POST /api/git/:threadId/reset-hard
+gitRoutes.post('/:threadId/reset-hard', async (c) => {
+  const threadId = c.req.param('threadId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(threadId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+
+  const { hash } = await c.req.json();
+  if (!hash) return c.json({ error: 'hash is required' }, 400);
+
+  const result = await gitServiceResetHard(threadId, userId, cwdResult.value, hash);
+  if (result.isErr()) return resultToResponse(c, result);
+  await invalidateGitStatusCache(threadId);
+  return c.json({ ok: true, output: result.value });
+});
+
 // POST /api/git/:threadId/gitignore
 gitRoutes.post('/:threadId/gitignore', async (c) => {
   const userId = c.get('userId') as string;
@@ -1796,12 +1907,17 @@ gitRoutes.post('/:threadId/gitignore', async (c) => {
   const cwd = cwdResult.value;
 
   const raw = await c.req.json().catch(() => ({}));
-  const pattern = raw?.pattern;
-  if (!pattern || typeof pattern !== 'string') {
-    return c.json({ error: 'pattern is required' }, 400);
+  const patterns: string[] = Array.isArray(raw?.patterns)
+    ? raw.patterns.filter((p: unknown) => typeof p === 'string' && p)
+    : typeof raw?.pattern === 'string' && raw.pattern
+      ? [raw.pattern]
+      : [];
+  if (patterns.length === 0) {
+    return c.json({ error: 'pattern or patterns is required' }, 400);
   }
-
-  const result = addToGitignore(cwd, pattern);
-  if (result.isErr()) return resultToResponse(c, result);
+  for (const p of patterns) {
+    const result = addToGitignore(cwd, p);
+    if (result.isErr()) return resultToResponse(c, result);
+  }
   return c.json({ ok: true });
 });

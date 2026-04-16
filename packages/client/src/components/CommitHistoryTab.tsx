@@ -10,11 +10,15 @@ import {
   RefreshCw,
   Search,
   X,
+  GitBranch,
+  RotateCcw,
+  History,
 } from 'lucide-react';
 import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
+import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { PullFetchButtons } from '@/components/pull-fetch-buttons';
 import { PushButton } from '@/components/push-button';
 import { Button } from '@/components/ui/button';
@@ -137,6 +141,14 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const [diffContent, setDiffContent] = useState<string | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
+
+  // Operation progress
+  const [checkoutInProgress, setCheckoutInProgress] = useState(false);
+  const [revertInProgress, setRevertInProgress] = useState(false);
+  const [resetInProgress, setResetInProgress] = useState(false);
+  const [confirmCheckoutOpen, setConfirmCheckoutOpen] = useState(false);
+  const [confirmRevertOpen, setConfirmRevertOpen] = useState(false);
+  const [confirmResetOpen, setConfirmResetOpen] = useState(false);
 
   const gitContextKey = effectiveThreadId || projectModeId;
 
@@ -495,6 +507,99 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
     setPrInProgress(false);
   }, [hasGitContext, prInProgress, prDialog, effectiveThreadId, projectModeId]);
 
+  const handleCheckoutCommit = useCallback(async () => {
+    if (!selectedHash || !hasGitContext || checkoutInProgress) return;
+    setCheckoutInProgress(true);
+    const result = effectiveThreadId
+      ? await api.checkoutCommit(effectiveThreadId, selectedHash)
+      : await api.projectCheckoutCommit(projectModeId!, selectedHash);
+
+    if (result.isOk()) {
+      toast.success(t('history.checkoutSuccess', 'Switched to commit (detached HEAD)'));
+      setSelectedHash(null);
+    } else {
+      toastError(result.error);
+    }
+    setCheckoutInProgress(false);
+    setConfirmCheckoutOpen(false);
+    // Refresh status and log
+    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
+    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+    loadedRef.current = false;
+    loadLog(0, false);
+  }, [
+    selectedHash,
+    hasGitContext,
+    checkoutInProgress,
+    effectiveThreadId,
+    projectModeId,
+    setSelectedHash,
+    loadLog,
+    t,
+  ]);
+
+  const handleRevertCommit = useCallback(async () => {
+    if (!selectedHash || !hasGitContext || revertInProgress) return;
+    setRevertInProgress(true);
+    const result = effectiveThreadId
+      ? await api.revertCommit(effectiveThreadId, selectedHash)
+      : await api.projectRevertCommit(projectModeId!, selectedHash);
+
+    if (result.isOk()) {
+      toast.success(t('history.revertSuccess', 'Commit reverted successfully'));
+      setSelectedHash(null);
+    } else {
+      toastError(result.error);
+    }
+    setRevertInProgress(false);
+    setConfirmRevertOpen(false);
+    // Refresh status and log
+    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
+    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+    loadedRef.current = false;
+    loadLog(0, false);
+  }, [
+    selectedHash,
+    hasGitContext,
+    revertInProgress,
+    effectiveThreadId,
+    projectModeId,
+    setSelectedHash,
+    loadLog,
+    t,
+  ]);
+
+  const handleResetHard = useCallback(async () => {
+    if (!selectedHash || !hasGitContext || resetInProgress) return;
+    setResetInProgress(true);
+    const result = effectiveThreadId
+      ? await api.resetHard(effectiveThreadId, selectedHash)
+      : await api.projectResetHard(projectModeId!, selectedHash);
+
+    if (result.isOk()) {
+      toast.success(t('history.resetSuccess', 'Branch reset to this commit'));
+      setSelectedHash(null);
+    } else {
+      toastError(result.error);
+    }
+    setResetInProgress(false);
+    setConfirmResetOpen(false);
+    // Refresh status and log
+    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
+    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+    loadedRef.current = false;
+    loadLog(0, false);
+  }, [
+    selectedHash,
+    hasGitContext,
+    resetInProgress,
+    effectiveThreadId,
+    projectModeId,
+    setSelectedHash,
+    loadLog,
+    t,
+  ]);
+
   // ── Render ──
 
   if (!hasGitContext) {
@@ -777,7 +882,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
                   setExpandedFile(null);
                   setDiffContent(null);
                 }}
-                className="shrink-0 text-muted-foreground"
+                className="sr-only shrink-0 text-muted-foreground"
                 data-testid="commit-detail-close"
               >
                 <X className="icon-xs" />
@@ -799,6 +904,78 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
                 <span className="flex-shrink-0 text-muted-foreground">
                   &middot; {commitFiles.length} file{commitFiles.length !== 1 ? 's' : ''}
                 </span>
+                <div className="ml-auto flex items-center gap-1">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setConfirmCheckoutOpen(true)}
+                        disabled={checkoutInProgress}
+                        data-testid="commit-checkout-btn"
+                      >
+                        {checkoutInProgress ? <Loader2 className="animate-spin" /> : <GitBranch />}
+                        {t('history.checkout', 'Checkout')}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      {t('history.checkoutTooltip', 'Checkout this commit (detached HEAD)')}
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        onClick={() => setConfirmRevertOpen(true)}
+                        disabled={revertInProgress}
+                        data-testid="commit-revert-btn"
+                      >
+                        {revertInProgress ? <Loader2 className="animate-spin" /> : <RotateCcw />}
+                        {t('history.revert', 'Revert')}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      {t('history.revertTooltip', 'Undo this commit with a new commit')}
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="text-destructive hover:text-destructive"
+                        onClick={() => setConfirmResetOpen(true)}
+                        disabled={resetInProgress}
+                        data-testid="commit-reset-btn"
+                      >
+                        {resetInProgress ? <Loader2 className="animate-spin" /> : <History />}
+                        {t('history.reset', 'Reset')}
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="bottom">
+                      {t('history.resetTooltip', 'Hard reset branch to this commit')}
+                    </TooltipContent>
+                  </Tooltip>
+
+                  <div className="mx-1 h-4 w-px bg-border" />
+
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => {
+                      setSelectedHash(null);
+                      setExpandedFile(null);
+                      setDiffContent(null);
+                    }}
+                    className="shrink-0 text-muted-foreground"
+                    data-testid="commit-detail-close"
+                  >
+                    <X className="icon-xs" />
+                  </Button>
+                </div>
               </div>
             )}
             {commitBody && (
@@ -957,6 +1134,46 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
           </div>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={confirmCheckoutOpen}
+        onOpenChange={setConfirmCheckoutOpen}
+        title={t('history.confirmCheckoutTitle', 'Checkout Commit')}
+        description={t(
+          'history.confirmCheckoutDesc',
+          'This will switch to a detached HEAD at this commit. Any uncommitted changes may be lost. Continue?',
+        )}
+        confirmLabel={t('history.confirmCheckoutButton', 'Checkout')}
+        onConfirm={handleCheckoutCommit}
+        onCancel={() => setConfirmCheckoutOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmRevertOpen}
+        onOpenChange={setConfirmRevertOpen}
+        title={t('history.confirmRevertTitle', 'Revert Commit')}
+        description={t(
+          'history.confirmRevertDesc',
+          'This will create a new commit that undoes the changes from this commit. Continue?',
+        )}
+        confirmLabel={t('history.confirmRevertButton', 'Revert')}
+        onConfirm={handleRevertCommit}
+        onCancel={() => setConfirmRevertOpen(false)}
+      />
+
+      <ConfirmDialog
+        open={confirmResetOpen}
+        onOpenChange={setConfirmResetOpen}
+        title={t('history.confirmResetTitle', 'Hard Reset Branch')}
+        description={t(
+          'history.confirmResetDesc',
+          'Are you sure you want to hard reset the current branch to this commit? This will discard all changes and commits after this point. This action cannot be undone.',
+        )}
+        confirmLabel={t('history.confirmResetButton', 'Reset Branch')}
+        onConfirm={handleResetHard}
+        onCancel={() => setConfirmResetOpen(false)}
+        variant="destructive"
+      />
     </div>
   );
 }

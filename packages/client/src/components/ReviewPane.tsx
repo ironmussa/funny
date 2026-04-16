@@ -223,7 +223,7 @@ export function ReviewPane() {
   const [stashDropInProgress, setStashDropInProgress] = useState<string | null>(null);
   const [resetInProgress, setResetInProgress] = useState(false);
   const [confirmDialog, setConfirmDialog] = useState<{
-    type: 'revert' | 'reset' | 'discard-all' | 'drop-stash';
+    type: 'revert' | 'reset' | 'discard-all' | 'drop-stash' | 'ignore';
     path?: string;
     paths?: string[];
     stashIndex?: string;
@@ -696,11 +696,14 @@ export function ReviewPane() {
 
   // selectedDiffContent removed — diffs now only shown in expanded modal
 
-  const filteredPaths = useMemo(() => new Set(filteredDiffs.map((d) => d.path)), [filteredDiffs]);
-  const checkedCount = fileSearch
-    ? [...checkedFiles].filter((p) => filteredPaths.has(p)).length
-    : checkedFiles.size;
-  const totalCount = filteredDiffs.length;
+  // Only count files that are actually visible (not hidden inside collapsed folders)
+  const visibleFiles = useMemo(
+    () => treeRows.filter((r): r is Extract<typeof r, { kind: 'file' }> => r.kind === 'file'),
+    [treeRows],
+  );
+  const visiblePaths = useMemo(() => new Set(visibleFiles.map((r) => r.file.path)), [visibleFiles]);
+  const checkedCount = [...checkedFiles].filter((p) => visiblePaths.has(p)).length;
+  const totalCount = visibleFiles.length;
 
   const virtualizer = useVirtualizer({
     count: treeRows.length,
@@ -724,9 +727,8 @@ export function ReviewPane() {
   };
 
   const toggleAll = () => {
-    const targetFiles = filteredDiffs;
-    const targetPaths = new Set(targetFiles.map((d) => d.path));
-    const allChecked = targetFiles.every((d) => checkedFiles.has(d.path));
+    const targetPaths = visiblePaths;
+    const allChecked = [...targetPaths].every((p) => checkedFiles.has(p));
     if (allChecked) {
       // Uncheck only the visible (filtered) files, keep others checked
       setCheckedFiles((prev) => {
@@ -899,6 +901,25 @@ export function ReviewPane() {
           defaultValue: '{{count}} file(s) discarded',
         }),
       );
+      await refresh();
+    }
+  };
+
+  const handleIgnoreFiles = () => {
+    const paths = checkedFiles.size > 0 ? Array.from(checkedFiles) : summaries.map((s) => s.path);
+    if (paths.length === 0) return;
+    setConfirmDialog({ type: 'ignore', paths });
+  };
+
+  const executeIgnoreFiles = async (paths: string[]) => {
+    if (!hasGitContext) return;
+    const result = effectiveThreadId
+      ? await api.addPatternsToGitignore(effectiveThreadId, paths)
+      : await api.projectAddPatternsToGitignore(projectModeId!, paths);
+    if (result.isErr()) {
+      toast.error(`Failed to update .gitignore: ${result.error.message}`);
+    } else {
+      toast.success(`${paths.length} path(s) added to .gitignore`);
       await refresh();
     }
   };
@@ -1834,6 +1855,27 @@ export function ReviewPane() {
                     </TooltipContent>
                   </Tooltip>
                 )}
+                {summaries.length > 0 && (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
+                        onClick={handleIgnoreFiles}
+                        disabled={!!actionInProgress}
+                        className="text-muted-foreground"
+                        data-testid="review-ignore-files"
+                      >
+                        <EyeOff className="icon-base" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent side="top">
+                      {checkedFiles.size > 0
+                        ? `Add ${checkedFiles.size} file(s) to .gitignore`
+                        : 'Add all to .gitignore'}
+                    </TooltipContent>
+                  </Tooltip>
+                )}
               </div>
 
               {/* File search */}
@@ -2667,9 +2709,11 @@ export function ReviewPane() {
           title={
             confirmDialog?.type === 'revert' || confirmDialog?.type === 'discard-all'
               ? t('review.discardChanges', 'Discard changes')
-              : confirmDialog?.type === 'drop-stash'
-                ? t('review.dropStashTitle', 'Discard stash')
-                : t('review.undoLastCommit', 'Undo last commit')
+              : confirmDialog?.type === 'ignore'
+                ? 'Add to .gitignore'
+                : confirmDialog?.type === 'drop-stash'
+                  ? t('review.dropStashTitle', 'Discard stash')
+                  : t('review.undoLastCommit', 'Undo last commit')
           }
           description={
             confirmDialog?.type === 'revert'
@@ -2679,9 +2723,11 @@ export function ReviewPane() {
                     count: confirmDialog?.paths?.length,
                     defaultValue: `Discard changes in ${confirmDialog?.paths?.length} file(s)? This cannot be undone.`,
                   })
-                : confirmDialog?.type === 'drop-stash'
-                  ? t('review.dropStashConfirm', 'Drop this stash entry? This cannot be undone.')
-                  : t('review.resetSoftConfirm', 'Undo the last commit? Changes will be kept.')
+                : confirmDialog?.type === 'ignore'
+                  ? `Add ${confirmDialog?.paths?.length} file(s) to .gitignore?`
+                  : confirmDialog?.type === 'drop-stash'
+                    ? t('review.dropStashConfirm', 'Drop this stash entry? This cannot be undone.')
+                    : t('review.resetSoftConfirm', 'Undo the last commit? Changes will be kept.')
           }
           cancelLabel={t('common.cancel', 'Cancel')}
           confirmLabel={t('common.confirm', 'Confirm')}
@@ -2695,6 +2741,8 @@ export function ReviewPane() {
               await executeDiscardAll(dialog.paths);
             } else if (dialog?.type === 'reset') {
               await executeResetSoft();
+            } else if (dialog?.type === 'ignore' && dialog.paths) {
+              await executeIgnoreFiles(dialog.paths);
             } else if (dialog?.type === 'drop-stash' && dialog.stashIndex != null) {
               await executeStashDrop(dialog.stashIndex);
             }

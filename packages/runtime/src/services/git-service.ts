@@ -3,7 +3,7 @@
  * @domain subdomain-type: supporting
  * @domain type: app-service
  * @domain layer: application
- * @domain emits: git:staged, git:unstaged, git:reverted, git:committed, git:pushed, git:pulled, git:merged, git:stashed, git:stash-popped, git:stash-dropped, git:reset-soft
+ * @domain emits: git:staged, git:unstaged, git:reverted, git:committed, git:pushed, git:pulled, git:merged, git:stashed, git:stash-popped, git:stash-dropped, git:reset-soft, git:checkout, git:revert, git:reset-hard
  * @domain depends: GitCore, ThreadEventBus, ProfileService, WSBroker
  */
 
@@ -287,6 +287,69 @@ export function softReset(
       userId,
       projectId: await getProjectId(threadId),
       cwd,
+      output,
+    });
+    invalidateStatusCache(cwd);
+    return output;
+  });
+}
+
+export function checkoutHash(
+  threadId: string,
+  userId: string,
+  cwd: string,
+  hash: string,
+): ResultAsync<string, DomainError> {
+  return git(['checkout', hash], cwd).map(async (output) => {
+    threadEventBus.emit('git:checkout', {
+      threadId,
+      userId,
+      projectId: await getProjectId(threadId),
+      cwd,
+      hash,
+      output,
+    });
+    invalidateStatusCache(cwd);
+    return output;
+  });
+}
+
+export function revertCommit(
+  threadId: string,
+  userId: string,
+  cwd: string,
+  hash: string,
+): ResultAsync<string, DomainError> {
+  return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) => {
+    const env = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
+    return git(['revert', hash, '--no-edit'], cwd, env).map(async (output) => {
+      threadEventBus.emit('git:revert', {
+        threadId,
+        userId,
+        projectId: await getProjectId(threadId),
+        cwd,
+        hash,
+        output,
+      });
+      invalidateStatusCache(cwd);
+      return output;
+    });
+  });
+}
+
+export function resetHard(
+  threadId: string,
+  userId: string,
+  cwd: string,
+  hash: string,
+): ResultAsync<string, DomainError> {
+  return git(['reset', '--hard', hash], cwd).map(async (output) => {
+    threadEventBus.emit('git:reset-hard', {
+      threadId,
+      userId,
+      projectId: await getProjectId(threadId),
+      cwd,
+      hash,
       output,
     });
     invalidateStatusCache(cwd);

@@ -592,6 +592,11 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ pattern }),
     }),
+  addPatternsToGitignore: (threadId: string, patterns: string[]) =>
+    request<{ ok: boolean }>(`/git/${threadId}/gitignore`, {
+      method: 'POST',
+      body: JSON.stringify({ patterns }),
+    }),
   getGitStatuses: (projectId: string, signal?: AbortSignal) =>
     request<{ statuses: GitStatusInfo[] }>(`/git/status?projectId=${projectId}`, { signal }),
   getGitStatus: (threadId: string, signal?: AbortSignal) =>
@@ -652,6 +657,21 @@ export const api = {
     }),
   resetSoft: (threadId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/${threadId}/reset-soft`, { method: 'POST' }),
+  checkoutCommit: (threadId: string, hash: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/${threadId}/checkout-commit`, {
+      method: 'POST',
+      body: JSON.stringify({ hash }),
+    }),
+  revertCommit: (threadId: string, hash: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/${threadId}/revert-commit`, {
+      method: 'POST',
+      body: JSON.stringify({ hash }),
+    }),
+  resetHard: (threadId: string, hash: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/${threadId}/reset-hard`, {
+      method: 'POST',
+      body: JSON.stringify({ hash }),
+    }),
 
   // Project-based git (no thread needed — operates on the project's main directory)
   projectGitStatus: (projectId: string, signal?: AbortSignal) =>
@@ -778,6 +798,21 @@ export const api = {
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/reset-soft`, {
       method: 'POST',
     }),
+  projectCheckoutCommit: (projectId: string, hash: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/checkout-commit`, {
+      method: 'POST',
+      body: JSON.stringify({ hash }),
+    }),
+  projectRevertCommit: (projectId: string, hash: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/revert-commit`, {
+      method: 'POST',
+      body: JSON.stringify({ hash }),
+    }),
+  projectResetHard: (projectId: string, hash: string) =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/reset-hard`, {
+      method: 'POST',
+      body: JSON.stringify({ hash }),
+    }),
   projectGitLog: (projectId: string, limit = 50, skip = 0, signal?: AbortSignal) =>
     request<{
       entries: Array<{
@@ -821,6 +856,11 @@ export const api = {
     request<{ ok: boolean }>(`/git/project/${projectId}/gitignore`, {
       method: 'POST',
       body: JSON.stringify({ pattern }),
+    }),
+  projectAddPatternsToGitignore: (projectId: string, patterns: string[]) =>
+    request<{ ok: boolean }>(`/git/project/${projectId}/gitignore`, {
+      method: 'POST',
+      body: JSON.stringify({ patterns }),
     }),
 
   // Git Workflow (server-side orchestration)

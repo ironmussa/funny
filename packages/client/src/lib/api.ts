@@ -38,6 +38,9 @@ import i18n from '@/i18n/config';
 import { startSpan, metric } from '@/lib/telemetry';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 
+// ─── Git pull strategy (matches `PullStrategy` in @funny/core/git/remote.ts) ──
+export type PullStrategy = 'ff-only' | 'merge' | 'rebase';
+
 // ─── Memory types (inlined from @funny/memory to avoid cross-package dep) ──
 export type FactType = 'decision' | 'bug' | 'pattern' | 'convention' | 'insight' | 'context';
 export type DecayClass = 'slow' | 'normal' | 'fast';
@@ -631,8 +634,11 @@ export const api = {
     ),
   getCommitBody: (threadId: string, hash: string) =>
     request<{ body: string }>(`/git/${threadId}/commit/${hash}/body`),
-  pull: (threadId: string) =>
-    request<{ ok: boolean; output?: string }>(`/git/${threadId}/pull`, { method: 'POST' }),
+  pull: (threadId: string, strategy: PullStrategy = 'ff-only') =>
+    request<{ ok: boolean; output?: string }>(`/git/${threadId}/pull`, {
+      method: 'POST',
+      body: JSON.stringify({ strategy }),
+    }),
   fetchOrigin: (threadId: string) =>
     request<{ ok: boolean }>(`/git/${threadId}/fetch`, { method: 'POST' }),
   stash: (threadId: string, files?: string[]) =>
@@ -767,8 +773,11 @@ export const api = {
     }),
   projectPush: (projectId: string) =>
     request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/push`, { method: 'POST' }),
-  projectPull: (projectId: string) =>
-    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/pull`, { method: 'POST' }),
+  projectPull: (projectId: string, strategy: PullStrategy = 'ff-only') =>
+    request<{ ok: boolean; output?: string }>(`/git/project/${projectId}/pull`, {
+      method: 'POST',
+      body: JSON.stringify({ strategy }),
+    }),
   projectFetchOrigin: (projectId: string) =>
     request<{ ok: boolean }>(`/git/project/${projectId}/fetch`, { method: 'POST' }),
   projectStash: (projectId: string, files?: string[]) =>

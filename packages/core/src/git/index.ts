@@ -54,6 +54,7 @@ export {
 export { commit, runHookCommand } from './commit.js';
 
 export { push, pull, createPR, mergeBranch, cloneRepo } from './remote.js';
+export type { PullStrategy } from './remote.js';
 
 export { getDiff, getDiffSummary, getSingleFileDiff, getFullContextFileDiff } from './diff.js';
 

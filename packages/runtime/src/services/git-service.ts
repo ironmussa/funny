@@ -28,6 +28,7 @@ import {
   removeWorktree,
   removeBranch,
   type GitIdentityOptions,
+  type PullStrategy,
 } from '@funny/core/git';
 import type { WSEvent } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
@@ -186,9 +187,10 @@ export function pullChanges(
   threadId: string,
   userId: string,
   cwd: string,
+  strategy: PullStrategy = 'ff-only',
 ): ResultAsync<string, DomainError> {
   return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) =>
-    gitPull(cwd, identity).map(async (output) => {
+    gitPull(cwd, strategy, identity).map(async (output) => {
       threadEventBus.emit('git:pulled', {
         threadId,
         userId,

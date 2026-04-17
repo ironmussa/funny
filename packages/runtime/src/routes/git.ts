@@ -95,6 +95,7 @@ import {
   workflowSchema,
   publishRepoSchema,
   resolveConflictSchema,
+  pullSchema,
 } from '../validation/schemas.js';
 
 export const gitRoutes = new Hono<HonoEnv>();
@@ -805,8 +806,11 @@ gitRoutes.post('/project/:projectId/pull', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(pullSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
   const identity = await resolveIdentity(userId);
-  const result = await pull(cwdResult.value, identity);
+  const result = await pull(cwdResult.value, parsed.value.strategy, identity);
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
   return c.json({ ok: true, output: result.value });
@@ -1737,8 +1741,11 @@ gitRoutes.post('/:threadId/pull', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireThreadCwd(threadId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(pullSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
 
-  const result = await gitServicePull(threadId, userId, cwdResult.value);
+  const result = await gitServicePull(threadId, userId, cwdResult.value, parsed.value.strategy);
   if (result.isErr()) return resultToResponse(c, result);
   await invalidateGitStatusCache(threadId);
   return c.json({ ok: true, output: result.value });

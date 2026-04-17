@@ -20,6 +20,7 @@ import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { PullFetchButtons } from '@/components/pull-fetch-buttons';
+import { PullStrategyDialog, isDivergedBranchesError } from '@/components/pull-strategy-dialog';
 import { PushButton } from '@/components/push-button';
 import { Button } from '@/components/ui/button';
 import {
@@ -32,7 +33,7 @@ import {
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { api } from '@/lib/api';
+import { api, type PullStrategy } from '@/lib/api';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import { shortRelativeDate } from '@/lib/thread-utils';
 import { toastError } from '@/lib/toast-error';
@@ -106,6 +107,10 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
 
   // Git operation states
   const [pullInProgress, setPullInProgress] = useState(false);
+  const [pullStrategyDialog, setPullStrategyDialog] = useState<{
+    open: boolean;
+    errorMessage: string;
+  }>({ open: false, errorMessage: '' });
   const [fetchInProgress, setFetchInProgress] = useState(false);
   const [pushInProgress, setPushInProgress] = useState(false);
   const [prInProgress, setPrInProgress] = useState(false);
@@ -402,29 +407,58 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
 
   const hasUnpushed = unpushedHashes.size > 0;
 
+  const runPull = useCallback(
+    async (strategy: PullStrategy) => {
+      const result = effectiveThreadId
+        ? await api.pull(effectiveThreadId, strategy)
+        : await api.projectPull(projectModeId!, strategy);
+      if (result.isErr()) {
+        const msg = result.error.message;
+        if (strategy === 'ff-only' && isDivergedBranchesError(msg)) {
+          setPullStrategyDialog({ open: true, errorMessage: msg });
+          return;
+        }
+        toast.error(
+          t('review.pullFailed', {
+            message: msg,
+            defaultValue: `Pull failed: ${msg}`,
+          }),
+        );
+      } else {
+        toast.success(t('review.pullSuccess', 'Pulled successfully'));
+      }
+      // Refresh git status (unpulledCommitCount, etc.) like ReviewPane does
+      if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
+      else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+      loadedRef.current = false;
+      loadLog(0, false);
+    },
+    [effectiveThreadId, projectModeId, t, loadLog],
+  );
+
   const handlePull = useCallback(async () => {
     if (!hasGitContext || pullInProgress) return;
     setPullInProgress(true);
-    const result = effectiveThreadId
-      ? await api.pull(effectiveThreadId)
-      : await api.projectPull(projectModeId!);
-    if (result.isErr()) {
-      toast.error(
-        t('review.pullFailed', {
-          message: result.error.message,
-          defaultValue: `Pull failed: ${result.error.message}`,
-        }),
-      );
-    } else {
-      toast.success(t('review.pullSuccess', 'Pulled successfully'));
+    try {
+      await runPull('ff-only');
+    } finally {
+      setPullInProgress(false);
     }
-    setPullInProgress(false);
-    // Refresh git status (unpulledCommitCount, etc.) like ReviewPane does
-    if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
-    else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
-    loadedRef.current = false;
-    loadLog(0, false);
-  }, [hasGitContext, pullInProgress, effectiveThreadId, projectModeId, t, loadLog]);
+  }, [hasGitContext, pullInProgress, runPull]);
+
+  const handlePullStrategyChosen = useCallback(
+    async (strategy: Exclude<PullStrategy, 'ff-only'>) => {
+      setPullStrategyDialog({ open: false, errorMessage: '' });
+      if (pullInProgress) return;
+      setPullInProgress(true);
+      try {
+        await runPull(strategy);
+      } finally {
+        setPullInProgress(false);
+      }
+    },
+    [pullInProgress, runPull],
+  );
 
   const handleFetchOrigin = useCallback(async () => {
     if (!hasGitContext || fetchInProgress) return;
@@ -1173,6 +1207,13 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
         onConfirm={handleResetHard}
         onCancel={() => setConfirmResetOpen(false)}
         variant="destructive"
+      />
+
+      <PullStrategyDialog
+        open={pullStrategyDialog.open}
+        onOpenChange={(open) => setPullStrategyDialog((s) => ({ ...s, open }))}
+        errorMessage={pullStrategyDialog.errorMessage}
+        onChoose={handlePullStrategyChosen}
       />
     </div>
   );

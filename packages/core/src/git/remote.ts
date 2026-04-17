@@ -22,10 +22,29 @@ export function push(cwd: string, identity?: GitIdentityOptions): ResultAsync<st
 }
 
 /**
- * Pull from remote (fast-forward only).
+ * Strategy used when `git pull` encounters diverging branches.
+ * - `ff-only` → require fast-forward; fail if histories diverged (default, safest)
+ * - `merge`   → create a merge commit (`git pull --no-ff`)
+ * - `rebase`  → rebase local commits onto upstream (`git pull --rebase`)
  */
-export function pull(cwd: string, identity?: GitIdentityOptions): ResultAsync<string, DomainError> {
-  return gitRemote(['pull', '--ff-only'], cwd, identity);
+export type PullStrategy = 'ff-only' | 'merge' | 'rebase';
+
+/**
+ * Pull from remote using the given strategy.
+ * When `strategy` is omitted it defaults to `ff-only`.
+ */
+export function pull(
+  cwd: string,
+  strategy: PullStrategy = 'ff-only',
+  identity?: GitIdentityOptions,
+): ResultAsync<string, DomainError> {
+  const args =
+    strategy === 'rebase'
+      ? ['pull', '--rebase']
+      : strategy === 'merge'
+        ? ['pull', '--no-ff']
+        : ['pull', '--ff-only'];
+  return gitRemote(args, cwd, identity);
 }
 
 /**

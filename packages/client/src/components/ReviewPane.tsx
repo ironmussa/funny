@@ -34,6 +34,7 @@ import {
   PenLine,
   RotateCcw,
   ChevronRight,
+  GitBranch,
 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
@@ -43,6 +44,7 @@ import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { PullFetchButtons } from '@/components/pull-fetch-buttons';
+import { PullStrategyDialog, isDivergedBranchesError } from '@/components/pull-strategy-dialog';
 import { PushButton } from '@/components/push-button';
 import { Button } from '@/components/ui/button';
 import {
@@ -76,7 +78,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { TriCheckbox } from '@/components/ui/tri-checkbox';
 import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
 import { useElementLeft } from '@/hooks/use-element-width';
-import { api } from '@/lib/api';
+import { api, type PullStrategy } from '@/lib/api';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import { openFileInExternalEditor, getEditorLabel } from '@/lib/editor-utils';
 import { FileExtensionIcon } from '@/lib/file-icons';
@@ -214,6 +216,10 @@ export function ReviewPane() {
 
   // New git operations state
   const [pullInProgress, setPullInProgress] = useState(false);
+  const [pullStrategyDialog, setPullStrategyDialog] = useState<{
+    open: boolean;
+    errorMessage: string;
+  }>({ open: false, errorMessage: '' });
   const [fetchInProgress, setFetchInProgress] = useState(false);
   const [stashInProgress, setStashInProgress] = useState(false);
   const [stashEntries, setStashEntries] = useState<
@@ -1261,27 +1267,52 @@ export function ReviewPane() {
 
   // ── New git operation handlers ──
 
-  const handlePull = async () => {
-    if (!hasGitContext || pullInProgress) return;
-    setPullInProgress(true);
+  const runPull = async (strategy: PullStrategy) => {
     const result = effectiveThreadId
-      ? await api.pull(effectiveThreadId)
-      : await api.projectPull(projectModeId!);
+      ? await api.pull(effectiveThreadId, strategy)
+      : await api.projectPull(projectModeId!, strategy);
     if (result.isErr()) {
+      const msg = result.error.message;
+      // When ff-only fails because of a diverged branch, offer merge/rebase
+      // instead of just surfacing the raw git hint to the user.
+      if (strategy === 'ff-only' && isDivergedBranchesError(msg)) {
+        setPullStrategyDialog({ open: true, errorMessage: msg });
+        return;
+      }
       toast.error(
         t('review.pullFailed', {
-          message: result.error.message,
-          defaultValue: `Pull failed: ${result.error.message}`,
+          message: msg,
+          defaultValue: `Pull failed: ${msg}`,
         }),
       );
     } else {
       toast.success(t('review.pullSuccess', 'Pulled successfully'));
     }
-    setPullInProgress(false);
     // Force-refresh git status so unpulled badge clears immediately after pull.
     if (effectiveThreadId) useGitStatusStore.getState().fetchForThread(effectiveThreadId, true);
     else if (projectModeId) useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
     await refresh();
+  };
+
+  const handlePull = async () => {
+    if (!hasGitContext || pullInProgress) return;
+    setPullInProgress(true);
+    try {
+      await runPull('ff-only');
+    } finally {
+      setPullInProgress(false);
+    }
+  };
+
+  const handlePullStrategyChosen = async (strategy: Exclude<PullStrategy, 'ff-only'>) => {
+    setPullStrategyDialog({ open: false, errorMessage: '' });
+    if (pullInProgress) return;
+    setPullInProgress(true);
+    try {
+      await runPull(strategy);
+    } finally {
+      setPullInProgress(false);
+    }
   };
 
   const handleFetchOrigin = async () => {
@@ -2082,15 +2113,33 @@ export function ReviewPane() {
                               })}
                               data-testid={`review-file-checkbox-${f.path}`}
                             />
-                            <FileExtensionIcon
-                              filePath={f.path}
-                              className="icon-base flex-shrink-0 text-muted-foreground/80"
-                            />
+                            {f.kind === 'submodule' ? (
+                              <GitBranch
+                                className="icon-base flex-shrink-0 text-purple-500 dark:text-purple-400"
+                                data-testid={`review-submodule-icon-${f.path}`}
+                              />
+                            ) : (
+                              <FileExtensionIcon
+                                filePath={f.path}
+                                className="icon-base flex-shrink-0 text-muted-foreground/80"
+                              />
+                            )}
                             <HighlightText
-                              text={f.path.split('/').pop() || ''}
+                              text={f.path.split('/').pop() || f.path}
                               query={fileSearch}
                               className="flex-1 truncate font-mono-explorer text-xs"
                             />
+                            {f.kind === 'submodule' && (
+                              <span
+                                className="flex-shrink-0 rounded-sm border border-purple-500/40 bg-purple-500/10 px-1 text-[10px] uppercase tracking-wide text-purple-600 dark:text-purple-300"
+                                title={t('review.submoduleTooltip', {
+                                  defaultValue: 'Nested git repository (gitlink)',
+                                })}
+                                data-testid={`review-submodule-badge-${f.path}`}
+                              >
+                                {t('review.submodule', { defaultValue: 'submodule' })}
+                              </span>
+                            )}
                             <DiffStats
                               linesAdded={f.additions ?? 0}
                               linesDeleted={f.deletions ?? 0}
@@ -2747,6 +2796,14 @@ export function ReviewPane() {
               await executeStashDrop(dialog.stashIndex);
             }
           }}
+        />
+
+        {/* Strategy picker shown when fast-forward pull fails due to diverged branches */}
+        <PullStrategyDialog
+          open={pullStrategyDialog.open}
+          onOpenChange={(open) => setPullStrategyDialog((s) => ({ ...s, open }))}
+          errorMessage={pullStrategyDialog.errorMessage}
+          onChoose={handlePullStrategyChosen}
         />
 
         {/* Create PR dialog */}

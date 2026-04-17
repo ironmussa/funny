@@ -26,6 +26,15 @@ import {
 } from '@/components/ui/breadcrumb';
 import { Button } from '@/components/ui/button';
 import {
+  ColorPicker,
+  ColorPickerAlpha,
+  ColorPickerEyeDropper,
+  ColorPickerFormat,
+  ColorPickerHue,
+  ColorPickerOutput,
+  ColorPickerSelection,
+} from '@/components/ui/color-picker';
+import {
   Command,
   CommandInput,
   CommandList,
@@ -241,28 +250,45 @@ function ProjectColorPicker({
       </div>
       {/* Custom color picker */}
       <div className="flex items-center gap-3">
-        <div className="relative">
-          <input
-            type="color"
-            value={currentColor || '#7CB9E8'}
-            onChange={(e) => onSave(projectId, { color: e.target.value })}
-            aria-label="Custom color picker"
-            className="absolute inset-0 h-full w-full cursor-pointer opacity-0"
-          />
-          <div
-            className={cn(
-              'h-8 w-8 rounded-lg border-2 shadow-sm cursor-pointer transition-all hover:scale-105',
-              currentColor ? 'border-primary/50' : 'border-border',
-            )}
-            style={{ backgroundColor: currentColor || 'transparent' }}
-          >
-            {!currentColor && (
-              <div className="flex h-full w-full items-center justify-center rounded-md bg-gradient-to-br from-muted-foreground/10 to-muted-foreground/30">
-                <span className="text-xs text-muted-foreground">—</span>
+        <Popover>
+          <PopoverTrigger asChild>
+            <button
+              type="button"
+              aria-label="Open custom color picker"
+              data-testid="project-color-custom-trigger"
+              className={cn(
+                'h-8 w-8 rounded-lg border-2 shadow-sm cursor-pointer transition-all hover:scale-105',
+                currentColor ? 'border-primary/50' : 'border-border',
+              )}
+              style={{ backgroundColor: currentColor || 'transparent' }}
+            >
+              {!currentColor && (
+                <div className="flex h-full w-full items-center justify-center rounded-md bg-gradient-to-br from-muted-foreground/10 to-muted-foreground/30">
+                  <span className="text-xs text-muted-foreground">—</span>
+                </div>
+              )}
+            </button>
+          </PopoverTrigger>
+          <PopoverContent className="w-72 p-3" align="start">
+            <ColorPicker
+              value={currentColor || '#7CB9E8'}
+              onChange={([r, g, b]) => {
+                const hex =
+                  '#' + [r, g, b].map((v) => Math.round(v).toString(16).padStart(2, '0')).join('');
+                onSave(projectId, { color: hex });
+              }}
+            >
+              <ColorPickerSelection className="h-40 rounded-lg" />
+              <ColorPickerHue />
+              <ColorPickerAlpha />
+              <div className="flex items-center gap-2">
+                <ColorPickerEyeDropper />
+                <ColorPickerOutput />
+                <ColorPickerFormat />
               </div>
-            )}
-          </div>
-        </div>
+            </ColorPicker>
+          </PopoverContent>
+        </Popover>
         <span className="text-xs text-muted-foreground">Custom color</span>
         {currentColor && (
           <span className="font-mono text-xs text-muted-foreground">{currentColor}</span>

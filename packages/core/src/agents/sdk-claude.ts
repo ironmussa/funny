@@ -171,10 +171,12 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       };
     }
 
-    // Pass effort level to control thinking depth (Claude SDK specific)
-    // Note: 'max' is not available for Claude.ai subscribers (CLI/SDK), only via direct API
+    // Pass effort level to control thinking depth (Claude SDK specific).
+    // Supported values: 'low' | 'medium' | 'high' | 'xhigh' | 'max'. The SDK
+    // rejects unsupported levels per model at runtime; coerce unknown values
+    // to 'high' defensively for un-validated callers.
     if (this.options.effort) {
-      const validEfforts = new Set(['low', 'medium', 'high']);
+      const validEfforts = new Set(['low', 'medium', 'high', 'xhigh', 'max']);
       sdkOptions.effort = validEfforts.has(this.options.effort) ? this.options.effort : 'high';
     }
 

@@ -14,7 +14,7 @@ import { z } from 'zod';
 export const threadModeSchema = z.enum(['local', 'worktree']);
 export const threadRuntimeSchema = z.enum(['local', 'remote']);
 export const agentProviderSchema = z.enum(['claude', 'codex', 'gemini', 'deepagent', 'openswe']);
-export const claudeModelSchema = z.enum(['sonnet', 'sonnet-4.6', 'opus', 'haiku']);
+export const claudeModelSchema = z.enum(['sonnet', 'sonnet-4.6', 'opus', 'opus-4.7', 'haiku']);
 export const codexModelSchema = z.enum(['o3', 'o4-mini', 'codex-mini']);
 export const geminiModelSchema = z.enum([
   'gemini-2.0-flash',
@@ -117,7 +117,7 @@ export const reorderProjectsSchema = z.object({
 });
 
 export const threadPurposeSchema = z.enum(['explore', 'plan', 'implement']);
-export const effortLevelSchema = z.enum(['low', 'medium', 'high']);
+export const effortLevelSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max']);
 
 export const createThreadSchema = z.object({
   projectId: z.string().min(1),
@@ -206,6 +206,11 @@ export const commitSchema = z.object({
 export const createPRSchema = z.object({
   title: z.string().min(1, 'title is required').max(500),
   body: z.string().max(100_000),
+});
+
+export const pullStrategySchema = z.enum(['ff-only', 'merge', 'rebase']);
+export const pullSchema = z.object({
+  strategy: pullStrategySchema.optional().default('ff-only'),
 });
 
 export const createCommandSchema = z.object({

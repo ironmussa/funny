@@ -47,7 +47,7 @@ export interface StartAgentOptions {
   systemPrefix?: string;
   /** Additional environment variables to pass to the agent subprocess (e.g., API keys). */
   env?: Record<string, string>;
-  /** Effort level for Claude SDK — controls thinking depth ('low' | 'medium' | 'high' | 'max') */
+  /** Effort level for Claude SDK — controls thinking depth ('low' | 'medium' | 'high' | 'xhigh' | 'max') */
   effort?: string;
   /** Built-in skill names to disable (Deep Agent only) */
   builtinSkillsDisabled?: string[];

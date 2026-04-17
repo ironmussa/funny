@@ -29,6 +29,7 @@ const CLAUDE_MODEL_IDS: Record<ClaudeModel, string> = {
   sonnet: 'claude-sonnet-4-5-20250929',
   'sonnet-4.6': 'claude-sonnet-4-6',
   opus: 'claude-opus-4-6',
+  'opus-4.7': 'claude-opus-4-7',
   haiku: 'claude-haiku-4-5-20251001',
 };
 
@@ -78,6 +79,7 @@ const CLAUDE_MODEL_LABELS: Record<ClaudeModel, string> = {
   sonnet: 'Sonnet 4.5',
   'sonnet-4.6': 'Sonnet 4.6',
   opus: 'Opus 4.6',
+  'opus-4.7': 'Opus 4.7',
 };
 
 const CODEX_MODEL_LABELS: Record<CodexModel, string> = {

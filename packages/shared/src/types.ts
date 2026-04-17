@@ -359,7 +359,7 @@ export type AgentProvider =
 
 export type ThreadSource = 'web' | 'chrome_extension' | 'api' | 'automation' | 'ingest';
 
-export type ClaudeModel = 'sonnet' | 'sonnet-4.6' | 'opus' | 'haiku';
+export type ClaudeModel = 'sonnet' | 'sonnet-4.6' | 'opus' | 'opus-4.7' | 'haiku';
 export type CodexModel = 'o3' | 'o4-mini' | 'codex-mini';
 export type GeminiModel =
   | 'gemini-2.0-flash'
@@ -384,7 +384,7 @@ export type DeepAgentModel =
 export type OpenSWEModel = 'openswe-default';
 export type AgentModel = ClaudeModel | CodexModel | GeminiModel | DeepAgentModel | OpenSWEModel;
 export type PermissionMode = 'plan' | 'auto' | 'autoEdit' | 'confirmEdit' | 'ask';
-export type EffortLevel = 'low' | 'medium' | 'high' | 'max';
+export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 // ─── Agent Definitions ──────────────────────────────────
 
@@ -1026,11 +1026,19 @@ export interface ProjectHook {
 
 export type FileStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'conflicted';
 
+/**
+ * Kind of entry tracked by git.
+ * - 'file' (default): regular file.
+ * - 'submodule': gitlink (mode 160000) or nested git repo — the entry represents a whole repository, not a file.
+ */
+export type FileDiffKind = 'file' | 'submodule';
+
 export interface FileDiff {
   path: string;
   status: FileStatus;
   diff: string;
   staged: boolean;
+  kind?: FileDiffKind;
 }
 
 /** Lightweight file metadata without diff content (for summary endpoint). */
@@ -1040,6 +1048,7 @@ export interface FileDiffSummary {
   staged: boolean;
   additions?: number;
   deletions?: number;
+  kind?: FileDiffKind;
 }
 
 export interface DiffSummaryResponse {

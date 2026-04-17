@@ -40,6 +40,7 @@ export const PROVIDER_MODELS: Record<string, ModelConfig[]> = {
     { value: 'sonnet', i18nKey: 'sonnet', fallback: 'Sonnet 4.5', contextWindow: 200_000 },
     { value: 'sonnet-4.6', i18nKey: 'sonnet46', fallback: 'Sonnet 4.6', contextWindow: 200_000 },
     { value: 'opus', i18nKey: 'opus', fallback: 'Opus 4.6', contextWindow: 200_000 },
+    { value: 'opus-4.7', i18nKey: 'opus47', fallback: 'Opus 4.7', contextWindow: 200_000 },
   ],
   codex: [
     { value: 'o3', i18nKey: 'o3', fallback: 'o3', contextWindow: 200_000 },
@@ -247,15 +248,32 @@ export const EFFORT_LEVELS: EffortConfig[] = [
   { value: 'low', label: 'Low', description: 'Minimal thinking — fastest' },
   { value: 'medium', label: 'Medium', description: 'Balanced speed and quality' },
   { value: 'high', label: 'High', description: 'Deep reasoning (default)' },
+  { value: 'xhigh', label: 'Extra High', description: 'Long-horizon agentic work — Opus 4.7 only' },
+  { value: 'max', label: 'Max', description: 'Frontier reasoning — highest cost' },
 ];
 
 /** Providers that support effort/reasoning level configuration. */
 const PROVIDERS_WITH_EFFORT = new Set(['claude', 'codex']);
 
-/** Get available effort levels for a given provider. Returns empty array if not supported. */
-export function getEffortLevels(_model: string, provider?: string): EffortConfig[] {
+// Claude models that support effort beyond low/medium/high.
+// Keys are the friendly model names from `@funny/shared` models registry.
+const CLAUDE_MODELS_WITH_XHIGH = new Set(['opus-4.7']);
+const CLAUDE_MODELS_WITH_MAX = new Set(['opus-4.7', 'opus', 'sonnet-4.6']);
+
+/** Get available effort levels for a given provider + model. Returns empty array if not supported. */
+export function getEffortLevels(model: string, provider?: string): EffortConfig[] {
   if (provider && !PROVIDERS_WITH_EFFORT.has(provider)) return [];
-  return EFFORT_LEVELS;
+  if (provider !== 'claude') {
+    // Codex and other effort-capable providers only expose low/medium/high.
+    return EFFORT_LEVELS.filter(
+      (e) => e.value === 'low' || e.value === 'medium' || e.value === 'high',
+    );
+  }
+  return EFFORT_LEVELS.filter((e) => {
+    if (e.value === 'xhigh') return CLAUDE_MODELS_WITH_XHIGH.has(model);
+    if (e.value === 'max') return CLAUDE_MODELS_WITH_MAX.has(model);
+    return true;
+  });
 }
 
 const DEFAULT_CONTEXT_WINDOW = 200_000;

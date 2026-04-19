@@ -5,6 +5,7 @@ import * as React from 'react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { Separator } from '@/components/ui/separator';
 import {
   Sheet,
@@ -326,67 +327,65 @@ SidebarTrigger.displayName = 'SidebarTrigger';
 
 const SidebarRail = React.forwardRef<HTMLButtonElement, React.ComponentProps<'button'>>(
   ({ className, ...props }, ref) => {
-    const { toggleSidebar, setSidebarWidth, sidebarWidth, setIsResizing } = useSidebar();
-    const isDragging = React.useRef(false);
-    const startX = React.useRef(0);
+    const { toggleSidebar, sidebarWidth, setSidebarWidth, setIsResizing } = useSidebar();
+    const sidebarWidthRef = React.useRef(sidebarWidth);
+    React.useEffect(() => {
+      sidebarWidthRef.current = sidebarWidth;
+    }, [sidebarWidth]);
+
     const startWidth = React.useRef(0);
+    const startX = React.useRef(0);
 
-    const handlePointerDown = React.useCallback(
-      (e: React.PointerEvent) => {
-        isDragging.current = true;
-        startX.current = e.clientX;
-        startWidth.current = sidebarWidth;
+    const { resizing, handlePointerDown, handlePointerMove, handlePointerUp } = useResizeHandle({
+      direction: 'horizontal',
+      onResizeStart: () => {
+        startWidth.current = sidebarWidthRef.current;
         setIsResizing(true);
-        document.body.style.cursor = 'col-resize';
-        document.body.style.userSelect = 'none';
-        (e.target as HTMLElement).setPointerCapture(e.pointerId);
       },
-      [sidebarWidth, setIsResizing],
-    );
-
-    const handlePointerMove = React.useCallback(
-      (e: React.PointerEvent) => {
-        if (!isDragging.current) return;
-        const delta = e.clientX - startX.current;
+      onResize: (delta) => {
         setSidebarWidth(startWidth.current + delta);
       },
-      [setSidebarWidth],
+      onResizeEnd: () => {
+        setIsResizing(false);
+      },
+    });
+
+    // Wrap pointerdown to capture clientX for click-vs-drag detection
+    const onPointerDown = React.useCallback(
+      (e: React.PointerEvent<HTMLButtonElement>) => {
+        startX.current = e.clientX;
+        handlePointerDown(e);
+      },
+      [handlePointerDown],
     );
 
-    const handlePointerUp = React.useCallback(
-      (e: React.PointerEvent) => {
-        if (!isDragging.current) return;
-        isDragging.current = false;
-        setIsResizing(false);
-        document.body.style.cursor = '';
-        document.body.style.userSelect = '';
-        (e.target as HTMLElement).releasePointerCapture(e.pointerId);
+    const onClick = React.useCallback(
+      (e: React.MouseEvent<HTMLButtonElement>) => {
+        // Only toggle if it wasn't a drag
+        if (Math.abs(e.clientX - startX.current) < 5) {
+          toggleSidebar();
+        }
       },
-      [setIsResizing],
+      [toggleSidebar],
     );
 
     return (
       <TooltipProvider>
         <Tooltip>
           <TooltipTrigger asChild>
-            <button
+            <ResizeHandle
               ref={ref}
-              data-sidebar="rail"
-              aria-label="Toggle Sidebar"
-              tabIndex={-1}
-              onClick={(e) => {
-                // Only toggle if it wasn't a drag
-                if (Math.abs(e.clientX - startX.current) < 5) {
-                  toggleSidebar();
-                }
-              }}
-              onPointerDown={handlePointerDown}
+              direction="horizontal"
+              resizing={resizing}
+              onPointerDown={onPointerDown}
               onPointerMove={handlePointerMove}
               onPointerUp={handlePointerUp}
+              onClick={onClick}
+              data-sidebar="rail"
+              aria-label="Toggle Sidebar"
               className={cn(
-                'absolute inset-y-0 z-20 hidden w-[3px] translate-x-full bg-border transition-colors ease-linear hover:bg-ring/50 group-data-[side=left]:right-0 group-data-[side=right]:left-0 sm:flex',
-                'cursor-col-resize',
-                'before:absolute before:inset-y-0 before:-left-[5px] before:w-[13px] before:content-[""]',
+                'absolute inset-y-0 z-20 hidden translate-x-full sm:block',
+                'group-data-[side=left]:right-0 group-data-[side=right]:left-0',
                 'group-data-[collapsible=offcanvas]:translate-x-0 group-data-[collapsible=offcanvas]:hover:bg-sidebar',
                 '[[data-side=left][data-collapsible=offcanvas]_&]:-right-2',
                 '[[data-side=right][data-collapsible=offcanvas]_&]:-left-2',

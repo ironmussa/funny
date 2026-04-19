@@ -1,10 +1,9 @@
 import { PanelLeft } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
-import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { useNavigate } from 'react-router-dom';
 
 import { ErrorBoundary } from '@/components/ErrorBoundary';
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from '@/components/ui/resizable';
+import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
 import { WorkflowErrorModal } from '@/components/WorkflowErrorModal';
@@ -12,6 +11,7 @@ import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useRouteSync } from '@/hooks/use-route-sync';
 import { useThreadHistoryTracker } from '@/hooks/use-thread-history-tracker';
 import { useWS } from '@/hooks/use-ws';
+import { cn } from '@/lib/utils';
 import { TOAST_DURATION } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
@@ -151,8 +151,7 @@ export function App() {
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
 
-  // --- Right panel (ResizablePanelGroup) ---
-  const rightPanelRef = useRef<PanelImperativeHandle>(null);
+  // --- Right panel layout ---
   const isFullScreenView =
     settingsOpen ||
     generalSettingsOpen ||
@@ -164,37 +163,20 @@ export function App() {
     !!allThreadsProjectId;
   const rightPaneVisible = reviewPaneOpen && !isFullScreenView;
 
-  // Sync panel collapse/expand with store
-  useEffect(() => {
-    const panel = rightPanelRef.current;
-    if (!panel || isFullScreenView) return;
-    try {
-      if (rightPaneVisible) {
-        if (panel.isCollapsed()) panel.expand();
-      } else {
-        if (!panel.isCollapsed()) panel.collapse();
-      }
-    } catch {
-      // Panel may not be registered with PanelGroup yet after re-mount
-    }
-  }, [rightPaneVisible, isFullScreenView]);
-
-  // Persist right panel size to store (convert px → vw) and detect collapse/expand
-  const handleRightPanelResize = useCallback(
-    (size: { asPercentage: number; inPixels: number }) => {
-      const state = useUIStore.getState();
-      if (size.inPixels === 0) {
-        // Panel collapsed — sync store
-        if (state.reviewPaneOpen) state.setReviewPaneOpen(false);
-        return;
-      }
-      // Panel expanded — sync store
-      if (!state.reviewPaneOpen) state.setReviewPaneOpen(true);
-      const vw = (size.inPixels / window.innerWidth) * 100;
-      setReviewPaneWidth(vw);
+  // Drag-to-resize for the right pane. Capture starting width on pointerdown
+  // so the first drag responds immediately (no unit-normalization snap).
+  const dragStartWidthVw = useRef(0);
+  const { resizing, handlePointerDown, handlePointerMove, handlePointerUp } = useResizeHandle({
+    direction: 'horizontal',
+    onResizeStart: () => {
+      dragStartWidthVw.current = useUIStore.getState().reviewPaneWidth;
     },
-    [setReviewPaneWidth],
-  );
+    onResize: (deltaPx) => {
+      const deltaVw = (deltaPx / window.innerWidth) * 100;
+      // Dragging the handle right shrinks the right pane
+      setReviewPaneWidth(dragStartWidthVw.current - deltaVw);
+    },
+  });
 
   // Eagerly mount ReviewPane (hidden) after initial load so first toggle is instant.
   // Deferred via requestIdleCallback to avoid blocking the initial render.
@@ -264,91 +246,87 @@ export function App() {
       </ErrorBoundary>
       <CollapsedSidebarStrip />
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <ResizablePanelGroup orientation="horizontal" data-testid="main-panel-group">
-          {/* Center panel — main content + terminal */}
-          <ResizablePanel
-            minSize="30%"
-            className="flex flex-col"
-            style={{ overflow: 'hidden', minWidth: 0 }}
+      <div className="flex min-h-0 flex-1 overflow-hidden" data-testid="main-panel-group">
+        {/* Center panel — main content + terminal */}
+        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+          <SidebarInset className="flex h-full flex-col overflow-hidden">
+            <div className="flex min-h-0 flex-1 overflow-hidden">
+              <ErrorBoundary area="main-content">
+                <Suspense>
+                  {generalSettingsOpen ? (
+                    <GeneralSettingsView />
+                  ) : settingsOpen ? (
+                    <SettingsDetailView />
+                  ) : analyticsOpen ? (
+                    <AnalyticsView />
+                  ) : liveColumnsOpen ? (
+                    <LiveColumnsView />
+                  ) : testRunnerOpen ? (
+                    <TestRunnerPane />
+                  ) : automationInboxOpen ? (
+                    <AutomationInboxView />
+                  ) : addProjectOpen ? (
+                    <AddProjectView />
+                  ) : allThreadsProjectId ? (
+                    <AllThreadsView />
+                  ) : (
+                    <ThreadView />
+                  )}
+                </Suspense>
+              </ErrorBoundary>
+            </div>
+
+            <Suspense>
+              {!(
+                generalSettingsOpen ||
+                settingsOpen ||
+                analyticsOpen ||
+                liveColumnsOpen ||
+                testRunnerOpen ||
+                automationInboxOpen ||
+                addProjectOpen
+              ) && <TerminalPanel />}
+            </Suspense>
+          </SidebarInset>
+        </div>
+
+        {/* Resize handle between center and right pane — only when right pane is shown */}
+        {rightPaneVisible && (
+          <ResizeHandle
+            direction="horizontal"
+            resizing={resizing}
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            data-testid="right-pane-resize-handle"
+          />
+        )}
+
+        {/* Right panel — Review / Tasks / Activity. Kept mounted (hidden) once
+            ready so subsequent toggles are instant. */}
+        {!isFullScreenView && (reviewPaneReady || reviewPaneOpen) && (
+          <div
+            className={cn(
+              'flex min-w-0 flex-shrink-0 flex-col overflow-hidden bg-sidebar',
+              !rightPaneVisible && 'hidden',
+            )}
+            style={{ width: `${reviewPaneWidth}vw` }}
           >
-            <SidebarInset className="flex h-full flex-col overflow-hidden">
-              <div className="flex min-h-0 flex-1 overflow-hidden">
-                <ErrorBoundary area="main-content">
-                  <Suspense>
-                    {generalSettingsOpen ? (
-                      <GeneralSettingsView />
-                    ) : settingsOpen ? (
-                      <SettingsDetailView />
-                    ) : analyticsOpen ? (
-                      <AnalyticsView />
-                    ) : liveColumnsOpen ? (
-                      <LiveColumnsView />
-                    ) : testRunnerOpen ? (
-                      <TestRunnerPane />
-                    ) : automationInboxOpen ? (
-                      <AutomationInboxView />
-                    ) : addProjectOpen ? (
-                      <AddProjectView />
-                    ) : allThreadsProjectId ? (
-                      <AllThreadsView />
-                    ) : (
-                      <ThreadView />
-                    )}
-                  </Suspense>
-                </ErrorBoundary>
-              </div>
-
-              <Suspense>
-                {!(
-                  generalSettingsOpen ||
-                  settingsOpen ||
-                  analyticsOpen ||
-                  liveColumnsOpen ||
-                  testRunnerOpen ||
-                  automationInboxOpen ||
-                  addProjectOpen
-                ) && <TerminalPanel />}
-              </Suspense>
-            </SidebarInset>
-          </ResizablePanel>
-
-          {/* Resize handle between center and right pane — hidden during full-screen views */}
-          {!isFullScreenView && <ResizableHandle data-testid="right-pane-resize-handle" />}
-
-          {/* Right panel — Review / Tests / Activity / Tasks — unmounted during full-screen views */}
-          {!isFullScreenView && (
-            <ResizablePanel
-              panelRef={rightPanelRef}
-              defaultSize={`${reviewPaneWidth}vw`}
-              minSize="250px"
-              maxSize="70vw"
-              collapsible
-              collapsedSize="0px"
-              onResize={handleRightPanelResize}
-              className="flex flex-col"
-              style={{ overflow: 'hidden', minWidth: 0 }}
-            >
-              {(reviewPaneReady || reviewPaneOpen) && (
-                <div className="flex h-full min-w-0 flex-1 flex-col bg-sidebar">
-                  <div className="min-h-0 flex-1 overflow-hidden">
-                    <ErrorBoundary area="right-pane">
-                      <Suspense>
-                        {rightPaneTab === 'review' ? (
-                          <ReviewPane />
-                        ) : rightPaneTab === 'tasks' ? (
-                          <TasksPane />
-                        ) : (
-                          <ActivityPane />
-                        )}
-                      </Suspense>
-                    </ErrorBoundary>
-                  </div>
-                </div>
-              )}
-            </ResizablePanel>
-          )}
-        </ResizablePanelGroup>
+            <div className="min-h-0 flex-1 overflow-hidden">
+              <ErrorBoundary area="right-pane">
+                <Suspense>
+                  {rightPaneTab === 'review' ? (
+                    <ReviewPane />
+                  ) : rightPaneTab === 'tasks' ? (
+                    <TasksPane />
+                  ) : (
+                    <ActivityPane />
+                  )}
+                </Suspense>
+              </ErrorBoundary>
+            </div>
+          </div>
+        )}
       </div>
 
       <Toaster position="bottom-right" duration={TOAST_DURATION} />

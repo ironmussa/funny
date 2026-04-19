@@ -6,6 +6,7 @@ import {
   FilePlus,
   FileX,
   FileWarning,
+  FileCheck2,
   PanelRightClose,
   Search,
   X,
@@ -80,7 +81,11 @@ import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
 import { useElementLeft } from '@/hooks/use-element-width';
 import { api, type PullStrategy } from '@/lib/api';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
-import { openFileInExternalEditor, getEditorLabel } from '@/lib/editor-utils';
+import {
+  openFileInExternalEditor,
+  openFileInInternalEditor,
+  getEditorLabel,
+} from '@/lib/editor-utils';
 import { FileExtensionIcon } from '@/lib/file-icons';
 import { toastError } from '@/lib/toast-error';
 import { cn, resolveThreadBranch } from '@/lib/utils';
@@ -1988,11 +1993,15 @@ export function ReviewPane() {
                     </Button>
                   </div>
                 ) : summaries.length === 0 && !loading ? (
-                  <p className="p-3 text-xs text-muted-foreground">{t('review.noChanges')}</p>
+                  <div className="flex h-full min-h-0 flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
+                    <FileCheck2 className="h-8 w-8 opacity-40" />
+                    <p className="text-xs">{t('review.noChanges')}</p>
+                  </div>
                 ) : filteredDiffs.length === 0 && !loading ? (
-                  <p className="p-3 text-xs text-muted-foreground">
-                    {t('review.noMatchingFiles', 'No matching files')}
-                  </p>
+                  <div className="flex h-full min-h-0 flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
+                    <Search className="h-8 w-8 opacity-40" />
+                    <p className="text-xs">{t('review.noMatchingFiles', 'No matching files')}</p>
+                  </div>
                 ) : (
                   <div className={cn(loading && 'pointer-events-none')}>
                     <div
@@ -2208,6 +2217,17 @@ export function ReviewPane() {
                                 >
                                   <ExternalLink />
                                   {t('review.openInEditor', { editor: getEditorLabel() })}
+                                </DropdownMenuItem>
+                                <DropdownMenuItem
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const fullPath = basePath ? `${basePath}/${f.path}` : f.path;
+                                    openFileInInternalEditor(fullPath);
+                                  }}
+                                  data-testid={`review-open-internal-editor-${f.path}`}
+                                >
+                                  <FileCode />
+                                  {t('review.openInInternalEditor')}
                                 </DropdownMenuItem>
                                 <DropdownMenuSeparator />
                                 {f.staged ? (

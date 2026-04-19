@@ -7,6 +7,7 @@ import {
   Copy,
   ExternalLink,
   EyeOff,
+  FileCode,
   Folder,
   FolderOpen,
   FolderX,
@@ -29,7 +30,11 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { HighlightText } from '@/components/ui/highlight-text';
-import { openFileInExternalEditor, getEditorLabel } from '@/lib/editor-utils';
+import {
+  openFileInExternalEditor,
+  openFileInInternalEditor,
+  getEditorLabel,
+} from '@/lib/editor-utils';
 import { FileExtensionIcon } from '@/lib/file-icons';
 import { cn } from '@/lib/utils';
 
@@ -435,6 +440,17 @@ export function FileTree({
             >
               <ExternalLink />
               {t('review.openInEditor', { editor: getEditorLabel() })}
+            </DropdownMenuItem>
+            <DropdownMenuItem
+              onClick={(e) => {
+                e.stopPropagation();
+                const fullPath = basePath ? `${basePath}/${f.path}` : f.path;
+                openFileInInternalEditor(fullPath);
+              }}
+              data-testid={`file-tree-open-internal-editor-${f.path}`}
+            >
+              <FileCode />
+              {t('review.openInInternalEditor')}
             </DropdownMenuItem>
             {onRevertFile && (
               <>

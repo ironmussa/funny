@@ -171,6 +171,7 @@
     "mergeConflict": "Conflitos de rebase detectados entre sua branch e {{target}}",
     "askAgentResolve": "Pedir ao Agente para Resolver",
     "openInEditor": "Abrir no {{editor}}",
+    "openInInternalEditor": "Abrir no editor interno",
     "agentResolvePrompt": "O rebase sobre {{target}} falhou devido a conflitos. Por favor execute `git rebase {{target}}`, resolva todos os conflitos, e então execute `git rebase --continue`. Certifique-se de que todos os conflitos estejam completamente resolvidos antes de continuar.",
     "agentResolveSent": "Pediu ao agente para resolver os conflitos de rebase",
     "agentResolveThreadTitle": "Resolver conflitos de rebase sobre {{target}}",

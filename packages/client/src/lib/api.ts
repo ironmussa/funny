@@ -803,6 +803,11 @@ export const api = {
     }),
   projectGetRemoteUrl: (projectId: string, signal?: AbortSignal) =>
     request<{ remoteUrl: string | null }>(`/git/project/${projectId}/remote-url`, { signal }),
+  projectSetRemoteUrl: (projectId: string, url: string) =>
+    request<{ ok: boolean }>(`/git/project/${projectId}/remote`, {
+      method: 'POST',
+      body: JSON.stringify({ url }),
+    }),
   projectGetGhOrgs: (projectId: string, signal?: AbortSignal) =>
     request<{ orgs: string[] }>(`/git/project/${projectId}/gh-orgs`, { signal }),
   projectPublish: (

@@ -1149,7 +1149,6 @@ export const PromptInputUI = memo(function PromptInputUI({
                       checked={createWorktree}
                       onCheckedChange={onCreateWorktreeChange ?? (() => {})}
                       tabIndex={-1}
-                      size="xs"
                     />
                     <span>{t('thread.mode.worktree')}</span>
                   </label>

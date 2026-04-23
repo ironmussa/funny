@@ -329,6 +329,98 @@ export function getStatusSummary(
 }
 
 /**
+ * Summary of committed-only changes between baseBranch and branch, computed
+ * without touching the working tree. Used for local-mode threads whose branch
+ * is NOT currently checked out in the project's working directory, so they
+ * can display their own diff stats instead of inheriting whichever branch
+ * happens to be checked out right now.
+ */
+export function getCommittedBranchSummary(
+  repoCwd: string,
+  baseBranch: string,
+  branch: string,
+): ResultAsync<GitStatusSummary, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const [diffResult, remoteResult, baseCountResult, mergedResult] = await Promise.all([
+        gitRead(['diff', `${baseBranch}...${branch}`, '--numstat'], {
+          cwd: repoCwd,
+          reject: false,
+        }),
+        gitRead(['rev-parse', '--abbrev-ref', `${branch}@{upstream}`], {
+          cwd: repoCwd,
+          reject: false,
+        }),
+        gitRead(['rev-list', '--count', `${baseBranch}..${branch}`], {
+          cwd: repoCwd,
+          reject: false,
+        }),
+        gitRead(['branch', '--merged', baseBranch, '--format=%(refname:short)'], {
+          cwd: repoCwd,
+          reject: false,
+        }),
+      ]);
+
+      let linesAdded = 0;
+      let linesDeleted = 0;
+      if (diffResult.exitCode === 0 && diffResult.stdout.trim()) {
+        for (const line of diffResult.stdout.trim().split('\n')) {
+          const parts = line.split('\t');
+          if (parts.length >= 2) {
+            const a = parseInt(parts[0], 10);
+            const d = parseInt(parts[1], 10);
+            if (!isNaN(a)) linesAdded += a;
+            if (!isNaN(d)) linesDeleted += d;
+          }
+        }
+      }
+
+      const remoteBranch = remoteResult.exitCode === 0 ? remoteResult.stdout.trim() : null;
+      const hasRemoteBranch = !!remoteBranch;
+      let unpushedCommitCount = 0;
+      let unpulledCommitCount = 0;
+      if (hasRemoteBranch && remoteBranch) {
+        const [aheadResult, behindResult] = await Promise.all([
+          gitRead(['rev-list', '--count', `${remoteBranch}..${branch}`], {
+            cwd: repoCwd,
+            reject: false,
+          }),
+          gitRead(['rev-list', '--count', `${branch}..${remoteBranch}`], {
+            cwd: repoCwd,
+            reject: false,
+          }),
+        ]);
+        unpushedCommitCount =
+          aheadResult.exitCode === 0 ? parseInt(aheadResult.stdout.trim(), 10) || 0 : 0;
+        unpulledCommitCount =
+          behindResult.exitCode === 0 ? parseInt(behindResult.stdout.trim(), 10) || 0 : 0;
+      } else if (baseCountResult.exitCode === 0) {
+        unpushedCommitCount = parseInt(baseCountResult.stdout.trim(), 10) || 0;
+      }
+
+      let isMergedIntoBase = false;
+      if (mergedResult.exitCode === 0 && mergedResult.stdout) {
+        isMergedIntoBase = mergedResult.stdout
+          .split('\n')
+          .map((b) => b.trim())
+          .includes(branch);
+      }
+
+      return {
+        dirtyFileCount: 0,
+        unpushedCommitCount,
+        unpulledCommitCount,
+        hasRemoteBranch,
+        isMergedIntoBase,
+        linesAdded,
+        linesDeleted,
+      };
+    })(),
+    (error) => processError(String(error), 1, ''),
+  );
+}
+
+/**
  * Derive a single sync state from a git status summary.
  */
 export function deriveGitSyncState(summary: GitStatusSummary): GitSyncState {

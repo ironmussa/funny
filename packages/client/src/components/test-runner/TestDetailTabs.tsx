@@ -20,6 +20,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { CodeViewer } from '@/components/ui/code-viewer';
+import { Input } from '@/components/ui/input';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { api } from '@/lib/api';
@@ -294,12 +295,12 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
     <div className="flex h-full flex-col text-xs">
       {/* Filter toolbar */}
       <div className="flex items-center gap-1 border-b px-2 py-1">
-        <input
+        <Input
           type="text"
           placeholder="Filter network"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
-          className="mr-2 h-6 w-40 rounded border bg-transparent px-2 text-xs placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+          className="mr-2 w-40"
           data-testid="network-filter-input"
         />
         {NETWORK_FILTERS.map((f) => (

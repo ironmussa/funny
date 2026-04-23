@@ -208,20 +208,20 @@ export function GitProgressModal({
     <Dialog open={open} onOpenChange={isFinished ? onOpenChange : undefined}>
       <DialogContent
         className={cn(
-          'max-w-md overflow-hidden [&>button.absolute]:hidden',
-          hasFailed && 'max-w-lg',
+          'flex max-h-[85vh] w-[calc(100vw-2rem)] max-w-lg flex-col gap-4 overflow-hidden [&>button.absolute]:hidden',
+          hasFailed && 'max-w-2xl',
         )}
         onPointerDownOutside={(e) => {
           if (!isFinished) e.preventDefault();
         }}
       >
-        <DialogHeader>
+        <DialogHeader className="flex-shrink-0">
           <DialogTitle className="text-sm">{title}</DialogTitle>
           <DialogDescription className="sr-only">
             {t('review.progress.description', 'Git operation progress')}
           </DialogDescription>
         </DialogHeader>
-        <div className="space-y-2">
+        <div className="min-h-0 flex-1 space-y-2 overflow-y-auto">
           {visibleSteps.map((step) => {
             const stepElapsed = getStepElapsed(step.id);
             return (
@@ -282,7 +282,7 @@ export function GitProgressModal({
             );
           })}
         </div>
-        <div className="flex flex-col items-end gap-2">
+        <div className="flex flex-shrink-0 flex-col items-end gap-2">
           <span className="text-[10px] tabular-nums text-muted-foreground/50">
             {formatElapsed(totalElapsed)}
           </span>

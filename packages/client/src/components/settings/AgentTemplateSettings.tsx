@@ -30,6 +30,7 @@ import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import {
@@ -655,11 +656,9 @@ function ToolsSection({
             key={tool}
             className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-accent/50"
           >
-            <input
-              type="checkbox"
+            <Checkbox
               checked={!disallowed.has(tool)}
-              onChange={() => toggleTool(tool)}
-              className="rounded"
+              onCheckedChange={() => toggleTool(tool)}
               data-testid={`agent-template-tool-${tool}`}
             />
             <span className="font-mono text-[11px]">{tool}</span>
@@ -704,11 +703,9 @@ function SkillsSection({
             key={skill}
             className="flex cursor-pointer items-center gap-2 rounded px-2 py-1 text-xs hover:bg-accent/50"
           >
-            <input
-              type="checkbox"
+            <Checkbox
               checked={!disabled.has(skill)}
-              onChange={() => toggleSkill(skill)}
-              className="rounded"
+              onCheckedChange={() => toggleSkill(skill)}
               data-testid={`agent-template-skill-${skill}`}
             />
             <span>{skill}</span>
@@ -1085,11 +1082,9 @@ function SharingSection({
           </p>
         </div>
         <label className="flex cursor-pointer items-center gap-2">
-          <input
-            type="checkbox"
+          <Checkbox
             checked={template.shared ?? false}
-            onChange={(e) => onSave({ shared: e.target.checked })}
-            className="rounded"
+            onCheckedChange={(checked) => onSave({ shared: checked === true })}
             data-testid="agent-template-shared"
           />
           <Share2 className="h-3 w-3 text-muted-foreground" />

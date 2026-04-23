@@ -25,6 +25,8 @@ export {
   gitSafeSync,
   isGitRepo,
   isGitRepoSync,
+  isGitRepoRoot,
+  isGitRepoRootSync,
   gitRemote,
   type GitIdentityOptions,
 } from './base.js';
@@ -53,13 +55,14 @@ export {
 
 export { commit, runHookCommand } from './commit.js';
 
-export { push, pull, createPR, mergeBranch, cloneRepo } from './remote.js';
+export { push, pull, createPR, mergeBranch, cloneRepo, setOrigin } from './remote.js';
 export type { PullStrategy } from './remote.js';
 
 export { getDiff, getDiffSummary, getSingleFileDiff, getFullContextFileDiff } from './diff.js';
 
 export {
   getStatusSummary,
+  getCommittedBranchSummary,
   invalidateStatusCache,
   deriveGitSyncState,
   type GitStatusSummary,

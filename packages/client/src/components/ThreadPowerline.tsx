@@ -1,6 +1,7 @@
 import type { Thread, GitStatusInfo } from '@funny/shared';
 import { Folder, GitBranch } from 'lucide-react';
 import { useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { DiffStats } from '@/components/DiffStats';
 import {
@@ -47,11 +48,16 @@ export function ThreadPowerline({
   className,
   ...props
 }: ThreadPowerlineProps) {
+  const { t } = useTranslation();
   const isWorktree = thread.mode === 'worktree';
   const effectiveBranch = resolveThreadBranch(thread);
   const branchName =
     isWorktree && thread.baseBranch ? thread.baseBranch : effectiveBranch || thread.baseBranch;
   const worktreeBranchLabel = isWorktree ? (effectiveBranch ?? '') : '';
+  const worktreePath = thread.worktreePath ?? '';
+  const worktreePathShort = worktreePath
+    ? worktreePath.split('/').filter(Boolean).pop() || worktreePath
+    : '';
 
   const rawColor = projectColor || (projectName ? colorFromName(projectName) : '#52525b');
   const baseColor = darkenHex(rawColor, 0.1);
@@ -70,21 +76,27 @@ export function ThreadPowerline({
       });
     }
     if (branchName) {
+      const branchTooltip = isWorktree
+        ? t('powerline.tooltipBaseBranch', { branch: branchName })
+        : t('powerline.tooltipLocalBranch', { branch: branchName });
       segs.push({
         key: 'branch',
         icon: GitBranch,
         label: branchName,
         color: projectName ? branchColor : baseColor,
-        tooltip: branchName,
+        tooltip: branchTooltip,
       });
     }
     if (isWorktree && worktreeBranchLabel) {
+      const worktreeTooltip = worktreePathShort
+        ? t('powerline.tooltipWorktreeWithPath', { path: worktreePathShort })
+        : t('powerline.tooltipWorktree');
       segs.push({
         key: 'worktree-branch',
-        icon: GitBranch,
+        icon: Folder,
         label: worktreeBranchLabel,
         color: projectName ? worktreeColor : branchColor,
-        tooltip: worktreeBranchLabel,
+        tooltip: worktreeTooltip,
       });
     }
     return segs;
@@ -97,6 +109,8 @@ export function ThreadPowerline({
     isWorktree,
     worktreeBranchLabel,
     worktreeColor,
+    worktreePathShort,
+    t,
   ]);
 
   const hasDiffStats =

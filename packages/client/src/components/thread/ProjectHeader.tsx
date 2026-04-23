@@ -55,6 +55,10 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuPortal,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -69,11 +73,11 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
+import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
 import { api } from '@/lib/api';
-import { getEditorLabel } from '@/lib/editor-utils';
 import { stageConfig } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
-import { resolveThreadBranch } from '@/lib/utils';
+import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useGitStatusStore, useGitStatusForThread } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -83,6 +87,15 @@ import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 type MessageWithToolCalls = Message & { toolCalls?: ToolCall[] };
+
+const LINEAR_URL_RE = /https?:\/\/linear\.app\/[^\s)]+/i;
+
+function extractLinearUrl(text: string | undefined | null): string | null {
+  if (!text) return null;
+  const match = text.match(LINEAR_URL_RE);
+  if (!match) return null;
+  return match[0].replace(/[.,;:!?)\]]+$/, '');
+}
 
 function threadToMarkdown(messages: MessageWithToolCalls[], includeToolCalls: boolean): string {
   const lines: string[] = [];
@@ -110,7 +123,13 @@ function threadToMarkdown(messages: MessageWithToolCalls[], includeToolCalls: bo
   return lines.join('\n');
 }
 
-const MoreActionsMenu = memo(function MoreActionsMenu() {
+const MoreActionsMenu = memo(function MoreActionsMenu({
+  onOpenInEditor,
+  onViewOnBoard,
+}: {
+  onOpenInEditor?: (editor: Editor) => void;
+  onViewOnBoard?: () => void;
+}) {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
   const {
@@ -148,19 +167,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
   const isBusy = threadStatus === 'running' || threadStatus === 'setting_up';
   const canConvertToWorktree = threadMode !== 'worktree' && !isBusy;
 
-  // Tooltip ↔ DropdownMenu: suppress tooltip while dropdown is open and
-  // briefly after it closes (focus-return would otherwise flash the tooltip).
-  const [moreActionsTooltipBlocked, setMoreActionsTooltipBlocked] = useState(false);
-  const [moreActionsTooltipOpen, setMoreActionsTooltipOpen] = useState(false);
-  const handleMoreActionsDropdown = useCallback((open: boolean) => {
-    if (open) {
-      setMoreActionsTooltipBlocked(true);
-    } else {
-      // Keep blocked briefly so the focus-return tooltip doesn't flash
-      (document.activeElement as HTMLElement)?.blur();
-      setTimeout(() => setMoreActionsTooltipBlocked(false), 150);
-    }
-  }, []);
+  const { tooltipProps, menuProps, contentProps } = useTooltipMenu();
 
   // Create Branch dialog state
   const [createBranchOpen, setCreateBranchOpen] = useState(false);
@@ -237,11 +244,8 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
 
   return (
     <>
-      <DropdownMenu onOpenChange={handleMoreActionsDropdown}>
-        <Tooltip
-          open={!moreActionsTooltipBlocked && moreActionsTooltipOpen}
-          onOpenChange={setMoreActionsTooltipOpen}
-        >
+      <DropdownMenu {...menuProps}>
+        <Tooltip {...tooltipProps}>
           <TooltipTrigger asChild>
             <DropdownMenuTrigger asChild>
               <Button
@@ -256,7 +260,20 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
           </TooltipTrigger>
           <TooltipContent>{t('thread.moreActions', 'More actions')}</TooltipContent>
         </Tooltip>
-        <DropdownMenuContent align="end">
+        <DropdownMenuContent align="end" {...contentProps}>
+          {onViewOnBoard && (
+            <>
+              <DropdownMenuItem
+                data-testid="header-menu-view-board"
+                onClick={onViewOnBoard}
+                className="cursor-pointer"
+              >
+                <Columns3 className="icon-base mr-2" />
+                {t('kanban.viewOnBoard', 'View on Board')}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem
             data-testid="header-menu-toggle-activity"
             onClick={() =>
@@ -306,6 +323,31 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
             )}
             {t('thread.copyWithTools', 'Copy with tool calls')}
           </DropdownMenuItem>
+          {onOpenInEditor && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger data-testid="header-menu-open-editor">
+                  <ExternalLink className="icon-base mr-2" />
+                  {t('thread.openInEditor', 'Open in Editor')}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent>
+                    {(Object.keys(editorLabels) as Editor[]).map((editor) => (
+                      <DropdownMenuItem
+                        key={editor}
+                        data-testid={`header-menu-open-editor-${editor}`}
+                        onClick={() => onOpenInEditor(editor)}
+                        className="cursor-pointer"
+                      >
+                        {editorLabels[editor]}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
+            </>
+          )}
           {threadId && canConvertToWorktree && (
             <>
               <DropdownMenuSeparator />
@@ -585,6 +627,7 @@ const StageSelectorBadge = memo(function StageSelectorBadge({
 }) {
   const { t } = useTranslation();
   const updateThreadStage = useThreadStore((s) => s.updateThreadStage);
+  const StageIcon = stageConfig[stage].icon;
 
   return (
     <Select
@@ -593,18 +636,29 @@ const StageSelectorBadge = memo(function StageSelectorBadge({
         updateThreadStage(threadId, projectId, value as ThreadStage)
       }
     >
-      <SelectTrigger
-        data-testid="header-stage-select"
-        className="h-7 w-auto min-w-0 shrink-0 border-0 bg-transparent px-2 py-0 text-sm text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground"
-      >
-        <SelectValue>{t(stageConfig[stage].labelKey)}</SelectValue>
-      </SelectTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <SelectTrigger
+            data-testid="header-stage-select"
+            className="h-7 w-auto shrink-0 gap-0.5 border border-border/60 bg-transparent px-1.5 py-0 shadow-none hover:bg-accent [&>svg:last-child]:ml-0"
+          >
+            <StageIcon className={cn('icon-base', stageConfig[stage].className)} />
+          </SelectTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{t(stageConfig[stage].labelKey)}</TooltipContent>
+      </Tooltip>
       <SelectContent>
-        {VISIBLE_STAGES.map((s) => (
-          <SelectItem key={s} value={s}>
-            {t(stageConfig[s].labelKey)}
-          </SelectItem>
-        ))}
+        {VISIBLE_STAGES.map((s) => {
+          const Icon = stageConfig[s].icon;
+          return (
+            <SelectItem key={s} value={s}>
+              <span className="flex items-center gap-2">
+                <Icon className={cn('icon-sm', stageConfig[s].className)} />
+                {t(stageConfig[s].labelKey)}
+              </span>
+            </SelectItem>
+          );
+        })}
       </SelectContent>
     </Select>
   );
@@ -727,18 +781,6 @@ export const ProjectHeader = memo(function ProjectHeader() {
     }
   }, [activeThreadId, selectedProjectId, fetchForThread, fetchProjectStatus]);
 
-  // Tooltip ↔ DropdownMenu: suppress tooltip while editor dropdown is open
-  const [editorTooltipBlocked, setEditorTooltipBlocked] = useState(false);
-  const [editorTooltipOpen, setEditorTooltipOpen] = useState(false);
-  const handleEditorDropdown = useCallback((open: boolean) => {
-    if (open) {
-      setEditorTooltipBlocked(true);
-    } else {
-      (document.activeElement as HTMLElement)?.blur();
-      setTimeout(() => setEditorTooltipBlocked(false), 150);
-    }
-  }, []);
-
   /** Update the ?panel= query param in the URL without a full navigation. */
   const updatePanelParam = useCallback(
     (panel: string | null) => {
@@ -847,11 +889,11 @@ export const ProjectHeader = memo(function ProjectHeader() {
                     <span className="inline-grid min-w-0 max-w-full justify-start justify-items-start">
                       <span
                         aria-hidden
-                        className="invisible col-start-1 row-start-1 overflow-hidden whitespace-pre text-left text-sm font-medium"
+                        className="invisible col-start-1 row-start-1 h-5 max-w-full overflow-hidden whitespace-nowrap text-left text-sm font-medium"
                       >
                         {titleDraft || ' '}
                       </span>
-                      <input
+                      <Input
                         ref={titleInputRef}
                         data-testid="header-thread-title-input"
                         value={titleDraft}
@@ -866,7 +908,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                             cancelTitleEdit();
                           }
                         }}
-                        className="col-start-1 row-start-1 w-full min-w-0 border-0 bg-transparent p-0 text-left text-sm font-medium text-foreground outline-none ring-0 focus:outline-none focus:ring-0"
+                        className="col-start-1 row-start-1 h-5 w-full min-w-0 rounded-none border-0 bg-transparent p-0 text-left text-sm font-medium text-foreground shadow-none focus-visible:ring-0"
                       />
                     </span>
                   ) : (
@@ -922,6 +964,25 @@ export const ProjectHeader = memo(function ProjectHeader() {
               )}
             </BreadcrumbList>
           </Breadcrumb>
+          {(() => {
+            const linearUrl = extractLinearUrl(activeThreadTitle);
+            return linearUrl ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <a
+                    href={linearUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    data-testid="header-linear-link"
+                    className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                  >
+                    <ExternalLink className="icon-base" />
+                  </a>
+                </TooltipTrigger>
+                <TooltipContent>{t('thread.openLinearTask', 'Open Linear task')}</TooltipContent>
+              </Tooltip>
+            ) : null;
+          })()}
         </div>
         {activeThreadStatus !== 'setting_up' && (
           <div className="flex flex-shrink-0 items-center gap-2">
@@ -931,29 +992,6 @@ export const ProjectHeader = memo(function ProjectHeader() {
                 projectId={activeThreadProjectId!}
                 stage={activeThreadStage}
               />
-            )}
-            {activeThreadId && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    data-testid="header-view-board"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      setReviewPaneOpen(false);
-                      navigate(
-                        buildPath(
-                          `/kanban?project=${activeThreadProjectId}&highlight=${activeThreadId}`,
-                        ),
-                      );
-                    }}
-                    className="h-8 w-8 text-muted-foreground"
-                  >
-                    <Columns3 className="icon-base" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('kanban.viewOnBoard', 'View on Board')}</TooltipContent>
-              </Tooltip>
             )}
             <StartupCommandsPopover
               projectId={projectId!}
@@ -984,39 +1022,6 @@ export const ProjectHeader = memo(function ProjectHeader() {
                 <TooltipContent>{t('preview.openPreview')}</TooltipContent>
               </Tooltip>
             )}
-            <DropdownMenu onOpenChange={handleEditorDropdown}>
-              <Tooltip
-                open={!editorTooltipBlocked && editorTooltipOpen}
-                onOpenChange={setEditorTooltipOpen}
-              >
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      data-testid="header-open-editor"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground"
-                    >
-                      <ExternalLink className="icon-base" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {t('sidebar.openInEditor', { editor: getEditorLabel() })}
-                </TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent align="end">
-                {(Object.keys(editorLabels) as Editor[]).map((editor) => (
-                  <DropdownMenuItem
-                    key={editor}
-                    onClick={() => handleOpenInEditor(editor)}
-                    className="cursor-pointer"
-                  >
-                    {editorLabels[editor]}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -1055,7 +1060,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
-                  size={showGitStats ? undefined : 'icon-sm'}
+                  size="icon-sm"
                   onClick={() =>
                     startTransition(() => {
                       if (reviewPaneOpen && rightPaneTab === 'review') {
@@ -1068,20 +1073,13 @@ export const ProjectHeader = memo(function ProjectHeader() {
                     })
                   }
                   data-testid="header-toggle-review"
-                  className={`${showGitStats ? 'h-8 px-2' : ''} ${reviewPaneOpen && rightPaneTab === 'review' ? 'text-foreground' : 'text-muted-foreground'}`}
+                  className={
+                    reviewPaneOpen && rightPaneTab === 'review'
+                      ? 'text-foreground'
+                      : 'text-muted-foreground'
+                  }
                 >
-                  {showGitStats ? (
-                    <DiffStats
-                      linesAdded={effectiveGitStatus.linesAdded}
-                      linesDeleted={effectiveGitStatus.linesDeleted}
-                      dirtyFileCount={effectiveGitStatus.dirtyFileCount}
-                      size="sm"
-                      tooltips={false}
-                      className="font-semibold"
-                    />
-                  ) : (
-                    <GitCompare className="icon-base" />
-                  )}
+                  <GitCompare className="icon-base" />
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{t('review.title')}</TooltipContent>
@@ -1134,7 +1132,51 @@ export const ProjectHeader = memo(function ProjectHeader() {
                 <TooltipContent>Tasks</TooltipContent>
               </Tooltip>
             )}
-            {activeThreadId && <MoreActionsMenu />}
+            {showGitStats && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      startTransition(() => {
+                        if (reviewPaneOpen && rightPaneTab === 'review') {
+                          setReviewPaneOpen(false);
+                          updatePanelParam(null);
+                        } else {
+                          setReviewPaneOpen(true);
+                          updatePanelParam('review');
+                        }
+                      })
+                    }
+                    data-testid="header-diff-stats"
+                    className="cursor-pointer"
+                  >
+                    <DiffStats
+                      linesAdded={effectiveGitStatus.linesAdded}
+                      linesDeleted={effectiveGitStatus.linesDeleted}
+                      dirtyFileCount={effectiveGitStatus.dirtyFileCount}
+                      size="sm"
+                      tooltips={false}
+                      className="font-semibold"
+                    />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>{t('review.title')}</TooltipContent>
+              </Tooltip>
+            )}
+            {activeThreadId && (
+              <MoreActionsMenu
+                onOpenInEditor={handleOpenInEditor}
+                onViewOnBoard={() => {
+                  setReviewPaneOpen(false);
+                  navigate(
+                    buildPath(
+                      `/kanban?project=${activeThreadProjectId}&highlight=${activeThreadId}`,
+                    ),
+                  );
+                }}
+              />
+            )}
           </div>
         )}
       </div>

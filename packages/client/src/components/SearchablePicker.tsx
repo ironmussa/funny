@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { HighlightText } from '@/components/ui/highlight-text';
+import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 
@@ -301,7 +302,7 @@ export function SearchablePicker({
           )}
         </div>
         <div className="border-t border-border px-2 py-1.5">
-          <input
+          <Input
             ref={searchInputRef}
             type="text"
             value={search}
@@ -310,7 +311,7 @@ export function SearchablePicker({
             placeholder={searchPlaceholder}
             aria-label={label}
             autoComplete="off"
-            className="w-full bg-transparent text-sm placeholder:text-muted-foreground focus-visible:outline-none"
+            className="h-auto w-full rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
           />
         </div>
       </PopoverContent>
@@ -436,7 +437,7 @@ export function BranchPicker({
     return (
       <div className="flex items-center gap-1" data-testid={testId ? `${testId}-new` : undefined}>
         <Plus className="icon-xs shrink-0 text-muted-foreground" />
-        <input
+        <Input
           ref={newBranchInputRef}
           type="text"
           value={newBranchName}
@@ -460,7 +461,7 @@ export function BranchPicker({
           }}
           placeholder={t('newThread.newBranchPlaceholder', 'new-branch-name')}
           data-testid={testId ? `${testId}-new-input` : undefined}
-          className="w-40 bg-transparent font-mono text-xs text-foreground placeholder:text-muted-foreground focus-visible:outline-none"
+          className="h-auto w-40 rounded-none border-0 bg-transparent p-0 font-mono text-xs text-foreground shadow-none focus-visible:ring-0"
         />
         <button
           type="button"

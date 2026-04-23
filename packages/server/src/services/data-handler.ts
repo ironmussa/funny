@@ -359,6 +359,11 @@ export async function handleDataMessageWithAck(
         const thread = await threadRepo.getThread(data.threadId);
         return { type: 'data:get_thread_response', thread: thread ?? null };
       }
+      case 'data:get_thread_with_messages': {
+        const messageRepo = getMessageRepo();
+        const thread = await messageRepo.getThreadWithMessages(data.threadId, data.messageLimit);
+        return { type: 'data:get_thread_with_messages_response', thread: thread ?? null };
+      }
       case 'data:get_tool_call': {
         const toolCallRepo = getToolCallRepo();
         const toolCall = await toolCallRepo.getToolCall(data.toolCallId);

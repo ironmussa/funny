@@ -156,7 +156,6 @@ function InstalledServerCard({
             checked={!isDisabled}
             onCheckedChange={(checked) => onToggle(!checked)}
             disabled={toggling}
-            size="xs"
           />
           <TooltipIconButton
             onClick={onRemove}

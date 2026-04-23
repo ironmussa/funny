@@ -45,6 +45,7 @@ export function DiffStats({
   if (linesAdded === 0 && linesDeleted === 0 && !hasDirty) return null;
 
   const textSize = size === 'xxs' ? 'text-[10px]' : size === 'xs' ? 'text-xs' : 'text-sm';
+  const padding = size === 'xxs' ? 'px-1 py-0' : size === 'xs' ? 'px-1.5 py-0.5' : 'px-2 py-0.5';
 
   const addedTooltip =
     variant === 'pr'
@@ -90,7 +91,12 @@ export function DiffStats({
 
   return (
     <span
-      className={cn('inline-flex flex-shrink-0 items-center gap-1 font-mono', textSize, className)}
+      className={cn(
+        'inline-flex flex-shrink-0 items-center gap-1 rounded-lg border border-border font-mono',
+        textSize,
+        padding,
+        className,
+      )}
     >
       {hasDirty && (
         <>

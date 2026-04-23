@@ -3,6 +3,12 @@
     "title": "funny",
     "subtitle": "Parallel Claude Code Agents"
   },
+  "powerline": {
+    "tooltipLocalBranch": "Local — shares the project directory",
+    "tooltipBaseBranch": "Base branch",
+    "tooltipWorktree": "Isolated worktree",
+    "tooltipWorktreeWithPath": "Isolated worktree at {{path}}"
+  },
   "sidebar": {
     "projects": "Projects",
     "addProject": "Add project",

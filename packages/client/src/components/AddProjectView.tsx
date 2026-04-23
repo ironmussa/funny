@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
+import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
 import { CloneRepoView } from './CloneRepoView';
@@ -34,6 +35,7 @@ export function AddProjectView() {
   const [folderPickerOpen, setFolderPickerOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [gitInitDialogOpen, setGitInitDialogOpen] = useState(false);
+  const [isCloning, setIsCloning] = useState(false);
 
   const handleGitInit = async () => {
     setGitInitDialogOpen(false);
@@ -91,15 +93,17 @@ export function AddProjectView() {
   return (
     <div className="flex flex-1 justify-center overflow-y-auto pt-[10vh]">
       <div className="w-full max-w-md space-y-6 px-4 pb-8">
-        <div className="space-y-2 text-center">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
-            <Plus className="icon-xl text-primary" />
+        {!isCloning && (
+          <div className="space-y-2 text-center">
+            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+              <Plus className="icon-xl text-primary" />
+            </div>
+            <h2 className="text-xl font-semibold">{t('sidebar.addProject')}</h2>
           </div>
-          <h2 className="text-xl font-semibold">{t('sidebar.addProject')}</h2>
-        </div>
+        )}
 
         {/* Tab toggle */}
-        <div className="flex gap-1 rounded-lg bg-muted p-1">
+        <div className={cn('flex gap-1 rounded-lg bg-muted p-1', isCloning && 'hidden')}>
           <button
             className={`flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium transition-colors ${
               mode === 'local'
@@ -193,7 +197,7 @@ export function AddProjectView() {
             </div>
           </div>
         ) : (
-          <CloneRepoView />
+          <CloneRepoView onCloningChange={setIsCloning} />
         )}
       </div>
 

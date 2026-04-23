@@ -678,6 +678,7 @@ function setupRunnerDataHandlers(
     'data:update_message',
     'data:update_tool_call_output',
     'data:get_thread',
+    'data:get_thread_with_messages',
     'data:get_tool_call',
     'data:find_tool_call',
     'data:find_last_unanswered_interactive_tool_call',

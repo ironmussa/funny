@@ -205,7 +205,6 @@ export function PipelineSettings() {
             checked={!!pipeline.precommitFixEnabled}
             onCheckedChange={(v) => saveField({ precommitFixEnabled: v })}
             data-testid="pipeline-precommit-toggle"
-            size="xs"
           />
         </div>
         {!!pipeline.precommitFixEnabled && (
@@ -247,7 +246,6 @@ export function PipelineSettings() {
             checked={!!pipeline.enabled}
             onCheckedChange={(v) => saveField({ enabled: v })}
             data-testid="pipeline-review-toggle"
-            size="xs"
           />
         </div>
         {!!pipeline.enabled && (
@@ -291,7 +289,6 @@ export function PipelineSettings() {
             checked={!!pipeline.testEnabled}
             onCheckedChange={(v) => saveField({ testEnabled: v })}
             data-testid="pipeline-test-toggle"
-            size="xs"
           />
         </div>
         {!!pipeline.testEnabled && (
@@ -311,7 +308,6 @@ export function PipelineSettings() {
                 checked={!!pipeline.testFixEnabled}
                 onCheckedChange={(v) => saveField({ testFixEnabled: v })}
                 data-testid="pipeline-test-fix-toggle"
-                size="xs"
               />
             </SettingRow>
             {!!pipeline.testFixEnabled && (

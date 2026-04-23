@@ -50,6 +50,14 @@ export async function emitGitStatusForThread(
     cwd?: string | null;
     /** Optional GH_TOKEN env for PR detection on private repos */
     ghEnv?: Record<string, string>;
+    /**
+     * Allow rewriting `thread.branch` to match the current checkout when they
+     * diverge. Only safe when the caller has evidence that THIS thread's agent
+     * just ran a checkout (e.g., a Bash tool call). With multiple local threads
+     * sharing one working directory, blindly trusting the current branch lets
+     * one thread's checkout corrupt sibling threads' branch identity.
+     */
+    detectBranchDrift?: boolean;
   },
   ctx: HandlerServiceContext,
 ): Promise<void> {
@@ -65,7 +73,7 @@ export async function emitGitStatusForThread(
   // ── Branch drift detection (local-mode threads only) ──────────
   // Worktree threads have isolated directories — their branch is managed
   // by the worktree lifecycle, not by agent tool calls.
-  if (!thread.worktreePath) {
+  if (!thread.worktreePath && opts.detectBranchDrift) {
     const branchResult = await getCurrentBranch(effectiveCwd);
     if (branchResult.isOk()) {
       const currentBranch = branchResult.value;

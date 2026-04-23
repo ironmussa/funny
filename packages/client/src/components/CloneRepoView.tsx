@@ -43,7 +43,11 @@ type ViewState =
   | 'clone-config'
   | 'cloning';
 
-export function CloneRepoView() {
+interface CloneRepoViewProps {
+  onCloningChange?: (cloning: boolean) => void;
+}
+
+export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const loadProjects = useAppStore((s) => s.loadProjects);
@@ -51,6 +55,10 @@ export function CloneRepoView() {
   const generalSettingsOpen = useUIStore((s) => s.generalSettingsOpen);
 
   const [view, setView] = useState<ViewState>('checking');
+
+  useEffect(() => {
+    onCloningChange?.(view === 'cloning');
+  }, [view, onCloningChange]);
   const [ghUser, setGhUser] = useState<{
     login: string;
     avatar_url: string;

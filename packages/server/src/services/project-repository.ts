@@ -8,7 +8,7 @@
 
 import { resolve, isAbsolute } from 'path';
 
-import { isGitRepoSync, ensureWeaveConfigured } from '@funny/core/git';
+import { isGitRepoSync, isGitRepoRootSync, ensureWeaveConfigured } from '@funny/core/git';
 import type { Project, FollowUpMode } from '@funny/shared';
 import { badRequest, notFound, conflict, internal, type DomainError } from '@funny/shared/errors';
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
@@ -155,8 +155,17 @@ export async function createProject(
   }
   const path = resolve(rawPath);
 
-  if (!skipFsCheck && !isGitRepoSync(path)) {
-    return err(badRequest(`Not a git repository: ${path}`));
+  if (!skipFsCheck) {
+    if (!isGitRepoSync(path)) {
+      return err(badRequest(`Not a git repository: ${path}`));
+    }
+    if (!isGitRepoRootSync(path)) {
+      return err(
+        badRequest(
+          `Path is nested inside another git repository (not the repo root): ${path}. Run "git init" in this directory, or pick the repo's actual root.`,
+        ),
+      );
+    }
   }
 
   if (orgId) {
@@ -294,6 +303,13 @@ export async function updateProject(
     resolvedPath = resolve(fields.path);
     if (!isGitRepoSync(resolvedPath)) {
       return err(badRequest(`Not a git repository: ${resolvedPath}`));
+    }
+    if (!isGitRepoRootSync(resolvedPath)) {
+      return err(
+        badRequest(
+          `Path is nested inside another git repository (not the repo root): ${resolvedPath}. Run "git init" in this directory, or pick the repo's actual root.`,
+        ),
+      );
     }
     const existingPath = await dbGet(
       db

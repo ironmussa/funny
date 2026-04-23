@@ -942,7 +942,6 @@ function GeneralSettings() {
             >
               <Switch
                 data-testid="settings-memory-enabled"
-                size="sm"
                 checked={selectedProject.memoryEnabled ?? false}
                 onCheckedChange={(checked) =>
                   saveProject(selectedProject.id, { memoryEnabled: checked })

@@ -27,6 +27,8 @@ import {
   push,
   pull,
   getStatusSummary,
+  getCommittedBranchSummary,
+  getCurrentBranch,
   deriveGitSyncState,
   getLog,
   getUnpushedHashes,
@@ -46,6 +48,7 @@ import {
   getRemoteUrl,
   listGitHubOrgs,
   publishRepo,
+  setOrigin,
 } from '@funny/core/git';
 import { badRequest, internal } from '@funny/shared/errors';
 import { Hono } from 'hono';
@@ -96,6 +99,7 @@ import {
   publishRepoSchema,
   resolveConflictSchema,
   pullSchema,
+  setRemoteSchema,
 } from '../validation/schemas.js';
 
 export const gitRoutes = new Hono<HonoEnv>();
@@ -258,25 +262,76 @@ gitRoutes.get('/status', async (c) => {
         );
       }),
     ),
-    // Group local threads by branchKey so we call getStatusSummary once per
-    // unique key instead of once per thread (they share the same cwd).
+    // Local threads share the project cwd, but only the thread on the
+    // currently checked-out branch reflects the working tree. Threads on other
+    // branches get committed-only diff stats (git diff base...branch) so they
+    // don't inherit the dirty state of whichever branch is checked out now.
     (async () => {
-      const groupedByBranch = new Map<string, typeof localThreads>();
+      const currentBranchResult = await getCurrentBranch(project.path);
+      const currentBranch = currentBranchResult.isOk() ? currentBranchResult.value : null;
+
+      // Split threads: those matching the checked-out branch use working-tree
+      // summary (shared); others compute committed-only summary per branch.
+      const activeThreads: typeof localThreads = [];
+      const backgroundThreads: typeof localThreads = [];
       for (const thread of localThreads) {
-        const bk = computeBranchKey(thread);
-        const group = groupedByBranch.get(bk);
-        if (group) group.push(thread);
-        else groupedByBranch.set(bk, [thread]);
+        if (thread.branch && thread.branch === currentBranch) activeThreads.push(thread);
+        else backgroundThreads.push(thread);
       }
 
       const results: Array<PromiseSettledResult<any>> = [];
-      await Promise.all(
-        Array.from(groupedByBranch.entries()).map(async ([bk, threads]) => {
-          const representative = threads[0];
-          const summaryResult = await getStatusSummary(
+
+      // Active group: one getStatusSummary call shared across all threads on
+      // the currently-checked-out branch.
+      const activePromise = (async () => {
+        if (activeThreads.length === 0) return;
+        const representative = activeThreads[0];
+        const summaryResult = await getStatusSummary(
+          project.path,
+          representative.baseBranch ?? undefined,
+          project.path,
+        );
+        if (summaryResult.isErr()) {
+          for (const t of activeThreads) {
+            results.push({ status: 'fulfilled', value: null });
+          }
+          return;
+        }
+        const summary = summaryResult.value;
+        const state = deriveGitSyncState(summary);
+        for (const t of activeThreads) {
+          results.push({
+            status: 'fulfilled',
+            value: Object.assign(
+              { threadId: t.id, branchKey: computeBranchKey(t), state },
+              summary,
+            ),
+          });
+        }
+      })();
+
+      // Background group: committed-only diff per unique (baseBranch, branch).
+      // Threads without a branch or baseBranch are reported with zero stats.
+      const bgByKey = new Map<string, typeof localThreads>();
+      const bgUnassigned: typeof localThreads = [];
+      for (const thread of backgroundThreads) {
+        if (!thread.branch || !thread.baseBranch) {
+          bgUnassigned.push(thread);
+          continue;
+        }
+        const key = `${thread.baseBranch}..${thread.branch}`;
+        const group = bgByKey.get(key);
+        if (group) group.push(thread);
+        else bgByKey.set(key, [thread]);
+      }
+
+      const backgroundPromise = Promise.all(
+        Array.from(bgByKey.entries()).map(async ([, threads]) => {
+          const rep = threads[0];
+          const summaryResult = await getCommittedBranchSummary(
             project.path,
-            representative.baseBranch ?? undefined,
-            project.path,
+            rep.baseBranch!,
+            rep.branch!,
           );
           if (summaryResult.isErr()) {
             for (const t of threads) {
@@ -289,11 +344,35 @@ gitRoutes.get('/status', async (c) => {
           for (const t of threads) {
             results.push({
               status: 'fulfilled',
-              value: Object.assign({ threadId: t.id, branchKey: bk, state }, summary),
+              value: Object.assign(
+                { threadId: t.id, branchKey: computeBranchKey(t), state },
+                summary,
+              ),
             });
           }
         }),
       );
+
+      await Promise.all([activePromise, backgroundPromise]);
+
+      for (const t of bgUnassigned) {
+        results.push({
+          status: 'fulfilled',
+          value: {
+            threadId: t.id,
+            branchKey: computeBranchKey(t),
+            state: 'clean' as const,
+            dirtyFileCount: 0,
+            unpushedCommitCount: 0,
+            unpulledCommitCount: 0,
+            hasRemoteBranch: false,
+            isMergedIntoBase: false,
+            linesAdded: 0,
+            linesDeleted: 0,
+          },
+        });
+      }
+
       return results;
     })(),
     prLookupPromise,
@@ -760,6 +839,31 @@ gitRoutes.get('/project/:projectId/remote-url', async (c) => {
   const result = await getRemoteUrl(cwdResult.value);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ remoteUrl: result.value });
+});
+
+// POST /api/git/project/:projectId/remote
+// Add or update the `origin` remote for a project that was initialized
+// locally with no remote configured (GitHub Desktop-style "add remote").
+gitRoutes.post('/project/:projectId/remote', async (c) => {
+  const projectId = c.req.param('projectId');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(projectId, userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const parsed = validate(setRemoteSchema, await c.req.json().catch(() => ({})));
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+  log.info('git.setOrigin', { namespace: 'git', projectId });
+  const result = await setOrigin(cwdResult.value, parsed.value.url);
+  if (result.isErr()) {
+    log.error('git.setOrigin.failed', {
+      namespace: 'git',
+      projectId,
+      error: String(result.error),
+    });
+    return resultToResponse(c, result);
+  }
+  _gitStatusCache.delete(projectId);
+  return c.json({ ok: true });
 });
 
 // GET /api/git/project/:projectId/gh-orgs

@@ -335,7 +335,7 @@ export function NewThreadInput() {
             <>
               <span className="text-muted-foreground/40">/</span>
               {branchPickerLoading ? (
-                <span className="flex items-center gap-1">
+                <span className="flex items-center gap-1 px-2 py-1">
                   <GitBranch className="icon-xs shrink-0" />
                   <Loader2 className="icon-xs animate-spin" />
                 </span>

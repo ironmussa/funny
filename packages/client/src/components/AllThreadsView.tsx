@@ -774,8 +774,31 @@ export function AllThreadsView() {
               onEndReached={handleLoadMore}
               onSearchKeyDownRef={searchKeyDownRef}
               onThreadClick={(thread) => {
+                // Ensure the project is expanded so the thread row mounts in
+                // the sidebar before we try to scroll to it.
+                const projectStore = useProjectStore.getState();
+                if (!projectStore.expandedProjects.has(thread.projectId)) {
+                  projectStore.toggleProject(thread.projectId);
+                }
+
                 startTransition(() => {
                   navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
+                });
+
+                const scrollToThread = () => {
+                  const el = document.querySelector(
+                    `[data-project-id="${thread.projectId}"] [data-testid="thread-item-${thread.id}"]`,
+                  );
+                  if (el) {
+                    el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                    return true;
+                  }
+                  return false;
+                };
+                requestAnimationFrame(() => {
+                  if (scrollToThread()) return;
+                  // Collapsible slide-down hasn't mounted the row yet — retry after it settles.
+                  setTimeout(scrollToThread, 300);
                 });
               }}
               renderExtraBadges={(thread) => {

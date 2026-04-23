@@ -196,7 +196,6 @@ function HookItem({
                 checked={hook.enabled}
                 onCheckedChange={() => onToggleEnabled(hook)}
                 data-testid={`hook-toggle-${key}`}
-                size="xs"
               />
             </div>
           </TooltipTrigger>

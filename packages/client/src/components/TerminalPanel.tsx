@@ -12,6 +12,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
 import { getActiveWS } from '@/hooks/use-ws';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { api } from '@/lib/api';
@@ -773,26 +774,8 @@ export function TerminalPanel() {
   }, [fetchAvailableShells]);
 
   const [panelHeight, setPanelHeight] = useState(PANEL_HEIGHT);
-  const [newTermTooltipBlocked, setNewTermTooltipBlocked] = useState(false);
-  const [newTermTooltipOpen, setNewTermTooltipOpen] = useState(false);
-  const handleNewTermDropdown = useCallback((open: boolean) => {
-    if (open) {
-      setNewTermTooltipBlocked(true);
-    } else {
-      (document.activeElement as HTMLElement)?.blur();
-      setTimeout(() => setNewTermTooltipBlocked(false), 150);
-    }
-  }, []);
-  const [signalTooltipBlocked, setSignalTooltipBlocked] = useState(false);
-  const [signalTooltipOpen, setSignalTooltipOpen] = useState(false);
-  const handleSignalDropdown = useCallback((open: boolean) => {
-    if (open) {
-      setSignalTooltipBlocked(true);
-    } else {
-      (document.activeElement as HTMLElement)?.blur();
-      setTimeout(() => setSignalTooltipBlocked(false), 150);
-    }
-  }, []);
+  const newTermMenu = useTooltipMenu();
+  const signalMenu = useTooltipMenu();
   const startHeight = useRef(panelHeight);
 
   const {
@@ -940,11 +923,8 @@ export function TerminalPanel() {
             ))}
           </div>
 
-          <DropdownMenu onOpenChange={handleNewTermDropdown}>
-            <Tooltip
-              open={!newTermTooltipBlocked && newTermTooltipOpen}
-              onOpenChange={setNewTermTooltipOpen}
-            >
+          <DropdownMenu {...newTermMenu.menuProps}>
+            <Tooltip {...newTermMenu.tooltipProps}>
               <TooltipTrigger asChild>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon-xs">
@@ -954,7 +934,7 @@ export function TerminalPanel() {
               </TooltipTrigger>
               <TooltipContent>{t('terminal.newTerminal')}</TooltipContent>
             </Tooltip>
-            <DropdownMenuContent align="start" side="top">
+            <DropdownMenuContent align="start" side="top" {...newTermMenu.contentProps}>
               {availableShells.map((shell) => (
                 <DropdownMenuItem
                   key={shell.id}
@@ -975,11 +955,8 @@ export function TerminalPanel() {
           {effectiveActiveTabId &&
             visibleTabs.find((t) => t.id === effectiveActiveTabId)?.alive &&
             visibleTabs.find((t) => t.id === effectiveActiveTabId)?.type === 'pty' && (
-              <DropdownMenu onOpenChange={handleSignalDropdown}>
-                <Tooltip
-                  open={!signalTooltipBlocked && signalTooltipOpen}
-                  onOpenChange={setSignalTooltipOpen}
-                >
+              <DropdownMenu {...signalMenu.menuProps}>
+                <Tooltip {...signalMenu.tooltipProps}>
                   <TooltipTrigger asChild>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon-xs" data-testid="terminal-signal-menu">
@@ -989,7 +966,7 @@ export function TerminalPanel() {
                   </TooltipTrigger>
                   <TooltipContent>{t('terminal.sendSignal')}</TooltipContent>
                 </Tooltip>
-                <DropdownMenuContent align="end" side="top">
+                <DropdownMenuContent align="end" side="top" {...signalMenu.contentProps}>
                   <DropdownMenuItem
                     onClick={() => sendSignal(effectiveActiveTabId, 'SIGINT')}
                     data-testid="terminal-signal-sigint"

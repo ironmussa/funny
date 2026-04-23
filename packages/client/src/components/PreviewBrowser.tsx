@@ -1,6 +1,7 @@
 import { X, RefreshCw, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
+import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
 interface PreviewTab {
@@ -139,20 +140,24 @@ export function PreviewBrowser() {
             <span className="mr-1 font-mono text-xs text-muted-foreground">
               localhost:{activeTab.port}
             </span>
-            <button
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={handleRefresh}
-              className="rounded p-1 text-muted-foreground hover:text-foreground"
               title="Refresh"
+              className="text-muted-foreground hover:text-foreground"
             >
               <RefreshCw className="icon-sm" />
-            </button>
-            <button
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon-xs"
               onClick={handleOpenExternal}
-              className="rounded p-1 text-muted-foreground hover:text-foreground"
               title="Open in browser"
+              className="text-muted-foreground hover:text-foreground"
             >
               <ExternalLink className="icon-sm" />
-            </button>
+            </Button>
           </div>
         )}
       </div>

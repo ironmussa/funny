@@ -321,6 +321,17 @@ export const publishRepoSchema = z.object({
   private: z.boolean().default(true),
 });
 
+export const setRemoteSchema = z.object({
+  url: z
+    .string()
+    .min(1, 'url is required')
+    .max(2048)
+    .regex(
+      /^(https?:\/\/|git:\/\/|ssh:\/\/|git@[^\s:]+:)/,
+      'URL must start with https://, ssh://, git:// or use the git@host:path form',
+    ),
+});
+
 // ── Automations ─────────────────────────────────────────────────
 
 export const automationScheduleSchema = z

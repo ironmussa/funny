@@ -5,7 +5,7 @@
 import { processError, badRequest, internal, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
-import { git, gitRemote, type GitIdentityOptions } from './base.js';
+import { git, gitRemote, gitOptional, type GitIdentityOptions } from './base.js';
 import { getCurrentBranch } from './branch.js';
 import { toDomainError } from './errors.js';
 import { gitWrite, execute, ProcessExecutionError } from './process.js';
@@ -18,6 +18,44 @@ import { gitWrite, execute, ProcessExecutionError } from './process.js';
 export function push(cwd: string, identity?: GitIdentityOptions): ResultAsync<string, DomainError> {
   return getCurrentBranch(cwd).andThen((branch) =>
     gitRemote(['push', '-u', 'origin', branch], cwd, identity),
+  );
+}
+
+/**
+ * Add or update the `origin` remote so a local repository can push/pull
+ * against an existing empty remote (GitHub, GitLab, Bitbucket, self-hosted…).
+ *
+ * Accepts only https://, git://, ssh:// URLs or the `git@host:path` SCP-like
+ * form. Any other shape is rejected to keep this out of reach of command
+ * injection or file:// side-effects.
+ */
+export function setOrigin(cwd: string, url: string): ResultAsync<void, DomainError> {
+  const trimmed = url.trim();
+  const allowed = /^(https?:\/\/|git:\/\/|ssh:\/\/|git@[^\s:]+:)/;
+  if (!trimmed || !allowed.test(trimmed)) {
+    return ResultAsync.fromPromise(
+      Promise.reject(
+        badRequest('Invalid remote URL. Use https://, ssh://, git://, or git@host:path form.'),
+      ),
+      (e) => e as DomainError,
+    );
+  }
+  return ResultAsync.fromPromise(
+    (async () => {
+      const existing = await gitOptional(['remote', 'get-url', 'origin'], cwd);
+      const args = existing
+        ? ['remote', 'set-url', 'origin', trimmed]
+        : ['remote', 'add', 'origin', trimmed];
+      const result = await gitWrite(args, { cwd });
+      if (result.exitCode !== 0) {
+        throw processError(
+          result.stderr.trim() || 'Failed to configure origin',
+          result.exitCode,
+          result.stderr,
+        );
+      }
+    })(),
+    toDomainError,
   );
 }
 

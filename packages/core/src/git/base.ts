@@ -8,9 +8,9 @@
  * - gitRemote()  — authenticated remote commands (push, pull, fetch)
  */
 
-import { mkdtempSync, writeFileSync, rmSync } from 'fs';
+import { mkdtempSync, writeFileSync, rmSync, realpathSync } from 'fs';
 import { tmpdir } from 'os';
-import { dirname, join } from 'path';
+import { dirname, join, resolve } from 'path';
 
 import type { DomainError } from '@funny/shared/errors';
 import { processError, internal } from '@funny/shared/errors';
@@ -86,6 +86,34 @@ export function gitSafeSync(args: string[], cwd: string): string | null {
 export function isGitRepoSync(path: string): boolean {
   const result = gitSafeSync(['rev-parse', '--is-inside-work-tree'], path);
   return result === 'true';
+}
+
+function canonicalize(path: string): string {
+  try {
+    return realpathSync(resolve(path));
+  } catch {
+    return resolve(path);
+  }
+}
+
+/**
+ * Check if `path` is the ROOT of its git repository (not a nested directory
+ * inside one). Git's rev-parse walks up the directory tree to find a `.git`,
+ * which means a non-repo directory sitting inside another repo would still
+ * pass `isGitRepoSync`. This stricter check compares `show-toplevel` against
+ * the given path so callers can reject nested or parent-owned directories.
+ */
+export function isGitRepoRootSync(path: string): boolean {
+  const toplevel = gitSafeSync(['rev-parse', '--show-toplevel'], path);
+  if (!toplevel) return false;
+  return canonicalize(toplevel) === canonicalize(path);
+}
+
+/** Async variant of {@link isGitRepoRootSync}. */
+export async function isGitRepoRoot(path: string): Promise<boolean> {
+  const toplevel = await gitOptional(['rev-parse', '--show-toplevel'], path);
+  if (!toplevel) return false;
+  return canonicalize(toplevel) === canonicalize(path);
 }
 
 /**

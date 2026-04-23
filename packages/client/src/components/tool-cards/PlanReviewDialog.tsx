@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { createClientLogger } from '@/lib/client-logger';
 import { remarkPlugins } from '@/lib/markdown-components';
@@ -200,7 +201,7 @@ export function SelectionPopover({
           </div>
         ) : (
           <div className="flex items-center gap-2 px-2 py-1.5">
-            <input
+            <Input
               ref={inputRef}
               type="text"
               value={comment}
@@ -218,7 +219,7 @@ export function SelectionPopover({
               }}
               placeholder={t('plan.addComment', 'Add comment...')}
               data-testid="plan-selection-comment-input"
-              className="min-w-0 flex-1 bg-transparent text-sm text-foreground placeholder:text-muted-foreground/50 focus:outline-none"
+              className="h-auto min-w-0 flex-1 rounded-none border-0 bg-transparent p-0 text-sm text-foreground shadow-none placeholder:text-muted-foreground/50 focus-visible:ring-0"
             />
             <Button
               size="sm"

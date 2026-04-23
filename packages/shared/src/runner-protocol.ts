@@ -330,13 +330,25 @@ export interface DataAck {
 // Runner → Server: query data from the server
 // Used when runner needs to read data it doesn't have locally
 
-export type RunnerDataQuery = DataGetThread | DataGetToolCall | DataFindToolCall;
+export type RunnerDataQuery =
+  | DataGetThread
+  | DataGetThreadWithMessages
+  | DataGetToolCall
+  | DataFindToolCall;
 
 /** Runner → Server: get thread by ID */
 export interface DataGetThread {
   type: 'data:get_thread';
   requestId: string;
   threadId: string;
+}
+
+/** Runner → Server: get thread with messages by ID */
+export interface DataGetThreadWithMessages {
+  type: 'data:get_thread_with_messages';
+  requestId: string;
+  threadId: string;
+  messageLimit?: number;
 }
 
 /** Runner → Server: get tool call by ID */
@@ -360,6 +372,7 @@ export interface DataFindToolCall {
 // Server → Runner: query responses
 export type ServerDataQueryResponse =
   | DataGetThreadResponse
+  | DataGetThreadWithMessagesResponse
   | DataGetToolCallResponse
   | DataFindToolCallResponse;
 
@@ -367,6 +380,12 @@ export interface DataGetThreadResponse {
   type: 'data:get_thread_response';
   requestId: string;
   thread: Record<string, any> | null;
+}
+
+export interface DataGetThreadWithMessagesResponse {
+  type: 'data:get_thread_with_messages_response';
+  requestId: string;
+  thread: (Record<string, any> & { messages: any[] }) | null;
 }
 
 export interface DataGetToolCallResponse {

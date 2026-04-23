@@ -647,8 +647,11 @@ export function ReviewPane() {
   }, [gitContextKey, currentBranch]);
 
   // Check if the project has a remote origin configured (for Publish vs Push UX).
+  // Worktrees share the project's git config, so we resolve the underlying
+  // project id whether we're in project mode or thread mode.
+  const remoteCheckProjectId = projectModeId ?? threadProjectId ?? null;
   useEffect(() => {
-    if (!projectModeId) {
+    if (!remoteCheckProjectId) {
       setRemoteUrl(undefined);
       return;
     }
@@ -657,13 +660,13 @@ export function ReviewPane() {
       return;
     }
     const controller = new AbortController();
-    api.projectGetRemoteUrl(projectModeId, controller.signal).then((r) => {
+    api.projectGetRemoteUrl(remoteCheckProjectId, controller.signal).then((r) => {
       if (!controller.signal.aborted && r.isOk()) {
         setRemoteUrl(r.value.remoteUrl);
       }
     });
     return () => controller.abort();
-  }, [projectModeId, gitStatus?.hasRemoteBranch]);
+  }, [remoteCheckProjectId, gitStatus?.hasRemoteBranch]);
 
   // Reset selectedAction if "commit-pr" is selected but a PR already exists.
   useEffect(() => {
@@ -1708,13 +1711,25 @@ export function ReviewPane() {
                         variant="ghost"
                         size="icon-sm"
                         onClick={() => setPublishDialogOpen(true)}
-                        className="text-muted-foreground"
+                        className="relative text-muted-foreground"
                         data-testid="review-publish-toolbar"
                       >
                         <Upload className="icon-base" />
+                        {unpushedCommitCount > 0 && (
+                          <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] font-bold leading-none text-white">
+                            {unpushedCommitCount}
+                          </span>
+                        )}
                       </Button>
                     </TooltipTrigger>
-                    <TooltipContent side="top">Publish repository to GitHub</TooltipContent>
+                    <TooltipContent side="top">
+                      {unpushedCommitCount > 0
+                        ? t('review.publishWithCommits', {
+                            count: unpushedCommitCount,
+                            defaultValue: `Publish repository (${unpushedCommitCount} commit(s) to push)`,
+                          })
+                        : t('review.publishRepo', 'Publish repository')}
+                    </TooltipContent>
                   </Tooltip>
                 ) : (
                   <PushButton
@@ -2428,7 +2443,7 @@ export function ReviewPane() {
               )}
               {summaries.length > 0 && !commitInProgress && (
                 <div className="flex-shrink-0 space-y-1.5 border-t border-sidebar-border p-2">
-                  <input
+                  <Input
                     type="text"
                     placeholder={t('review.commitTitle')}
                     aria-label={t('review.commitTitle', 'Commit title')}
@@ -2436,7 +2451,6 @@ export function ReviewPane() {
                     value={commitTitle}
                     onChange={(e) => setCommitTitle(e.target.value)}
                     disabled={!!actionInProgress || generatingMsg}
-                    className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50"
                   />
                   <div className="rounded-md border border-input bg-background focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50">
                     <textarea
@@ -2881,8 +2895,7 @@ export function ReviewPane() {
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-2">
-              <input
-                className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50"
+              <Input
                 placeholder={t('review.prTitle', 'PR title')}
                 data-testid="review-pr-title"
                 value={prDialog?.title ?? ''}
@@ -3003,17 +3016,17 @@ export function ReviewPane() {
       </Tabs>
 
       <PublishRepoDialog
-        projectId={projectModeId ?? ''}
+        projectId={remoteCheckProjectId ?? ''}
         projectPath={basePath}
         open={publishDialogOpen}
         onOpenChange={setPublishDialogOpen}
         onSuccess={(repoUrl) => {
           setRemoteUrl(repoUrl);
           setPublishDialogOpen(false);
-          if (projectModeId) {
-            useGitStatusStore.getState().fetchProjectStatus(projectModeId, true);
+          if (remoteCheckProjectId) {
+            useGitStatusStore.getState().fetchProjectStatus(remoteCheckProjectId, true);
           }
-          toast.success('Repository published');
+          toast.success('Repository ready');
         }}
       />
     </div>

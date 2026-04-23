@@ -3,6 +3,12 @@
     "title": "funny",
     "subtitle": "Agentes Claude Code em Paralelo"
   },
+  "powerline": {
+    "tooltipLocalBranch": "Local — compartilha o diretório do projeto",
+    "tooltipBaseBranch": "Branch base",
+    "tooltipWorktree": "Worktree isolado",
+    "tooltipWorktreeWithPath": "Worktree isolado em {{path}}"
+  },
   "sidebar": {
     "projects": "Projetos",
     "addProject": "Adicionar projeto",

@@ -8,12 +8,6 @@ const meta = {
   component: Checkbox,
   parameters: { layout: 'centered' },
   tags: ['autodocs'],
-  argTypes: {
-    size: {
-      control: 'select',
-      options: ['default', 'sm', 'lg'],
-    },
-  },
 } satisfies Meta<typeof Checkbox>;
 
 export default meta;
@@ -27,39 +21,12 @@ export const Checked: Story = {
   args: { defaultChecked: true },
 };
 
-export const Small: Story = {
-  args: { size: 'sm', defaultChecked: true },
-};
-
-export const Large: Story = {
-  args: { size: 'lg', defaultChecked: true },
-};
-
 export const Disabled: Story = {
   args: { disabled: true },
 };
 
 export const DisabledChecked: Story = {
   args: { disabled: true, defaultChecked: true },
-};
-
-export const AllSizes: Story = {
-  render: () => (
-    <div className="flex items-center gap-6">
-      <div className="flex items-center gap-2">
-        <Checkbox data-testid="checkbox-sm" size="sm" defaultChecked />
-        <span className="text-xs text-muted-foreground">sm</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <Checkbox data-testid="checkbox-default" size="default" defaultChecked />
-        <span className="text-xs text-muted-foreground">default</span>
-      </div>
-      <div className="flex items-center gap-2">
-        <Checkbox data-testid="checkbox-lg" size="lg" defaultChecked />
-        <span className="text-xs text-muted-foreground">lg</span>
-      </div>
-    </div>
-  ),
 };
 
 export const WithLabel: Story = {
@@ -72,8 +39,6 @@ export const WithLabel: Story = {
     </div>
   ),
 };
-
-// --- Interaction Tests ---
 
 export const ToggleOnOff: Story = {
   render: () => <Checkbox data-testid="checkbox-toggle" />,

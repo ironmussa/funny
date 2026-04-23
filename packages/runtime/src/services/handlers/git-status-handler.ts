@@ -35,7 +35,15 @@ export const gitStatusHandler: EventHandler<'git:changed'> = {
       setTimeout(() => {
         pendingTimers.delete(threadId);
         ctx.log(`Emitting git status for thread ${threadId} (debounced, tool: ${event.toolName})`);
-        emitGitStatusForThread(event, ctx).catch((err) => {
+        // Drift detection is only safe when this thread's own agent could have
+        // run a checkout — i.e., a Bash tool call. Write/Edit/NotebookEdit
+        // tools cannot change the branch, so trusting the current checkout in
+        // those cases would let a parallel thread's checkout silently rewrite
+        // this thread's branch.
+        emitGitStatusForThread(
+          { ...event, detectBranchDrift: event.toolName === 'Bash' },
+          ctx,
+        ).catch((err) => {
           ctx.log(`Failed to emit git status for thread ${threadId}: ${err?.message ?? err}`);
         });
       }, DEBOUNCE_MS),

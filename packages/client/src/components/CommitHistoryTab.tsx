@@ -9,6 +9,7 @@ import {
   Loader2,
   RefreshCw,
   Search,
+  Upload,
   X,
   GitBranch,
   RotateCcw,
@@ -45,6 +46,7 @@ import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { FileTree } from './FileTree';
+import { PublishRepoDialog } from './PublishRepoDialog';
 import { ExpandedDiffView } from './tool-cards/ExpandedDiffDialog';
 
 // ── Types ──
@@ -160,6 +162,11 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const [confirmRevertOpen, setConfirmRevertOpen] = useState(false);
   const [confirmResetOpen, setConfirmResetOpen] = useState(false);
 
+  // Publish repository state — `null` means "no origin configured", `undefined`
+  // means "not checked yet / no context", any string means a remote exists.
+  const [remoteUrl, setRemoteUrl] = useState<string | null | undefined>(undefined);
+  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+
   // Project branch — reloads the log when the working directory branch changes
   // (e.g. user switches branches via the PromptInput branch picker).
   // Worktree threads pin to their own branch; local/project mode follows the
@@ -173,6 +180,33 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const effectiveBranch = isWorktreeMode ? threadBranch : projectBranch;
 
   const gitContextKey = `${effectiveThreadId || projectModeId || ''}::${effectiveBranch ?? ''}`;
+
+  // Resolve underlying project id whether we're in project or thread mode —
+  // worktrees share the project's git config so origin lives on the project.
+  const remoteCheckProjectId = projectModeId ?? threadProjectId ?? null;
+  const projectPathForPublish = useProjectStore((s) => {
+    if (!remoteCheckProjectId) return '';
+    return s.projects.find((p) => p.id === remoteCheckProjectId)?.path ?? '';
+  });
+
+  // Detect whether `origin` is configured — controls Publish vs Push UI.
+  useEffect(() => {
+    if (!remoteCheckProjectId) {
+      setRemoteUrl(undefined);
+      return;
+    }
+    if (gitStatus?.hasRemoteBranch) {
+      setRemoteUrl('exists');
+      return;
+    }
+    const controller = new AbortController();
+    api.projectGetRemoteUrl(remoteCheckProjectId, controller.signal).then((r) => {
+      if (!controller.signal.aborted && r.isOk()) {
+        setRemoteUrl(r.value.remoteUrl);
+      }
+    });
+    return () => controller.abort();
+  }, [remoteCheckProjectId, gitStatus?.hasRemoteBranch]);
 
   // AbortController for in-flight git log requests — aborted on context change
   const abortRef = useRef<AbortController | null>(null);
@@ -188,6 +222,11 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
       const result = effectiveThreadId
         ? await api.getGitLog(effectiveThreadId, PAGE_SIZE, true, skip, signal)
         : await api.projectGitLog(projectModeId!, PAGE_SIZE, skip, signal);
+      // Silently ignore aborts — they're triggered by context changes, not real failures.
+      if (signal?.aborted) {
+        loadingRef.current = false;
+        return;
+      }
       if (result.isOk()) {
         const { entries, hasMore: more, unpushedHashes: hashes } = result.value;
         setLogEntries((prev) => (append ? [...prev, ...entries] : entries));
@@ -748,13 +787,42 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
           unpulledCommitCount={gitStatus?.unpulledCommitCount ?? 0}
           testIdPrefix="history"
         />
-        <PushButton
-          onPush={handlePush}
-          pushInProgress={pushInProgress}
-          unpushedCommitCount={unpushedHashes.size}
-          disabled={pushInProgress || !hasUnpushed}
-          testIdPrefix="history"
-        />
+        {remoteUrl === null ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setPublishDialogOpen(true)}
+                className="relative text-muted-foreground"
+                data-testid="history-publish-toolbar"
+              >
+                <Upload className="icon-base" />
+                {unpushedHashes.size > 0 && (
+                  <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] font-bold leading-none text-white">
+                    {unpushedHashes.size}
+                  </span>
+                )}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="top">
+              {unpushedHashes.size > 0
+                ? t('review.publishWithCommits', {
+                    count: unpushedHashes.size,
+                    defaultValue: `Publish repository (${unpushedHashes.size} commit(s) to push)`,
+                  })
+                : t('review.publishRepo', 'Publish repository')}
+            </TooltipContent>
+          </Tooltip>
+        ) : (
+          <PushButton
+            onPush={handlePush}
+            pushInProgress={pushInProgress}
+            unpushedCommitCount={unpushedHashes.size}
+            disabled={pushInProgress || !hasUnpushed}
+            testIdPrefix="history"
+          />
+        )}
         {isOnDifferentBranch && (
           <Tooltip>
             <TooltipTrigger asChild>
@@ -1207,8 +1275,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-2">
-            <input
-              className="w-full rounded-md border border-input bg-background px-2 py-1.5 text-xs placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring/50"
+            <Input
               placeholder={t('review.prTitle', 'PR title')}
               data-testid="history-pr-title"
               value={prDialog?.title ?? ''}
@@ -1298,6 +1365,23 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
         onOpenChange={(open) => setPullStrategyDialog((s) => ({ ...s, open }))}
         errorMessage={pullStrategyDialog.errorMessage}
         onChoose={handlePullStrategyChosen}
+      />
+
+      <PublishRepoDialog
+        projectId={remoteCheckProjectId ?? ''}
+        projectPath={projectPathForPublish}
+        open={publishDialogOpen}
+        onOpenChange={setPublishDialogOpen}
+        onSuccess={(repoUrl) => {
+          setRemoteUrl(repoUrl);
+          setPublishDialogOpen(false);
+          if (remoteCheckProjectId) {
+            useGitStatusStore.getState().fetchProjectStatus(remoteCheckProjectId, true);
+          }
+          toast.success(t('review.publishSuccess', 'Repository ready'));
+          loadedRef.current = false;
+          loadLog(0, false);
+        }}
       />
     </div>
   );

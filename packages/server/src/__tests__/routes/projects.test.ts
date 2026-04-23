@@ -10,6 +10,7 @@ import { mock } from 'bun:test';
 // Mock git operations before any service imports
 mock.module('@funny/core/git', () => ({
   isGitRepoSync: () => true,
+  isGitRepoRootSync: () => true,
   ensureWeaveConfigured: () => Promise.resolve(),
 }));
 

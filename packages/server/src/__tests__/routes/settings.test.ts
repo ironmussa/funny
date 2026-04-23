@@ -11,6 +11,7 @@ process.env.RUNNER_AUTH_SECRET = 'test-secret';
 
 mock.module('@funny/core/git', () => ({
   isGitRepoSync: () => true,
+  isGitRepoRootSync: () => true,
   ensureWeaveConfigured: () => Promise.resolve(),
 }));
 

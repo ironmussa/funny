@@ -230,14 +230,7 @@ export type ThreadStatus =
 export type ThreadStage = 'backlog' | 'planning' | 'in_progress' | 'review' | 'done' | 'archived';
 export type WaitingReason = 'question' | 'plan' | 'permission';
 
-export type AgentProvider =
-  | 'claude'
-  | 'codex'
-  | 'gemini'
-  | 'deepagent'
-  | 'llm-api'
-  | 'openswe'
-  | 'external';
+export type AgentProvider = 'claude' | 'codex' | 'gemini' | 'deepagent' | 'llm-api' | 'external';
 
 export type ThreadSource = 'web' | 'chrome_extension' | 'api' | 'automation' | 'ingest';
 
@@ -263,8 +256,7 @@ export type DeepAgentModel =
   | 'deepagent-glm-5.1'
   | 'deepagent-glm-5-turbo'
   | 'deepagent-glm-5v-turbo';
-export type OpenSWEModel = 'openswe-default';
-export type AgentModel = ClaudeModel | CodexModel | GeminiModel | DeepAgentModel | OpenSWEModel;
+export type AgentModel = ClaudeModel | CodexModel | GeminiModel | DeepAgentModel;
 export type PermissionMode = 'plan' | 'auto' | 'autoEdit' | 'confirmEdit' | 'ask';
 export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 

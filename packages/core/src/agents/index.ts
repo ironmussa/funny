@@ -5,7 +5,6 @@ export { SDKClaudeProcess } from './sdk-claude.js';
 export { CodexProcess } from './codex.js';
 export { GeminiACPProcess } from './gemini-acp.js';
 export { DeepAgentProcess } from './deepagent-process.js';
-export { OpenSWEProcess } from './openswe.js';
 export {
   inferACPToolName,
   buildACPToolInput,

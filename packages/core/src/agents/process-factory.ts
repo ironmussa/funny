@@ -14,7 +14,6 @@ import { DeepAgentProcess } from './deepagent-process.js';
 import { GeminiACPProcess } from './gemini-acp.js';
 import type { IAgentProcessFactory, IAgentProcess, AgentProcessOptions } from './interfaces.js';
 import { LLMApiProcess } from './llm/llm-api-process.js';
-import { OpenSWEProcess } from './openswe.js';
 import { SDKClaudeProcess } from './sdk-claude.js';
 
 type ProcessConstructor = new (opts: AgentProcessOptions) => IAgentProcess;
@@ -25,7 +24,6 @@ const providerRegistry = new Map<string, ProcessConstructor>([
   ['gemini', GeminiACPProcess],
   ['deepagent', DeepAgentProcess],
   ['llm-api', LLMApiProcess],
-  ['openswe', OpenSWEProcess],
 ]);
 
 /** Register a new provider process class at runtime. */

@@ -10,7 +10,6 @@ import type {
   CodexModel,
   GeminiModel,
   DeepAgentModel,
-  OpenSWEModel,
   PermissionMode,
 } from './types.js';
 // ── Application defaults (single source of truth) ────────────────
@@ -45,10 +44,6 @@ const GEMINI_MODEL_IDS: Record<GeminiModel, string> = {
   'gemini-2.5-pro': 'gemini-2.5-pro',
   'gemini-3-flash-preview': 'gemini-3-flash-preview',
   'gemini-3-pro-preview': 'gemini-3-pro-preview',
-};
-
-const OPENSWE_MODEL_IDS: Record<OpenSWEModel, string> = {
-  'openswe-default': 'openswe-default',
 };
 
 const DEEPAGENT_MODEL_IDS: Record<DeepAgentModel, string> = {
@@ -96,10 +91,6 @@ const GEMINI_MODEL_LABELS: Record<GeminiModel, string> = {
   'gemini-2.0-flash': 'Gemini 2.0 Flash',
 };
 
-const OPENSWE_MODEL_LABELS: Record<OpenSWEModel, string> = {
-  'openswe-default': 'OpenSWE Default',
-};
-
 const DEEPAGENT_MODEL_LABELS: Record<DeepAgentModel, string> = {
   'minimax-m2.7': 'MiniMax M2.7',
   'minimax-m2.7-highspeed': 'MiniMax M2.7 Highspeed',
@@ -123,7 +114,6 @@ export const PROVIDER_LABELS: Record<string, string> = {
   codex: 'Codex',
   gemini: 'Gemini',
   deepagent: 'Deep Agent',
-  openswe: 'OpenSWE',
 };
 
 // ── Permission mode mapping (Claude SDK specific) ─────────────
@@ -260,11 +250,6 @@ export function resolveModelId(provider: AgentProvider, model: AgentModel): stri
     if (!id) throw new Error(`Unknown Deep Agent model: ${model}`);
     return id;
   }
-  if (provider === 'openswe') {
-    const id = OPENSWE_MODEL_IDS[model as OpenSWEModel];
-    if (!id) return model as string; // Pass through unknown models
-    return id;
-  }
   if (provider === 'llm-api') {
     // LLM API uses full model IDs directly — pass through
     return model as string;
@@ -278,7 +263,6 @@ export function getDefaultModel(provider: AgentProvider): AgentModel {
   if (provider === 'codex') return 'o4-mini';
   if (provider === 'gemini') return 'gemini-3-flash-preview';
   if (provider === 'deepagent') return 'minimax-m2.7';
-  if (provider === 'openswe') return 'openswe-default';
   if (provider === 'llm-api') return DEFAULT_MODEL; // Default to claude-equivalent
   throw new Error(`Unknown provider: ${provider}`);
 }
@@ -289,7 +273,6 @@ export function getProviderModels(provider: AgentProvider): AgentModel[] {
   if (provider === 'codex') return Object.keys(CODEX_MODEL_IDS) as CodexModel[];
   if (provider === 'gemini') return Object.keys(GEMINI_MODEL_IDS) as GeminiModel[];
   if (provider === 'deepagent') return Object.keys(DEEPAGENT_MODEL_IDS) as DeepAgentModel[];
-  if (provider === 'openswe') return Object.keys(OPENSWE_MODEL_IDS) as OpenSWEModel[];
   if (provider === 'llm-api') return []; // LLM API accepts any model ID
   throw new Error(`Unknown provider: ${provider}`);
 }
@@ -318,12 +301,6 @@ export function getProviderModelsWithLabels(provider: AgentProvider): ModelInfo[
     return (Object.keys(DEEPAGENT_MODEL_LABELS) as DeepAgentModel[]).map((k) => ({
       value: k,
       label: DEEPAGENT_MODEL_LABELS[k],
-    }));
-  }
-  if (provider === 'openswe') {
-    return (Object.keys(OPENSWE_MODEL_LABELS) as OpenSWEModel[]).map((k) => ({
-      value: k,
-      label: OPENSWE_MODEL_LABELS[k],
     }));
   }
   return [];
@@ -368,7 +345,6 @@ export function getDefaultAllowedTools(provider: AgentProvider): string[] {
   if (provider === 'codex') return [...CODEX_DEFAULT_TOOLS];
   if (provider === 'gemini') return [...GEMINI_DEFAULT_TOOLS];
   if (provider === 'deepagent') return [...DEEPAGENT_DEFAULT_TOOLS];
-  if (provider === 'openswe') return []; // OpenSWE manages its own tools server-side
   if (provider === 'llm-api') return [...LLM_API_DEFAULT_TOOLS];
   return [];
 }

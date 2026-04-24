@@ -32,7 +32,6 @@ import {
   gitWatcherStartOnAgentStartHandler,
   gitWatcherStopOnAgentCompletedHandler,
 } from './git-watcher-lifecycle-handler.js';
-import { memoryGCHandler } from './memory-gc-handler.js';
 import { pipelineTriggerHandler } from './pipeline-trigger-handler.js';
 import { stageTransitionOnAgentStartHandler } from './stage-transition-on-agent-start-handler.js';
 import {
@@ -77,8 +76,6 @@ const allHandlers: EventHandler<any>[] = [
   gitWatcherStopOnAgentCompletedHandler,
   // Pipeline
   pipelineTriggerHandler,
-  // Memory
-  memoryGCHandler,
   // Telemetry
   gitCommitTelemetryHandler,
   gitPushTelemetryHandler,

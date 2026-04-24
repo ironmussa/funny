@@ -58,7 +58,6 @@ export const projects = pgTable('projects', {
   urls: text('urls'),
   systemPrompt: text('system_prompt'),
   launcherUrl: text('launcher_url'),
-  memoryEnabled: integer('memory_enabled').notNull().default(0),
   defaultAgentTemplateId: text('default_agent_template_id'),
   userId: text('user_id').notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
@@ -514,8 +513,6 @@ export const agentTemplates = pgTable('agent_templates', {
   mcpServers: text('mcp_servers'), // JSON array
   builtinSkillsDisabled: text('builtin_skills_disabled'), // JSON array
   customSkillPaths: text('custom_skill_paths'), // JSON array
-  memoryOverride: integer('memory_override'), // null/0/1
-  customMemoryPaths: text('custom_memory_paths'), // JSON array
   agentName: text('agent_name'),
   shared: integer('shared').notNull().default(0),
   variables: text('variables'), // JSON array

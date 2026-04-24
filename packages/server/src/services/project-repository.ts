@@ -277,7 +277,6 @@ export async function updateProject(
     urls?: string[] | null;
     systemPrompt?: string | null;
     launcherUrl?: string | null;
-    memoryEnabled?: boolean;
     defaultAgentTemplateId?: string | null;
   },
 ): Promise<Result<Project, DomainError>> {
@@ -338,7 +337,6 @@ export async function updateProject(
   if (fields.urls !== undefined) updateData.urls = fields.urls ? JSON.stringify(fields.urls) : null;
   if (fields.systemPrompt !== undefined) updateData.systemPrompt = fields.systemPrompt;
   if (fields.launcherUrl !== undefined) updateData.launcherUrl = fields.launcherUrl;
-  if (fields.memoryEnabled !== undefined) updateData.memoryEnabled = fields.memoryEnabled;
   if (fields.defaultAgentTemplateId !== undefined)
     updateData.defaultAgentTemplateId = fields.defaultAgentTemplateId;
 

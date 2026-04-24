@@ -1,11 +1,4 @@
-import {
-  getBaseUrlForThread,
-  validateContainerUrl,
-  type DecayClass,
-  type FactType,
-  type MemoryFact,
-  type PullStrategy,
-} from './api/_core';
+import { getBaseUrlForThread, validateContainerUrl, type PullStrategy } from './api/_core';
 import { agentTemplatesApi } from './api/agent-templates';
 import { analyticsApi } from './api/analytics';
 import { arcsApi } from './api/arcs';
@@ -14,7 +7,6 @@ import { browseApi } from './api/browse';
 import { gitApi } from './api/git';
 import { githubApi } from './api/github';
 import { mcpApi } from './api/mcp';
-import { memoryApi } from './api/memory';
 import { pipelinesApi } from './api/pipelines';
 import { profileApi } from './api/profile';
 import { projectsApi } from './api/projects';
@@ -27,7 +19,7 @@ import { worktreesApi } from './api/worktrees';
 
 // Re-export shared helpers/types consumed outside api.ts
 export { getBaseUrlForThread, validateContainerUrl };
-export type { DecayClass, FactType, MemoryFact, PullStrategy };
+export type { PullStrategy };
 
 // Order preserves the original section layout in api.ts so method ordering
 // (in the merged object) matches pre-split behavior exactly.
@@ -48,6 +40,5 @@ export const api = {
   ...profileApi, // Profile
   ...teamApi, // Team / Organization / Invites / Runners
   ...testsApi, // Test Runner
-  ...memoryApi, // Memory (Paisley Park)
   ...arcsApi, // Arcs
 };

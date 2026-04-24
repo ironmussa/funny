@@ -96,8 +96,6 @@ export interface ClaudeProcessOptions {
   customSkillPaths?: string[];
   /** Custom agent name (Deep Agent only, default: 'funny-coding-assistant') */
   agentName?: string;
-  /** Custom memory file paths (Deep Agent only, overrides workspace defaults) */
-  customMemoryPaths?: string[];
   /** Custom spawn function for sandboxed execution (e.g., Podman container) */
   spawnClaudeCodeProcess?: (options: {
     command: string;

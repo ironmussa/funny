@@ -40,18 +40,6 @@ export type {
 } from './types/github.js';
 
 export type {
-  FactType,
-  DecayClass,
-  MemoryScope,
-  MemoryFact,
-  RecallOptions,
-  AddOptions,
-  SearchFilters,
-  TimelineOptions,
-  MemoryRecallResult,
-} from './types/memory.js';
-
-export type {
   ReviewFindingSeverity,
   ReviewFindingCategory,
   CodeReviewFinding,
@@ -186,7 +174,6 @@ export interface Project {
   urls?: string[];
   systemPrompt?: string;
   launcherUrl?: string;
-  memoryEnabled?: boolean;
   defaultAgentTemplateId?: string;
   userId: string;
   sortOrder: number;

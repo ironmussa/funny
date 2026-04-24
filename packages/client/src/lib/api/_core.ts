@@ -9,30 +9,6 @@ import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 // ─── Git pull strategy (matches `PullStrategy` in @funny/core/git/remote.ts) ──
 export type PullStrategy = 'ff-only' | 'merge' | 'rebase';
 
-// ─── Memory types (inlined from @funny/memory to avoid cross-package dep) ──
-export type FactType = 'decision' | 'bug' | 'pattern' | 'convention' | 'insight' | 'context';
-export type DecayClass = 'slow' | 'normal' | 'fast';
-export interface MemoryFact {
-  id: string;
-  type: FactType;
-  confidence: number;
-  sourceAgent: string | null;
-  sourceOperator: string | null;
-  sourceSession: string | null;
-  validFrom: string;
-  invalidAt: string | null;
-  ingestedAt: string;
-  invalidatedBy: string | null;
-  supersededBy: string | null;
-  tags: string[];
-  related: string[];
-  decayClass: DecayClass;
-  accessCount: number;
-  lastAccessed: string;
-  content: string;
-  projectId: string;
-}
-
 const isTauri = !!(window as any).__TAURI_INTERNALS__;
 const serverPort = import.meta.env.VITE_SERVER_PORT || '3001';
 // In the browser, always use relative URLs so requests go through the Vite proxy

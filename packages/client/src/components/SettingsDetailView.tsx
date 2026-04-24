@@ -61,7 +61,6 @@ import { ArchivedThreadsSettings } from './ArchivedThreadsSettings';
 import { AutomationSettings } from './AutomationSettings';
 import { FolderPicker } from './FolderPicker';
 import { McpServerSettings } from './McpServerSettings';
-import { MemorySettings } from './MemorySettings';
 import { PipelineSettings } from './PipelineSettings';
 import { ProjectConfigSettings } from './ProjectConfigSettings';
 import { ProjectHooksSettings } from './ProjectHooksSettings';
@@ -934,21 +933,6 @@ function GeneralSettings() {
               currentUrl={selectedProject.launcherUrl}
               onSave={saveProject}
             />
-            <SettingRow
-              title={t('settings.memoryEnabled', 'Project Memory')}
-              description={t(
-                'settings.memoryEnabledDesc',
-                'Enable Paisley Park memory system for this project. Agents will recall and store knowledge across sessions.',
-              )}
-            >
-              <Switch
-                data-testid="settings-memory-enabled"
-                checked={selectedProject.memoryEnabled ?? false}
-                onCheckedChange={(checked) =>
-                  saveProject(selectedProject.id, { memoryEnabled: checked })
-                }
-              />
-            </SettingRow>
             <WeaveStatusSetting projectId={selectedProject.id} />
             <DefaultTemplateSetting
               projectId={selectedProject.id}
@@ -1072,8 +1056,6 @@ export function SettingsDetailView() {
             <PipelineSettings />
           ) : page === 'archived-threads' ? (
             <ArchivedThreadsSettings />
-          ) : page === 'memory' ? (
-            <MemorySettings />
           ) : page === 'users' ? (
             <UserManagement />
           ) : page === 'team-members' ? (

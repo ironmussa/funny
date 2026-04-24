@@ -48,14 +48,12 @@
     "test": "vitest run",
     "test:bun": "bun test src/__tests__/db/ src/__tests__/routes/projects.test.ts src/__tests__/routes/git.test.ts src/__tests__/routes/threads.test.ts src/__tests__/services/project-manager.test.ts src/__tests__/services/thread-manager.test.ts src/__tests__/services/worktree-manager.test.ts src/__tests__/services/agent-runner.test.ts src/__tests__/services/agent-runner-class.test.ts src/__tests__/services/automation-manager.test.ts src/__tests__/services/pipeline-db.test.ts src/__tests__/services/pty-persistence.test.ts src/__tests__/utils/process.test.ts src/__tests__/utils/git-v2.test.ts",
     "lint:promises": "eslint src/",
-    "mcp:memory": "bun ../memory/src/mcp/server.ts",
     "prepublishOnly": "bun run build"
   },
   "dependencies": {
     "@abbacchio/transport": "^0.2.0",
     "@anthropic-ai/claude-agent-sdk": "^0.2.111",
     "@anthropic-ai/sdk": "^0.78.0",
-    "@funny/memory": "*",
     "@xterm/addon-serialize": "^0.14.0",
     "@xterm/headless": "^6.0.0",
     "assemblyai": "^4.26.1",

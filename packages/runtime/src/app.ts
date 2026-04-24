@@ -43,7 +43,6 @@ import { gitRoutes, invalidateGitStatusCacheByProject } from './routes/git.js';
 import { githubRoutes } from './routes/github.js';
 import { ingestRoutes } from './routes/ingest.js';
 import mcpRoutes from './routes/mcp.js';
-import { memoryRoutes } from './routes/memory.js';
 import pluginRoutes from './routes/plugins.js';
 import { projectRoutes } from './routes/projects.js';
 import skillsRoutes from './routes/skills.js';
@@ -308,7 +307,6 @@ export async function createRuntimeApp(options: RuntimeAppOptions): Promise<Runt
   app.route('/api/github', githubRoutes);
   app.route('/api/tests', testRoutes);
   app.route('/api/automations', automationRoutes);
-  app.route('/api/projects', memoryRoutes);
   app.route('/api/arcs', arcRoutes);
   app.route('/api/projects', arcProjectRoutes);
 

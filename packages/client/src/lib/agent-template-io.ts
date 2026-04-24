@@ -24,8 +24,6 @@ export function exportTemplate(template: AgentTemplate): void {
       mcpServers: template.mcpServers,
       builtinSkillsDisabled: template.builtinSkillsDisabled,
       customSkillPaths: template.customSkillPaths,
-      memoryOverride: template.memoryOverride,
-      customMemoryPaths: template.customMemoryPaths,
       agentName: template.agentName,
     },
   };

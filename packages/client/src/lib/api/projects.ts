@@ -40,7 +40,6 @@ export const projectsApi = {
       urls?: string[] | null;
       systemPrompt?: string | null;
       launcherUrl?: string | null;
-      memoryEnabled?: boolean;
       defaultAgentTemplateId?: string | null;
     },
   ) => request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),

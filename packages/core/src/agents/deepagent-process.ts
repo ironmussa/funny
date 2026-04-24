@@ -107,10 +107,6 @@ export class DeepAgentProcess extends BaseAgentProcess {
     if (this.options.customSkillPaths?.length) {
       args.push('--skills', this.options.customSkillPaths.join(','));
     }
-    if (this.options.customMemoryPaths?.length) {
-      args.push('--memory', this.options.customMemoryPaths.join(','));
-    }
-
     // Build env — alias provider API keys so that LangChain integrations
     // (used internally by deepagents-acp) can find them.
     const spawnEnv = { ...process.env, ...this.options.env };

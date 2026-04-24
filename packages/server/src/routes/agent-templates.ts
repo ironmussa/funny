@@ -95,8 +95,6 @@ agentTemplateRoutes.post('/', async (c) => {
     mcpServers: toJson(body.mcpServers),
     builtinSkillsDisabled: toJson(body.builtinSkillsDisabled),
     customSkillPaths: toJson(body.customSkillPaths),
-    memoryOverride: body.memoryOverride ?? null,
-    customMemoryPaths: toJson(body.customMemoryPaths),
     agentName: body.agentName ?? null,
     shared: body.shared ?? false,
     variables: toJson(body.variables),
@@ -130,7 +128,6 @@ agentTemplateRoutes.patch('/:id', async (c) => {
     'model',
     'systemPromptMode',
     'systemPrompt',
-    'memoryOverride',
     'agentName',
     'shared',
   ] as const) {
@@ -143,7 +140,6 @@ agentTemplateRoutes.patch('/:id', async (c) => {
     'mcpServers',
     'builtinSkillsDisabled',
     'customSkillPaths',
-    'customMemoryPaths',
     'variables',
   ] as const) {
     if (body[key] !== undefined) updates[key] = toJson(body[key]);
@@ -195,8 +191,6 @@ agentTemplateRoutes.post('/:id/duplicate', async (c) => {
       mcpServers: toJson(builtin.mcpServers),
       builtinSkillsDisabled: toJson(builtin.builtinSkillsDisabled),
       customSkillPaths: toJson(builtin.customSkillPaths),
-      memoryOverride: builtin.memoryOverride ?? null,
-      customMemoryPaths: toJson(builtin.customMemoryPaths),
       agentName: builtin.agentName ?? null,
     };
   } else {
@@ -228,7 +222,6 @@ const JSON_COLUMNS = [
   'mcpServers',
   'builtinSkillsDisabled',
   'customSkillPaths',
-  'customMemoryPaths',
   'variables',
 ] as const;
 

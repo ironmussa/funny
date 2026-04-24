@@ -12,7 +12,6 @@ import {
   Users,
   UsersRound,
   Workflow,
-  BrainCircuit,
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
@@ -42,7 +41,6 @@ const baseSettingsItems = [
   { id: 'automations', label: 'Automations', icon: Timer },
   { id: 'pipelines', label: 'Pipelines', icon: Workflow },
   { id: 'archived-threads', label: 'Archived Threads', icon: Archive },
-  { id: 'memory', label: 'Memory', icon: BrainCircuit },
 ] as const;
 
 export const settingsItems = baseSettingsItems;
@@ -59,7 +57,6 @@ export const settingsLabelKeys: Record<string, string> = {
   automations: 'settings.automations',
   pipelines: 'settings.pipelines',
   'archived-threads': 'settings.archivedThreads',
-  memory: 'settings.memory',
   users: 'users.title',
   'team-members': 'Team Members',
 };
@@ -74,10 +71,9 @@ export function SettingsPanel() {
 
   // Build items list dynamically
   // Hide "Archived Threads" when viewing per-project settings
-  // Hide "Memory" when no project is selected (it's project-scoped)
   const items: Array<{ id: string; label: string; icon: typeof Settings }> = selectedProjectId
     ? [...baseSettingsItems].filter((item) => item.id !== 'archived-threads')
-    : [...baseSettingsItems].filter((item) => item.id !== 'memory');
+    : [...baseSettingsItems];
   if (authUser?.role === 'admin') {
     items.push({ id: 'users', label: 'Users', icon: Users });
     items.push({ id: 'team-members', label: 'Team Members', icon: UsersRound });

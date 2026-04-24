@@ -224,8 +224,6 @@ export class AgentLifecycleManager {
     let tplBuiltinSkillsDisabled: string[] | undefined;
     let tplCustomSkillPaths: string[] | undefined;
     let tplAgentName: string | undefined;
-    let tplMemoryOverride: boolean | null = null;
-    let tplCustomMemoryPaths: string[] | undefined;
     if (thread?.agentTemplateId && provider === 'deepagent') {
       try {
         // Check builtin templates first (no remote call needed)
@@ -280,11 +278,7 @@ export class AgentLifecycleManager {
           // Phase 2: Parse remaining template fields for runtime wiring
           tplBuiltinSkillsDisabled = parseJsonCol<string>(tpl.builtinSkillsDisabled);
           tplCustomSkillPaths = parseJsonCol<string>(tpl.customSkillPaths);
-          tplCustomMemoryPaths = parseJsonCol<string>(tpl.customMemoryPaths);
           tplAgentName = tpl.agentName ?? undefined;
-          // memoryOverride: integer column — null = use project default, 0 = force off, 1 = force on
-          tplMemoryOverride =
-            tpl.memoryOverride === 1 ? true : tpl.memoryOverride === 0 ? false : null;
 
           log.info('Agent template resolved', {
             namespace: 'agent',
@@ -297,8 +291,6 @@ export class AgentLifecycleManager {
             builtinSkillsDisabled: tplBuiltinSkillsDisabled,
             customSkillPaths: tplCustomSkillPaths?.length ?? 0,
             agentName: tplAgentName,
-            memoryOverride: tplMemoryOverride,
-            customMemoryPaths: tplCustomMemoryPaths?.length ?? 0,
           });
         }
       } catch (err) {
@@ -307,86 +299,6 @@ export class AgentLifecycleManager {
           threadId,
           templateId: thread.agentTemplateId,
           error: (err as Error).message,
-        });
-      }
-    }
-
-    // Paisley Park: project memory integration
-    // Template memoryOverride: true = force on, false = force off, null = use project default
-    let memoryContext: string | undefined;
-    const projectMemoryEnabled =
-      project?.memoryEnabled ||
-      process.env.MEMORY_ENABLED === 'true' ||
-      process.env.MEMORY_ENABLED === '1';
-    const memoryEnabled = tplMemoryOverride !== null ? tplMemoryOverride : projectMemoryEnabled;
-    if (project && memoryEnabled) {
-      const memDbUrl = process.env.MEMORY_DB_URL ?? `file:${project.id}-memory.db`;
-      const memSyncUrl = process.env.MEMORY_SYNC_URL;
-      const memAuthToken = process.env.MEMORY_AUTH_TOKEN;
-
-      // 1. Inject initial memory context (read-only seed for system prompt)
-      if (!effectiveSessionId) {
-        try {
-          const { getPaisleyPark } = await import('@funny/memory');
-          const pp = getPaisleyPark({
-            url: memDbUrl,
-            syncUrl: memSyncUrl,
-            authToken: memAuthToken,
-            projectId: project.id,
-            projectName: project.name,
-          });
-          const recallResult = await pp.recall(prompt, {
-            limit: Number(process.env.MEMORY_RECALL_LIMIT) || 10,
-            scope: 'all',
-          });
-          if (recallResult.formattedContext) {
-            memoryContext = recallResult.formattedContext;
-            log.debug('Memory context injected', {
-              namespace: 'memory',
-              threadId,
-              factCount: recallResult.totalFound,
-            });
-          }
-        } catch (e) {
-          log.warn('Memory recall failed, proceeding without context', {
-            namespace: 'memory',
-            threadId,
-            error: String(e),
-          });
-        }
-      }
-
-      // 2. Attach Paisley Park MCP server so the agent can read/write memory during execution
-      try {
-        const memoryPkgDir = require.resolve('@funny/memory').replace(/\/src\/index\.ts$/, '');
-        const mcpServerPath = `${memoryPkgDir}/src/mcp/server.ts`;
-        const ppMcpEnv: Record<string, string> = {
-          PP_PROJECT_ID: project.id,
-          PP_PROJECT_NAME: project.name,
-          PP_DB_URL: memDbUrl,
-        };
-        if (memSyncUrl) ppMcpEnv.PP_SYNC_URL = memSyncUrl;
-        if (memAuthToken) ppMcpEnv.PP_AUTH_TOKEN = memAuthToken;
-
-        mcpServers = {
-          ...mcpServers,
-          'paisley-park': {
-            type: 'stdio' as const,
-            command: 'bun',
-            args: [mcpServerPath],
-            env: ppMcpEnv,
-          },
-        };
-        log.info('Paisley Park MCP server attached', {
-          namespace: 'memory',
-          threadId,
-          mcpServerPath,
-        });
-      } catch (e) {
-        log.warn('Failed to attach Paisley Park MCP server', {
-          namespace: 'memory',
-          threadId,
-          error: String(e),
         });
       }
     }
@@ -412,19 +324,6 @@ export class AgentLifecycleManager {
       }
     }
 
-    // Build memory tools hint if MCP is attached
-    const memoryHint = mcpServers?.['paisley-park']
-      ? [
-          '[MEMORY SYSTEM]',
-          'You have access to project memory via Paisley Park MCP tools (pp_recall, pp_add, pp_invalidate, pp_search, pp_evolve).',
-          '- Use pp_recall BEFORE starting work to check for relevant decisions, patterns, or known issues.',
-          '- Use pp_add to store important non-obvious knowledge (decisions, bug root causes, conventions, insights).',
-          '- Do NOT store information derivable from code, git history, or file structure.',
-          '- Use pp_invalidate when you discover a stored fact is no longer accurate.',
-          '[/MEMORY SYSTEM]',
-        ].join('\n')
-      : undefined;
-
     const systemPrefix =
       [
         // For Deep Agent templates with 'prepend' mode, add template prompt before project prompt
@@ -434,8 +333,6 @@ export class AgentLifecycleManager {
         projectSystemPrompt
           ? `[PROJECT INSTRUCTIONS]\n${projectSystemPrompt}\n[/PROJECT INSTRUCTIONS]`
           : undefined,
-        memoryContext,
-        memoryHint,
         resumePrefix,
       ]
         .filter(Boolean)
@@ -503,7 +400,6 @@ export class AgentLifecycleManager {
         builtinSkillsDisabled: tplBuiltinSkillsDisabled,
         customSkillPaths: tplCustomSkillPaths,
         agentName: tplAgentName,
-        customMemoryPaths: tplCustomMemoryPaths,
       });
 
       threadEventBus.emit('agent:started', {

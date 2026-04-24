@@ -62,7 +62,6 @@ interface ProjectState {
       urls?: string[] | null;
       systemPrompt?: string | null;
       launcherUrl?: string | null;
-      memoryEnabled?: boolean;
     },
   ) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;

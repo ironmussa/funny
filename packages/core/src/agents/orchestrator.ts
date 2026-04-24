@@ -55,8 +55,6 @@ export interface StartAgentOptions {
   customSkillPaths?: string[];
   /** Custom agent name (Deep Agent only) */
   agentName?: string;
-  /** Custom memory file paths (Deep Agent only) */
-  customMemoryPaths?: string[];
 }
 
 export interface OrchestratorEvents {
@@ -103,7 +101,6 @@ export class AgentOrchestrator extends EventEmitter {
       builtinSkillsDisabled,
       customSkillPaths,
       agentName,
-      customMemoryPaths,
     } = options;
 
     dlog.info('startAgent', {
@@ -175,7 +172,6 @@ export class AgentOrchestrator extends EventEmitter {
       builtinSkillsDisabled,
       customSkillPaths,
       agentName,
-      customMemoryPaths,
     };
 
     dlog.info('processOpts systemPrefix', {

@@ -58,10 +58,6 @@ export interface AgentTemplate {
   builtinSkillsDisabled?: string[];
   customSkillPaths?: string[];
 
-  // Memory
-  memoryOverride?: boolean | null;
-  customMemoryPaths?: string[];
-
   // Deep Agent identity
   agentName?: string;
 
@@ -88,8 +84,6 @@ export interface CreateAgentTemplateRequest {
   mcpServers?: McpServer[];
   builtinSkillsDisabled?: string[];
   customSkillPaths?: string[];
-  memoryOverride?: boolean | null;
-  customMemoryPaths?: string[];
   agentName?: string;
   shared?: boolean;
   variables?: TemplateVariable[];

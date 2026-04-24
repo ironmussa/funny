@@ -47,7 +47,6 @@ export const projects = sqliteTable('projects', {
   urls: text('urls'),
   systemPrompt: text('system_prompt'),
   launcherUrl: text('launcher_url'),
-  memoryEnabled: integer('memory_enabled', { mode: 'boolean' }).notNull().default(false),
   defaultAgentTemplateId: text('default_agent_template_id'), // default template for new threads
   userId: text('user_id').notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
@@ -505,8 +504,6 @@ export const agentTemplates = sqliteTable('agent_templates', {
   mcpServers: text('mcp_servers'), // JSON array
   builtinSkillsDisabled: text('builtin_skills_disabled'), // JSON array
   customSkillPaths: text('custom_skill_paths'), // JSON array
-  memoryOverride: integer('memory_override'), // null/0/1
-  customMemoryPaths: text('custom_memory_paths'), // JSON array
   agentName: text('agent_name'),
   shared: integer('shared', { mode: 'boolean' }).notNull().default(false), // visible to all users
   variables: text('variables'), // JSON array of template variables

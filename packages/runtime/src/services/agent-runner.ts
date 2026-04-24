@@ -12,7 +12,6 @@
 import { setLogSink } from '@funny/core';
 import { AgentOrchestrator, defaultProcessFactory } from '@funny/core/agents';
 import type { IAgentProcessFactory } from '@funny/core/agents';
-import { setMemoryLogSink } from '@funny/memory';
 import type { AgentProvider, AgentModel, PermissionMode } from '@funny/shared';
 
 import { log } from '../lib/logger.js';
@@ -130,11 +129,6 @@ export const extractActiveAgents = defaultRunner.extractActiveAgents.bind(defaul
 // ── Bridge core debug logs to Winston/OTLP ──────────────────
 setLogSink((level, namespace, message, data) => {
   const meta: Record<string, unknown> = { namespace: `core:${namespace}`, ...data };
-  log[level](message, meta);
-});
-
-setMemoryLogSink((level, namespace, message, data) => {
-  const meta: Record<string, unknown> = { namespace: `memory:${namespace}`, ...data };
   log[level](message, meta);
 });
 

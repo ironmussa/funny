@@ -148,34 +148,39 @@ export function EditFileCard({
                 editor: getEditorLabel(defaultEditor),
                 path: filePath,
               });
-              return editorUri ? (
-                <a
-                  href={editorUri}
-                  onClick={(e) => e.stopPropagation()}
-                  className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
-                  title={editorTitle}
-                >
-                  {displayPath}
-                </a>
-              ) : (
-                <span
-                  role="button"
-                  tabIndex={0}
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    openFileInEditor(filePath, defaultEditor);
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' || e.key === ' ') {
-                      e.stopPropagation();
-                      openFileInEditor(filePath, defaultEditor);
-                    }
-                  }}
-                  className="min-w-0 cursor-pointer truncate text-left font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
-                  title={editorTitle}
-                >
-                  {displayPath}
-                </span>
+              return (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    {editorUri ? (
+                      <a
+                        href={editorUri}
+                        onClick={(e) => e.stopPropagation()}
+                        className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+                      >
+                        {displayPath}
+                      </a>
+                    ) : (
+                      <span
+                        role="button"
+                        tabIndex={0}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openFileInEditor(filePath, defaultEditor);
+                        }}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.stopPropagation();
+                            openFileInEditor(filePath, defaultEditor);
+                          }
+                        }}
+                        className="min-w-0 cursor-pointer truncate text-left font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+                      >
+                        {displayPath}
+                      </span>
+                    )}
+                  </TooltipTrigger>
+                  <TooltipContent>{editorTitle}</TooltipContent>
+                </Tooltip>
               );
             })()}
           {displayTime && (

@@ -335,14 +335,19 @@ function AddThreadButton({
   // Single project mode: click goes straight to new thread
   if (projectId) {
     return (
-      <button
-        data-testid="kanban-add-thread"
-        className="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-        onClick={() => onSelect(projectId)}
-        title={t('kanban.addThread')}
-      >
-        <Plus className="icon-base" />
-      </button>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            data-testid="kanban-add-thread"
+            className="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+            onClick={() => onSelect(projectId)}
+            aria-label={t('kanban.addThread')}
+          >
+            <Plus className="icon-base" />
+          </button>
+        </TooltipTrigger>
+        <TooltipContent>{t('kanban.addThread')}</TooltipContent>
+      </Tooltip>
     );
   }
 
@@ -358,15 +363,20 @@ function AddThreadButton({
         if (!v) setSearch('');
       }}
     >
-      <PopoverTrigger asChild>
-        <button
-          data-testid="kanban-add-thread"
-          className="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-          title={t('kanban.addThread')}
-        >
-          <Plus className="icon-base" />
-        </button>
-      </PopoverTrigger>
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <PopoverTrigger asChild>
+            <button
+              data-testid="kanban-add-thread"
+              className="ml-auto rounded p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
+              aria-label={t('kanban.addThread')}
+            >
+              <Plus className="icon-base" />
+            </button>
+          </PopoverTrigger>
+        </TooltipTrigger>
+        <TooltipContent>{t('kanban.addThread')}</TooltipContent>
+      </Tooltip>
       <PopoverContent align="start" className="w-64 p-0">
         <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
           <Search className="icon-base shrink-0 text-muted-foreground" />

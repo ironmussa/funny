@@ -5,7 +5,12 @@
 import { existsSync, statSync, openSync, readSync, closeSync } from 'node:fs';
 import { join } from 'node:path';
 
-import type { FileDiff, FileDiffSummary, DiffSummaryResponse } from '@funny/shared';
+import type {
+  FileDiff,
+  FileDiffSummary,
+  DiffSummaryResponse,
+  NestedDirtyStats,
+} from '@funny/shared';
 import { processError, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
@@ -70,6 +75,54 @@ function classifyPath(cwd: string, rawPath: string): { path: string; isSubmodule
   // `.git` can be a dir (standalone clone) or a file (submodule gitlink pointer).
   const dotGit = join(cwd, path, '.git');
   return { path, isSubmodule: existsSync(dotGit) };
+}
+
+/**
+ * Compute a lightweight dirty summary *inside* a nested git repository.
+ *
+ * Submodules / nested repos appear as a single entry in the parent's diff,
+ * so the parent's line counts can't describe what happened inside. This
+ * helper inspects the nested repo directly (porcelain + numstat) to surface
+ * an aggregate {dirtyFileCount, linesAdded, linesDeleted} for the UI.
+ *
+ * `pointerMoved` indicates whether the parent's gitlink points at a different
+ * commit (i.e. a "modified" submodule in the parent index even when the
+ * nested working tree is clean).
+ */
+async function getNestedDirtyStats(
+  submoduleAbsPath: string,
+  pointerMoved: boolean,
+): Promise<NestedDirtyStats | undefined> {
+  try {
+    if (!existsSync(join(submoduleAbsPath, '.git'))) return undefined;
+    const [statusRes, diffRes] = await Promise.all([
+      gitRead(['status', '--porcelain'], { cwd: submoduleAbsPath, reject: false }),
+      gitRead(['diff', 'HEAD', '--numstat'], { cwd: submoduleAbsPath, reject: false }),
+    ]);
+    let dirtyFileCount = 0;
+    if (statusRes.exitCode === 0 && statusRes.stdout.trim()) {
+      dirtyFileCount = statusRes.stdout.trim().split('\n').filter(Boolean).length;
+    }
+    let linesAdded = 0;
+    let linesDeleted = 0;
+    if (diffRes.exitCode === 0 && diffRes.stdout.trim()) {
+      for (const line of diffRes.stdout.trim().split('\n')) {
+        const parts = line.split('\t');
+        if (parts.length >= 2) {
+          const a = parseInt(parts[0], 10);
+          const d = parseInt(parts[1], 10);
+          if (!isNaN(a)) linesAdded += a;
+          if (!isNaN(d)) linesDeleted += d;
+        }
+      }
+    }
+    if (!pointerMoved && dirtyFileCount === 0 && linesAdded === 0 && linesDeleted === 0) {
+      return undefined;
+    }
+    return { dirtyFileCount, linesAdded, linesDeleted, pointerMoved };
+  } catch {
+    return undefined;
+  }
 }
 
 function matchesAnyPattern(filePath: string, patterns: string[]): boolean {
@@ -236,6 +289,21 @@ export function getDiff(cwd: string): ResultAsync<FileDiff[], DomainError> {
       for (const f of allUnstaged) {
         if (stagedPaths.has(f.path)) continue;
         pushEntry(f, unstagedDiffMap.get(f.path) ?? '', false);
+      }
+
+      // Enrich submodules with nested dirty stats (see getDiffSummary).
+      const subIdx = diffs.map((d, i) => (d.kind === 'submodule' ? i : -1)).filter((i) => i >= 0);
+      if (subIdx.length > 0) {
+        await Promise.all(
+          subIdx.map(async (i) => {
+            const d = diffs[i];
+            const nested = await getNestedDirtyStats(
+              join(cwd, d.path),
+              d.status === 'modified' || d.status === 'added',
+            );
+            if (nested) diffs[i] = { ...d, nestedDirty: nested };
+          }),
+        );
       }
 
       return diffs;
@@ -408,6 +476,24 @@ export function getDiffSummary(
           ...(isSubmodule && { kind: 'submodule' as const }),
         };
       });
+
+      // 4. Enrich submodule entries with nested dirty stats so the UI can show
+      // what changed inside each nested repo as a single aggregate pill.
+      const submoduleIndexes = files
+        .map((f, i) => (f.kind === 'submodule' ? i : -1))
+        .filter((i) => i >= 0);
+      if (submoduleIndexes.length > 0) {
+        await Promise.all(
+          submoduleIndexes.map(async (i) => {
+            const f = files[i];
+            const nested = await getNestedDirtyStats(
+              join(cwd, f.path),
+              f.status === 'modified' || f.status === 'added',
+            );
+            if (nested) files[i] = { ...f, nestedDirty: nested };
+          }),
+        );
+      }
 
       return { files, total, truncated };
     })(),

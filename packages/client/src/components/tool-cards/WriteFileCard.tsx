@@ -1,7 +1,11 @@
-import { ChevronRight, FileText } from 'lucide-react';
+import { Check, ChevronRight, Copy, Eye, FileText, FileCode2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { MessageContent } from '@/components/thread/MessageContent';
+import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
 
@@ -14,6 +18,8 @@ import {
   useCurrentProjectPath,
   makeRelativePath,
 } from './utils';
+
+const MARKDOWN_EXTS = new Set(['md', 'mdx', 'markdown']);
 
 export function WriteFileCard({
   parsed,
@@ -31,8 +37,11 @@ export function WriteFileCard({
   const projectPath = useCurrentProjectPath();
   const displayPath = filePath ? makeRelativePath(filePath, projectPath) : undefined;
   const content = parsed.content as string | undefined;
-  const ext = filePath ? getFileExtension(filePath) : '';
+  const ext = filePath ? getFileExtension(filePath).toLowerCase() : '';
   const fileName = filePath ? getFileName(filePath) : 'unknown';
+  const isMarkdown = MARKDOWN_EXTS.has(ext);
+  const [renderMarkdown, setRenderMarkdown] = useState(isMarkdown);
+  const [copied, copy] = useCopyToClipboard();
 
   return (
     <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
@@ -59,34 +68,39 @@ export function WriteFileCard({
               editor: getEditorLabel(defaultEditor),
               path: filePath,
             });
-            return editorUri ? (
-              <a
-                href={editorUri}
-                onClick={(e) => e.stopPropagation()}
-                className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
-                title={editorTitle}
-              >
-                {displayPath}
-              </a>
-            ) : (
-              <span
-                role="button"
-                tabIndex={0}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  openFileInEditor(filePath, defaultEditor);
-                }}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.stopPropagation();
-                    openFileInEditor(filePath, defaultEditor);
-                  }
-                }}
-                className="min-w-0 cursor-pointer truncate text-left font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
-                title={editorTitle}
-              >
-                {displayPath}
-              </span>
+            return (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  {editorUri ? (
+                    <a
+                      href={editorUri}
+                      onClick={(e) => e.stopPropagation()}
+                      className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+                    >
+                      {displayPath}
+                    </a>
+                  ) : (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        openFileInEditor(filePath, defaultEditor);
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.stopPropagation();
+                          openFileInEditor(filePath, defaultEditor);
+                        }
+                      }}
+                      className="min-w-0 cursor-pointer truncate text-left font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+                    >
+                      {displayPath}
+                    </span>
+                  )}
+                </TooltipTrigger>
+                <TooltipContent>{editorTitle}</TooltipContent>
+              </Tooltip>
             );
           })()}
         {displayTime && (
@@ -97,18 +111,66 @@ export function WriteFileCard({
       </button>
       {expanded && content != null && (
         <div className="max-h-[50vh] overflow-y-auto border-t border-border/40">
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b border-border/30 bg-background px-3 py-1 backdrop-blur-sm">
-            <span className="text-xs font-medium text-muted-foreground">{fileName}</span>
-            {ext && (
-              <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
-                {ext}
-              </span>
-            )}
+          <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/30 bg-background px-3 py-1 backdrop-blur-sm">
+            <span className="truncate text-xs font-medium text-muted-foreground">{fileName}</span>
+            <div className="flex flex-shrink-0 items-center gap-1">
+              {ext && (
+                <span className="rounded bg-muted px-1.5 py-0.5 font-mono text-xs text-muted-foreground">
+                  {ext}
+                </span>
+              )}
+              {isMarkdown && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon-xs"
+                      onClick={() => setRenderMarkdown((v) => !v)}
+                      data-testid="write-file-toggle-markdown"
+                      aria-pressed={renderMarkdown}
+                      className="text-muted-foreground hover:text-foreground"
+                    >
+                      {renderMarkdown ? (
+                        <FileCode2 className="icon-sm" />
+                      ) : (
+                        <Eye className="icon-sm" />
+                      )}
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent side="left">
+                    {renderMarkdown
+                      ? t('tools.viewSource', 'View source')
+                      : t('tools.preview', 'Preview')}
+                  </TooltipContent>
+                </Tooltip>
+              )}
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-xs"
+                    onClick={() => copy(content)}
+                    data-testid="write-file-copy"
+                    aria-label={t('tools.copy', 'Copy')}
+                    className="text-muted-foreground hover:text-foreground"
+                  >
+                    {copied ? <Check className="icon-sm" /> : <Copy className="icon-sm" />}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent side="left">{t('tools.copy', 'Copy')}</TooltipContent>
+              </Tooltip>
+            </div>
           </div>
           <div>
-            <pre className="whitespace-pre-wrap break-all px-3 py-2 font-mono text-sm leading-relaxed text-foreground/80">
-              {content}
-            </pre>
+            {isMarkdown && renderMarkdown ? (
+              <div className="px-3 py-2">
+                <MessageContent content={content} />
+              </div>
+            ) : (
+              <pre className="whitespace-pre-wrap break-all px-3 py-2 font-mono text-sm leading-relaxed text-foreground/80">
+                {content}
+              </pre>
+            )}
           </div>
         </div>
       )}

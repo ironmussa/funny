@@ -626,7 +626,7 @@ export const PromptInput = memo(function PromptInput({
       } else {
         editorRef.current?.clear();
       }
-    } else if (!effectiveThreadId) {
+    } else if (!effectiveThreadId && prevId) {
       editorRef.current?.clear();
     }
     stopRecordingRef.current();

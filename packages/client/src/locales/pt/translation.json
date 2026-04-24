@@ -210,6 +210,17 @@
     "pathCopied": "Caminho copiado",
     "submodule": "submódulo",
     "submoduleTooltip": "Repositório git aninhado (gitlink)",
+    "submoduleDirtyCount": "submódulo · {{count}}",
+    "submoduleLoading": "Carregando arquivos do submódulo…",
+    "submoduleError": "Falha ao carregar o submódulo",
+    "submoduleEmpty": "Sem alterações dentro do submódulo",
+    "submodulePointerMoved": "O ponteiro do gitlink mudou (alteração visível no pai).",
+    "submoduleDirtyLine_one": "{{count}} arquivo modificado dentro",
+    "submoduleDirtyLine_other": "{{count}} arquivos modificados dentro",
+    "submoduleLines": "linhas",
+    "submoduleExpandHint": "Clique na seta para ver os arquivos internos.",
+    "collapseSubmodule": "Recolher submódulo",
+    "expandSubmodule": "Expandir submódulo",
     "ignoreFailed": "Erro ao adicionar ao .gitignore: {{message}}",
     "ignoreSuccess": "Adicionado ao .gitignore",
     "pull": "Pull",
@@ -457,6 +468,9 @@
     "output": "Saída",
     "waitingForOutput": "Aguardando saída...",
     "openInEditor": "Abrir no {{editor}}: {{path}}",
+    "copy": "Copiar",
+    "preview": "Visualizar",
+    "viewSource": "Ver fonte",
     "other": "Outra",
     "otherPlaceholder": "Escreva sua resposta...",
     "next": "Próximo",
@@ -538,6 +552,16 @@
     "newFolder": "Nova Pasta",
     "newFolderPlaceholder": "Nome da pasta...",
     "create": "Criar"
+  },
+  "projectFiles": {
+    "title": "Arquivos do projeto",
+    "description": "Navegar e abrir arquivos do projeto",
+    "filterPlaceholder": "Filtrar arquivos...",
+    "noProject": "Selecione um projeto primeiro",
+    "loading": "Carregando arquivos...",
+    "noMatches": "Nenhum arquivo corresponde ao filtro",
+    "empty": "Nenhum arquivo neste projeto",
+    "truncated": "Mostrando os primeiros {{limit}} arquivos"
   },
   "startup": {
     "title": "Comandos de Inicialização",
@@ -684,7 +708,8 @@
     "hideMinimap": "Ocultar minimapa",
     "showMinimap": "Mostrar minimapa",
     "fullscreen": "Tela cheia",
-    "exitFullscreen": "Sair da tela cheia"
+    "exitFullscreen": "Sair da tela cheia",
+    "copy": "Copiar"
   },
   "dialog": {
     "archiveThread": "Arquivar thread",
@@ -965,6 +990,16 @@
     "create": "Criar usuário",
     "creating": "Criando...",
     "createFailed": "Erro ao criar usuário"
+  },
+  "projectFiles": {
+    "title": "Arquivos do Projeto",
+    "description": "Navegar e abrir arquivos do projeto",
+    "filterPlaceholder": "Filtrar arquivos...",
+    "loading": "Carregando arquivos...",
+    "empty": "Sem arquivos neste projeto",
+    "noMatches": "Nenhum arquivo corresponde ao filtro",
+    "noProject": "Selecione um projeto primeiro",
+    "truncated": "Mostrando os primeiros {{limit}} arquivos"
   },
   "testRunner": {
     "title": "Executor de Testes",

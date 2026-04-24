@@ -30,6 +30,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { HighlightText } from '@/components/ui/highlight-text';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   openFileInExternalEditor,
   openFileInInternalEditor,
@@ -55,14 +56,35 @@ export type TreeRow =
       additions: number;
       deletions: number;
     }
-  | { kind: 'file'; file: FileDiffSummary; depth: number };
+  | { kind: 'file'; file: FileDiffSummary; depth: number }
+  | {
+      kind: 'submodule-status';
+      submodulePath: string;
+      depth: number;
+      state: 'loading' | 'error' | 'empty';
+      message?: string;
+    };
 
 interface FolderNode {
   children: Map<string, FolderNode>;
   files: FileDiffSummary[];
 }
 
-export function buildTreeRows(diffs: FileDiffSummary[], collapsed: Set<string>): TreeRow[] {
+/**
+ * Build a flat row list for virtualization.
+ *
+ * `submoduleExpansions` + `submoduleStates` describe the inner contents of
+ * submodule entries the user has expanded. `expandedSubmodules` is the
+ * explicit set of submodule paths whose contents should be shown (positive
+ * semantics — presence = expanded).
+ */
+export function buildTreeRows(
+  diffs: FileDiffSummary[],
+  collapsed: Set<string>,
+  submoduleExpansions?: Map<string, FileDiffSummary[]>,
+  submoduleStates?: Map<string, { state: 'loading' | 'error' | 'empty'; message?: string }>,
+  expandedSubmodules?: Set<string>,
+): TreeRow[] {
   const root: FolderNode = { children: new Map(), files: [] };
   for (const f of diffs) {
     const parts = f.path.split('/');
@@ -91,6 +113,24 @@ export function buildTreeRows(diffs: FileDiffSummary[], collapsed: Set<string>):
   }
 
   const rows: TreeRow[] = [];
+
+  function appendSubmoduleChildren(file: FileDiffSummary, depth: number) {
+    const inner = submoduleExpansions?.get(file.path);
+    const state = submoduleStates?.get(file.path);
+    if (inner && inner.length > 0) {
+      const prefixed = inner.map((f) => ({ ...f, path: `${file.path}/${f.path}` }));
+      const innerRows = buildTreeRows(prefixed, collapsed, submoduleExpansions, submoduleStates);
+      for (const r of innerRows) rows.push({ ...r, depth: r.depth + depth + 1 });
+    } else if (state) {
+      rows.push({
+        kind: 'submodule-status',
+        submodulePath: file.path,
+        depth: depth + 1,
+        state: state.state,
+        message: state.message,
+      });
+    }
+  }
 
   function flatten(node: FolderNode, depth: number, pathPrefix: string) {
     const sortedFolders = [...node.children.entries()].sort(([a], [b]) => a.localeCompare(b));
@@ -121,6 +161,9 @@ export function buildTreeRows(diffs: FileDiffSummary[], collapsed: Set<string>):
     }
     for (const file of node.files.sort((a, b) => a.path.localeCompare(b.path))) {
       rows.push({ kind: 'file', file, depth });
+      if (file.kind === 'submodule' && expandedSubmodules?.has(file.path)) {
+        appendSubmoduleChildren(file, depth);
+      }
     }
   }
 
@@ -171,6 +214,16 @@ function statusLetter(status: string): string {
   }
 }
 
+/** Collect every folder path shown for the given files (full expansion). */
+export function collectAllFolderPaths(files: FileDiffSummary[]): Set<string> {
+  const rows = buildTreeRows(files, new Set());
+  const paths = new Set<string>();
+  for (const row of rows) {
+    if (row.kind === 'folder') paths.add(row.path);
+  }
+  return paths;
+}
+
 /* ── Props ── */
 
 export interface FileTreeProps {
@@ -208,6 +261,27 @@ export interface FileTreeProps {
   virtualize?: boolean;
   /** Search query to highlight matching text in file/folder names */
   searchQuery?: string;
+  /** Hide the per-file status letter (A/M/D/R). Use when rows don't represent git changes. */
+  hideStatus?: boolean;
+  /** Hide the per-file and per-folder diff stats (+/-). Use when rows don't represent git changes. */
+  hideDiffStats?: boolean;
+  /** Controlled collapsed-folders set. Omit for internal state. */
+  collapsedFolders?: Set<string>;
+  /** Callback when a folder is toggled (only used in controlled mode). */
+  onCollapsedFoldersChange?: (next: Set<string>) => void;
+  /**
+   * When provided, submodule entries become expandable: clicking the chevron
+   * calls this with the submodule's path (relative to the git root). The
+   * caller is expected to fetch the submodule's inner file list and pass it
+   * back via `submoduleExpansions`.
+   */
+  onToggleSubmodule?: (submodulePath: string) => void;
+  /** Map of submodule path → loaded inner file list (path relative to the submodule). */
+  submoduleExpansions?: Map<string, FileDiffSummary[]>;
+  /** Map of submodule path → loading/error state for the inner file list. */
+  submoduleStates?: Map<string, { state: 'loading' | 'error' | 'empty'; message?: string }>;
+  /** Set of submodule paths that are currently expanded (presence = expanded). */
+  expandedSubmodules?: Set<string>;
 }
 
 /* ── Component ── */
@@ -230,13 +304,32 @@ export function FileTree({
   rowStyle,
   virtualize = false,
   searchQuery,
+  hideStatus = false,
+  hideDiffStats = false,
+  collapsedFolders: collapsedFoldersProp,
+  onCollapsedFoldersChange,
+  onToggleSubmodule,
+  submoduleExpansions,
+  submoduleStates,
+  expandedSubmodules,
 }: FileTreeProps) {
   const { t } = useTranslation();
-  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+  const [internalCollapsed, setInternalCollapsed] = useState<Set<string>>(new Set());
+  const collapsedFolders = collapsedFoldersProp ?? internalCollapsed;
   const dropdownCloseRef = useRef(0);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  const treeRows = useMemo(() => buildTreeRows(files, collapsedFolders), [files, collapsedFolders]);
+  const treeRows = useMemo(
+    () =>
+      buildTreeRows(
+        files,
+        collapsedFolders,
+        submoduleExpansions,
+        submoduleStates,
+        expandedSubmodules,
+      ),
+    [files, collapsedFolders, submoduleExpansions, submoduleStates, expandedSubmodules],
+  );
 
   const virtualizer = useVirtualizer({
     count: virtualize ? treeRows.length : 0,
@@ -244,20 +337,32 @@ export function FileTree({
     estimateSize: () => ROW_HEIGHT,
     getItemKey: (index) => {
       const row = treeRows[index];
-      return row.kind === 'folder' ? `d:${row.path}` : `f:${row.file.path}`;
+      if (row.kind === 'folder') return `d:${row.path}`;
+      if (row.kind === 'submodule-status') return `s:${row.submodulePath}:${row.state}`;
+      return `f:${row.file.path}`;
     },
     overscan: 15,
     enabled: virtualize,
   });
 
-  const toggleFolder = useCallback((folderPath: string) => {
-    setCollapsedFolders((prev) => {
-      const next = new Set(prev);
-      if (next.has(folderPath)) next.delete(folderPath);
-      else next.add(folderPath);
-      return next;
-    });
-  }, []);
+  const toggleFolder = useCallback(
+    (folderPath: string) => {
+      if (collapsedFoldersProp && onCollapsedFoldersChange) {
+        const next = new Set(collapsedFoldersProp);
+        if (next.has(folderPath)) next.delete(folderPath);
+        else next.add(folderPath);
+        onCollapsedFoldersChange(next);
+        return;
+      }
+      setInternalCollapsed((prev) => {
+        const next = new Set(prev);
+        if (next.has(folderPath)) next.delete(folderPath);
+        else next.add(folderPath);
+        return next;
+      });
+    },
+    [collapsedFoldersProp, onCollapsedFoldersChange],
+  );
 
   const handleCopyPath = useCallback(
     (path: string, relative: boolean) => {
@@ -269,6 +374,33 @@ export function FileTree({
   );
 
   const renderRow = (row: TreeRow, index: number, style?: CSSProperties) => {
+    if (row.kind === 'submodule-status') {
+      const label =
+        row.state === 'loading'
+          ? t('review.submoduleLoading', { defaultValue: 'Loading submodule files…' })
+          : row.state === 'error'
+            ? (row.message ??
+              t('review.submoduleError', { defaultValue: 'Failed to load submodule' }))
+            : t('review.submoduleEmpty', { defaultValue: 'No changes inside submodule' });
+      return (
+        <div
+          key={`submodule-status-${row.submodulePath}-${row.state}`}
+          className={cn(
+            'flex h-6 select-none items-center gap-1.5 overflow-hidden pr-1 italic',
+            fontSize,
+            'text-muted-foreground/80',
+          )}
+          style={{
+            ...style,
+            paddingLeft: `${8 + row.depth * INDENT_PX}px`,
+          }}
+          data-testid={`${testIdPrefix}-submodule-status-${row.submodulePath}`}
+        >
+          <span className="truncate">{label}</span>
+        </div>
+      );
+    }
+
     if (row.kind === 'folder') {
       const isCollapsed = collapsedFolders.has(row.path);
       return (
@@ -309,9 +441,17 @@ export function FileTree({
               {row.label}
             </span>
           )}
-          <DiffStats linesAdded={row.additions} linesDeleted={row.deletions} size={diffStatsSize} />
+          {!hideDiffStats && (
+            <DiffStats
+              linesAdded={row.additions}
+              linesDeleted={row.deletions}
+              size={diffStatsSize}
+            />
+          )}
           {/* Spacers to align with file rows (status letter + 3-dot menu) */}
-          <span className={cn('invisible flex-shrink-0 font-medium', fontSize)}>M</span>
+          {!hideStatus && (
+            <span className={cn('invisible flex-shrink-0 font-medium', fontSize)}>M</span>
+          )}
           <span className="h-6 w-6 flex-shrink-0" />
         </div>
       );
@@ -322,6 +462,9 @@ export function FileTree({
     const isChecked = checkedFiles?.has(f.path) ?? false;
     const fileName = f.path.split('/').pop() || f.path;
     const isSubmodule = f.kind === 'submodule';
+    const canExpandSubmodule = isSubmodule && !!onToggleSubmodule;
+    const isSubmoduleExpanded = canExpandSubmodule && !!expandedSubmodules?.has(f.path);
+    const nested = f.nestedDirty;
 
     return (
       <div
@@ -364,6 +507,25 @@ export function FileTree({
             {isChecked && <Check className="icon-2xs" />}
           </button>
         )}
+        {canExpandSubmodule && (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              onToggleSubmodule?.(f.path);
+            }}
+            aria-label={
+              isSubmoduleExpanded
+                ? t('review.collapseSubmodule', { defaultValue: 'Collapse submodule' })
+                : t('review.expandSubmodule', { defaultValue: 'Expand submodule' })
+            }
+            className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+            data-testid={`${testIdPrefix}-submodule-toggle-${f.path}`}
+          >
+            <ChevronRight
+              className={cn('icon-sm transition-transform', isSubmoduleExpanded && 'rotate-90')}
+            />
+          </button>
+        )}
         {isSubmodule ? (
           <GitBranch
             className="h-4 w-4 flex-shrink-0 text-purple-500 dark:text-purple-400"
@@ -387,29 +549,80 @@ export function FileTree({
           </span>
         )}
         {isSubmodule && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className={cn(
+                  'flex-shrink-0 rounded-sm border border-purple-500/40 bg-purple-500/10 px-1 text-[10px] uppercase tracking-wide text-purple-600 dark:text-purple-300',
+                )}
+                data-testid={`${testIdPrefix}-submodule-badge-${f.path}`}
+              >
+                {nested && nested.dirtyFileCount > 0
+                  ? t('review.submoduleDirtyCount', {
+                      count: nested.dirtyFileCount,
+                      defaultValue: 'submodule · {{count}}',
+                    })
+                  : t('review.submodule', { defaultValue: 'submodule' })}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent side="top" className="max-w-xs text-xs">
+              <div className="font-medium">
+                {t('review.submoduleTooltip', {
+                  defaultValue: 'Nested git repository (gitlink)',
+                })}
+              </div>
+              {nested && (
+                <div className="mt-1 space-y-0.5 font-mono">
+                  {nested.pointerMoved && (
+                    <div>
+                      {t('review.submodulePointerMoved', {
+                        defaultValue: 'Gitlink pointer moved (parent-visible change).',
+                      })}
+                    </div>
+                  )}
+                  <div>
+                    {t('review.submoduleDirtyLine', {
+                      count: nested.dirtyFileCount,
+                      defaultValue: '{{count}} file(s) dirty inside',
+                    })}
+                  </div>
+                  {(nested.linesAdded > 0 || nested.linesDeleted > 0) && (
+                    <div>
+                      <span className="text-diff-added">+{nested.linesAdded}</span>{' '}
+                      <span className="text-diff-removed">-{nested.linesDeleted}</span>{' '}
+                      <span className="text-muted-foreground">
+                        {t('review.submoduleLines', { defaultValue: 'lines' })}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              )}
+              {canExpandSubmodule && (
+                <div className="mt-1 text-muted-foreground">
+                  {t('review.submoduleExpandHint', {
+                    defaultValue: 'Click the arrow to expand inner files.',
+                  })}
+                </div>
+              )}
+            </TooltipContent>
+          </Tooltip>
+        )}
+        {!hideDiffStats &&
+          (() => {
+            const effAdded = isSubmodule && nested ? nested.linesAdded : (f.additions ?? 0);
+            const effDeleted = isSubmodule && nested ? nested.linesDeleted : (f.deletions ?? 0);
+            return (
+              <DiffStats linesAdded={effAdded} linesDeleted={effDeleted} size={diffStatsSize} />
+            );
+          })()}
+        {!hideStatus && (
           <span
-            className={cn(
-              'flex-shrink-0 rounded-sm border border-purple-500/40 bg-purple-500/10 px-1 text-[10px] uppercase tracking-wide text-purple-600 dark:text-purple-300',
-            )}
-            title={t('review.submoduleTooltip', {
-              defaultValue: 'Nested git repository (gitlink)',
-            })}
-            data-testid={`${testIdPrefix}-submodule-badge-${f.path}`}
+            className={cn('flex-shrink-0 font-medium', fontSize)}
+            style={{ color: statusColor(f.status) }}
           >
-            {t('review.submodule', { defaultValue: 'submodule' })}
+            {statusLetter(f.status)}
           </span>
         )}
-        <DiffStats
-          linesAdded={f.additions ?? 0}
-          linesDeleted={f.deletions ?? 0}
-          size={diffStatsSize}
-        />
-        <span
-          className={cn('flex-shrink-0 font-medium', fontSize)}
-          style={{ color: statusColor(f.status) }}
-        >
-          {statusLetter(f.status)}
-        </span>
         <DropdownMenu
           onOpenChange={(open) => {
             if (!open) dropdownCloseRef.current = Date.now();

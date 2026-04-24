@@ -218,6 +218,17 @@
     "pathCopied": "Path copied",
     "submodule": "submodule",
     "submoduleTooltip": "Nested git repository (gitlink)",
+    "submoduleDirtyCount": "submodule · {{count}}",
+    "submoduleLoading": "Loading submodule files…",
+    "submoduleError": "Failed to load submodule",
+    "submoduleEmpty": "No changes inside submodule",
+    "submodulePointerMoved": "Gitlink pointer moved (parent-visible change).",
+    "submoduleDirtyLine_one": "{{count}} file dirty inside",
+    "submoduleDirtyLine_other": "{{count}} files dirty inside",
+    "submoduleLines": "lines",
+    "submoduleExpandHint": "Click the arrow to expand inner files.",
+    "collapseSubmodule": "Collapse submodule",
+    "expandSubmodule": "Expand submodule",
     "ignoreFailed": "Failed to add to .gitignore: {{message}}",
     "ignoreSuccess": "Added to .gitignore",
     "pull": "Pull",
@@ -466,6 +477,9 @@
     "output": "Output",
     "waitingForOutput": "Waiting for output...",
     "openInEditor": "Open in {{editor}}: {{path}}",
+    "copy": "Copy",
+    "preview": "Preview",
+    "viewSource": "View source",
     "other": "Other",
     "otherPlaceholder": "Write your answer...",
     "next": "Next",
@@ -547,6 +561,16 @@
     "newFolder": "New Folder",
     "newFolderPlaceholder": "Folder name...",
     "create": "Create"
+  },
+  "projectFiles": {
+    "title": "Project Files",
+    "description": "Browse and open project files",
+    "filterPlaceholder": "Filter files...",
+    "noProject": "Select a project first",
+    "loading": "Loading files...",
+    "noMatches": "No files match your filter",
+    "empty": "No files in this project",
+    "truncated": "Showing first {{limit}} files"
   },
   "startup": {
     "title": "Startup Commands",
@@ -693,7 +717,8 @@
     "hideMinimap": "Hide minimap",
     "showMinimap": "Show minimap",
     "fullscreen": "Fullscreen",
-    "exitFullscreen": "Exit fullscreen"
+    "exitFullscreen": "Exit fullscreen",
+    "copy": "Copy"
   },
   "dialog": {
     "archiveThread": "Archive thread",
@@ -983,6 +1008,16 @@
     "create": "Create user",
     "creating": "Creating...",
     "createFailed": "Failed to create user"
+  },
+  "projectFiles": {
+    "title": "Project Files",
+    "description": "Browse and open project files",
+    "filterPlaceholder": "Filter files...",
+    "loading": "Loading files...",
+    "empty": "No files in this project",
+    "noMatches": "No files match your filter",
+    "noProject": "Select a project first",
+    "truncated": "Showing first {{limit}} files"
   },
   "testRunner": {
     "title": "Test Runner",

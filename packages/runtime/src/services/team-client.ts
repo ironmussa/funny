@@ -676,26 +676,42 @@ async function handleTunnelRequest(data: {
  * (e.g., when git watcher fires for all threads at once).
  */
 const MAX_CONCURRENT_DATA_REQUESTS = 20;
+// Reject if a caller waits longer than this in the slot queue — prevents
+// indefinite hangs when the server stops responding (e.g. rate-limit drops).
+const DATA_SLOT_ACQUIRE_TIMEOUT = 20_000;
 let activeDataRequests = 0;
-const dataRequestQueue: Array<() => void> = [];
+type QueueEntry = { grant: () => void; abort: () => void };
+const dataRequestQueue: QueueEntry[] = [];
 
 function acquireDataSlot(): Promise<void> {
   if (activeDataRequests < MAX_CONCURRENT_DATA_REQUESTS) {
     activeDataRequests++;
     return Promise.resolve();
   }
-  return new Promise<void>((resolve) => {
-    dataRequestQueue.push(() => {
-      activeDataRequests++;
-      resolve();
-    });
+  return new Promise<void>((resolve, reject) => {
+    const entry: QueueEntry = {
+      grant: () => {
+        clearTimeout(timer);
+        activeDataRequests++;
+        resolve();
+      },
+      abort: () => {
+        reject(new Error('Data slot acquire timed out'));
+      },
+    };
+    const timer = setTimeout(() => {
+      const idx = dataRequestQueue.indexOf(entry);
+      if (idx >= 0) dataRequestQueue.splice(idx, 1);
+      entry.abort();
+    }, DATA_SLOT_ACQUIRE_TIMEOUT);
+    dataRequestQueue.push(entry);
   });
 }
 
 function releaseDataSlot(): void {
   activeDataRequests--;
   const next = dataRequestQueue.shift();
-  if (next) next();
+  if (next) next.grant();
 }
 
 /**

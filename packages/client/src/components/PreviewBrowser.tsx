@@ -2,6 +2,7 @@ import { X, RefreshCw, ExternalLink } from 'lucide-react';
 import { useEffect, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 interface PreviewTab {
@@ -140,24 +141,34 @@ export function PreviewBrowser() {
             <span className="mr-1 font-mono text-xs text-muted-foreground">
               localhost:{activeTab.port}
             </span>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={handleRefresh}
-              title="Refresh"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <RefreshCw className="icon-sm" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={handleOpenExternal}
-              title="Open in browser"
-              className="text-muted-foreground hover:text-foreground"
-            >
-              <ExternalLink className="icon-sm" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleRefresh}
+                  aria-label="Refresh"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <RefreshCw className="icon-sm" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Refresh</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  onClick={handleOpenExternal}
+                  aria-label="Open in browser"
+                  className="text-muted-foreground hover:text-foreground"
+                >
+                  <ExternalLink className="icon-sm" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Open in browser</TooltipContent>
+            </Tooltip>
           </div>
         )}
       </div>

@@ -14,6 +14,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
@@ -159,15 +160,20 @@ export function AddProjectView() {
                   value={newProjectPath}
                   onChange={(e) => setNewProjectPath(e.target.value)}
                 />
-                <Button
-                  data-testid="add-project-browse"
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setFolderPickerOpen(true)}
-                  title={t('sidebar.browseFolder')}
-                >
-                  <FolderOpen className="icon-base" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      data-testid="add-project-browse"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setFolderPickerOpen(true)}
+                      aria-label={t('sidebar.browseFolder')}
+                    >
+                      <FolderOpen className="icon-base" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>{t('sidebar.browseFolder')}</TooltipContent>
+                </Tooltip>
               </div>
             </div>
             <div className="flex gap-2 pt-2">

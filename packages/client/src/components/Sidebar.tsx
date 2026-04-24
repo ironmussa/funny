@@ -301,7 +301,9 @@ export function AppSidebar() {
         navigate(buildPath(`/projects/${projectId}`));
       });
       requestAnimationFrame(() => {
-        const ta = document.querySelector<HTMLTextAreaElement>('[data-testid="prompt-textarea"]');
+        const el = projectsScrollRef.current?.querySelector(`[data-project-id="${projectId}"]`);
+        el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        const ta = document.querySelector<HTMLElement>('[data-testid="prompt-editor"]');
         ta?.focus();
       });
     },

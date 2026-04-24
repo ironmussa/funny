@@ -868,35 +868,47 @@ export const PromptInputUI = memo(function PromptInputUI({
                             className="h-7 flex-1 bg-background text-xs"
                           />
                           <div className="flex shrink-0 items-center gap-0.5">
-                            <Button
-                              data-testid={`queue-save-${message.id}`}
-                              type="button"
-                              size="icon-xs"
-                              onClick={() => handleQueueEditSave(message.id)}
-                              disabled={isBusy}
-                              aria-label={t('prompt.saveQueuedMessage', 'Save')}
-                              title={t('prompt.saveQueuedMessage', 'Save')}
-                              className="text-muted-foreground hover:text-foreground"
-                            >
-                              {isBusy ? (
-                                <Loader2 className="icon-xs animate-spin" />
-                              ) : (
-                                <Check className="icon-xs" />
-                              )}
-                            </Button>
-                            <Button
-                              data-testid={`queue-cancel-edit-${message.id}`}
-                              type="button"
-                              variant="ghost"
-                              size="icon-xs"
-                              onClick={handleQueueEditCancel}
-                              disabled={isBusy}
-                              aria-label={t('prompt.cancelQueuedEdit', 'Cancel')}
-                              title={t('prompt.cancelQueuedEdit', 'Cancel')}
-                              className="text-muted-foreground hover:text-foreground"
-                            >
-                              <X className="icon-xs" />
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  data-testid={`queue-save-${message.id}`}
+                                  type="button"
+                                  size="icon-xs"
+                                  onClick={() => handleQueueEditSave(message.id)}
+                                  disabled={isBusy}
+                                  aria-label={t('prompt.saveQueuedMessage', 'Save')}
+                                  className="text-muted-foreground hover:text-foreground"
+                                >
+                                  {isBusy ? (
+                                    <Loader2 className="icon-xs animate-spin" />
+                                  ) : (
+                                    <Check className="icon-xs" />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {t('prompt.saveQueuedMessage', 'Save')}
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  data-testid={`queue-cancel-edit-${message.id}`}
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={handleQueueEditCancel}
+                                  disabled={isBusy}
+                                  aria-label={t('prompt.cancelQueuedEdit', 'Cancel')}
+                                  className="text-muted-foreground hover:text-foreground"
+                                >
+                                  <X className="icon-xs" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {t('prompt.cancelQueuedEdit', 'Cancel')}
+                              </TooltipContent>
+                            </Tooltip>
                           </div>
                         </div>
                       ) : (
@@ -911,36 +923,48 @@ export const PromptInputUI = memo(function PromptInputUI({
                             {message.content}
                           </p>
                           <div className="flex shrink-0 items-center gap-0.5">
-                            <Button
-                              data-testid={`queue-edit-${message.id}`}
-                              type="button"
-                              variant="ghost"
-                              size="icon-xs"
-                              onClick={() => handleQueueEditStart(message)}
-                              disabled={isBusy}
-                              aria-label={t('prompt.editQueuedMessage', 'Edit')}
-                              title={t('prompt.editQueuedMessage', 'Edit')}
-                              className="text-muted-foreground hover:text-foreground"
-                            >
-                              <Pencil className="icon-xs" />
-                            </Button>
-                            <Button
-                              data-testid={`queue-delete-${message.id}`}
-                              type="button"
-                              variant="ghost"
-                              size="icon-xs"
-                              onClick={() => handleQueueDelete(message.id)}
-                              disabled={isBusy}
-                              aria-label={t('prompt.deleteQueuedMessage', 'Delete')}
-                              title={t('prompt.deleteQueuedMessage', 'Delete')}
-                              className="text-destructive hover:text-destructive"
-                            >
-                              {isBusy ? (
-                                <Loader2 className="icon-xs animate-spin" />
-                              ) : (
-                                <Trash2 className="icon-xs" />
-                              )}
-                            </Button>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  data-testid={`queue-edit-${message.id}`}
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={() => handleQueueEditStart(message)}
+                                  disabled={isBusy}
+                                  aria-label={t('prompt.editQueuedMessage', 'Edit')}
+                                  className="text-muted-foreground hover:text-foreground"
+                                >
+                                  <Pencil className="icon-xs" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {t('prompt.editQueuedMessage', 'Edit')}
+                              </TooltipContent>
+                            </Tooltip>
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  data-testid={`queue-delete-${message.id}`}
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon-xs"
+                                  onClick={() => handleQueueDelete(message.id)}
+                                  disabled={isBusy}
+                                  aria-label={t('prompt.deleteQueuedMessage', 'Delete')}
+                                  className="text-destructive hover:text-destructive"
+                                >
+                                  {isBusy ? (
+                                    <Loader2 className="icon-xs animate-spin" />
+                                  ) : (
+                                    <Trash2 className="icon-xs" />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {t('prompt.deleteQueuedMessage', 'Delete')}
+                              </TooltipContent>
+                            </Tooltip>
                           </div>
                         </div>
                       )}
@@ -1164,21 +1188,26 @@ export const PromptInputUI = memo(function PromptInputUI({
                   />
                 )}
                 {showBacklog && (
-                  <button
-                    data-testid="prompt-backlog-toggle"
-                    onClick={() => onSendToBacklogChange?.(!sendToBacklog)}
-                    tabIndex={-1}
-                    className={cn(
-                      'flex items-center gap-1 pl-2 py-1 text-xs rounded transition-colors shrink-0 ml-auto',
-                      sendToBacklog
-                        ? 'bg-primary/10 text-primary'
-                        : 'text-muted-foreground hover:text-foreground hover:bg-muted',
-                    )}
-                    title={t('prompt.sendToBacklog')}
-                  >
-                    <Inbox className="icon-xs" />
-                    {t('prompt.backlog')}
-                  </button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        data-testid="prompt-backlog-toggle"
+                        onClick={() => onSendToBacklogChange?.(!sendToBacklog)}
+                        tabIndex={-1}
+                        className={cn(
+                          'flex items-center gap-1 pl-2 py-1 text-xs rounded transition-colors shrink-0 ml-auto',
+                          sendToBacklog
+                            ? 'bg-primary/10 text-primary'
+                            : 'text-muted-foreground hover:text-foreground hover:bg-muted',
+                        )}
+                        aria-label={t('prompt.sendToBacklog')}
+                      >
+                        <Inbox className="icon-xs" />
+                        {t('prompt.backlog')}
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>{t('prompt.sendToBacklog')}</TooltipContent>
+                  </Tooltip>
                 )}
               </div>
             ) : (

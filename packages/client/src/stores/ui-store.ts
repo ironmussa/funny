@@ -12,7 +12,7 @@ const RIGHT_PANE_OPEN_KEY = 'right_pane_open';
 const RIGHT_PANE_TAB_KEY = 'right_pane_tab';
 const REVIEW_SUB_TAB_KEY = 'review_sub_tab';
 
-export type RightPaneTab = 'review' | 'tasks' | 'activity';
+export type RightPaneTab = 'review' | 'tasks' | 'activity' | 'files';
 export type ReviewSubTab = 'changes' | 'history' | 'stash' | 'prs';
 const VALID_REVIEW_SUB_TABS: ReviewSubTab[] = ['changes', 'history', 'stash', 'prs'];
 
@@ -49,6 +49,7 @@ interface UIState {
   setTestRunnerOpen: (open: boolean) => void;
   setTasksPaneOpen: (open: boolean) => void;
   setActivityPaneOpen: (open: boolean) => void;
+  setFilesPaneOpen: (open: boolean) => void;
   setReviewPaneWidth: (width: number) => void;
   setRightPaneTab: (tab: RightPaneTab) => void;
   setSettingsOpen: (open: boolean) => void;
@@ -87,7 +88,7 @@ export const useUIStore = create<UIState>((set) => ({
   rightPaneTab: (() => {
     try {
       const stored = localStorage.getItem(RIGHT_PANE_TAB_KEY);
-      if (stored && ['review', 'tasks', 'activity'].includes(stored)) {
+      if (stored && ['review', 'tasks', 'activity', 'files'].includes(stored)) {
         return stored as RightPaneTab;
       }
       return 'activity' as RightPaneTab;
@@ -184,6 +185,14 @@ export const useUIStore = create<UIState>((set) => ({
     set(
       open
         ? { reviewPaneOpen: true, rightPaneTab: 'activity' as RightPaneTab }
+        : { reviewPaneOpen: false },
+    );
+  },
+  setFilesPaneOpen: (open) => {
+    persistRightPane(open, open ? 'files' : undefined);
+    set(
+      open
+        ? { reviewPaneOpen: true, rightPaneTab: 'files' as RightPaneTab }
         : { reviewPaneOpen: false },
     );
   },

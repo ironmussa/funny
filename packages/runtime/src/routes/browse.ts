@@ -340,6 +340,7 @@ function getFileName(filePath: string): string {
 }
 
 const FILE_SEARCH_LIMIT = 100;
+const FILE_BROWSE_MAX_LIMIT = 20000;
 
 // List files and folders in a git repository (respects .gitignore)
 app.get('/files', async (c) => {
@@ -352,6 +353,11 @@ app.get('/files', async (c) => {
   if (denied) return denied;
 
   const query = c.req.query('query') || '';
+  const limitParam = Number(c.req.query('limit'));
+  const requestedLimit =
+    Number.isFinite(limitParam) && limitParam > 0
+      ? Math.min(limitParam, FILE_BROWSE_MAX_LIMIT)
+      : FILE_SEARCH_LIMIT;
 
   try {
     const allFiles = await resolveGitFiles(dirPath);
@@ -364,11 +370,11 @@ app.get('/files', async (c) => {
 
     if (!query) {
       // No query — return first N files (no folders needed for search dialog)
-      const files: BrowseItem[] = allFiles.slice(0, FILE_SEARCH_LIMIT).map((f) => ({
+      const files: BrowseItem[] = allFiles.slice(0, requestedLimit).map((f) => ({
         path: f,
         type: 'file' as const,
       }));
-      return c.json({ files, truncated: allFiles.length > FILE_SEARCH_LIMIT });
+      return c.json({ files, truncated: allFiles.length > requestedLimit });
     }
 
     // Server-side scored search

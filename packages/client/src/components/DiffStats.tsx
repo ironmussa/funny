@@ -19,6 +19,8 @@ interface DiffStatsProps {
   /** Show tooltips on hover (default: true for sm, false for xs) */
   tooltips?: boolean;
   className?: string;
+  /** Optional content rendered inside the pill after the stats (e.g. sync arrows). */
+  trailing?: React.ReactNode;
 }
 
 /**
@@ -36,6 +38,7 @@ export function DiffStats({
   size = 'sm',
   tooltips,
   className,
+  trailing,
 }: DiffStatsProps) {
   const { t } = useTranslation();
   const showTooltips = tooltips ?? size === 'sm';
@@ -113,6 +116,7 @@ export function DiffStats({
       )}
       {added}
       {deleted}
+      {trailing}
     </span>
   );
 }

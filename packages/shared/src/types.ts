@@ -1033,12 +1033,27 @@ export type FileStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'conflic
  */
 export type FileDiffKind = 'file' | 'submodule';
 
+/**
+ * Aggregate changes inside a nested git repository (submodule / gitlink).
+ * Populated for entries with `kind: 'submodule'` so the UI can show what
+ * changed *inside* the nested repo without loading its full file list.
+ */
+export interface NestedDirtyStats {
+  /** Count of dirty files inside the nested repo (modified + staged + untracked). */
+  dirtyFileCount: number;
+  linesAdded: number;
+  linesDeleted: number;
+  /** Whether the submodule's HEAD commit moved (gitlink pointer changed). */
+  pointerMoved?: boolean;
+}
+
 export interface FileDiff {
   path: string;
   status: FileStatus;
   diff: string;
   staged: boolean;
   kind?: FileDiffKind;
+  nestedDirty?: NestedDirtyStats;
 }
 
 /** Lightweight file metadata without diff content (for summary endpoint). */
@@ -1049,6 +1064,7 @@ export interface FileDiffSummary {
   additions?: number;
   deletions?: number;
   kind?: FileDiffKind;
+  nestedDirty?: NestedDirtyStats;
 }
 
 export interface DiffSummaryResponse {

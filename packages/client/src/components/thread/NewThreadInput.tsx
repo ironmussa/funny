@@ -58,7 +58,7 @@ export function NewThreadInput() {
   const { t } = useTranslation();
   const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const effectiveProjectId = newThreadProjectId || selectedProjectId;
+  const effectiveProjectId = selectedProjectId || newThreadProjectId;
   const newThreadIdleOnly = useUIStore((s) => s.newThreadIdleOnly);
   const issueContext = useUIStore((s) => s.newThreadIssueContext);
   const clearIssueContext = useUIStore((s) => s.clearIssueContext);

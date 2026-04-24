@@ -821,6 +821,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 
   const editor = useEditor({
     immediatelyRender: true,
+    autofocus: 'end',
     extensions: [
       Document,
       Paragraph,

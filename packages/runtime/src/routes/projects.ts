@@ -25,6 +25,7 @@ import { Hono } from 'hono';
 
 import { log } from '../lib/logger.js';
 import { requireAdmin } from '../middleware/auth.js';
+import { requestSpan } from '../middleware/tracing.js';
 import {
   startCommand,
   stopCommand,
@@ -66,9 +67,24 @@ projectRoutes.get('/:id/branches', async (c) => {
   const identity = userId ? await resolveIdentity(userId) : undefined;
   void fetchRemote(project.path, identity);
   const [branchesResult, defaultBranchResult, currentBranchResult] = await Promise.all([
-    listBranchesDetailed(project.path),
-    getDefaultBranch(project.path),
-    getCurrentBranch(project.path),
+    (async () => {
+      const span = requestSpan(c, 'git.branches_detailed', { projectId: project.id });
+      const r = await listBranchesDetailed(project.path);
+      span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
+      return r;
+    })(),
+    (async () => {
+      const span = requestSpan(c, 'git.default_branch', { projectId: project.id });
+      const r = await getDefaultBranch(project.path);
+      span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
+      return r;
+    })(),
+    (async () => {
+      const span = requestSpan(c, 'git.current_branch', { projectId: project.id });
+      const r = await getCurrentBranch(project.path);
+      span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
+      return r;
+    })(),
   ]);
 
   const detailed = branchesResult.isOk() ? branchesResult.value : [];

@@ -725,8 +725,25 @@ function setupRunnerDataHandlers(
 
   for (const eventName of dataEvents) {
     socket.on(eventName, async (data: any, ack?: (response: any) => void) => {
-      if (isRateLimited(socket.id, 200, 10_000)) return;
       const requestId = data?._requestId;
+      // Data events are chatty during streaming tool output; use a higher cap
+      // than control events. Drops MUST emit a response / ack so the caller
+      // doesn't hang for the full 15s request timeout.
+      if (isRateLimited(socket.id, 1000, 10_000)) {
+        log.warn('Data event rate-limited — dropping', {
+          namespace: 'socketio',
+          runnerId,
+          type: eventName,
+          requestId,
+        });
+        const errorResponse = { error: 'Rate limit exceeded', success: false };
+        if (requestId && typeof requestId === 'string' && REQUEST_ID_RE.test(requestId)) {
+          emitDataResponse(requestId, errorResponse);
+        } else if (ack) {
+          ack(errorResponse);
+        }
+        return;
+      }
       // Validate requestId format to prevent event name injection
       if (requestId && (typeof requestId !== 'string' || !REQUEST_ID_RE.test(requestId))) {
         log.warn('Invalid requestId format', { namespace: 'socketio', runnerId, type: eventName });

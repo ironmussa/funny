@@ -21,6 +21,7 @@ import {
   Undo2,
   EyeOff,
   Folder,
+  FolderMinus,
   FolderOpen,
   FolderX,
   Copy,
@@ -102,7 +103,7 @@ import { useUIStore, type ReviewSubTab } from '@/stores/ui-store';
 
 import { CommitHistoryTab } from './CommitHistoryTab';
 import { DiffStats } from './DiffStats';
-import { buildTreeRows } from './FileTree';
+import { buildTreeRows, collectAllFolderPaths } from './FileTree';
 import { InlineProgressSteps } from './InlineProgressSteps';
 import { PRSummaryCard } from './PRSummaryCard';
 import { PublishRepoDialog } from './PublishRepoDialog';
@@ -699,9 +700,92 @@ export function ReviewPane() {
 
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
 
+  const [expandedSubmodules, setExpandedSubmodules] = useState<Set<string>>(new Set());
+  const [submoduleExpansions, setSubmoduleExpansions] = useState<Map<string, FileDiffSummary[]>>(
+    new Map(),
+  );
+  const [submoduleStates, setSubmoduleStates] = useState<
+    Map<string, { state: 'loading' | 'error' | 'empty'; message?: string }>
+  >(new Map());
+
+  const toggleSubmodule = useCallback(
+    async (submodulePath: string) => {
+      const currentlyExpanded = expandedSubmodules.has(submodulePath);
+      setExpandedSubmodules((prev) => {
+        const next = new Set(prev);
+        if (currentlyExpanded) next.delete(submodulePath);
+        else next.add(submodulePath);
+        return next;
+      });
+      if (currentlyExpanded) return;
+      // Fetch only when expanding and we haven't loaded it yet.
+      if (submoduleExpansions.has(submodulePath)) return;
+      setSubmoduleStates((prev) => {
+        const next = new Map(prev);
+        next.set(submodulePath, { state: 'loading' });
+        return next;
+      });
+      try {
+        const result = effectiveThreadId
+          ? await api.getSubmoduleDiffSummary(effectiveThreadId, submodulePath)
+          : projectModeId
+            ? await api.projectSubmoduleDiffSummary(projectModeId, submodulePath)
+            : null;
+        if (!result) return;
+        if (result.isErr()) {
+          setSubmoduleStates((prev) => {
+            const next = new Map(prev);
+            next.set(submodulePath, {
+              state: 'error',
+              message: result.error.message,
+            });
+            return next;
+          });
+          return;
+        }
+        const res = result.value;
+        if (res.files.length === 0) {
+          setSubmoduleStates((prev) => {
+            const next = new Map(prev);
+            next.set(submodulePath, { state: 'empty' });
+            return next;
+          });
+        } else {
+          setSubmoduleExpansions((prev) => {
+            const next = new Map(prev);
+            next.set(submodulePath, res.files);
+            return next;
+          });
+          setSubmoduleStates((prev) => {
+            const next = new Map(prev);
+            next.delete(submodulePath);
+            return next;
+          });
+        }
+      } catch (e) {
+        setSubmoduleStates((prev) => {
+          const next = new Map(prev);
+          next.set(submodulePath, {
+            state: 'error',
+            message: e instanceof Error ? e.message : String(e),
+          });
+          return next;
+        });
+      }
+    },
+    [expandedSubmodules, submoduleExpansions, effectiveThreadId, projectModeId],
+  );
+
   const treeRows = useMemo(
-    () => buildTreeRows(filteredDiffs, collapsedFolders),
-    [filteredDiffs, collapsedFolders],
+    () =>
+      buildTreeRows(
+        filteredDiffs,
+        collapsedFolders,
+        submoduleExpansions,
+        submoduleStates,
+        expandedSubmodules,
+      ),
+    [filteredDiffs, collapsedFolders, submoduleExpansions, submoduleStates, expandedSubmodules],
   );
 
   const toggleFolder = useCallback((folderPath: string) => {
@@ -712,6 +796,20 @@ export function ReviewPane() {
       return next;
     });
   }, []);
+
+  const handleCollapseAllFolders = useCallback(() => {
+    setCollapsedFolders(collectAllFolderPaths(filteredDiffs));
+  }, [filteredDiffs]);
+
+  const handleExpandAllFolders = useCallback(() => {
+    setCollapsedFolders(new Set());
+  }, []);
+
+  const hasFolders = useMemo(() => treeRows.some((r) => r.kind === 'folder'), [treeRows]);
+  const allFoldersCollapsed = useMemo(() => {
+    if (!hasFolders) return false;
+    return treeRows.every((r) => r.kind !== 'folder' || collapsedFolders.has(r.path));
+  }, [treeRows, collapsedFolders, hasFolders]);
 
   // selectedDiffContent removed — diffs now only shown in expanded modal
 
@@ -731,7 +829,9 @@ export function ReviewPane() {
       treeRows[index]?.kind === 'folder' ? FOLDER_ROW_HEIGHT : FILE_ROW_HEIGHT,
     getItemKey: (index) => {
       const row = treeRows[index];
-      return row.kind === 'folder' ? `d:${row.path}` : `f:${row.file.path}`;
+      if (row.kind === 'folder') return `d:${row.path}`;
+      if (row.kind === 'submodule-status') return `s:${row.submodulePath}:${row.state}`;
+      return `f:${row.file.path}`;
     },
     overscan: 15,
   });
@@ -1966,7 +2066,7 @@ export function ReviewPane() {
 
               {/* Select all / count */}
               {summaries.length > 0 && (
-                <div className="flex h-8 items-center gap-1.5 border-b border-sidebar-border py-1.5 pl-2 pr-4">
+                <div className="flex h-8 items-center gap-1.5 border-b border-sidebar-border py-1.5 pl-2 pr-2">
                   <TriCheckbox
                     state={
                       checkedCount === totalCount && totalCount > 0
@@ -1982,6 +2082,44 @@ export function ReviewPane() {
                   <span className="text-xs text-muted-foreground">
                     {checkedCount}/{totalCount} {t('review.selected', 'selected')}
                   </span>
+                  {hasFolders && (
+                    <div className="ml-auto flex items-center gap-0.5">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={handleCollapseAllFolders}
+                            disabled={allFoldersCollapsed}
+                            data-testid="review-collapse-all"
+                            className="text-muted-foreground"
+                          >
+                            <FolderMinus className="icon-xs" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          {t('common.collapseAll', 'Collapse all folders')}
+                        </TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button
+                            variant="ghost"
+                            size="icon-xs"
+                            onClick={handleExpandAllFolders}
+                            disabled={collapsedFolders.size === 0}
+                            data-testid="review-expand-all"
+                            className="text-muted-foreground"
+                          >
+                            <FolderOpen className="icon-xs" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent side="top">
+                          {t('common.expandAll', 'Expand all folders')}
+                        </TooltipContent>
+                      </Tooltip>
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -2029,6 +2167,40 @@ export function ReviewPane() {
                       {virtualizer.getVirtualItems().map((virtualRow) => {
                         const row = treeRows[virtualRow.index];
                         const paddingLeft = `${8 + row.depth * INDENT_PX}px`;
+
+                        if (row.kind === 'submodule-status') {
+                          const label =
+                            row.state === 'loading'
+                              ? t('review.submoduleLoading', {
+                                  defaultValue: 'Loading submodule files…',
+                                })
+                              : row.state === 'error'
+                                ? (row.message ??
+                                  t('review.submoduleError', {
+                                    defaultValue: 'Failed to load submodule',
+                                  }))
+                                : t('review.submoduleEmpty', {
+                                    defaultValue: 'No changes inside submodule',
+                                  });
+                          return (
+                            <div
+                              key={`submodule-status-${row.submodulePath}-${row.state}`}
+                              className="flex items-center gap-1.5 text-xs italic text-muted-foreground/80"
+                              style={{
+                                position: 'absolute',
+                                top: 0,
+                                left: 0,
+                                width: '100%',
+                                height: `${virtualRow.size}px`,
+                                transform: `translateY(${virtualRow.start}px)`,
+                                paddingLeft,
+                              }}
+                              data-testid={`review-submodule-status-${row.submodulePath}`}
+                            >
+                              <span className="truncate">{label}</span>
+                            </div>
+                          );
+                        }
 
                         if (row.kind === 'folder') {
                           const isCollapsed = collapsedFolders.has(row.path);
@@ -2174,6 +2346,32 @@ export function ReviewPane() {
                               })}
                               data-testid={`review-file-checkbox-${f.path}`}
                             />
+                            {f.kind === 'submodule' && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  toggleSubmodule(f.path);
+                                }}
+                                aria-label={
+                                  expandedSubmodules.has(f.path)
+                                    ? t('review.collapseSubmodule', {
+                                        defaultValue: 'Collapse submodule',
+                                      })
+                                    : t('review.expandSubmodule', {
+                                        defaultValue: 'Expand submodule',
+                                      })
+                                }
+                                className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                                data-testid={`review-submodule-toggle-${f.path}`}
+                              >
+                                <ChevronRight
+                                  className={cn(
+                                    'icon-sm transition-transform',
+                                    expandedSubmodules.has(f.path) && 'rotate-90',
+                                  )}
+                                />
+                              </button>
+                            )}
                             {f.kind === 'submodule' ? (
                               <GitBranch
                                 className="icon-base flex-shrink-0 text-purple-500 dark:text-purple-400"
@@ -2191,19 +2389,77 @@ export function ReviewPane() {
                               className="flex-1 truncate font-mono-explorer text-xs"
                             />
                             {f.kind === 'submodule' && (
-                              <span
-                                className="flex-shrink-0 rounded-sm border border-purple-500/40 bg-purple-500/10 px-1 text-[10px] uppercase tracking-wide text-purple-600 dark:text-purple-300"
-                                title={t('review.submoduleTooltip', {
-                                  defaultValue: 'Nested git repository (gitlink)',
-                                })}
-                                data-testid={`review-submodule-badge-${f.path}`}
-                              >
-                                {t('review.submodule', { defaultValue: 'submodule' })}
-                              </span>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span
+                                    className="flex-shrink-0 rounded-sm border border-purple-500/40 bg-purple-500/10 px-1 text-[10px] uppercase tracking-wide text-purple-600 dark:text-purple-300"
+                                    data-testid={`review-submodule-badge-${f.path}`}
+                                  >
+                                    {f.nestedDirty && f.nestedDirty.dirtyFileCount > 0
+                                      ? t('review.submoduleDirtyCount', {
+                                          count: f.nestedDirty.dirtyFileCount,
+                                          defaultValue: 'submodule · {{count}}',
+                                        })
+                                      : t('review.submodule', { defaultValue: 'submodule' })}
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent side="top" className="max-w-xs text-xs">
+                                  <div className="font-medium">
+                                    {t('review.submoduleTooltip', {
+                                      defaultValue: 'Nested git repository (gitlink)',
+                                    })}
+                                  </div>
+                                  {f.nestedDirty && (
+                                    <div className="mt-1 space-y-0.5 font-mono">
+                                      {f.nestedDirty.pointerMoved && (
+                                        <div>
+                                          {t('review.submodulePointerMoved', {
+                                            defaultValue:
+                                              'Gitlink pointer moved (parent-visible change).',
+                                          })}
+                                        </div>
+                                      )}
+                                      <div>
+                                        {t('review.submoduleDirtyLine', {
+                                          count: f.nestedDirty.dirtyFileCount,
+                                          defaultValue: '{{count}} file(s) dirty inside',
+                                        })}
+                                      </div>
+                                      {(f.nestedDirty.linesAdded > 0 ||
+                                        f.nestedDirty.linesDeleted > 0) && (
+                                        <div>
+                                          <span className="text-diff-added">
+                                            +{f.nestedDirty.linesAdded}
+                                          </span>{' '}
+                                          <span className="text-diff-removed">
+                                            -{f.nestedDirty.linesDeleted}
+                                          </span>{' '}
+                                          <span className="text-muted-foreground">
+                                            {t('review.submoduleLines', { defaultValue: 'lines' })}
+                                          </span>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )}
+                                  <div className="mt-1 text-muted-foreground">
+                                    {t('review.submoduleExpandHint', {
+                                      defaultValue: 'Click the arrow to expand inner files.',
+                                    })}
+                                  </div>
+                                </TooltipContent>
+                              </Tooltip>
                             )}
                             <DiffStats
-                              linesAdded={f.additions ?? 0}
-                              linesDeleted={f.deletions ?? 0}
+                              linesAdded={
+                                f.kind === 'submodule' && f.nestedDirty
+                                  ? f.nestedDirty.linesAdded
+                                  : (f.additions ?? 0)
+                              }
+                              linesDeleted={
+                                f.kind === 'submodule' && f.nestedDirty
+                                  ? f.nestedDirty.linesDeleted
+                                  : (f.deletions ?? 0)
+                              }
                               size="xs"
                             />
                             <span
@@ -2451,6 +2707,7 @@ export function ReviewPane() {
                     value={commitTitle}
                     onChange={(e) => setCommitTitle(e.target.value)}
                     disabled={!!actionInProgress || generatingMsg}
+                    className="h-auto px-2 py-1.5 text-xs"
                   />
                   <div className="rounded-md border border-input bg-background focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50">
                     <textarea

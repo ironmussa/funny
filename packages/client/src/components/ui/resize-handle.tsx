@@ -106,10 +106,10 @@ export const ResizeHandle = forwardRef<HTMLButtonElement, ResizeHandleProps>(fun
       className={cn(
         'relative z-10 flex-shrink-0',
         isHorizontal
-          ? 'w-[3px] cursor-col-resize bg-border transition-colors ease-linear hover:bg-ring/50 before:absolute before:inset-y-0 before:-left-[2px] before:w-[7px] before:content-[""]'
-          : 'h-1.5 cursor-row-resize after:absolute after:inset-x-0 after:top-1/2 after:h-px after:-translate-y-1/2 after:bg-border after:transition-colors after:ease-linear hover:after:bg-sidebar-border',
-        isHorizontal && resizing && 'bg-ring/50',
-        !isHorizontal && resizing && 'after:bg-sidebar-border',
+          ? 'w-1.5 cursor-col-resize after:absolute after:inset-y-0 after:left-1/2 after:w-px after:-translate-x-1/2 after:bg-border after:transition-all after:ease-linear hover:after:w-[3px] hover:after:bg-ring/50'
+          : 'h-1.5 cursor-row-resize after:absolute after:inset-x-0 after:top-1/2 after:h-px after:-translate-y-1/2 after:bg-border after:transition-all after:ease-linear hover:after:h-[3px] hover:after:bg-ring/50',
+        isHorizontal && resizing && 'after:!w-[3px] after:!bg-ring/50',
+        !isHorizontal && resizing && 'after:!h-[3px] after:!bg-ring/50',
         className,
       )}
       data-testid={testId}

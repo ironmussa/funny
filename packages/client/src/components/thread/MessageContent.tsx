@@ -1,6 +1,7 @@
 import { Check, Copy } from 'lucide-react';
 import { memo, lazy, Suspense } from 'react';
 
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { toEditorUriWithLine, openFileInEditor } from '@/lib/editor-utils';
 import { remarkPlugins, baseMarkdownComponents } from '@/lib/markdown-components';
@@ -22,25 +23,25 @@ const markdownComponents = {
       const editor = useSettingsStore.getState().defaultEditor;
       const uri = toEditorUriWithLine(fileMatch[0], editor);
       const label = editorLabels[editor];
-      if (uri) {
-        return (
-          <a
-            href={uri}
-            className="text-primary hover:underline"
-            title={`Open in ${label}: ${text}`}
-          >
-            {children}
-          </a>
-        );
-      }
+      const tooltipText = `Open in ${label}: ${text}`;
       return (
-        <button
-          onClick={() => openFileInEditor(fileMatch[0], editor)}
-          className="inline cursor-pointer text-primary hover:underline"
-          title={`Open in ${label}: ${text}`}
-        >
-          {children}
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            {uri ? (
+              <a href={uri} className="text-primary hover:underline">
+                {children}
+              </a>
+            ) : (
+              <button
+                onClick={() => openFileInEditor(fileMatch[0], editor)}
+                className="inline cursor-pointer text-primary hover:underline"
+              >
+                {children}
+              </button>
+            )}
+          </TooltipTrigger>
+          <TooltipContent>{tooltipText}</TooltipContent>
+        </Tooltip>
       );
     }
     return (

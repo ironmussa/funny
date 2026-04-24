@@ -1,8 +1,8 @@
 import type { StartupCommand, Message, ToolCall, ThreadStage } from '@funny/shared';
 import {
-  GitCompare,
   GitFork,
   GitBranch,
+  GitCompare,
   Globe,
   Terminal,
   ExternalLink,
@@ -14,6 +14,8 @@ import {
   Loader2,
   Columns3,
   ArrowLeft,
+  ArrowUp,
+  ArrowDown,
   Milestone,
   Copy,
   ClipboardList,
@@ -21,6 +23,7 @@ import {
   EllipsisVertical,
   Trash2,
   FolderOpen,
+  FolderTree,
   FlaskConical,
   ListChecks,
   Activity,
@@ -491,6 +494,7 @@ function StartupCommandsPopover({
   const { t } = useTranslation();
   const [commands, setCommands] = useState<StartupCommand[]>([]);
   const [open, setOpen] = useState(false);
+  const { tooltipProps, menuProps, contentProps } = useTooltipMenu();
 
   const tabs = useTerminalStore((s) => s.tabs);
   const runningIds = new Set<string>();
@@ -527,8 +531,14 @@ function StartupCommandsPopover({
   const anyRunning = commands.some((cmd) => runningIds.has(cmd.id));
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
-      <Tooltip>
+    <Popover
+      open={open}
+      onOpenChange={(next) => {
+        setOpen(next);
+        menuProps.onOpenChange(next);
+      }}
+    >
+      <Tooltip {...tooltipProps}>
         <TooltipTrigger asChild>
           <PopoverTrigger asChild>
             <Button
@@ -543,7 +553,7 @@ function StartupCommandsPopover({
         </TooltipTrigger>
         <TooltipContent>{t('startup.title', 'Startup Commands')}</TooltipContent>
       </Tooltip>
-      <PopoverContent align="end" className="w-64 p-2">
+      <PopoverContent align="end" className="w-64 p-2" {...contentProps}>
         {threadId && (
           <div
             data-testid="startup-worktree-banner"
@@ -628,6 +638,7 @@ const StageSelectorBadge = memo(function StageSelectorBadge({
   const { t } = useTranslation();
   const updateThreadStage = useThreadStore((s) => s.updateThreadStage);
   const StageIcon = stageConfig[stage].icon;
+  const { tooltipProps, menuProps, contentProps } = useTooltipMenu();
 
   return (
     <Select
@@ -635,8 +646,9 @@ const StageSelectorBadge = memo(function StageSelectorBadge({
       onValueChange={(value: string) =>
         updateThreadStage(threadId, projectId, value as ThreadStage)
       }
+      {...menuProps}
     >
-      <Tooltip>
+      <Tooltip {...tooltipProps}>
         <TooltipTrigger asChild>
           <SelectTrigger
             data-testid="header-stage-select"
@@ -647,7 +659,7 @@ const StageSelectorBadge = memo(function StageSelectorBadge({
         </TooltipTrigger>
         <TooltipContent>{t(stageConfig[stage].labelKey)}</TooltipContent>
       </Tooltip>
-      <SelectContent>
+      <SelectContent {...contentProps}>
         {VISIBLE_STAGES.map((s) => {
           const Icon = stageConfig[s].icon;
           return (
@@ -743,6 +755,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
   const testRunnerOpen = useUIStore((s) => s.testRunnerOpen);
   const setTasksPaneOpen = useUIStore((s) => s.setTasksPaneOpen);
   const setActivityPaneOpen = useUIStore((s) => s.setActivityPaneOpen);
+  const setFilesPaneOpen = useUIStore((s) => s.setFilesPaneOpen);
   const rightPaneTab = useUIStore((s) => s.rightPaneTab);
   const kanbanContext = useUIStore((s) => s.kanbanContext);
   const { openPreview, isTauri } = usePreviewWindow();
@@ -772,6 +785,10 @@ export const ProjectHeader = memo(function ProjectHeader() {
     (effectiveGitStatus.linesAdded > 0 ||
       effectiveGitStatus.linesDeleted > 0 ||
       effectiveGitStatus.dirtyFileCount > 0);
+  const unpushedCommitCount = effectiveGitStatus?.unpushedCommitCount ?? 0;
+  const unpulledCommitCount = effectiveGitStatus?.unpulledCommitCount ?? 0;
+  const hasPendingPush = unpushedCommitCount > 0;
+  const hasPendingPull = unpulledCommitCount > 0;
   // Fetch git status when activeThread changes
   useEffect(() => {
     if (activeThreadId) {
@@ -876,9 +893,26 @@ export const ProjectHeader = memo(function ProjectHeader() {
             <BreadcrumbList>
               {project && activeThreadId && (
                 <BreadcrumbItem className="flex-shrink-0">
-                  <BreadcrumbLink className="flex cursor-default items-center gap-1.5 whitespace-nowrap text-sm">
-                    <FolderOpen className="icon-sm text-muted-foreground" />
-                    {project.name}
+                  <BreadcrumbLink asChild>
+                    <button
+                      type="button"
+                      data-testid={`header-project-name-${project.id}`}
+                      onClick={() => {
+                        startTransition(() => {
+                          useProjectStore.getState().selectProject(project.id);
+                          setReviewPaneOpen(false);
+                          navigate(buildPath(`/projects/${project.id}`));
+                        });
+                        requestAnimationFrame(() => {
+                          const el = document.querySelector(`[data-project-id="${project.id}"]`);
+                          el?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+                        });
+                      }}
+                      className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-sm hover:text-foreground"
+                    >
+                      <FolderOpen className="icon-sm text-muted-foreground" />
+                      {project.name}
+                    </button>
                   </BreadcrumbLink>
                 </BreadcrumbItem>
               )}
@@ -1063,34 +1097,6 @@ export const ProjectHeader = memo(function ProjectHeader() {
                   size="icon-sm"
                   onClick={() =>
                     startTransition(() => {
-                      if (reviewPaneOpen && rightPaneTab === 'review') {
-                        setReviewPaneOpen(false);
-                        updatePanelParam(null);
-                      } else {
-                        setReviewPaneOpen(true);
-                        updatePanelParam('review');
-                      }
-                    })
-                  }
-                  data-testid="header-toggle-review"
-                  className={
-                    reviewPaneOpen && rightPaneTab === 'review'
-                      ? 'text-foreground'
-                      : 'text-muted-foreground'
-                  }
-                >
-                  <GitCompare className="icon-base" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t('review.title')}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() =>
-                    startTransition(() => {
                       const opening = !testRunnerOpen;
                       setTestRunnerOpen(opening);
                       updatePanelParam(opening ? 'tests' : null);
@@ -1103,6 +1109,35 @@ export const ProjectHeader = memo(function ProjectHeader() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{t('tests.title', 'Tests')}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() =>
+                    startTransition(() => {
+                      if (reviewPaneOpen && rightPaneTab === 'files') {
+                        setFilesPaneOpen(false);
+                        updatePanelParam(null);
+                      } else {
+                        setFilesPaneOpen(true);
+                        updatePanelParam('files');
+                      }
+                    })
+                  }
+                  data-testid="header-toggle-project-files"
+                  disabled={!projectId}
+                  className={
+                    reviewPaneOpen && rightPaneTab === 'files'
+                      ? 'text-foreground'
+                      : 'text-muted-foreground'
+                  }
+                >
+                  <FolderTree className="icon-base" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('projectFiles.title', 'Project Files')}</TooltipContent>
             </Tooltip>
             {activeThreadArcId && (
               <Tooltip>
@@ -1132,7 +1167,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
                 <TooltipContent>Tasks</TooltipContent>
               </Tooltip>
             )}
-            {showGitStats && (
+            {showGitStats ? (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <button
@@ -1158,10 +1193,76 @@ export const ProjectHeader = memo(function ProjectHeader() {
                       size="sm"
                       tooltips={false}
                       className="font-semibold"
+                      trailing={
+                        <SyncArrows
+                          hasPendingPush={hasPendingPush}
+                          hasPendingPull={hasPendingPull}
+                          withSeparator
+                        />
+                      }
                     />
                   </button>
                 </TooltipTrigger>
-                <TooltipContent>{t('review.title')}</TooltipContent>
+                <TooltipContent>
+                  {renderSyncTooltip(t, unpushedCommitCount, unpulledCommitCount)}
+                </TooltipContent>
+              </Tooltip>
+            ) : hasPendingPush || hasPendingPull ? (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <button
+                    type="button"
+                    onClick={() =>
+                      startTransition(() => {
+                        if (reviewPaneOpen && rightPaneTab === 'review') {
+                          setReviewPaneOpen(false);
+                          updatePanelParam(null);
+                        } else {
+                          setReviewPaneOpen(true);
+                          updatePanelParam('review');
+                        }
+                      })
+                    }
+                    data-testid="header-sync-arrows"
+                    className="inline-flex flex-shrink-0 cursor-pointer items-center gap-1 rounded-lg border border-border px-2 py-0.5 font-mono text-sm font-semibold"
+                  >
+                    <SyncArrows hasPendingPush={hasPendingPush} hasPendingPull={hasPendingPull} />
+                  </button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {renderSyncTooltip(t, unpushedCommitCount, unpulledCommitCount)}
+                </TooltipContent>
+              </Tooltip>
+            ) : (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() =>
+                      startTransition(() => {
+                        if (reviewPaneOpen && rightPaneTab === 'review') {
+                          setReviewPaneOpen(false);
+                          updatePanelParam(null);
+                        } else {
+                          setReviewPaneOpen(true);
+                          updatePanelParam('review');
+                        }
+                      })
+                    }
+                    data-testid="header-toggle-review"
+                    className={cn(
+                      reviewPaneOpen && rightPaneTab === 'review'
+                        ? 'text-foreground'
+                        : 'text-muted-foreground',
+                    )}
+                  >
+                    <GitCompare className="icon-base" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  {renderSyncTooltip(t, unpushedCommitCount, unpulledCommitCount)}
+                </TooltipContent>
               </Tooltip>
             )}
             {activeThreadId && (
@@ -1183,3 +1284,52 @@ export const ProjectHeader = memo(function ProjectHeader() {
     </div>
   );
 });
+
+function SyncArrows({
+  hasPendingPush,
+  hasPendingPull,
+  withSeparator = false,
+}: {
+  hasPendingPush: boolean;
+  hasPendingPull: boolean;
+  withSeparator?: boolean;
+}) {
+  if (!hasPendingPush && !hasPendingPull) return null;
+  return (
+    <>
+      {withSeparator && <span className="text-muted-foreground">·</span>}
+      <span
+        className="inline-flex items-center text-foreground"
+        data-testid="header-review-sync-arrows"
+      >
+        {hasPendingPush && <ArrowUp className="h-3 w-3" strokeWidth={2.5} />}
+        {hasPendingPull && <ArrowDown className="h-3 w-3" strokeWidth={2.5} />}
+      </span>
+    </>
+  );
+}
+
+function renderSyncTooltip(
+  t: (key: string, opts?: Record<string, unknown>) => string,
+  unpushedCommitCount: number,
+  unpulledCommitCount: number,
+): string {
+  const parts: string[] = [];
+  if (unpushedCommitCount > 0) {
+    parts.push(
+      t('review.readyToPush', {
+        count: unpushedCommitCount,
+        defaultValue: `${unpushedCommitCount} commit(s) ready to push`,
+      }),
+    );
+  }
+  if (unpulledCommitCount > 0) {
+    parts.push(
+      t('review.readyToPull', {
+        count: unpulledCommitCount,
+        defaultValue: `${unpulledCommitCount} commit(s) to pull`,
+      }),
+    );
+  }
+  return parts.length > 0 ? parts.join(' · ') : t('review.title');
+}

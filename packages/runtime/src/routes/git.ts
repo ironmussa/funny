@@ -55,6 +55,7 @@ import { Hono } from 'hono';
 import { err, ok } from 'neverthrow';
 
 import { log } from '../lib/logger.js';
+import { startSpan } from '../lib/telemetry.js';
 import { requestSpan } from '../middleware/tracing.js';
 import {
   stage as gitServiceStage,
@@ -205,9 +206,10 @@ gitRoutes.get('/status', async (c) => {
   const lastFetch = _lastFetchTs.get(projectId) ?? 0;
   if (Date.now() - lastFetch > FETCH_THROTTLE_MS) {
     _lastFetchTs.set(projectId, Date.now());
+    const fetchSpan = requestSpan(c, 'git.fetch_remote', { projectId });
     await fetchRemote(project.path, identity ?? undefined).match(
-      () => {},
-      () => {},
+      () => fetchSpan.end('ok'),
+      () => fetchSpan.end('error'),
     );
   }
 
@@ -232,7 +234,13 @@ gitRoutes.get('/status', async (c) => {
     >();
     const entries = await Promise.all(
       Array.from(uniqueBranches).map(async (branch) => {
+        const span = startSpan('github.pr_lookup', {
+          traceId: statusSpan.traceId,
+          parentSpanId: statusSpan.spanId,
+          attributes: { projectId, branch },
+        });
         const pr = await getPRForBranch(project.path, branch, ghEnv);
+        span.end('ok');
         return [branch, pr] as const;
       }),
     );
@@ -245,10 +253,19 @@ gitRoutes.get('/status', async (c) => {
   const [worktreeResults, localResults, prByBranch] = await Promise.all([
     Promise.allSettled(
       worktreeThreads.map(async (thread) => {
+        const span = startSpan('git.status_summary', {
+          traceId: statusSpan.traceId,
+          parentSpanId: statusSpan.spanId,
+          attributes: { threadId: thread.id, mode: 'worktree' },
+        });
         const summaryResult = await getStatusSummary(
           thread.worktreePath!,
           thread.baseBranch ?? undefined,
           project.path,
+        );
+        span.end(
+          summaryResult.isOk() ? 'ok' : 'error',
+          summaryResult.isErr() ? summaryResult.error.message : undefined,
         );
         if (summaryResult.isErr()) return null;
         const summary = summaryResult.value;
@@ -267,7 +284,16 @@ gitRoutes.get('/status', async (c) => {
     // branches get committed-only diff stats (git diff base...branch) so they
     // don't inherit the dirty state of whichever branch is checked out now.
     (async () => {
+      const currentBranchSpan = startSpan('git.current_branch', {
+        traceId: statusSpan.traceId,
+        parentSpanId: statusSpan.spanId,
+        attributes: { projectId },
+      });
       const currentBranchResult = await getCurrentBranch(project.path);
+      currentBranchSpan.end(
+        currentBranchResult.isOk() ? 'ok' : 'error',
+        currentBranchResult.isErr() ? currentBranchResult.error.message : undefined,
+      );
       const currentBranch = currentBranchResult.isOk() ? currentBranchResult.value : null;
 
       // Split threads: those matching the checked-out branch use working-tree
@@ -286,10 +312,23 @@ gitRoutes.get('/status', async (c) => {
       const activePromise = (async () => {
         if (activeThreads.length === 0) return;
         const representative = activeThreads[0];
+        const span = startSpan('git.status_summary', {
+          traceId: statusSpan.traceId,
+          parentSpanId: statusSpan.spanId,
+          attributes: {
+            projectId,
+            mode: 'local-active',
+            threadCount: activeThreads.length,
+          },
+        });
         const summaryResult = await getStatusSummary(
           project.path,
           representative.baseBranch ?? undefined,
           project.path,
+        );
+        span.end(
+          summaryResult.isOk() ? 'ok' : 'error',
+          summaryResult.isErr() ? summaryResult.error.message : undefined,
         );
         if (summaryResult.isErr()) {
           for (const t of activeThreads) {
@@ -328,10 +367,24 @@ gitRoutes.get('/status', async (c) => {
       const backgroundPromise = Promise.all(
         Array.from(bgByKey.entries()).map(async ([, threads]) => {
           const rep = threads[0];
+          const span = startSpan('git.committed_branch_summary', {
+            traceId: statusSpan.traceId,
+            parentSpanId: statusSpan.spanId,
+            attributes: {
+              projectId,
+              baseBranch: rep.baseBranch!,
+              branch: rep.branch!,
+              threadCount: threads.length,
+            },
+          });
           const summaryResult = await getCommittedBranchSummary(
             project.path,
             rep.baseBranch!,
             rep.branch!,
+          );
+          span.end(
+            summaryResult.isOk() ? 'ok' : 'error',
+            summaryResult.isErr() ? summaryResult.error.message : undefined,
           );
           if (summaryResult.isErr()) {
             for (const t of threads) {
@@ -405,7 +458,15 @@ gitRoutes.get('/status', async (c) => {
       .map((s: any) => attachPR(s, threadBranchMap.get(s.threadId))),
     ...(await Promise.all(
       mergedThreads.map(async (t) => {
-        const unpushed = t.baseBranch ? await countUnpushedCommits(project.path, t.baseBranch) : 0;
+        let unpushed = 0;
+        if (t.baseBranch) {
+          const span = requestSpan(c, 'git.unpushed_count', {
+            threadId: t.id,
+            branch: t.baseBranch,
+          });
+          unpushed = await countUnpushedCommits(project.path, t.baseBranch);
+          span.end('ok');
+        }
         return attachPR(
           {
             threadId: t.id,
@@ -458,14 +519,20 @@ gitRoutes.get('/project/:projectId/status', async (c) => {
   const lastFetch = _lastFetchTs.get(projectId) ?? 0;
   if (Date.now() - lastFetch > FETCH_THROTTLE_MS) {
     _lastFetchTs.set(projectId, Date.now());
+    const fetchSpan = requestSpan(c, 'git.fetch_remote', { projectId });
     const identity = await resolveIdentity(userId);
     await fetchRemote(cwd, identity ?? undefined).match(
-      () => {},
-      () => {},
+      () => fetchSpan.end('ok'),
+      () => fetchSpan.end('error'),
     );
   }
 
+  const statusSpan = requestSpan(c, 'git.status_summary', { projectId });
   const summaryResult = await getStatusSummary(cwd);
+  statusSpan.end(
+    summaryResult.isOk() ? 'ok' : 'error',
+    summaryResult.isErr() ? summaryResult.error.message : undefined,
+  );
   if (summaryResult.isErr()) return resultToResponse(c, summaryResult);
   const summary = summaryResult.value;
   return c.json({
@@ -493,7 +560,38 @@ gitRoutes.get('/project/:projectId/diff/summary', async (c) => {
     : undefined;
   const maxFilesRaw = c.req.query('maxFiles');
   const maxFiles = maxFilesRaw ? parseInt(maxFilesRaw, 10) : undefined;
+  const projectId = c.req.param('projectId');
+  const span = requestSpan(c, 'git.diff_summary', { projectId });
   const result = await getDiffSummary(cwd, { excludePatterns, maxFiles });
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json(result.value);
+});
+
+// GET /api/git/project/:projectId/diff/submodule
+gitRoutes.get('/project/:projectId/diff/submodule', async (c) => {
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  const relPath = c.req.query('path');
+  if (!relPath) {
+    return resultToResponse(c, err(badRequest('Missing required query parameter: path')));
+  }
+  const pathCheck = validateFilePaths(cwd, [relPath]);
+  if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
+  const { join } = await import('node:path');
+  const submoduleCwd = join(cwd, relPath);
+  if (!existsSync(submoduleCwd) || !existsSync(join(submoduleCwd, '.git'))) {
+    return resultToResponse(c, err(badRequest(`Not a git repository: ${relPath}`)));
+  }
+  const span = requestSpan(c, 'git.diff_submodule', {
+    projectId: c.req.param('projectId'),
+    path: relPath,
+  });
+  const result = await getDiffSummary(submoduleCwd);
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json(result.value);
 });
@@ -511,9 +609,15 @@ gitRoutes.get('/project/:projectId/diff/file', async (c) => {
   }
   const staged = c.req.query('staged') === 'true';
   const fullContext = c.req.query('context') === 'full';
+  const span = requestSpan(c, 'git.diff_file', {
+    projectId: c.req.param('projectId'),
+    path: filePath,
+    fullContext,
+  });
   const result = fullContext
     ? await getFullContextFileDiff(cwd, filePath, staged)
     : await getSingleFileDiff(cwd, filePath, staged);
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ diff: result.value });
 });
@@ -529,9 +633,20 @@ gitRoutes.get('/project/:projectId/log', async (c) => {
   const skipRaw = c.req.query('skip');
   const skip = skipRaw ? Math.max(parseInt(skipRaw, 10) || 0, 0) : 0;
   const cwd = cwdResult.value;
+  const projectId = c.req.param('projectId');
   const [result, unpushedResult] = await Promise.all([
-    getLog(cwd, limit + 1, undefined, skip),
-    getUnpushedHashes(cwd),
+    (async () => {
+      const span = requestSpan(c, 'git.log', { projectId });
+      const r = await getLog(cwd, limit + 1, undefined, skip);
+      span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
+      return r;
+    })(),
+    (async () => {
+      const span = requestSpan(c, 'git.unpushed_hashes', { projectId });
+      const r = await getUnpushedHashes(cwd);
+      span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
+      return r;
+    })(),
   ]);
   if (result.isErr()) return resultToResponse(c, result);
   const entries = result.value;
@@ -548,7 +663,12 @@ gitRoutes.get('/project/:projectId/commit/:hash/files', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const span = requestSpan(c, 'git.commit_files', {
+    projectId: c.req.param('projectId'),
+    hash: c.req.param('hash'),
+  });
   const result = await getCommitFiles(cwdResult.value, c.req.param('hash'));
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ files: result.value });
 });
@@ -563,7 +683,13 @@ gitRoutes.get('/project/:projectId/commit/:hash/diff', async (c) => {
   if (!filePath) {
     return resultToResponse(c, err(badRequest('Missing required query parameter: path')));
   }
+  const span = requestSpan(c, 'git.commit_diff', {
+    projectId: c.req.param('projectId'),
+    hash: c.req.param('hash'),
+    path: filePath,
+  });
   const result = await getCommitFileDiff(cwdResult.value, c.req.param('hash'), filePath);
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ diff: result.value });
 });
@@ -574,7 +700,12 @@ gitRoutes.get('/project/:projectId/commit/:hash/body', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const span = requestSpan(c, 'git.commit_body', {
+    projectId: c.req.param('projectId'),
+    hash: c.req.param('hash'),
+  });
   const result = await getCommitBody(cwdResult.value, c.req.param('hash'));
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ body: result.value });
 });
@@ -585,7 +716,9 @@ gitRoutes.get('/project/:projectId/stash/list', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const span = requestSpan(c, 'git.stash_list', { projectId: c.req.param('projectId') });
   const result = await stashList(cwdResult.value);
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ entries: result.value });
 });
@@ -597,7 +730,12 @@ gitRoutes.get('/project/:projectId/stash/show/:stashIndex', async (c) => {
   const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const stashRef = `stash@{${c.req.param('stashIndex')}}`;
+  const span = requestSpan(c, 'git.stash_show', {
+    projectId: c.req.param('projectId'),
+    stashIndex: c.req.param('stashIndex'),
+  });
   const result = await stashShow(cwdResult.value, stashRef);
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ files: result.value });
 });
@@ -836,7 +974,9 @@ gitRoutes.get('/project/:projectId/remote-url', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireProjectCwd(projectId, userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const span = requestSpan(c, 'git.remote_url', { projectId });
   const result = await getRemoteUrl(cwdResult.value);
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ remoteUrl: result.value });
 });
@@ -877,7 +1017,9 @@ gitRoutes.get('/project/:projectId/gh-orgs', async (c) => {
   if (!identity?.githubToken) {
     return c.json({ orgs: [] });
   }
+  const span = requestSpan(c, 'github.orgs', { projectId });
   const result = await listGitHubOrgs(cwdResult.value, { GH_TOKEN: identity.githubToken });
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ orgs: result.value });
 });
@@ -1163,10 +1305,20 @@ gitRoutes.get('/:threadId/status', async (c) => {
     const projectResult = await requireProject(thread.projectId, userId, orgId ?? undefined);
     const projectPath = projectResult.isOk() ? projectResult.value.path : null;
     const [unpushed, prInfo] = await Promise.all([
-      projectPath ? countUnpushedCommits(projectPath, thread.baseBranch) : Promise.resolve(0),
-      projectPath && branchForPR
-        ? getPRForBranch(projectPath, branchForPR, ghEnv)
-        : Promise.resolve(null),
+      (async () => {
+        if (!projectPath) return 0;
+        const span = requestSpan(c, 'git.unpushed_count', { threadId, branch: thread.baseBranch });
+        const r = await countUnpushedCommits(projectPath, thread.baseBranch);
+        span.end('ok');
+        return r;
+      })(),
+      (async () => {
+        if (!projectPath || !branchForPR) return null;
+        const span = requestSpan(c, 'github.pr_lookup', { threadId, branch: branchForPR });
+        const r = await getPRForBranch(projectPath, branchForPR, ghEnv);
+        span.end('ok');
+        return r;
+      })(),
     ]);
     return c.json({
       threadId,
@@ -1193,16 +1345,28 @@ gitRoutes.get('/:threadId/status', async (c) => {
   const lastFetch = _lastFetchTs.get(thread.projectId) ?? 0;
   if (Date.now() - lastFetch > FETCH_THROTTLE_MS) {
     _lastFetchTs.set(thread.projectId, Date.now());
+    const fetchSpan = requestSpan(c, 'git.fetch_remote', { threadId });
     await fetchRemote(project.path, identity ?? undefined).match(
-      () => {},
-      () => {},
+      () => fetchSpan.end('ok'),
+      () => fetchSpan.end('error'),
     );
   }
 
   const cwd = thread.worktreePath || project.path;
   const [summaryResult, prInfo] = await Promise.all([
-    getStatusSummary(cwd, thread.baseBranch ?? undefined, project.path),
-    branchForPR ? getPRForBranch(project.path, branchForPR, ghEnv) : Promise.resolve(null),
+    (async () => {
+      const span = requestSpan(c, 'git.status_summary', { threadId });
+      const r = await getStatusSummary(cwd, thread.baseBranch ?? undefined, project.path);
+      span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
+      return r;
+    })(),
+    (async () => {
+      if (!branchForPR) return null;
+      const span = requestSpan(c, 'github.pr_lookup', { threadId, branch: branchForPR });
+      const r = await getPRForBranch(project.path, branchForPR, ghEnv);
+      span.end('ok');
+      return r;
+    })(),
   ]);
   if (summaryResult.isErr()) return resultToResponse(c, summaryResult);
   const summary = summaryResult.value;
@@ -1235,7 +1399,39 @@ gitRoutes.get('/:threadId/diff/summary', async (c) => {
     : undefined;
   const maxFilesRaw = c.req.query('maxFiles');
   const maxFiles = maxFilesRaw ? parseInt(maxFilesRaw, 10) : undefined;
+  const span = requestSpan(c, 'git.diff_summary', { threadId: c.req.param('threadId') });
   const result = await getDiffSummary(cwd, { excludePatterns, maxFiles });
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json(result.value);
+});
+
+// GET /api/git/:threadId/diff/submodule
+// Returns a diff summary for the inside of a submodule / nested git repo,
+// scoped by the submodule's path relative to the thread cwd.
+gitRoutes.get('/:threadId/diff/submodule', async (c) => {
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  const relPath = c.req.query('path');
+  if (!relPath) {
+    return resultToResponse(c, err(badRequest('Missing required query parameter: path')));
+  }
+  const pathCheck = validateFilePaths(cwd, [relPath]);
+  if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
+  const { join } = await import('node:path');
+  const submoduleCwd = join(cwd, relPath);
+  if (!existsSync(submoduleCwd) || !existsSync(join(submoduleCwd, '.git'))) {
+    return resultToResponse(c, err(badRequest(`Not a git repository: ${relPath}`)));
+  }
+  const span = requestSpan(c, 'git.diff_submodule', {
+    threadId: c.req.param('threadId'),
+    path: relPath,
+  });
+  const result = await getDiffSummary(submoduleCwd);
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json(result.value);
 });
@@ -1253,9 +1449,15 @@ gitRoutes.get('/:threadId/diff/file', async (c) => {
   }
   const staged = c.req.query('staged') === 'true';
   const fullContext = c.req.query('context') === 'full';
+  const span = requestSpan(c, 'git.diff_file', {
+    threadId: c.req.param('threadId'),
+    path: filePath,
+    fullContext,
+  });
   const result = fullContext
     ? await getFullContextFileDiff(cwd, filePath, staged)
     : await getSingleFileDiff(cwd, filePath, staged);
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ diff: result.value });
 });
@@ -1270,7 +1472,12 @@ gitRoutes.get('/:threadId/diff', async (c) => {
   if (!existsSync(cwd)) {
     return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
   }
+  const span = requestSpan(c, 'git.diff', { threadId: c.req.param('threadId') });
   const diffResult = await getDiff(cwd);
+  span.end(
+    diffResult.isOk() ? 'ok' : 'error',
+    diffResult.isErr() ? diffResult.error.message : undefined,
+  );
   if (diffResult.isErr()) return resultToResponse(c, diffResult);
   return c.json(diffResult.value);
 });
@@ -1793,8 +2000,18 @@ gitRoutes.get('/:threadId/log', async (c) => {
   const baseBranch = all ? undefined : thread.baseBranch;
   const cwd = cwdResult.value;
   const [result, unpushedResult] = await Promise.all([
-    getLog(cwd, limit + 1, baseBranch, skip),
-    getUnpushedHashes(cwd),
+    (async () => {
+      const span = requestSpan(c, 'git.log', { threadId });
+      const r = await getLog(cwd, limit + 1, baseBranch, skip);
+      span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
+      return r;
+    })(),
+    (async () => {
+      const span = requestSpan(c, 'git.unpushed_hashes', { threadId });
+      const r = await getUnpushedHashes(cwd);
+      span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
+      return r;
+    })(),
   ]);
   if (result.isErr()) return resultToResponse(c, result);
   const entries = result.value;
@@ -1811,7 +2028,12 @@ gitRoutes.get('/:threadId/commit/:hash/files', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const span = requestSpan(c, 'git.commit_files', {
+    threadId: c.req.param('threadId'),
+    hash: c.req.param('hash'),
+  });
   const result = await getCommitFiles(cwdResult.value, c.req.param('hash'));
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ files: result.value });
 });
@@ -1826,7 +2048,13 @@ gitRoutes.get('/:threadId/commit/:hash/diff', async (c) => {
   if (!filePath) {
     return resultToResponse(c, err(badRequest('Missing required query parameter: path')));
   }
+  const span = requestSpan(c, 'git.commit_diff', {
+    threadId: c.req.param('threadId'),
+    hash: c.req.param('hash'),
+    path: filePath,
+  });
   const result = await getCommitFileDiff(cwdResult.value, c.req.param('hash'), filePath);
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ diff: result.value });
 });
@@ -1837,7 +2065,12 @@ gitRoutes.get('/:threadId/commit/:hash/body', async (c) => {
   const orgId = c.get('organizationId');
   const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const span = requestSpan(c, 'git.commit_body', {
+    threadId: c.req.param('threadId'),
+    hash: c.req.param('hash'),
+  });
   const result = await getCommitBody(cwdResult.value, c.req.param('hash'));
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ body: result.value });
 });
@@ -1931,7 +2164,9 @@ gitRoutes.get('/:threadId/stash/list', async (c) => {
   const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
 
+  const span = requestSpan(c, 'git.stash_list', { threadId: c.req.param('threadId') });
   const result = await stashList(cwdResult.value);
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ entries: result.value });
 });
@@ -1943,7 +2178,12 @@ gitRoutes.get('/:threadId/stash/show/:stashIndex', async (c) => {
   const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
   if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
   const stashRef = `stash@{${c.req.param('stashIndex')}}`;
+  const span = requestSpan(c, 'git.stash_show', {
+    threadId: c.req.param('threadId'),
+    stashIndex: c.req.param('stashIndex'),
+  });
   const result = await stashShow(cwdResult.value, stashRef);
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json({ files: result.value });
 });

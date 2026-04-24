@@ -20,6 +20,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { ActionList } from '@/components/test-runner/ActionList';
 import { ActionTimeline } from '@/components/test-runner/ActionTimeline';
 import { TestDetailTabs } from '@/components/test-runner/TestDetailTabs';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { cn } from '@/lib/utils';
 import { useTestStore } from '@/stores/test-store';
@@ -353,14 +354,19 @@ export function BrowserPreview({
           >
             <ZoomOut className="icon-base" />
           </TooltipIconButton>
-          <button
-            data-testid="browser-zoom-level"
-            className="min-w-[32px] rounded px-1 text-center text-xs tabular-nums text-muted-foreground hover:bg-muted"
-            onClick={() => setZoom(1)}
-            title="Reset zoom"
-          >
-            {zoom === 1 ? '1x' : `${zoom}x`}
-          </button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <button
+                data-testid="browser-zoom-level"
+                className="min-w-[32px] rounded px-1 text-center text-xs tabular-nums text-muted-foreground hover:bg-muted"
+                onClick={() => setZoom(1)}
+                aria-label="Reset zoom"
+              >
+                {zoom === 1 ? '1x' : `${zoom}x`}
+              </button>
+            </TooltipTrigger>
+            <TooltipContent>Reset zoom</TooltipContent>
+          </Tooltip>
           <TooltipIconButton
             data-testid="browser-zoom-in"
             tooltip="Zoom in"

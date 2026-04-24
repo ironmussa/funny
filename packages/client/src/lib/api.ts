@@ -568,6 +568,12 @@ export const api = {
       `/git/${threadId}/diff/file?path=${encodeURIComponent(filePath)}&staged=${staged}${context ? `&context=${context}` : ''}`,
       { signal },
     ),
+  /** Diff summary for the inside of a submodule / nested git repo, relative to the thread cwd. */
+  getSubmoduleDiffSummary: (threadId: string, submodulePath: string, signal?: AbortSignal) =>
+    request<import('@funny/shared').DiffSummaryResponse>(
+      `/git/${threadId}/diff/submodule?path=${encodeURIComponent(submodulePath)}`,
+      { signal },
+    ),
   stageFiles: (threadId: string, paths: string[]) =>
     request<{ ok: boolean }>(`/git/${threadId}/stage`, {
       method: 'POST',
@@ -751,6 +757,11 @@ export const api = {
   ) =>
     request<{ diff: string }>(
       `/git/project/${projectId}/diff/file?path=${encodeURIComponent(filePath)}&staged=${staged}${context ? `&context=${context}` : ''}`,
+      { signal },
+    ),
+  projectSubmoduleDiffSummary: (projectId: string, submodulePath: string, signal?: AbortSignal) =>
+    request<import('@funny/shared').DiffSummaryResponse>(
+      `/git/project/${projectId}/diff/submodule?path=${encodeURIComponent(submodulePath)}`,
       { signal },
     ),
   projectStageFiles: (projectId: string, paths: string[]) =>
@@ -1228,9 +1239,10 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ parent, name }),
     }),
-  browseFiles: (path: string, query?: string) => {
+  browseFiles: (path: string, query?: string, limit?: number) => {
     const params = new URLSearchParams({ path });
     if (query) params.set('query', query);
+    if (limit) params.set('limit', String(limit));
     return request<{
       files: Array<{ path: string; type: 'file' | 'folder' } | string>;
       truncated: boolean;

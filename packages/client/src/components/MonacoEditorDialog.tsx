@@ -1,5 +1,15 @@
 import { Editor, type BeforeMount, type OnMount } from '@monaco-editor/react';
-import { Maximize2, Minimize2, Eye, EyeOff, BookOpen, Code, FileCode } from 'lucide-react';
+import {
+  Maximize2,
+  Minimize2,
+  Eye,
+  EyeOff,
+  BookOpen,
+  Check,
+  Code,
+  Copy,
+  FileCode,
+} from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -18,6 +28,7 @@ import {
 } from '@/components/ui/dialog';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
@@ -47,6 +58,12 @@ export function MonacoEditorDialog({
   const isMarkdown = language === 'markdown';
 
   const [showPreview, setShowPreview] = useState(isMarkdown);
+  const [copied, copy] = useCopyToClipboard();
+
+  // When the dialog opens or the file changes, default markdown files to preview mode.
+  useEffect(() => {
+    if (open) setShowPreview(isMarkdown);
+  }, [open, filePath, isMarkdown]);
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
 
@@ -178,6 +195,23 @@ export function MonacoEditorDialog({
               {filePath}
             </span>
           </DialogTitle>
+          {/* Copy file contents */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => copy(content)}
+                disabled={!content}
+                className="flex-shrink-0 text-muted-foreground"
+                data-testid="editor-copy-content"
+                aria-label={t('editor.copy', 'Copy')}
+              >
+                {copied ? <Check className="icon-base" /> : <Copy className="icon-base" />}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom">{t('editor.copy', 'Copy')}</TooltipContent>
+          </Tooltip>
           {/* Markdown preview toggle */}
           {isMarkdown && (
             <Tooltip>

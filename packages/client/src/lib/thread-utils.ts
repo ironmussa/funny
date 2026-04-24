@@ -33,12 +33,12 @@ export const stageConfig: Record<
   ThreadStage,
   { icon: typeof Clock; className: string; labelKey: string }
 > = {
-  backlog: { icon: LayoutList, className: 'text-gray-400', labelKey: 'kanban.backlog' },
-  planning: { icon: Lightbulb, className: 'text-violet-400', labelKey: 'kanban.planning' },
-  in_progress: { icon: Play, className: 'text-blue-400', labelKey: 'kanban.inProgress' },
-  review: { icon: Eye, className: 'text-amber-400', labelKey: 'kanban.review' },
-  done: { icon: CheckCircle2, className: 'text-green-400', labelKey: 'kanban.done' },
-  archived: { icon: Archive, className: 'text-gray-400', labelKey: 'kanban.archived' },
+  backlog: { icon: LayoutList, className: 'text-muted-foreground', labelKey: 'kanban.backlog' },
+  planning: { icon: Lightbulb, className: 'text-muted-foreground', labelKey: 'kanban.planning' },
+  in_progress: { icon: Play, className: 'text-muted-foreground', labelKey: 'kanban.inProgress' },
+  review: { icon: Eye, className: 'text-muted-foreground', labelKey: 'kanban.review' },
+  done: { icon: CheckCircle2, className: 'text-muted-foreground', labelKey: 'kanban.done' },
+  archived: { icon: Archive, className: 'text-muted-foreground', labelKey: 'kanban.archived' },
 };
 
 export function timeAgo(dateStr: string, t: (key: string, opts?: any) => string): string {

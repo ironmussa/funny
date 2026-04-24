@@ -254,15 +254,16 @@ function ProjectPathSetting({
             onChange={(e) => setValue(e.target.value)}
             placeholder="/absolute/path/to/repo"
           />
-          <Button
+          <TooltipIconButton
             data-testid="settings-project-path-browse"
             variant="outline"
             size="icon"
             onClick={() => setPickerOpen(true)}
-            title={t('sidebar.browseFolder', 'Browse folder')}
+            tooltip={t('sidebar.browseFolder', 'Browse folder')}
+            aria-label={t('sidebar.browseFolder', 'Browse folder')}
           >
             <FolderOpen className="icon-base" />
-          </Button>
+          </TooltipIconButton>
           <Button
             data-testid="settings-project-path-save"
             size="sm"

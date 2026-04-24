@@ -6,6 +6,7 @@ import { ErrorBoundary } from '@/components/ErrorBoundary';
 import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { SidebarProvider, SidebarInset, useSidebar } from '@/components/ui/sidebar';
 import { Toaster } from '@/components/ui/sonner';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { WorkflowErrorModal } from '@/components/WorkflowErrorModal';
 import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useRouteSync } from '@/hooks/use-route-sync';
@@ -47,13 +48,18 @@ function CollapsedSidebarStrip() {
   const { state, toggleSidebar } = useSidebar();
   if (state === 'expanded') return null;
   return (
-    <button
-      onClick={toggleSidebar}
-      className="flex h-full w-10 flex-shrink-0 cursor-pointer items-start justify-center border-r border-border bg-sidebar pt-3 transition-colors hover:bg-sidebar-accent"
-      title="Expand sidebar"
-    >
-      <PanelLeft className="icon-base text-muted-foreground" />
-    </button>
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          onClick={toggleSidebar}
+          className="flex h-full w-10 flex-shrink-0 cursor-pointer items-start justify-center border-r border-border bg-sidebar pt-3 transition-colors hover:bg-sidebar-accent"
+          aria-label="Expand sidebar"
+        >
+          <PanelLeft className="icon-base text-muted-foreground" />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent>Expand sidebar</TooltipContent>
+    </Tooltip>
   );
 }
 
@@ -72,6 +78,9 @@ const TasksPane = lazy(() =>
 );
 const ActivityPane = lazy(() =>
   import('@/components/ActivityPane').then((m) => ({ default: m.ActivityPane })),
+);
+const ProjectFilesPane = lazy(() =>
+  import('@/components/ProjectFilesPane').then((m) => ({ default: m.ProjectFilesPane })),
 );
 const TerminalPanel = lazy(() =>
   import('@/components/TerminalPanel').then((m) => ({ default: m.TerminalPanel })),
@@ -302,15 +311,15 @@ export function App() {
           />
         )}
 
-        {/* Right panel — Review / Tasks / Activity. Kept mounted (hidden) once
-            ready so subsequent toggles are instant. */}
+        {/* Right panel — Review / Tasks / Activity. Kept mounted (width 0) once
+            ready so subsequent toggles are instant and the open/close animates. */}
         {!isFullScreenView && (reviewPaneReady || reviewPaneOpen) && (
           <div
             className={cn(
               'flex min-w-0 flex-shrink-0 flex-col overflow-hidden bg-sidebar',
-              !rightPaneVisible && 'hidden',
+              !resizing && 'transition-[width] duration-200 ease-linear',
             )}
-            style={{ width: `${reviewPaneWidth}vw` }}
+            style={{ width: rightPaneVisible ? `${reviewPaneWidth}vw` : '0px' }}
           >
             <div className="min-h-0 flex-1 overflow-hidden">
               <ErrorBoundary area="right-pane">
@@ -319,6 +328,8 @@ export function App() {
                     <ReviewPane />
                   ) : rightPaneTab === 'tasks' ? (
                     <TasksPane />
+                  ) : rightPaneTab === 'files' ? (
+                    <ProjectFilesPane />
                   ) : (
                     <ActivityPane />
                   )}

@@ -2,6 +2,7 @@ import { ChevronRight, Wrench, ListTodo, Check } from 'lucide-react';
 import { useState, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
@@ -191,40 +192,49 @@ export const ToolCallCard = memo(
                     editor: getEditorLabel(defaultEditor),
                     path: filePath,
                   });
-                  return editorUri ? (
-                    <a
-                      href={editorUri}
-                      onClick={(e) => e.stopPropagation()}
-                      className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
-                      title={editorTitle}
-                    >
-                      {displayPath}
-                    </a>
-                  ) : (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        openFileInEditor(filePath, defaultEditor);
-                      }}
-                      className="min-w-0 truncate text-left font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
-                      title={editorTitle}
-                    >
-                      {displayPath}
-                    </button>
+                  return (
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        {editorUri ? (
+                          <a
+                            href={editorUri}
+                            onClick={(e) => e.stopPropagation()}
+                            className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+                          >
+                            {displayPath}
+                          </a>
+                        ) : (
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              openFileInEditor(filePath, defaultEditor);
+                            }}
+                            className="min-w-0 truncate text-left font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+                          >
+                            {displayPath}
+                          </button>
+                        )}
+                      </TooltipTrigger>
+                      <TooltipContent>{editorTitle}</TooltipContent>
+                    </Tooltip>
                   );
                 })()
               ) : name === 'WebFetch' && summary ? (
-                <a
-                  href={summary}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onClick={(e) => e.stopPropagation()}
-                  className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
-                  title={summary}
-                  data-testid="tool-webfetch-url"
-                >
-                  {summary}
-                </a>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <a
+                      href={summary}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="min-w-0 truncate font-mono text-xs text-muted-foreground hover:text-primary hover:underline"
+                      data-testid="tool-webfetch-url"
+                    >
+                      {summary}
+                    </a>
+                  </TooltipTrigger>
+                  <TooltipContent>{summary}</TooltipContent>
+                </Tooltip>
               ) : (
                 <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
                   {summary}

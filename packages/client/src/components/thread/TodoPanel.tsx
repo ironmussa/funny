@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { TodoItem } from '@/components/tool-cards/utils';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
 interface TodoPanelProps {
@@ -61,20 +62,32 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
         >
           {progress.completed}/{progress.total}
         </motion.span>
-        <button
-          onClick={() => setMinimized((v) => !v)}
-          className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted"
-          title={minimized ? t('todoPanel.expand') : t('todoPanel.minimize')}
-        >
-          {minimized ? <ChevronDown className="icon-xs" /> : <ChevronUp className="icon-xs" />}
-        </button>
-        <button
-          onClick={onDismiss}
-          className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted"
-          title={t('todoPanel.dismiss')}
-        >
-          <X className="icon-xs" />
-        </button>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={() => setMinimized((v) => !v)}
+              className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted"
+              aria-label={minimized ? t('todoPanel.expand') : t('todoPanel.minimize')}
+            >
+              {minimized ? <ChevronDown className="icon-xs" /> : <ChevronUp className="icon-xs" />}
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>
+            {minimized ? t('todoPanel.expand') : t('todoPanel.minimize')}
+          </TooltipContent>
+        </Tooltip>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button
+              onClick={onDismiss}
+              className="rounded p-0.5 text-muted-foreground transition-colors hover:bg-muted"
+              aria-label={t('todoPanel.dismiss')}
+            >
+              <X className="icon-xs" />
+            </button>
+          </TooltipTrigger>
+          <TooltipContent>{t('todoPanel.dismiss')}</TooltipContent>
+        </Tooltip>
       </div>
 
       {!minimized && (

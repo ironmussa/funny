@@ -1,290 +1,172 @@
 // ─── Thread Machine (re-exported for convenience) ────────
 export type { ResumeReason } from './thread-machine.js';
 
-// ─── Auth ────────────────────────────────────────────────
+// ─── Domain re-exports (split modules) ───────────────────
+export type {
+  UserRole,
+  SafeUser,
+  CreateUserRequest,
+  UpdateUserRequest,
+  TeamRole,
+  Organization,
+  TeamMember,
+  Invitation,
+  TeamProject,
+  UserProfile,
+  UpdateProfileRequest,
+} from './types/auth.js';
 
-export type UserRole = 'admin' | 'user';
+export type {
+  GitHubRepo,
+  GitHubIssue,
+  EnrichedGitHubIssue,
+  GitHubPR,
+  CICheckConclusion,
+  CICheck,
+  MergeableState,
+  ReviewDecision,
+  PRDetail,
+  PRThreadComment,
+  PRReviewThread,
+  PRReactionSummary,
+  PRIssueComment,
+  PRReview,
+  PRConversation,
+  PRCommentKind,
+  PRReactionContent,
+  PRFile,
+  PRCommit,
+  CloneRepoRequest,
+} from './types/github.js';
 
-export interface SafeUser {
-  id: string;
-  username: string;
-  displayName: string;
-  role: UserRole;
-}
+export type {
+  FactType,
+  DecayClass,
+  MemoryScope,
+  MemoryFact,
+  RecallOptions,
+  AddOptions,
+  SearchFilters,
+  TimelineOptions,
+  MemoryRecallResult,
+} from './types/memory.js';
 
-export interface CreateUserRequest {
-  username: string;
-  password: string;
-  displayName: string;
-  role: UserRole;
-}
+export type {
+  ReviewFindingSeverity,
+  ReviewFindingCategory,
+  CodeReviewFinding,
+  CodeReviewResult,
+  TriggerReviewRequest,
+} from './types/review.js';
 
-export interface UpdateUserRequest {
-  displayName?: string;
-  role?: UserRole;
-  password?: string;
-}
+export type { WeaveStatus } from './types/weave.js';
 
-// ─── Teams / Organizations ───────────────────────────────
+export type { HookType, HookCommand, ProjectHook } from './types/hooks.js';
+export { HOOK_TYPES } from './types/hooks.js';
 
-export type TeamRole = 'owner' | 'admin' | 'member' | 'viewer';
+export type {
+  TestFile,
+  TestSpec,
+  TestSuite,
+  DiscoverTestsResponse,
+  RunTestRequest,
+  RunTestResponse,
+  TestFileStatus,
+  TestActionCategory,
+  TestActionBoundingBox,
+  WSTestActionData,
+  WSTestFrameData,
+  WSTestOutputData,
+  WSTestStatusData,
+  TestConsoleLevel,
+  WSTestConsoleData,
+  TestNetworkEntry,
+  WSTestNetworkData,
+  WSTestErrorData,
+} from './types/test.js';
 
-export interface Organization {
-  id: string;
-  name: string;
-  slug: string;
-  logo?: string | null;
-  metadata?: string | null;
-  anthropicApiKey?: string | null; // Encrypted at rest
-  defaultModel?: string | null;
-  defaultMode?: string | null;
-  defaultPermissionMode?: string | null;
-  createdAt: string;
-}
+export type {
+  FunnyPortGroup,
+  FunnyProcessConfig,
+  FunnyAutomationConfig,
+  FunnyProjectConfig,
+  AutomationSource,
+  WSCommandMetricsData,
+  WSNativeGitBuildOutputData,
+  WSNativeGitBuildStatusData,
+} from './types/funny-config.js';
 
-export interface TeamMember {
-  id: string;
-  userId: string;
-  organizationId: string;
-  role: TeamRole;
-  username?: string;
-  displayName?: string;
-  email?: string;
-  createdAt: string;
-}
+export type {
+  McpServerType,
+  McpServer,
+  McpListResponse,
+  McpAddRequest,
+  McpOAuthStartRequest,
+  McpOAuthStartResponse,
+  McpRemoveRequest,
+} from './types/mcp.js';
 
-export interface Invitation {
-  id: string;
-  email: string;
-  organizationId: string;
-  role: TeamRole;
-  status: 'pending' | 'accepted' | 'rejected' | 'cancelled';
-  inviterId: string;
-  expiresAt: string;
-}
+export type {
+  Skill,
+  SkillListResponse,
+  SkillAddRequest,
+  SkillRemoveRequest,
+} from './types/skills.js';
 
-export interface TeamProject {
-  teamId: string;
-  projectId: string;
-}
+export type { PluginCommand, Plugin, PluginListResponse } from './types/plugins.js';
 
-// ─── User Profile (Git Identity) ─────────────────────────
+export type {
+  FileStatus,
+  FileDiffKind,
+  NestedDirtyStats,
+  FileDiff,
+  FileDiffSummary,
+  DiffSummaryResponse,
+  GitSyncState,
+  GitStatusInfo,
+  WSGitStatusData,
+  MergeProgress,
+  GitWorkflowAction,
+  GitWorkflowRequest,
+  GitWorkflowProgressStep,
+  WSGitWorkflowProgressData,
+} from './types/git.js';
 
-export interface UserProfile {
-  id: string;
-  userId: string;
-  gitName: string | null;
-  gitEmail: string | null;
-  /** Map of provider key ID → whether a key is set (e.g. { github: true, minimax: false }). */
-  providerKeys: Record<string, boolean>;
-  /** @deprecated Use providerKeys['github'] */
-  hasGithubToken: boolean;
-  /** @deprecated Use providerKeys['assemblyai'] */
-  hasAssemblyaiKey: boolean;
-  /** @deprecated Use providerKeys['minimax'] */
-  hasMinimaxApiKey: boolean;
-  setupCompleted: boolean;
-  defaultEditor: string | null;
-  useInternalEditor: boolean | null;
-  terminalShell: string | null;
-  toolPermissions: Record<string, string> | null;
-  theme: string | null;
-  runnerInviteToken: string | null;
-  createdAt: string;
-  updatedAt: string;
-}
+export type {
+  SystemPromptMode,
+  DeepAgentTool,
+  TemplateVariable,
+  AgentTemplate,
+  CreateAgentTemplateRequest,
+  UpdateAgentTemplateRequest,
+  AgentTemplateExportFile,
+} from './types/agent-templates.js';
+export { DEEPAGENT_TOOLS, BUILTIN_AGENT_TEMPLATES } from './types/agent-templates.js';
 
-export interface UpdateProfileRequest {
-  gitName?: string;
-  gitEmail?: string;
-  /** Set or clear a provider key by canonical ID. Value is plaintext; null clears it. */
-  providerKey?: { id: string; value: string | null };
-  /** @deprecated Use providerKey: { id: 'github', value } */
-  githubToken?: string | null;
-  /** @deprecated Use providerKey: { id: 'assemblyai', value } */
-  assemblyaiApiKey?: string | null;
-  /** @deprecated Use providerKey: { id: 'minimax', value } */
-  minimaxApiKey?: string | null;
-  setupCompleted?: boolean;
-  defaultEditor?: string;
-  useInternalEditor?: boolean;
-  terminalShell?: string;
-  toolPermissions?: Record<string, string>;
-  theme?: string;
-}
+export type {
+  PipelineStatus,
+  PipelineRunStatus,
+  PipelineStageType,
+  PipelineVerdict,
+  PipelineStageConfig,
+  Pipeline,
+  PipelineRun,
+  WSPipelineRunStartedData,
+  WSPipelineStageUpdateData,
+  WSPipelineRunCompletedData,
+} from './types/pipelines.js';
 
-// ─── GitHub ──────────────────────────────────────────────
+export type {
+  AutomationSchedule,
+  RunTriageStatus,
+  Automation,
+  AutomationRun,
+  CreateAutomationRequest,
+  UpdateAutomationRequest,
+  InboxItem,
+} from './types/automations.js';
 
-export interface GitHubRepo {
-  id: number;
-  full_name: string;
-  name: string;
-  description: string | null;
-  private: boolean;
-  html_url: string;
-  clone_url: string;
-  language: string | null;
-  updated_at: string;
-  stargazers_count: number;
-  default_branch: string;
-  owner: {
-    login: string;
-    avatar_url: string;
-  };
-}
-
-export interface GitHubIssue {
-  number: number;
-  title: string;
-  state: 'open' | 'closed';
-  body: string | null;
-  created_at: string;
-  updated_at: string;
-  html_url: string;
-  user: {
-    login: string;
-    avatar_url: string;
-  } | null;
-  labels: Array<{
-    name: string;
-    color: string;
-  }>;
-  comments: number;
-  pull_request?: unknown;
-}
-
-export interface EnrichedGitHubIssue extends GitHubIssue {
-  linkedBranch: string | null;
-  linkedPR: { number: number; url: string; state: string } | null;
-  suggestedBranchName: string;
-}
-
-export interface GitHubPR {
-  number: number;
-  title: string;
-  state: 'open' | 'closed';
-  html_url: string;
-  user: {
-    login: string;
-    avatar_url: string;
-  } | null;
-  created_at: string;
-  updated_at: string;
-  head: { ref: string; label: string };
-  base: { ref: string; label: string };
-  draft: boolean;
-  labels: Array<{
-    name: string;
-    color: string;
-  }>;
-  merged_at: string | null;
-}
-
-// ─── PR Detail (rich data for PR Summary Card) ───────────
-
-export type CICheckConclusion =
-  | 'success'
-  | 'failure'
-  | 'neutral'
-  | 'cancelled'
-  | 'skipped'
-  | 'timed_out'
-  | 'action_required'
-  | 'stale'
-  | null;
-
-export interface CICheck {
-  id: number;
-  name: string;
-  status: 'queued' | 'in_progress' | 'completed';
-  conclusion: CICheckConclusion;
-  html_url: string | null;
-  started_at: string | null;
-  completed_at: string | null;
-  app_name: string | null;
-}
-
-export type MergeableState = 'mergeable' | 'conflicting' | 'unknown';
-export type ReviewDecision = 'APPROVED' | 'CHANGES_REQUESTED' | 'REVIEW_REQUIRED' | null;
-
-export interface PRDetail {
-  number: number;
-  title: string;
-  body: string;
-  state: 'open' | 'closed';
-  draft: boolean;
-  merged: boolean;
-  mergeable_state: MergeableState;
-  html_url: string;
-  additions: number;
-  deletions: number;
-  changed_files: number;
-  head: { ref: string; sha: string };
-  base: { ref: string };
-  user: { login: string; avatar_url: string } | null;
-  review_decision: ReviewDecision;
-  checks: CICheck[];
-  checks_passed: number;
-  checks_failed: number;
-  checks_pending: number;
-  created_at: string;
-  updated_at: string;
-}
-
-// ─── PR Review Threads (inline comments) ─────────────────
-
-export interface PRThreadComment {
-  id: number;
-  author: string;
-  author_avatar_url: string;
-  body: string;
-  created_at: string;
-  updated_at: string;
-  author_association: string;
-}
-
-export interface PRReviewThread {
-  id: number;
-  path: string;
-  line: number | null;
-  original_line: number | null;
-  side: 'LEFT' | 'RIGHT';
-  start_line: number | null;
-  is_resolved: boolean;
-  is_outdated: boolean;
-  comments: PRThreadComment[];
-}
-
-// ─── PR Files (changed files in a PR) ───────────────────
-
-export interface PRFile {
-  sha: string;
-  filename: string;
-  status: 'added' | 'removed' | 'modified' | 'renamed' | 'copied' | 'changed' | 'unchanged';
-  additions: number;
-  deletions: number;
-  changes: number;
-  patch?: string;
-  previous_filename?: string;
-}
-
-// ─── PR Commits ─────────────────────────────────────────
-
-export interface PRCommit {
-  sha: string;
-  message: string;
-  author: {
-    login: string;
-    avatar_url: string;
-  } | null;
-  date: string;
-}
-
-export interface CloneRepoRequest {
-  cloneUrl: string;
-  destinationPath: string;
-  name?: string;
-}
+export type { ThreadEventType, ThreadEvent } from './types/thread-events.js';
 
 // ─── Projects ────────────────────────────────────────────
 
@@ -649,151 +531,6 @@ export interface WSQueueUpdateData {
   dequeuedImages?: ImageAttachment[];
 }
 
-// ─── Test Runner ─────────────────────────────────────────
-
-export interface TestFile {
-  path: string; // relative to project root, e.g. "e2e/app.spec.ts"
-}
-
-export interface TestSpec {
-  id: string; // Playwright spec id or "file:line" fallback
-  title: string; // e.g. "A.1 Sidebar navigation icons have accessible labels"
-  file: string; // relative path
-  line: number;
-  column: number;
-  projects: string[]; // Playwright projects this spec runs in (e.g. ["chromium", "firefox"])
-}
-
-export interface TestSuite {
-  title: string; // e.g. "Logger - Crear logs con metadata"
-  file: string;
-  line: number;
-  column: number;
-  specs: TestSpec[];
-  suites: TestSuite[]; // nested describe blocks
-}
-
-export interface DiscoverTestsResponse {
-  file: string;
-  specs: TestSpec[]; // flat list (backwards compat)
-  suites: TestSuite[]; // hierarchical structure with describe blocks
-  projects: string[]; // Playwright projects (e.g. ["chromium", "firefox", "webkit"])
-}
-
-export interface RunTestRequest {
-  file: string; // relative path of the test file to run
-  line?: number; // when set, runs only the test at this line
-  projects?: string[]; // Playwright projects to run (e.g. ["chromium"])
-}
-
-export interface RunTestResponse {
-  runId: string;
-}
-
-export type TestFileStatus = 'idle' | 'running' | 'passed' | 'failed' | 'stopped';
-
-// ─── Test Action Types (Playwright reporter structured actions) ─────
-
-export type TestActionCategory = 'pw:api' | 'expect' | 'fixture' | 'hook' | 'test.step';
-
-export interface TestActionBoundingBox {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
-}
-
-export interface WSTestActionData {
-  /** Unique action id, e.g. "step-0" */
-  id: string;
-  /** Human-readable action title, e.g. "page.click('button.submit')" */
-  title: string;
-  /** Playwright step category */
-  category: TestActionCategory;
-  /** CSS selector extracted from the action title (if applicable) */
-  selector?: string;
-  /** Epoch ms when this step started */
-  startTime: number;
-  /** Epoch ms when this step ended (set on stepEnd) */
-  endTime?: number;
-  /** Duration in ms */
-  duration?: number;
-  /** Error message if step failed */
-  error?: string;
-  /** Parent step id for nested steps */
-  parentId?: string;
-  /** Element bounding box at action time (resolved via CDP) */
-  boundingBox?: TestActionBoundingBox;
-  /** Timestamp of the nearest captured frame */
-  frameTimestamp?: number;
-}
-
-// ─── Test WebSocket Event Data ──────────────────────────────────────
-
-export interface WSTestFrameData {
-  data: string; // base64 JPEG
-  timestamp: number;
-}
-
-export interface WSTestOutputData {
-  line: string;
-  stream: 'stdout' | 'stderr';
-}
-
-export interface WSTestStatusData {
-  status: TestFileStatus;
-  file: string;
-  runId: string;
-  exitCode?: number;
-  error?: string;
-}
-
-export type TestConsoleLevel = 'log' | 'info' | 'warn' | 'error' | 'debug' | 'trace';
-
-export interface WSTestConsoleData {
-  level: TestConsoleLevel;
-  text: string;
-  url?: string;
-  line?: number;
-  column?: number;
-  timestamp: number;
-}
-
-export interface TestNetworkEntry {
-  id: string;
-  method: string;
-  url: string;
-  status?: number;
-  statusText?: string;
-  resourceType?: string;
-  mimeType?: string;
-  startTime: number;
-  endTime?: number;
-  duration?: number;
-  size?: number;
-  failed?: boolean;
-  errorText?: string;
-  requestHeaders?: Record<string, string>;
-  responseHeaders?: Record<string, string>;
-  postData?: string;
-  responseBody?: string;
-  responseBodyBase64?: boolean;
-}
-
-export interface WSTestNetworkData {
-  entry: TestNetworkEntry;
-  phase: 'request' | 'response' | 'completed' | 'failed';
-}
-
-export interface WSTestErrorData {
-  message: string;
-  source?: string;
-  line?: number;
-  column?: number;
-  stack?: string;
-  timestamp: number;
-}
-
 export interface WSWorkflowStepData {
   runId: string;
   workflowName: string;
@@ -854,52 +591,6 @@ export interface WSWorktreeSetupData {
   label: string;
   status: 'running' | 'completed' | 'failed';
   error?: string;
-}
-
-// ─── Git Workflow (server-side orchestration) ────────────
-
-export type GitWorkflowAction =
-  | 'commit'
-  | 'amend'
-  | 'commit-push'
-  | 'commit-pr'
-  | 'commit-merge'
-  | 'push'
-  | 'merge'
-  | 'create-pr';
-
-export interface GitWorkflowRequest {
-  action: GitWorkflowAction;
-  message?: string;
-  filesToStage?: string[];
-  filesToUnstage?: string[];
-  amend?: boolean;
-  noVerify?: boolean;
-  prTitle?: string;
-  prBody?: string;
-  targetBranch?: string;
-  cleanup?: boolean;
-}
-
-export interface GitWorkflowProgressStep {
-  id: string;
-  label: string;
-  status: 'pending' | 'running' | 'completed' | 'failed';
-  error?: string;
-  url?: string;
-  subItems?: {
-    label: string;
-    status: 'pending' | 'running' | 'completed' | 'failed';
-    error?: string;
-  }[];
-}
-
-export interface WSGitWorkflowProgressData {
-  workflowId: string;
-  status: 'started' | 'step_update' | 'completed' | 'failed';
-  title: string;
-  action: GitWorkflowAction;
-  steps: GitWorkflowProgressStep[];
 }
 
 export type WSEvent =
@@ -987,127 +678,6 @@ export interface StartupCommand {
   createdAt: string;
 }
 
-// ─── Project Hooks (Husky-backed) ────────────────────────
-
-export type HookType =
-  | 'pre-commit'
-  | 'commit-msg'
-  | 'pre-push'
-  | 'post-commit'
-  | 'post-merge'
-  | 'post-checkout';
-
-export const HOOK_TYPES: HookType[] = [
-  'pre-commit',
-  'commit-msg',
-  'pre-push',
-  'post-commit',
-  'post-merge',
-  'post-checkout',
-];
-
-/** A single command within a hook type */
-export interface HookCommand {
-  label: string;
-  command: string;
-  enabled?: boolean; // defaults to true
-}
-
-/** Flat representation of a hook command for the UI (includes derived fields) */
-export interface ProjectHook {
-  hookType: HookType;
-  index: number; // position within the hookType's commands array
-  label: string;
-  command: string;
-  enabled: boolean;
-}
-
-// ─── Git Diffs ───────────────────────────────────────────
-
-export type FileStatus = 'added' | 'modified' | 'deleted' | 'renamed' | 'conflicted';
-
-/**
- * Kind of entry tracked by git.
- * - 'file' (default): regular file.
- * - 'submodule': gitlink (mode 160000) or nested git repo — the entry represents a whole repository, not a file.
- */
-export type FileDiffKind = 'file' | 'submodule';
-
-/**
- * Aggregate changes inside a nested git repository (submodule / gitlink).
- * Populated for entries with `kind: 'submodule'` so the UI can show what
- * changed *inside* the nested repo without loading its full file list.
- */
-export interface NestedDirtyStats {
-  /** Count of dirty files inside the nested repo (modified + staged + untracked). */
-  dirtyFileCount: number;
-  linesAdded: number;
-  linesDeleted: number;
-  /** Whether the submodule's HEAD commit moved (gitlink pointer changed). */
-  pointerMoved?: boolean;
-}
-
-export interface FileDiff {
-  path: string;
-  status: FileStatus;
-  diff: string;
-  staged: boolean;
-  kind?: FileDiffKind;
-  nestedDirty?: NestedDirtyStats;
-}
-
-/** Lightweight file metadata without diff content (for summary endpoint). */
-export interface FileDiffSummary {
-  path: string;
-  status: FileStatus;
-  staged: boolean;
-  additions?: number;
-  deletions?: number;
-  kind?: FileDiffKind;
-  nestedDirty?: NestedDirtyStats;
-}
-
-export interface DiffSummaryResponse {
-  files: FileDiffSummary[];
-  total: number;
-  truncated: boolean;
-}
-
-// ─── Git Sync Status ────────────────────────────────────
-
-export type GitSyncState = 'dirty' | 'unpushed' | 'pushed' | 'merged' | 'clean';
-
-export interface GitStatusInfo {
-  threadId: string;
-  branchKey: string;
-  state: GitSyncState;
-  dirtyFileCount: number;
-  unpushedCommitCount: number;
-  unpulledCommitCount: number;
-  hasRemoteBranch: boolean;
-  isMergedIntoBase: boolean;
-  linesAdded: number;
-  linesDeleted: number;
-  /** PR number if the branch has an open/merged PR on GitHub */
-  prNumber?: number;
-  /** PR URL on GitHub */
-  prUrl?: string;
-  /** PR state: OPEN, MERGED, or CLOSED */
-  prState?: 'OPEN' | 'MERGED' | 'CLOSED';
-}
-
-export interface WSGitStatusData {
-  statuses: GitStatusInfo[];
-}
-
-// ─── Merge Agent ─────────────────────────────────────────
-
-export interface MergeProgress {
-  branch: string;
-  status: 'merging' | 'conflict' | 'resolved' | 'done' | 'failed';
-  message?: string;
-}
-
 // ─── API Request/Response types ──────────────────────────
 
 export interface CreateProjectRequest {
@@ -1193,650 +763,21 @@ export interface CreatePRRequest {
   body: string;
 }
 
-// ─── MCP Servers ────────────────────────────────────────
-
-export type McpServerType = 'stdio' | 'http' | 'sse';
-
-export interface McpServer {
-  name: string;
-  type: McpServerType;
-  command?: string;
-  args?: string[];
-  url?: string;
-  headers?: Record<string, string>;
-  env?: Record<string, string>;
-  status?: 'ok' | 'needs_auth' | 'error';
-  disabled?: boolean;
-  /** Where the server is defined: 'project' (.mcp.json) or 'user' (~/.claude.json) */
-  source?: 'project' | 'user';
-}
-
-export interface McpListResponse {
-  servers: McpServer[];
-}
-
-export interface McpAddRequest {
-  name: string;
-  type: McpServerType;
-  command?: string;
-  args?: string[];
-  url?: string;
-  headers?: Record<string, string>;
-  env?: Record<string, string>;
-  scope?: 'project' | 'user';
-  projectPath: string;
-}
-
-// ─── MCP OAuth ──────────────────────────────────────────
-
-export interface McpOAuthStartRequest {
-  serverName: string;
-  projectPath: string;
-}
-
-export interface McpOAuthStartResponse {
-  authUrl: string;
-}
-
-export interface McpRemoveRequest {
-  name: string;
-  projectPath: string;
-  scope?: 'project' | 'user';
-}
-
-// ─── Skills ─────────────────────────────────────────────
-
-export interface Skill {
-  name: string;
-  description: string;
-  source: string;
-  sourceUrl?: string;
-  installedAt?: string;
-  updatedAt?: string;
-  scope?: 'global' | 'project';
-}
-
-export interface SkillListResponse {
-  skills: Skill[];
-}
-
-export interface SkillAddRequest {
-  identifier: string;
-}
-
-export interface SkillRemoveRequest {
-  name: string;
-}
-
-// ─── Plugins ─────────────────────────────────────────────
-
-export interface PluginCommand {
-  name: string;
-  description: string;
-}
-
-export interface Plugin {
-  name: string;
-  description: string;
-  author: string;
-  installed: boolean;
-  installedAt?: string;
-  lastUpdated?: string;
-  commands: PluginCommand[];
-}
-
-export interface PluginListResponse {
-  plugins: Plugin[];
-}
-
-// ─── Automations ────────────────────────────────────────
-
-// Cron expression string — e.g. "0 9 * * *" (daily at 9am)
-export type AutomationSchedule = string;
-export type RunTriageStatus = 'pending' | 'reviewed' | 'dismissed';
-
-export interface Automation {
-  id: string;
-  projectId: string;
-  userId: string;
-  name: string;
-  prompt: string;
-  schedule: AutomationSchedule;
-  provider: AgentProvider;
-  model: AgentModel;
-  mode: ThreadMode;
-  permissionMode: PermissionMode;
-  baseBranch?: string;
-  enabled: boolean;
-  maxRunHistory: number;
-  lastRunAt?: string;
-  /** Whether this automation was created in the UI or synced from .funny.json */
-  source?: AutomationSource;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface AutomationRun {
-  id: string;
-  automationId: string;
-  threadId: string;
-  status: 'running' | 'completed' | 'failed' | 'archived';
-  triageStatus: RunTriageStatus;
-  hasFindings?: boolean;
-  summary?: string;
-  startedAt: string;
-  completedAt?: string;
-}
-
-export interface CreateAutomationRequest {
-  projectId: string;
-  name: string;
-  prompt: string;
-  schedule: AutomationSchedule;
-  provider?: AgentProvider;
-  model?: AgentModel;
-  mode?: ThreadMode;
-  permissionMode?: PermissionMode;
-  baseBranch?: string;
-}
-
-export interface UpdateAutomationRequest {
-  name?: string;
-  prompt?: string;
-  schedule?: AutomationSchedule;
-  provider?: AgentProvider;
-  model?: AgentModel;
-  mode?: ThreadMode;
-  permissionMode?: PermissionMode;
-  baseBranch?: string;
-  enabled?: boolean;
-  maxRunHistory?: number;
-}
-
-export interface InboxItem {
-  run: AutomationRun;
-  automation: Automation;
-  thread: Thread;
-}
-
-// ─── Thread Events ──────────────────────────────────────
-
-export type ThreadEventType =
-  | 'git:changed'
-  | 'git:commit'
-  | 'git:push'
-  | 'git:merge'
-  | 'git:pr_created'
-  | 'git:stage'
-  | 'git:unstage'
-  | 'git:revert'
-  | 'git:pull'
-  | 'git:stash'
-  | 'git:stash_pop'
-  | 'git:reset_soft'
-  | 'compact_boundary'
-  | 'workflow:started'
-  | 'workflow:completed'
-  | 'workflow:hooks'
-  | 'workflow:review'
-  | 'workflow:fix'
-  | 'workflow:precommit_fix'
-  | 'pipeline:started'
-  | 'pipeline:reviewer_started'
-  | 'pipeline:review_verdict'
-  | 'pipeline:corrector_started'
-  | 'pipeline:fix_applied'
-  | 'pipeline:completed'
-  | 'pipeline:precommit_hooks'
-  | 'pipeline:precommit_fixer_started'
-  | 'pipeline:precommit_fixing'
-  | 'pipeline:precommit_fixed'
-  | 'pipeline:precommit_failed';
-
-export interface ThreadEvent {
-  id: string;
-  threadId: string;
-  type: ThreadEventType;
-  data: string;
-  createdAt: string;
-}
-
-// ─── Code Review (ReviewBot) ────────────────────────────
-
-export type ReviewFindingSeverity = 'critical' | 'high' | 'medium' | 'low' | 'suggestion';
-export type ReviewFindingCategory =
-  | 'bug'
-  | 'security'
-  | 'performance'
-  | 'style'
-  | 'logic'
-  | 'maintainability';
-
-export interface CodeReviewFinding {
-  severity: ReviewFindingSeverity;
-  category: ReviewFindingCategory;
-  file: string;
-  line?: number;
-  description: string;
-  suggestion?: string;
-}
-
-export interface CodeReviewResult {
-  prNumber: number;
-  status: 'approved' | 'changes_requested' | 'commented';
-  summary: string;
-  findings: CodeReviewFinding[];
-  duration_ms: number;
-  model: string;
-}
-
-export interface TriggerReviewRequest {
-  prNumber: number;
-  model?: string;
-  provider?: string;
-}
-
-// ─── Pipelines ──────────────────────────────────────────
-
-export type PipelineStatus = 'idle' | 'running' | 'completed' | 'failed';
-export type PipelineRunStatus =
-  | 'running'
-  | 'reviewing'
-  | 'fixing'
-  | 'completed'
-  | 'failed'
-  | 'skipped';
-export type PipelineStageType = 'reviewer' | 'corrector';
-export type PipelineVerdict = 'pass' | 'fail';
-
-export interface PipelineStageConfig {
-  type: PipelineStageType;
-  model: AgentModel;
-  permissionMode: PermissionMode;
-  prompt: string;
-}
-
-export interface Pipeline {
-  id: string;
-  projectId: string;
-  userId: string;
-  name: string;
-  enabled: boolean;
-  reviewModel: AgentModel;
-  fixModel: AgentModel;
-  maxIterations: number;
-  precommitFixEnabled: boolean;
-  precommitFixModel: AgentModel;
-  precommitFixMaxIterations: number;
-  reviewerPrompt?: string;
-  correctorPrompt?: string;
-  precommitFixerPrompt?: string;
-  commitMessagePrompt?: string;
-  testEnabled: boolean;
-  testCommand?: string;
-  testFixEnabled: boolean;
-  testFixModel: AgentModel;
-  testFixMaxIterations: number;
-  testFixerPrompt?: string;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface PipelineRun {
-  id: string;
-  pipelineId: string;
-  threadId: string;
-  status: PipelineRunStatus;
-  currentStage: PipelineStageType;
-  iteration: number;
-  maxIterations: number;
-  commitSha?: string;
-  verdict?: PipelineVerdict;
-  findings?: string;
-  fixerThreadId?: string;
-  precommitIteration?: number;
-  hookName?: string;
-  hookError?: string;
-  createdAt: string;
-  completedAt?: string;
-}
-
-// ─── Pipeline WebSocket Events ──────────────────────────
-
-export interface WSPipelineRunStartedData {
-  pipelineId: string;
-  runId: string;
-  threadId: string;
-  commitSha?: string;
-}
-
-export interface WSPipelineStageUpdateData {
-  pipelineId: string;
-  runId: string;
-  threadId: string;
-  stage: PipelineStageType;
-  iteration: number;
-  maxIterations: number;
-  verdict?: PipelineVerdict;
-  findings?: string;
-}
-
-export interface WSPipelineRunCompletedData {
-  pipelineId: string;
-  runId: string;
-  threadId: string;
-  status: PipelineRunStatus;
-  totalIterations: number;
-}
-
-// ─── Weave Semantic Merge ─────────────────────────────────
-
-export interface WeaveStatus {
-  driverInstalled: boolean;
-  driverConfigured: boolean;
-  attributesConfigured: boolean;
-  status: 'active' | 'unconfigured' | 'not-installed';
-}
-
-// ─── Project Worktree Configuration (.funny.json) ───────
-
-export interface FunnyPortGroup {
-  name: string;
-  basePort: number;
-  envVars: string[];
-}
-
-/** A managed process definition from .funny.json or Procfile */
-export interface FunnyProcessConfig {
-  name: string;
-  command: string;
-  /** Auto-restart on non-zero exit (default: true for Procfile, false for .funny.json) */
-  autoRestart?: boolean;
-  /** Max restarts within restartWindowSec before giving up (default: 5) */
-  maxRestarts?: number;
-  /** Time window in seconds for restart counting (default: 60) */
-  restartWindowSec?: number;
-}
-
-/** An automation definition from .funny.json */
-export interface FunnyAutomationConfig {
-  name: string;
-  prompt: string;
-  schedule: string;
-  provider?: string;
-  model?: string;
-  permissionMode?: string;
-}
-
-export interface FunnyProjectConfig {
-  /** Relative paths to .env files to copy into worktrees (e.g. "packages/runtime/.env") */
-  envFiles?: string[];
-  /** Port groups — each group gets one unique port shared across its envVars */
-  portGroups?: FunnyPortGroup[];
-  /** Shell commands to run in the worktree after creation (e.g. ["bun install"]) */
-  postCreate?: string[];
-  /** Managed processes — auto-started with the project, optionally auto-restarted */
-  processes?: FunnyProcessConfig[];
-  /** Automations — synced to DB on project load */
-  automations?: FunnyAutomationConfig[];
-}
-
-/** Source of an automation: created in UI or synced from .funny.json config */
-export type AutomationSource = 'ui' | 'config';
-
-/** Process health metrics emitted via WebSocket */
-export interface WSCommandMetricsData {
-  commandId: string;
-  projectId: string;
-  uptime: number;
-  restartCount: number;
-  memoryUsageKB: number;
-}
-
-// ─── Native Git Build (WebSocket events) ────────────────
-
-export interface WSNativeGitBuildOutputData {
-  text: string;
-  channel: 'stdout' | 'stderr';
-}
-
-export interface WSNativeGitBuildStatusData {
-  status: 'building' | 'completed' | 'failed';
-  exitCode?: number;
-}
-
-// ─── Paisley Park (Project Memory) ──────────────────────
-
-export type FactType = 'decision' | 'bug' | 'pattern' | 'convention' | 'insight' | 'context';
-
-export type DecayClass = 'slow' | 'normal' | 'fast';
-
-export type MemoryScope = 'project' | 'operator' | 'team' | 'all';
-
-export interface MemoryFact {
-  id: string;
-  type: FactType;
-  confidence: number;
-  sourceAgent: string | null;
-  sourceOperator: string | null;
-  sourceSession: string | null;
-  validFrom: string; // ISO 8601
-  invalidAt: string | null;
-  ingestedAt: string; // ISO 8601
-  invalidatedBy: string | null;
-  supersededBy: string | null;
-  tags: string[];
-  related: string[];
-  decayClass: DecayClass;
-  accessCount: number;
-  lastAccessed: string; // ISO 8601
-  content: string;
-}
-
-export interface RecallOptions {
-  limit?: number;
-  scope?: MemoryScope;
-  includeInvalidated?: boolean;
-  minConfidence?: number;
-  asOf?: string; // ISO 8601
-  forOperator?: string;
-}
-
-export interface AddOptions {
-  type: FactType;
-  tags?: string[];
-  confidence?: number;
-  decayClass?: DecayClass;
-  relatedTo?: string[];
-  validFrom?: string; // ISO 8601
-  scope?: MemoryScope;
-  sourceAgent?: string;
-  sourceOperator?: string;
-  sourceSession?: string;
-}
-
-export interface SearchFilters {
-  type?: FactType | FactType[];
-  tags?: string[];
-  sourceAgent?: string;
-  validAt?: string; // ISO 8601
-  createdAfter?: string; // ISO 8601
-  createdBefore?: string; // ISO 8601
-  minConfidence?: number;
-}
-
-export interface TimelineOptions {
-  from?: string; // ISO 8601
-  to?: string; // ISO 8601
-  type?: FactType | FactType[];
-  includeInvalidated?: boolean;
-}
-
-export interface MemoryRecallResult {
-  facts: MemoryFact[];
-  formattedContext: string;
-  totalFound: number;
-}
-
-// ─── Agent Templates ───────────────────────────────────
-
-export type SystemPromptMode = 'replace' | 'prepend' | 'append';
-
-/** Deep Agent built-in tools that can be toggled on/off. */
-export const DEEPAGENT_TOOLS = [
-  'read_file',
-  'write_file',
-  'edit_file',
-  'ls',
-  'glob',
-  'grep',
-  'execute',
-  'task',
-  'write_todos',
-  'compact_conversation',
-] as const;
-export type DeepAgentTool = (typeof DEEPAGENT_TOOLS)[number];
-
-/** A user-fillable variable in a template's system prompt. */
-export interface TemplateVariable {
-  name: string;
-  description?: string;
-  defaultValue?: string;
-}
-
-/**
- * A reusable agent configuration template (global, per-user).
- * Only applicable when the harness/provider is `deepagent`.
- */
-export interface AgentTemplate {
-  id: string;
-  userId: string;
-
-  // Identity
-  name: string;
-  description?: string;
-  icon?: string;
-  color?: string;
-
-  // Model (provider is always deepagent)
-  model?: DeepAgentModel;
-
-  // System Prompt
-  systemPromptMode: SystemPromptMode;
-  systemPrompt?: string;
-
-  // Tools (deny list from DEEPAGENT_TOOLS)
-  disallowedTools?: DeepAgentTool[];
-
-  // MCP Servers (additive to project-level servers)
-  mcpServers?: McpServer[];
-
-  // Skills
-  builtinSkillsDisabled?: string[];
-  customSkillPaths?: string[];
-
-  // Memory
-  memoryOverride?: boolean | null;
-  customMemoryPaths?: string[];
-
-  // Deep Agent identity
-  agentName?: string;
-
-  // Sharing
-  shared?: boolean;
-
-  // Variables (user-fillable placeholders in system prompt)
-  variables?: TemplateVariable[];
-
-  // Meta
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreateAgentTemplateRequest {
-  name: string;
-  description?: string;
-  icon?: string;
-  color?: string;
-  model?: DeepAgentModel;
-  systemPromptMode?: SystemPromptMode;
-  systemPrompt?: string;
-  disallowedTools?: DeepAgentTool[];
-  mcpServers?: McpServer[];
-  builtinSkillsDisabled?: string[];
-  customSkillPaths?: string[];
-  memoryOverride?: boolean | null;
-  customMemoryPaths?: string[];
-  agentName?: string;
-  shared?: boolean;
-  variables?: TemplateVariable[];
-}
-
-export type UpdateAgentTemplateRequest = Partial<CreateAgentTemplateRequest>;
-
-/** Shape of a JSON file used for importing/exporting templates. */
-export interface AgentTemplateExportFile {
-  version: 1;
-  template: CreateAgentTemplateRequest;
-}
-
-// ─── Built-in Starter Templates ────────────────────────────
-
-/**
- * Built-in starter templates that ship with the app.
- * IDs are prefixed with `__builtin__` to avoid collisions with user-created templates.
- * Users cannot edit or delete these — they can only duplicate them.
- */
-export const BUILTIN_AGENT_TEMPLATES: AgentTemplate[] = [
-  {
-    id: '__builtin__code-reviewer',
-    userId: '__system__',
-    name: 'Code Reviewer',
-    description:
-      'Reviews code for bugs, security issues, and best practices. Read-only — cannot modify files.',
-    color: '#7CB9E8',
-    systemPromptMode: 'prepend',
-    systemPrompt:
-      'You are a code reviewer. Focus on identifying bugs, security vulnerabilities, performance issues, and deviations from best practices. Provide clear, actionable feedback. Do NOT modify any files — only read and analyze.',
-    disallowedTools: ['write_file', 'edit_file', 'execute'],
-    createdAt: '2025-01-01T00:00:00.000Z',
-    updatedAt: '2025-01-01T00:00:00.000Z',
-  },
-  {
-    id: '__builtin__planner',
-    userId: '__system__',
-    name: 'Planner',
-    description: 'Analyzes requirements and creates implementation plans without writing code.',
-    color: '#C3A6E0',
-    systemPromptMode: 'prepend',
-    systemPrompt:
-      'You are a technical planner. Analyze the codebase and requirements, then produce a detailed implementation plan with specific files to create or modify, data flow descriptions, and a recommended build sequence. Do NOT write code — only plan.',
-    disallowedTools: ['write_file', 'edit_file', 'execute'],
-    createdAt: '2025-01-01T00:00:00.000Z',
-    updatedAt: '2025-01-01T00:00:00.000Z',
-  },
-  {
-    id: '__builtin__full-stack-dev',
-    userId: '__system__',
-    name: 'Full Stack Dev',
-    description: 'General-purpose developer with all tools enabled and coding preferences loaded.',
-    color: '#A8D5A2',
-    systemPromptMode: 'prepend',
-    systemPrompt:
-      "You are a full-stack developer. Write clean, well-structured code following the project's existing conventions. Prefer small, focused changes. Run tests after modifications when possible.",
-    createdAt: '2025-01-01T00:00:00.000Z',
-    updatedAt: '2025-01-01T00:00:00.000Z',
-  },
-  {
-    id: '__builtin__bug-fixer',
-    userId: '__system__',
-    name: 'Bug Fixer',
-    description: 'Focused on diagnosing and fixing bugs with minimal, targeted changes.',
-    color: '#F4A4A4',
-    systemPromptMode: 'prepend',
-    systemPrompt:
-      'You are a bug fixer. Diagnose the root cause of the issue before making changes. Make minimal, targeted fixes — do not refactor surrounding code or add features. Verify the fix addresses the reported problem.',
-    createdAt: '2025-01-01T00:00:00.000Z',
-    updatedAt: '2025-01-01T00:00:00.000Z',
-  },
-];
+// Imports needed by local type aliases — pulled in from split modules.
+import type { TeamRole } from './types/auth.js';
+import type { WSGitStatusData, WSGitWorkflowProgressData } from './types/git.js';
+import type {
+  WSPipelineRunStartedData,
+  WSPipelineStageUpdateData,
+  WSPipelineRunCompletedData,
+} from './types/pipelines.js';
+import type {
+  WSTestActionData,
+  WSTestFrameData,
+  WSTestOutputData,
+  WSTestStatusData,
+  WSTestConsoleData,
+  WSTestNetworkData,
+  WSTestErrorData,
+} from './types/test.js';
+import type { ThreadEvent } from './types/thread-events.js';

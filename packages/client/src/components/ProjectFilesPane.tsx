@@ -165,9 +165,6 @@ export function ProjectFilesPane() {
         <div className="flex min-w-0 items-center gap-2 px-1 text-sm font-medium">
           <FolderTree className="icon-base flex-shrink-0 text-muted-foreground" />
           <span className="truncate">{t('projectFiles.title', 'Project Files')}</span>
-          {project?.name && (
-            <span className="truncate text-xs text-muted-foreground">· {project.name}</span>
-          )}
         </div>
         <Tooltip>
           <TooltipTrigger asChild>

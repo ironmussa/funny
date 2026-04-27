@@ -70,6 +70,8 @@ vi.mock('@/stores/thread-store-internals', () => ({
   rebuildThreadProjectIndex: vi.fn(),
   invalidateSelectThread: vi.fn(),
   setAppNavigate: vi.fn(),
+  setCacheInvalidator: vi.fn(),
+  invalidateThreadCache: vi.fn(),
 }));
 
 import { useThreadStore } from '@/stores/thread-store';
@@ -139,6 +141,7 @@ describe('thread store actions', () => {
         true,
         ['Write', 'Edit'],
         ['Bash'],
+        undefined,
       );
     });
 

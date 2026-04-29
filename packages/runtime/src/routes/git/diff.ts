@@ -81,6 +81,49 @@ diffRoutes.get('/project/:projectId/diff/submodule', async (c) => {
   return c.json(result.value);
 });
 
+// GET /api/git/project/:projectId/diff/submodule/file
+// Returns a single-file diff scoped *inside* a submodule / nested git repo.
+// `submodule` = path of the submodule relative to the project; `path` = file
+// path relative to the submodule.
+diffRoutes.get('/project/:projectId/diff/submodule/file', async (c) => {
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireProjectCwd(c.req.param('projectId'), userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  const submodulePath = c.req.query('submodule');
+  const filePath = c.req.query('path');
+  if (!submodulePath || !filePath) {
+    return resultToResponse(
+      c,
+      err(badRequest('Missing required query parameters: submodule, path')),
+    );
+  }
+  const pathCheck = validateFilePaths(cwd, [submodulePath]);
+  if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
+  const { join } = await import('node:path');
+  const submoduleCwd = join(cwd, submodulePath);
+  if (!existsSync(submoduleCwd) || !existsSync(join(submoduleCwd, '.git'))) {
+    return resultToResponse(c, err(badRequest(`Not a git repository: ${submodulePath}`)));
+  }
+  const innerCheck = validateFilePaths(submoduleCwd, [filePath]);
+  if (innerCheck.isErr()) return resultToResponse(c, innerCheck);
+  const staged = c.req.query('staged') === 'true';
+  const fullContext = c.req.query('context') === 'full';
+  const span = requestSpan(c, 'git.diff_submodule_file', {
+    projectId: c.req.param('projectId'),
+    submodule: submodulePath,
+    path: filePath,
+    fullContext,
+  });
+  const result = fullContext
+    ? await getFullContextFileDiff(submoduleCwd, filePath, staged)
+    : await getSingleFileDiff(submoduleCwd, filePath, staged);
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ diff: result.value });
+});
+
 // GET /api/git/project/:projectId/diff/file
 diffRoutes.get('/project/:projectId/diff/file', async (c) => {
   const userId = c.get('userId') as string;
@@ -161,6 +204,47 @@ diffRoutes.get('/:threadId/diff/submodule', async (c) => {
   span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
   if (result.isErr()) return resultToResponse(c, result);
   return c.json(result.value);
+});
+
+// GET /api/git/:threadId/diff/submodule/file
+// Single-file diff scoped *inside* a submodule of the thread's worktree.
+diffRoutes.get('/:threadId/diff/submodule/file', async (c) => {
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId');
+  const cwdResult = await requireThreadCwd(c.req.param('threadId'), userId, orgId);
+  if (cwdResult.isErr()) return resultToResponse(c, cwdResult);
+  const cwd = cwdResult.value;
+  const submodulePath = c.req.query('submodule');
+  const filePath = c.req.query('path');
+  if (!submodulePath || !filePath) {
+    return resultToResponse(
+      c,
+      err(badRequest('Missing required query parameters: submodule, path')),
+    );
+  }
+  const pathCheck = validateFilePaths(cwd, [submodulePath]);
+  if (pathCheck.isErr()) return resultToResponse(c, pathCheck);
+  const { join } = await import('node:path');
+  const submoduleCwd = join(cwd, submodulePath);
+  if (!existsSync(submoduleCwd) || !existsSync(join(submoduleCwd, '.git'))) {
+    return resultToResponse(c, err(badRequest(`Not a git repository: ${submodulePath}`)));
+  }
+  const innerCheck = validateFilePaths(submoduleCwd, [filePath]);
+  if (innerCheck.isErr()) return resultToResponse(c, innerCheck);
+  const staged = c.req.query('staged') === 'true';
+  const fullContext = c.req.query('context') === 'full';
+  const span = requestSpan(c, 'git.diff_submodule_file', {
+    threadId: c.req.param('threadId'),
+    submodule: submodulePath,
+    path: filePath,
+    fullContext,
+  });
+  const result = fullContext
+    ? await getFullContextFileDiff(submoduleCwd, filePath, staged)
+    : await getSingleFileDiff(submoduleCwd, filePath, staged);
+  span.end(result.isOk() ? 'ok' : 'error', result.isErr() ? result.error.message : undefined);
+  if (result.isErr()) return resultToResponse(c, result);
+  return c.json({ diff: result.value });
 });
 
 // GET /api/git/:threadId/diff/file

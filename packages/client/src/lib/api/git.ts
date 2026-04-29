@@ -36,6 +36,18 @@ export const gitApi = {
       `/git/${threadId}/diff/submodule?path=${encodeURIComponent(submodulePath)}`,
       { signal },
     ),
+  getSubmoduleFileDiff: (
+    threadId: string,
+    submodulePath: string,
+    filePath: string,
+    staged: boolean,
+    signal?: AbortSignal,
+    context?: 'full',
+  ) =>
+    request<{ diff: string }>(
+      `/git/${threadId}/diff/submodule/file?submodule=${encodeURIComponent(submodulePath)}&path=${encodeURIComponent(filePath)}&staged=${staged}${context ? `&context=${context}` : ''}`,
+      { signal },
+    ),
   stageFiles: (threadId: string, paths: string[]) =>
     request<{ ok: boolean }>(`/git/${threadId}/stage`, {
       method: 'POST',
@@ -228,6 +240,18 @@ export const gitApi = {
   projectSubmoduleDiffSummary: (projectId: string, submodulePath: string, signal?: AbortSignal) =>
     request<import('@funny/shared').DiffSummaryResponse>(
       `/git/project/${projectId}/diff/submodule?path=${encodeURIComponent(submodulePath)}`,
+      { signal },
+    ),
+  projectSubmoduleFileDiff: (
+    projectId: string,
+    submodulePath: string,
+    filePath: string,
+    staged: boolean,
+    signal?: AbortSignal,
+    context?: 'full',
+  ) =>
+    request<{ diff: string }>(
+      `/git/project/${projectId}/diff/submodule/file?submodule=${encodeURIComponent(submodulePath)}&path=${encodeURIComponent(filePath)}&staged=${staged}${context ? `&context=${context}` : ''}`,
       { signal },
     ),
   projectStageFiles: (projectId: string, paths: string[]) =>

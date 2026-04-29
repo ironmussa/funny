@@ -145,6 +145,8 @@ export function App() {
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const reviewPaneWidth = useUIStore((s) => s.reviewPaneWidth);
   const setReviewPaneWidth = useUIStore((s) => s.setReviewPaneWidth);
+  const reviewPaneResizing = useUIStore((s) => s.reviewPaneResizing);
+  const setReviewPaneResizing = useUIStore((s) => s.setReviewPaneResizing);
   const rightPaneTab = useUIStore((s) => s.rightPaneTab);
   const settingsOpen = useUIStore((s) => s.settingsOpen);
   const generalSettingsOpen = useUIStore((s) => s.generalSettingsOpen);
@@ -182,11 +184,15 @@ export function App() {
     direction: 'horizontal',
     onResizeStart: () => {
       dragStartWidthVw.current = useUIStore.getState().reviewPaneWidth;
+      setReviewPaneResizing(true);
     },
     onResize: (deltaPx) => {
       const deltaVw = (deltaPx / window.innerWidth) * 100;
       // Dragging the handle right shrinks the right pane
       setReviewPaneWidth(dragStartWidthVw.current - deltaVw);
+    },
+    onResizeEnd: () => {
+      setReviewPaneResizing(false);
     },
   });
 
@@ -314,7 +320,7 @@ export function App() {
         <div
           className={cn(
             'flex min-w-0 flex-shrink-0 flex-col overflow-hidden bg-sidebar',
-            !resizing && 'transition-[width] duration-200 ease-linear',
+            !resizing && !reviewPaneResizing && 'transition-[width] duration-200 ease-linear',
           )}
           style={{ width: rightPaneVisible ? `${reviewPaneWidth}vw` : 0 }}
         >

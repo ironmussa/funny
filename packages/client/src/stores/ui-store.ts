@@ -26,6 +26,7 @@ function persistRightPane(open: boolean, tab?: RightPaneTab) {
 interface UIState {
   reviewPaneOpen: boolean;
   reviewPaneWidth: number; // percentage of viewport width
+  reviewPaneResizing: boolean;
   rightPaneTab: RightPaneTab;
   settingsOpen: boolean;
   activeSettingsPage: string | null;
@@ -58,6 +59,7 @@ interface UIState {
   setActivityPaneOpen: (open: boolean) => void;
   setFilesPaneOpen: (open: boolean) => void;
   setReviewPaneWidth: (width: number) => void;
+  setReviewPaneResizing: (resizing: boolean) => void;
   setRightPaneTab: (tab: RightPaneTab) => void;
   setSettingsOpen: (open: boolean) => void;
   setActiveSettingsPage: (page: string | null) => void;
@@ -118,6 +120,7 @@ export const useUIStore = create<UIState>((set) => ({
       return DEFAULT_REVIEW_PANE_WIDTH;
     }
   })(),
+  reviewPaneResizing: false,
   settingsOpen: false,
   activeSettingsPage: null,
   newThreadProjectId: null,
@@ -223,6 +226,7 @@ export const useUIStore = create<UIState>((set) => ({
     } catch {}
     set({ reviewPaneWidth: clamped });
   },
+  setReviewPaneResizing: (resizing) => set({ reviewPaneResizing: resizing }),
   setSettingsOpen: (open) =>
     set(
       open

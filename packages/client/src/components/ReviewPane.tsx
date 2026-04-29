@@ -69,6 +69,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
+import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import {
   Select,
   SelectContent,
@@ -134,9 +135,29 @@ export function ReviewPane() {
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const reviewSubTab = useUIStore((s) => s.reviewSubTab);
   const setReviewSubTabStore = useUIStore((s) => s.setReviewSubTab);
+  const setReviewPaneWidth = useUIStore((s) => s.setReviewPaneWidth);
+  const setReviewPaneResizing = useUIStore((s) => s.setReviewPaneResizing);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const panelRef = useRef<HTMLDivElement>(null);
   const panelLeftPx = useElementLeft(panelRef);
+
+  // Drag-to-resize for the diff overlay's right edge — adjusts the right
+  // pane width (which in turn drives panelLeftPx / overlay width).
+  const overlayDragStartWidthVw = useRef(0);
+  const overlayResize = useResizeHandle({
+    direction: 'horizontal',
+    onResizeStart: () => {
+      overlayDragStartWidthVw.current = useUIStore.getState().reviewPaneWidth;
+      setReviewPaneResizing(true);
+    },
+    onResize: (deltaPx) => {
+      const deltaVw = (deltaPx / window.innerWidth) * 100;
+      setReviewPaneWidth(overlayDragStartWidthVw.current - deltaVw);
+    },
+    onResizeEnd: () => {
+      setReviewPaneResizing(false);
+    },
+  });
 
   // Use selectedThreadId for git requests — it updates *immediately* when the
   // user clicks a thread in the sidebar (before the thread data loads from the
@@ -549,23 +570,70 @@ export function ReviewPane() {
     refreshingRef.current = false;
   };
 
+  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
+
+  const [expandedSubmodules, setExpandedSubmodules] = useState<Set<string>>(new Set());
+  const [submoduleExpansions, setSubmoduleExpansions] = useState<Map<string, FileDiffSummary[]>>(
+    new Map(),
+  );
+  const [submoduleStates, setSubmoduleStates] = useState<
+    Map<string, { state: 'loading' | 'error' | 'empty'; message?: string }>
+  >(new Map());
+
+  // Resolve a path to the (submodule, inner-relative-path, inner-summary) triple
+  // when it belongs to an expanded submodule. Inner files use composite paths
+  // like `<submodule>/<innerPath>` and are not present in `summaries`, so the
+  // lookup also has to consult `submoduleExpansions` to find their `staged`
+  // flag and to route diff requests to the nested repo.
+  const resolveSubmoduleEntry = useCallback(
+    (filePath: string): { submodulePath: string; innerPath: string; staged: boolean } | null => {
+      for (const [submodulePath, inner] of submoduleExpansions) {
+        const prefix = `${submodulePath}/`;
+        if (!filePath.startsWith(prefix)) continue;
+        const innerPath = filePath.slice(prefix.length);
+        const innerSummary = inner.find((f) => f.path === innerPath);
+        if (!innerSummary) continue;
+        return { submodulePath, innerPath, staged: innerSummary.staged };
+      }
+      return null;
+    },
+    [submoduleExpansions],
+  );
+
   // Lazy load diff content for the selected file
   const loadDiffForFile = useCallback(
     async (filePath: string) => {
       if (!hasGitContext || diffCache.has(filePath)) return;
-      const summary = summaries.find((s) => s.path === filePath);
-      if (!summary) return;
+      const submoduleEntry = resolveSubmoduleEntry(filePath);
+      const summary = submoduleEntry ? null : summaries.find((s) => s.path === filePath);
+      if (!submoduleEntry && !summary) return;
       const signal = abortRef.current?.signal;
       setLoadingDiff(filePath);
-      const result = effectiveThreadId
-        ? await api.getFileDiff(effectiveThreadId, filePath, summary.staged, signal)
-        : await api.projectFileDiff(projectModeId!, filePath, summary.staged, signal);
+      const result = submoduleEntry
+        ? effectiveThreadId
+          ? await api.getSubmoduleFileDiff(
+              effectiveThreadId,
+              submoduleEntry.submodulePath,
+              submoduleEntry.innerPath,
+              submoduleEntry.staged,
+              signal,
+            )
+          : await api.projectSubmoduleFileDiff(
+              projectModeId!,
+              submoduleEntry.submodulePath,
+              submoduleEntry.innerPath,
+              submoduleEntry.staged,
+              signal,
+            )
+        : effectiveThreadId
+          ? await api.getFileDiff(effectiveThreadId, filePath, summary!.staged, signal)
+          : await api.projectFileDiff(projectModeId!, filePath, summary!.staged, signal);
       if (result.isOk() && !signal?.aborted) {
         setDiffCache((prev) => new Map(prev).set(filePath, result.value.diff));
       }
       setLoadingDiff((prev) => (prev === filePath ? null : prev));
     },
-    [hasGitContext, diffCache, summaries, effectiveThreadId, projectModeId],
+    [hasGitContext, diffCache, summaries, effectiveThreadId, projectModeId, resolveSubmoduleEntry],
   );
 
   // Fetch full-context diff for the "Show full file" toggle
@@ -573,12 +641,31 @@ export function ReviewPane() {
     path: string,
   ): Promise<{ oldValue: string; newValue: string; rawDiff?: string } | null> => {
     if (!hasGitContext) return null;
-    const summary = summaries.find((s) => s.path === path);
-    if (!summary) return null;
+    const submoduleEntry = resolveSubmoduleEntry(path);
+    const summary = submoduleEntry ? null : summaries.find((s) => s.path === path);
+    if (!submoduleEntry && !summary) return null;
     const signal = abortRef.current?.signal;
-    const result = effectiveThreadId
-      ? await api.getFileDiff(effectiveThreadId, path, summary.staged, signal, 'full')
-      : await api.projectFileDiff(projectModeId!, path, summary.staged, signal, 'full');
+    const result = submoduleEntry
+      ? effectiveThreadId
+        ? await api.getSubmoduleFileDiff(
+            effectiveThreadId,
+            submoduleEntry.submodulePath,
+            submoduleEntry.innerPath,
+            submoduleEntry.staged,
+            signal,
+            'full',
+          )
+        : await api.projectSubmoduleFileDiff(
+            projectModeId!,
+            submoduleEntry.submodulePath,
+            submoduleEntry.innerPath,
+            submoduleEntry.staged,
+            signal,
+            'full',
+          )
+      : effectiveThreadId
+        ? await api.getFileDiff(effectiveThreadId, path, summary!.staged, signal, 'full')
+        : await api.projectFileDiff(projectModeId!, path, summary!.staged, signal, 'full');
     if (result.isOk() && !signal?.aborted) {
       return {
         oldValue: parseDiffOld(result.value.diff),
@@ -701,16 +788,6 @@ export function ReviewPane() {
     const query = fileSearch.toLowerCase();
     return summaries.filter((d) => d.path.toLowerCase().includes(query));
   }, [summaries, fileSearch]);
-
-  const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
-
-  const [expandedSubmodules, setExpandedSubmodules] = useState<Set<string>>(new Set());
-  const [submoduleExpansions, setSubmoduleExpansions] = useState<Map<string, FileDiffSummary[]>>(
-    new Map(),
-  );
-  const [submoduleStates, setSubmoduleStates] = useState<
-    Map<string, { state: 'loading' | 'error' | 'empty'; message?: string }>
-  >(new Map());
 
   const toggleSubmodule = useCallback(
     async (submodulePath: string) => {
@@ -1770,10 +1847,19 @@ export function ReviewPane() {
         panelLeftPx > 0 &&
         createPortal(
           <div
-            className="fixed bottom-0 left-0 top-0 z-40 bg-background"
+            className="fixed bottom-0 left-0 top-0 z-40 overflow-hidden bg-background"
             style={{ width: `${panelLeftPx}px` }}
             data-testid="expanded-diff-overlay"
           >
+            <ResizeHandle
+              direction="horizontal"
+              resizing={overlayResize.resizing}
+              onPointerDown={overlayResize.handlePointerDown}
+              onPointerMove={overlayResize.handlePointerMove}
+              onPointerUp={overlayResize.handlePointerUp}
+              className="absolute inset-y-0 right-0 z-50"
+              data-testid="expanded-diff-overlay-resize-handle"
+            />
             <ExpandedDiffView
               filePath={expandedSummary?.path || ''}
               oldValue={expandedDiffContent ? parseDiffOld(expandedDiffContent) : ''}

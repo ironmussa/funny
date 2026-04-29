@@ -142,6 +142,20 @@ fn is_binary_by_attr(
   false
 }
 
+/// True if the nested git repo at `nested_path` reports any uncommitted changes.
+/// Used to surface dirtiness for stranded gitlinks (entries with mode 160000
+/// that aren't registered in `.gitmodules`), which gix's submodule status
+/// machinery skips entirely.
+fn is_nested_repo_dirty_status(nested_path: &Path) -> bool {
+  std::process::Command::new("git")
+    .args(["status", "--porcelain"])
+    .current_dir(nested_path)
+    .output()
+    .ok()
+    .map(|o| o.status.success() && !o.stdout.is_empty())
+    .unwrap_or(false)
+}
+
 /// Count commits between two refs using `git rev-list --count <range>`.
 /// Falls back to 0 on any error.
 fn rev_list_count(cwd: &Path, range: &str) -> u32 {
@@ -212,7 +226,12 @@ pub async fn get_status_summary(
     let status_platform = repo
       .status(gix::progress::Discard)
       .map_err(|e| napi::Error::from_reason(format!("Failed to create status: {e}")))?
-      .untracked_files(gix::status::UntrackedFiles::Files);
+      .untracked_files(gix::status::UntrackedFiles::Files)
+      // Force submodule dirtiness checks — see diff_summary.rs for rationale.
+      .index_worktree_submodules(gix::status::Submodule::Given {
+        ignore: gix::submodule::config::Ignore::None,
+        check_dirty: true,
+      });
 
     let empty_patterns: Vec<BString> = Vec::new();
     let status_iter = status_platform
@@ -327,6 +346,29 @@ pub async fn get_status_summary(
         continue;
       }
       lines_added += count_file_lines(path);
+    }
+
+    // ── Phase 1c: stranded gitlinks (gitlinks without `.gitmodules`) ──
+    // Mirrors the Phase 3 logic in diff_summary.rs: gix only inspects
+    // submodules listed in `.gitmodules`, so detect dirty bare gitlinks
+    // by scanning the index for COMMIT-mode entries.
+    for idx_entry in index.entries().iter() {
+      if !idx_entry.mode.is_submodule() {
+        continue;
+      }
+      let path_str = idx_entry.path(&index).to_str_lossy().to_string();
+      if worktree_changed_paths.contains(&path_str) {
+        continue;
+      }
+      let nested = worktree_path.join(&path_str);
+      if !nested.join(".git").exists() {
+        continue;
+      }
+      if !is_nested_repo_dirty_status(&nested) {
+        continue;
+      }
+      worktree_changed_paths.insert(path_str);
+      dirty_file_count += 1;
     }
 
     // ── Phase 2a: Branch analysis ──

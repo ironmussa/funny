@@ -8,6 +8,7 @@ import {
   useStepTimers,
   useTotalFromSteps,
 } from '@/components/GitProgressModal';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 interface InlineProgressStepsProps {
@@ -76,9 +77,11 @@ export function InlineProgressSteps({ steps, showTotal = true }: InlineProgressS
                 <SubItemsList subItems={step.subItems} parentStatus={step.status} />
               )}
               {step.error && !(step.subItems && step.subItems.length > 0) && (
-                <pre className="mt-0.5 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-destructive/5 p-1.5 font-mono text-[11px] text-destructive/80">
-                  {step.error}
-                </pre>
+                <ScrollArea className="mt-0.5 max-h-40 rounded bg-destructive/5">
+                  <pre className="whitespace-pre-wrap break-words p-1.5 font-mono text-[11px] text-destructive/80">
+                    {step.error}
+                  </pre>
+                </ScrollArea>
               )}
             </div>
           </div>

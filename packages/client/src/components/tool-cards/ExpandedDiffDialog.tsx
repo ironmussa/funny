@@ -182,6 +182,7 @@ function DiffContent({
   showFullFile,
   wordWrap,
   searchQuery,
+  searchCaseSensitive,
   currentMatchIndex,
   onMatchCount,
   onResolveConflict,
@@ -203,6 +204,7 @@ function DiffContent({
   showFullFile?: boolean;
   wordWrap?: boolean;
   searchQuery?: string;
+  searchCaseSensitive?: boolean;
   currentMatchIndex?: number;
   onMatchCount?: (count: number) => void;
   onResolveConflict?: (blockId: number, resolution: ConflictResolution) => void;
@@ -242,6 +244,7 @@ function DiffContent({
       showMinimap={!!showFullFile}
       wordWrap={wordWrap}
       searchQuery={searchQuery}
+      searchCaseSensitive={searchCaseSensitive}
       currentMatchIndex={currentMatchIndex}
       onMatchCount={onMatchCount}
       onResolveConflict={onResolveConflict}
@@ -295,6 +298,7 @@ export function ExpandedDiffDialog({
   // ── Search state ──
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [totalMatches, setTotalMatches] = useState(0);
 
@@ -550,6 +554,11 @@ export function ExpandedDiffDialog({
                 setSearchQuery(v);
                 setCurrentMatchIndex(0);
               }}
+              caseSensitive={searchCaseSensitive}
+              onCaseSensitiveChange={(v) => {
+                setSearchCaseSensitive(v);
+                setCurrentMatchIndex(0);
+              }}
               currentIndex={currentMatchIndex}
               totalMatches={totalMatches}
               onPrev={goToPrevMatch}
@@ -601,6 +610,7 @@ export function ExpandedDiffDialog({
                 showFullFile={showFullFile}
                 wordWrap={wordWrap}
                 searchQuery={showSearch ? searchQuery : undefined}
+                searchCaseSensitive={searchCaseSensitive}
                 currentMatchIndex={currentMatchIndex}
                 onMatchCount={handleMatchCount}
               />
@@ -813,6 +823,7 @@ export function ExpandedDiffView({
   // ── Search state ──
   const [showSearch, setShowSearch] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [totalMatches, setTotalMatches] = useState(0);
 
@@ -1071,6 +1082,11 @@ export function ExpandedDiffView({
               setSearchQuery(v);
               setCurrentMatchIndex(0);
             }}
+            caseSensitive={searchCaseSensitive}
+            onCaseSensitiveChange={(v) => {
+              setSearchCaseSensitive(v);
+              setCurrentMatchIndex(0);
+            }}
             currentIndex={currentMatchIndex}
             totalMatches={totalMatches}
             onPrev={goToPrevMatch}
@@ -1094,6 +1110,7 @@ export function ExpandedDiffView({
             showFullFile={showFullFile}
             wordWrap={wordWrap}
             searchQuery={showSearch ? searchQuery : undefined}
+            searchCaseSensitive={searchCaseSensitive}
             currentMatchIndex={currentMatchIndex}
             onMatchCount={handleMatchCount}
             onResolveConflict={onResolveConflict}

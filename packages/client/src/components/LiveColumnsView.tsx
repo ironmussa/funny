@@ -3,16 +3,17 @@ import {
   monitorForElements,
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
-import { Loader2, LayoutGrid, Grid2x2, Plus, Search, X } from 'lucide-react';
+import { Loader2, LayoutGrid, Grid2x2, Plus, X } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo, memo, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { colorFromName } from '@/components/ui/project-chip';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { SearchBar } from '@/components/ui/search-bar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { api } from '@/lib/api';
@@ -67,17 +68,18 @@ function ProjectPickerPopover({
     >
       <PopoverTrigger asChild>{trigger}</PopoverTrigger>
       <PopoverContent align="start" className="w-64 p-0">
-        <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
-          <Search className="icon-base shrink-0 text-muted-foreground" />
-          <Input
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+        <div className="border-b border-border/50 px-2 py-1.5">
+          <SearchBar
+            query={search}
+            onQueryChange={setSearch}
             placeholder={placeholder}
-            className="h-auto flex-1 rounded-none border-0 bg-transparent px-0 py-0 text-sm shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
+            totalMatches={filtered.length}
+            resultLabel={search ? `${filtered.length}/${projects.length}` : ''}
             autoFocus
+            testIdPrefix="grid-project-picker-search"
           />
         </div>
-        <div className="max-h-56 overflow-y-auto py-1">
+        <ScrollArea className="max-h-56 py-1">
           {filtered.length === 0 ? (
             <div className="py-3 text-center text-sm text-muted-foreground">—</div>
           ) : (
@@ -100,7 +102,7 @@ function ProjectPickerPopover({
               </button>
             ))
           )}
-        </div>
+        </ScrollArea>
       </PopoverContent>
     </Popover>
   );

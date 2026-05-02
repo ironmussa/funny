@@ -24,6 +24,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Select,
   SelectContent,
@@ -408,164 +409,170 @@ export function GeneralSettingsView() {
       </Sidebar>
 
       {/* Right content area */}
-      <div className="min-h-0 max-w-2xl flex-1 overflow-y-auto p-6">
-        {activePreferencesPage === 'general' && (
-          <>
-            <h3 className="settings-section-header">{t('settings.general')}</h3>
-            <div className="settings-card">
-              <SettingRow
-                title={t('settings.defaultEditor')}
-                description={t('settings.defaultEditorDesc')}
-              >
-                <Select value={defaultEditor} onValueChange={handleEditorChange}>
-                  <SelectTrigger className="w-[140px]" data-testid="preferences-editor-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {(Object.entries(editorLabels) as [Editor, string][]).map(([value, label]) => (
-                      <SelectItem key={value} value={value}>
-                        {label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </SettingRow>
+      <ScrollArea className="min-h-0 max-w-2xl flex-1">
+        <div className="p-6">
+          {activePreferencesPage === 'general' && (
+            <>
+              <h3 className="settings-section-header">{t('settings.general')}</h3>
+              <div className="settings-card">
+                <SettingRow
+                  title={t('settings.defaultEditor')}
+                  description={t('settings.defaultEditorDesc')}
+                >
+                  <Select value={defaultEditor} onValueChange={handleEditorChange}>
+                    <SelectTrigger className="w-[140px]" data-testid="preferences-editor-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {(Object.entries(editorLabels) as [Editor, string][]).map(
+                        ([value, label]) => (
+                          <SelectItem key={value} value={value}>
+                            {label}
+                          </SelectItem>
+                        ),
+                      )}
+                    </SelectContent>
+                  </Select>
+                </SettingRow>
 
-              <SettingRow
-                title={t('settings.useInternalEditor')}
-                description={t('settings.useInternalEditorDesc')}
-              >
-                <Checkbox
-                  checked={useInternalEditor}
-                  onCheckedChange={(checked) => handleInternalEditorChange(!!checked)}
-                  data-testid="preferences-internal-editor"
-                />
-              </SettingRow>
-
-              <SettingRow title={t('settings.language')} description={t('settings.languageDesc')}>
-                <Select value={i18n.language} onValueChange={handleLanguageChange}>
-                  <SelectTrigger className="w-[140px]" data-testid="preferences-language-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {Object.keys(i18n.options.resources ?? {}).map((code) => (
-                      <SelectItem key={code} value={code}>
-                        {getLanguageName(code)}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </SettingRow>
-
-              <SettingRow
-                title={t('settings.terminalShell')}
-                description={t('settings.terminalShellDesc')}
-              >
-                <Select value={terminalShell} onValueChange={handleShellChange}>
-                  <SelectTrigger className="w-[160px]" data-testid="preferences-shell-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="default">{t('settings.shellDefault')}</SelectItem>
-                    {availableShells.map((shell) => (
-                      <SelectItem key={shell.id} value={shell.id}>
-                        {shell.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </SettingRow>
-            </div>
-          </>
-        )}
-
-        {activePreferencesPage === 'appearance' && (
-          <>
-            <h3 className="settings-section-header">{t('settings.appearance')}</h3>
-            <p className="px-1 pb-3 text-xs text-muted-foreground">{t('settings.themeDesc')}</p>
-            <div className="grid grid-cols-3 gap-2">
-              {THEME_OPTIONS.map((opt) => (
-                <ThemeCard
-                  key={opt.value}
-                  option={opt}
-                  selected={(theme ?? 'one-dark') === opt.value}
-                  onClick={() => handleThemeChange(opt.value)}
-                  t={t}
-                />
-              ))}
-            </div>
-
-            <h3 className="settings-section-header mt-6">{t('settings.fontSize')}</h3>
-            <div className="settings-card">
-              <SettingRow title={t('settings.fontSize')} description={t('settings.fontSizeDesc')}>
-                <Select value={fontSize} onValueChange={handleFontSizeChange}>
-                  <SelectTrigger className="w-[140px]" data-testid="preferences-font-size-select">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="small">{t('settings.fontSizeSmall')}</SelectItem>
-                    <SelectItem value="default">{t('settings.fontSizeDefault')}</SelectItem>
-                    <SelectItem value="large">{t('settings.fontSizeLarge')}</SelectItem>
-                  </SelectContent>
-                </Select>
-              </SettingRow>
-            </div>
-          </>
-        )}
-
-        {activePreferencesPage === 'github' && (
-          <>
-            <h3 className="settings-section-header">GitHub</h3>
-            <div className="settings-card">
-              <div className="px-4 py-3.5">
-                <p className="settings-row-title">{t('profile.githubTokenLabel')}</p>
-                <p className="settings-row-desc mb-2">{t('profile.githubTokenDesc')}</p>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="password"
-                    value={keyInputs.github ?? ''}
-                    onChange={(e) => setKeyInputs((prev) => ({ ...prev, github: e.target.value }))}
-                    data-testid="preferences-github-token"
-                    placeholder={
-                      keyPresence.github ? t('profile.tokenSaved') : t('profile.tokenPlaceholder')
-                    }
-                    className="text-sm"
+                <SettingRow
+                  title={t('settings.useInternalEditor')}
+                  description={t('settings.useInternalEditorDesc')}
+                >
+                  <Checkbox
+                    checked={useInternalEditor}
+                    onCheckedChange={(checked) => handleInternalEditorChange(!!checked)}
+                    data-testid="preferences-internal-editor"
                   />
-                  <Button
-                    size="sm"
-                    onClick={() => handleSaveProviderKey('github')}
-                    disabled={!keyInputs.github || !!keySaving.github}
-                    data-testid="preferences-save-token"
-                  >
-                    {keySaving.github ? t('common.saving') : t('common.save')}
-                  </Button>
-                  {keyPresence.github && (
+                </SettingRow>
+
+                <SettingRow title={t('settings.language')} description={t('settings.languageDesc')}>
+                  <Select value={i18n.language} onValueChange={handleLanguageChange}>
+                    <SelectTrigger className="w-[140px]" data-testid="preferences-language-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {Object.keys(i18n.options.resources ?? {}).map((code) => (
+                        <SelectItem key={code} value={code}>
+                          {getLanguageName(code)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </SettingRow>
+
+                <SettingRow
+                  title={t('settings.terminalShell')}
+                  description={t('settings.terminalShellDesc')}
+                >
+                  <Select value={terminalShell} onValueChange={handleShellChange}>
+                    <SelectTrigger className="w-[160px]" data-testid="preferences-shell-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="default">{t('settings.shellDefault')}</SelectItem>
+                      {availableShells.map((shell) => (
+                        <SelectItem key={shell.id} value={shell.id}>
+                          {shell.label}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </SettingRow>
+              </div>
+            </>
+          )}
+
+          {activePreferencesPage === 'appearance' && (
+            <>
+              <h3 className="settings-section-header">{t('settings.appearance')}</h3>
+              <p className="px-1 pb-3 text-xs text-muted-foreground">{t('settings.themeDesc')}</p>
+              <div className="grid grid-cols-3 gap-2">
+                {THEME_OPTIONS.map((opt) => (
+                  <ThemeCard
+                    key={opt.value}
+                    option={opt}
+                    selected={(theme ?? 'one-dark') === opt.value}
+                    onClick={() => handleThemeChange(opt.value)}
+                    t={t}
+                  />
+                ))}
+              </div>
+
+              <h3 className="settings-section-header mt-6">{t('settings.fontSize')}</h3>
+              <div className="settings-card">
+                <SettingRow title={t('settings.fontSize')} description={t('settings.fontSizeDesc')}>
+                  <Select value={fontSize} onValueChange={handleFontSizeChange}>
+                    <SelectTrigger className="w-[140px]" data-testid="preferences-font-size-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="small">{t('settings.fontSizeSmall')}</SelectItem>
+                      <SelectItem value="default">{t('settings.fontSizeDefault')}</SelectItem>
+                      <SelectItem value="large">{t('settings.fontSizeLarge')}</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </SettingRow>
+              </div>
+            </>
+          )}
+
+          {activePreferencesPage === 'github' && (
+            <>
+              <h3 className="settings-section-header">GitHub</h3>
+              <div className="settings-card">
+                <div className="px-4 py-3.5">
+                  <p className="settings-row-title">{t('profile.githubTokenLabel')}</p>
+                  <p className="settings-row-desc mb-2">{t('profile.githubTokenDesc')}</p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="password"
+                      value={keyInputs.github ?? ''}
+                      onChange={(e) =>
+                        setKeyInputs((prev) => ({ ...prev, github: e.target.value }))
+                      }
+                      data-testid="preferences-github-token"
+                      placeholder={
+                        keyPresence.github ? t('profile.tokenSaved') : t('profile.tokenPlaceholder')
+                      }
+                      className="text-sm"
+                    />
                     <Button
-                      variant="ghost"
                       size="sm"
-                      className="shrink-0 text-xs text-destructive hover:text-destructive"
-                      onClick={() => handleClearProviderKey('github')}
-                      disabled={!!keySaving.github}
-                      data-testid="preferences-clear-token"
+                      onClick={() => handleSaveProviderKey('github')}
+                      disabled={!keyInputs.github || !!keySaving.github}
+                      data-testid="preferences-save-token"
                     >
-                      {t('profile.clearToken')}
+                      {keySaving.github ? t('common.saving') : t('common.save')}
                     </Button>
-                  )}
+                    {keyPresence.github && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 text-xs text-destructive hover:text-destructive"
+                        onClick={() => handleClearProviderKey('github')}
+                        disabled={!!keySaving.github}
+                        data-testid="preferences-clear-token"
+                      >
+                        {t('profile.clearToken')}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </>
-        )}
+            </>
+          )}
 
-        {activePreferencesPage === 'ai-keys' && (
-          <>
-            <h3 className="settings-section-header">AI Providers</h3>
-            <p className="px-1 pb-3 text-xs text-muted-foreground">
-              Configure API keys for AI providers. Keys are encrypted at rest.
-            </p>
-            <div className="settings-card space-y-0 divide-y divide-border">
-              {PROVIDER_KEY_REGISTRY.filter((k) => k.id !== 'github' && k.id !== 'assemblyai').map(
-                (keyConfig) => (
+          {activePreferencesPage === 'ai-keys' && (
+            <>
+              <h3 className="settings-section-header">AI Providers</h3>
+              <p className="px-1 pb-3 text-xs text-muted-foreground">
+                Configure API keys for AI providers. Keys are encrypted at rest.
+              </p>
+              <div className="settings-card space-y-0 divide-y divide-border">
+                {PROVIDER_KEY_REGISTRY.filter(
+                  (k) => k.id !== 'github' && k.id !== 'assemblyai',
+                ).map((keyConfig) => (
                   <div key={keyConfig.id} className="px-4 py-3.5">
                     <p className="settings-row-title">{keyConfig.label}</p>
                     <p className="settings-row-desc mb-2">
@@ -617,189 +624,189 @@ export function GeneralSettingsView() {
                       )}
                     </div>
                   </div>
-                ),
-              )}
-            </div>
-          </>
-        )}
+                ))}
+              </div>
+            </>
+          )}
 
-        {activePreferencesPage === 'speech' && (
-          <>
-            <h3 className="settings-section-header">Speech</h3>
-            <p className="px-1 pb-3 text-xs text-muted-foreground">
-              Configure an AssemblyAI API key to enable voice dictation in the prompt input.
-            </p>
-            <div className="settings-card">
-              <div className="px-4 py-3.5">
-                <p className="settings-row-title">AssemblyAI API Key</p>
-                <p className="settings-row-desc mb-2">
-                  Get your key at{' '}
-                  <a
-                    href="https://www.assemblyai.com/dashboard/signup"
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-primary hover:underline"
-                  >
-                    assemblyai.com
-                  </a>
-                  . The key is encrypted at rest.
-                </p>
-                <div className="flex items-center gap-2">
-                  <Input
-                    type="password"
-                    value={keyInputs.assemblyai ?? ''}
-                    onChange={(e) =>
-                      setKeyInputs((prev) => ({ ...prev, assemblyai: e.target.value }))
-                    }
-                    data-testid="preferences-assemblyai-key"
-                    placeholder={
-                      keyPresence.assemblyai
-                        ? t('profile.tokenSaved')
-                        : 'Enter your AssemblyAI API key'
-                    }
-                    className="text-sm"
-                  />
-                  <Button
-                    size="sm"
-                    onClick={() => handleSaveProviderKey('assemblyai')}
-                    disabled={!keyInputs.assemblyai || !!keySaving.assemblyai}
-                    data-testid="preferences-save-assemblyai-key"
-                  >
-                    {keySaving.assemblyai ? t('common.saving') : t('common.save')}
-                  </Button>
-                  {keyPresence.assemblyai && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="shrink-0 text-xs text-destructive hover:text-destructive"
-                      onClick={() => handleClearProviderKey('assemblyai')}
-                      disabled={!!keySaving.assemblyai}
-                      data-testid="preferences-clear-assemblyai-key"
+          {activePreferencesPage === 'speech' && (
+            <>
+              <h3 className="settings-section-header">Speech</h3>
+              <p className="px-1 pb-3 text-xs text-muted-foreground">
+                Configure an AssemblyAI API key to enable voice dictation in the prompt input.
+              </p>
+              <div className="settings-card">
+                <div className="px-4 py-3.5">
+                  <p className="settings-row-title">AssemblyAI API Key</p>
+                  <p className="settings-row-desc mb-2">
+                    Get your key at{' '}
+                    <a
+                      href="https://www.assemblyai.com/dashboard/signup"
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-primary hover:underline"
                     >
-                      {t('profile.clearToken')}
+                      assemblyai.com
+                    </a>
+                    . The key is encrypted at rest.
+                  </p>
+                  <div className="flex items-center gap-2">
+                    <Input
+                      type="password"
+                      value={keyInputs.assemblyai ?? ''}
+                      onChange={(e) =>
+                        setKeyInputs((prev) => ({ ...prev, assemblyai: e.target.value }))
+                      }
+                      data-testid="preferences-assemblyai-key"
+                      placeholder={
+                        keyPresence.assemblyai
+                          ? t('profile.tokenSaved')
+                          : 'Enter your AssemblyAI API key'
+                      }
+                      className="text-sm"
+                    />
+                    <Button
+                      size="sm"
+                      onClick={() => handleSaveProviderKey('assemblyai')}
+                      disabled={!keyInputs.assemblyai || !!keySaving.assemblyai}
+                      data-testid="preferences-save-assemblyai-key"
+                    >
+                      {keySaving.assemblyai ? t('common.saving') : t('common.save')}
                     </Button>
-                  )}
+                    {keyPresence.assemblyai && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="shrink-0 text-xs text-destructive hover:text-destructive"
+                        onClick={() => handleClearProviderKey('assemblyai')}
+                        disabled={!!keySaving.assemblyai}
+                        data-testid="preferences-clear-assemblyai-key"
+                      >
+                        {t('profile.clearToken')}
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          </>
-        )}
+            </>
+          )}
 
-        {activePreferencesPage === 'organizations' && <OrganizationManagement />}
+          {activePreferencesPage === 'organizations' && <OrganizationManagement />}
 
-        {activePreferencesPage === 'runners' && <RunnersSettings />}
+          {activePreferencesPage === 'runners' && <RunnersSettings />}
 
-        {activePreferencesPage === 'agent-templates' && <AgentTemplateSettings />}
+          {activePreferencesPage === 'agent-templates' && <AgentTemplateSettings />}
 
-        {activePreferencesPage === 'system' && <SystemSettings />}
+          {activePreferencesPage === 'system' && <SystemSettings />}
 
-        {activePreferencesPage === 'email' && (
-          <>
-            <div className="flex items-center gap-2">
-              <h3 className="settings-section-header">Email (SMTP)</h3>
-              {smtpSource !== 'none' && (
-                <span
-                  className={cn(
-                    'rounded-full px-2 py-0.5 text-[10px] font-medium',
-                    smtpSource === 'database'
-                      ? 'bg-primary/10 text-primary'
-                      : 'bg-muted text-muted-foreground',
-                  )}
-                  data-testid="preferences-smtp-status"
-                >
-                  {smtpSource === 'database' ? 'Configured' : 'Env vars'}
-                </span>
-              )}
-            </div>
-            <p className="px-1 pb-3 text-xs text-muted-foreground">
-              Used for sending team invitation emails. Set via env vars (SMTP_HOST, SMTP_USER,
-              SMTP_PASS) or configure below.
-            </p>
-            <div className="settings-card">
-              <div className="space-y-3 px-4 py-3.5">
-                <div className="grid grid-cols-[1fr_80px] gap-2">
+          {activePreferencesPage === 'email' && (
+            <>
+              <div className="flex items-center gap-2">
+                <h3 className="settings-section-header">Email (SMTP)</h3>
+                {smtpSource !== 'none' && (
+                  <span
+                    className={cn(
+                      'rounded-full px-2 py-0.5 text-[10px] font-medium',
+                      smtpSource === 'database'
+                        ? 'bg-primary/10 text-primary'
+                        : 'bg-muted text-muted-foreground',
+                    )}
+                    data-testid="preferences-smtp-status"
+                  >
+                    {smtpSource === 'database' ? 'Configured' : 'Env vars'}
+                  </span>
+                )}
+              </div>
+              <p className="px-1 pb-3 text-xs text-muted-foreground">
+                Used for sending team invitation emails. Set via env vars (SMTP_HOST, SMTP_USER,
+                SMTP_PASS) or configure below.
+              </p>
+              <div className="settings-card">
+                <div className="space-y-3 px-4 py-3.5">
+                  <div className="grid grid-cols-[1fr_80px] gap-2">
+                    <div>
+                      <label className="mb-1 block text-xs text-muted-foreground">Host</label>
+                      <Input
+                        value={smtpHost}
+                        onChange={(e) => setSmtpHost(e.target.value)}
+                        placeholder="smtp.gmail.com"
+                        className="text-sm"
+                        data-testid="preferences-smtp-host"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-1 block text-xs text-muted-foreground">Port</label>
+                      <Input
+                        value={smtpPort}
+                        onChange={(e) => setSmtpPort(e.target.value)}
+                        placeholder="587"
+                        className="text-sm"
+                        data-testid="preferences-smtp-port"
+                      />
+                    </div>
+                  </div>
                   <div>
-                    <label className="mb-1 block text-xs text-muted-foreground">Host</label>
+                    <label className="mb-1 block text-xs text-muted-foreground">Username</label>
                     <Input
-                      value={smtpHost}
-                      onChange={(e) => setSmtpHost(e.target.value)}
-                      placeholder="smtp.gmail.com"
+                      value={smtpUser}
+                      onChange={(e) => setSmtpUser(e.target.value)}
+                      placeholder="you@example.com"
                       className="text-sm"
-                      data-testid="preferences-smtp-host"
+                      data-testid="preferences-smtp-user"
                     />
                   </div>
                   <div>
-                    <label className="mb-1 block text-xs text-muted-foreground">Port</label>
+                    <label className="mb-1 block text-xs text-muted-foreground">Password</label>
                     <Input
-                      value={smtpPort}
-                      onChange={(e) => setSmtpPort(e.target.value)}
-                      placeholder="587"
+                      type="password"
+                      value={smtpPass}
+                      onChange={(e) => setSmtpPass(e.target.value)}
+                      placeholder={
+                        smtpHasPassword
+                          ? 'Password saved (enter new to replace)'
+                          : 'App password or SMTP password'
+                      }
                       className="text-sm"
-                      data-testid="preferences-smtp-port"
+                      data-testid="preferences-smtp-pass"
                     />
                   </div>
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Username</label>
-                  <Input
-                    value={smtpUser}
-                    onChange={(e) => setSmtpUser(e.target.value)}
-                    placeholder="you@example.com"
-                    className="text-sm"
-                    data-testid="preferences-smtp-user"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">Password</label>
-                  <Input
-                    type="password"
-                    value={smtpPass}
-                    onChange={(e) => setSmtpPass(e.target.value)}
-                    placeholder={
-                      smtpHasPassword
-                        ? 'Password saved (enter new to replace)'
-                        : 'App password or SMTP password'
-                    }
-                    className="text-sm"
-                    data-testid="preferences-smtp-pass"
-                  />
-                </div>
-                <div>
-                  <label className="mb-1 block text-xs text-muted-foreground">From address</label>
-                  <Input
-                    value={smtpFrom}
-                    onChange={(e) => setSmtpFrom(e.target.value)}
-                    placeholder="noreply@example.com"
-                    className="text-sm"
-                    data-testid="preferences-smtp-from"
-                  />
-                </div>
-                <div className="flex items-center gap-2 pt-1">
-                  <Button
-                    size="sm"
-                    onClick={handleSaveSmtp}
-                    disabled={!smtpHost || !smtpUser || smtpSaving}
-                    data-testid="preferences-smtp-save"
-                  >
-                    <Mail className="icon-sm mr-1.5" />
-                    {smtpSaving ? 'Saving...' : 'Save SMTP'}
-                  </Button>
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={handleTestSmtp}
-                    disabled={smtpSource === 'none' || smtpTesting}
-                    data-testid="preferences-smtp-test"
-                  >
-                    <Send className="icon-sm mr-1.5" />
-                    {smtpTesting ? 'Sending...' : 'Send Test Email'}
-                  </Button>
+                  <div>
+                    <label className="mb-1 block text-xs text-muted-foreground">From address</label>
+                    <Input
+                      value={smtpFrom}
+                      onChange={(e) => setSmtpFrom(e.target.value)}
+                      placeholder="noreply@example.com"
+                      className="text-sm"
+                      data-testid="preferences-smtp-from"
+                    />
+                  </div>
+                  <div className="flex items-center gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      onClick={handleSaveSmtp}
+                      disabled={!smtpHost || !smtpUser || smtpSaving}
+                      data-testid="preferences-smtp-save"
+                    >
+                      <Mail className="icon-sm mr-1.5" />
+                      {smtpSaving ? 'Saving...' : 'Save SMTP'}
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={handleTestSmtp}
+                      disabled={smtpSource === 'none' || smtpTesting}
+                      data-testid="preferences-smtp-test"
+                    >
+                      <Send className="icon-sm mr-1.5" />
+                      {smtpTesting ? 'Sending...' : 'Send Test Email'}
+                    </Button>
+                  </div>
                 </div>
               </div>
-            </div>
-          </>
-        )}
-      </div>
+            </>
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
 }

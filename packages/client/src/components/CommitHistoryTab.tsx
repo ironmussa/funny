@@ -34,6 +34,8 @@ import {
 } from '@/components/ui/dialog';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api, type PullStrategy } from '@/lib/api';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
@@ -145,6 +147,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
 
   // File search
   const [fileSearch, setFileSearch] = useState('');
+  const [fileSearchCaseSensitive, setFileSearchCaseSensitive] = useState(false);
 
   // File diff
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
@@ -462,15 +465,28 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
       deletions: f.deletions,
     }));
     if (!fileSearch.trim()) return all;
+    if (fileSearchCaseSensitive) {
+      return all.filter((f) => f.path.includes(fileSearch));
+    }
     const q = fileSearch.toLowerCase();
     return all.filter((f) => f.path.toLowerCase().includes(q));
-  }, [commitFiles, fileSearch]);
+  }, [commitFiles, fileSearch, fileSearchCaseSensitive]);
 
   // ── Search (filters against all loaded entries) ──
   const [commitSearch, setCommitSearch] = useState('');
+  const [commitSearchCaseSensitive, setCommitSearchCaseSensitive] = useState(false);
 
   const filteredEntries = useMemo(() => {
     if (!commitSearch.trim()) return logEntries;
+    if (commitSearchCaseSensitive) {
+      return logEntries.filter(
+        (e) =>
+          e.message.includes(commitSearch) ||
+          e.author.includes(commitSearch) ||
+          e.shortHash.includes(commitSearch) ||
+          e.hash.includes(commitSearch),
+      );
+    }
     const q = commitSearch.toLowerCase();
     return logEntries.filter(
       (e) =>
@@ -479,7 +495,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
         e.shortHash.toLowerCase().includes(q) ||
         e.hash.toLowerCase().includes(q),
     );
-  }, [logEntries, commitSearch]);
+  }, [logEntries, commitSearch, commitSearchCaseSensitive]);
 
   // ── Virtualizer for commit list ──
   const commitScrollRef = useRef<HTMLDivElement>(null);
@@ -870,31 +886,19 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
 
       {/* Search */}
       {logEntries.length > 0 && (
-        <div className="border-b border-sidebar-border px-2 py-2">
-          <div className="relative">
-            <Search className="icon-sm pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              type="text"
-              placeholder={t('history.searchCommits', 'Filter commits\u2026')}
-              aria-label={t('history.searchCommits', 'Filter commits')}
-              data-testid="history-commit-search"
-              value={commitSearch}
-              onChange={(e) => setCommitSearch(e.target.value)}
-              className="h-7 pl-7 pr-7 text-xs md:text-xs"
-            />
-            {commitSearch && (
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                onClick={() => setCommitSearch('')}
-                aria-label={t('review.clearSearch', 'Clear search')}
-                data-testid="history-commit-search-clear"
-                className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
-              >
-                <X className="icon-xs" />
-              </Button>
-            )}
-          </div>
+        <div className="border-b border-sidebar-border px-2 py-1">
+          <SearchBar
+            query={commitSearch}
+            onQueryChange={setCommitSearch}
+            placeholder={t('history.searchCommits', 'Filter commits\u2026')}
+            totalMatches={filteredEntries.length}
+            resultLabel={commitSearch ? `${filteredEntries.length}/${logEntries.length}` : ''}
+            caseSensitive={commitSearchCaseSensitive}
+            onCaseSensitiveChange={setCommitSearchCaseSensitive}
+            onClose={commitSearch ? () => setCommitSearch('') : undefined}
+            autoFocus={false}
+            testIdPrefix="history-commit-search"
+          />
         </div>
       )}
 
@@ -1165,9 +1169,11 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
               </div>
             )}
             {commitBody && (
-              <p className="mt-1.5 max-h-[80px] overflow-y-auto whitespace-pre-wrap text-[11px] text-muted-foreground">
-                {commitBody}
-              </p>
+              <ScrollArea className="mt-1.5 max-h-[80px]">
+                <p className="whitespace-pre-wrap text-[11px] text-muted-foreground">
+                  {commitBody}
+                </p>
+              </ScrollArea>
             )}
           </div>
 
@@ -1185,34 +1191,22 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
                 data-testid="commit-detail-file-tree"
               >
                 {commitFiles.length > 0 && (
-                  <div className="shrink-0 border-b border-sidebar-border px-2 py-2">
-                    <div className="relative">
-                      <Search className="icon-sm pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                      <Input
-                        type="text"
-                        placeholder={t('review.searchFiles', 'Filter files\u2026')}
-                        aria-label={t('review.searchFiles', 'Filter files')}
-                        data-testid="commit-detail-file-filter"
-                        value={fileSearch}
-                        onChange={(e) => setFileSearch(e.target.value)}
-                        className="h-7 pl-7 pr-7 text-xs md:text-xs"
-                      />
-                      {fileSearch && (
-                        <Button
-                          variant="ghost"
-                          size="icon-xs"
-                          onClick={() => setFileSearch('')}
-                          aria-label={t('review.clearSearch', 'Clear search')}
-                          data-testid="commit-detail-file-filter-clear"
-                          className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
-                        >
-                          <X className="icon-xs" />
-                        </Button>
-                      )}
-                    </div>
+                  <div className="shrink-0 border-b border-sidebar-border px-2 py-1">
+                    <SearchBar
+                      query={fileSearch}
+                      onQueryChange={setFileSearch}
+                      placeholder={t('review.searchFiles', 'Filter files\u2026')}
+                      totalMatches={treeFiles.length}
+                      resultLabel={fileSearch ? `${treeFiles.length}/${commitFiles.length}` : ''}
+                      caseSensitive={fileSearchCaseSensitive}
+                      onCaseSensitiveChange={setFileSearchCaseSensitive}
+                      onClose={fileSearch ? () => setFileSearch('') : undefined}
+                      autoFocus={false}
+                      testIdPrefix="commit-detail-file-filter"
+                    />
                   </div>
                 )}
-                <div className="min-h-0 flex-1 overflow-auto">
+                <ScrollArea className="min-h-0 flex-1">
                   {commitFiles.length === 0 ? (
                     <div className="py-4 text-center text-xs text-muted-foreground">
                       {t('history.noFiles', 'No files changed')}
@@ -1230,7 +1224,7 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
                       searchQuery={fileSearch || undefined}
                     />
                   )}
-                </div>
+                </ScrollArea>
               </div>
 
               {/* Diff viewer */}

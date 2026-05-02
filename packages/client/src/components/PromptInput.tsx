@@ -18,6 +18,7 @@ import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useDraftStore } from '@/stores/draft-store';
+import { usePiModelsStore } from '@/stores/pi-models-store';
 import { useProfileStore } from '@/stores/profile-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -131,7 +132,68 @@ export const PromptInput = memo(function PromptInput({
   const hasLauncher = !!effectiveProject?.launcherUrl;
   const [effort, setEffort] = useState<string>('high');
 
-  const unifiedModelGroups = useMemo(() => getUnifiedModelOptions(t), [t]);
+  const baseUnifiedModelGroups = useMemo(() => getUnifiedModelOptions(t), [t]);
+
+  // ── Pi dynamic models ──
+  // Pi exposes its model catalog at runtime (it depends on which providers
+  // the user authenticated with via `pi auth`). Fetch on mount and re-merge
+  // into the model group so the dropdown reflects what pi actually offers.
+  const piStatus = usePiModelsStore((s) => s.status);
+  const piModels = usePiModelsStore((s) => s.models);
+  const piReason = usePiModelsStore((s) => s.reason);
+  const piMessage = usePiModelsStore((s) => s.message);
+  const fetchPiModels = usePiModelsStore((s) => s.fetch);
+  useEffect(() => {
+    void fetchPiModels();
+  }, [fetchPiModels]);
+
+  const unifiedModelGroups = useMemo(() => {
+    return baseUnifiedModelGroups.map((group) => {
+      if (group.provider !== 'pi') return group;
+      const defaultLabel =
+        t('thread.model.piDefault') === 'thread.model.piDefault'
+          ? 'Pi (configured default)'
+          : t('thread.model.piDefault');
+      const items: { value: string; label: string }[] = [
+        { value: 'pi:default', label: defaultLabel },
+      ];
+      if (piStatus === 'ready' && piModels.length > 0) {
+        for (const m of piModels) {
+          items.push({ value: `pi:${m.modelId}`, label: m.name || m.modelId });
+        }
+      } else if (piStatus === 'error') {
+        const hint =
+          piReason === 'auth_required'
+            ? t('thread.model.piAuthRequired', 'Pi: configurar (run `pi auth`)')
+            : piReason === 'sdk_missing'
+              ? t('thread.model.piSdkMissing', 'Pi: SDK no instalado')
+              : piReason === 'no_models'
+                ? t('thread.model.piNoModels', 'Pi: no hay modelos configurados')
+                : piReason === 'spawn_failed'
+                  ? t('thread.model.piSpawnFailed', 'Pi: no se pudo iniciar pi-acp')
+                  : piReason === 'timeout'
+                    ? t('thread.model.piTimeout', 'Pi: tiempo de espera agotado')
+                    : t('thread.model.piError', 'Pi: error de descubrimiento');
+        items.push({ value: 'pi:__configure__', label: hint });
+      } else if (piStatus === 'loading') {
+        items.push({
+          value: 'pi:__loading__',
+          label: t('thread.model.piLoading', 'Cargando modelos…'),
+        });
+      }
+      return { ...group, models: items };
+    });
+  }, [baseUnifiedModelGroups, piStatus, piModels, piReason, t]);
+
+  // Surface fetch errors once via a debug log so they show up in Abbacchio.
+  useEffect(() => {
+    if (piStatus === 'error' && piMessage) {
+      piLog.warn('pi model discovery failed', {
+        reason: piReason ?? 'unknown',
+        message: piMessage,
+      });
+    }
+  }, [piStatus, piReason, piMessage]);
 
   // Effort options — available for providers that support reasoning levels (Claude, Codex)
   const { provider: currentProvider, model: currentModel } = useMemo(
@@ -172,6 +234,11 @@ export const PromptInput = memo(function PromptInput({
     s.activeThread ? resolveThreadBranch(s.activeThread) : undefined,
   );
   const activeThreadBaseBranch = useThreadStore((s) => s.activeThread?.baseBranch);
+  const activeThreadContextTokens = useThreadStore(
+    (s) => s.activeThread?.contextUsage?.cumulativeInputTokens ?? 0,
+  );
+  // Default context window — keep in sync with ContextUsageBar.
+  const contextPct = Math.min(100, (activeThreadContextTokens / 200_000) * 100);
 
   // ── Branch state (new-thread: from shared store, follow-up: local) ──
   const selectedBranch = useBranchPickerStore((s) => s.selectedBranch);
@@ -700,6 +767,18 @@ export const PromptInput = memo(function PromptInput({
   const clearPromptDraftRef = useRef(clearPromptDraft);
   clearPromptDraftRef.current = clearPromptDraft;
 
+  const handleCompact = useCallback(async () => {
+    const tid = threadIdRef.current;
+    if (!tid) return;
+    const result = await api.sendMessage(tid, '/compact');
+    if (result.isErr()) {
+      toastError(result.error);
+    } else {
+      toast.success(t('prompt.compactRequested', 'Compaction requested'));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [t]);
+
   const wrappedOnSubmit = useCallback(
     async (prompt: string, opts: Parameters<typeof onSubmit>[1], images?: ImageAttachment[]) => {
       hasSubmittedRef.current = true;
@@ -771,6 +850,8 @@ export const PromptInput = memo(function PromptInput({
         onEffortChange={effortOptions.length > 0 ? setEffort : undefined}
         effortOptions={effortOptions.length > 0 ? effortOptions : undefined}
         defaultTemplateId={effectiveProject?.defaultAgentTemplateId}
+        contextPct={contextPct}
+        onCompact={effectiveThreadId ? handleCompact : undefined}
       />
 
       {branchSwitchDialog}

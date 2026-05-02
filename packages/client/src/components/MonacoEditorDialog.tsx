@@ -6,12 +6,15 @@ import {
   EyeOff,
   BookOpen,
   Check,
+  ChevronDown,
+  ChevronUp,
   Code,
   Copy,
   FileCode,
+  X,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -26,10 +29,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
+import { rehypeMarkSearch } from '@/lib/rehype-mark-search';
 import { cn } from '@/lib/utils';
 import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 
@@ -66,6 +71,22 @@ export function MonacoEditorDialog({
   }, [open, filePath, isMarkdown]);
 
   const editorRef = useRef<Parameters<OnMount>[0] | null>(null);
+
+  // Markdown preview search state
+  const previewContainerRef = useRef<HTMLDivElement | null>(null);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const matchElementsRef = useRef<HTMLElement[]>([]);
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedQuery, setDebouncedQuery] = useState('');
+  const [matchCount, setMatchCount] = useState(0);
+  const [currentMatch, setCurrentMatch] = useState(0);
+
+  // Debounce typing so the (expensive) DOM walk runs after a short pause.
+  useEffect(() => {
+    const id = setTimeout(() => setDebouncedQuery(searchQuery), 200);
+    return () => clearTimeout(id);
+  }, [searchQuery]);
 
   const isDirty = content !== originalContent;
 
@@ -156,13 +177,22 @@ export function MonacoEditorDialog({
     editorRef.current = editor;
   }, []);
 
-  // Ctrl+F → open Monaco find widget
+  // Ctrl+F → open Monaco find widget in code view, or inline search bar in markdown preview.
   useEffect(() => {
     if (!open) return;
     const handler = (e: KeyboardEvent) => {
       if (e.ctrlKey && e.key === 'f') {
         e.preventDefault();
         e.stopPropagation();
+        if (showPreview && isMarkdown) {
+          setSearchOpen(true);
+          // Focus the search input on next tick (after render).
+          requestAnimationFrame(() => {
+            searchInputRef.current?.focus();
+            searchInputRef.current?.select();
+          });
+          return;
+        }
         const editor = editorRef.current;
         if (editor) {
           editor.focus();
@@ -172,7 +202,85 @@ export function MonacoEditorDialog({
     };
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [open]);
+  }, [open, showPreview, isMarkdown]);
+
+  // Reset search when leaving preview, closing dialog, or switching files.
+  useEffect(() => {
+    if (!open || !showPreview || !isMarkdown) {
+      setSearchOpen(false);
+      setSearchQuery('');
+    }
+  }, [open, showPreview, isMarkdown, filePath]);
+
+  // After ReactMarkdown renders with the rehype plugin, collect the produced
+  // <mark> elements so we can navigate (next/prev) and scroll to active.
+  // No DOM mutation — the plugin baked the highlights into the AST.
+  useEffect(() => {
+    const container = previewContainerRef.current;
+    if (!container) {
+      matchElementsRef.current = [];
+      setMatchCount(0);
+      setCurrentMatch(0);
+      return;
+    }
+    const query = searchOpen ? debouncedQuery.trim() : '';
+    if (!query) {
+      matchElementsRef.current = [];
+      setMatchCount(0);
+      setCurrentMatch(0);
+      return;
+    }
+    const marks = Array.from(container.querySelectorAll<HTMLElement>('mark.md-search-match'));
+    matchElementsRef.current = marks;
+    setMatchCount(marks.length);
+    setCurrentMatch(marks.length > 0 ? 1 : 0);
+  }, [debouncedQuery, searchOpen, content, showPreview, isMarkdown]);
+
+  // Style + scroll the active match.
+  useEffect(() => {
+    const marks = matchElementsRef.current;
+    marks.forEach((m, i) => {
+      if (i === currentMatch - 1) {
+        m.dataset.active = 'true';
+      } else {
+        delete m.dataset.active;
+      }
+    });
+    const active = marks[currentMatch - 1];
+    if (active) {
+      active.scrollIntoView({ block: 'center', behavior: 'smooth' });
+    }
+  }, [currentMatch, matchCount]);
+
+  const goToNextMatch = useCallback(() => {
+    setCurrentMatch((prev) => (matchCount === 0 ? 0 : (prev % matchCount) + 1));
+  }, [matchCount]);
+
+  const goToPrevMatch = useCallback(() => {
+    setCurrentMatch((prev) => (matchCount === 0 ? 0 : prev <= 1 ? matchCount : prev - 1));
+  }, [matchCount]);
+
+  const closeSearch = useCallback(() => {
+    setSearchOpen(false);
+    setSearchQuery('');
+  }, []);
+
+  // Memoize the rendered markdown. Re-renders only when content or the (debounced)
+  // search query changes — the rehype plugin bakes <mark> elements into the AST,
+  // so React reconciles normally without imperative DOM mutation.
+  const activeQuery = searchOpen ? debouncedQuery.trim() : '';
+  const renderedMarkdown = useMemo(
+    () => (
+      <ReactMarkdown
+        remarkPlugins={[remarkGfm]}
+        rehypePlugins={[[rehypeMarkSearch, { query: activeQuery }]]}
+        components={markdownPreviewComponents}
+      >
+        {content}
+      </ReactMarkdown>
+    ),
+    [content, activeQuery],
+  );
 
   return (
     <Dialog open={open} onOpenChange={handleClose}>
@@ -282,13 +390,73 @@ export function MonacoEditorDialog({
 
         <div className="min-h-0 flex-1 overflow-hidden">
           {showPreview && isMarkdown ? (
-            <ScrollArea className="h-full">
-              <div className="prose prose-sm max-w-none px-8 py-6">
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownPreviewComponents}>
-                  {content}
-                </ReactMarkdown>
-              </div>
-            </ScrollArea>
+            <div className="relative h-full">
+              {searchOpen && (
+                <div
+                  className="absolute right-4 top-3 z-10 flex items-center gap-1 rounded-md border border-border bg-popover p-1 shadow-md"
+                  data-testid="markdown-search-bar"
+                >
+                  <Input
+                    ref={searchInputRef}
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Escape') {
+                        e.preventDefault();
+                        closeSearch();
+                      } else if (e.key === 'Enter') {
+                        e.preventDefault();
+                        if (e.shiftKey) goToPrevMatch();
+                        else goToNextMatch();
+                      }
+                    }}
+                    placeholder={t('editor.searchPlaceholder', 'Find')}
+                    className="h-7 w-48 text-xs"
+                    data-testid="markdown-search-input"
+                  />
+                  <span
+                    className="min-w-[3rem] px-1 text-center text-xs tabular-nums text-muted-foreground"
+                    data-testid="markdown-search-count"
+                  >
+                    {matchCount === 0 ? '0/0' : `${currentMatch}/${matchCount}`}
+                  </span>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={goToPrevMatch}
+                    disabled={matchCount === 0}
+                    data-testid="markdown-search-prev"
+                    aria-label={t('editor.searchPrev', 'Previous match')}
+                  >
+                    <ChevronUp className="icon-base" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={goToNextMatch}
+                    disabled={matchCount === 0}
+                    data-testid="markdown-search-next"
+                    aria-label={t('editor.searchNext', 'Next match')}
+                  >
+                    <ChevronDown className="icon-base" />
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={closeSearch}
+                    data-testid="markdown-search-close"
+                    aria-label={t('editor.searchClose', 'Close search')}
+                  >
+                    <X className="icon-base" />
+                  </Button>
+                </div>
+              )}
+              <ScrollArea className="h-full">
+                <div ref={previewContainerRef} className="prose prose-sm max-w-none px-8 py-6">
+                  {renderedMarkdown}
+                </div>
+              </ScrollArea>
+            </div>
           ) : (
             <Editor
               height="100%"

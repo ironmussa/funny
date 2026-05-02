@@ -36,14 +36,15 @@ export async function searchThreadIdsByContent(opts: {
   query: string;
   projectId?: string;
   userId: string;
+  caseSensitive?: boolean;
 }): Promise<Map<string, string>> {
-  const { query, projectId, userId } = opts;
+  const { query, projectId, userId, caseSensitive = false } = opts;
   if (!query.trim()) return new Map();
 
-  // When the query contains characters that FTS tokenizers strip (e.g. _TOKEN),
-  // go straight to LIKE which does exact substring matching.
-  if (needsLikeFallback(query)) {
-    return await searchViaLike(query, projectId, userId);
+  // FTS5 / tsvector are inherently case-insensitive (tokens are lowercased).
+  // For case-sensitive search, always use the LIKE path which does exact substring matching.
+  if (caseSensitive || needsLikeFallback(query)) {
+    return await searchViaLike(query, projectId, userId, caseSensitive);
   }
 
   // Dialect-specific full-text search with LIKE fallback on error
@@ -53,7 +54,7 @@ export async function searchThreadIdsByContent(opts: {
     }
     return await searchViaFts5(query, projectId, userId);
   } catch {
-    return await searchViaLike(query, projectId, userId);
+    return await searchViaLike(query, projectId, userId, false);
   }
 }
 
@@ -141,9 +142,13 @@ async function searchViaLike(
   query: string,
   projectId: string | undefined,
   userId: string,
+  caseSensitive: boolean,
 ): Promise<Map<string, string>> {
-  const safeQuery = escapeLike(query.trim());
+  const trimmed = query.trim();
+  const safeQuery = escapeLike(trimmed);
 
+  // SQL `LIKE` semantics differ across drivers (SQLite ASCII-insensitive, PG case-sensitive).
+  // We use it as a coarse filter and apply the exact case-sensitivity rule in JS below.
   const filters: ReturnType<typeof eq>[] = [like(schema.messages.content, `%${safeQuery}%`)];
 
   filters.push(eq(schema.threads.userId, userId));
@@ -160,13 +165,14 @@ async function searchViaLike(
   );
 
   const result = new Map<string, string>();
-  const queryLower = query.trim().toLowerCase();
+  const needle = caseSensitive ? trimmed : trimmed.toLowerCase();
   for (const row of rows) {
     if (result.has(row.threadId)) continue;
-    const idx = row.content.toLowerCase().indexOf(queryLower);
+    const haystack = caseSensitive ? row.content : row.content.toLowerCase();
+    const idx = haystack.indexOf(needle);
     if (idx === -1) continue;
     const start = Math.max(0, idx - 30);
-    const end = Math.min(row.content.length, idx + queryLower.length + 50);
+    const end = Math.min(row.content.length, idx + needle.length + 50);
     let snippet = row.content.slice(start, end).replace(/\n/g, ' ');
     if (start > 0) snippet = '…' + snippet;
     if (end < row.content.length) snippet = snippet + '…';

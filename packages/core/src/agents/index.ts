@@ -24,6 +24,11 @@ export {
   type ForkAcpSessionResult,
   type ForkAcpSessionUnsupported,
 } from './acp-fork.js';
+export {
+  discoverPiModels,
+  type DiscoveredPiModel,
+  type DiscoverPiModelsResult,
+} from './pi-discover.js';
 
 // ── LLM Provider Abstraction ──────────────────────────────────
 export * from './llm/index.js';

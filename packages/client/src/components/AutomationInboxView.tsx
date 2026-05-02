@@ -1,5 +1,5 @@
 import type { RunTriageStatus } from '@funny/shared';
-import { Check, ChevronsUpDown, Inbox, Settings, Search } from 'lucide-react';
+import { Check, ChevronsUpDown, Inbox, Settings } from 'lucide-react';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
@@ -13,8 +13,9 @@ import {
   CommandItem,
   CommandList,
 } from '@/components/ui/command';
-import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { SearchBar } from '@/components/ui/search-bar';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAutomationStore } from '@/stores/automation-store';
@@ -39,6 +40,7 @@ export function AutomationInboxView() {
   const [filterOpen, setFilterOpen] = useState(false);
   const [triageStatusFilter, setTriageStatusFilter] = useState<RunTriageStatus | 'all'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
+  const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
 
   // Keep a stable ref to avoid restarting the effect on re-renders
   const loadInboxRef = useRef(loadInbox);
@@ -64,17 +66,26 @@ export function AutomationInboxView() {
 
     // Filter by search query
     if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase();
-      items = items.filter(
-        (item) =>
-          item.automation.name.toLowerCase().includes(query) ||
-          item.thread.title.toLowerCase().includes(query) ||
-          item.run.summary?.toLowerCase().includes(query),
-      );
+      if (searchCaseSensitive) {
+        items = items.filter(
+          (item) =>
+            item.automation.name.includes(searchQuery) ||
+            item.thread.title.includes(searchQuery) ||
+            !!item.run.summary?.includes(searchQuery),
+        );
+      } else {
+        const query = searchQuery.toLowerCase();
+        items = items.filter(
+          (item) =>
+            item.automation.name.toLowerCase().includes(query) ||
+            item.thread.title.toLowerCase().includes(query) ||
+            item.run.summary?.toLowerCase().includes(query),
+        );
+      }
     }
 
     return items;
-  }, [inbox, triageStatusFilter, filterProjectId, searchQuery]);
+  }, [inbox, triageStatusFilter, filterProjectId, searchQuery, searchCaseSensitive]);
 
   // Build list of projects that have inbox items
   const projectsWithItems = useMemo(() => {
@@ -158,18 +169,19 @@ export function AutomationInboxView() {
       </div>
 
       {/* Search Bar */}
-      <div className="border-b border-border px-6 py-3">
-        <div className="relative">
-          <Search className="icon-sm absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="text"
-            data-testid="inbox-search"
-            placeholder="Search by automation name, thread title, or summary..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="h-8 pl-9 pr-3 text-xs"
-          />
-        </div>
+      <div className="border-b border-border px-6 py-2">
+        <SearchBar
+          query={searchQuery}
+          onQueryChange={setSearchQuery}
+          placeholder="Search by automation name, thread title, or summary..."
+          totalMatches={filteredInbox.length}
+          resultLabel={searchQuery ? `${filteredInbox.length}/${inbox.length}` : ''}
+          caseSensitive={searchCaseSensitive}
+          onCaseSensitiveChange={setSearchCaseSensitive}
+          onClose={searchQuery ? () => setSearchQuery('') : undefined}
+          autoFocus={false}
+          testIdPrefix="inbox-search"
+        />
       </div>
 
       {/* Project filter */}
@@ -240,99 +252,103 @@ export function AutomationInboxView() {
       )}
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto p-6">
-        {filteredInbox.length === 0 ? (
-          <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-            <Inbox className="mb-3 h-8 w-8 opacity-50" />
-            <p className="text-sm">No pending reviews.</p>
-            <p className="mt-1 text-xs">Automation results that need review will appear here.</p>
-          </div>
-        ) : (
-          <div className="mx-auto max-w-2xl space-y-3">
-            {filteredInbox.map(({ run, automation, thread }) => {
-              const itemProject = projects.find((p) => p.id === thread.projectId);
-              return (
-                <div
-                  key={run.id}
-                  className={cn(
-                    'rounded-lg border bg-card p-4 space-y-3 cursor-pointer transition-colors',
-                    selectedThreadId === thread.id
-                      ? 'border-primary/50 bg-accent/30'
-                      : 'border-border/50 hover:border-border',
-                  )}
-                  onClick={() => handleSelectItem(thread.id)}
-                >
-                  <div className="flex items-center justify-between">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-medium">{automation.name}</p>
-                      <p className="truncate text-xs text-muted-foreground">
-                        {itemProject && <span className="font-medium">{itemProject.name} · </span>}
-                        {thread.title}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-2">
-                      <span
-                        className={cn(
-                          'text-xs px-1.5 py-0.5 rounded-full',
-                          run.hasFindings
-                            ? 'bg-status-warning/10 text-status-warning/80'
-                            : 'bg-muted text-muted-foreground',
-                        )}
-                      >
-                        {run.hasFindings ? 'Has findings' : 'No findings'}
-                      </span>
-                      <span className="text-xs text-muted-foreground">
-                        {run.completedAt ? new Date(run.completedAt).toLocaleString() : ''}
-                      </span>
-                    </div>
-                  </div>
-                  {run.summary && <p className="text-xs text-muted-foreground">{run.summary}</p>}
-                  <div className="flex items-center justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setAutomationInboxOpen(false);
-                        navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
-                      }}
-                    >
-                      View Thread
-                    </Button>
-                    {run.triageStatus === 'pending' && (
-                      <>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            triageRun(run.id, 'dismissed');
-                          }}
-                        >
-                          Dismiss
-                        </Button>
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="h-7 text-xs"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            triageRun(run.id, 'reviewed');
-                          }}
-                        >
-                          Mark Reviewed
-                        </Button>
-                      </>
+      <ScrollArea className="flex-1">
+        <div className="p-6">
+          {filteredInbox.length === 0 ? (
+            <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
+              <Inbox className="mb-3 h-8 w-8 opacity-50" />
+              <p className="text-sm">No pending reviews.</p>
+              <p className="mt-1 text-xs">Automation results that need review will appear here.</p>
+            </div>
+          ) : (
+            <div className="mx-auto max-w-2xl space-y-3">
+              {filteredInbox.map(({ run, automation, thread }) => {
+                const itemProject = projects.find((p) => p.id === thread.projectId);
+                return (
+                  <div
+                    key={run.id}
+                    className={cn(
+                      'rounded-lg border bg-card p-4 space-y-3 cursor-pointer transition-colors',
+                      selectedThreadId === thread.id
+                        ? 'border-primary/50 bg-accent/30'
+                        : 'border-border/50 hover:border-border',
                     )}
+                    onClick={() => handleSelectItem(thread.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="min-w-0">
+                        <p className="truncate text-sm font-medium">{automation.name}</p>
+                        <p className="truncate text-xs text-muted-foreground">
+                          {itemProject && (
+                            <span className="font-medium">{itemProject.name} · </span>
+                          )}
+                          {thread.title}
+                        </p>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span
+                          className={cn(
+                            'text-xs px-1.5 py-0.5 rounded-full',
+                            run.hasFindings
+                              ? 'bg-status-warning/10 text-status-warning/80'
+                              : 'bg-muted text-muted-foreground',
+                          )}
+                        >
+                          {run.hasFindings ? 'Has findings' : 'No findings'}
+                        </span>
+                        <span className="text-xs text-muted-foreground">
+                          {run.completedAt ? new Date(run.completedAt).toLocaleString() : ''}
+                        </span>
+                      </div>
+                    </div>
+                    {run.summary && <p className="text-xs text-muted-foreground">{run.summary}</p>}
+                    <div className="flex items-center justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setAutomationInboxOpen(false);
+                          navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
+                        }}
+                      >
+                        View Thread
+                      </Button>
+                      {run.triageStatus === 'pending' && (
+                        <>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              triageRun(run.id, 'dismissed');
+                            }}
+                          >
+                            Dismiss
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 text-xs"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              triageRun(run.id, 'reviewed');
+                            }}
+                          >
+                            Mark Reviewed
+                          </Button>
+                        </>
+                      )}
+                    </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </ScrollArea>
     </div>
   );
 }

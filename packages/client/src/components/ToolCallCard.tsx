@@ -2,6 +2,7 @@ import { ChevronRight, Wrench, ListTodo, Check } from 'lucide-react';
 import { useState, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { timeAgo } from '@/lib/thread-utils';
@@ -255,7 +256,7 @@ export const ToolCallCard = memo(
           )}
         </button>
         {expanded && (
-          <div className="max-h-[50vh] overflow-y-auto border-t border-border/40">
+          <ScrollArea className="max-h-[50vh] border-t border-border/40">
             {isTodo && todos ? (
               <div className="px-3">
                 <TodoList todos={todos} />
@@ -320,7 +321,7 @@ export const ToolCallCard = memo(
                 )}
               </div>
             )}
-          </div>
+          </ScrollArea>
         )}
       </div>
     );

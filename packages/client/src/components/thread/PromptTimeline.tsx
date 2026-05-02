@@ -9,6 +9,7 @@ import {
 } from 'lucide-react';
 import { useMemo, useRef, useEffect, type RefObject } from 'react';
 
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
@@ -503,9 +504,11 @@ function TimelineMilestone({
             <div className="font-mono text-[10px] text-muted-foreground">
               {formatRelativeTime(milestone.timestamp)}
             </div>
-            <pre className="max-h-[200px] overflow-y-auto whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
-              {milestone.content.trim()}
-            </pre>
+            <ScrollArea className="max-h-[200px]">
+              <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed">
+                {milestone.content.trim()}
+              </pre>
+            </ScrollArea>
           </div>
         </TooltipContent>
       </Tooltip>

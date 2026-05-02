@@ -1,11 +1,12 @@
 import type { Thread, ThreadStatus } from '@funny/shared';
-import { Search, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { type ReactNode, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { BranchBadge } from '@/components/BranchBadge';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
-import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { SearchBar } from '@/components/ui/search-bar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { statusConfig, timeAgo, getStatusLabels } from '@/lib/thread-utils';
@@ -36,6 +37,10 @@ interface ThreadListViewProps {
   contentSnippets?: Map<string, string>;
   /** Expose the search keyboard handler so external inputs can drive arrow navigation */
   onSearchKeyDownRef?: React.MutableRefObject<((e: React.KeyboardEvent) => void) | null>;
+  /** Current case-sensitive state. Pass `onCaseSensitiveChange` to enable the toggle. */
+  caseSensitive?: boolean;
+  /** Called when the user toggles case sensitivity. */
+  onCaseSensitiveChange?: (value: boolean) => void;
 }
 
 export function ThreadListView({
@@ -62,6 +67,8 @@ export function ThreadListView({
   hideBranch = false,
   contentSnippets,
   onSearchKeyDownRef,
+  caseSensitive,
+  onCaseSensitiveChange,
 }: ThreadListViewProps) {
   const { t } = useTranslation();
   useMinuteTick();
@@ -154,19 +161,20 @@ export function ThreadListView({
       {/* Search + optional page size */}
       {!hideSearch && (
         <div className="flex flex-shrink-0 items-center gap-2">
-          <div className="relative flex-1">
-            <Search className="icon-sm absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              ref={searchInputRef}
-              type="text"
-              placeholder={searchPlaceholder}
-              value={search}
-              onChange={(e) => onSearchChange(e.target.value)}
-              onKeyDown={handleSearchKeyDown}
-              autoFocus={autoFocusSearch}
-              className="h-auto w-full py-1.5 pl-8 pr-3 text-xs"
-            />
-          </div>
+          <SearchBar
+            inputRef={searchInputRef}
+            query={search}
+            onQueryChange={onSearchChange}
+            placeholder={searchPlaceholder}
+            totalMatches={threads.length}
+            resultLabel={search.trim() ? `${threads.length}/${totalCount}` : ''}
+            caseSensitive={caseSensitive}
+            onCaseSensitiveChange={onCaseSensitiveChange}
+            onInputKeyDown={handleSearchKeyDown}
+            autoFocus={!!autoFocusSearch}
+            testIdPrefix="thread-list-search"
+            className="flex-1 rounded-md border border-input bg-background px-2"
+          />
           {pageSizeOptions && onPageSizeChange && (
             <select
               value={pageSize}
@@ -194,7 +202,7 @@ export function ThreadListView({
           {search ? searchEmptyMessage : emptyMessage}
         </div>
       ) : (
-        <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-border/50">
+        <ScrollArea className="min-h-0 flex-1 rounded-lg border border-border/50">
           {threads.map((thread, i) => {
             const s = statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending;
             const Icon = s.icon;
@@ -253,7 +261,7 @@ export function ThreadListView({
               </Wrapper>
             );
           })}
-        </div>
+        </ScrollArea>
       )}
 
       {/* Pagination */}

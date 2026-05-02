@@ -27,6 +27,7 @@ export function ThreadSearchBar({
 }: ThreadSearchBarProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
+  const [caseSensitive, setCaseSensitive] = useState(false);
   const [results, setResults] = useState<SearchResult[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -37,6 +38,7 @@ export function ThreadSearchBar({
   useEffect(() => {
     if (!open) {
       setQuery('');
+      setCaseSensitive(false);
       setResults([]);
       setCurrentIndex(0);
       setLoading(false);
@@ -44,7 +46,7 @@ export function ThreadSearchBar({
   }, [open, threadId]);
 
   const doSearch = useCallback(
-    async (q: string) => {
+    async (q: string, cs: boolean) => {
       if (abortRef.current) abortRef.current.abort();
 
       if (!q.trim()) {
@@ -59,7 +61,7 @@ export function ThreadSearchBar({
       abortRef.current = controller;
 
       try {
-        const result = await api.searchThreadMessages(threadId, q.trim());
+        const result = await api.searchThreadMessages(threadId, q.trim(), 100, cs);
         if (controller.signal.aborted) return;
         if (result.isOk()) {
           const { results: items } = result.value;
@@ -87,7 +89,13 @@ export function ThreadSearchBar({
   const handleQueryChange = (value: string) => {
     setQuery(value);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    debounceRef.current = setTimeout(() => doSearch(value), 300);
+    debounceRef.current = setTimeout(() => doSearch(value, caseSensitive), 300);
+  };
+
+  const handleCaseSensitiveChange = (value: boolean) => {
+    setCaseSensitive(value);
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    doSearch(query, value);
   };
 
   const navigatePrev = useCallback(() => {
@@ -110,6 +118,8 @@ export function ThreadSearchBar({
     <SearchBar
       query={query}
       onQueryChange={handleQueryChange}
+      caseSensitive={caseSensitive}
+      onCaseSensitiveChange={handleCaseSensitiveChange}
       currentIndex={Math.max(0, currentIndex)}
       totalMatches={results.length}
       onPrev={navigatePrev}

@@ -140,6 +140,48 @@ export async function createRuntimeApp(options: RuntimeAppOptions): Promise<Runt
     return c.json({ shells: detectShells() });
   });
 
+  // Pi models discovery endpoint — spawns pi-acp out of process and returns
+  // the catalog it advertises. Cached briefly so opening the model selector
+  // doesn't fork a child every time. Pass `?refresh=1` to bust the cache
+  // (e.g. after the user runs `pi /login`).
+  let piModelsCache: { at: number; payload: unknown } | null = null;
+  const PI_MODELS_TTL_MS = 60_000;
+  app.get('/api/system/pi/models', async (c) => {
+    const refresh = c.req.query('refresh') === '1' || c.req.query('refresh') === 'true';
+    if (!refresh && piModelsCache && Date.now() - piModelsCache.at < PI_MODELS_TTL_MS) {
+      return c.json(piModelsCache.payload);
+    }
+    const { discoverPiModels } = await import('@funny/core/agents');
+    const result = await discoverPiModels();
+    const payload = result.ok
+      ? {
+          ok: true as const,
+          models: result.models,
+          currentModelId: result.currentModelId,
+          discoveredAt: Date.now(),
+        }
+      : {
+          ok: false as const,
+          reason: result.reason,
+          message: result.message ?? null,
+          discoveredAt: Date.now(),
+        };
+    piModelsCache = { at: Date.now(), payload };
+    if (!result.ok) {
+      log.warn('pi model discovery failed', {
+        namespace: 'pi-discover',
+        reason: result.reason,
+        message: result.message,
+      });
+    } else {
+      log.info('pi model discovery ok', {
+        namespace: 'pi-discover',
+        count: result.models.length,
+      });
+    }
+    return c.json(payload);
+  });
+
   // Setup status endpoint
   app.get('/api/setup/status', async (c) => {
     resetProviderCache();

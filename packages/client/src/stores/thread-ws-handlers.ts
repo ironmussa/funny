@@ -8,6 +8,7 @@ import { toast } from 'sonner';
 
 import i18n from '@/i18n/config';
 import { createClientLogger } from '@/lib/client-logger';
+import { saveContextUsage } from '@/lib/context-usage-storage';
 import { buildPath } from '@/lib/url';
 
 import {
@@ -685,6 +686,9 @@ export function handleWSContextUsage(
     lastInputTokens: data.inputTokens,
     lastOutputTokens: data.outputTokens,
   };
+
+  // Persist across page reloads — the runtime only keeps usage in memory.
+  saveContextUsage(threadId, usage);
 
   // Always persist to the map so it survives thread switches
   const updates: Partial<import('./thread-store').ThreadState> = {

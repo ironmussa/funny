@@ -11,6 +11,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { createClientLogger } from '@/lib/client-logger';
 import { remarkPlugins } from '@/lib/markdown-components';
@@ -139,31 +140,33 @@ function PlanOutline({
   if (titled.length < 2) return null;
 
   return (
-    <nav
-      className="w-56 flex-shrink-0 overflow-y-auto border-r border-border/40 py-3"
+    <ScrollArea
+      className="w-56 flex-shrink-0 border-r border-border/40 py-3"
       data-testid="plan-review-outline"
     >
-      <ul className="space-y-0.5 px-2">
-        {titled.map((section) => (
-          <li key={section.id}>
-            <button
-              onClick={() => onNavigate(section.id)}
-              data-testid={`plan-outline-item-${section.id}`}
-              className={cn(
-                'w-full truncate rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent',
-                section.level >= 3 && 'pl-5',
-                section.level >= 4 && 'pl-8',
-                activeSectionId === section.id
-                  ? 'bg-accent font-medium text-foreground'
-                  : 'text-muted-foreground',
-              )}
-            >
-              {section.title}
-            </button>
-          </li>
-        ))}
-      </ul>
-    </nav>
+      <nav>
+        <ul className="space-y-0.5 px-2">
+          {titled.map((section) => (
+            <li key={section.id}>
+              <button
+                onClick={() => onNavigate(section.id)}
+                data-testid={`plan-outline-item-${section.id}`}
+                className={cn(
+                  'w-full truncate rounded px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent',
+                  section.level >= 3 && 'pl-5',
+                  section.level >= 4 && 'pl-8',
+                  activeSectionId === section.id
+                    ? 'bg-accent font-medium text-foreground'
+                    : 'text-muted-foreground',
+                )}
+              >
+                {section.title}
+              </button>
+            </li>
+          ))}
+        </ul>
+      </nav>
+    </ScrollArea>
   );
 }
 

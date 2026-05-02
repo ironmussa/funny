@@ -23,9 +23,10 @@ export const threadsApi = {
     const params = new URLSearchParams({ designId, limit: String(limit) });
     return request<PaginatedThreadsResponse>(`/threads?${params.toString()}`);
   },
-  searchThreadContent: (query: string, projectId?: string) => {
+  searchThreadContent: (query: string, projectId?: string, caseSensitive = false) => {
     const params = new URLSearchParams({ q: query });
     if (projectId) params.set('projectId', projectId);
+    if (caseSensitive) params.set('caseSensitive', 'true');
     return request<{ threadIds: string[]; snippets: Record<string, string> }>(
       `/threads/search/content?${params.toString()}`,
     );
@@ -38,8 +39,9 @@ export const threadsApi = {
     const params = new URLSearchParams({ cursor, limit: String(limit) });
     return request<PaginatedMessages>(`/threads/${threadId}/messages?${params.toString()}`);
   },
-  searchThreadMessages: (threadId: string, query: string, limit = 100) => {
+  searchThreadMessages: (threadId: string, query: string, limit = 100, caseSensitive = false) => {
     const params = new URLSearchParams({ q: query, limit: String(limit) });
+    if (caseSensitive) params.set('caseSensitive', 'true');
     return request<{
       results: Array<{
         messageId: string;

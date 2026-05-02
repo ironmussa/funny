@@ -20,7 +20,8 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { Badge } from '@/components/ui/badge';
 import { CodeViewer } from '@/components/ui/code-viewer';
-import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { SearchBar } from '@/components/ui/search-bar';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { api } from '@/lib/api';
@@ -128,17 +129,17 @@ function LogTab({ outputLines }: { outputLines: OutputLine[] }) {
   };
 
   return (
-    <div
-      ref={logRef}
-      onScroll={handleScroll}
-      className="h-full overflow-y-auto px-3 py-1 font-mono text-xs"
+    <ScrollArea
+      viewportRef={logRef}
+      viewportProps={{ onScroll: handleScroll }}
+      className="h-full font-mono text-xs"
     >
       {outputLines.length === 0 ? (
         <div className="flex h-full items-center justify-center text-muted-foreground">
           Test output will appear here...
         </div>
       ) : (
-        <pre className="whitespace-pre-wrap break-words leading-relaxed text-foreground">
+        <pre className="whitespace-pre-wrap break-words px-3 py-1 leading-relaxed text-foreground">
           {outputLines.map((line, i) => (
             <div
               key={i}
@@ -148,7 +149,7 @@ function LogTab({ outputLines }: { outputLines: OutputLine[] }) {
           ))}
         </pre>
       )}
-    </div>
+    </ScrollArea>
   );
 }
 
@@ -170,7 +171,11 @@ function ConsoleTab({ entries }: { entries: WSTestConsoleData[] }) {
   };
 
   return (
-    <div ref={ref} onScroll={handleScroll} className="h-full overflow-y-auto font-mono text-xs">
+    <ScrollArea
+      viewportRef={ref}
+      viewportProps={{ onScroll: handleScroll }}
+      className="h-full font-mono text-xs"
+    >
       {entries.length === 0 ? (
         <div className="flex h-full items-center justify-center text-muted-foreground">
           Browser console messages will appear here...
@@ -199,7 +204,7 @@ function ConsoleTab({ entries }: { entries: WSTestConsoleData[] }) {
           ))}
         </div>
       )}
-    </div>
+    </ScrollArea>
   );
 }
 
@@ -207,7 +212,7 @@ function ConsoleTab({ entries }: { entries: WSTestConsoleData[] }) {
 
 function ErrorsTab({ entries }: { entries: WSTestErrorData[] }) {
   return (
-    <div className="h-full overflow-y-auto font-mono text-xs">
+    <ScrollArea className="h-full font-mono text-xs">
       {entries.length === 0 ? (
         <div className="flex h-full items-center justify-center text-muted-foreground">
           No errors captured
@@ -236,7 +241,7 @@ function ErrorsTab({ entries }: { entries: WSTestErrorData[] }) {
           ))}
         </div>
       )}
-    </div>
+    </ScrollArea>
   );
 }
 
@@ -272,6 +277,7 @@ function matchesNetworkFilter(entry: TestNetworkEntry, filter: NetworkFilter): b
 function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
   const [filter, setFilter] = useState<NetworkFilter>('All');
   const [search, setSearch] = useState('');
+  const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
@@ -280,11 +286,15 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
       result = result.filter((e) => matchesNetworkFilter(e, filter));
     }
     if (search) {
-      const q = search.toLowerCase();
-      result = result.filter((e) => e.url.toLowerCase().includes(q));
+      if (searchCaseSensitive) {
+        result = result.filter((e) => e.url.includes(search));
+      } else {
+        const q = search.toLowerCase();
+        result = result.filter((e) => e.url.toLowerCase().includes(q));
+      }
     }
     return result;
-  }, [entries, filter, search]);
+  }, [entries, filter, search, searchCaseSensitive]);
 
   const selectedEntry = useMemo(
     () => (selectedId ? (entries.find((e) => e.id === selectedId) ?? null) : null),
@@ -295,13 +305,18 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
     <div className="flex h-full flex-col text-xs">
       {/* Filter toolbar */}
       <div className="flex items-center gap-1 border-b px-2 py-1">
-        <Input
-          type="text"
+        <SearchBar
+          query={search}
+          onQueryChange={setSearch}
           placeholder="Filter network"
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="mr-2 w-40"
-          data-testid="network-filter-input"
+          totalMatches={filtered.length}
+          resultLabel={search ? `${filtered.length}/${entries.length}` : ''}
+          caseSensitive={searchCaseSensitive}
+          onCaseSensitiveChange={setSearchCaseSensitive}
+          onClose={search ? () => setSearch('') : undefined}
+          autoFocus={false}
+          testIdPrefix="network-filter"
+          className="mr-2 w-72"
         />
         {NETWORK_FILTERS.map((f) => (
           <button
@@ -323,11 +338,8 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
       {/* Split: request list + detail panel */}
       <div className="flex min-h-0 flex-1">
         {/* Request list */}
-        <div
-          className={cn(
-            'min-h-0 overflow-y-auto border-r',
-            selectedEntry ? 'w-[280px] shrink-0' : 'flex-1',
-          )}
+        <ScrollArea
+          className={cn('min-h-0 border-r', selectedEntry ? 'w-[280px] shrink-0' : 'flex-1')}
         >
           {filtered.length === 0 ? (
             <div className="flex h-full items-center justify-center text-muted-foreground">
@@ -406,7 +418,7 @@ function NetworkTab({ entries }: { entries: TestNetworkEntry[] }) {
               </tbody>
             </table>
           )}
-        </div>
+        </ScrollArea>
 
         {/* Detail panel */}
         {selectedEntry && (
@@ -507,11 +519,13 @@ function NetworkDetailPanel({ entry, onClose }: { entry: TestNetworkEntry; onClo
       </div>
 
       {/* Detail content */}
-      <div className="min-h-0 flex-1 overflow-y-auto px-4 py-2 font-mono">
-        {tab === 'headers' && <HeadersDetail entry={entry} />}
-        {tab === 'payload' && <PayloadDetail entry={entry} />}
-        {tab === 'response' && <ResponseDetail entry={entry} />}
-      </div>
+      <ScrollArea className="min-h-0 flex-1 font-mono">
+        <div className="px-4 py-2">
+          {tab === 'headers' && <HeadersDetail entry={entry} />}
+          {tab === 'payload' && <PayloadDetail entry={entry} />}
+          {tab === 'response' && <ResponseDetail entry={entry} />}
+        </div>
+      </ScrollArea>
     </div>
   );
 }
@@ -944,7 +958,11 @@ function CallTab({
   }
 
   return (
-    <div ref={ref} onScroll={handleScroll} className="h-full overflow-y-auto font-mono text-xs">
+    <ScrollArea
+      viewportRef={ref}
+      viewportProps={{ onScroll: handleScroll }}
+      className="h-full font-mono text-xs"
+    >
       {hasStructured ? (
         <div>
           {structuredActions!.map((action) => (
@@ -985,7 +1003,7 @@ function CallTab({
           ))}
         </div>
       )}
-    </div>
+    </ScrollArea>
   );
 }
 
@@ -1028,7 +1046,7 @@ function AnnotationsTab({ outputLines }: { outputLines: OutputLine[] }) {
   }, [outputLines]);
 
   return (
-    <div className="h-full overflow-y-auto text-xs">
+    <ScrollArea className="h-full text-xs">
       {annotations.length === 0 ? (
         <div className="flex h-full items-center justify-center text-muted-foreground">
           No annotations found
@@ -1047,7 +1065,7 @@ function AnnotationsTab({ outputLines }: { outputLines: OutputLine[] }) {
           ))}
         </div>
       )}
-    </div>
+    </ScrollArea>
   );
 }
 

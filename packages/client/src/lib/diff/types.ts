@@ -42,6 +42,8 @@ export interface VirtualDiffProps {
   wordWrap?: boolean;
   /** Search query to highlight in diff content */
   searchQuery?: string;
+  /** Whether the search should be case-sensitive. Default: false */
+  searchCaseSensitive?: boolean;
   /** Index of the current active match (0-based) for "current match" styling */
   currentMatchIndex?: number;
   /** Callback reporting total match count when searchQuery changes */

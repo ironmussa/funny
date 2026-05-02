@@ -5,9 +5,11 @@
  * @domain layer: infrastructure
  */
 
-import { git } from '@funny/core/git';
+import { fetchRemote, git, type GitIdentityOptions } from '@funny/core/git';
 import { ok } from 'neverthrow';
 
+import { log } from '../../lib/logger.js';
+import { startSpan } from '../../lib/telemetry.js';
 import * as tm from '../../services/thread-manager.js';
 import { requireProject } from '../../utils/route-helpers.js';
 
@@ -30,6 +32,45 @@ export async function invalidateGitStatusCache(threadId: string) {
 /** Invalidate cached git status by project ID directly. Exported for use by event handlers. */
 export function invalidateGitStatusCacheByProject(projectId: string) {
   _gitStatusCache.delete(projectId);
+}
+
+/**
+ * Throttled background `git fetch`. Returns immediately; the network fetch runs
+ * detached so /api/git/status responses aren't blocked by remote round-trips.
+ * On completion, the per-project bulk cache is invalidated so the next status
+ * call recomputes `unpulledCommitCount` against the freshly updated refs.
+ *
+ * Returns true when a fetch was scheduled, false when the throttle window
+ * suppressed it. Callers don't need to await — the caller has already moved on.
+ */
+export function scheduleBackgroundFetch(
+  projectId: string,
+  projectPath: string,
+  identity: GitIdentityOptions | undefined,
+  attrs?: Record<string, string | number | boolean>,
+): boolean {
+  const lastFetch = _lastFetchTs.get(projectId) ?? 0;
+  if (Date.now() - lastFetch <= FETCH_THROTTLE_MS) return false;
+  _lastFetchTs.set(projectId, Date.now());
+
+  const span = startSpan('git.fetch_remote', {
+    attributes: { projectId, background: true, ...(attrs ?? {}) },
+  });
+  fetchRemote(projectPath, identity).match(
+    () => {
+      span.end('ok');
+      _gitStatusCache.delete(projectId);
+    },
+    (error) => {
+      span.end('error', error.message);
+      log.warn('Background git fetch failed', {
+        namespace: 'git-service',
+        projectId,
+        error: error.message,
+      });
+    },
+  );
+  return true;
 }
 
 /** Count unpushed commits on a branch vs its remote tracking branch. */

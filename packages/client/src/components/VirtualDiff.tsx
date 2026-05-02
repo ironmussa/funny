@@ -50,6 +50,7 @@ export const VirtualDiff = memo(function VirtualDiff({
   showMinimap = false,
   wordWrap = false,
   searchQuery,
+  searchCaseSensitive = false,
   currentMatchIndex = -1,
   onMatchCount,
   onResolveConflict,
@@ -343,14 +344,17 @@ export const VirtualDiff = memo(function VirtualDiff({
     for (const row of renderRows) {
       let count = 0;
       if (row.type === 'unified-line') {
-        count = countTextMatches(row.line.text, q);
+        count = countTextMatches(row.line.text, q, searchCaseSensitive);
       } else if (row.type === 'split-pair') {
-        if (row.pair.left) count += countTextMatches(row.pair.left.text, q);
-        if (row.pair.right) count += countTextMatches(row.pair.right.text, q);
+        if (row.pair.left) count += countTextMatches(row.pair.left.text, q, searchCaseSensitive);
+        if (row.pair.right) count += countTextMatches(row.pair.right.text, q, searchCaseSensitive);
       } else if (row.type === 'three-pane-triple') {
-        if (row.triple.left) count += countTextMatches(row.triple.left.text, q);
-        if (row.triple.center) count += countTextMatches(row.triple.center.text, q);
-        if (row.triple.right) count += countTextMatches(row.triple.right.text, q);
+        if (row.triple.left)
+          count += countTextMatches(row.triple.left.text, q, searchCaseSensitive);
+        if (row.triple.center)
+          count += countTextMatches(row.triple.center.text, q, searchCaseSensitive);
+        if (row.triple.right)
+          count += countTextMatches(row.triple.right.text, q, searchCaseSensitive);
       }
       perRow.push(count);
     }
@@ -369,7 +373,7 @@ export const VirtualDiff = memo(function VirtualDiff({
     }
 
     return { perRow, prefixSum, total, matchToRow };
-  }, [renderRows, searchQuery]);
+  }, [renderRows, searchQuery, searchCaseSensitive]);
 
   // Report match count to parent
   useEffect(() => {
@@ -753,6 +757,7 @@ export const VirtualDiff = memo(function VirtualDiff({
                     lang={highlightLang}
                     wrap={wordWrap}
                     searchQuery={searchQuery}
+                    searchCaseSensitive={searchCaseSensitive}
                     matchOffset={searchMatchData?.prefixSum[vItem.index]}
                     currentMatchIdx={currentMatchIndex}
                   />
@@ -763,6 +768,7 @@ export const VirtualDiff = memo(function VirtualDiff({
                     lang={highlightLang}
                     wrap={wordWrap}
                     searchQuery={searchQuery}
+                    searchCaseSensitive={searchCaseSensitive}
                     matchOffset={searchMatchData?.prefixSum[vItem.index]}
                     currentMatchIdx={currentMatchIndex}
                   />
@@ -773,6 +779,7 @@ export const VirtualDiff = memo(function VirtualDiff({
                     lang={highlightLang}
                     wrap={wordWrap}
                     searchQuery={searchQuery}
+                    searchCaseSensitive={searchCaseSensitive}
                     matchOffset={searchMatchData?.prefixSum[vItem.index]}
                     currentMatchIdx={currentMatchIndex}
                     selectable={selectable}

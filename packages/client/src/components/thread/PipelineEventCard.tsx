@@ -23,6 +23,7 @@ import { memo, useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
@@ -432,12 +433,12 @@ function PrecommitHooksCard({
                   <span className="truncate font-mono">{hook.label}</span>
                 </div>
                 {errorHtml && (
-                  <div className="ml-4.5 mt-0.5 max-h-60 overflow-auto rounded border border-border/40 bg-background/80 px-2.5 py-1.5">
+                  <ScrollArea className="ml-4.5 mt-0.5 max-h-60 rounded border border-border/40 bg-background/80">
                     <pre
-                      className="whitespace-pre-wrap break-words font-mono text-[11px] leading-relaxed text-muted-foreground"
+                      className="whitespace-pre-wrap break-words px-2.5 py-1.5 font-mono text-[11px] leading-relaxed text-muted-foreground"
                       dangerouslySetInnerHTML={{ __html: errorHtml }}
                     />
-                  </div>
+                  </ScrollArea>
                 )}
               </div>
             );

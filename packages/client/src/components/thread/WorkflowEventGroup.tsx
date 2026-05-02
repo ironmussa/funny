@@ -12,6 +12,7 @@ import { useShallow } from 'zustand/shallow';
 
 import type { GitProgressStep } from '@/components/GitProgressModal';
 import { SubItemsList } from '@/components/GitProgressModal';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useCommitProgressStore } from '@/stores/commit-progress-store';
@@ -277,9 +278,11 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
               ))}
               {status.error && innerEvents.length === 0 && (
                 <div className="px-3 py-1.5">
-                  <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words rounded bg-destructive/5 p-2 font-mono text-[11px] text-destructive/80">
-                    {status.error}
-                  </pre>
+                  <ScrollArea className="max-h-40 rounded bg-destructive/5">
+                    <pre className="whitespace-pre-wrap break-words p-2 font-mono text-[11px] text-destructive/80">
+                      {status.error}
+                    </pre>
+                  </ScrollArea>
                 </div>
               )}
             </>

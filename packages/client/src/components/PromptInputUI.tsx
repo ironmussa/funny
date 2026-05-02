@@ -44,6 +44,7 @@ import type { PromptEditorHandle } from './prompt-editor/PromptEditor';
 import { PromptEditor } from './prompt-editor/PromptEditor';
 import { serializeEditorContent } from './prompt-editor/serialize';
 import { BranchPicker } from './SearchablePicker';
+import { ContextUsageRing } from './thread/ContextUsageRing';
 
 // ── Selectors ────────────────────────────────────────────────────
 
@@ -80,7 +81,7 @@ export const ModeSelect = memo(function ModeSelect({
 export type ModelSelectGroup = {
   provider: string;
   providerLabel: string;
-  models: { value: string; label: string }[];
+  models: { value: string; label: string; disabled?: boolean }[];
 };
 
 export const ModelSelect = memo(function ModelSelect({
@@ -108,7 +109,7 @@ export const ModelSelect = memo(function ModelSelect({
             {idx > 0 && <SelectSeparator />}
             <SelectLabel>{group.providerLabel}</SelectLabel>
             {group.models.map((m) => (
-              <SelectItem key={m.value} value={m.value} size="xs">
+              <SelectItem key={m.value} value={m.value} size="xs" disabled={m.disabled}>
                 {m.label}
               </SelectItem>
             ))}
@@ -352,6 +353,10 @@ export interface PromptInputUIProps {
 
   // ── Default template (from project settings) ──
   defaultTemplateId?: string;
+
+  // ── Context window usage (% of total context used) ──
+  contextPct?: number;
+  onCompact?: () => void;
 }
 
 // ── Component ────────────────────────────────────────────────────
@@ -410,6 +415,8 @@ export const PromptInputUI = memo(function PromptInputUI({
   onEffortChange,
   effortOptions,
   defaultTemplateId,
+  contextPct,
+  onCompact,
 }: PromptInputUIProps) {
   const { t } = useTranslation();
 
@@ -1006,6 +1013,9 @@ export const PromptInputUI = memo(function PromptInputUI({
               <ModeSelect value={mode} onChange={onModeChange} modes={modes} />
               {/* Model + effort + send — always visible, pushed right */}
               <div className="ml-auto flex shrink-0 items-center gap-1">
+                {typeof contextPct === 'number' && (
+                  <ContextUsageRing pct={contextPct} onCompact={onCompact} disabled={!onCompact} />
+                )}
                 <ModelSelect
                   value={unifiedModel}
                   onChange={onUnifiedModelChange}

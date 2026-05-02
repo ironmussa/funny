@@ -10,7 +10,6 @@ import {
   Pin,
   PinOff,
   Plus,
-  Search,
   Trash2,
   Chrome,
   Bot,
@@ -38,9 +37,10 @@ import {
   DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
-import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { colorFromName } from '@/components/ui/project-chip';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { stageConfig, statusConfig, timeAgo } from '@/lib/thread-utils';
@@ -378,18 +378,19 @@ function AddThreadButton({
         <TooltipContent>{t('kanban.addThread')}</TooltipContent>
       </Tooltip>
       <PopoverContent align="start" className="w-64 p-0">
-        <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2.5">
-          <Search className="icon-base shrink-0 text-muted-foreground" />
-          <Input
-            ref={inputRef}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+        <div className="border-b border-border/50 px-2 py-1.5">
+          <SearchBar
+            inputRef={inputRef}
+            query={search}
+            onQueryChange={setSearch}
             placeholder={t('kanban.searchProject')}
-            className="h-auto flex-1 rounded-none border-0 bg-transparent px-0 py-0 text-sm shadow-none placeholder:text-muted-foreground focus-visible:ring-0"
+            totalMatches={filtered.length}
+            resultLabel={search ? `${filtered.length}/${projects.length}` : ''}
             autoFocus
+            testIdPrefix="kanban-add-thread-search"
           />
         </div>
-        <div className="max-h-56 overflow-y-auto py-1">
+        <ScrollArea className="max-h-56 py-1">
           {filtered.length === 0 ? (
             <div className="py-3 text-center text-sm text-muted-foreground">
               {t('commandPalette.noResults')}
@@ -413,7 +414,7 @@ function AddThreadButton({
               </button>
             ))
           )}
-        </div>
+        </ScrollArea>
       </PopoverContent>
     </Popover>
   );

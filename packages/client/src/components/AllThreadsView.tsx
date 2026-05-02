@@ -2,12 +2,12 @@ import type { ThreadStatus, GitSyncState } from '@funny/shared';
 import {
   ChevronLeft,
   Archive,
-  Search,
   ArrowUp,
   ArrowDown,
   Columns3,
   ChevronDown,
   Check,
+  Search,
   X,
 } from 'lucide-react';
 import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
@@ -25,9 +25,9 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { normalize } from '@/components/ui/highlight-text';
-import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { colorFromName } from '@/components/ui/project-chip';
+import { SearchBar } from '@/components/ui/search-bar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { VirtualThreadList } from '@/components/VirtualThreadList';
 import { api } from '@/lib/api';
@@ -202,6 +202,7 @@ export function AllThreadsView() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchKeyDownRef = useRef<((e: React.KeyboardEvent) => void) | null>(null);
   const [search, setSearch] = useState('');
+  const [caseSensitive, setCaseSensitive] = useState(false);
   const [statusFilter, setStatusFilter] = useState<Set<string>>(() => {
     const paramStatus = searchParams.get('status');
     if (paramStatus) return new Set(paramStatus.split(',').filter(Boolean));
@@ -230,7 +231,7 @@ export function AllThreadsView() {
   // Stores threadId → snippet so we can display matching text on cards
   const [contentMatches, setContentMatches] = useState<Map<string, string>>(new Map());
   const searchTimerRef = useRef<ReturnType<typeof setTimeout>>(undefined);
-  // Cache: key = "query|projectId" → Map<threadId, snippet>
+  // Cache: key = "query|projectId|cs" → Map<threadId, snippet>
   const searchCacheRef = useRef<Map<string, Map<string, string>>>(new Map());
 
   useEffect(() => {
@@ -243,7 +244,7 @@ export function AllThreadsView() {
       return;
     }
 
-    const cacheKey = `${q}|${projectFilter || ''}`;
+    const cacheKey = `${q}|${projectFilter || ''}|${caseSensitive ? '1' : '0'}`;
     const cached = searchCacheRef.current.get(cacheKey);
     if (cached) {
       setContentMatches(cached);
@@ -253,7 +254,7 @@ export function AllThreadsView() {
     // Debounce 300ms to avoid hammering the server on every keystroke
     searchTimerRef.current = setTimeout(() => {
       const pid = projectFilter || undefined;
-      api.searchThreadContent(q, pid).then((res) => {
+      api.searchThreadContent(q, pid, caseSensitive).then((res) => {
         if (res.isOk()) {
           const map = new Map<string, string>();
           const { threadIds, snippets } = res.value;
@@ -274,7 +275,7 @@ export function AllThreadsView() {
     return () => {
       if (searchTimerRef.current) clearTimeout(searchTimerRef.current);
     };
-  }, [search, projectFilter]);
+  }, [search, projectFilter, caseSensitive]);
 
   const projectInfoById = useMemo(() => {
     const map: Record<string, { name: string; color?: string }> = {};
@@ -333,17 +334,21 @@ export function AllThreadsView() {
   const filtered = useMemo(() => {
     let result = allThreads;
 
-    // Text search (accent-insensitive) — matches title, branch, status, project name, OR message content
+    // Text search — matches title, branch, status, project name, OR message content.
+    // Case-insensitive by default (also strips accents); case-sensitive uses raw substring match.
     if (search.trim()) {
-      const q = normalize(search);
+      const matches = caseSensitive
+        ? (text: string | undefined | null) => !!text && text.includes(search)
+        : (
+            (q) => (text: string | undefined | null) =>
+              !!text && normalize(text).includes(q)
+          )(normalize(search));
       result = result.filter(
         (t) =>
-          normalize(t.title).includes(q) ||
-          (t.branch && normalize(t.branch).includes(q)) ||
-          normalize(t.status).includes(q) ||
-          (!projectFilter &&
-            projectNameById[t.projectId] &&
-            normalize(projectNameById[t.projectId]).includes(q)) ||
+          matches(t.title) ||
+          matches(t.branch) ||
+          matches(t.status) ||
+          (!projectFilter && matches(projectNameById[t.projectId])) ||
           contentMatches.has(t.id),
       );
     }
@@ -378,6 +383,7 @@ export function AllThreadsView() {
   }, [
     allThreads,
     search,
+    caseSensitive,
     statusFilter,
     gitFilter,
     modeFilter,
@@ -490,33 +496,26 @@ export function AllThreadsView() {
 
       {/* Filters */}
       <div className="flex items-center gap-2 border-b border-border/50 px-4 py-2">
-        {/* Search input (compact, inline) */}
-        <div className="relative flex-shrink-0">
-          <Search className="icon-xs absolute left-2 top-1/2 -translate-y-1/2 text-sm text-muted-foreground" />
-          <Input
-            ref={searchInputRef}
-            type="text"
-            placeholder={
-              projectFilter
-                ? t('allThreads.searchPlaceholder')
-                : t('allThreads.globalSearchPlaceholder')
-            }
-            value={search}
-            onChange={(e) => handleSearchChange(e.target.value)}
-            onKeyDown={(e) => searchKeyDownRef.current?.(e)}
-            className="h-7 w-72 bg-transparent py-1 pl-6 pr-7 text-xs md:text-xs"
-            data-testid="all-threads-search"
-          />
-          {search && (
-            <button
-              onClick={() => handleSearchChange('')}
-              data-testid="all-threads-clear-search"
-              className="absolute right-1.5 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <X className="icon-xs" />
-            </button>
-          )}
-        </div>
+        {/* Search (compact, inline) */}
+        <SearchBar
+          inputRef={searchInputRef}
+          query={search}
+          onQueryChange={handleSearchChange}
+          totalMatches={filtered.length}
+          resultLabel={search.trim() ? `${filtered.length}/${allThreads.length}` : ''}
+          caseSensitive={caseSensitive}
+          onCaseSensitiveChange={setCaseSensitive}
+          onInputKeyDown={(e) => searchKeyDownRef.current?.(e)}
+          onClose={search ? () => handleSearchChange('') : undefined}
+          autoFocus={false}
+          placeholder={
+            projectFilter
+              ? t('allThreads.searchPlaceholder')
+              : t('allThreads.globalSearchPlaceholder')
+          }
+          testIdPrefix="all-threads-search"
+          className="h-7 w-72 flex-shrink-0 rounded-md border border-input bg-transparent px-2"
+        />
 
         <div className="h-4 w-px bg-border" />
 

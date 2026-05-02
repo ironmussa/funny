@@ -160,6 +160,7 @@ export function App() {
   const analyticsOpen = useUIStore((s) => s.analyticsOpen);
   const liveColumnsOpen = useUIStore((s) => s.liveColumnsOpen);
   const designViewDesignId = useUIStore((s) => s.designViewDesignId);
+  const designViewProjectId = useUIStore((s) => s.designViewProjectId);
   const designViewOpen = !!designViewDesignId;
   const designsListProjectId = useUIStore((s) => s.designsListProjectId);
   const designsListOpen = !!designsListProjectId;
@@ -258,14 +259,12 @@ export function App() {
 
   return (
     <SidebarProvider defaultOpen={true} className="h-screen overflow-hidden">
-      {!designViewOpen && (
-        <ErrorBoundary area="sidebar">
-          <Suspense fallback={<SidebarPlaceholder />}>
-            <AppSidebar />
-          </Suspense>
-        </ErrorBoundary>
-      )}
-      {!designViewOpen && <CollapsedSidebarStrip />}
+      <ErrorBoundary area="sidebar">
+        <Suspense fallback={<SidebarPlaceholder />}>
+          <AppSidebar singleProjectId={designViewOpen ? designViewProjectId : null} />
+        </Suspense>
+      </ErrorBoundary>
+      <CollapsedSidebarStrip />
 
       <div className="flex min-h-0 flex-1 overflow-hidden" data-testid="main-panel-group">
         {/* Center panel — main content + terminal */}

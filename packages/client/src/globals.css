@@ -979,6 +979,15 @@
 }
 
 @layer components {
+  /* Markdown preview search highlights (MonacoEditorDialog) */
+  mark.md-search-match {
+    @apply rounded-sm bg-yellow-300/60 text-foreground;
+    padding: 0;
+  }
+  mark.md-search-match[data-active='true'] {
+    @apply bg-orange-400 text-black;
+  }
+
   /* Settings section header */
   .settings-section-header {
     @apply px-1 pb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground;

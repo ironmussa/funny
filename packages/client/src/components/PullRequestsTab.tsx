@@ -6,6 +6,7 @@ import { useTranslation } from 'react-i18next';
 import { AuthorBadge } from '@/components/AuthorBadge';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
@@ -397,7 +398,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
       </div>
 
       {/* Content */}
-      <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+      <ScrollArea className="flex min-h-0 flex-1 flex-col">
         {loading && prs.length === 0 ? (
           <div className="flex items-center gap-2 p-3 text-xs text-muted-foreground">
             <Loader2 className="icon-sm animate-spin" />
@@ -529,7 +530,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
             )}
           </div>
         )}
-      </div>
+      </ScrollArea>
 
       {/* PR Detail Dialog */}
       {selectedPR && projectId && (

@@ -18,6 +18,7 @@ export const ThreePaneRow = memo(function ThreePaneRow({
   lang,
   wrap,
   searchQuery,
+  searchCaseSensitive,
   matchOffset,
   currentMatchIdx,
 }: {
@@ -27,11 +28,14 @@ export const ThreePaneRow = memo(function ThreePaneRow({
   lang: string;
   wrap?: boolean;
   searchQuery?: string;
+  searchCaseSensitive?: boolean;
   matchOffset?: number;
   currentMatchIdx?: number;
 }) {
-  const leftMatches = searchQuery && left ? countTextMatches(left.text, searchQuery) : 0;
-  const centerMatches = searchQuery && center ? countTextMatches(center.text, searchQuery) : 0;
+  const leftMatches =
+    searchQuery && left ? countTextMatches(left.text, searchQuery, searchCaseSensitive) : 0;
+  const centerMatches =
+    searchQuery && center ? countTextMatches(center.text, searchQuery, searchCaseSensitive) : 0;
   const align = wrap ? 'items-start overflow-visible' : 'items-center overflow-hidden';
   const leftConflictBg = getConflictBg(left?.conflictRole);
   const rightConflictBg = getConflictBg(right?.conflictRole);
@@ -84,6 +88,7 @@ export const ThreePaneRow = memo(function ThreePaneRow({
                 searchQuery,
                 matchOffset ?? 0,
                 currentMatchIdx ?? -1,
+                searchCaseSensitive,
               ),
             }}
           />
@@ -114,6 +119,7 @@ export const ThreePaneRow = memo(function ThreePaneRow({
                 searchQuery,
                 (matchOffset ?? 0) + leftMatches,
                 currentMatchIdx ?? -1,
+                searchCaseSensitive,
               ),
             }}
           />
@@ -155,6 +161,7 @@ export const ThreePaneRow = memo(function ThreePaneRow({
                 searchQuery,
                 (matchOffset ?? 0) + leftMatches + centerMatches,
                 currentMatchIdx ?? -1,
+                searchCaseSensitive,
               ),
             }}
           />

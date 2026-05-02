@@ -4,6 +4,7 @@ import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import type { TodoItem } from '@/components/tool-cards/utils';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 
@@ -26,10 +27,10 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
   useEffect(() => {
     if (scrollTargetIdx < 0 || minimized || !listRef.current) return;
     const container = listRef.current;
-    const wrapper = container.firstElementChild as HTMLElement | null;
+    // Radix ScrollArea wraps our content in an extra div, so descend twice.
+    const wrapper = container.firstElementChild?.firstElementChild as HTMLElement | null;
     if (!wrapper || scrollTargetIdx >= wrapper.children.length) return;
     const el = wrapper.children[scrollTargetIdx] as HTMLElement;
-    // scrollTo the target, centering it in the container
     requestAnimationFrame(() => {
       const targetTop = el.offsetTop - container.clientHeight / 2 + el.offsetHeight / 2;
       container.scrollTo({ top: Math.max(0, targetTop), behavior: 'smooth' });
@@ -108,8 +109,8 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
           </div>
 
           {/* Animated todo list */}
-          <div ref={listRef} className="max-h-64 overflow-y-auto px-3 pb-2">
-            <div className="space-y-1 py-1">
+          <ScrollArea viewportRef={listRef} className="max-h-64">
+            <div className="space-y-1 px-3 py-1 pb-2">
               {todos.map((todo, i) => (
                 <motion.div
                   key={todo.content}
@@ -146,7 +147,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
                 </motion.div>
               ))}
             </div>
-          </div>
+          </ScrollArea>
         </>
       )}
     </motion.div>

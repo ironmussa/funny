@@ -4,7 +4,6 @@ import {
   Copy,
   ExternalLink,
   Loader2,
-  Search,
   Lock,
   Globe,
   ArrowLeft,
@@ -21,6 +20,8 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { SearchBar } from '@/components/ui/search-bar';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
@@ -534,23 +535,24 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
         )}
 
         {/* Search */}
-        <div className="relative mb-3">
-          <Search className="icon-sm absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            className="h-auto w-full py-1.5 pl-8 pr-8"
+        <div className="mb-3">
+          <SearchBar
+            query={search}
+            onQueryChange={setSearch}
             placeholder={t('github.repos.searchPlaceholder')}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-            data-testid="clone-repo-search"
+            totalMatches={repos.length}
+            resultLabel={search ? `${repos.length}` : ''}
+            loading={searchPending}
+            onClose={search ? () => setSearch('') : undefined}
+            onInputKeyDown={handleSearchKeyDown}
+            autoFocus={false}
+            testIdPrefix="clone-repo-search"
+            className="rounded-md border border-input bg-background px-2"
           />
-          {searchPending && (
-            <Loader2 className="icon-sm absolute right-2.5 top-1/2 -translate-y-1/2 animate-spin text-muted-foreground" />
-          )}
         </div>
 
         {/* Repo list */}
-        <div ref={listRef} className="-mx-1 max-h-[40vh] min-h-0 flex-1 overflow-y-auto">
+        <ScrollArea viewportRef={listRef} className="-mx-1 max-h-[40vh] min-h-0 flex-1">
           {repos.map((repo, index) => (
             <button
               key={repo.id}
@@ -602,7 +604,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
           )}
 
           <div ref={sentinelRef} aria-hidden className="h-1 w-full" />
-        </div>
+        </ScrollArea>
       </div>
     );
   }

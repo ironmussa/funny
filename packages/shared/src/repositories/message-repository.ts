@@ -232,12 +232,15 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     threadId: string;
     query: string;
     limit?: number;
+    caseSensitive?: boolean;
   }): Promise<
     { messageId: string; role: string; content: string; timestamp: string; snippet: string }[]
   > {
-    const { threadId, query, limit = 100 } = opts;
+    const { threadId, query, limit = 100, caseSensitive = false } = opts;
     const safeQuery = query.replace(/%/g, '\\%').replace(/_/g, '\\_');
 
+    // SQL `LIKE` semantics differ across drivers (SQLite ASCII-insensitive, PG case-sensitive).
+    // We use it as a coarse filter and apply the exact case-sensitivity rule in JS below.
     const rows = await dbAll(
       db
         .select({
@@ -257,22 +260,32 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
         .limit(limit),
     );
 
-    const queryLower = query.toLowerCase();
-    return rows.map((row) => {
-      const idx = row.content.toLowerCase().indexOf(queryLower);
+    const needle = caseSensitive ? query : query.toLowerCase();
+    const results: {
+      messageId: string;
+      role: string;
+      content: string;
+      timestamp: string;
+      snippet: string;
+    }[] = [];
+    for (const row of rows) {
+      const haystack = caseSensitive ? row.content : row.content.toLowerCase();
+      const idx = haystack.indexOf(needle);
+      if (idx === -1) continue;
       const start = Math.max(0, idx - 40);
-      const end = Math.min(row.content.length, idx + queryLower.length + 60);
+      const end = Math.min(row.content.length, idx + needle.length + 60);
       let snippet = row.content.slice(start, end).replace(/\n/g, ' ');
       if (start > 0) snippet = '…' + snippet;
       if (end < row.content.length) snippet = snippet + '…';
-      return {
+      results.push({
         messageId: row.id,
         role: row.role,
         content: row.content,
         timestamp: row.timestamp,
         snippet,
-      };
-    });
+      });
+    }
+    return results;
   }
 
   return {

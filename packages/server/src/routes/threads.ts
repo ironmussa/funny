@@ -232,12 +232,18 @@ threadRoutes.get('/:id/messages/search', async (c) => {
   const q = c.req.query('q') || '';
   const limitParam = c.req.query('limit');
   const limit = Math.min(200, Math.max(1, parseInt(limitParam || '100', 10)));
+  const caseSensitive = c.req.query('caseSensitive') === 'true';
 
   if (!q.trim()) {
     return c.json({ results: [] });
   }
 
-  const results = await messageRepo.searchMessages({ threadId: id, query: q.trim(), limit });
+  const results = await messageRepo.searchMessages({
+    threadId: id,
+    query: q.trim(),
+    limit,
+    caseSensitive,
+  });
   return c.json({ results });
 });
 
@@ -586,18 +592,19 @@ threadRoutes.delete('/:id', async (c) => {
   return c.json({ ok: true });
 });
 
-// GET /api/threads/search/content?q=xxx&projectId=xxx
+// GET /api/threads/search/content?q=xxx&projectId=xxx&caseSensitive=true
 threadRoutes.get('/search/content', async (c) => {
   const userId = c.get('userId') as string;
   const q = c.req.query('q') || '';
   const projectId = c.req.query('projectId');
+  const caseSensitive = c.req.query('caseSensitive') === 'true';
 
   if (!q.trim()) {
     return c.json({ threadIds: [], snippets: {} });
   }
 
   const { searchThreadIdsByContent } = await import('../services/search-repository.js');
-  const results = await searchThreadIdsByContent({ query: q, projectId, userId });
+  const results = await searchThreadIdsByContent({ query: q, projectId, userId, caseSensitive });
 
   const threadIds = Array.from(results.keys());
   const snippets: Record<string, string> = {};

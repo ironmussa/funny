@@ -68,6 +68,8 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { SearchBar } from '@/components/ui/search-bar';
 import {
   Select,
   SelectContent,
@@ -172,6 +174,7 @@ export function ReviewPane() {
   const [loadError, setLoadError] = useState(false);
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const [fileSearch, setFileSearch] = useState('');
+  const [fileSearchCaseSensitive, setFileSearchCaseSensitive] = useState(false);
   const [checkedFiles, setCheckedFiles] = useState<Set<string>>(new Set());
   const { setCommitDraft, clearCommitDraft } = useDraftStore();
   const [commitTitle, setCommitTitleRaw] = useState('');
@@ -760,9 +763,12 @@ export function ReviewPane() {
 
   const filteredDiffs = useMemo(() => {
     if (!fileSearch) return summaries;
+    if (fileSearchCaseSensitive) {
+      return summaries.filter((d) => d.path.includes(fileSearch));
+    }
     const query = fileSearch.toLowerCase();
     return summaries.filter((d) => d.path.toLowerCase().includes(query));
-  }, [summaries, fileSearch]);
+  }, [summaries, fileSearch, fileSearchCaseSensitive]);
 
   const toggleSubmodule = useCallback(
     async (submodulePath: string) => {
@@ -1696,6 +1702,7 @@ export function ReviewPane() {
   const [stashDialogDiff, setStashDialogDiff] = useState<string | null>(null);
   const [stashDialogDiffLoading, setStashDialogDiffLoading] = useState(false);
   const [stashFileSearch, setStashFileSearch] = useState('');
+  const [stashFileSearchCaseSensitive, setStashFileSearchCaseSensitive] = useState(false);
 
   const loadStashFileDiff = useCallback(
     async (index: string, filePath: string) => {
@@ -1770,9 +1777,12 @@ export function ReviewPane() {
       deletions: f.deletions,
     }));
     if (!stashFileSearch.trim()) return all;
+    if (stashFileSearchCaseSensitive) {
+      return all.filter((f) => f.path.includes(stashFileSearch));
+    }
     const q = stashFileSearch.toLowerCase();
     return all.filter((f) => f.path.toLowerCase().includes(q));
-  }, [stashFiles, stashFileSearch]);
+  }, [stashFiles, stashFileSearch, stashFileSearchCaseSensitive]);
 
   const selectedStashEntry = useMemo(() => {
     if (!selectedStashIndex) return null;
@@ -1841,33 +1851,21 @@ export function ReviewPane() {
                 className="flex w-[280px] shrink-0 flex-col border-r border-border"
                 data-testid="expanded-diff-file-tree"
               >
-                <div className="shrink-0 border-b border-sidebar-border px-2 py-2">
-                  <div className="relative">
-                    <Search className="icon-sm pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      placeholder={t('review.searchFiles', 'Filter files\u2026')}
-                      aria-label={t('review.searchFiles', 'Filter files')}
-                      data-testid="expanded-diff-file-filter"
-                      value={fileSearch}
-                      onChange={(e) => setFileSearch(e.target.value)}
-                      className="h-7 pl-7 pr-7 text-xs md:text-xs"
-                    />
-                    {fileSearch && (
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => setFileSearch('')}
-                        aria-label={t('review.clearSearch', 'Clear search')}
-                        data-testid="expanded-diff-file-filter-clear"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
-                      >
-                        <X className="icon-xs" />
-                      </Button>
-                    )}
-                  </div>
+                <div className="shrink-0 border-b border-sidebar-border px-2 py-1">
+                  <SearchBar
+                    query={fileSearch}
+                    onQueryChange={setFileSearch}
+                    placeholder={t('review.searchFiles', 'Filter files\u2026')}
+                    totalMatches={filteredDiffs.length}
+                    resultLabel={fileSearch ? `${filteredDiffs.length}/${summaries.length}` : ''}
+                    caseSensitive={fileSearchCaseSensitive}
+                    onCaseSensitiveChange={setFileSearchCaseSensitive}
+                    onClose={fileSearch ? () => setFileSearch('') : undefined}
+                    autoFocus={false}
+                    testIdPrefix="expanded-diff-file-filter"
+                  />
                 </div>
-                <div className="min-h-0 flex-1 overflow-auto">
+                <ScrollArea className="min-h-0 flex-1">
                   <FileTree
                     files={filteredDiffs}
                     selectedFile={expandedFile}
@@ -1880,7 +1878,7 @@ export function ReviewPane() {
                     searchQuery={fileSearch || undefined}
                     testIdPrefix="expanded-diff"
                   />
-                </div>
+                </ScrollArea>
               </div>
 
               {/* Diff viewer */}
@@ -2250,31 +2248,19 @@ export function ReviewPane() {
 
               {/* File search */}
               {summaries.length > 0 && (
-                <div className="border-b border-sidebar-border px-2 py-2">
-                  <div className="relative">
-                    <Search className="icon-sm pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      placeholder={t('review.searchFiles', 'Filter files\u2026')}
-                      aria-label={t('review.searchFiles', 'Filter files')}
-                      data-testid="review-file-filter"
-                      value={fileSearch}
-                      onChange={(e) => setFileSearch(e.target.value)}
-                      className="h-7 pl-7 pr-7 text-xs md:text-xs"
-                    />
-                    {fileSearch && (
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => setFileSearch('')}
-                        aria-label={t('review.clearSearch', 'Clear search')}
-                        data-testid="review-file-filter-clear"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
-                      >
-                        <X className="icon-xs" />
-                      </Button>
-                    )}
-                  </div>
+                <div className="border-b border-sidebar-border px-2 py-1">
+                  <SearchBar
+                    query={fileSearch}
+                    onQueryChange={setFileSearch}
+                    placeholder={t('review.searchFiles', 'Filter files\u2026')}
+                    totalMatches={filteredDiffs.length}
+                    resultLabel={fileSearch ? `${filteredDiffs.length}/${summaries.length}` : ''}
+                    caseSensitive={fileSearchCaseSensitive}
+                    onCaseSensitiveChange={setFileSearchCaseSensitive}
+                    onClose={fileSearch ? () => setFileSearch('') : undefined}
+                    autoFocus={false}
+                    testIdPrefix="review-file-filter"
+                  />
                 </div>
               )}
 
@@ -3138,7 +3124,7 @@ export function ReviewPane() {
           className="flex min-h-0 flex-1 data-[state=inactive]:hidden"
           forceMount
         >
-          <div className="flex min-h-0 flex-1 flex-col overflow-auto">
+          <ScrollArea className="flex min-h-0 flex-1 flex-col">
             {filteredStashEntries.length === 0 ? (
               <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
                 <Archive className="h-8 w-8 opacity-40" />
@@ -3240,7 +3226,7 @@ export function ReviewPane() {
                 })}
               </div>
             )}
-          </div>
+          </ScrollArea>
 
           {/* Stash detail dialog */}
           <Dialog
@@ -3297,34 +3283,24 @@ export function ReviewPane() {
                     data-testid="stash-detail-file-tree"
                   >
                     {stashFiles.length > 0 && (
-                      <div className="shrink-0 border-b border-sidebar-border px-2 py-2">
-                        <div className="relative">
-                          <Search className="icon-sm pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                          <Input
-                            type="text"
-                            placeholder={t('review.searchFiles', 'Filter files\u2026')}
-                            aria-label={t('review.searchFiles', 'Filter files')}
-                            data-testid="stash-detail-file-filter"
-                            value={stashFileSearch}
-                            onChange={(e) => setStashFileSearch(e.target.value)}
-                            className="h-7 pl-7 pr-7 text-xs md:text-xs"
-                          />
-                          {stashFileSearch && (
-                            <Button
-                              variant="ghost"
-                              size="icon-xs"
-                              onClick={() => setStashFileSearch('')}
-                              aria-label={t('review.clearSearch', 'Clear search')}
-                              data-testid="stash-detail-file-filter-clear"
-                              className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
-                            >
-                              <X className="icon-xs" />
-                            </Button>
-                          )}
-                        </div>
+                      <div className="shrink-0 border-b border-sidebar-border px-2 py-1">
+                        <SearchBar
+                          query={stashFileSearch}
+                          onQueryChange={setStashFileSearch}
+                          placeholder={t('review.searchFiles', 'Filter files\u2026')}
+                          totalMatches={stashTreeFiles.length}
+                          resultLabel={
+                            stashFileSearch ? `${stashTreeFiles.length}/${stashFiles.length}` : ''
+                          }
+                          caseSensitive={stashFileSearchCaseSensitive}
+                          onCaseSensitiveChange={setStashFileSearchCaseSensitive}
+                          onClose={stashFileSearch ? () => setStashFileSearch('') : undefined}
+                          autoFocus={false}
+                          testIdPrefix="stash-detail-file-filter"
+                        />
                       </div>
                     )}
-                    <div className="min-h-0 flex-1 overflow-auto">
+                    <ScrollArea className="min-h-0 flex-1">
                       {stashFiles.length === 0 ? (
                         <div className="py-4 text-center text-xs text-muted-foreground">
                           {t('review.noFiles', 'No files')}
@@ -3344,7 +3320,7 @@ export function ReviewPane() {
                           searchQuery={stashFileSearch || undefined}
                         />
                       )}
-                    </div>
+                    </ScrollArea>
                   </div>
 
                   <div

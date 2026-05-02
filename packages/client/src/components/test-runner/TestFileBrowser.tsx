@@ -23,7 +23,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
-import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { SearchBar } from '@/components/ui/search-bar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { openFileInExternalEditor, getEditorLabel } from '@/lib/editor-utils';
 import { FileExtensionIcon } from '@/lib/file-icons';
@@ -565,6 +566,7 @@ export function TestFileBrowser({
   onStop,
 }: TestFileBrowserProps) {
   const [search, setSearch] = useState('');
+  const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
   const [expandedFolders, setExpandedFolders] = useState<Set<string>>(new Set());
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [expandedSuites, setExpandedSuites] = useState<Set<string>>(new Set());
@@ -572,9 +574,12 @@ export function TestFileBrowser({
 
   const filteredFiles = useMemo(() => {
     if (!search) return files;
+    if (searchCaseSensitive) {
+      return files.filter((f) => f.path.includes(search));
+    }
     const lower = search.toLowerCase();
     return files.filter((f) => f.path.toLowerCase().includes(lower));
-  }, [files, search]);
+  }, [files, search, searchCaseSensitive]);
 
   const tree = useMemo(() => buildTree(filteredFiles), [filteredFiles]);
 
@@ -667,12 +672,18 @@ export function TestFileBrowser({
     <div className="flex h-full flex-col overflow-hidden">
       {/* Toolbar */}
       <div className="flex items-center gap-2 border-b px-2 py-1.5">
-        <Input
-          data-testid="test-search"
+        <SearchBar
+          query={search}
+          onQueryChange={setSearch}
           placeholder="Search tests..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="h-7 text-xs"
+          totalMatches={filteredFiles.length}
+          resultLabel={search ? `${filteredFiles.length}/${files.length}` : ''}
+          caseSensitive={searchCaseSensitive}
+          onCaseSensitiveChange={setSearchCaseSensitive}
+          onClose={search ? () => setSearch('') : undefined}
+          autoFocus={false}
+          testIdPrefix="test-search"
+          className="flex-1"
         />
         {isRunning ? (
           <Button
@@ -721,7 +732,7 @@ export function TestFileBrowser({
       )}
 
       {/* File tree */}
-      <div className="flex-1 overflow-y-auto pr-3">
+      <ScrollArea className="flex-1 pr-3">
         {isLoading ? (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
             <Loader2 className="icon-base mr-2 animate-spin" />
@@ -761,7 +772,7 @@ export function TestFileBrowser({
             />
           ))
         )}
-      </div>
+      </ScrollArea>
     </div>
   );
 }

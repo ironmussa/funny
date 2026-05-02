@@ -344,10 +344,10 @@ export function escapeRegExp(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-export function countTextMatches(text: string, query: string): number {
+export function countTextMatches(text: string, query: string, caseSensitive = false): number {
   if (!query) return 0;
-  const q = query.toLowerCase();
-  const t = text.toLowerCase();
+  const q = caseSensitive ? query : query.toLowerCase();
+  const t = caseSensitive ? text : text.toLowerCase();
   let count = 0;
   let pos = 0;
   while ((pos = t.indexOf(q, pos)) !== -1) {

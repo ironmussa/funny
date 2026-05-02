@@ -211,115 +211,16 @@ const deepagentModels = {
 } as const satisfies Record<string, ModelDefinition>;
 
 // Pi (https://github.com/badlogic/pi-mono) routes through multiple
-// underlying providers (Anthropic via Antigravity, Google Cloud Code Assist,
-// etc.). Each model `id` here is the pi-acp `provider/model` ModelId
-// (passed via ACP `unstable_setSessionModel`). The `default` entry skips
-// the setSessionModel call and lets pi use its configured default from
-// `~/.pi/agent/settings.json`.
+// underlying providers and exposes its catalog dynamically. The static
+// registry only carries the `default` sentinel — actual model IDs are
+// discovered at runtime via the `/system/pi/models` endpoint and passed
+// through `resolveModelId` as wire-format strings (e.g. `google/gemini-3.1-pro`).
 const piModels = {
   default: {
     id: 'default',
     label: 'Pi (configured default)',
     contextWindow: 200_000,
     i18nKey: 'piDefault',
-  },
-  // ── google-antigravity (Anthropic + Google models via Antigravity) ─
-  'pi-antigravity-opus-4.6-thinking': {
-    id: 'google-antigravity/claude-opus-4-6-thinking',
-    label: 'Antigravity · Claude Opus 4.6 Thinking',
-    contextWindow: 200_000,
-    i18nKey: 'piAntigravityOpus46Thinking',
-  },
-  'pi-antigravity-opus-4.5-thinking': {
-    id: 'google-antigravity/claude-opus-4-5-thinking',
-    label: 'Antigravity · Claude Opus 4.5 Thinking',
-    contextWindow: 200_000,
-    i18nKey: 'piAntigravityOpus45Thinking',
-  },
-  'pi-antigravity-sonnet-4.6': {
-    id: 'google-antigravity/claude-sonnet-4-6',
-    label: 'Antigravity · Claude Sonnet 4.6',
-    contextWindow: 200_000,
-    i18nKey: 'piAntigravitySonnet46',
-  },
-  'pi-antigravity-sonnet-4.5': {
-    id: 'google-antigravity/claude-sonnet-4-5',
-    label: 'Antigravity · Claude Sonnet 4.5',
-    contextWindow: 200_000,
-    i18nKey: 'piAntigravitySonnet45',
-  },
-  'pi-antigravity-sonnet-4.5-thinking': {
-    id: 'google-antigravity/claude-sonnet-4-5-thinking',
-    label: 'Antigravity · Claude Sonnet 4.5 Thinking',
-    contextWindow: 200_000,
-    i18nKey: 'piAntigravitySonnet45Thinking',
-  },
-  'pi-antigravity-gemini-3.1-pro-high': {
-    id: 'google-antigravity/gemini-3.1-pro-high',
-    label: 'Antigravity · Gemini 3.1 Pro (high)',
-    contextWindow: 1_000_000,
-    i18nKey: 'piAntigravityGemini31ProHigh',
-  },
-  'pi-antigravity-gemini-3.1-pro-low': {
-    id: 'google-antigravity/gemini-3.1-pro-low',
-    label: 'Antigravity · Gemini 3.1 Pro (low)',
-    contextWindow: 1_000_000,
-    i18nKey: 'piAntigravityGemini31ProLow',
-  },
-  'pi-antigravity-gemini-3-flash': {
-    id: 'google-antigravity/gemini-3-flash',
-    label: 'Antigravity · Gemini 3 Flash',
-    contextWindow: 1_000_000,
-    i18nKey: 'piAntigravityGemini3Flash',
-  },
-  'pi-antigravity-gpt-oss-120b': {
-    id: 'google-antigravity/gpt-oss-120b-medium',
-    label: 'Antigravity · GPT-OSS 120B (medium)',
-    contextWindow: 131_072,
-    i18nKey: 'piAntigravityGptOss120b',
-  },
-  // ── google-gemini-cli (Cloud Code Assist) ─────────────────
-  'pi-gemini-cli-3.1-pro-preview': {
-    id: 'google-gemini-cli/gemini-3.1-pro-preview',
-    label: 'Cloud Code Assist · Gemini 3.1 Pro Preview',
-    contextWindow: 1_000_000,
-    i18nKey: 'piGeminiCli31ProPreview',
-  },
-  'pi-gemini-cli-3-pro-preview': {
-    id: 'google-gemini-cli/gemini-3-pro-preview',
-    label: 'Cloud Code Assist · Gemini 3 Pro Preview',
-    contextWindow: 1_000_000,
-    i18nKey: 'piGeminiCli3ProPreview',
-  },
-  'pi-gemini-cli-3.1-flash-lite-preview': {
-    id: 'google-gemini-cli/gemini-3.1-flash-lite-preview',
-    label: 'Cloud Code Assist · Gemini 3.1 Flash Lite Preview',
-    contextWindow: 1_000_000,
-    i18nKey: 'piGeminiCli31FlashLitePreview',
-  },
-  'pi-gemini-cli-3-flash-preview': {
-    id: 'google-gemini-cli/gemini-3-flash-preview',
-    label: 'Cloud Code Assist · Gemini 3 Flash Preview',
-    contextWindow: 1_000_000,
-    i18nKey: 'piGeminiCli3FlashPreview',
-  },
-  'pi-gemini-cli-2.5-pro': {
-    id: 'google-gemini-cli/gemini-2.5-pro',
-    label: 'Cloud Code Assist · Gemini 2.5 Pro',
-    contextWindow: 1_048_576,
-    i18nKey: 'piGeminiCli25Pro',
-  },
-  'pi-gemini-cli-2.5-flash': {
-    id: 'google-gemini-cli/gemini-2.5-flash',
-    label: 'Cloud Code Assist · Gemini 2.5 Flash',
-    contextWindow: 1_048_576,
-    i18nKey: 'piGeminiCli25Flash',
-  },
-  'pi-gemini-cli-2.0-flash': {
-    id: 'google-gemini-cli/gemini-2.0-flash',
-    label: 'Cloud Code Assist · Gemini 2.0 Flash',
-    contextWindow: 1_048_576,
-    i18nKey: 'piGeminiCli20Flash',
   },
 } as const satisfies Record<string, ModelDefinition>;
 
@@ -351,7 +252,7 @@ const PROVIDER_DEFAULT_MODEL: Record<keyof typeof MODEL_REGISTRY, AgentModel> = 
   claude: DEFAULT_MODEL,
   codex: 'gpt-5.4',
   gemini: 'gemini-3.1-pro-preview',
-  pi: 'pi-antigravity-gemini-3.1-pro-high',
+  pi: 'default',
   deepagent: 'minimax-m2.7',
 };
 
@@ -517,6 +418,10 @@ export function resolveModelId(provider: AgentProvider, model: AgentModel): stri
   }
   const def = getModelDefinition(provider, model);
   if (!def) {
+    // Pi exposes its catalog dynamically (see pi-discover.ts). The selected
+    // value may already be the wire-format `provider/modelId` that pi-acp
+    // expects — pass it through instead of throwing.
+    if (provider === 'pi') return model as string;
     const providerLabel = PROVIDER_LABELS[provider] ?? provider;
     throw new Error(`Unknown ${providerLabel} model: ${model}`);
   }

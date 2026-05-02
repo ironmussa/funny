@@ -36,10 +36,11 @@ export function injectSearchMarks(
   query: string,
   globalOffset: number,
   currentIdx: number,
+  caseSensitive = false,
 ): string {
   if (!query) return html;
   const escaped = escapeRegExp(query);
-  const regex = new RegExp(escaped, 'gi');
+  const regex = new RegExp(escaped, caseSensitive ? 'g' : 'gi');
   let counter = globalOffset;
 
   return html.replace(
@@ -61,8 +62,9 @@ export function getSearchHighlight(
   query?: string,
   globalOffset = 0,
   currentIdx = -1,
+  caseSensitive = false,
 ): string {
   const html = getCachedHighlight(text, lang);
   if (!query) return html;
-  return injectSearchMarks(html, query, globalOffset, currentIdx);
+  return injectSearchMarks(html, query, globalOffset, currentIdx, caseSensitive);
 }

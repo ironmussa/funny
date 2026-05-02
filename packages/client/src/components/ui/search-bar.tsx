@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Loader2, Search, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, CaseSensitive, Loader2, Search, X } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -10,16 +10,16 @@ export interface SearchBarProps {
   query: string;
   /** Called when the user types */
   onQueryChange: (query: string) => void;
-  /** Current match index (0-based) */
-  currentIndex: number;
-  /** Total number of matches */
+  /** Total number of matches (or filtered results, depending on context) */
   totalMatches: number;
-  /** Go to the previous match */
-  onPrev: () => void;
-  /** Go to the next match */
-  onNext: () => void;
-  /** Close the search bar */
-  onClose: () => void;
+  /** Current match index (0-based). Required when `onPrev`/`onNext` are provided; ignored otherwise. */
+  currentIndex?: number;
+  /** Go to the previous match. Omit to hide the prev button (e.g. list filters). */
+  onPrev?: () => void;
+  /** Go to the next match. Omit to hide the next button (e.g. list filters). */
+  onNext?: () => void;
+  /** Close the search bar. When omitted, the close button is hidden. */
+  onClose?: () => void;
   /** Show a loading spinner */
   loading?: boolean;
   /** Placeholder text */
@@ -32,6 +32,19 @@ export interface SearchBarProps {
   testIdPrefix?: string;
   /** Auto-focus the input on mount */
   autoFocus?: boolean;
+  /** Current case-sensitive state. When `onCaseSensitiveChange` is provided, a toggle is shown. */
+  caseSensitive?: boolean;
+  /** Called when the user toggles case sensitivity. Pass to enable the toggle button. */
+  onCaseSensitiveChange?: (value: boolean) => void;
+  /**
+   * Override the result label (e.g. "12 / 50" for list filters).
+   * If omitted, the label is computed from `currentIndex`/`totalMatches`.
+   */
+  resultLabel?: string;
+  /** Forward additional key events from the input (e.g. ArrowUp/Down for list nav) */
+  onInputKeyDown?: (e: React.KeyboardEvent<HTMLInputElement>) => void;
+  /** Forward a ref to the input element */
+  inputRef?: React.Ref<HTMLInputElement>;
 }
 
 export function SearchBar({
@@ -48,43 +61,73 @@ export function SearchBar({
   className,
   testIdPrefix = 'search',
   autoFocus = true,
+  caseSensitive = false,
+  onCaseSensitiveChange,
+  resultLabel,
+  onInputKeyDown,
+  inputRef: externalInputRef,
 }: SearchBarProps) {
-  const inputRef = useRef<HTMLInputElement>(null);
+  const internalInputRef = useRef<HTMLInputElement>(null);
   const [closing, setClosing] = useState(false);
+
+  const setInputRef = useCallback(
+    (node: HTMLInputElement | null) => {
+      internalInputRef.current = node;
+      if (typeof externalInputRef === 'function') externalInputRef(node);
+      else if (externalInputRef && 'current' in externalInputRef) {
+        (externalInputRef as React.MutableRefObject<HTMLInputElement | null>).current = node;
+      }
+    },
+    [externalInputRef],
+  );
 
   useEffect(() => {
     if (autoFocus) {
-      requestAnimationFrame(() => inputRef.current?.focus());
+      requestAnimationFrame(() => internalInputRef.current?.focus());
     }
   }, [autoFocus]);
 
   const startClose = useCallback(() => {
-    setClosing(true);
-  }, []);
+    if (onClose) setClosing(true);
+  }, [onClose]);
 
   const handleAnimationEnd = useCallback(() => {
-    if (closing) onClose();
+    if (closing) onClose?.();
   }, [closing, onClose]);
 
   const handleKeyDown = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (e.key === 'Escape') {
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === 'Escape' && onClose) {
         e.preventDefault();
         startClose();
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        if (e.shiftKey) onPrev();
-        else onNext();
+        return;
       }
+      if (e.key === 'Enter' && (onPrev || onNext)) {
+        e.preventDefault();
+        if (e.shiftKey) onPrev?.();
+        else onNext?.();
+        return;
+      }
+      if (e.altKey && (e.key === 'c' || e.key === 'C') && onCaseSensitiveChange) {
+        e.preventDefault();
+        onCaseSensitiveChange(!caseSensitive);
+        return;
+      }
+      onInputKeyDown?.(e);
     },
-    [startClose, onPrev, onNext],
+    [startClose, onPrev, onNext, onClose, onInputKeyDown, onCaseSensitiveChange, caseSensitive],
   );
 
-  const resultLabel = query
+  const computedLabel = query
     ? totalMatches > 0
-      ? `${currentIndex + 1}/${totalMatches}`
-      : `0/0`
-    : `0/0`;
+      ? currentIndex != null
+        ? `${currentIndex + 1}/${totalMatches}`
+        : `${totalMatches}`
+      : `0`
+    : `0`;
+  const label = resultLabel ?? computedLabel;
+
+  const showNav = !!(onPrev || onNext);
 
   return (
     <div
@@ -100,7 +143,7 @@ export function SearchBar({
     >
       {showIcon && <Search className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />}
       <Input
-        ref={inputRef}
+        ref={setInputRef}
         value={query}
         onChange={(e) => onQueryChange(e.target.value)}
         onKeyDown={handleKeyDown}
@@ -115,37 +158,56 @@ export function SearchBar({
         {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
       </span>
       <span
-        className="w-12 flex-shrink-0 text-center text-xs tabular-nums text-muted-foreground"
+        className="min-w-[2.5rem] flex-shrink-0 text-center text-xs tabular-nums text-muted-foreground"
         data-testid={`${testIdPrefix}-count`}
       >
-        {resultLabel}
+        {label}
       </span>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={onPrev}
-        disabled={totalMatches === 0}
-        data-testid={`${testIdPrefix}-prev`}
-      >
-        <ArrowUp className="h-3.5 w-3.5" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={onNext}
-        disabled={totalMatches === 0}
-        data-testid={`${testIdPrefix}-next`}
-      >
-        <ArrowDown className="h-3.5 w-3.5" />
-      </Button>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        onClick={startClose}
-        data-testid={`${testIdPrefix}-close`}
-      >
-        <X className="h-3.5 w-3.5" />
-      </Button>
+      {onCaseSensitiveChange && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={() => onCaseSensitiveChange(!caseSensitive)}
+          aria-pressed={caseSensitive}
+          title={`Match case (${caseSensitive ? 'on' : 'off'}) — Alt+C`}
+          className={cn(caseSensitive && 'bg-accent text-accent-foreground')}
+          data-testid={`${testIdPrefix}-case-sensitive`}
+        >
+          <CaseSensitive className="h-3.5 w-3.5" />
+        </Button>
+      )}
+      {showNav && (
+        <>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onPrev}
+            disabled={!onPrev || totalMatches === 0}
+            data-testid={`${testIdPrefix}-prev`}
+          >
+            <ArrowUp className="h-3.5 w-3.5" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            onClick={onNext}
+            disabled={!onNext || totalMatches === 0}
+            data-testid={`${testIdPrefix}-next`}
+          >
+            <ArrowDown className="h-3.5 w-3.5" />
+          </Button>
+        </>
+      )}
+      {onClose && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          onClick={startClose}
+          data-testid={`${testIdPrefix}-close`}
+        >
+          <X className="h-3.5 w-3.5" />
+        </Button>
+      )}
     </div>
   );
 }

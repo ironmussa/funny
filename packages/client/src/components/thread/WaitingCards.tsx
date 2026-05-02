@@ -11,6 +11,7 @@ import { useState, useRef, useEffect, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { ensureLanguage, highlightCode } from '@/hooks/use-highlight';
 import { cn } from '@/lib/utils';
 import { CODE_FONT_SIZE_PX, CODE_LINE_HEIGHT_PX, useSettingsStore } from '@/stores/settings-store';
@@ -169,30 +170,30 @@ export function PermissionApprovalCard({
       {displayedInput && (
         <div className="space-y-1">
           {bashCommand && highlightedBash ? (
-            <pre
-              data-testid="permission-card-tool-input"
-              style={{
-                fontSize: `${CODE_FONT_SIZE_PX[fontSize]}px`,
-                lineHeight: `${CODE_LINE_HEIGHT_PX[fontSize]}px`,
-              }}
-              className={cn(
-                'hljs bg-muted rounded p-2 overflow-auto whitespace-pre-wrap break-all font-mono max-h-32',
-              )}
-              dangerouslySetInnerHTML={{ __html: highlightedBash }}
-            />
+            <ScrollArea className="max-h-32 rounded bg-muted">
+              <pre
+                data-testid="permission-card-tool-input"
+                style={{
+                  fontSize: `${CODE_FONT_SIZE_PX[fontSize]}px`,
+                  lineHeight: `${CODE_LINE_HEIGHT_PX[fontSize]}px`,
+                }}
+                className="hljs whitespace-pre-wrap break-all p-2 font-mono"
+                dangerouslySetInnerHTML={{ __html: highlightedBash }}
+              />
+            </ScrollArea>
           ) : (
-            <pre
-              data-testid="permission-card-tool-input"
-              style={{
-                fontSize: `${CODE_FONT_SIZE_PX[fontSize]}px`,
-                lineHeight: `${CODE_LINE_HEIGHT_PX[fontSize]}px`,
-              }}
-              className={cn(
-                'bg-muted text-muted-foreground rounded p-2 overflow-auto whitespace-pre-wrap break-all font-mono max-h-32',
-              )}
-            >
-              {displayedInput}
-            </pre>
+            <ScrollArea className="max-h-32 rounded bg-muted">
+              <pre
+                data-testid="permission-card-tool-input"
+                style={{
+                  fontSize: `${CODE_FONT_SIZE_PX[fontSize]}px`,
+                  lineHeight: `${CODE_LINE_HEIGHT_PX[fontSize]}px`,
+                }}
+                className="whitespace-pre-wrap break-all p-2 font-mono text-muted-foreground"
+              >
+                {displayedInput}
+              </pre>
+            </ScrollArea>
           )}
           {isLongInput && (
             <button

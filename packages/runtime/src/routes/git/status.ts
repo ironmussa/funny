@@ -12,7 +12,6 @@ import {
   getCommittedBranchSummary,
   getCurrentBranch,
   deriveGitSyncState,
-  fetchRemote,
   getPRForBranch,
 } from '@funny/core/git';
 import { badRequest } from '@funny/shared/errors';
@@ -30,10 +29,9 @@ import { requireThread, requireProject } from '../../utils/route-helpers.js';
 import {
   _gitStatusCache,
   GIT_STATUS_CACHE_TTL_MS,
-  _lastFetchTs,
-  FETCH_THROTTLE_MS,
   countUnpushedCommits,
   requireProjectCwd,
+  scheduleBackgroundFetch,
 } from './helpers.js';
 
 export const statusRoutes = new Hono<HonoEnv>();
@@ -76,17 +74,11 @@ statusRoutes.get('/status', async (c) => {
   const identity = await resolveIdentity(userId);
   const ghEnv = identity?.githubToken ? { GH_TOKEN: identity.githubToken } : undefined;
 
-  // Throttled fetch: update remote tracking refs so unpulledCommitCount is accurate.
-  // Runs at most once every FETCH_THROTTLE_MS per project (non-blocking on failure).
-  const lastFetch = _lastFetchTs.get(projectId) ?? 0;
-  if (Date.now() - lastFetch > FETCH_THROTTLE_MS) {
-    _lastFetchTs.set(projectId, Date.now());
-    const fetchSpan = requestSpan(c, 'git.fetch_remote', { projectId });
-    await fetchRemote(project.path, identity ?? undefined).match(
-      () => fetchSpan.end('ok'),
-      () => fetchSpan.end('error'),
-    );
-  }
+  // Background fetch: update remote tracking refs so unpulledCommitCount is
+  // accurate on the *next* request. Detached so the response isn't blocked
+  // by ~1s remote round-trips per project. Throttled per-project; on success
+  // the bulk-status cache is invalidated so the next call sees fresh refs.
+  scheduleBackgroundFetch(projectId, project.path, identity ?? undefined);
 
   // Collect unique branches for batch PR lookup (deduplicate across all thread types)
   const uniqueBranches = new Set<string>();
@@ -383,17 +375,9 @@ statusRoutes.get('/project/:projectId/status', async (c) => {
     return resultToResponse(c, err(badRequest(`Working directory does not exist: ${cwd}`)));
   }
 
-  // Throttled fetch so unpulledCommitCount is accurate
-  const lastFetch = _lastFetchTs.get(projectId) ?? 0;
-  if (Date.now() - lastFetch > FETCH_THROTTLE_MS) {
-    _lastFetchTs.set(projectId, Date.now());
-    const fetchSpan = requestSpan(c, 'git.fetch_remote', { projectId });
-    const identity = await resolveIdentity(userId);
-    await fetchRemote(cwd, identity ?? undefined).match(
-      () => fetchSpan.end('ok'),
-      () => fetchSpan.end('error'),
-    );
-  }
+  // Background fetch so unpulledCommitCount is fresh on next request.
+  const identity = await resolveIdentity(userId);
+  scheduleBackgroundFetch(projectId, cwd, identity ?? undefined);
 
   const statusSpan = requestSpan(c, 'git.status_summary', { projectId });
   const summaryResult = await getStatusSummary(cwd);
@@ -466,16 +450,8 @@ statusRoutes.get('/:threadId/status', async (c) => {
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
 
-  // Throttled fetch: update remote tracking refs so unpulledCommitCount is accurate.
-  const lastFetch = _lastFetchTs.get(thread.projectId) ?? 0;
-  if (Date.now() - lastFetch > FETCH_THROTTLE_MS) {
-    _lastFetchTs.set(thread.projectId, Date.now());
-    const fetchSpan = requestSpan(c, 'git.fetch_remote', { threadId });
-    await fetchRemote(project.path, identity ?? undefined).match(
-      () => fetchSpan.end('ok'),
-      () => fetchSpan.end('error'),
-    );
-  }
+  // Background fetch so unpulledCommitCount is fresh on next request.
+  scheduleBackgroundFetch(thread.projectId, project.path, identity ?? undefined, { threadId });
 
   const cwd = thread.worktreePath || project.path;
   const [summaryResult, prInfo] = await Promise.all([

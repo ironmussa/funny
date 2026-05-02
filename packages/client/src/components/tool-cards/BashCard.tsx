@@ -2,6 +2,7 @@ import { ChevronRight, Terminal } from 'lucide-react';
 import { useState, useMemo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { ensureLanguage, highlightCode } from '@/hooks/use-highlight';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { cn } from '@/lib/utils';
@@ -69,43 +70,45 @@ export function BashCard({
         )}
       </button>
       {expanded && command && (
-        <div className="max-h-[50vh] space-y-2 overflow-y-auto border-t border-border/40 py-2">
-          <div className="px-3">
-            <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-              {t('tools.input')}
+        <ScrollArea className="max-h-[50vh] border-t border-border/40">
+          <div className="space-y-2 py-2">
+            <div className="px-3">
+              <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
+                {t('tools.input')}
+              </div>
+              <div className="overflow-x-auto rounded border border-border/40 bg-background/80 px-2.5 py-1.5 font-mono text-xs">
+                {highlightedCommand ? (
+                  <div
+                    className="hljs whitespace-pre-wrap break-all leading-relaxed"
+                    dangerouslySetInnerHTML={{ __html: highlightedCommand }}
+                  />
+                ) : (
+                  <pre className="whitespace-pre-wrap break-all leading-relaxed text-foreground">
+                    {command}
+                  </pre>
+                )}
+              </div>
             </div>
-            <div className="overflow-x-auto rounded border border-border/40 bg-background/80 px-2.5 py-1.5 font-mono text-xs">
-              {highlightedCommand ? (
-                <div
-                  className="hljs whitespace-pre-wrap break-all leading-relaxed"
-                  dangerouslySetInnerHTML={{ __html: highlightedCommand }}
-                />
+
+            <div className="px-3">
+              <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
+                {t('tools.output')}
+              </div>
+              {output ? (
+                <div className="rounded border border-border/40 bg-background/80 px-2.5 py-1.5">
+                  <pre
+                    className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-muted-foreground"
+                    dangerouslySetInnerHTML={{ __html: htmlOutput! }}
+                  />
+                </div>
               ) : (
-                <pre className="whitespace-pre-wrap break-all leading-relaxed text-foreground">
-                  {command}
-                </pre>
+                <div className="py-1 text-sm italic text-muted-foreground/50">
+                  {t('tools.waitingForOutput')}
+                </div>
               )}
             </div>
           </div>
-
-          <div className="px-3">
-            <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-              {t('tools.output')}
-            </div>
-            {output ? (
-              <div className="rounded border border-border/40 bg-background/80 px-2.5 py-1.5">
-                <pre
-                  className="whitespace-pre-wrap break-all font-mono text-xs leading-relaxed text-muted-foreground"
-                  dangerouslySetInnerHTML={{ __html: htmlOutput! }}
-                />
-              </div>
-            ) : (
-              <div className="py-1 text-sm italic text-muted-foreground/50">
-                {t('tools.waitingForOutput')}
-              </div>
-            )}
-          </div>
-        </div>
+        </ScrollArea>
       )}
     </div>
   );

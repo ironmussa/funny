@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { MessageContent } from '@/components/thread/MessageContent';
 import { Button } from '@/components/ui/button';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { cn } from '@/lib/utils';
@@ -136,7 +137,7 @@ export function ReadFileCard({
         )}
       </button>
       {expanded && hasOutput && (
-        <div className="max-h-[50vh] overflow-y-auto border-t border-border/40">
+        <ScrollArea className="max-h-[50vh] border-t border-border/40">
           <div className="sticky top-0 z-10 flex items-center justify-between gap-2 border-b border-border/30 bg-background px-3 py-1 backdrop-blur-sm">
             <span className="truncate text-xs font-medium text-muted-foreground">{fileName}</span>
             <div className="flex flex-shrink-0 items-center gap-1">
@@ -198,7 +199,7 @@ export function ReadFileCard({
               </pre>
             )}
           </div>
-        </div>
+        </ScrollArea>
       )}
     </div>
   );

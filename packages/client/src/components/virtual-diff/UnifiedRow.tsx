@@ -17,6 +17,7 @@ export const UnifiedRow = memo(function UnifiedRow({
   lang,
   wrap,
   searchQuery,
+  searchCaseSensitive,
   matchOffset,
   currentMatchIdx,
   selectable,
@@ -28,6 +29,7 @@ export const UnifiedRow = memo(function UnifiedRow({
   lang: string;
   wrap?: boolean;
   searchQuery?: string;
+  searchCaseSensitive?: boolean;
   matchOffset?: number;
   currentMatchIdx?: number;
   selectable?: boolean;
@@ -92,6 +94,7 @@ export const UnifiedRow = memo(function UnifiedRow({
             searchQuery,
             matchOffset ?? 0,
             currentMatchIdx ?? -1,
+            searchCaseSensitive,
           ),
         }}
       />

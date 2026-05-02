@@ -2,6 +2,7 @@ import { ChevronRight, Bot, Loader2 } from 'lucide-react';
 import { Suspense, lazy, useState, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { remarkPlugins, baseMarkdownComponents } from '@/lib/markdown-components';
 import { groupConsecutiveToolCalls } from '@/lib/render-items';
 import { cn } from '@/lib/utils';
@@ -116,7 +117,7 @@ export const TaskCard = memo(function TaskCard({
       </button>
 
       {expanded && (
-        <div className="max-h-[60vh] overflow-y-auto border-t border-border/40">
+        <ScrollArea className="max-h-[60vh] border-t border-border/40">
           {/* Child tool calls from the subagent (grouped like main thread) */}
           {hasChildren && (
             <div className="space-y-1 px-3 py-2">
@@ -165,7 +166,7 @@ export const TaskCard = memo(function TaskCard({
               {t('tools.waitingForOutput')}
             </div>
           )}
-        </div>
+        </ScrollArea>
       )}
     </div>
   );

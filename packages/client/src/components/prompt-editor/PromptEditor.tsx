@@ -1099,7 +1099,13 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
 
   // ── Animate height changes when text wraps to a new line ──
   useEffect(() => {
-    const el = editor?.view.dom as HTMLElement | undefined;
+    if (!editor) return;
+    let el: HTMLElement | undefined;
+    try {
+      el = editor.view.dom as HTMLElement;
+    } catch {
+      return;
+    }
     if (!el) return;
     let prev = el.offsetHeight;
     let anim: Animation | null = null;
@@ -1131,7 +1137,11 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     const handleMouseDown = (e: MouseEvent) => {
       const target = e.target as Node;
       // Check if click is inside the editor
-      if (editor?.view.dom.contains(target)) return;
+      try {
+        if (editor?.view.dom.contains(target)) return;
+      } catch {
+        // editor view not mounted yet — fall through to other checks
+      }
       // Check if click is inside the popup (portaled to body)
       const popup = document.querySelector('[data-suggestion-popup]');
       if (popup?.contains(target)) return;

@@ -27,6 +27,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
@@ -154,12 +155,12 @@ const HooksEventCard = memo(function HooksEventCard({
         )}
       </button>
       {expanded && errorOutput && (
-        <div className="mx-3 mb-2 mt-1 max-h-60 overflow-auto rounded border border-border/50 bg-black/80 p-2">
+        <ScrollArea className="mx-3 mb-2 mt-1 max-h-60 rounded border border-border/50 bg-black/80">
           <pre
-            className="whitespace-pre-wrap break-all font-mono text-[11px] leading-relaxed text-[#d4d4d4]"
+            className="whitespace-pre-wrap break-all p-2 font-mono text-[11px] leading-relaxed text-[#d4d4d4]"
             dangerouslySetInnerHTML={{ __html: errorOutput }}
           />
-        </div>
+        </ScrollArea>
       )}
     </div>
   );

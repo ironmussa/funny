@@ -6,15 +6,13 @@ import {
   Loader2,
   PanelRightClose,
   RefreshCw,
-  Search,
-  X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { collectAllFolderPaths, FileTree } from '@/components/FileTree';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
@@ -73,6 +71,7 @@ export function ProjectFilesPane() {
   const [loading, setLoading] = useState(false);
   const [truncated, setTruncated] = useState(false);
   const [query, setQuery] = useState('');
+  const [queryCaseSensitive, setQueryCaseSensitive] = useState(false);
   const [collapsedFolders, setCollapsedFolders] = useState<Set<string>>(new Set());
   const requestIdRef = useRef(0);
   const collapsedInitializedRef = useRef<string | null>(null);
@@ -131,10 +130,14 @@ export function ProjectFilesPane() {
   }, [basePath, files, allSummaries]);
 
   const filteredSummaries = useMemo<FileDiffSummary[]>(() => {
-    const q = query.trim().toLowerCase();
-    if (!q) return allSummaries;
+    const trimmed = query.trim();
+    if (!trimmed) return allSummaries;
+    if (queryCaseSensitive) {
+      return allSummaries.filter((s) => s.path.includes(trimmed));
+    }
+    const q = trimmed.toLowerCase();
     return allSummaries.filter((s) => s.path.toLowerCase().includes(q));
-  }, [allSummaries, query]);
+  }, [allSummaries, query, queryCaseSensitive]);
 
   const handleCollapsedChange = useCallback(
     (next: Set<string>) => {
@@ -240,31 +243,19 @@ export function ProjectFilesPane() {
         </Tooltip>
       </div>
 
-      <div className="flex-shrink-0 border-b border-sidebar-border px-2 py-2">
-        <div className="relative">
-          <Search className="icon-sm pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="text"
-            data-testid="project-files-filter"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder={t('projectFiles.filterPlaceholder', 'Filter files\u2026')}
-            aria-label={t('projectFiles.filterPlaceholder', 'Filter files')}
-            className="h-7 pl-7 pr-7 text-xs md:text-xs"
-          />
-          {query && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              onClick={() => setQuery('')}
-              aria-label={t('review.clearSearch', 'Clear search')}
-              data-testid="project-files-filter-clear"
-              className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
-            >
-              <X className="icon-xs" />
-            </Button>
-          )}
-        </div>
+      <div className="flex-shrink-0 border-b border-sidebar-border px-2 py-1">
+        <SearchBar
+          query={query}
+          onQueryChange={setQuery}
+          placeholder={t('projectFiles.filterPlaceholder', 'Filter files\u2026')}
+          totalMatches={filteredSummaries.length}
+          resultLabel={query ? `${filteredSummaries.length}/${allSummaries.length}` : ''}
+          caseSensitive={queryCaseSensitive}
+          onCaseSensitiveChange={setQueryCaseSensitive}
+          onClose={query ? () => setQuery('') : undefined}
+          autoFocus={false}
+          testIdPrefix="project-files-filter"
+        />
       </div>
 
       <div className="min-h-0 flex-1 overflow-hidden">

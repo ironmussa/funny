@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { useEffect, useRef } from 'react';
 
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { cn } from '@/lib/utils';
 
 interface ActionListProps {
@@ -109,10 +110,10 @@ export function ActionList({
   }
 
   return (
-    <div
-      ref={ref}
-      onScroll={handleScroll}
-      className="h-full overflow-y-auto text-xs"
+    <ScrollArea
+      viewportRef={ref}
+      viewportProps={{ onScroll: handleScroll }}
+      className="h-full text-xs"
       data-testid="action-list"
     >
       {visibleActions.map((action) => {
@@ -154,6 +155,6 @@ export function ActionList({
           </div>
         );
       })}
-    </div>
+    </ScrollArea>
   );
 }

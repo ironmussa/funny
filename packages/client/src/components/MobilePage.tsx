@@ -111,7 +111,7 @@ function ProjectListView({
       <header className="flex shrink-0 items-center border-b border-border px-4 py-3">
         <h1 className="text-base font-semibold">funny</h1>
       </header>
-      <div className="flex-1 overflow-y-auto">
+      <ScrollArea className="flex-1">
         {projects.length === 0 ? (
           <div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
             {t('sidebar.noProjects', 'No projects yet. Add one from the desktop app.')}
@@ -133,7 +133,7 @@ function ProjectListView({
             ))}
           </div>
         )}
-      </div>
+      </ScrollArea>
     </>
   );
 }
@@ -193,7 +193,7 @@ function ThreadListView({
           {t('sidebar.newThread', 'New')}
         </button>
       </header>
-      <div className="flex-1 overflow-y-auto">
+      <ScrollArea className="flex-1">
         {sortedThreads.length === 0 ? (
           <div className="flex h-full items-center justify-center p-4 text-sm text-muted-foreground">
             {t('sidebar.noThreads', 'No threads yet. Create one to start.')}
@@ -219,7 +219,7 @@ function ThreadListView({
             ))}
           </div>
         )}
-      </div>
+      </ScrollArea>
     </>
   );
 }

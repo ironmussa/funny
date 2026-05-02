@@ -6,6 +6,8 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { SearchBar } from '@/components/ui/search-bar';
 import {
   Select,
   SelectContent,
@@ -79,6 +81,7 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
   const [commitFiles, setCommitFiles] = useState<PRFile[] | null>(null);
   const [loadingCommitFiles, setLoadingCommitFiles] = useState(false);
   const [fileSearch, setFileSearch] = useState('');
+  const [fileSearchCaseSensitive, setFileSearchCaseSensitive] = useState(false);
 
   // Fetch data when dialog opens
   useEffect(() => {
@@ -147,9 +150,12 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
   const displayedFiles = commitFiles ?? files;
   const filteredFiles = useMemo(() => {
     if (!fileSearch) return displayedFiles;
+    if (fileSearchCaseSensitive) {
+      return displayedFiles.filter((f) => f.filename.includes(fileSearch));
+    }
     const q = fileSearch.toLowerCase();
     return displayedFiles.filter((f) => f.filename.toLowerCase().includes(q));
-  }, [displayedFiles, fileSearch]);
+  }, [displayedFiles, fileSearch, fileSearchCaseSensitive]);
   const fileSummaries = useMemo(() => toFileDiffSummaries(filteredFiles), [filteredFiles]);
 
   // Revert a file to its base branch state
@@ -346,35 +352,25 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
             >
               {/* File search */}
               {displayedFiles.length > 0 && (
-                <div className="shrink-0 border-b border-sidebar-border px-2 py-2">
-                  <div className="relative">
-                    <Search className="icon-sm pointer-events-none absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground" />
-                    <Input
-                      type="text"
-                      placeholder="Filter files…"
-                      aria-label="Filter files"
-                      data-testid="pr-detail-file-filter"
-                      value={fileSearch}
-                      onChange={(e) => setFileSearch(e.target.value)}
-                      className="h-7 pl-7 pr-7 text-xs md:text-xs"
-                    />
-                    {fileSearch && (
-                      <Button
-                        variant="ghost"
-                        size="icon-xs"
-                        onClick={() => setFileSearch('')}
-                        aria-label="Clear search"
-                        data-testid="pr-detail-file-filter-clear"
-                        className="absolute right-1 top-1/2 -translate-y-1/2 text-muted-foreground"
-                      >
-                        <X className="icon-xs" />
-                      </Button>
-                    )}
-                  </div>
+                <div className="shrink-0 border-b border-sidebar-border px-2 py-1">
+                  <SearchBar
+                    query={fileSearch}
+                    onQueryChange={setFileSearch}
+                    placeholder="Filter files…"
+                    totalMatches={filteredFiles.length}
+                    resultLabel={
+                      fileSearch ? `${filteredFiles.length}/${displayedFiles.length}` : ''
+                    }
+                    caseSensitive={fileSearchCaseSensitive}
+                    onCaseSensitiveChange={setFileSearchCaseSensitive}
+                    onClose={fileSearch ? () => setFileSearch('') : undefined}
+                    autoFocus={false}
+                    testIdPrefix="pr-detail-file-filter"
+                  />
                 </div>
               )}
 
-              <div className="min-h-0 flex-1 overflow-auto">
+              <ScrollArea className="min-h-0 flex-1">
                 {loadingCommitFiles ? (
                   <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
                     <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -396,7 +392,7 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
                     testIdPrefix="pr-detail"
                   />
                 )}
-              </div>
+              </ScrollArea>
             </div>
 
             {/* ── Diff viewer ── */}

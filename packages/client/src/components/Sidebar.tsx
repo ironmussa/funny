@@ -36,6 +36,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import {
   Sidebar,
   SidebarContent,
@@ -67,12 +68,16 @@ import { ThreadList } from './sidebar/ThreadList';
 
 const EMPTY_THREADS: Thread[] = [];
 
-export function AppSidebar() {
+export function AppSidebar({ singleProjectId }: { singleProjectId?: string | null } = {}) {
   const navigate = useStableNavigate();
   const { t } = useTranslation();
   const { toggleSidebar } = useSidebar();
   // project-store
-  const projects = useProjectStore((s) => s.projects);
+  const allProjects = useProjectStore((s) => s.projects);
+  const projects = useMemo(
+    () => (singleProjectId ? allProjects.filter((p) => p.id === singleProjectId) : allProjects),
+    [allProjects, singleProjectId],
+  );
   const projectsInitialized = useProjectStore((s) => s.initialized);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const revealNonce = useProjectStore((s) => s.revealNonce);
@@ -649,10 +654,12 @@ export function AppSidebar() {
             {t('sidebar.threadsTitle')}
           </h2>
         </div>
-        <div
-          ref={threadsScrollRef}
-          className="relative min-h-0 overflow-y-auto px-2 pb-2"
-          onScroll={(e) => setThreadsScrolled(e.currentTarget.scrollTop > 0)}
+        <ScrollArea
+          viewportRef={threadsScrollRef}
+          viewportProps={{
+            onScroll: (e) => setThreadsScrolled((e.currentTarget as HTMLDivElement).scrollTop > 0),
+          }}
+          className="relative min-h-0 px-2 pb-2"
         >
           <div ref={threadsTopSentinelRef} aria-hidden className="h-px shrink-0" />
           <div
@@ -666,7 +673,7 @@ export function AppSidebar() {
             onArchiveThread={handleArchiveThreadFromList}
             onDeleteThread={handleDeleteThreadFromList}
           />
-        </div>
+        </ScrollArea>
       </div>
 
       {/* Projects header (fixed, outside scroll) */}

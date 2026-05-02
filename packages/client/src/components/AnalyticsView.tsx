@@ -118,56 +118,55 @@ export function AnalyticsView() {
               <ChevronDown className="icon-xs opacity-50" />
             </button>
           </PopoverTrigger>
-          <PopoverContent
-            align="start"
-            className="max-h-[300px] w-auto min-w-[180px] overflow-y-auto p-1"
-          >
-            <button
-              onClick={() => setProjectId('__all__')}
-              className={cn(
-                'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
-                'hover:bg-accent hover:text-accent-foreground',
-                projectId === '__all__' && 'text-accent-foreground',
-              )}
-            >
-              <span
+          <PopoverContent align="start" className="w-auto min-w-[180px] p-0">
+            <ScrollArea className="max-h-[300px] p-1">
+              <button
+                onClick={() => setProjectId('__all__')}
                 className={cn(
-                  'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
-                  projectId === '__all__'
-                    ? 'bg-primary border-primary text-primary-foreground'
-                    : 'border-muted-foreground/30',
+                  'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
+                  'hover:bg-accent hover:text-accent-foreground',
+                  projectId === '__all__' && 'text-accent-foreground',
                 )}
               >
-                {projectId === '__all__' && <Check className="icon-2xs" />}
-              </span>
-              <span className="flex-1">{t('analytics.allProjects')}</span>
-            </button>
-            {projects.map((p) => {
-              const isActive = projectId === p.id;
-              return (
-                <button
-                  key={p.id}
-                  onClick={() => setProjectId(p.id)}
+                <span
                   className={cn(
-                    'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
-                    'hover:bg-accent hover:text-accent-foreground',
-                    isActive && 'text-accent-foreground',
+                    'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
+                    projectId === '__all__'
+                      ? 'bg-primary border-primary text-primary-foreground'
+                      : 'border-muted-foreground/30',
                   )}
                 >
-                  <span
+                  {projectId === '__all__' && <Check className="icon-2xs" />}
+                </span>
+                <span className="flex-1">{t('analytics.allProjects')}</span>
+              </button>
+              {projects.map((p) => {
+                const isActive = projectId === p.id;
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => setProjectId(p.id)}
                     className={cn(
-                      'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
-                      isActive
-                        ? 'bg-primary border-primary text-primary-foreground'
-                        : 'border-muted-foreground/30',
+                      'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
+                      'hover:bg-accent hover:text-accent-foreground',
+                      isActive && 'text-accent-foreground',
                     )}
                   >
-                    {isActive && <Check className="icon-2xs" />}
-                  </span>
-                  <span className="flex-1 truncate">{p.name}</span>
-                </button>
-              );
-            })}
+                    <span
+                      className={cn(
+                        'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
+                        isActive
+                          ? 'bg-primary border-primary text-primary-foreground'
+                          : 'border-muted-foreground/30',
+                      )}
+                    >
+                      {isActive && <Check className="icon-2xs" />}
+                    </span>
+                    <span className="flex-1 truncate">{p.name}</span>
+                  </button>
+                );
+              })}
+            </ScrollArea>
           </PopoverContent>
         </Popover>
 

@@ -81,6 +81,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TriCheckbox } from '@/components/ui/tri-checkbox';
 import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
+import { useCommitDraft } from '@/hooks/use-commit-draft';
 import { useStashState } from '@/hooks/use-stash-state';
 import { api, type PullStrategy } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
@@ -178,43 +179,10 @@ export function ReviewPane() {
   const [fileSearch, setFileSearch] = useState('');
   const [fileSearchCaseSensitive, setFileSearchCaseSensitive] = useState(false);
   const [checkedFiles, setCheckedFiles] = useState<Set<string>>(new Set());
-  const { setCommitDraft, clearCommitDraft } = useDraftStore();
-  const [commitTitle, setCommitTitleRaw] = useState('');
-  const [commitBody, setCommitBodyRaw] = useState('');
-
-  // Use refs to read current values without nesting setState calls
-  const commitTitleRef = useRef(commitTitle);
-  commitTitleRef.current = commitTitle;
-  const commitBodyRef = useRef(commitBody);
-  commitBodyRef.current = commitBody;
-
-  // Wrap setters to also persist to draft store
+  const { clearCommitDraft } = useDraftStore();
   const draftId = effectiveThreadId || projectModeId;
-  const setCommitTitle = useCallback(
-    (v: string | ((prev: string) => string)) => {
-      setCommitTitleRaw((prev) => {
-        const next = typeof v === 'function' ? v(prev) : v;
-        if (draftId) {
-          setCommitDraft(draftId, next, commitBodyRef.current);
-        }
-        return next;
-      });
-    },
-    [draftId, setCommitDraft],
-  );
-
-  const setCommitBody = useCallback(
-    (v: string | ((prev: string) => string)) => {
-      setCommitBodyRaw((prev) => {
-        const next = typeof v === 'function' ? v(prev) : v;
-        if (draftId) {
-          setCommitDraft(draftId, commitTitleRef.current, next);
-        }
-        return next;
-      });
-    },
-    [draftId, setCommitDraft],
-  );
+  const { commitTitle, commitBody, setCommitTitle, setCommitBody, commitTitleRef, commitBodyRef } =
+    useCommitDraft(draftId);
   const generatingMsg = useReviewPaneStore((s) =>
     draftId ? (s.generatingCommitMsg[draftId] ?? false) : false,
   );
@@ -702,11 +670,8 @@ export function ReviewPane() {
     setLoadError(false);
     setSelectedAction('commit');
 
-    // Restore commit title/body from draft store
-    const draftKey = effectiveThreadId || projectModeId;
-    const draft = draftKey ? useDraftStore.getState().drafts[draftKey] : undefined;
-    setCommitTitleRaw(draft?.commitTitle ?? '');
-    setCommitBodyRaw(draft?.commitBody ?? '');
+    // Commit title/body are restored automatically by useCommitDraft when
+    // draftId (= gitContextKey) changes.
 
     // Only fetch data if the pane is visible; otherwise defer until it opens.
     if (reviewPaneOpen) {
@@ -957,8 +922,8 @@ export function ReviewPane() {
           useThreadStore.getState().selectedThreadId ||
           useProjectStore.getState().selectedProjectId;
         if (currentDraftId === capturedDraftId) {
-          setCommitTitleRaw(result.value.title);
-          setCommitBodyRaw(result.value.body);
+          setCommitTitle(result.value.title);
+          setCommitBody(result.value.body);
         }
       } else if (!ac.signal.aborted) {
         toast.error(t('review.generateFailed', { message: result.error.message }));
@@ -1013,8 +978,8 @@ export function ReviewPane() {
       }
 
       // Progress is now driven by WS events (workflow events in the timeline)
-      setCommitTitleRaw('');
-      setCommitBodyRaw('');
+      setCommitTitle('');
+      setCommitBody('');
       if (draftId) clearCommitDraft(draftId);
       return;
     }
@@ -1041,8 +1006,8 @@ export function ReviewPane() {
     }
 
     // Clear draft on successful submission — progress is now driven by WS
-    setCommitTitleRaw('');
-    setCommitBodyRaw('');
+    setCommitTitle('');
+    setCommitBody('');
     if (draftId) clearCommitDraft(draftId);
   };
 

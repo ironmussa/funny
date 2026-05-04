@@ -1,7 +1,18 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 
 import { createMessageRepository } from '../../repositories/message-repository.js';
-import { createTestDb, seedProject, seedThread } from '../helpers/test-db.js';
+import {
+  createTestDb,
+  seedProject,
+  seedThread,
+  seedMessage,
+  seedToolCall,
+} from '../helpers/test-db.js';
+
+/** Build an ISO timestamp `i` seconds after a fixed base, so message order is deterministic. */
+function ts(i: number): string {
+  return new Date(Date.UTC(2026, 0, 1, 0, 0, i)).toISOString();
+}
 
 let deps: ReturnType<typeof createTestDb>;
 let repo: ReturnType<typeof createMessageRepository>;
@@ -114,6 +125,116 @@ describe('getThreadWithMessages', () => {
     const result = await repo.getThreadWithMessages('t1');
     expect(result!.lastUserMessage).toBeDefined();
     expect(result!.lastUserMessage!.content).toBe('user prompt');
+  });
+
+  test('returns ONLY the N most recent messages without server-side extension', async () => {
+    // Layout (ASC): user @ 0, then 8 assistant messages @ 1..8.
+    // The repo must NOT extend backwards to include the user — that's the
+    // client's job (loadOlderMessages, fired on idle). Initial response stays
+    // small to keep first paint fast.
+    seedMessage(deps.db, { id: 'u', role: 'user', content: 'prompt', timestamp: ts(0) });
+    for (let i = 1; i <= 8; i++) {
+      seedMessage(deps.db, {
+        id: `a${i}`,
+        role: 'assistant',
+        content: `reply-${i}`,
+        timestamp: ts(i),
+      });
+    }
+
+    const result = await repo.getThreadWithMessages('t1', 3);
+    expect(result!.messages).toHaveLength(3);
+    expect(result!.messages[0].id).toBe('a6');
+    expect(result!.messages.at(-1)!.id).toBe('a8');
+    expect(result!.hasMore).toBe(true);
+    // lastUserMessage is still sent so the prompt header can render.
+    expect(result!.lastUserMessage!.id).toBe('u');
+  });
+
+  test('lastUserMessage is fetched separately when no user message is in the window', async () => {
+    seedMessage(deps.db, { id: 'u', role: 'user', content: 'old prompt', timestamp: ts(0) });
+    for (let i = 1; i <= 5; i++) {
+      seedMessage(deps.db, {
+        id: `a${i}`,
+        role: 'assistant',
+        content: `reply-${i}`,
+        timestamp: ts(i),
+      });
+    }
+
+    const result = await repo.getThreadWithMessages('t1', 2);
+    expect(result!.messages.every((m: any) => m.role === 'assistant')).toBe(true);
+    expect(result!.hasMore).toBe(true);
+    expect(result!.lastUserMessage).toBeDefined();
+    expect(result!.lastUserMessage!.id).toBe('u');
+    expect(result!.lastUserMessage!.content).toBe('old prompt');
+  });
+
+  test('lastUserMessage fetched out-of-window is enriched with its tool calls', async () => {
+    seedMessage(deps.db, { id: 'u', role: 'user', content: 'old prompt', timestamp: ts(0) });
+    seedToolCall(deps.db, { id: 'tc-u', messageId: 'u', name: 'UserTool' });
+    for (let i = 1; i <= 5; i++) {
+      seedMessage(deps.db, {
+        id: `a${i}`,
+        role: 'assistant',
+        content: `reply-${i}`,
+        timestamp: ts(i),
+      });
+    }
+
+    const result = await repo.getThreadWithMessages('t1', 2);
+    expect(result!.lastUserMessage!.id).toBe('u');
+    expect(result!.lastUserMessage!.toolCalls).toHaveLength(1);
+    expect(result!.lastUserMessage!.toolCalls[0].name).toBe('UserTool');
+  });
+
+  test('hasMore is false when total rows fit within the limit', async () => {
+    seedMessage(deps.db, { id: 'u', role: 'user', content: 'prompt', timestamp: ts(0) });
+    seedMessage(deps.db, { id: 'a1', role: 'assistant', content: 'r1', timestamp: ts(1) });
+
+    const result = await repo.getThreadWithMessages('t1', 5);
+    expect(result!.messages).toHaveLength(2);
+    expect(result!.hasMore).toBe(false);
+  });
+
+  test('lastUserMessage is reused from the window when present (no extra fetch)', async () => {
+    // When the window already contains the most-recent user message, the
+    // implementation reuses it instead of issuing the fallback query — this
+    // also exercises the code path that finds it in the loaded slice.
+    seedMessage(deps.db, { id: 'u1', role: 'user', content: 'first', timestamp: ts(0) });
+    seedMessage(deps.db, { id: 'a1', role: 'assistant', content: 'r1', timestamp: ts(1) });
+    seedMessage(deps.db, { id: 'u2', role: 'user', content: 'second', timestamp: ts(2) });
+    seedMessage(deps.db, { id: 'a2', role: 'assistant', content: 'r2', timestamp: ts(3) });
+
+    const result = await repo.getThreadWithMessages('t1', 3);
+    // Window is u2, a2 plus one more (a1) — most recent 3.
+    expect(result!.messages.map((m: any) => m.id)).toEqual(['a1', 'u2', 'a2']);
+    // lastUserMessage should be u2 (the most recent user, in-window).
+    expect(result!.lastUserMessage!.id).toBe('u2');
+    expect(result!.lastUserMessage!.content).toBe('second');
+  });
+
+  test('single tool-calls fetch covers messages and out-of-window lastUserMessage', async () => {
+    // Tool calls on both an in-window assistant and the out-of-window user
+    // must both be returned, even though they come from a single batched query.
+    seedMessage(deps.db, { id: 'u', role: 'user', content: 'old prompt', timestamp: ts(0) });
+    seedToolCall(deps.db, { id: 'tc-u', messageId: 'u', name: 'UserTool' });
+    for (let i = 1; i <= 5; i++) {
+      seedMessage(deps.db, {
+        id: `a${i}`,
+        role: 'assistant',
+        content: `reply-${i}`,
+        timestamp: ts(i),
+      });
+    }
+    seedToolCall(deps.db, { id: 'tc-a5', messageId: 'a5', name: 'AsstTool' });
+
+    const result = await repo.getThreadWithMessages('t1', 2);
+    const a5 = result!.messages.find((m: any) => m.id === 'a5');
+    expect(a5!.toolCalls).toHaveLength(1);
+    expect(a5!.toolCalls[0].name).toBe('AsstTool');
+    expect(result!.lastUserMessage!.toolCalls).toHaveLength(1);
+    expect(result!.lastUserMessage!.toolCalls[0].name).toBe('UserTool');
   });
 
   test('parses initInfo from thread initTools', async () => {

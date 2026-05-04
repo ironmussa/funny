@@ -1,6 +1,6 @@
-import type { ContextUsage } from '@/stores/thread-store';
-
 import { createClientLogger } from './client-logger';
+import { onContextUsage } from './context-usage-events';
+import type { ContextUsage } from './context-usage-types';
 
 const log = createClientLogger('context-usage-storage');
 const KEY_PREFIX = 'funny:contextUsage:';
@@ -39,3 +39,7 @@ export function saveContextUsage(threadId: string, usage: ContextUsage): void {
     log.warn('save failed', { threadId, error: String(err) });
   }
 }
+
+// Persist on every WS context-usage event so wsHandlers doesn't need to import
+// this module directly (keeps the handler chain shallow).
+onContextUsage(saveContextUsage);

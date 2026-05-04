@@ -1,12 +1,11 @@
 import { ChevronRight, Wrench, ListTodo } from 'lucide-react';
-import { useState, memo, useMemo } from 'react';
+import { useState, memo, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 
 import { getToolLabel } from './tool-cards/utils';
-import { ToolCallCard } from './ToolCallCard';
 
 export interface ToolCallItem {
   id: string;
@@ -18,14 +17,19 @@ export interface ToolCallItem {
 export interface ToolCallGroupProps {
   name: string;
   calls: ToolCallItem[];
-  onRespond?: (answer: string) => void;
   timestamp?: string;
+  /**
+   * Renderer for individual tool calls inside the expanded group. Injected by
+   * the parent so this component doesn't import `ToolCallCard` directly —
+   * that would form a static import cycle.
+   */
+  renderCall?: (call: ToolCallItem & { _childToolCalls?: any[] }) => ReactNode;
 }
 
 function toolCallGroupAreEqual(prev: ToolCallGroupProps, next: ToolCallGroupProps) {
   if (
     prev.name !== next.name ||
-    prev.onRespond !== next.onRespond ||
+    prev.renderCall !== next.renderCall ||
     prev.timestamp !== next.timestamp
   )
     return false;
@@ -40,8 +44,8 @@ function toolCallGroupAreEqual(prev: ToolCallGroupProps, next: ToolCallGroupProp
 export const ToolCallGroup = memo(function ToolCallGroup({
   name,
   calls,
-  onRespond,
   timestamp,
+  renderCall,
 }: ToolCallGroupProps) {
   const { t } = useTranslation();
   const [expanded, setExpanded] = useState(false);
@@ -78,19 +82,9 @@ export const ToolCallGroup = memo(function ToolCallGroup({
           )}
         </div>
       </button>
-      {expanded && (
+      {expanded && renderCall && (
         <div className="space-y-1.5 border-t border-border/40 px-2 pb-2 pt-1">
-          {calls.map((tc: any) => (
-            <ToolCallCard
-              key={tc.id}
-              name={tc.name}
-              input={tc.input}
-              output={tc.output}
-              onRespond={onRespond}
-              hideLabel
-              childToolCalls={tc._childToolCalls}
-            />
-          ))}
+          {calls.map((tc) => renderCall(tc))}
         </div>
       )}
     </div>

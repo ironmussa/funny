@@ -44,6 +44,7 @@ import { toastError } from '@/lib/toast-error';
 import { cn } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useProjectStore } from '@/stores/project-store';
+import { useThreadReadStore, isThreadUnread } from '@/stores/thread-read-store';
 
 export interface ThreadItemProps {
   thread: Thread;
@@ -161,6 +162,13 @@ export const ThreadItem = memo(function ThreadItem({
   const isBusy = isRunning || isSettingUp;
   const displayTime = timeValue ?? timeAgo(thread.createdAt, t);
 
+  // Show a blue "unread" dot when a finished thread hasn't been opened since
+  // it last completed. Selector returns a boolean so unrelated threads'
+  // read-state changes don't re-render this row.
+  const isUnread = useThreadReadStore((s) =>
+    isThreadUnread(s.readAt, thread.id, thread.completedAt),
+  );
+
   // Keep the last known git status so the widget doesn't flicker away
   // during transient undefined gaps (e.g. thread selection race conditions).
   const lastGitStatusRef = useRef(gitStatus);
@@ -200,10 +208,29 @@ export const ThreadItem = memo(function ThreadItem({
       <div className="flex min-w-0 items-center gap-1.5">
         {/* Thread status / pin icon — pin only shown when onPin is provided (i.e. pin has effect on ordering) */}
         <div className="relative h-3.5 w-3.5 flex-shrink-0">
-          {onPin &&
-          thread.pinned &&
-          thread.status !== 'running' &&
-          thread.status !== 'setting_up' ? (
+          {isUnread && !isBusy ? (
+            <span
+              className={cn(
+                'absolute inset-0 flex items-center justify-center',
+                onPin && 'group-hover/thread:hidden',
+              )}
+            >
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    data-testid={`thread-unread-dot-${thread.id}`}
+                    className="block h-2 w-2 rounded-full bg-blue-500"
+                  />
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {t('thread.unread', 'Unread')}
+                </TooltipContent>
+              </Tooltip>
+            </span>
+          ) : onPin &&
+            thread.pinned &&
+            thread.status !== 'running' &&
+            thread.status !== 'setting_up' ? (
             <span
               className={cn(
                 'absolute inset-0 flex items-center justify-center text-muted-foreground',

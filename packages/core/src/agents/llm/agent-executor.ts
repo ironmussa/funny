@@ -65,12 +65,10 @@ export interface StepInfo {
   usage?: { input_tokens: number; output_tokens: number };
 }
 
-/** A plain tool definition (no Vercel AI SDK dependency) */
-export interface ToolDef {
-  description: string;
-  parameters: z.ZodType<any>;
-  execute: (args: any) => Promise<string>;
-}
+// ToolDef interface lives in ./types.js to avoid an import cycle with
+// browser-tools (which needs the type but is consumed by this file).
+export type { ToolDef } from './types.js';
+import type { ToolDef } from './types.js';
 
 // ── Options ───────────────────────────────────────────────────
 

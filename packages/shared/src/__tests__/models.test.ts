@@ -20,8 +20,8 @@ describe('resolveModelId', () => {
       expect(resolveModelId('claude', 'sonnet')).toBe('claude-sonnet-4-5-20250929');
     });
 
-    test('resolves opus to its full model ID', () => {
-      expect(resolveModelId('claude', 'opus')).toBe('claude-opus-4-6');
+    test('resolves opus to its full model ID (with 1M context alias)', () => {
+      expect(resolveModelId('claude', 'opus')).toBe('claude-opus-4-6[1m]');
     });
 
     test('resolves haiku to its full model ID', () => {

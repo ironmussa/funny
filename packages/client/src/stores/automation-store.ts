@@ -1,7 +1,7 @@
 import type { Automation, AutomationRun, InboxItem } from '@funny/shared';
 import { create } from 'zustand';
 
-import { api } from '@/lib/api';
+import { automationsApi as api } from '@/lib/api/automations';
 
 interface AutomationState {
   automationsByProject: Record<string, Automation[]>;

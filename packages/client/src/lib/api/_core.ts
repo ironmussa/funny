@@ -3,6 +3,7 @@ import { internal, processError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
 import i18n from '@/i18n/config';
+import { emitUnauthorized } from '@/lib/api/auth-events';
 import { startSpan, metric } from '@/lib/telemetry';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 
@@ -107,25 +108,13 @@ export function request<T>(path: string, init?: RequestInit): ResultAsync<T, Dom
       if (!res.ok) {
         span.end('ERROR');
 
-        // On 401, verify the session is truly invalid before logging out.
-        // Multiple requests fire concurrently after login; a transient 401
-        // (e.g. cookie-cache race in Better Auth + PostgreSQL) must not
-        // trigger logout while the session is still valid.
+        // On 401, fire an event for auth-store to verify and log out if needed.
+        // Decoupled via auth-events so _core doesn't depend on auth-store/auth-client.
         if (res.status === 401) {
           const pathNoQuery = path.split('?')[0];
           const isInitialProfileLoad = method === 'GET' && pathNoQuery === '/profile';
           if (!isInitialProfileLoad) {
-            import('@/lib/auth-client').then(async ({ authClient }) => {
-              try {
-                const session = await authClient.getSession();
-                if (!session.data?.user) {
-                  const { useAuthStore } = await import('@/stores/auth-store');
-                  useAuthStore.getState().logout();
-                }
-              } catch {
-                // Session check failed — don't logout on transient errors
-              }
-            });
+            emitUnauthorized(pathNoQuery);
           }
         }
 

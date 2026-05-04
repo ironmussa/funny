@@ -9,7 +9,7 @@ import {
   getToolLabel,
   getFileExtension,
   getFileName,
-} from '@/components/tool-cards/utils';
+} from '@/components/tool-cards/format-utils';
 import { extToHljsLang } from '@/hooks/use-highlight';
 import { toEditorUri, toEditorUriWithLine } from '@/lib/editor-utils';
 

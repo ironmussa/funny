@@ -1,7 +1,8 @@
 import type { ToolPermission, UserProfile } from '@funny/shared';
 import { create } from 'zustand';
 
-import { api } from '@/lib/api';
+import { profileApi } from '@/lib/api/profile';
+import { systemApi } from '@/lib/api/system';
 
 export type Editor = 'cursor' | 'vscode' | 'windsurf' | 'zed' | 'sublime' | 'vim';
 export type ThreadMode = 'local' | 'worktree';
@@ -148,7 +149,7 @@ interface SettingsState {
 
 /** Save a partial settings update to the server (fire-and-forget). */
 function syncToServer(data: Record<string, any>) {
-  api.updateProfile(data).match(
+  profileApi.updateProfile(data).match(
     () => {},
     () => {},
   );
@@ -212,7 +213,7 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   },
   fetchAvailableShells: async () => {
     if (get()._shellsLoaded) return;
-    const result = await api.getAvailableShells();
+    const result = await systemApi.getAvailableShells();
     if (result.isOk()) {
       set({ availableShells: result.value.shells, _shellsLoaded: true });
     }

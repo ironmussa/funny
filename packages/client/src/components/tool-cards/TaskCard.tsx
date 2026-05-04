@@ -1,14 +1,11 @@
 import { ChevronRight, Bot, Loader2 } from 'lucide-react';
-import { Suspense, lazy, useState, useMemo, memo } from 'react';
+import { Suspense, lazy, useState, useMemo, memo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { remarkPlugins, baseMarkdownComponents } from '@/lib/markdown-components';
-import { groupConsecutiveToolCalls } from '@/lib/render-items';
+import { groupConsecutiveToolCalls, type ToolItem } from '@/lib/render-items';
 import { cn } from '@/lib/utils';
-
-import { ToolCallCard } from '../ToolCallCard';
-import { ToolCallGroup } from '../ToolCallGroup';
 
 const LazyMarkdown = lazy(() =>
   import('react-markdown').then(({ default: ReactMarkdown }) => ({
@@ -43,12 +40,20 @@ function normalizeTaskOutput(output: string): string {
   return output;
 }
 
+export type RenderChildToolCall = (item: ToolItem, idx: number) => ReactNode;
+
 interface TaskCardProps {
   parsed: Record<string, unknown>;
   output?: string;
   hideLabel?: boolean;
   childToolCalls?: any[];
   displayTime?: string | null;
+  /**
+   * Renderer for nested child tool calls. Injected by `ToolCallCard` so that
+   * `TaskCard` doesn't have to import `ToolCallCard`/`ToolCallGroup`, which
+   * would create a static cycle through the component tree.
+   */
+  renderChild?: RenderChildToolCall;
 }
 
 export const TaskCard = memo(function TaskCard({
@@ -57,6 +62,7 @@ export const TaskCard = memo(function TaskCard({
   hideLabel,
   childToolCalls,
   displayTime,
+  renderChild,
 }: TaskCardProps) {
   const { t } = useTranslation();
   const isRunning = !rawOutput;
@@ -119,24 +125,9 @@ export const TaskCard = memo(function TaskCard({
       {expanded && (
         <ScrollArea className="max-h-[60vh] border-t border-border/40">
           {/* Child tool calls from the subagent (grouped like main thread) */}
-          {hasChildren && (
+          {hasChildren && renderChild && (
             <div className="space-y-1 px-3 py-2">
-              {groupedChildren.map((item, idx) =>
-                item.type === 'toolcall-group' ? (
-                  <ToolCallGroup
-                    key={`group-${item.name}-${idx}`}
-                    name={item.name}
-                    calls={item.calls}
-                  />
-                ) : (
-                  <ToolCallCard
-                    key={item.tc.id}
-                    name={item.tc.name}
-                    input={item.tc.input}
-                    output={item.tc.output}
-                  />
-                ),
-              )}
+              {groupedChildren.map((item, idx) => renderChild(item, idx))}
             </div>
           )}
 

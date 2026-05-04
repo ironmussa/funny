@@ -8,7 +8,7 @@
 import type { Browser, Page } from 'playwright';
 import { z } from 'zod';
 
-import type { ToolDef } from './agent-executor.js';
+import type { ToolDef } from './types.js';
 
 export interface BrowserToolsContext {
   /** Base URL of the app to test (e.g., http://localhost:3000) */

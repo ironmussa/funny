@@ -3,17 +3,17 @@ import type { DomainError } from '@funny/shared/errors';
 import { okAsync, errAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
-vi.mock('@/lib/api', () => ({
-  api: {
+vi.mock('@/lib/api/git', () => ({
+  gitApi: {
     getGitStatuses: vi.fn(),
     getGitStatus: vi.fn(),
   },
 }));
 
-import { api } from '@/lib/api';
+import { gitApi } from '@/lib/api/git';
 import { useGitStatusStore, _resetCooldowns, branchKey } from '@/stores/git-status-store';
 
-const mockApi = vi.mocked(api);
+const mockApi = vi.mocked(gitApi);
 
 function makeStatus(
   overrides: Partial<GitStatusInfo> & { threadId: string; branchKey: string },

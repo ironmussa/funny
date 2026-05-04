@@ -40,7 +40,7 @@ import { cn } from '@/lib/utils';
 import { DiffCommentThread } from '../DiffCommentThread';
 import { FileTree } from '../FileTree';
 import { type DiffViewMode, type ConflictResolution, VirtualDiff } from '../VirtualDiff';
-import { getFileName } from './utils';
+import { getFileName } from './format-utils';
 
 /* ── Helpers ── */
 

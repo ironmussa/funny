@@ -6,7 +6,7 @@
  * The exported function API is backward-compatible.
  */
 
-import type { AgentInitInfo } from './thread-store';
+import type { AgentInitInfo } from './thread-types';
 
 // ── ThreadStoreInternals class ──────────────────────────────────
 
@@ -31,6 +31,9 @@ export class ThreadStoreInternals {
 
   /** Cache invalidator registered by thread-store (avoids circular import) */
   private cacheInvalidator: ((threadId: string) => void) | null = null;
+
+  /** Callback registered by ui-store to reset UI state on thread select */
+  private threadSelectListener: (() => void) | null = null;
 
   // ── Select generation ──────────────────────────────────────────
 
@@ -125,6 +128,16 @@ export class ThreadStoreInternals {
     this.cacheInvalidator?.(threadId);
   }
 
+  // ── Thread-select listener (UI state reset) ──────────────────
+
+  setThreadSelectListener(fn: () => void): void {
+    this.threadSelectListener = fn;
+  }
+
+  notifyThreadSelected(): void {
+    this.threadSelectListener?.();
+  }
+
   // ── Reset (for tests) ─────────────────────────────────────────
 
   reset(): void {
@@ -135,6 +148,7 @@ export class ThreadStoreInternals {
     this.threadProjectIndex.clear();
     this.navigateFn = null;
     this.cacheInvalidator = null;
+    this.threadSelectListener = null;
   }
 }
 
@@ -165,3 +179,5 @@ export const setCacheInvalidator = (fn: (threadId: string) => void) =>
   internals.setCacheInvalidator(fn);
 export const invalidateThreadCache = (threadId: string) =>
   internals.invalidateThreadCache(threadId);
+export const setThreadSelectListener = (fn: () => void) => internals.setThreadSelectListener(fn);
+export const notifyThreadSelected = () => internals.notifyThreadSelected();

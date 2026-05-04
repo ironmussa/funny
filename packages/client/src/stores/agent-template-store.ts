@@ -13,7 +13,7 @@ import type {
 import { BUILTIN_AGENT_TEMPLATES } from '@funny/shared';
 import { create } from 'zustand';
 
-import { api } from '@/lib/api';
+import { agentTemplatesApi as api } from '@/lib/api/agent-templates';
 
 interface AgentTemplateState {
   templates: AgentTemplate[];

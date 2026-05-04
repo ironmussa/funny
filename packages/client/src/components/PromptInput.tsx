@@ -4,6 +4,7 @@ import {
   DEFAULT_PROVIDER,
   DEFAULT_PERMISSION_MODE,
   DEFAULT_THREAD_MODE,
+  getModelContextWindow,
 } from '@funny/shared/models';
 import { useState, useRef, useEffect, useCallback, useMemo, memo } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -237,8 +238,11 @@ export const PromptInput = memo(function PromptInput({
   const activeThreadContextTokens = useThreadStore(
     (s) => s.activeThread?.contextUsage?.cumulativeInputTokens ?? 0,
   );
-  // Default context window — keep in sync with ContextUsageBar.
-  const contextPct = Math.min(100, (activeThreadContextTokens / 200_000) * 100);
+  const contextMaxTokens =
+    activeThreadProvider && activeThreadModel
+      ? getModelContextWindow(activeThreadProvider, activeThreadModel)
+      : 200_000;
+  const contextPct = Math.min(100, (activeThreadContextTokens / contextMaxTokens) * 100);
 
   // ── Branch state (new-thread: from shared store, follow-up: local) ──
   const selectedBranch = useBranchPickerStore((s) => s.selectedBranch);
@@ -851,6 +855,8 @@ export const PromptInput = memo(function PromptInput({
         effortOptions={effortOptions.length > 0 ? effortOptions : undefined}
         defaultTemplateId={effectiveProject?.defaultAgentTemplateId}
         contextPct={contextPct}
+        contextUsedTokens={activeThreadContextTokens}
+        contextMaxTokens={contextMaxTokens}
         onCompact={effectiveThreadId ? handleCompact : undefined}
       />
 

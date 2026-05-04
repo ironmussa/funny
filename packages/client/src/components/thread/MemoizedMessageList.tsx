@@ -15,6 +15,7 @@ import { useTranslation } from 'react-i18next';
 
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useMinuteTick } from '@/hooks/use-minute-tick';
 import {
   getCachedPrepared,
   isPretextReady,
@@ -186,6 +187,10 @@ export const MemoizedMessageList = memo(
     ref,
   ) {
     const { t } = useTranslation();
+    // Re-render every 60s so timeAgo timestamps in tool cards stay fresh.
+    // Needed here (not just in ThreadView) because the custom memo comparator
+    // blocks parent-driven re-renders when only the tick changes.
+    useMinuteTick();
 
     // ── Font config: dynamic based on global font size setting ──
     const globalFontSize = useSettingsStore((s) => s.fontSize);
@@ -563,20 +568,27 @@ export const MemoizedMessageList = memo(
                 name={ti.name}
                 calls={ti.calls}
                 timestamp={ti.calls[0]?.timestamp}
-                onRespond={
-                  (ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode') &&
-                  isWaiting &&
-                  onToolRespond
-                    ? (answer: string) => {
-                        for (const call of ti.calls) {
-                          if (!call.output) {
+                renderCall={(call) => (
+                  <ToolCallCard
+                    key={call.id}
+                    name={ti.name}
+                    input={call.input}
+                    output={call.output}
+                    childToolCalls={call._childToolCalls}
+                    hideLabel
+                    onRespond={
+                      (ti.name === 'AskUserQuestion' || ti.name === 'ExitPlanMode') &&
+                      isWaiting &&
+                      onToolRespond &&
+                      !call.output
+                        ? (answer: string) => {
                             onToolRespond(call.id, answer, ti.name);
+                            onSend(answer, { model: '', mode: '' });
                           }
-                        }
-                        onSend(answer, { model: '', mode: '' });
-                      }
-                    : undefined
-                }
+                        : undefined
+                    }
+                  />
+                )}
               />
             </div>
           );

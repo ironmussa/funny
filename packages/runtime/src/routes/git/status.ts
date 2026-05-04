@@ -13,6 +13,7 @@ import {
   getCurrentBranch,
   deriveGitSyncState,
   getPRForBranch,
+  type BranchPRInfo,
 } from '@funny/core/git';
 import { badRequest } from '@funny/shared/errors';
 import { Hono } from 'hono';
@@ -30,8 +31,11 @@ import {
   _gitStatusCache,
   GIT_STATUS_CACHE_TTL_MS,
   countUnpushedCommits,
+  emitPRUpdateForThread,
+  getCachedPR,
   requireProjectCwd,
   scheduleBackgroundFetch,
+  schedulePRLookup,
 } from './helpers.js';
 
 export const statusRoutes = new Hono<HonoEnv>();
@@ -413,25 +417,20 @@ statusRoutes.get('/:threadId/status', async (c) => {
   if (!thread.worktreePath && !thread.branch && thread.baseBranch && thread.mergedAt) {
     const projectResult = await requireProject(thread.projectId, userId, orgId ?? undefined);
     const projectPath = projectResult.isOk() ? projectResult.value.path : null;
-    const [unpushed, prInfo] = await Promise.all([
-      (async () => {
-        if (!projectPath) return 0;
-        const span = requestSpan(c, 'git.unpushed_count', { threadId, branch: thread.baseBranch });
-        const r = await countUnpushedCommits(projectPath, thread.baseBranch);
-        span.end('ok');
-        return r;
-      })(),
-      (async () => {
-        if (!projectPath || !branchForPR) return null;
-        const span = requestSpan(c, 'github.pr_lookup', { threadId, branch: branchForPR });
-        const r = await getPRForBranch(projectPath, branchForPR, ghEnv);
-        span.end('ok');
-        return r;
-      })(),
-    ]);
-    return c.json({
+    const span = requestSpan(c, 'git.unpushed_count', { threadId, branch: thread.baseBranch });
+    const unpushed = projectPath ? await countUnpushedCommits(projectPath, thread.baseBranch) : 0;
+    span.end('ok');
+
+    // PR info: synchronous cache hit, otherwise defer and push via WS.
+    let prInfo: BranchPRInfo | null | undefined;
+    if (projectPath && branchForPR) {
+      prInfo = getCachedPR(projectPath, branchForPR);
+    }
+
+    const branchKey = computeBranchKey(thread as any);
+    const baseStatus = {
       threadId,
-      branchKey: computeBranchKey(thread as any),
+      branchKey,
       state: 'merged' as const,
       dirtyFileCount: 0,
       unpushedCommitCount: unpushed,
@@ -440,6 +439,20 @@ statusRoutes.get('/:threadId/status', async (c) => {
       isMergedIntoBase: true,
       linesAdded: 0,
       linesDeleted: 0,
+    };
+
+    if (prInfo === undefined && projectPath && branchForPR) {
+      schedulePRLookup({
+        projectPath,
+        branch: branchForPR,
+        ghEnv,
+        onUpdate: (pr) =>
+          emitPRUpdateForThread({ userId, threadId, branchKey, status: baseStatus, pr }),
+      });
+    }
+
+    return c.json({
+      ...baseStatus,
       ...(prInfo
         ? { prNumber: prInfo.prNumber, prUrl: prInfo.prUrl, prState: prInfo.prState }
         : {}),
@@ -454,29 +467,38 @@ statusRoutes.get('/:threadId/status', async (c) => {
   scheduleBackgroundFetch(thread.projectId, project.path, identity ?? undefined, { threadId });
 
   const cwd = thread.worktreePath || project.path;
-  const [summaryResult, prInfo] = await Promise.all([
-    (async () => {
-      const span = requestSpan(c, 'git.status_summary', { threadId });
-      const r = await getStatusSummary(cwd, thread.baseBranch ?? undefined, project.path);
-      span.end(r.isOk() ? 'ok' : 'error', r.isErr() ? r.error.message : undefined);
-      return r;
-    })(),
-    (async () => {
-      if (!branchForPR) return null;
-      const span = requestSpan(c, 'github.pr_lookup', { threadId, branch: branchForPR });
-      const r = await getPRForBranch(project.path, branchForPR, ghEnv);
-      span.end('ok');
-      return r;
-    })(),
-  ]);
+  const summarySpan = requestSpan(c, 'git.status_summary', { threadId });
+  const summaryResult = await getStatusSummary(cwd, thread.baseBranch ?? undefined, project.path);
+  summarySpan.end(
+    summaryResult.isOk() ? 'ok' : 'error',
+    summaryResult.isErr() ? summaryResult.error.message : undefined,
+  );
   if (summaryResult.isErr()) return resultToResponse(c, summaryResult);
   const summary = summaryResult.value;
 
-  return c.json({
+  // PR info: synchronous cache hit, otherwise defer and push via WS.
+  const prInfo = branchForPR ? getCachedPR(project.path, branchForPR) : undefined;
+
+  const branchKey = computeBranchKey(thread as any);
+  const baseStatus = {
     threadId,
-    branchKey: computeBranchKey(thread as any),
+    branchKey,
     state: deriveGitSyncState(summary),
     ...summary,
+  };
+
+  if (prInfo === undefined && branchForPR) {
+    schedulePRLookup({
+      projectPath: project.path,
+      branch: branchForPR,
+      ghEnv,
+      onUpdate: (pr) =>
+        emitPRUpdateForThread({ userId, threadId, branchKey, status: baseStatus, pr }),
+    });
+  }
+
+  return c.json({
+    ...baseStatus,
     ...(prInfo ? { prNumber: prInfo.prNumber, prUrl: prInfo.prUrl, prState: prInfo.prState } : {}),
   });
 });

@@ -1,4 +1,4 @@
-import { useAuthStore } from '@/stores/auth-store';
+import { getActiveOrgSlug } from './url-state';
 
 /** Known top-level route segments that are NOT org slugs. */
 const STATIC_ROUTES = new Set([
@@ -16,7 +16,7 @@ const STATIC_ROUTES = new Set([
 
 /** Build an app-internal path, auto-prefixing the active org slug if any. */
 export function buildPath(path: string): string {
-  const slug = useAuthStore.getState().activeOrgSlug;
+  const slug = getActiveOrgSlug();
   if (!slug) return path;
   // Avoid double-prefixing
   if (path.startsWith(`/${slug}/`) || path === `/${slug}`) return path;

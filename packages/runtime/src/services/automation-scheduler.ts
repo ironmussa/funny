@@ -348,6 +348,14 @@ export async function startScheduler(): Promise<void> {
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 shutdownManager.register('automation-scheduler', () => stopScheduler(), ShutdownPhase.SERVICES);
 
+// Register scheduler hooks with the manager (one-way: scheduler → manager).
+// Inverts what was previously a manager ↔ scheduler import cycle.
+am.registerSchedulerHooks({
+  onAutomationCreated,
+  onAutomationUpdated,
+  onAutomationDeleted,
+});
+
 export function stopScheduler(): void {
   // Stop all cron jobs
   for (const [_id, job] of activeJobs) {

@@ -1,14 +1,15 @@
 import type { Project } from '@funny/shared';
 import { create } from 'zustand';
 
-import { api } from '@/lib/api';
+import { projectsApi } from '@/lib/api/projects';
+import { threadsApi } from '@/lib/api/threads';
 
 import { useAuthStore } from './auth-store';
-import { useGitStatusStore } from './git-status-store';
 import {
   batchUpdateThreads,
   ensureThreadsLoaded,
   clearProjectThreads,
+  fetchGitStatusForProject,
   registerProjectStore,
 } from './store-bridge';
 
@@ -99,7 +100,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     _loadProjectsPromise = (async () => {
       try {
         const { activeOrgId, activeOrgName } = useAuthStore.getState();
-        const result = await api.listProjects(activeOrgId);
+        const result = await projectsApi.listProjects(activeOrgId);
         if (result.isErr()) return;
         // When an org is active, all returned projects belong to that org.
         // Mark them as team projects with the org name so the sidebar shows badges.
@@ -128,10 +129,9 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         // Fire git status + branch fetches immediately in parallel with thread
         // loading (async-parallel). Previously these waited until ALL threads
         // finished loading, adding unnecessary latency to sidebar diff stats.
-        const gitStore = useGitStatusStore.getState();
         const { expandedProjects, fetchBranch } = get();
         for (const p of projects) {
-          gitStore.fetchForProject(p.id);
+          fetchGitStatusForProject(p.id);
           if (expandedProjects.has(p.id)) {
             fetchBranch(p.id);
           }
@@ -141,7 +141,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
         // in a single set() call to avoid N separate re-renders (one per project).
         Promise.all(
           projects.map(async (p) => {
-            const result = await api.listThreads(p.id, false, 50);
+            const result = await threadsApi.listThreads(p.id, false, 50);
             return {
               projectId: p.id,
               threads: result.isOk() ? result.value.threads : null,
@@ -175,7 +175,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       // Defer git status fetch to avoid blocking the interaction (INP).
       // The collapsible animation and thread list render first, then git
       // status icons fill in once the browser is idle.
-      const fetchGitStatus = () => useGitStatusStore.getState().fetchForProject(projectId);
+      const fetchGitStatus = () => fetchGitStatusForProject(projectId);
       if (typeof requestIdleCallback === 'function') {
         requestIdleCallback(fetchGitStatus);
       } else {
@@ -204,7 +204,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     // Fetch branch name for the selected project
     get().fetchBranch(projectId);
     // Defer git status fetch to avoid blocking the interaction (INP)
-    const fetchGitStatus = () => useGitStatusStore.getState().fetchForProject(projectId);
+    const fetchGitStatus = () => fetchGitStatusForProject(projectId);
     if (typeof requestIdleCallback === 'function') {
       requestIdleCallback(fetchGitStatus);
     } else {
@@ -232,7 +232,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     _inFlightBranch.add(projectId);
 
     try {
-      const result = await api.listBranches(projectId, ac.signal);
+      const result = await projectsApi.listBranches(projectId, ac.signal);
       if (result.isErr()) return;
       const { currentBranch } = result.value;
       if (currentBranch) {
@@ -245,7 +245,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   renameProject: async (projectId, name) => {
-    const result = await api.renameProject(projectId, name);
+    const result = await projectsApi.renameProject(projectId, name);
     if (result.isErr()) return;
     const { projects } = get();
     set({
@@ -254,7 +254,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   updateProject: async (projectId, data) => {
-    const result = await api.updateProject(projectId, data);
+    const result = await projectsApi.updateProject(projectId, data);
     if (result.isErr()) return;
     const { projects } = get();
     set({
@@ -263,7 +263,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   deleteProject: async (projectId) => {
-    const result = await api.deleteProject(projectId);
+    const result = await projectsApi.deleteProject(projectId);
     if (result.isErr()) return;
     const { projects, expandedProjects, selectedProjectId } = get();
     const nextExpanded = new Set(expandedProjects);
@@ -280,7 +280,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
   },
 
   setProjectLocalPath: async (projectId, localPath) => {
-    const result = await api.setProjectLocalPath(projectId, localPath);
+    const result = await projectsApi.setProjectLocalPath(projectId, localPath);
     if (result.isErr()) return false;
     const { projects } = get();
     set({
@@ -300,7 +300,7 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
     set({ projects: reordered });
 
     // Persist to server
-    const result = await api.reorderProjects(projectIds);
+    const result = await projectsApi.reorderProjects(projectIds);
     if (result.isErr()) {
       // Revert on failure
       set({ projects });

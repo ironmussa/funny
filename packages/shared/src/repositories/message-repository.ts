@@ -60,14 +60,16 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
   }
 
   /** Get a thread with its messages and tool calls.
-   *  When messageLimit is provided, returns only the N most recent messages
-   *  plus a hasMore flag.  Always includes `lastUserMessage` so the UI can
-   *  show the sticky prompt without loading all messages. */
+   *  When messageLimit is provided, returns ONLY the N most recent messages
+   *  plus a hasMore flag — no server-side extension. The client extends the
+   *  window in idle time via /messages, keeping the initial response small
+   *  and the first paint fast. `lastUserMessage` is always included so the
+   *  sticky prompt header can render immediately. */
   async function getThreadWithMessages(id: string, messageLimit?: number) {
     const thread = await dbGet(db.select().from(schema.threads).where(eq(schema.threads.id, id)));
     if (!thread) return null;
 
-    let messages;
+    let messages: (typeof schema.messages.$inferSelect)[];
     let hasMore = false;
 
     if (messageLimit) {
@@ -79,41 +81,8 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
           .orderBy(desc(schema.messages.timestamp))
           .limit(messageLimit + 1),
       );
-
       hasMore = rows.length > messageLimit;
-      let collected = hasMore ? rows.slice(0, messageLimit) : rows;
-
-      // Extend backwards until the oldest loaded message is a user message,
-      // so the thread renders with its starting prompt visible without the
-      // client needing a follow-up "Loading older messages…" round trip.
-      // Capped to avoid runaway fetches on huge threads.
-      const MAX_TOTAL = messageLimit * 5;
-      while (
-        hasMore &&
-        collected.length < MAX_TOTAL &&
-        collected.length > 0 &&
-        collected[collected.length - 1].role !== 'user'
-      ) {
-        const oldest = collected[collected.length - 1];
-        const moreRows = await dbAll(
-          db
-            .select()
-            .from(schema.messages)
-            .where(
-              and(
-                eq(schema.messages.threadId, id),
-                lt(schema.messages.timestamp, oldest.timestamp),
-              ),
-            )
-            .orderBy(desc(schema.messages.timestamp))
-            .limit(messageLimit + 1),
-        );
-        const batchHasMore = moreRows.length > messageLimit;
-        const batchSliced = batchHasMore ? moreRows.slice(0, messageLimit) : moreRows;
-        collected = [...collected, ...batchSliced];
-        hasMore = batchHasMore;
-      }
-
+      const collected = hasMore ? rows.slice(0, messageLimit) : rows;
       messages = collected.reverse();
     } else {
       messages = await dbAll(
@@ -125,23 +94,61 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
       );
     }
 
-    // Always fetch the last user message separately — it may not be in the
-    // paginated window when the agent produced many tool calls after it.
-    const lastUserRow = await dbGet(
-      db
-        .select()
-        .from(schema.messages)
-        .where(and(eq(schema.messages.threadId, id), eq(schema.messages.role, 'user')))
-        .orderBy(desc(schema.messages.timestamp))
-        .limit(1),
-    );
-    const [lastUserMessage] = lastUserRow ? await enrichMessages([lastUserRow]) : [undefined];
+    // Most-recent user message in the loaded window (messages is ASC here).
+    let lastUserMessage: typeof schema.messages.$inferSelect | undefined;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      if (messages[i].role === 'user') {
+        lastUserMessage = messages[i];
+        break;
+      }
+    }
+
+    // Only fall back to a dedicated query when the window has no user message
+    // (e.g. agent produced > MAX_TOTAL messages since the last prompt).
+    if (!lastUserMessage) {
+      const lastUserRow = await dbGet(
+        db
+          .select()
+          .from(schema.messages)
+          .where(and(eq(schema.messages.threadId, id), eq(schema.messages.role, 'user')))
+          .orderBy(desc(schema.messages.timestamp))
+          .limit(1),
+      );
+      lastUserMessage = lastUserRow ?? undefined;
+    }
+
+    // Single batched tool-calls fetch covering messages + lastUserMessage.
+    const toolCallIds = messages.map((m) => m.id);
+    const lastUserOutsideWindow =
+      lastUserMessage && !messages.some((m) => m.id === lastUserMessage!.id);
+    if (lastUserOutsideWindow && lastUserMessage) toolCallIds.push(lastUserMessage.id);
+
+    const allToolCalls =
+      toolCallIds.length > 0
+        ? await dbAll(
+            db
+              .select()
+              .from(schema.toolCalls)
+              .where(
+                toolCallIds.length === 1
+                  ? eq(schema.toolCalls.messageId, toolCallIds[0])
+                  : inArray(schema.toolCalls.messageId, toolCallIds),
+              ),
+          )
+        : [];
+
+    const enrichedMessages = await enrichMessages(messages, allToolCalls);
+    const enrichedLastUser = lastUserMessage
+      ? lastUserOutsideWindow
+        ? (await enrichMessages([lastUserMessage], allToolCalls))[0]
+        : enrichedMessages.find((m) => m.id === lastUserMessage!.id)
+      : undefined;
 
     return {
       ...thread,
-      messages: await enrichMessages(messages),
+      messages: enrichedMessages,
       hasMore,
-      lastUserMessage,
+      lastUserMessage: enrichedLastUser,
       initInfo: thread.initTools
         ? {
             tools: JSON.parse(thread.initTools) as string[],

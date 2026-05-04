@@ -1,6 +1,8 @@
 import { setup } from 'xstate';
 
-import type { ThreadStatus } from './types.js';
+import type { ThreadStatus, ResumeReason } from './primitives.js';
+
+export type { ResumeReason };
 
 /**
  * Thread lifecycle state machine (shared between client and server)
@@ -37,14 +39,6 @@ import type { ThreadStatus } from './types.js';
  */
 
 // ── Types ─────────────────────────────────────────────────────────
-
-export type ResumeReason =
-  | 'fresh' // First start, no session to resume
-  | 'waiting-response' // User responded to question/plan/permission
-  | 'interrupted' // Genuine resume after stop/fail/interrupt
-  | 'follow-up' // New message sent after agent completed
-  | 'post-merge' // Follow-up after worktree merge
-  | null; // Unknown / not set
 
 export interface ThreadContext {
   threadId: string;

@@ -16,23 +16,29 @@ import { nanoid } from 'nanoid';
 
 import { getServices } from './service-registry.js';
 
-// Lazy import to avoid circular dependency (scheduler imports us)
-let schedulerHooks: {
+// Scheduler hooks registered by automation-scheduler at module init.
+// Inverting the dependency (scheduler → manager only) breaks what was
+// previously a manager ↔ scheduler import cycle.
+export interface SchedulerHooks {
   onAutomationCreated: (a: any) => void;
   onAutomationUpdated: (a: any) => void;
   onAutomationDeleted: (id: string) => void;
-} | null = null;
+}
 
-async function getSchedulerHooks() {
-  if (!schedulerHooks) {
-    const mod = await import('./automation-scheduler.js');
-    schedulerHooks = {
-      onAutomationCreated: mod.onAutomationCreated,
-      onAutomationUpdated: mod.onAutomationUpdated,
-      onAutomationDeleted: mod.onAutomationDeleted,
-    };
-  }
-  return schedulerHooks;
+let schedulerHooks: SchedulerHooks | null = null;
+
+export function registerSchedulerHooks(hooks: SchedulerHooks) {
+  schedulerHooks = hooks;
+}
+
+function getSchedulerHooks(): SchedulerHooks {
+  return (
+    schedulerHooks ?? {
+      onAutomationCreated: () => {},
+      onAutomationUpdated: () => {},
+      onAutomationDeleted: () => {},
+    }
+  );
 }
 
 // ── Automation CRUD ──────────────────────────────────────────────
@@ -78,7 +84,7 @@ export async function createAutomation(data: {
   const automation = (await getAutomation(id))!;
 
   // Notify scheduler to create a cron job
-  const hooks = await getSchedulerHooks();
+  const hooks = getSchedulerHooks();
   hooks.onAutomationCreated(automation);
 
   return automation;
@@ -90,14 +96,14 @@ export async function updateAutomation(id: string, updates: Record<string, any>)
   // Notify scheduler to reschedule the cron job
   const automation = await getAutomation(id);
   if (automation) {
-    const hooks = await getSchedulerHooks();
+    const hooks = getSchedulerHooks();
     hooks.onAutomationUpdated(automation);
   }
 }
 
 export async function deleteAutomation(id: string) {
   // Notify scheduler before deleting
-  const hooks = await getSchedulerHooks();
+  const hooks = getSchedulerHooks();
   hooks.onAutomationDeleted(id);
 
   await getServices().automations.deleteAutomationRow(id);

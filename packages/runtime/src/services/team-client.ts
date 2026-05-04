@@ -547,6 +547,24 @@ function connectSocket(): void {
     }
   });
 
+  socket.io.on('reconnect_error', (err) => {
+    log.warn('Socket.IO reconnect error', {
+      namespace: 'runner',
+      error: err.message,
+    });
+  });
+
+  // `reconnection_failed` fires only when reconnectionAttempts is finite and
+  // exhausted. With Infinity (our setting) it should never fire — log it
+  // loudly if it does so we notice silent give-ups instead of staring at
+  // dead connections.
+  socket.io.on('reconnect_failed', () => {
+    log.error('Socket.IO reconnect_failed — auto-reconnect gave up; forcing manual reconnect', {
+      namespace: 'runner',
+    });
+    connectSocket();
+  });
+
   // Handle tunnel requests with ack callback
   socket.on('tunnel:request', async (data: any, ack: (response: any) => void) => {
     const response = await handleTunnelRequest(data);
@@ -576,6 +594,10 @@ function connectSocket(): void {
     // Fail every in-flight data request on disconnect so callers aren't
     // stuck waiting for the full 15s timeout.
     if (pendingDataRequests.size > 0) {
+      log.warn('Failing in-flight data requests due to socket disconnect', {
+        namespace: 'runner',
+        count: pendingDataRequests.size,
+      });
       for (const [, p] of pendingDataRequests) {
         clearTimeout(p.timer);
         p.reject(new Error('Socket.IO disconnected while awaiting data response'));
@@ -803,7 +825,7 @@ async function sendDataMessage(eventType: string, payload: Record<string, any>):
 
     const requestId = nanoid();
 
-    return await new Promise((resolve, reject) => {
+    const pending = new Promise((resolve, reject) => {
       const timer = setTimeout(() => {
         pendingDataRequests.delete(requestId);
         reject(new Error(`Data request timed out (${eventType})`));
@@ -812,6 +834,16 @@ async function sendDataMessage(eventType: string, payload: Record<string, any>):
       pendingDataRequests.set(requestId, { resolve, reject, timer });
       state.socket!.emit(eventType, { ...payload, _requestId: requestId });
     });
+
+    // Register a no-op handler on the underlying promise so a socket-disconnect
+    // rejection (rejected for *every* pending request at once in the `disconnect`
+    // listener) doesn't surface as an unhandled rejection when a caller has
+    // already moved on. `await pending` below still propagates the error to
+    // direct awaiters; this only suppresses the global unhandled-rejection
+    // signal on the original promise.
+    pending.catch(() => {});
+
+    return await pending;
   } finally {
     releaseDataSlot();
   }

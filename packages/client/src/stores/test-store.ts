@@ -13,7 +13,7 @@ import type {
 } from '@funny/shared';
 import { create } from 'zustand';
 
-import { api } from '@/lib/api';
+import { testsApi as api } from '@/lib/api/tests';
 
 const STORAGE_KEY_PREFIX = 'test-selected-projects:';
 

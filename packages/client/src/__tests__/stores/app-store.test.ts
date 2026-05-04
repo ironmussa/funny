@@ -4,14 +4,17 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { useAppStore } from '@/stores/app-store';
 
-// Mock the api module
-vi.mock('@/lib/api', () => ({
-  api: {
+// project-store and thread-store now import the specific api/* modules
+// directly (not the barrel). Mock those plus the barrel for legacy callers.
+const { mockProjectsApi, mockThreadsApi } = vi.hoisted(() => ({
+  mockProjectsApi: {
     listProjects: vi.fn(),
-    listThreads: vi.fn(),
     listBranches: vi
       .fn()
       .mockReturnValue(Promise.resolve({ isOk: () => false, isErr: () => true })),
+  },
+  mockThreadsApi: {
+    listThreads: vi.fn(),
     getThread: vi.fn(),
     getThreadEvents: vi.fn(),
     archiveThread: vi.fn(),
@@ -19,8 +22,13 @@ vi.mock('@/lib/api', () => ({
   },
 }));
 
-import { api } from '@/lib/api';
-const mockApi = vi.mocked(api);
+vi.mock('@/lib/api', () => ({
+  api: { ...mockProjectsApi, ...mockThreadsApi },
+}));
+vi.mock('@/lib/api/projects', () => ({ projectsApi: mockProjectsApi }));
+vi.mock('@/lib/api/threads', () => ({ threadsApi: mockThreadsApi }));
+
+const mockApi = { ...mockProjectsApi, ...mockThreadsApi };
 
 describe('AppStore', () => {
   beforeEach(() => {

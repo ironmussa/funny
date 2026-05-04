@@ -10,8 +10,8 @@ const { mockSendMessage, mockStopThread, mockApproveTool, mockSearchThreadConten
   }),
 );
 
-vi.mock('@/lib/api', () => ({
-  api: {
+vi.mock('@/lib/api/threads', () => ({
+  threadsApi: {
     sendMessage: mockSendMessage,
     stopThread: mockStopThread,
     approveTool: mockApproveTool,

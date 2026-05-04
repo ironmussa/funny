@@ -1,7 +1,7 @@
 import { toast } from 'sonner';
 import { create } from 'zustand';
 
-import { api } from '@/lib/api';
+import { systemApi } from '@/lib/api/system';
 
 interface InternalEditorState {
   isOpen: boolean;
@@ -17,7 +17,7 @@ export const useInternalEditorStore = create<InternalEditorState>((set) => ({
   initialContent: null,
   openFile: async (path) => {
     // Validate that the file exists and load content before opening the dialog
-    const result = await api.readFile(path);
+    const result = await systemApi.readFile(path);
     if (result.isErr()) {
       toast.error('Failed to open file', {
         description: result.error.message,

@@ -10,9 +10,9 @@ import { memo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/shallow';
 
-import type { GitProgressStep } from '@/components/GitProgressModal';
 import { SubItemsList } from '@/components/GitProgressModal';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import type { GitProgressStep } from '@/lib/git-progress-types';
 import { timeAgo } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useCommitProgressStore } from '@/stores/commit-progress-store';

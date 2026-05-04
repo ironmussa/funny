@@ -13,7 +13,7 @@ const mockApi = vi.hoisted(() => ({
   triageRun: vi.fn(),
 }));
 
-vi.mock('@/lib/api', () => ({ api: mockApi }));
+vi.mock('@/lib/api/automations', () => ({ automationsApi: mockApi }));
 
 import { useAutomationStore } from '@/stores/automation-store';
 

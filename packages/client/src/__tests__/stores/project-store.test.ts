@@ -9,18 +9,15 @@ const {
   mockClearProjectThreads,
   mockThreadsByProject,
   mockFetchForProject,
+  mockProjectsApi,
+  mockThreadsApi,
 } = vi.hoisted(() => ({
   mockLoadThreadsForProject: vi.fn().mockResolvedValue(undefined),
   mockClearProjectThreads: vi.fn(),
   mockThreadsByProject: { current: {} as Record<string, unknown[]> },
   mockFetchForProject: vi.fn(),
-}));
-
-// Mock dependencies
-vi.mock('@/lib/api', () => ({
-  api: {
+  mockProjectsApi: {
     listProjects: vi.fn(),
-    listThreads: vi.fn(),
     listBranches: vi
       .fn()
       .mockReturnValue(Promise.resolve({ isOk: () => false, isErr: () => true })),
@@ -28,8 +25,20 @@ vi.mock('@/lib/api', () => ({
     updateProject: vi.fn(),
     deleteProject: vi.fn(),
     reorderProjects: vi.fn(),
+    setProjectLocalPath: vi.fn(),
+  },
+  mockThreadsApi: {
+    listThreads: vi.fn(),
   },
 }));
+
+// Mock the API barrel (for any leftover consumers) and the specific sub-modules
+// the store now imports directly.
+vi.mock('@/lib/api', () => ({
+  api: { ...mockProjectsApi, ...mockThreadsApi },
+}));
+vi.mock('@/lib/api/projects', () => ({ projectsApi: mockProjectsApi }));
+vi.mock('@/lib/api/threads', () => ({ threadsApi: mockThreadsApi }));
 
 vi.mock('@/stores/store-bridge', () => ({
   batchUpdateThreads: vi.fn(),
@@ -40,6 +49,7 @@ vi.mock('@/stores/store-bridge', () => ({
     }
   },
   clearProjectThreads: (...args: any[]) => mockClearProjectThreads(...args),
+  fetchGitStatusForProject: vi.fn(),
   registerProjectStore: vi.fn(),
 }));
 
@@ -51,10 +61,9 @@ vi.mock('@/stores/git-status-store', () => ({
   },
 }));
 
-import { api } from '@/lib/api';
 import { useProjectStore } from '@/stores/project-store';
 
-const mockApi = vi.mocked(api);
+const mockApi = mockProjectsApi;
 
 function makeProject(overrides: Partial<Project> = {}): Project {
   return {
@@ -110,12 +119,11 @@ describe('ProjectStore', () => {
     });
 
     test('triggers thread loading in background for all projects', async () => {
-      const { api: realApi } = await import('@/lib/api');
-      const mockListThreads = vi.mocked(realApi.listThreads);
+      const mockListThreads = mockThreadsApi.listThreads;
 
       const projects = [makeProject({ id: 'p1' }), makeProject({ id: 'p2' })];
       mockApi.listProjects.mockReturnValueOnce(okAsync(projects) as any);
-      // loadProjects now calls api.listThreads directly for each project (batched)
+      // loadProjects now calls threadsApi.listThreads directly for each project (batched)
       mockListThreads.mockReturnValue(okAsync({ threads: [], total: 0, hasMore: false }) as any);
 
       await useProjectStore.getState().loadProjects();

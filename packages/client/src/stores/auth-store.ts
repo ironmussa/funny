@@ -1,8 +1,10 @@
 import type { SafeUser } from '@funny/shared';
 import { create } from 'zustand';
 
+import { onUnauthorized } from '@/lib/api/auth-events';
 import { authClient } from '@/lib/auth-client';
 import { createClientLogger } from '@/lib/client-logger';
+import { setActiveOrgSlug } from '@/lib/url-state';
 
 const log = createClientLogger('auth-store');
 
@@ -77,8 +79,10 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
             role: u.role || 'user',
           },
         });
+        setActiveOrgSlug(activeOrgSlug);
       } else {
         set({ isAuthenticated: false, isLoading: false, user: null });
+        setActiveOrgSlug(null);
       }
     } catch (err) {
       log.error('initialization error', {
@@ -136,8 +140,26 @@ export const useAuthStore = create<AuthState>((set, _get) => ({
       activeOrgName: null,
       activeOrgSlug: null,
     });
+    setActiveOrgSlug(null);
   },
 
-  setActiveOrg: (id, name, slug) =>
-    set({ activeOrgId: id, activeOrgName: name, activeOrgSlug: slug ?? null }),
+  setActiveOrg: (id, name, slug) => {
+    set({ activeOrgId: id, activeOrgName: name, activeOrgSlug: slug ?? null });
+    setActiveOrgSlug(slug ?? null);
+  },
 }));
+
+// Verify session on 401 and log out only if it's truly invalid.
+// Multiple requests fire concurrently after login; a transient 401
+// (e.g. cookie-cache race in Better Auth + PostgreSQL) must not
+// trigger logout while the session is still valid.
+onUnauthorized(async () => {
+  try {
+    const session = await authClient.getSession();
+    if (!session.data?.user) {
+      useAuthStore.getState().logout();
+    }
+  } catch {
+    // Session check failed — don't logout on transient errors
+  }
+});

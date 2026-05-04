@@ -1,8 +1,9 @@
 import type { GitStatusInfo } from '@funny/shared';
 import { create } from 'zustand';
 
-import { api } from '@/lib/api';
-import { useThreadStore } from '@/stores/thread-store';
+import { gitApi as api } from '@/lib/api/git';
+
+import { getThreadsByProject, registerGitStatusStore } from './store-bridge';
 
 /** Git status for a project root (no threadId) */
 export type ProjectGitStatus = Omit<GitStatusInfo, 'threadId' | 'branchKey'>;
@@ -117,7 +118,7 @@ function resolveBranchKey(threadId: string, mapping: Record<string, string>): st
   const fromMapping = mapping[threadId];
   if (fromMapping) return fromMapping;
   // Compute client-side from thread data
-  const { threadsByProject } = useThreadStore.getState();
+  const threadsByProject = getThreadsByProject();
   for (const threads of Object.values(threadsByProject)) {
     const thread = threads.find((t) => t.id === threadId);
     if (thread) return branchKey(thread);
@@ -393,6 +394,8 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
     });
   },
 }));
+
+registerGitStatusStore(useGitStatusStore);
 
 /**
  * Hook to get git status for a specific thread.

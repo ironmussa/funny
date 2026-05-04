@@ -99,9 +99,12 @@ export const gitSyncStateConfig: Record<
 /** Map full model IDs (from Claude SDK / Gemini CLI) back to friendly keys used in translations. */
 const MODEL_ID_TO_KEY: Record<string, string> = {
   'claude-opus-4-6': 'opus',
+  'claude-opus-4-6[1m]': 'opus',
   'claude-opus-4-7': 'opus47',
+  'claude-opus-4-7[1m]': 'opus47',
   'claude-sonnet-4-5-20250929': 'sonnet',
   'claude-sonnet-4-6': 'sonnet46',
+  'claude-sonnet-4-6[1m]': 'sonnet46',
   'claude-haiku-4-5-20251001': 'haiku',
   'gemini-2.0-flash': 'gemini20flash',
   'gemini-2.5-flash': 'gemini25flash',

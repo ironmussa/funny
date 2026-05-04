@@ -136,7 +136,7 @@ describe('AgentOrchestrator', () => {
     test('passes resolved model ID to process', async () => {
       await orchestrator.startAgent(baseOpts({ model: 'opus' }));
 
-      expect(factory.lastProcess.options.model).toBe('claude-opus-4-6');
+      expect(factory.lastProcess.options.model).toBe('claude-opus-4-6[1m]');
     });
 
     test('passes permission mode to process', async () => {

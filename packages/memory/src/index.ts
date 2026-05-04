@@ -54,6 +54,7 @@ export { setMemoryLogSink } from './logger.js';
 export type { MemoryLogger } from './logger.js';
 export { runGC, shouldRunGC, trackThreadCompletion, markGCComplete } from './gc.js';
 export type { GCResult } from './gc.js';
+import { setPaisleyParkFactory } from './gc.js';
 export {
   runConsolidation,
   checkAdmission,
@@ -448,6 +449,10 @@ export async function destroyAllInstances() {
   }
   instances.clear();
 }
+
+// Wire the factory into gc.ts at module load. Inverting the dependency
+// (gc no longer reaches back into index.ts) breaks the import cycle.
+setPaisleyParkFactory(getPaisleyPark);
 
 // ─── Helpers ───────────────────────────────────────────
 

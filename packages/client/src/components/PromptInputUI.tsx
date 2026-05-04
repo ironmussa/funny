@@ -356,6 +356,8 @@ export interface PromptInputUIProps {
 
   // ── Context window usage (% of total context used) ──
   contextPct?: number;
+  contextUsedTokens?: number;
+  contextMaxTokens?: number;
   onCompact?: () => void;
 }
 
@@ -416,6 +418,8 @@ export const PromptInputUI = memo(function PromptInputUI({
   effortOptions,
   defaultTemplateId,
   contextPct,
+  contextUsedTokens,
+  contextMaxTokens,
   onCompact,
 }: PromptInputUIProps) {
   const { t } = useTranslation();
@@ -1014,7 +1018,13 @@ export const PromptInputUI = memo(function PromptInputUI({
               {/* Model + effort + send — always visible, pushed right */}
               <div className="ml-auto flex shrink-0 items-center gap-1">
                 {typeof contextPct === 'number' && (
-                  <ContextUsageRing pct={contextPct} onCompact={onCompact} disabled={!onCompact} />
+                  <ContextUsageRing
+                    pct={contextPct}
+                    usedTokens={contextUsedTokens}
+                    maxTokens={contextMaxTokens}
+                    onCompact={onCompact}
+                    disabled={!onCompact}
+                  />
                 )}
                 <ModelSelect
                   value={unifiedModel}

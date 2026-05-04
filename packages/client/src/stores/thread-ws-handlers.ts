@@ -8,7 +8,7 @@ import { toast } from 'sonner';
 
 import i18n from '@/i18n/config';
 import { createClientLogger } from '@/lib/client-logger';
-import { saveContextUsage } from '@/lib/context-usage-storage';
+import { emitContextUsage } from '@/lib/context-usage-events';
 import { buildPath } from '@/lib/url';
 
 import {
@@ -16,13 +16,14 @@ import {
   getThreadActor,
   wsEventToMachineEvent,
 } from './thread-machine-bridge';
-import type { AgentInitInfo, ThreadState } from './thread-store';
+import { useThreadReadStore } from './thread-read-store';
 import {
   bufferWSEvent,
   getNavigate,
   getProjectIdForThread,
   invalidateThreadCache,
 } from './thread-store-internals';
+import type { AgentInitInfo, ThreadState } from './thread-types';
 
 const wsLog = createClientLogger('ws-handlers');
 
@@ -570,6 +571,18 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
 
   set(stateUpdate as any);
 
+  // If the thread the user is currently viewing just finished, mark it as read
+  // so it doesn't show an unread blue dot in the sidebar.
+  if (
+    activeThread?.id === threadId &&
+    (resultStatus === 'completed' ||
+      resultStatus === 'failed' ||
+      resultStatus === 'stopped' ||
+      resultStatus === 'interrupted')
+  ) {
+    useThreadReadStore.getState().markRead(threadId);
+  }
+
   if (resultStatus === 'waiting') return;
 
   const projectIdForRefresh =
@@ -688,10 +701,11 @@ export function handleWSContextUsage(
   };
 
   // Persist across page reloads — the runtime only keeps usage in memory.
-  saveContextUsage(threadId, usage);
+  // context-usage-storage subscribes to this event and writes to localStorage.
+  emitContextUsage(threadId, usage);
 
   // Always persist to the map so it survives thread switches
-  const updates: Partial<import('./thread-store').ThreadState> = {
+  const updates: Partial<ThreadState> = {
     contextUsageByThread: { ...contextUsageByThread, [threadId]: usage },
   };
 

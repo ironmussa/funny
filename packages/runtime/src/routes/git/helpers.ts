@@ -5,12 +5,19 @@
  * @domain layer: infrastructure
  */
 
-import { fetchRemote, git, type GitIdentityOptions } from '@funny/core/git';
+import {
+  fetchRemote,
+  getPRForBranch,
+  git,
+  type BranchPRInfo,
+  type GitIdentityOptions,
+} from '@funny/core/git';
 import { ok } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { startSpan } from '../../lib/telemetry.js';
 import * as tm from '../../services/thread-manager.js';
+import { wsBroker } from '../../services/ws-broker.js';
 import { requireProject } from '../../utils/route-helpers.js';
 
 // computeBranchKey is imported from utils/git-status-helpers.ts
@@ -22,6 +29,97 @@ export const GIT_STATUS_CACHE_TTL_MS = 2_000; // 2 seconds
 // Throttled fetch: track last fetch time per project so we don't hammer the remote.
 export const _lastFetchTs = new Map<string, number>();
 export const FETCH_THROTTLE_MS = 30_000; // 30 seconds
+
+// Per-branch PR info cache. `gh pr list` averages ~320ms per call and is the
+// dominant cost in /api/git/:threadId/status. Cache result so the synchronous
+// path is free, then refresh in the background and push updates via WS.
+// `null` is a valid cached value meaning "no PR exists for this branch".
+const _prInfoCache = new Map<string, { data: BranchPRInfo | null; ts: number }>();
+const _prFetchInflight = new Set<string>();
+export const PR_INFO_CACHE_TTL_MS = 60_000; // 1 minute
+
+function prCacheKey(projectPath: string, branch: string): string {
+  return `${projectPath}::${branch}`;
+}
+
+/** Read cached PR info. Returns `undefined` on miss, `null` for known-no-PR, otherwise the cached value. */
+export function getCachedPR(projectPath: string, branch: string): BranchPRInfo | null | undefined {
+  const cached = _prInfoCache.get(prCacheKey(projectPath, branch));
+  if (!cached) return undefined;
+  if (Date.now() - cached.ts >= PR_INFO_CACHE_TTL_MS) return undefined;
+  return cached.data;
+}
+
+/**
+ * Fire-and-forget PR lookup. Caches the result and invokes `onUpdate` so the
+ * caller can broadcast a follow-up WS event with the freshly-resolved PR info.
+ * Deduped per (projectPath, branch) so concurrent thread switches don't pile
+ * up `gh pr list` invocations.
+ */
+export function schedulePRLookup(opts: {
+  projectPath: string;
+  branch: string;
+  ghEnv?: Record<string, string>;
+  onUpdate?: (pr: BranchPRInfo | null) => void;
+}): void {
+  const { projectPath, branch, ghEnv, onUpdate } = opts;
+  const key = prCacheKey(projectPath, branch);
+  if (_prFetchInflight.has(key)) return;
+  const cached = _prInfoCache.get(key);
+  if (cached && Date.now() - cached.ts < PR_INFO_CACHE_TTL_MS) {
+    onUpdate?.(cached.data);
+    return;
+  }
+  _prFetchInflight.add(key);
+  const span = startSpan('github.pr_lookup', {
+    attributes: { branch, background: true },
+  });
+  getPRForBranch(projectPath, branch, ghEnv).then(
+    (pr) => {
+      span.end('ok');
+      _prInfoCache.set(key, { data: pr, ts: Date.now() });
+      _prFetchInflight.delete(key);
+      onUpdate?.(pr);
+    },
+    (error) => {
+      span.end('error', String(error));
+      _prFetchInflight.delete(key);
+      log.warn('Background PR lookup failed', {
+        namespace: 'git-service',
+        branch,
+        error: String(error),
+      });
+    },
+  );
+}
+
+/**
+ * Emit a `git:status` WS event for a single thread carrying just the PR fields.
+ * Client merges by `branchKey`, so the existing status fields stay intact and
+ * the PR badge appears as soon as the background lookup resolves.
+ */
+export function emitPRUpdateForThread(opts: {
+  userId: string;
+  threadId: string;
+  branchKey: string;
+  status: Record<string, unknown>;
+  pr: BranchPRInfo | null;
+}): void {
+  const { userId, threadId, branchKey, status, pr } = opts;
+  const merged = {
+    ...status,
+    threadId,
+    branchKey,
+    ...(pr ? { prNumber: pr.prNumber, prUrl: pr.prUrl, prState: pr.prState } : {}),
+  };
+  wsBroker.emitToUser(userId, {
+    type: 'git:status',
+    threadId,
+    data: {
+      statuses: [merged as unknown as import('@funny/shared').GitStatusInfo],
+    },
+  });
+}
 
 /** Invalidate cached git status for a project after mutating git operations. */
 export async function invalidateGitStatusCache(threadId: string) {

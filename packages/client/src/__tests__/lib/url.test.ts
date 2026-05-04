@@ -1,11 +1,11 @@
 import { describe, test, expect, beforeEach } from 'vitest';
 
 import { buildPath, stripOrgPrefix } from '@/lib/url';
-import { useAuthStore } from '@/stores/auth-store';
+import { setActiveOrgSlug } from '@/lib/url-state';
 
-// Reset auth store before each test
+// Reset slug before each test
 beforeEach(() => {
-  useAuthStore.setState({ activeOrgSlug: null });
+  setActiveOrgSlug(null);
 });
 
 // ── stripOrgPrefix ───────────────────────────────────────────────
@@ -71,22 +71,22 @@ describe('buildPath', () => {
   });
 
   test('prefixes org slug to path', () => {
-    useAuthStore.setState({ activeOrgSlug: 'acme' });
+    setActiveOrgSlug('acme');
     expect(buildPath('/projects')).toBe('/acme/projects');
   });
 
   test('avoids double-prefixing', () => {
-    useAuthStore.setState({ activeOrgSlug: 'acme' });
+    setActiveOrgSlug('acme');
     expect(buildPath('/acme/projects')).toBe('/acme/projects');
   });
 
   test('avoids double-prefixing exact slug match', () => {
-    useAuthStore.setState({ activeOrgSlug: 'acme' });
+    setActiveOrgSlug('acme');
     expect(buildPath('/acme')).toBe('/acme');
   });
 
   test('handles path without leading slash', () => {
-    useAuthStore.setState({ activeOrgSlug: 'acme' });
+    setActiveOrgSlug('acme');
     expect(buildPath('projects')).toBe('/acme/projects');
   });
 });

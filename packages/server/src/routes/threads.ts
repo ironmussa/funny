@@ -22,6 +22,7 @@ import { Hono } from 'hono';
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';
 import { log } from '../lib/logger.js';
+import { startSpan } from '../lib/telemetry.js';
 import type { ServerEnv } from '../lib/types.js';
 import { proxyToRunner } from '../middleware/proxy.js';
 import * as messageQueueRepo from '../services/message-queue-repository.js';
@@ -178,27 +179,56 @@ threadRoutes.get('/archived', async (c) => {
 threadRoutes.get('/:id', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
-
-  // Ownership check: verify the thread belongs to the requesting user
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
-
   const limitParam = c.req.query('messageLimit');
   const messageLimit = limitParam
     ? Math.min(200, Math.max(1, parseInt(limitParam, 10)))
     : undefined;
-  const result = await messageRepo.getThreadWithMessages(id, messageLimit);
-  if (!result) return c.json({ error: 'Thread not found' }, 404);
 
-  const [queuedCount, queuedNext] = await Promise.all([
-    messageQueueRepo.queueCount(id),
-    messageQueueRepo.peek(id),
-  ]);
-  return c.json({
-    ...result,
-    queuedCount,
-    queuedNextMessage: queuedNext?.content,
+  const span = startSpan('GET /api/threads/:id', {
+    attributes: { 'thread.id': id, 'thread.message_limit': messageLimit ?? null },
   });
+  try {
+    // Fetch thread+messages, queue count, and queue head in parallel.
+    // Ownership is checked off the thread row inside the same query result,
+    // so we avoid a separate getThread() round-trip.
+    const fetchSpan = startSpan('thread.fetch_with_messages', {
+      traceId: span.traceId,
+      parentSpanId: span.spanId,
+      attributes: { 'thread.id': id },
+    });
+    const queueCountSpan = startSpan('thread.queue_count', {
+      traceId: span.traceId,
+      parentSpanId: span.spanId,
+      attributes: { 'thread.id': id },
+    });
+    const queuePeekSpan = startSpan('thread.queue_peek', {
+      traceId: span.traceId,
+      parentSpanId: span.spanId,
+      attributes: { 'thread.id': id },
+    });
+    const [result, queuedCount, queuedNext] = await Promise.all([
+      messageRepo.getThreadWithMessages(id, messageLimit).finally(() => fetchSpan.end('ok')),
+      messageQueueRepo.queueCount(id).finally(() => queueCountSpan.end('ok')),
+      messageQueueRepo.peek(id).finally(() => queuePeekSpan.end('ok')),
+    ]);
+
+    if (!result || result.userId !== userId) {
+      span.end('ok');
+      return c.json({ error: 'Thread not found' }, 404);
+    }
+
+    span.attributes['thread.message_count'] = result.messages?.length ?? 0;
+    span.attributes['thread.queued_count'] = queuedCount;
+    span.end('ok');
+    return c.json({
+      ...result,
+      queuedCount,
+      queuedNextMessage: queuedNext?.content,
+    });
+  } catch (e) {
+    span.end('error', e instanceof Error ? e.message : String(e));
+    throw e;
+  }
 });
 
 // GET /api/threads/:id/messages?cursor=<ISO>&limit=50
@@ -494,12 +524,40 @@ threadRoutes.get('/:id/events', async (c) => {
   const id = c.req.param('id');
   const userId = c.get('userId') as string;
 
-  const thread = await threadRepo.getThread(id);
-  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
+  const span = startSpan('GET /api/threads/:id/events', {
+    attributes: { 'thread.id': id },
+  });
+  try {
+    // Run the ownership lookup and the events query in parallel — events
+    // is the slow leg and can't read user data we wouldn't already return.
+    const { getThreadEvents } = await import('../services/thread-event-repository.js');
+    const ownerSpan = startSpan('thread.owner_check', {
+      traceId: span.traceId,
+      parentSpanId: span.spanId,
+      attributes: { 'thread.id': id },
+    });
+    const eventsSpan = startSpan('thread.events.fetch', {
+      traceId: span.traceId,
+      parentSpanId: span.spanId,
+      attributes: { 'thread.id': id },
+    });
+    const [thread, events] = await Promise.all([
+      threadRepo.getThread(id).finally(() => ownerSpan.end('ok')),
+      getThreadEvents(id).finally(() => eventsSpan.end('ok')),
+    ]);
 
-  const { getThreadEvents } = await import('../services/thread-event-repository.js');
-  const events = await getThreadEvents(id);
-  return c.json({ events });
+    if (!thread || thread.userId !== userId) {
+      span.end('ok');
+      return c.json({ error: 'Thread not found' }, 404);
+    }
+
+    span.attributes['thread.events_count'] = events.length;
+    span.end('ok');
+    return c.json({ events });
+  } catch (e) {
+    span.end('error', e instanceof Error ? e.message : String(e));
+    throw e;
+  }
 });
 
 // GET /api/threads/:id/touched-files — all unique file paths modified by Write/Edit/NotebookEdit

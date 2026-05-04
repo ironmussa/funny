@@ -2,6 +2,7 @@ import { create } from 'zustand';
 
 import { useProjectStore } from './project-store';
 import { useThreadStore, invalidateSelectThread } from './thread-store';
+import { setThreadSelectListener } from './thread-store-internals';
 
 const REVIEW_PANE_WIDTH_KEY = 'review_pane_width';
 const DEFAULT_REVIEW_PANE_WIDTH = 50; // percentage of viewport width
@@ -459,3 +460,9 @@ export const useUIStore = create<UIState>((set) => ({
 
   clearIssueContext: () => set({ newThreadIssueContext: null }),
 }));
+
+// Reset transient UI panes whenever a thread is selected.
+// Registered via the listener API to avoid a thread-store ↔ ui-store import cycle.
+setThreadSelectListener(() => {
+  useUIStore.setState({ newThreadProjectId: null, allThreadsProjectId: null });
+});

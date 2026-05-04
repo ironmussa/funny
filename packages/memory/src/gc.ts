@@ -11,11 +11,31 @@
 
 import { Result, err, ok } from 'neverthrow';
 
-import { getPaisleyPark } from './index.js';
 import { log } from './logger.js';
 import { listFacts, updateFact, deleteFact, syncDb } from './storage.js';
 import { calculateDecayScore, cosineSimilarity } from './temporal.js';
 import { DEFAULT_GC_CONFIG, type GCConfig, type StorageConfig } from './types.js';
+
+// PaisleyPark factory is injected by `index.ts` via `setPaisleyParkFactory`
+// to avoid an import cycle (`index.ts` re-exports gc symbols and would
+// previously import `getPaisleyPark` back from `index.ts` here).
+// `any` here is intentional: importing the PaisleyPark *type* would
+// re-introduce the same module edge that we are trying to break.
+type PaisleyParkFactory = (config: StorageConfig) => any;
+let paisleyParkFactory: PaisleyParkFactory | null = null;
+
+export function setPaisleyParkFactory(factory: PaisleyParkFactory): void {
+  paisleyParkFactory = factory;
+}
+
+function getPaisleyPark(config: StorageConfig): any {
+  if (!paisleyParkFactory) {
+    throw new Error(
+      'PaisleyPark factory not registered. Import from "@funny/memory" before calling runGC.',
+    );
+  }
+  return paisleyParkFactory(config);
+}
 
 // ─── GC result ─────────────────────────────────────────
 

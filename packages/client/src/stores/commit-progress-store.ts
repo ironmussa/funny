@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-import type { GitProgressStep } from '@/components/GitProgressModal';
+import type { GitProgressStep } from '@/lib/git-progress-types';
 
 export interface CommitProgressEntry {
   title: string;

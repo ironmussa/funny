@@ -14,6 +14,7 @@ type LazyRef<T> = { current: StoreApi<T> | null };
 
 const _projectStoreRef: LazyRef<any> = { current: null };
 const _threadStoreRef: LazyRef<any> = { current: null };
+const _gitStatusStoreRef: LazyRef<any> = { current: null };
 
 /** Called by project-store during creation to register itself */
 export function registerProjectStore(store: StoreApi<any>): void {
@@ -23,6 +24,29 @@ export function registerProjectStore(store: StoreApi<any>): void {
 /** Called by thread-store during creation to register itself */
 export function registerThreadStore(store: StoreApi<any>): void {
   _threadStoreRef.current = store;
+}
+
+/** Called by git-status-store during creation to register itself */
+export function registerGitStatusStore(store: StoreApi<any>): void {
+  _gitStatusStoreRef.current = store;
+}
+
+// ── Project → Git Status operations ──────────────────────────
+
+/** Refetch git status for a project (fire-and-forget). */
+export function fetchGitStatusForProject(projectId: string): void {
+  const store = _gitStatusStoreRef.current;
+  if (!store) return;
+  store.getState().fetchForProject(projectId);
+}
+
+// ── Git Status → Thread operations ───────────────────────────
+
+/** Snapshot of `threadsByProject` for read-only branchKey computation. */
+export function getThreadsByProject(): Record<string, any[]> {
+  const store = _threadStoreRef.current;
+  if (!store) return {};
+  return store.getState().threadsByProject;
 }
 
 // ── Project → Thread operations ──────────────────────────────

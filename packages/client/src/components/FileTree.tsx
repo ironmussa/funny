@@ -32,7 +32,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { HighlightText } from '@/components/ui/highlight-text';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { api } from '@/lib/api';
+import { browseApi as api } from '@/lib/api/browse';
 import { createClientLogger } from '@/lib/client-logger';
 import {
   openFileInExternalEditor,

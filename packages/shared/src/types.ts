@@ -1,5 +1,35 @@
-// ─── Thread Machine (re-exported for convenience) ────────
-export type { ResumeReason } from './thread-machine.js';
+// ─── Primitives (re-exported for convenience) ────────────
+// The actual definitions live in `./primitives.js` so sub-modules can
+// depend on these without forming a cycle through the `types.js` barrel.
+export type {
+  ThreadMode,
+  ThreadRuntime,
+  ThreadStatus,
+  ThreadStage,
+  WaitingReason,
+  ThreadSource,
+  AgentProvider,
+  PermissionMode,
+  EffortLevel,
+  FollowUpMode,
+  ResumeReason,
+} from './primitives.js';
+
+import type {
+  AgentProvider,
+  EffortLevel,
+  FollowUpMode,
+  PermissionMode,
+  ThreadMode,
+  ThreadRuntime,
+  ThreadSource,
+  ThreadStage,
+  ThreadStatus,
+  WaitingReason,
+} from './primitives.js';
+// ─── Thread (interface lives in ./types/thread.js to avoid cycles) ──
+import type { Thread, PaginatedThreadsResponse } from './types/thread.js';
+export type { Thread, PaginatedThreadsResponse };
 
 // ─── Domain re-exports (split modules) ───────────────────
 export type {
@@ -160,8 +190,6 @@ export type { ThreadEventType, ThreadEvent } from './types/thread-events.js';
 
 // ─── Projects ────────────────────────────────────────────
 
-export type FollowUpMode = 'interrupt' | 'queue' | 'ask';
-
 export interface Project {
   id: string;
   name: string;
@@ -208,38 +236,12 @@ export interface Design {
 }
 
 // ─── Threads ─────────────────────────────────────────────
-
-export type ThreadMode = 'local' | 'worktree';
-export type ThreadRuntime = 'local' | 'remote';
-export type ThreadStatus =
-  | 'setting_up'
-  | 'idle'
-  | 'pending'
-  | 'running'
-  | 'waiting'
-  | 'completed'
-  | 'failed'
-  | 'stopped'
-  | 'interrupted';
-export type ThreadStage = 'backlog' | 'planning' | 'in_progress' | 'review' | 'done' | 'archived';
-export type WaitingReason = 'question' | 'plan' | 'permission';
-
-export type AgentProvider =
-  | 'claude'
-  | 'codex'
-  | 'gemini'
-  | 'pi'
-  | 'deepagent'
-  | 'llm-api'
-  | 'external';
-
-export type ThreadSource = 'web' | 'chrome_extension' | 'api' | 'automation' | 'ingest';
+// Primitive unions live in ./primitives.js (re-exported above).
+// The Thread interface lives in ./types/thread.js (re-exported above).
 
 // Model type unions are derived from MODEL_REGISTRY — see ./models.ts
 import type { ClaudeModel, CodexModel, GeminiModel, DeepAgentModel, AgentModel } from './models.js';
 export type { ClaudeModel, CodexModel, GeminiModel, DeepAgentModel, AgentModel };
-export type PermissionMode = 'plan' | 'auto' | 'autoEdit' | 'confirmEdit' | 'ask';
-export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 // ─── Agent Definitions ──────────────────────────────────
 
@@ -266,55 +268,6 @@ export interface AgentDefinition {
   allowedTools?: string[];
   /** Tools that should be disabled for this agent role. */
   disallowedTools?: string[];
-}
-
-export interface Thread {
-  id: string;
-  projectId: string;
-  userId: string;
-  title: string;
-  mode: ThreadMode;
-  status: ThreadStatus;
-  stage: ThreadStage;
-  provider: AgentProvider;
-  permissionMode: PermissionMode;
-  model: AgentModel;
-  branch?: string;
-  baseBranch?: string;
-  worktreePath?: string;
-  sessionId?: string;
-  initialPrompt?: string;
-  cost: number;
-  archived?: boolean;
-  pinned?: boolean;
-  automationId?: string;
-  source: ThreadSource;
-  externalRequestId?: string;
-  parentThreadId?: string;
-  designId?: string;
-  runtime: ThreadRuntime;
-  containerUrl?: string;
-  containerName?: string;
-  commentCount?: number;
-  /** Why context recovery is needed (e.g. model/provider changed mid-thread) */
-  contextRecoveryReason?: string | null;
-  createdAt: string;
-  updatedAt: string;
-  completedAt?: string;
-  /** Creator/agent that generated this thread (user ID, 'external', 'pipeline', 'automation', etc.) */
-  createdBy?: string;
-  /** Snippet of the last assistant message (populated in list queries) */
-  lastAssistantMessage?: string;
-  /** Agent template used to configure this thread (Deep Agent only). */
-  agentTemplateId?: string;
-  /** Filled template variable values (key → value). */
-  templateVariables?: Record<string, string>;
-}
-
-export interface PaginatedThreadsResponse {
-  threads: Thread[];
-  total: number;
-  hasMore: boolean;
 }
 
 // ─── Thread Comments ────────────────────────────────────

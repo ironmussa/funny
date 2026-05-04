@@ -3,6 +3,8 @@ import { cn } from '@/lib/utils';
 
 interface Props {
   pct: number;
+  usedTokens?: number;
+  maxTokens?: number;
   onCompact?: () => void;
   disabled?: boolean;
 }
@@ -12,10 +14,19 @@ const STROKE = 2.5;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRC = 2 * Math.PI * RADIUS;
 
-export function ContextUsageRing({ pct, onCompact, disabled }: Props) {
+const formatTokens = (n: number): string => {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(n >= 10_000_000 ? 0 : 2)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`;
+  return String(n);
+};
+
+export function ContextUsageRing({ pct, usedTokens, maxTokens, onCompact, disabled }: Props) {
   const clamped = Math.max(0, Math.min(100, pct));
   const remaining = Math.max(0, Math.round(100 - clamped));
   const dash = (clamped / 100) * CIRC;
+  const showTokens =
+    typeof usedTokens === 'number' && typeof maxTokens === 'number' && maxTokens > 0;
+  const remainingTokens = showTokens ? Math.max(0, maxTokens - usedTokens) : 0;
 
   const color =
     clamped > 80 ? 'stroke-red-500' : clamped > 60 ? 'stroke-amber-500' : 'stroke-muted-foreground';
@@ -58,6 +69,12 @@ export function ContextUsageRing({ pct, onCompact, disabled }: Props) {
       </HoverCardTrigger>
       <HoverCardContent side="top" align="end" className="w-64 text-sm">
         <p className="font-medium">{remaining}% of context remaining until auto-compact.</p>
+        {showTokens && (
+          <p className="mt-1 text-xs text-muted-foreground">
+            {formatTokens(usedTokens)} / {formatTokens(maxTokens)} tokens used ·{' '}
+            {formatTokens(remainingTokens)} left
+          </p>
+        )}
         <p className="mt-1 text-xs text-muted-foreground">Click to compact now.</p>
       </HoverCardContent>
     </HoverCard>

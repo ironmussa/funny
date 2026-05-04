@@ -1,7 +1,7 @@
 import type { PRDetail, PRReviewThread } from '@funny/shared';
 import { create } from 'zustand';
 
-import { api } from '@/lib/api';
+import { githubApi as api } from '@/lib/api/github';
 
 const COOLDOWN_MS = 30_000;
 

@@ -1,4 +1,5 @@
-import type { AgentModel, PermissionMode } from '../types.js';
+import type { AgentModel } from '../models.js';
+import type { PermissionMode } from '../primitives.js';
 
 // ─── Pipelines ──────────────────────────────────────────
 

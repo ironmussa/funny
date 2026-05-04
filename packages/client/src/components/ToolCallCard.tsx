@@ -32,6 +32,7 @@ import {
   makeRelativePath,
 } from './tool-cards/utils';
 import { WriteFileCard } from './tool-cards/WriteFileCard';
+import { ToolCallGroup } from './ToolCallGroup';
 
 interface ToolCallCardProps {
   name: string;
@@ -149,6 +150,22 @@ export const ToolCallCard = memo(
           hideLabel={hideLabel}
           childToolCalls={childToolCalls}
           displayTime={displayTime}
+          renderChild={(item, idx) =>
+            item.type === 'toolcall-group' ? (
+              <ToolCallGroup
+                key={`group-${item.name}-${idx}`}
+                name={item.name}
+                calls={item.calls}
+              />
+            ) : (
+              <ToolCallCard
+                key={item.tc.id}
+                name={item.tc.name}
+                input={item.tc.input}
+                output={item.tc.output}
+              />
+            )
+          }
         />
       );
     if (name === 'Think')

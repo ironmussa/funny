@@ -7,7 +7,7 @@
  * this file too — do not duplicate model lists elsewhere.
  */
 
-import type { AgentProvider, FollowUpMode, PermissionMode, ThreadMode } from './types.js';
+import type { AgentProvider, FollowUpMode, PermissionMode, ThreadMode } from './primitives.js';
 
 // ── Application defaults ────────────────────────────────────────
 // Change these values to update defaults across the entire codebase.
@@ -44,21 +44,21 @@ const claudeModels = {
     i18nKey: 'sonnet',
   },
   'sonnet-4.6': {
-    id: 'claude-sonnet-4-6',
+    id: 'claude-sonnet-4-6[1m]',
     label: 'Sonnet 4.6',
-    contextWindow: 200_000,
+    contextWindow: 1_000_000,
     i18nKey: 'sonnet46',
   },
   opus: {
-    id: 'claude-opus-4-6',
+    id: 'claude-opus-4-6[1m]',
     label: 'Opus 4.6',
-    contextWindow: 200_000,
+    contextWindow: 1_000_000,
     i18nKey: 'opus',
   },
   'opus-4.7': {
-    id: 'claude-opus-4-7',
+    id: 'claude-opus-4-7[1m]',
     label: 'Opus 4.7',
-    contextWindow: 200_000,
+    contextWindow: 1_000_000,
     i18nKey: 'opus47',
   },
 } as const satisfies Record<string, ModelDefinition>;

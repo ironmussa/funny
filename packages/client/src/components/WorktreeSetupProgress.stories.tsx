@@ -1,7 +1,7 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { useEffect, useState } from 'react';
 
-import type { GitProgressStep } from '@/components/GitProgressModal';
+import type { GitProgressStep } from '@/lib/git-progress-types';
 
 import { WorktreeSetupProgress } from './WorktreeSetupProgress';
 

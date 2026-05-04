@@ -1,4 +1,4 @@
-import type { DeepAgentModel } from '../types.js';
+import type { DeepAgentModel } from '../models.js';
 import type { McpServer } from './mcp.js';
 
 // ─── Agent Templates ───────────────────────────────────

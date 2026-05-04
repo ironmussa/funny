@@ -24,7 +24,12 @@
       "Skill(commit-commands:commit)",
       "Skill(commit-commands:commit:*)",
       "Bash(mkdir -p /home/argenisleon/.claude/skills/wireframe-creator/assets /home/argenisleon/.claude/skills/wireframe-creator/references /home/argenisleon/.claude/skills/wireframe-creator/evals)",
-      "Bash(rtk ls *)"
+      "Bash(rtk ls *)",
+      "mcp__plugin_sentrux_sentrux__scan",
+      "mcp__plugin_sentrux_sentrux__health",
+      "mcp__plugin_sentrux_sentrux__dsm",
+      "mcp__plugin_sentrux_sentrux__check_rules",
+      "mcp__plugin_sentrux_sentrux__test_gaps"
     ]
   },
   "enableAllProjectMcpServers": true,

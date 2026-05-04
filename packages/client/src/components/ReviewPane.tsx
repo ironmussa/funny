@@ -115,6 +115,7 @@ import { InlineProgressSteps } from './InlineProgressSteps';
 import { PRSummaryCard } from './PRSummaryCard';
 import { PublishRepoDialog } from './PublishRepoDialog';
 import { PullRequestsTab } from './PullRequestsTab';
+import { ChangesToolbar } from './review-pane/ChangesToolbar';
 import { StashTab } from './review-pane/StashTab';
 import { ExpandedDiffView } from './tool-cards/ExpandedDiffDialog';
 
@@ -1500,258 +1501,36 @@ export function ReviewPane() {
               )}
 
               {/* Toolbar icons */}
-              <div className="flex items-center gap-1 border-b border-sidebar-border px-2 py-1">
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon-sm"
-                      onClick={refresh}
-                      className="text-muted-foreground"
-                      data-testid="review-refresh"
-                    >
-                      <RefreshCw className={cn('icon-base', loading && 'animate-spin')} />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent side="top">{t('review.refresh')}</TooltipContent>
-                </Tooltip>
-                <PullFetchButtons
-                  onPull={handlePull}
-                  onFetch={handleFetchOrigin}
-                  pullInProgress={pullInProgress}
-                  fetchInProgress={fetchInProgress}
-                  unpulledCommitCount={gitStatus?.unpulledCommitCount ?? 0}
-                  testIdPrefix="review"
-                />
-                {remoteUrl === null ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={() => setPublishDialogOpen(true)}
-                        className="relative text-muted-foreground"
-                        data-testid="review-publish-toolbar"
-                      >
-                        <Upload className="icon-base" />
-                        {unpushedCommitCount > 0 && (
-                          <span className="absolute -right-0.5 -top-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-blue-500 px-0.5 text-[9px] font-bold leading-none text-white">
-                            {unpushedCommitCount}
-                          </span>
-                        )}
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {unpushedCommitCount > 0
-                        ? t('review.publishWithCommits', {
-                            count: unpushedCommitCount,
-                            defaultValue: `Publish repository (${unpushedCommitCount} commit(s) to push)`,
-                          })
-                        : t('review.publishRepo', 'Publish repository')}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : (
-                  <PushButton
-                    onPush={handlePushOnly}
-                    pushInProgress={pushInProgress}
-                    unpushedCommitCount={unpushedCommitCount}
-                    testIdPrefix="review"
-                  />
-                )}
-                {!!threadBranch && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={openMergeDialog}
-                        disabled={mergeInProgress || summaries.length > 0}
-                        className="text-muted-foreground"
-                        data-testid="review-merge-toolbar"
-                      >
-                        <GitMerge className={cn('icon-base', mergeInProgress && 'animate-pulse')} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {summaries.length > 0
-                        ? t('review.commitFirst', 'Commit changes before merging')
-                        : t('review.mergeIntoBranch', {
-                            target: baseBranch || 'base',
-                            defaultValue: `Merge into branch`,
-                          })}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {isOnDifferentBranch && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      {gitStatus?.prNumber ? (
-                        (() => {
-                          const prState = gitStatus.prState ?? 'OPEN';
-                          const PrIcon =
-                            prState === 'MERGED'
-                              ? GitMerge
-                              : prState === 'CLOSED'
-                                ? GitPullRequestClosed
-                                : GitPullRequest;
-                          const prIconColor =
-                            prState === 'MERGED'
-                              ? 'text-purple-500'
-                              : prState === 'CLOSED'
-                                ? 'text-red-500'
-                                : 'text-green-500';
-                          return (
-                            <Button
-                              variant="ghost"
-                              size="icon-sm"
-                              onClick={() => window.open(gitStatus.prUrl, '_blank')}
-                              className="text-muted-foreground"
-                              data-testid="review-view-pr-toolbar"
-                            >
-                              <PrIcon className={`icon-base ${prIconColor}`} />
-                            </Button>
-                          );
-                        })()
-                      ) : (
-                        <Button
-                          variant="ghost"
-                          size="icon-sm"
-                          onClick={() => setPrDialog({ title: threadBranch || '', body: '' })}
-                          disabled={!!isAgentRunning}
-                          className="text-muted-foreground"
-                          data-testid="review-create-pr-toolbar"
-                        >
-                          <GitPullRequest className="icon-base" />
-                        </Button>
-                      )}
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {gitStatus?.prNumber
-                        ? t('review.viewPR', {
-                            number: gitStatus.prNumber,
-                            defaultValue: `View PR #${gitStatus.prNumber}`,
-                          })
-                        : isAgentRunning
-                          ? t('review.agentRunningTooltip')
-                          : t('review.createPRTooltip', {
-                              branch: threadBranch,
-                              target: baseBranch || 'base',
-                            })}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {summaries.length > 0 && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={handleStageSelected}
-                        disabled={!!actionInProgress || !!isAgentRunning}
-                        className="text-muted-foreground"
-                        data-testid="review-stage-selected"
-                      >
-                        <Plus className="icon-base" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {isAgentRunning
-                        ? t('review.agentRunningTooltip')
-                        : checkedFiles.size > 0
-                          ? t('review.stageSelected', { defaultValue: 'Stage selected' })
-                          : t('review.stageAll', { defaultValue: 'Stage all' })}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {summaries.some((f) => f.staged) && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={handleUnstageAll}
-                        disabled={!!actionInProgress || !!isAgentRunning}
-                        className="text-muted-foreground"
-                        data-testid="review-unstage-selected"
-                      >
-                        <Minus className="icon-base" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {isAgentRunning
-                        ? t('review.agentRunningTooltip')
-                        : checkedFiles.size > 0
-                          ? t('review.unstageSelected', { defaultValue: 'Unstage selected' })
-                          : t('review.unstageAll', { defaultValue: 'Unstage all' })}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {summaries.length > 0 && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={handleStashSelected}
-                        disabled={!!actionInProgress || !!isAgentRunning || stashInProgress}
-                        className="text-muted-foreground"
-                        data-testid="review-stash-selected"
-                      >
-                        <Archive className={cn('icon-base', stashInProgress && 'animate-pulse')} />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {isAgentRunning
-                        ? t('review.agentRunningTooltip')
-                        : checkedFiles.size > 0
-                          ? t('review.stashSelected', { defaultValue: 'Stash selected' })
-                          : t('review.stashAll', { defaultValue: 'Stash all' })}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {summaries.length > 0 && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={handleDiscardAll}
-                        disabled={!!actionInProgress || !!isAgentRunning}
-                        className="text-muted-foreground"
-                        data-testid="review-discard-all"
-                      >
-                        <Undo2 className="icon-base" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {isAgentRunning
-                        ? t('review.agentRunningTooltip')
-                        : t('review.discard', 'Discard')}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-                {summaries.length > 0 && (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        variant="ghost"
-                        size="icon-sm"
-                        onClick={handleIgnoreFiles}
-                        disabled={!!actionInProgress}
-                        className="text-muted-foreground"
-                        data-testid="review-ignore-files"
-                      >
-                        <EyeOff className="icon-base" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent side="top">
-                      {checkedFiles.size > 0
-                        ? `Add ${checkedFiles.size} file(s) to .gitignore`
-                        : 'Add all to .gitignore'}
-                    </TooltipContent>
-                  </Tooltip>
-                )}
-              </div>
+              <ChangesToolbar
+                refresh={refresh}
+                loading={loading}
+                handlePull={handlePull}
+                handleFetchOrigin={handleFetchOrigin}
+                pullInProgress={pullInProgress}
+                fetchInProgress={fetchInProgress}
+                handlePushOnly={handlePushOnly}
+                pushInProgress={pushInProgress}
+                remoteUrl={remoteUrl}
+                setPublishDialogOpen={setPublishDialogOpen}
+                unpushedCommitCount={unpushedCommitCount}
+                threadBranch={threadBranch}
+                baseBranch={baseBranch}
+                isOnDifferentBranch={isOnDifferentBranch}
+                openMergeDialog={openMergeDialog}
+                mergeInProgress={mergeInProgress}
+                setPrDialog={setPrDialog}
+                summaries={summaries}
+                checkedFiles={checkedFiles}
+                handleStageSelected={handleStageSelected}
+                handleUnstageAll={handleUnstageAll}
+                handleStashSelected={handleStashSelected}
+                handleDiscardAll={handleDiscardAll}
+                handleIgnoreFiles={handleIgnoreFiles}
+                actionInProgress={actionInProgress}
+                stashInProgress={stashInProgress}
+                gitStatus={gitStatus}
+                isAgentRunning={isAgentRunning}
+              />
 
               {/* File search */}
               {summaries.length > 0 && (

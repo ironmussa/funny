@@ -1,5 +1,5 @@
 import type { FileDiffSummary } from '@funny/shared';
-import { FileCheck2, FileCode, FilePlus, FileWarning, FileX, PanelRightClose } from 'lucide-react';
+import { FileCode, FilePlus, FileWarning, FileX, PanelRightClose } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate } from 'react-router-dom';
@@ -18,7 +18,6 @@ import { useGenerateCommitMsg } from '@/hooks/use-generate-commit-msg';
 import { usePublishState } from '@/hooks/use-publish-state';
 import { useReviewActions } from '@/hooks/use-review-actions';
 import { useStashState } from '@/hooks/use-stash-state';
-import { createClientLogger } from '@/lib/client-logger';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useGitStatusStore, useGitStatusForThread } from '@/stores/git-status-store';
 import { usePRDetail } from '@/stores/pr-detail-store';
@@ -44,8 +43,6 @@ const fileStatusIcons: Record<string, typeof FileCode> = {
   renamed: FileCode,
   conflicted: FileWarning,
 };
-
-const log = createClientLogger('review-pane');
 
 export function ReviewPane() {
   const { t } = useTranslation();

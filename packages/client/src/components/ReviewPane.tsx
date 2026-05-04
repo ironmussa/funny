@@ -82,6 +82,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { TriCheckbox } from '@/components/ui/tri-checkbox';
 import { useAutoRefreshDiff } from '@/hooks/use-auto-refresh-diff';
 import { useCommitDraft } from '@/hooks/use-commit-draft';
+import { usePublishState } from '@/hooks/use-publish-state';
 import { useStashState } from '@/hooks/use-stash-state';
 import { api, type PullStrategy } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
@@ -251,8 +252,13 @@ export function ReviewPane() {
   const commitLockRef = useRef(false);
 
   // Publish repository state — detect repos with no remote origin
-  const [remoteUrl, setRemoteUrl] = useState<string | null | undefined>(undefined);
-  const [publishDialogOpen, setPublishDialogOpen] = useState(false);
+  // remoteCheckProjectId resolves either the project-mode id or the active
+  // thread's project (worktrees share git config with the project).
+  const remoteCheckProjectId = projectModeId ?? threadProjectId ?? null;
+  const { remoteUrl, publishDialogOpen, setPublishDialogOpen } = usePublishState({
+    remoteCheckProjectId,
+    hasRemoteBranch: gitStatus?.hasRemoteBranch,
+  });
 
   // Track when a workflow just completed so we can auto-close the pane
   // once the refresh shows a fully-clean branch.
@@ -681,28 +687,6 @@ export function ReviewPane() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- reset+refresh on context change only; refresh/reviewPaneOpen are read but not deps (handled separately)
   }, [gitContextKey, currentBranch]);
-
-  // Check if the project has a remote origin configured (for Publish vs Push UX).
-  // Worktrees share the project's git config, so we resolve the underlying
-  // project id whether we're in project mode or thread mode.
-  const remoteCheckProjectId = projectModeId ?? threadProjectId ?? null;
-  useEffect(() => {
-    if (!remoteCheckProjectId) {
-      setRemoteUrl(undefined);
-      return;
-    }
-    if (gitStatus?.hasRemoteBranch) {
-      setRemoteUrl('exists');
-      return;
-    }
-    const controller = new AbortController();
-    api.projectGetRemoteUrl(remoteCheckProjectId, controller.signal).then((r) => {
-      if (!controller.signal.aborted && r.isOk()) {
-        setRemoteUrl(r.value.remoteUrl);
-      }
-    });
-    return () => controller.abort();
-  }, [remoteCheckProjectId, gitStatus?.hasRemoteBranch]);
 
   // Reset selectedAction if "commit-pr" is selected but a PR already exists.
   useEffect(() => {

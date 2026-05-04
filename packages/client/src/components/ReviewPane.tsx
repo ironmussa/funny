@@ -117,6 +117,7 @@ import { PublishRepoDialog } from './PublishRepoDialog';
 import { PullRequestsTab } from './PullRequestsTab';
 import { ChangesToolbar } from './review-pane/ChangesToolbar';
 import { CommitDraftPanel } from './review-pane/CommitDraftPanel';
+import { DiffViewerModal } from './review-pane/DiffViewerModal';
 import { StashTab } from './review-pane/StashTab';
 import { ExpandedDiffView } from './tool-cards/ExpandedDiffDialog';
 
@@ -1336,86 +1337,35 @@ export function ReviewPane() {
 
   return (
     <div className="flex h-full flex-col">
-      {/* Diff viewer modal — centered Dialog matching the commit detail dialog */}
-      <Dialog
-        open={!!expandedFile}
-        onOpenChange={(open) => {
-          if (!open) handleExpandedClose();
-        }}
-      >
-        <DialogContent
-          className="flex h-[85vh] max-w-[90vw] flex-col gap-0 p-0"
-          data-testid="expanded-diff-overlay"
-        >
-          <DialogTitle className="sr-only">
-            {expandedSummary?.path ?? t('review.diffViewer', 'Diff viewer')}
-          </DialogTitle>
-          <DialogDescription className="sr-only">
-            {t('review.diffViewerDescription', 'View and stage changes for the selected file')}
-          </DialogDescription>
-          {expandedFile && (
-            <div className="flex min-h-0 flex-1">
-              {/* File tree sidebar */}
-              <div
-                className="flex w-[280px] shrink-0 flex-col border-r border-border"
-                data-testid="expanded-diff-file-tree"
-              >
-                <div className="shrink-0 border-b border-sidebar-border px-2 py-1">
-                  <SearchBar
-                    query={fileSearch}
-                    onQueryChange={setFileSearch}
-                    placeholder={t('review.searchFiles', 'Filter files\u2026')}
-                    totalMatches={filteredDiffs.length}
-                    resultLabel={fileSearch ? `${filteredDiffs.length}/${summaries.length}` : ''}
-                    caseSensitive={fileSearchCaseSensitive}
-                    onCaseSensitiveChange={setFileSearchCaseSensitive}
-                    onClose={fileSearch ? () => setFileSearch('') : undefined}
-                    autoFocus={false}
-                    testIdPrefix="expanded-diff-file-filter"
-                  />
-                </div>
-                <ScrollArea className="min-h-0 flex-1">
-                  <FileTree
-                    files={filteredDiffs}
-                    selectedFile={expandedFile}
-                    onFileClick={handleExpandedFileSelect}
-                    checkedFiles={checkedFiles}
-                    onToggleFile={toggleFile}
-                    onRevertFile={handleRevertFile}
-                    onIgnore={handleIgnore}
-                    basePath={basePath}
-                    searchQuery={fileSearch || undefined}
-                    testIdPrefix="expanded-diff"
-                  />
-                </ScrollArea>
-              </div>
-
-              {/* Diff viewer */}
-              <div className="flex min-w-0 flex-1 flex-col">
-                <ExpandedDiffView
-                  filePath={expandedSummary?.path || ''}
-                  oldValue={expandedDiffContent ? parseDiffOld(expandedDiffContent) : ''}
-                  newValue={expandedDiffContent ? parseDiffNew(expandedDiffContent) : ''}
-                  icon={ExpandedIcon}
-                  loading={loadingDiff === expandedFile}
-                  rawDiff={expandedDiffContent}
-                  diffCache={diffCache}
-                  onClose={handleExpandedClose}
-                  prReviewThreads={prThreads}
-                  onRequestFullDiff={requestFullDiff}
-                  onResolveConflict={handleResolveConflict}
-                  selectable
-                  onStagePatch={handleStagePatch}
-                  stagingInProgress={patchStagingInProgress}
-                  onSelectionStateChange={handleSelectionStateChange}
-                  selectAllSignal={selectAllSignal}
-                  deselectAllSignal={deselectAllSignal}
-                />
-              </div>
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
+      <DiffViewerModal
+        expandedFile={expandedFile}
+        expandedSummary={expandedSummary}
+        expandedDiffContent={expandedDiffContent}
+        ExpandedIcon={ExpandedIcon}
+        onClose={handleExpandedClose}
+        onFileSelect={handleExpandedFileSelect}
+        fileSearch={fileSearch}
+        setFileSearch={setFileSearch}
+        fileSearchCaseSensitive={fileSearchCaseSensitive}
+        setFileSearchCaseSensitive={setFileSearchCaseSensitive}
+        filteredDiffs={filteredDiffs}
+        summaries={summaries}
+        checkedFiles={checkedFiles}
+        toggleFile={toggleFile}
+        onRevertFile={handleRevertFile}
+        onIgnore={handleIgnore}
+        basePath={basePath}
+        loadingDiff={loadingDiff}
+        diffCache={diffCache}
+        prThreads={prThreads}
+        requestFullDiff={requestFullDiff}
+        handleResolveConflict={handleResolveConflict}
+        handleStagePatch={handleStagePatch}
+        patchStagingInProgress={patchStagingInProgress}
+        handleSelectionStateChange={handleSelectionStateChange}
+        selectAllSignal={selectAllSignal}
+        deselectAllSignal={deselectAllSignal}
+      />
       {/* Normal ReviewPane content */}
       <Tabs
         value={reviewSubTab}

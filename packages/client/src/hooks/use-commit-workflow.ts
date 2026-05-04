@@ -14,6 +14,7 @@ import { gitApi } from '@/lib/api/git';
 import { projectsApi } from '@/lib/api/projects';
 import { toastError } from '@/lib/toast-error';
 import { useCommitProgressStore, type CommitProgressEntry } from '@/stores/commit-progress-store';
+import { useDraftStore } from '@/stores/draft-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 export type CommitAction = 'commit' | 'commit-push' | 'commit-pr' | 'commit-merge' | 'amend';
@@ -29,7 +30,6 @@ interface UseCommitWorkflowArgs {
   commitTitle: string;
   commitBody: string;
   draftId: string | null | undefined;
-  clearCommitDraft: (id: string) => void;
   setCommitTitle: (v: string) => void;
   setCommitBody: (v: string) => void;
   baseBranch: string | undefined;
@@ -104,7 +104,6 @@ export function useCommitWorkflow({
   commitTitle,
   commitBody,
   draftId,
-  clearCommitDraft,
   setCommitTitle,
   setCommitBody,
   baseBranch,
@@ -113,6 +112,7 @@ export function useCommitWorkflow({
   refresh,
 }: UseCommitWorkflowArgs): UseCommitWorkflowResult {
   const { t } = useTranslation();
+  const { clearCommitDraft } = useDraftStore();
 
   const [selectedAction, setSelectedAction] = useState<CommitAction>('commit');
   const [actionInProgress, setActionInProgress] = useState<string | null>(null);

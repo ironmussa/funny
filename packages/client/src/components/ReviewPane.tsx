@@ -23,7 +23,6 @@ import { createClientLogger } from '@/lib/client-logger';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import { toastError } from '@/lib/toast-error';
 import { cn, resolveThreadBranch } from '@/lib/utils';
-import { useDraftStore } from '@/stores/draft-store';
 import { useGitStatusStore, useGitStatusForThread } from '@/stores/git-status-store';
 import { usePRDetail } from '@/stores/pr-detail-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -102,7 +101,6 @@ export function ReviewPane() {
   const [fileSearch, setFileSearch] = useState('');
   const [fileSearchCaseSensitive, setFileSearchCaseSensitive] = useState(false);
   const [checkedFiles, setCheckedFiles] = useState<Set<string>>(new Set());
-  const { clearCommitDraft } = useDraftStore();
   const draftId = effectiveThreadId || projectModeId;
   const { commitTitle, commitBody, setCommitTitle, setCommitBody, commitTitleRef, commitBodyRef } =
     useCommitDraft(draftId);
@@ -452,7 +450,6 @@ export function ReviewPane() {
     commitTitle,
     commitBody,
     draftId,
-    clearCommitDraft,
     setCommitTitle,
     setCommitBody,
     baseBranch,

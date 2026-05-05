@@ -12,14 +12,13 @@ import { toast } from 'sonner';
 
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useDictation } from '@/hooks/use-dictation';
+import { usePiPromptModels } from '@/hooks/use-pi-prompt-models';
 import { api } from '@/lib/api';
-import { createClientLogger } from '@/lib/client-logger';
-import { getUnifiedModelOptions, getEffortLevels, parseUnifiedModel } from '@/lib/providers';
+import { getEffortLevels, getUnifiedModelOptions, parseUnifiedModel } from '@/lib/providers';
 import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useDraftStore } from '@/stores/draft-store';
-import { usePiModelsStore } from '@/stores/pi-models-store';
 import { useProfileStore } from '@/stores/profile-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
@@ -134,67 +133,7 @@ export const PromptInput = memo(function PromptInput({
   const [effort, setEffort] = useState<string>('high');
 
   const baseUnifiedModelGroups = useMemo(() => getUnifiedModelOptions(t), [t]);
-
-  // ── Pi dynamic models ──
-  // Pi exposes its model catalog at runtime (it depends on which providers
-  // the user authenticated with via `pi auth`). Fetch on mount and re-merge
-  // into the model group so the dropdown reflects what pi actually offers.
-  const piStatus = usePiModelsStore((s) => s.status);
-  const piModels = usePiModelsStore((s) => s.models);
-  const piReason = usePiModelsStore((s) => s.reason);
-  const piMessage = usePiModelsStore((s) => s.message);
-  const fetchPiModels = usePiModelsStore((s) => s.fetch);
-  useEffect(() => {
-    void fetchPiModels();
-  }, [fetchPiModels]);
-
-  const unifiedModelGroups = useMemo(() => {
-    return baseUnifiedModelGroups.map((group) => {
-      if (group.provider !== 'pi') return group;
-      const defaultLabel =
-        t('thread.model.piDefault') === 'thread.model.piDefault'
-          ? 'Pi (configured default)'
-          : t('thread.model.piDefault');
-      const items: { value: string; label: string }[] = [
-        { value: 'pi:default', label: defaultLabel },
-      ];
-      if (piStatus === 'ready' && piModels.length > 0) {
-        for (const m of piModels) {
-          items.push({ value: `pi:${m.modelId}`, label: m.name || m.modelId });
-        }
-      } else if (piStatus === 'error') {
-        const hint =
-          piReason === 'auth_required'
-            ? t('thread.model.piAuthRequired', 'Pi: configurar (run `pi auth`)')
-            : piReason === 'sdk_missing'
-              ? t('thread.model.piSdkMissing', 'Pi: SDK no instalado')
-              : piReason === 'no_models'
-                ? t('thread.model.piNoModels', 'Pi: no hay modelos configurados')
-                : piReason === 'spawn_failed'
-                  ? t('thread.model.piSpawnFailed', 'Pi: no se pudo iniciar pi-acp')
-                  : piReason === 'timeout'
-                    ? t('thread.model.piTimeout', 'Pi: tiempo de espera agotado')
-                    : t('thread.model.piError', 'Pi: error de descubrimiento');
-        items.push({ value: 'pi:__configure__', label: hint });
-      } else if (piStatus === 'loading') {
-        items.push({
-          value: 'pi:__loading__',
-          label: t('thread.model.piLoading', 'Cargando modelos…'),
-        });
-      }
-      return { ...group, models: items };
-    });
-  }, [baseUnifiedModelGroups, piStatus, piModels, piReason, t]);
-
-  // Surface fetch errors once via a debug log so they show up in Abbacchio.
-  useEffect(() => {
-    if (piStatus === 'error' && piMessage) {
-      piLog.warn('pi model discovery failed', {
-        reason: piReason ?? 'unknown',
-        message: piMessage,
-      });
-    }
-  }, [piStatus, piReason, piMessage]);
+  const unifiedModelGroups = usePiPromptModels(baseUnifiedModelGroups);
 
   // Effort options — available for providers that support reasoning levels (Claude, Codex)
   const { provider: currentProvider, model: currentModel } = useMemo(
@@ -735,13 +674,16 @@ export const PromptInput = memo(function PromptInput({
     [effectiveProjectId, gitCurrentBranch, ensureBranch],
   );
 
-  // Checkout on follow-up branch change so ReviewPane refreshes immediately
+  // Checkout on follow-up branch change so ReviewPane refreshes immediately.
+  // Wait for ensureBranch to confirm before updating the picker — otherwise
+  // cancelling the dirty-files dialog leaves the UI on a branch we never switched to.
   const handleFollowUpBranchChange = useCallback(
     async (branch: string) => {
-      setFollowUpSelectedBranch(branch);
       if (effectiveProjectId && branch !== gitCurrentBranch) {
-        await ensureBranch(effectiveProjectId, branch);
+        const ok = await ensureBranch(effectiveProjectId, branch);
+        if (!ok) return;
       }
+      setFollowUpSelectedBranch(branch);
     },
     [effectiveProjectId, gitCurrentBranch, ensureBranch],
   );

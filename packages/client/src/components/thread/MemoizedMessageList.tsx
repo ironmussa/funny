@@ -13,7 +13,6 @@ import {
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
-import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import {
@@ -42,6 +41,7 @@ import type { CompactionEvent } from '@/stores/thread-store';
 
 import { ToolCallCard } from '../ToolCallCard';
 import { ToolCallGroup } from '../ToolCallGroup';
+import { AuthorAvatar } from './AuthorAvatar';
 import { CompactionEventCard } from './CompactionEventCard';
 import { GitEventCard } from './GitEventCard';
 import { MessageContent, CopyButton } from './MessageContent';
@@ -647,21 +647,7 @@ export const MemoizedMessageList = memo(
             >
               <div className="break-words text-sm leading-relaxed">
                 <div className="flex items-start gap-2">
-                  {msg.author && (
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Avatar className="mt-0.5">
-                          <AvatarFallback
-                            className="text-xs font-medium text-primary"
-                            name={msg.author}
-                          >
-                            {msg.author.slice(0, 2).toUpperCase()}
-                          </AvatarFallback>
-                        </Avatar>
-                      </TooltipTrigger>
-                      <TooltipContent side="top">{msg.author}</TooltipContent>
-                    </Tooltip>
-                  )}
+                  {msg.author && <AuthorAvatar author={msg.author} />}
                   <div className="min-w-0 flex-1">
                     <MessageContent content={msg.content.trim()} />
                   </div>

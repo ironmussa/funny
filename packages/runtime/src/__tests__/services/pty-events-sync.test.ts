@@ -15,7 +15,7 @@ import { describe, test, expect } from 'vitest';
 // Paths relative to the monorepo root (__tests__/services/)
 const MONOREPO_ROOT = resolve(import.meta.dirname ?? __dirname, '../../../../..');
 const SOCKETIO_PATH = resolve(MONOREPO_ROOT, 'packages/server/src/services/socketio.ts');
-const APP_PATH = resolve(MONOREPO_ROOT, 'packages/runtime/src/app.ts');
+const APP_PATH = resolve(MONOREPO_ROOT, 'packages/runtime/src/app/pty-message-handler.ts');
 
 function extractPtyEvents(source: string, pattern: RegExp): string[] {
   const match = source.match(pattern);

@@ -14,6 +14,7 @@ import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useDictation } from '@/hooks/use-dictation';
 import { usePiPromptModels } from '@/hooks/use-pi-prompt-models';
 import { api } from '@/lib/api';
+import { createClientLogger } from '@/lib/client-logger';
 import { getEffortLevels, getUnifiedModelOptions, parseUnifiedModel } from '@/lib/providers';
 import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
@@ -26,7 +27,7 @@ import { useThreadStore } from '@/stores/thread-store';
 import type { PromptEditorHandle } from './prompt-editor/PromptEditor';
 import { PromptInputUI } from './PromptInputUI';
 
-const piLog = createClientLogger('PromptInput');
+const queueLog = createClientLogger('PromptInputQueue');
 
 // ── Props (unchanged external API) ──────────────────────────────
 
@@ -500,7 +501,7 @@ export const PromptInput = memo(function PromptInput({
       lastQueueFetchRef.current.threadId === key.threadId &&
       lastQueueFetchRef.current.queuedCount === key.queuedCount
     ) {
-      piLog.debug('queue effect: skipped (dedup)', {
+      queueLog.debug('queue effect: skipped (dedup)', {
         threadId: effectiveThreadId,
         queuedCount: String(queuedCount),
       });
@@ -508,7 +509,7 @@ export const PromptInput = memo(function PromptInput({
     }
     lastQueueFetchRef.current = key;
 
-    piLog.info('queue effect: fetching queue', {
+    queueLog.info('queue effect: fetching queue', {
       threadId: effectiveThreadId,
       queuedCount: String(queuedCount),
     });
@@ -520,13 +521,13 @@ export const PromptInput = memo(function PromptInput({
       const result = await api.listQueue(effectiveThreadId);
       if (cancelled) return;
       if (result.isOk()) {
-        piLog.info('queue effect: fetched queue', {
+        queueLog.info('queue effect: fetched queue', {
           threadId: effectiveThreadId,
           messageCount: String(result.value.length),
         });
         setQueuedMessages(result.value);
       } else {
-        piLog.warn('queue effect: fetch failed', {
+        queueLog.warn('queue effect: fetch failed', {
           threadId: effectiveThreadId,
           error: result.error.message,
         });

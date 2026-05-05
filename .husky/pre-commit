@@ -28,3 +28,11 @@ if [ -n "$DEBUG_MATCHES" ]; then
   echo "$DEBUG_MATCHES"
   exit 1
 fi
+
+# Typecheck baseline diff: only fails when staged TS changes introduce NEW
+# errors (pre-existing baseline errors are tracked in
+# .fitness/typecheck-baseline.txt). Skipped when no .ts/.tsx files are
+# staged so non-TS commits stay fast.
+if git diff --cached --name-only --diff-filter=ACM | grep -qE '\.(ts|tsx)$'; then
+  bun scripts/fitness/check-typecheck.ts || exit 1
+fi

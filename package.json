@@ -62,7 +62,9 @@
     "fitness:layering": "bun scripts/fitness/check-layering.ts",
     "fitness:circular": "bun scripts/fitness/check-circular.ts",
     "fitness:size": "bun scripts/fitness/check-file-size.ts",
-    "fitness:growth": "bun scripts/fitness/check-file-growth.ts"
+    "fitness:growth": "bun scripts/fitness/check-file-growth.ts",
+    "typecheck": "bun scripts/fitness/check-typecheck.ts",
+    "typecheck:refresh": "bun scripts/fitness/check-typecheck.ts --refresh"
   },
   "dependencies": {
     "@agentclientprotocol/sdk": "^0.20.0",

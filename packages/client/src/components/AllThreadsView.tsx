@@ -1,121 +1,22 @@
-import type { ThreadStatus, GitSyncState } from '@funny/shared';
-import {
-  ChevronLeft,
-  Archive,
-  ArrowUp,
-  ArrowDown,
-  Columns3,
-  ChevronDown,
-  Check,
-  Search,
-  X,
-} from 'lucide-react';
-import { useState, useMemo, useEffect, useRef, useCallback } from 'react';
+import type { GitSyncState, ThreadStatus } from '@funny/shared';
+import { ChevronLeft, Columns3, Search } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 
-import { KanbanView } from '@/components/KanbanView';
-import { ThreadPowerline } from '@/components/ThreadPowerline';
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-  CommandList,
-} from '@/components/ui/command';
+import { AllThreadsContent } from '@/components/all-threads/AllThreadsContent';
+import { AllThreadsToolbar } from '@/components/all-threads/AllThreadsToolbar';
 import { normalize } from '@/components/ui/highlight-text';
-import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
-import { colorFromName } from '@/components/ui/project-chip';
-import { SearchBar } from '@/components/ui/search-bar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
-import { VirtualThreadList } from '@/components/VirtualThreadList';
 import { api } from '@/lib/api';
-import { getStatusLabels } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
-import { cn } from '@/lib/utils';
-import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
+import { branchKey as computeBranchKey, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 type SortField = 'updated' | 'created';
 type SortDir = 'desc' | 'asc';
-
-function FilterDropdown({
-  label,
-  options,
-  selected,
-  onToggle,
-  counts,
-  testId,
-}: {
-  label: string;
-  options: { value: string; label: string }[];
-  selected: Set<string>;
-  onToggle: (value: string) => void;
-  counts?: Record<string, number>;
-  testId?: string;
-}) {
-  const activeCount = selected.size;
-  const triggerLabel =
-    activeCount === 0
-      ? label
-      : activeCount === 1
-        ? (options.find((o) => selected.has(o.value))?.label ?? label)
-        : `${label} (${activeCount})`;
-
-  return (
-    <Popover>
-      <PopoverTrigger asChild>
-        <button
-          data-testid={testId}
-          className={cn(
-            'inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-colors whitespace-nowrap',
-            activeCount > 0
-              ? 'bg-accent text-accent-foreground border-accent-foreground/20'
-              : 'bg-transparent text-muted-foreground border-border hover:bg-accent/50 hover:text-foreground',
-          )}
-        >
-          {triggerLabel}
-          <ChevronDown className="icon-xs opacity-50" />
-        </button>
-      </PopoverTrigger>
-      <PopoverContent align="start" className="w-auto min-w-[160px] p-1">
-        {options.map((opt) => {
-          const isActive = selected.has(opt.value);
-          const count = counts?.[opt.value];
-          return (
-            <button
-              key={opt.value}
-              onClick={() => onToggle(opt.value)}
-              className={cn(
-                'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
-                'hover:bg-accent hover:text-accent-foreground',
-                isActive && 'text-accent-foreground',
-              )}
-            >
-              <span
-                className={cn(
-                  'flex h-3.5 w-3.5 items-center justify-center rounded-sm border',
-                  isActive
-                    ? 'bg-primary border-primary text-primary-foreground'
-                    : 'border-muted-foreground/30',
-                )}
-              >
-                {isActive && <Check className="icon-2xs" />}
-              </span>
-              <span className="flex-1">{opt.label}</span>
-              {count != null && count > 0 && (
-                <span className="tabular-nums text-muted-foreground">{count}</span>
-              )}
-            </button>
-          );
-        })}
-      </PopoverContent>
-    </Popover>
-  );
-}
 
 export function AllThreadsView() {
   const { t } = useTranslation();
@@ -189,14 +90,6 @@ export function AllThreadsView() {
   const handleProjectFilterChange = (projectId: string | null) => {
     setProjectFilter(projectId);
     setSearchParams(buildSearchParams({ project: projectId }), { replace: true });
-  };
-
-  const handleViewModeChange = (mode: 'list' | 'board') => {
-    // Navigate to the appropriate route instead of using query params
-    const params = buildSearchParams();
-    const qs = new URLSearchParams(params).toString();
-    const path = mode === 'board' ? '/kanban' : '/list';
-    navigate(buildPath(qs ? `${path}?${qs}` : path), { replace: true });
   };
 
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -329,8 +222,6 @@ export function AllThreadsView() {
     return storeThreads.filter((t) => !t.archived);
   }, [storeThreads, showArchived, viewMode]);
 
-  const statusLabels = getStatusLabels(t);
-
   const filtered = useMemo(() => {
     let result = allThreads;
 
@@ -411,16 +302,6 @@ export function AllThreadsView() {
     setSearch(value);
   };
 
-  const toggleFilter =
-    (setter: React.Dispatch<React.SetStateAction<Set<string>>>) => (value: string) => {
-      setter((prev) => {
-        const next = new Set(prev);
-        if (next.has(value)) next.delete(value);
-        else next.add(value);
-        return next;
-      });
-    };
-
   const hasActiveFilters =
     statusFilter.size > 0 ||
     gitFilter.size > 0 ||
@@ -494,343 +375,60 @@ export function AllThreadsView() {
         </div>
       </div>
 
-      {/* Filters */}
-      <div className="flex items-center gap-2 border-b border-border/50 px-4 py-2">
-        {/* Search (compact, inline) */}
-        <SearchBar
-          inputRef={searchInputRef}
-          query={search}
-          onQueryChange={handleSearchChange}
-          totalMatches={filtered.length}
-          resultLabel={search.trim() ? `${filtered.length}/${allThreads.length}` : ''}
-          caseSensitive={caseSensitive}
-          onCaseSensitiveChange={setCaseSensitive}
-          onInputKeyDown={(e) => searchKeyDownRef.current?.(e)}
-          onClose={search ? () => handleSearchChange('') : undefined}
-          autoFocus={false}
-          placeholder={
-            projectFilter
-              ? t('allThreads.searchPlaceholder')
-              : t('allThreads.globalSearchPlaceholder')
-          }
-          testIdPrefix="all-threads-search"
-          className="h-7 w-72 flex-shrink-0 rounded-md border border-input bg-transparent px-2"
-        />
+      <AllThreadsToolbar
+        searchInputRef={searchInputRef}
+        search={search}
+        onSearchChange={handleSearchChange}
+        caseSensitive={caseSensitive}
+        onCaseSensitiveChange={setCaseSensitive}
+        searchKeyDown={(e) => searchKeyDownRef.current?.(e)}
+        filteredCount={filtered.length}
+        totalCount={allThreads.length}
+        searchPlaceholder={
+          projectFilter
+            ? t('allThreads.searchPlaceholder')
+            : t('allThreads.globalSearchPlaceholder')
+        }
+        projects={projects}
+        projectFilter={projectFilter}
+        filteredProjectName={filteredProject?.name}
+        projectFilterOpen={projectFilterOpen}
+        setProjectFilterOpen={setProjectFilterOpen}
+        onProjectFilterChange={handleProjectFilterChange}
+        statusFilter={statusFilter}
+        setStatusFilter={setStatusFilter}
+        gitFilter={gitFilter}
+        setGitFilter={setGitFilter}
+        modeFilter={modeFilter}
+        setModeFilter={setModeFilter}
+        statusCounts={statusCounts}
+        gitCounts={gitCounts}
+        threadStatuses={threadStatuses}
+        gitStates={gitStates}
+        sortField={sortField}
+        setSortField={setSortField}
+        sortDir={sortDir}
+        setSortDir={setSortDir}
+        showArchived={showArchived}
+        setShowArchived={setShowArchived}
+        hasActiveFilters={hasActiveFilters}
+        onResetFilters={resetFilters}
+      />
 
-        <div className="h-4 w-px bg-border" />
-
-        {/* Project filter (single-select) */}
-        <Popover open={projectFilterOpen} onOpenChange={setProjectFilterOpen}>
-          <PopoverTrigger asChild>
-            <button
-              data-testid="all-threads-project-filter"
-              className={cn(
-                'inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-colors whitespace-nowrap',
-                projectFilter
-                  ? 'bg-accent text-accent-foreground border-accent-foreground/20'
-                  : 'bg-transparent text-muted-foreground border-border hover:bg-accent/50 hover:text-foreground',
-              )}
-            >
-              {projectFilter && filteredProject
-                ? filteredProject.name
-                : t('allThreads.filterProject')}
-              <ChevronDown className="icon-xs opacity-50" />
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-[240px] p-0">
-            <Command>
-              <CommandInput
-                placeholder={t('kanban.searchProject')}
-                className="h-9 text-xs"
-                data-testid="all-threads-project-filter-search"
-              />
-              <CommandList>
-                <CommandEmpty>{t('commandPalette.noResults')}</CommandEmpty>
-                <CommandGroup>
-                  <CommandItem
-                    value={t('allThreads.allProjects')}
-                    onSelect={() => {
-                      handleProjectFilterChange(null);
-                      setProjectFilterOpen(false);
-                    }}
-                    className="text-xs"
-                  >
-                    <span
-                      className={cn(
-                        'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
-                        !projectFilter
-                          ? 'bg-primary border-primary text-primary-foreground'
-                          : 'border-muted-foreground/30',
-                      )}
-                    >
-                      {!projectFilter && <Check className="icon-2xs" />}
-                    </span>
-                    <span className="flex-1">{t('allThreads.allProjects')}</span>
-                  </CommandItem>
-                  {projects.map((p) => {
-                    const isActive = projectFilter === p.id;
-                    return (
-                      <CommandItem
-                        key={p.id}
-                        value={`${p.name} ${p.path ?? ''}`}
-                        onSelect={() => {
-                          handleProjectFilterChange(p.id);
-                          setProjectFilterOpen(false);
-                        }}
-                        className="text-xs"
-                      >
-                        <span
-                          className={cn(
-                            'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
-                            isActive
-                              ? 'bg-primary border-primary text-primary-foreground'
-                              : 'border-muted-foreground/30',
-                          )}
-                        >
-                          {isActive && <Check className="icon-2xs" />}
-                        </span>
-                        <span className="flex-1 truncate">{p.name}</span>
-                      </CommandItem>
-                    );
-                  })}
-                </CommandGroup>
-              </CommandList>
-            </Command>
-          </PopoverContent>
-        </Popover>
-
-        {/* Status dropdown */}
-        <FilterDropdown
-          testId="all-threads-status-filter"
-          label={t('allThreads.filterStatus')}
-          options={threadStatuses
-            .filter((s) => (statusCounts[s] || 0) > 0)
-            .map((s) => ({ value: s, label: statusLabels[s] }))}
-          selected={statusFilter}
-          onToggle={toggleFilter(setStatusFilter)}
-          counts={statusCounts}
-        />
-
-        {/* Git dropdown */}
-        <FilterDropdown
-          testId="all-threads-git-filter"
-          label="Git"
-          options={gitStates
-            .filter((gs) => (gitCounts[gs] || 0) > 0)
-            .map((gs) => ({ value: gs, label: t(`gitStatus.${gs}`) }))}
-          selected={gitFilter}
-          onToggle={toggleFilter(setGitFilter)}
-          counts={gitCounts}
-        />
-
-        {/* Mode dropdown */}
-        <FilterDropdown
-          label={t('allThreads.filterMode')}
-          options={[
-            { value: 'local', label: t('thread.mode.local') },
-            { value: 'worktree', label: t('thread.mode.worktree') },
-          ]}
-          selected={modeFilter}
-          onToggle={toggleFilter(setModeFilter)}
-        />
-
-        <div className="h-4 w-px bg-border" />
-
-        {/* Sort toggle */}
-        <Popover>
-          <PopoverTrigger asChild>
-            <button
-              data-testid="all-threads-sort"
-              className="inline-flex items-center gap-1 whitespace-nowrap rounded-md border border-border bg-transparent px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-accent/50 hover:text-foreground"
-            >
-              {t('allThreads.sortLabel')}:{' '}
-              {sortField === 'updated' ? t('allThreads.sortUpdated') : t('allThreads.sortCreated')}
-              {sortDir === 'desc' ? (
-                <ArrowDown className="icon-xs" />
-              ) : (
-                <ArrowUp className="icon-xs" />
-              )}
-            </button>
-          </PopoverTrigger>
-          <PopoverContent align="start" className="w-auto min-w-[140px] p-1">
-            <button
-              onClick={() => {
-                setSortField('updated');
-              }}
-              className={cn(
-                'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
-                'hover:bg-accent hover:text-accent-foreground',
-              )}
-            >
-              <span
-                className={cn(
-                  'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
-                  sortField === 'updated'
-                    ? 'bg-primary border-primary text-primary-foreground'
-                    : 'border-muted-foreground/30',
-                )}
-              >
-                {sortField === 'updated' && <Check className="icon-2xs" />}
-              </span>
-              {t('allThreads.sortUpdated')}
-            </button>
-            <button
-              onClick={() => {
-                setSortField('created');
-              }}
-              className={cn(
-                'flex items-center gap-2 w-full px-2 py-1.5 text-xs rounded-sm transition-colors text-left',
-                'hover:bg-accent hover:text-accent-foreground',
-              )}
-            >
-              <span
-                className={cn(
-                  'flex h-3.5 w-3.5 items-center justify-center rounded-full border',
-                  sortField === 'created'
-                    ? 'bg-primary border-primary text-primary-foreground'
-                    : 'border-muted-foreground/30',
-                )}
-              >
-                {sortField === 'created' && <Check className="icon-2xs" />}
-              </span>
-              {t('allThreads.sortCreated')}
-            </button>
-            <div className="my-1 h-px bg-border" />
-            <button
-              data-testid="all-threads-sort-direction"
-              onClick={() => {
-                setSortDir((d) => (d === 'desc' ? 'asc' : 'desc'));
-              }}
-              className="flex w-full items-center gap-2 rounded-sm px-2 py-1.5 text-left text-xs transition-colors hover:bg-accent hover:text-accent-foreground"
-            >
-              {sortDir === 'desc' ? (
-                <>
-                  <ArrowDown className="icon-xs" />
-                  {t('allThreads.sortDesc')}
-                </>
-              ) : (
-                <>
-                  <ArrowUp className="icon-xs" />
-                  {t('allThreads.sortAsc')}
-                </>
-              )}
-            </button>
-          </PopoverContent>
-        </Popover>
-
-        {/* Archived toggle */}
-        <button
-          data-testid="all-threads-show-archived"
-          onClick={() => {
-            setShowArchived(!showArchived);
-          }}
-          className={cn(
-            'inline-flex items-center gap-1 px-2 py-1 text-xs rounded-md border transition-colors whitespace-nowrap',
-            showArchived
-              ? 'bg-status-warning/10 border-status-warning/20 text-status-warning/80'
-              : 'bg-transparent text-muted-foreground border-border hover:bg-accent/50 hover:text-foreground',
-          )}
-        >
-          <Archive className="icon-xs" />
-          {t('allThreads.showArchived')}
-        </button>
-
-        {/* Clear filters */}
-        {hasActiveFilters && (
-          <button
-            data-testid="all-threads-clear-filters"
-            onClick={resetFilters}
-            className="whitespace-nowrap px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
-          >
-            {t('allThreads.clearFilters')}
-          </button>
-        )}
-      </div>
-
-      {/* Thread content */}
       <div className="flex min-h-0 flex-1 flex-col">
-        {viewMode === 'board' ? (
-          <div className="min-h-0 flex-1">
-            <KanbanView
-              threads={filtered}
-              projectId={projectFilter || undefined}
-              search={search}
-              contentSnippets={contentMatches}
-              highlightThreadId={searchParams.get('highlight') || undefined}
-            />
-          </div>
-        ) : (
-          <div className="flex min-h-0 flex-1 flex-col px-4 py-3">
-            <VirtualThreadList
-              threads={filtered}
-              search={search}
-              contentSnippets={contentMatches}
-              emptyMessage={t('allThreads.noThreads')}
-              searchEmptyMessage={t('allThreads.noMatch')}
-              hideBranch
-              hasMore={hasMoreServerThreads}
-              loadingMore={loadingMore}
-              onEndReached={handleLoadMore}
-              onSearchKeyDownRef={searchKeyDownRef}
-              onThreadClick={(thread) => {
-                // Ensure the project is expanded so the thread row mounts in
-                // the sidebar before we try to scroll to it.
-                const projectStore = useProjectStore.getState();
-                if (!projectStore.expandedProjects.has(thread.projectId)) {
-                  projectStore.toggleProject(thread.projectId);
-                }
-
-                // Full-priority commit so the center pane updates in parallel
-                // with the sidebar's smooth scroll instead of after it.
-                useUIStore.getState().setKanbanContext({
-                  projectId: projectFilter || undefined,
-                  search,
-                  threadId: thread.id,
-                  viewMode: 'list',
-                });
-                navigate(buildPath(`/projects/${thread.projectId}/threads/${thread.id}`));
-
-                const scrollToThread = () => {
-                  const el = document.querySelector(
-                    `[data-project-id="${thread.projectId}"] [data-testid="thread-item-${thread.id}"]`,
-                  );
-                  if (el) {
-                    el.scrollIntoView({ block: 'nearest', behavior: 'auto' });
-                    return true;
-                  }
-                  return false;
-                };
-                requestAnimationFrame(() => {
-                  if (scrollToThread()) return;
-                  // Collapsible slide-down hasn't mounted the row yet — retry after it settles.
-                  setTimeout(scrollToThread, 300);
-                });
-              }}
-              renderExtraBadges={(thread) => {
-                const gs = statusByBranch[computeBranchKey(thread)];
-                const pInfo = projectInfoById[thread.projectId];
-                return (
-                  <>
-                    <ThreadPowerline
-                      thread={thread}
-                      projectName={!projectFilter ? pInfo?.name : undefined}
-                      projectColor={pInfo?.color}
-                      gitStatus={gs}
-                      diffStatsSize="xxs"
-                      data-testid={`list-thread-powerline-${thread.id}`}
-                    />
-                    {!!thread.archived && (
-                      <span className="inline-flex items-center gap-0.5 rounded bg-muted px-1 py-px text-[10px] font-medium leading-tight text-status-warning/80">
-                        <Archive className="icon-2xs" />
-                        {t('allThreads.archived')}
-                      </span>
-                    )}
-                  </>
-                );
-              }}
-            />
-          </div>
-        )}
+        <AllThreadsContent
+          viewMode={viewMode}
+          threads={filtered}
+          search={search}
+          contentMatches={contentMatches}
+          highlightThreadId={searchParams.get('highlight') || undefined}
+          projectFilter={projectFilter}
+          projectInfoById={projectInfoById}
+          hasMoreServerThreads={hasMoreServerThreads}
+          loadingMore={loadingMore}
+          onLoadMore={handleLoadMore}
+          searchKeyDownRef={searchKeyDownRef}
+        />
       </div>
     </div>
   );

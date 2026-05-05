@@ -10,7 +10,6 @@ import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
-import { IssuesDialog } from './IssuesDialog';
 import { SettingsPanel } from './SettingsPanel';
 import { SidebarDialogs } from './sidebar/SidebarDialogs';
 import { SidebarFooter } from './sidebar/SidebarFooter';
@@ -162,20 +161,6 @@ export function AppSidebar({ singleProjectId }: { singleProjectId?: string | nul
 
       <SidebarFooter />
 
-      {issuesProjectId && (
-        <IssuesDialog
-          projectId={issuesProjectId}
-          open={!!issuesProjectId}
-          onOpenChange={(open) => {
-            if (!open) setIssuesProjectId(null);
-          }}
-          onCreateThread={(params) => {
-            setIssuesProjectId(null);
-            useUIStore.getState().startNewThreadFromIssue(issuesProjectId, params);
-          }}
-        />
-      )}
-
       <SidebarDialogs
         archiveConfirm={archiveConfirm}
         setArchiveConfirm={setArchiveConfirm}
@@ -189,6 +174,8 @@ export function AppSidebar({ singleProjectId }: { singleProjectId?: string | nul
         deleteProjectConfirm={deleteProjectConfirm}
         setDeleteProjectConfirm={setDeleteProjectConfirm}
         handleDeleteProjectConfirm={handleDeleteProjectConfirm}
+        issuesProjectId={issuesProjectId}
+        setIssuesProjectId={setIssuesProjectId}
         actionLoading={actionLoading}
       />
 

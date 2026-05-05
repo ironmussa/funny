@@ -2,6 +2,7 @@ import type { Dispatch, SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
+import { IssuesDialog } from '@/components/IssuesDialog';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -13,6 +14,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { WorktreeDeleteDialog } from '@/components/WorktreeDeleteDialog';
+import { useUIStore } from '@/stores/ui-store';
 
 export interface ArchiveConfirmState {
   threadId: string;
@@ -58,6 +60,9 @@ interface SidebarDialogsProps {
   setDeleteProjectConfirm: Dispatch<SetStateAction<DeleteProjectConfirmState | null>>;
   handleDeleteProjectConfirm: () => void;
 
+  issuesProjectId: string | null;
+  setIssuesProjectId: Dispatch<SetStateAction<string | null>>;
+
   actionLoading: boolean;
 }
 
@@ -82,6 +87,8 @@ export function SidebarDialogs({
   deleteProjectConfirm,
   setDeleteProjectConfirm,
   handleDeleteProjectConfirm,
+  issuesProjectId,
+  setIssuesProjectId,
   actionLoading,
 }: SidebarDialogsProps) {
   const { t } = useTranslation();
@@ -206,6 +213,20 @@ export function SidebarDialogs({
         onCancel={() => setDeleteProjectConfirm(null)}
         onConfirm={handleDeleteProjectConfirm}
       />
+
+      {issuesProjectId && (
+        <IssuesDialog
+          projectId={issuesProjectId}
+          open={!!issuesProjectId}
+          onOpenChange={(open) => {
+            if (!open) setIssuesProjectId(null);
+          }}
+          onCreateThread={(params) => {
+            setIssuesProjectId(null);
+            useUIStore.getState().startNewThreadFromIssue(issuesProjectId, params);
+          }}
+        />
+      )}
     </>
   );
 }

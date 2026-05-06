@@ -513,6 +513,21 @@ export interface WSThreadStageChangedData {
   projectId: string;
 }
 
+export interface WSRateLimitInfo {
+  status: 'allowed' | 'allowed_warning' | 'rejected';
+  resetsAt?: number;
+  rateLimitType?: 'five_hour' | 'seven_day' | 'seven_day_opus' | 'seven_day_sonnet' | 'overage';
+  utilization?: number;
+  overageStatus?: 'allowed' | 'allowed_warning' | 'rejected';
+  overageResetsAt?: number;
+  isUsingOverage?: boolean;
+  surpassedThreshold?: number;
+}
+
+export interface WSRateLimitData {
+  info: WSRateLimitInfo;
+}
+
 export interface WSAutomationRunUpdatedData {
   automationId: string;
   runId: string;
@@ -541,6 +556,7 @@ export type WSEvent =
   | { type: 'agent:error'; threadId: string; data: WSErrorData }
   | { type: 'agent:compact_boundary'; threadId: string; data: WSCompactBoundaryData }
   | { type: 'agent:context_usage'; threadId: string; data: WSContextUsageData }
+  | { type: 'agent:rate_limit'; threadId: string; data: WSRateLimitData }
   | { type: 'command:output'; threadId: string; data: WSCommandOutputData }
   | { type: 'command:status'; threadId: string; data: WSCommandStatusData }
   | { type: 'automation:run_started'; threadId: string; data: WSAutomationRunStartedData }

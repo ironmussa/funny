@@ -935,14 +935,19 @@ export function invalidateThreadCache(threadId: string): void {
   threadCache.delete(threadId);
 }
 
-/** Get a thread with its messages + tool calls from the server by ID */
+/**
+ * Get a thread together with its full message history from the server.
+ * Used by context recovery (post-merge, worktree-convert, model/provider
+ * change) — without this the runner has no access to prior messages because
+ * the central server owns the database.
+ */
 export async function remoteGetThreadWithMessages(
   threadId: string,
   messageLimit?: number,
 ): Promise<any> {
   const response = await sendDataMessage('data:get_thread_with_messages', {
     threadId,
-    messageLimit,
+    ...(messageLimit !== undefined ? { messageLimit } : {}),
   });
   return response?.thread ?? null;
 }

@@ -583,6 +583,15 @@ export class SDKClaudeProcess extends BaseAgentProcess {
         };
       }
 
+      case 'rate_limit_event': {
+        const r = sdkMsg as any;
+        return {
+          type: 'rate_limit',
+          info: r.rate_limit_info,
+          sessionId: r.session_id,
+        };
+      }
+
       case 'result': {
         const r = sdkMsg as any;
         return {

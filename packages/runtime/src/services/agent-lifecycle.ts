@@ -129,6 +129,32 @@ export class AgentLifecycleManager {
       });
     }
 
+    // Cold-path session protection: if the thread has a persisted sessionId
+    // but the agent process for it is gone (server restart, crash, manual
+    // stop, watcher reload), force context recovery instead of letting the
+    // next process attempt `session/load`. gemini-cli/codex/pi-coding-agent
+    // all stream conversation history back as fire-and-forget notifications
+    // that race with the loadSession response promise; the late notifications
+    // get translated as new session updates and duplicate every prior
+    // assistant message and tool call in the DB. Rebuilding the prompt from
+    // DB-side context (via `recoverThreadContext` below) gives the agent
+    // equivalent continuity without triggering the replay race.
+    if (
+      currentThread?.sessionId &&
+      !this.orchestrator.isRunning(threadId) &&
+      !currentThread.contextRecoveryReason &&
+      !currentThread.mergedAt
+    ) {
+      log.info('Cold-path session: forcing recovery to avoid loadSession replay race', {
+        namespace: 'agent',
+        threadId,
+        sessionId: currentThread.sessionId,
+      });
+      await this.threadManager.updateThread(threadId, {
+        contextRecoveryReason: 'process_lost',
+      });
+    }
+
     // Read session ID from DB for resume
     const thread = await this.threadManager.getThread(threadId);
 

@@ -59,12 +59,30 @@ export interface CLICompactBoundaryMessage {
   sessionId: string;
 }
 
+export interface CLIRateLimitInfo {
+  status: 'allowed' | 'allowed_warning' | 'rejected';
+  resetsAt?: number;
+  rateLimitType?: 'five_hour' | 'seven_day' | 'seven_day_opus' | 'seven_day_sonnet' | 'overage';
+  utilization?: number;
+  overageStatus?: 'allowed' | 'allowed_warning' | 'rejected';
+  overageResetsAt?: number;
+  isUsingOverage?: boolean;
+  surpassedThreshold?: number;
+}
+
+export interface CLIRateLimitMessage {
+  type: 'rate_limit';
+  info: CLIRateLimitInfo;
+  sessionId: string;
+}
+
 export type CLIMessage =
   | CLISystemMessage
   | CLIAssistantMessage
   | CLIUserMessage
   | CLIResultMessage
-  | CLICompactBoundaryMessage;
+  | CLICompactBoundaryMessage
+  | CLIRateLimitMessage;
 
 // ── Process Options ────────────────────────────────────────────────
 

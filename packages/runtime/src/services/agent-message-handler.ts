@@ -233,6 +233,21 @@ export class AgentMessageHandler {
       return;
     }
 
+    // Rate limit — claude.ai subscription quota update
+    if (msg.type === 'rate_limit') {
+      log.info('Rate limit info', {
+        namespace: 'agent',
+        threadId,
+        status: msg.info.status,
+        rateLimitType: msg.info.rateLimitType ?? '',
+        utilization: msg.info.utilization ?? 0,
+        resetsAt: msg.info.resetsAt ?? 0,
+        isUsingOverage: msg.info.isUsingOverage ?? false,
+      });
+      await this.emitWS(threadId, 'agent:rate_limit', { info: msg.info });
+      return;
+    }
+
     // Result — agent finished
     if (msg.type === 'result') {
       await this.handleResult(threadId, msg);

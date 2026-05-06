@@ -222,11 +222,15 @@ export class AgentOrchestrator extends EventEmitter {
     // Reuse gate: if a live process supports sendPrompt and the request is
     // compatible, issue the follow-up on the live process instead of killing
     // + respawning. Keeps the in-memory ACP session warm and avoids
-    // loadSession replay overhead. Skipped on resume (sessionId set) since
-    // resume implies the previous process is gone.
+    // loadSession replay (which on gemini-cli re-emits prior assistant
+    // messages and tool calls as new updates, duplicating them in the DB).
+    // The persisted sessionId in `options.sessionId` is just a reflection
+    // of what this same live process emitted via system:init — it does not
+    // imply the process is gone. After a watcher restart, `lastOptions` is
+    // cleared by extractActiveAgents, so isCompatibleOptions returns false
+    // and we fall through to the kill+respawn loadSession path.
     const existing = this.activeAgents.get(threadId);
     const liveAndCompatible =
-      !isResume &&
       existing &&
       !existing.exited &&
       !this.manuallyStopped.has(threadId) &&

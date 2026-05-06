@@ -343,7 +343,7 @@ export interface DataGetThread {
   threadId: string;
 }
 
-/** Runner → Server: get thread with messages by ID */
+/** Runner → Server: get thread with its messages + tool calls */
 export interface DataGetThreadWithMessages {
   type: 'data:get_thread_with_messages';
   requestId: string;
@@ -385,7 +385,7 @@ export interface DataGetThreadResponse {
 export interface DataGetThreadWithMessagesResponse {
   type: 'data:get_thread_with_messages_response';
   requestId: string;
-  thread: (Record<string, any> & { messages: any[] }) | null;
+  thread: Record<string, any> | null;
 }
 
 export interface DataGetToolCallResponse {

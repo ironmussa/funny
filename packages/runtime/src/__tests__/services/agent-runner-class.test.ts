@@ -273,7 +273,14 @@ describe('AgentRunner class', () => {
       expect(statusEvents[0].data).toEqual({ status: 'running' });
     });
 
-    test('passes session ID for resume when thread has one', async () => {
+    test('clears stale sessionId on cold path to avoid loadSession replay', async () => {
+      // When a thread has a persisted sessionId but no live agent process
+      // (server restart, crash, watcher reload), startAgent must NOT pass
+      // the stale sessionId to the new process — calling `session/load` on
+      // gemini-cli/codex/pi triggers a replay that races with the response
+      // promise and duplicates every prior assistant message and tool call.
+      // Instead, context recovery is triggered: sessionId is cleared and
+      // the prompt is rebuilt from DB, giving equivalent continuity.
       tmMock.threads.set('t1', { sessionId: 'sess-abc' });
 
       let capturedOpts: any = null;
@@ -285,7 +292,9 @@ describe('AgentRunner class', () => {
 
       await runner.startAgent('t1', 'continue', '/tmp');
 
-      expect(capturedOpts.sessionId).toBe('sess-abc');
+      // The stale sessionId must NOT be passed to the new process —
+      // recoverThreadContext clears it before the orchestrator sees it.
+      expect(capturedOpts.sessionId).toBeUndefined();
     });
 
     test('stops existing agent before starting a new one', async () => {

@@ -41,6 +41,7 @@ import type {
 import { create } from 'zustand';
 
 import { api } from '@/lib/api';
+import { loadContextUsage } from '@/lib/context-usage-storage';
 import { metric, startSpan } from '@/lib/telemetry';
 
 import {
@@ -489,8 +490,10 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       const storedSetupProgress =
         thread.status === 'setting_up' ? get().setupProgressByThread[threadId] : undefined;
 
-      // Restore cached context usage so the bar survives thread switches
-      const storedContextUsage = get().contextUsageByThread[threadId];
+      // Restore cached context usage so the ring survives thread switches and
+      // page reloads. Falls back to localStorage when the in-memory map is empty
+      // (e.g. fresh tab) so the ring re-appears before the next WS event fires.
+      const storedContextUsage = get().contextUsageByThread[threadId] ?? loadContextUsage(threadId);
 
       // Restore cached queued count so the queue widget survives thread switches
       const storedQueuedCount = get().queuedCountByThread[threadId];

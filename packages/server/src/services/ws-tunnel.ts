@@ -27,6 +27,24 @@ export interface TunnelResponse {
 }
 
 /**
+ * Raised when the runner did not ack within {@link TUNNEL_TIMEOUT_MS}.
+ *
+ * Distinct from "runner not connected" because here the request was already
+ * delivered — the runner may still be processing it. Callers MUST NOT retry
+ * on a different transport (e.g., direct HTTP), or the work duplicates.
+ */
+export class TunnelTimeoutError extends Error {
+  readonly runnerId: string;
+  readonly timeoutMs: number;
+  constructor(runnerId: string, timeoutMs: number) {
+    super(`Tunnel to runner ${runnerId} timed out after ${timeoutMs}ms`);
+    this.name = 'TunnelTimeoutError';
+    this.runnerId = runnerId;
+    this.timeoutMs = timeoutMs;
+  }
+}
+
+/**
  * Send an HTTP request to a runner through the Socket.IO tunnel.
  * Returns a Response-like object with status, headers, and body.
  *
@@ -69,7 +87,7 @@ export function tunnelFetch(
       },
       (err: Error | null, response: TunnelResponse) => {
         if (err) {
-          reject(new Error(`Tunnel to runner ${runnerId} timed out after ${TUNNEL_TIMEOUT_MS}ms`));
+          reject(new TunnelTimeoutError(runnerId, TUNNEL_TIMEOUT_MS));
         } else {
           resolve(response);
         }

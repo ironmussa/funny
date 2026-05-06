@@ -326,6 +326,19 @@ function setupBrowserPtyHandlers(socket: Socket, userId: string): void {
       } else {
         // No projectId — route to any runner owned by this user.
         const runnerId = await rm.findAnyRunnerForUser(userId);
+        if (!runnerId && eventName === 'pty:list') {
+          // Runner not connected yet (e.g. browser refresh racing the runner's
+          // re-handshake). Respond with an empty pending sessions list so the
+          // client does not lock `sessionsChecked` and orphan live PTYs by
+          // spawning new ones. The runner-connect handler below pushes a fresh
+          // pty:list once a runner shows up, which delivers the real list.
+          log.info('pty:list received with no runner connected — responding pending', {
+            namespace: 'socketio',
+            userId,
+          });
+          socket.emit('pty:sessions', { sessions: [], pending: true });
+          return;
+        }
         await forwardToRunner(runnerId);
       }
     });

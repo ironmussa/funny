@@ -34,7 +34,7 @@ import { log } from '../lib/logger.js';
 import type { ServerEnv } from '../lib/types.js';
 import { resolveAnyRunner, resolveRunner } from '../services/runner-resolver.js';
 import { isRunnerConnected } from '../services/ws-relay.js';
-import { tunnelFetch } from '../services/ws-tunnel.js';
+import { TunnelTimeoutError, tunnelFetch } from '../services/ws-tunnel.js';
 
 const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET!;
 
@@ -151,6 +151,24 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
         headers: new Headers(tunnelResp.headers),
       });
     } catch (tunnelErr) {
+      // On timeout, the runner already received the request and may still be
+      // processing it. Falling back to direct HTTP would deliver the request
+      // a second time and duplicate side effects (e.g., persisting a user
+      // message twice and enqueuing two prompts on agents that await the
+      // full turn in sendPrompt — Gemini/Codex/Pi). Surface 504 instead.
+      if (tunnelErr instanceof TunnelTimeoutError) {
+        log.warn('Tunnel request timed out — not falling back', {
+          namespace: 'proxy',
+          runnerId,
+          path,
+          method: c.req.method,
+          timeoutMs: tunnelErr.timeoutMs,
+        });
+        return c.json(
+          { error: 'Runner did not respond in time. The request may still be processing.' },
+          504,
+        );
+      }
       log.warn('Tunnel request failed', {
         namespace: 'proxy',
         runnerId,

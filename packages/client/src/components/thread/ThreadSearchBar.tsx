@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { SearchBar } from '@/components/ui/search-bar';
@@ -12,11 +12,31 @@ interface SearchResult {
   snippet: string;
 }
 
+interface Occurrence {
+  messageId: string;
+  withinIdx: number;
+}
+
 interface ThreadSearchBarProps {
   threadId: string;
   open: boolean;
   onClose: () => void;
-  onNavigateToMessage: (messageId: string, query: string) => void;
+  onNavigateToMessage: (messageId: string, query: string, withinIdx: number) => void;
+}
+
+function countOccurrences(haystack: string, needle: string, caseSensitive: boolean): number {
+  if (!needle) return 0;
+  const h = caseSensitive ? haystack : haystack.toLowerCase();
+  const n = caseSensitive ? needle : needle.toLowerCase();
+  let count = 0;
+  let from = 0;
+  while (true) {
+    const idx = h.indexOf(n, from);
+    if (idx === -1) break;
+    count++;
+    from = idx + n.length;
+  }
+  return count;
 }
 
 export function ThreadSearchBar({
@@ -33,6 +53,21 @@ export function ThreadSearchBar({
   const [loading, setLoading] = useState(false);
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const abortRef = useRef<AbortController | null>(null);
+
+  // Flatten results into per-occurrence entries so the count matches
+  // visible highlights and navigation moves to each individual mark.
+  const occurrences = useMemo<Occurrence[]>(() => {
+    const q = query.trim();
+    if (!q || results.length === 0) return [];
+    const flat: Occurrence[] = [];
+    for (const r of results) {
+      const n = countOccurrences(r.content, q, caseSensitive);
+      for (let i = 0; i < n; i++) {
+        flat.push({ messageId: r.messageId, withinIdx: i });
+      }
+    }
+    return flat;
+  }, [results, query, caseSensitive]);
 
   // Reset state when thread changes or bar closes
   useEffect(() => {
@@ -68,7 +103,7 @@ export function ThreadSearchBar({
           setResults(items);
           setCurrentIndex(items.length > 0 ? 0 : -1);
           if (items.length > 0) {
-            onNavigateToMessage(items[0].messageId, q.trim());
+            onNavigateToMessage(items[0].messageId, q.trim(), 0);
           }
         } else {
           setResults([]);
@@ -99,18 +134,20 @@ export function ThreadSearchBar({
   };
 
   const navigatePrev = useCallback(() => {
-    if (results.length === 0) return;
-    const newIdx = currentIndex <= 0 ? results.length - 1 : currentIndex - 1;
+    if (occurrences.length === 0) return;
+    const newIdx = currentIndex <= 0 ? occurrences.length - 1 : currentIndex - 1;
     setCurrentIndex(newIdx);
-    onNavigateToMessage(results[newIdx].messageId, query.trim());
-  }, [results, currentIndex, query, onNavigateToMessage]);
+    const occ = occurrences[newIdx];
+    onNavigateToMessage(occ.messageId, query.trim(), occ.withinIdx);
+  }, [occurrences, currentIndex, query, onNavigateToMessage]);
 
   const navigateNext = useCallback(() => {
-    if (results.length === 0) return;
-    const newIdx = currentIndex >= results.length - 1 ? 0 : currentIndex + 1;
+    if (occurrences.length === 0) return;
+    const newIdx = currentIndex >= occurrences.length - 1 ? 0 : currentIndex + 1;
     setCurrentIndex(newIdx);
-    onNavigateToMessage(results[newIdx].messageId, query.trim());
-  }, [results, currentIndex, query, onNavigateToMessage]);
+    const occ = occurrences[newIdx];
+    onNavigateToMessage(occ.messageId, query.trim(), occ.withinIdx);
+  }, [occurrences, currentIndex, query, onNavigateToMessage]);
 
   if (!open) return null;
 
@@ -121,7 +158,7 @@ export function ThreadSearchBar({
       caseSensitive={caseSensitive}
       onCaseSensitiveChange={handleCaseSensitiveChange}
       currentIndex={Math.max(0, currentIndex)}
-      totalMatches={results.length}
+      totalMatches={occurrences.length}
       onPrev={navigatePrev}
       onNext={navigateNext}
       onClose={onClose}

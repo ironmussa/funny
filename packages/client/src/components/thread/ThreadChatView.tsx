@@ -32,6 +32,7 @@ function useThreadSearch(
 ) {
   const [searchOpen, setSearchOpen] = useState(false);
   const highlightedMsgRef = useRef<string | null>(null);
+  const highlightedQueryRef = useRef<string>('');
 
   useEffect(() => {
     if (!activeThreadId) return;
@@ -65,7 +66,19 @@ function useThreadSearch(
   const highlightTextInElement = useCallback((root: Element, query: string) => {
     if (!query) return;
     const queryLower = query.toLowerCase();
-    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+    const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+      acceptNode: (node) => {
+        // Skip text already inside a search mark to prevent nested re-highlighting.
+        let p: Node | null = node.parentNode;
+        while (p && p !== root) {
+          if (p instanceof Element && p.hasAttribute('data-search-hl')) {
+            return NodeFilter.FILTER_REJECT;
+          }
+          p = p.parentNode;
+        }
+        return NodeFilter.FILTER_ACCEPT;
+      },
+    });
     const matches: { node: Text; index: number }[] = [];
 
     let node: Text | null;
@@ -94,27 +107,53 @@ function useThreadSearch(
   }, []);
 
   const handleSearchNavigate = useCallback(
-    (messageId: string, query: string) => {
-      clearSearchHighlights();
-      highlightedMsgRef.current = messageId;
+    (messageId: string, query: string, withinIdx: number) => {
+      const needsRehighlight =
+        highlightedMsgRef.current !== messageId || highlightedQueryRef.current !== query;
+      if (needsRehighlight) {
+        clearSearchHighlights();
+        highlightedMsgRef.current = messageId;
+        highlightedQueryRef.current = query;
+      }
       streamRef.current?.expandToItem(messageId);
 
-      const scrollToMsg = () => {
+      const focusOccurrence = () => {
         const el = streamRef.current?.scrollViewport?.querySelector(
           `[data-item-key="${CSS.escape(messageId)}"]`,
         );
-        if (el) {
+        if (!el) return false;
+
+        if (needsRehighlight) highlightTextInElement(el, query);
+
+        const marks = el.querySelectorAll('mark[data-search-hl]');
+        if (marks.length === 0) {
           el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          highlightTextInElement(el, query);
-          const firstMark = el.querySelector('mark[data-search-hl]');
-          if (firstMark) {
-            firstMark.scrollIntoView({ behavior: 'smooth', block: 'center' });
-          }
+          return true;
         }
+
+        // Move "current" emphasis to the requested occurrence.
+        marks.forEach((m) => {
+          const mEl = m as HTMLElement;
+          mEl.removeAttribute('data-search-current');
+          mEl.style.backgroundColor = '#FFE500';
+          mEl.style.outline = '';
+        });
+        const target = marks[Math.min(withinIdx, marks.length - 1)] as HTMLElement | undefined;
+        if (target) {
+          target.setAttribute('data-search-current', '');
+          target.style.backgroundColor = '#FF8A00';
+          target.style.outline = '2px solid #FF8A00';
+          target.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+        return true;
       };
 
-      scrollToMsg();
-      requestAnimationFrame(scrollToMsg);
+      if (!focusOccurrence()) {
+        // Element may not have rendered yet (virtualized list, just expanded).
+        requestAnimationFrame(() => {
+          if (!focusOccurrence()) requestAnimationFrame(focusOccurrence);
+        });
+      }
     },
     [clearSearchHighlights, highlightTextInElement, streamRef],
   );
@@ -123,6 +162,7 @@ function useThreadSearch(
     setSearchOpen(false);
     clearSearchHighlights();
     highlightedMsgRef.current = null;
+    highlightedQueryRef.current = '';
   }, [clearSearchHighlights]);
 
   return { searchOpen, handleSearchNavigate, handleSearchClose };

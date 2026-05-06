@@ -745,7 +745,7 @@ export const PromptInputUI = memo(function PromptInputUI({
 
   // ── Render ──
   return (
-    <div className="px-3 sm:px-4">
+    <div className={cn(!isNewThread && 'px-3 sm:px-4')}>
       <div className="mx-auto w-full min-w-0 max-w-3xl pb-4">
         {/* Image lightbox */}
         <ImageLightbox

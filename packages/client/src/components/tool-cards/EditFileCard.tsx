@@ -1,5 +1,5 @@
 import { ChevronRight, FilePen, Maximize2 } from 'lucide-react';
-import { useState, useMemo, useCallback } from 'react';
+import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -94,6 +94,29 @@ export function EditFileCard({
 
   const [expanded, setExpanded] = useState(true);
   const [showExpandedDiff, setShowExpandedDiff] = useState(false);
+  const [diffMounted, setDiffMounted] = useState(false);
+  const diffSlotRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!expanded || diffMounted) return;
+    const el = diffSlotRef.current;
+    if (!el) return;
+    if (typeof IntersectionObserver === 'undefined') {
+      setDiffMounted(true);
+      return;
+    }
+    const io = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setDiffMounted(true);
+          io.disconnect();
+        }
+      },
+      { rootMargin: '600px 0px' },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [expanded, diffMounted]);
 
   const requestFullDiff = useCallback(
     async (
@@ -206,15 +229,19 @@ export function EditFileCard({
         )}
       </div>
       {expanded && hasDiff && (
-        <div className="max-h-[50vh] overflow-hidden border-t border-border/40">
-          <VirtualDiff
-            unifiedDiff={unifiedDiff}
-            splitView={false}
-            filePath={filePath}
-            codeFolding={true}
-            className="h-full max-h-[50vh]"
-            data-testid="edit-file-inline-diff"
-          />
+        <div ref={diffSlotRef} className="max-h-[50vh] overflow-hidden border-t border-border/40">
+          {diffMounted ? (
+            <VirtualDiff
+              unifiedDiff={unifiedDiff}
+              splitView={false}
+              filePath={filePath}
+              codeFolding={true}
+              className="h-full max-h-[50vh]"
+              data-testid="edit-file-inline-diff"
+            />
+          ) : (
+            <div className="h-16" data-testid="edit-file-inline-diff-placeholder" />
+          )}
         </div>
       )}
       <ExpandedDiffDialog

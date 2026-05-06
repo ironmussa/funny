@@ -32,6 +32,7 @@ mock.module('../../services/ws-relay.js', () => ({
 mock.module('../../services/ws-tunnel.js', () => ({
   setIO: () => {},
   tunnelFetch: () => Promise.reject(new Error('not available in test')),
+  TunnelTimeoutError: class TunnelTimeoutError extends Error {},
 }));
 
 import { describe, test, expect, beforeAll, beforeEach } from 'bun:test';

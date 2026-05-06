@@ -142,6 +142,10 @@ export class GeminiACPProcess extends BaseAgentProcess {
   // ── Provider-specific run loop ─────────────────────────────────
 
   protected async runProcess(): Promise<void> {
+    const tStart = Date.now();
+    const t = () => Date.now() - tStart;
+    const hasSession = !!this.options.sessionId;
+
     // Dynamic import — fails gracefully if SDK not installed
     let SDK: ACPSDK;
     try {
@@ -157,10 +161,11 @@ export class GeminiACPProcess extends BaseAgentProcess {
 
     // Resolve Gemini binary
     const geminiBin = this.resolveGeminiBinary();
-    dlog.debug('resolved binary', {
+    dlog.info('acp-timing: sdk-loaded', {
+      ms: t(),
       bin: geminiBin,
       platform: process.platform,
-      shell: process.platform === 'win32',
+      hasSession,
     });
 
     // Build CLI args
@@ -211,8 +216,16 @@ export class GeminiACPProcess extends BaseAgentProcess {
 
     // If the child exits unexpectedly, wake the run loop so cleanup happens.
     child.on('exit', (code, signal) => {
+      dlog.warn('acp-timing: child exit', {
+        ms: t(),
+        code,
+        signal,
+        aborted: this.isAborted,
+        exited: this._exited,
+        sessionReady: !!this.activeSessionId,
+        numTurns: this.numTurns,
+      });
       if (!this.isAborted && !this._exited) {
-        dlog.warn('gemini child exited unexpectedly', { code, signal });
         this.abortController.abort();
       }
     });
@@ -226,6 +239,7 @@ export class GeminiACPProcess extends BaseAgentProcess {
       this._exited = true;
       return;
     }
+    dlog.info('acp-timing: spawned', { ms: t(), pid: child.pid });
 
     const outputStream = Writable.toWeb(child.stdin!) as WritableStream<Uint8Array>;
     const inputStream = Readable.toWeb(child.stdout!) as unknown as ReadableStream<Uint8Array>;
@@ -262,6 +276,7 @@ export class GeminiACPProcess extends BaseAgentProcess {
 
     try {
       // 1. Initialize ACP
+      dlog.info('acp-timing: initialize-start', { ms: t() });
       const initResult = await connection.initialize({
         protocolVersion: 1,
         clientInfo: { name: 'funny', version: '1.0.0' },
@@ -270,10 +285,16 @@ export class GeminiACPProcess extends BaseAgentProcess {
 
       const supportsLoadSession = initResult.agentCapabilities?.loadSession === true;
       this.supportsImages = initResult.agentCapabilities?.promptCapabilities?.image === true;
+      dlog.info('acp-timing: initialize-done', {
+        ms: t(),
+        supportsLoadSession,
+        supportsImages: this.supportsImages,
+      });
 
       // 2. Resume existing session if possible, else create a new one.
       const mcpServerList = toACPMcpServers(this.options.mcpServers);
       if (this.options.sessionId && supportsLoadSession) {
+        dlog.info('acp-timing: loadSession-start', { ms: t(), sessionId: this.options.sessionId });
         this.activeSessionId = this.options.sessionId;
         this.replayingHistory = true;
         try {
@@ -285,12 +306,18 @@ export class GeminiACPProcess extends BaseAgentProcess {
         } finally {
           this.replayingHistory = false;
         }
+        dlog.info('acp-timing: loadSession-done', { ms: t() });
       } else {
+        dlog.info('acp-timing: newSession-start', {
+          ms: t(),
+          mcpServerCount: mcpServerList.length,
+        });
         sessionResponse = await connection.newSession({
           cwd: this.options.cwd,
           mcpServers: mcpServerList,
         });
         this.activeSessionId = sessionResponse.sessionId;
+        dlog.info('acp-timing: newSession-done', { ms: t(), sessionId: this.activeSessionId });
       }
 
       // Emit init with the real session id once known so the persisted
@@ -318,12 +345,24 @@ export class GeminiACPProcess extends BaseAgentProcess {
         });
       }
 
+      dlog.info('acp-timing: handshake-complete', {
+        ms: t(),
+        sessionId: this.activeSessionId,
+        promptLen: this.options.prompt?.length ?? 0,
+      });
+
       // Run initial prompt inline so a setup error surfaces as a failed turn.
       await this.runOnePrompt(this.options.prompt, this.options.images);
 
       // Stay alive across turns; sendPrompt() reuses this connection.
       await this.awaitShutdown();
     } catch (err: unknown) {
+      dlog.error('acp-timing: handshake-or-run failed', {
+        ms: t(),
+        sessionReady: !!this.activeSessionId,
+        aborted: this.isAborted,
+        message: err instanceof Error ? err.message : String(err),
+      });
       this.flushPendingThought();
       if (!this.isAborted) {
         const errorMessage = this.extractErrorMessage(err);
@@ -398,9 +437,23 @@ export class GeminiACPProcess extends BaseAgentProcess {
     }
 
     try {
+      dlog.info('acp-timing: prompt-send', {
+        sessionId: this.activeSessionId,
+        turn: this.numTurns + 1,
+        promptLen: prompt.length,
+        imageBlocks: imageBlocks.length,
+      });
       const promptResponse = await this.connection.prompt({
         sessionId: this.activeSessionId,
         prompt: promptBlocks,
+      });
+      dlog.info('acp-timing: prompt-done', {
+        sessionId: this.activeSessionId,
+        turn: this.numTurns + 1,
+        durationMs: Date.now() - startTime,
+        stopReason: promptResponse.stopReason,
+        hadAssistantText: !!this.lastAssistantText,
+        accumulatedLen: this.lastAssistantText.length,
       });
 
       // Extract usage if available — rough Gemini pricing estimate.
@@ -435,6 +488,14 @@ export class GeminiACPProcess extends BaseAgentProcess {
         result: this.lastAssistantText || undefined,
       });
     } catch (err: unknown) {
+      dlog.error('acp-timing: prompt-error', {
+        sessionId: this.activeSessionId,
+        turn: this.numTurns + 1,
+        durationMs: Date.now() - startTime,
+        aborted: this.isAborted,
+        hadAssistantText: !!this.lastAssistantText,
+        message: err instanceof Error ? err.message : String(err),
+      });
       this.flushPendingThought();
       if (!this.isAborted) {
         const errorMessage = this.extractErrorMessage(err);
@@ -585,6 +646,43 @@ export class GeminiACPProcess extends BaseAgentProcess {
           hasContent: !!(update as any).content?.length,
           title: update.title ?? '',
         });
+
+        // Gemini sometimes skips the initial `tool_call` event and goes
+        // straight to a completed `tool_call_update`. Without a synthetic
+        // tool_use the client has no card to render and the edit appears
+        // to happen silently. Emit one now from the update fields.
+        if (!this.toolCallsSeen.has(toolCallId)) {
+          const acpKind = (update as any).kind as string | undefined;
+          const title = update.title || '';
+          const locations = (update as any).locations as
+            | Array<{ path: string; line?: number | null }>
+            | undefined;
+          const toolName = inferACPToolName(acpKind, title);
+          const input = buildACPToolInput(toolName, {
+            kind: acpKind,
+            title,
+            rawInput: (update as any).rawInput,
+            locations,
+          });
+          this.toolCallsSeen.set(toolCallId, toolName);
+          this.emit('message', {
+            type: 'assistant',
+            message: {
+              id: randomUUID(),
+              content: [
+                {
+                  type: 'tool_use',
+                  id: toolCallId,
+                  name: toolName,
+                  input,
+                },
+              ],
+            },
+          } as CLIMessage);
+          // Rotate assistant message id so post-tool text is a separate DB message.
+          this.accumulatedText = '';
+          this.assistantMsgId = randomUUID();
+        }
 
         if (update.status === 'completed' || update.status === 'failed') {
           this.toolCallsSeen.set(toolCallId, 'done');

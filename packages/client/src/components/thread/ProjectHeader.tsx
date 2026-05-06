@@ -52,18 +52,15 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuTrigger,
+  DropdownMenuPortal,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
@@ -119,6 +116,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
     threadMode,
     threadBranch,
     threadPinned,
+    threadStage,
     hasMessages,
   } = useThreadStore(
     useShallow((s) => ({
@@ -128,16 +126,20 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
       threadMode: s.activeThread?.mode,
       threadBranch: s.activeThread ? resolveThreadBranch(s.activeThread) : undefined,
       threadPinned: s.activeThread?.pinned,
+      threadStage: s.activeThread?.stage,
       hasMessages: (s.activeThread?.messages?.length ?? 0) > 0,
     })),
   );
   const pinThread = useThreadStore((s) => s.pinThread);
+  const updateThreadStage = useThreadStore((s) => s.updateThreadStage);
   const timelineVisible = useUIStore((s) => s.timelineVisible);
   const setTimelineVisible = useUIStore((s) => s.setTimelineVisible);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
+  const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const rightPaneTab = useUIStore((s) => s.rightPaneTab);
   const setActivityPaneOpen = useUIStore((s) => s.setActivityPaneOpen);
   const activityActive = reviewPaneOpen && rightPaneTab === 'activity';
+  const showStage = !!threadId && !!threadStage && threadStage !== 'archived';
   const [copiedText, copyText] = useCopyToClipboard();
   const [copiedTools, copyTools] = useCopyToClipboard();
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -256,6 +258,57 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
           <TooltipContent>{t('thread.moreActions', 'More actions')}</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end">
+          {(showStage || threadId) && (
+            <>
+              {showStage && (
+                <DropdownMenuSub>
+                  <DropdownMenuSubTrigger data-testid="header-menu-stage">
+                    {(() => {
+                      const StageIcon = stageConfig[threadStage!].icon;
+                      return <StageIcon className="icon-base mr-2" />;
+                    })()}
+                    {t('kanban.stage', 'Stage')}
+                    <span className="ml-auto pl-2 text-xs text-muted-foreground">
+                      {t(stageConfig[threadStage!].labelKey)}
+                    </span>
+                  </DropdownMenuSubTrigger>
+                  <DropdownMenuPortal>
+                    <DropdownMenuSubContent>
+                      {VISIBLE_STAGES.map((s) => {
+                        const Icon = stageConfig[s].icon;
+                        return (
+                          <DropdownMenuItem
+                            key={s}
+                            data-testid={`header-menu-stage-${s}`}
+                            onClick={() => updateThreadStage(threadId!, threadProjectId!, s)}
+                            className="cursor-pointer"
+                          >
+                            <Icon className="icon-base mr-2" />
+                            {t(stageConfig[s].labelKey)}
+                            {s === threadStage && <Check className="icon-base ml-auto pl-1" />}
+                          </DropdownMenuItem>
+                        );
+                      })}
+                    </DropdownMenuSubContent>
+                  </DropdownMenuPortal>
+                </DropdownMenuSub>
+              )}
+              {threadId && (
+                <DropdownMenuItem
+                  data-testid="header-menu-view-board"
+                  onClick={() => {
+                    setReviewPaneOpen(false);
+                    navigate(buildPath(`/kanban?project=${threadProjectId}&highlight=${threadId}`));
+                  }}
+                  className="cursor-pointer"
+                >
+                  <Columns3 className="icon-base mr-2" />
+                  {t('kanban.viewOnBoard', 'View on Board')}
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuSeparator />
+            </>
+          )}
           <DropdownMenuItem
             data-testid="header-menu-toggle-activity"
             onClick={() =>
@@ -548,42 +601,6 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
 
 const VISIBLE_STAGES: ThreadStage[] = ['backlog', 'planning', 'in_progress', 'review', 'done'];
 
-const StageSelectorBadge = memo(function StageSelectorBadge({
-  threadId,
-  projectId,
-  stage,
-}: {
-  threadId: string;
-  projectId: string;
-  stage: ThreadStage;
-}) {
-  const { t } = useTranslation();
-  const updateThreadStage = useThreadStore((s) => s.updateThreadStage);
-
-  return (
-    <Select
-      value={stage}
-      onValueChange={(value: string) =>
-        updateThreadStage(threadId, projectId, value as ThreadStage)
-      }
-    >
-      <SelectTrigger
-        data-testid="header-stage-select"
-        className="h-7 w-auto min-w-0 shrink-0 border-0 bg-transparent px-2 py-0 text-sm text-muted-foreground shadow-none hover:bg-accent hover:text-accent-foreground"
-      >
-        <SelectValue>{t(stageConfig[stage].labelKey)}</SelectValue>
-      </SelectTrigger>
-      <SelectContent>
-        {VISIBLE_STAGES.map((s) => (
-          <SelectItem key={s} value={s}>
-            {t(stageConfig[s].labelKey)}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
-  );
-});
-
 export const ProjectHeader = memo(function ProjectHeader() {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
@@ -592,7 +609,6 @@ export const ProjectHeader = memo(function ProjectHeader() {
     activeThreadId,
     activeThreadProjectId,
     activeThreadTitle,
-    activeThreadStage,
     activeThreadStatus,
     activeThreadWorktreePath,
     activeThreadParentId,
@@ -602,7 +618,6 @@ export const ProjectHeader = memo(function ProjectHeader() {
       activeThreadId: s.activeThread?.id,
       activeThreadProjectId: s.activeThread?.projectId,
       activeThreadTitle: s.activeThread?.title,
-      activeThreadStage: s.activeThread?.stage,
       activeThreadStatus: s.activeThread?.status,
       activeThreadWorktreePath: s.activeThread?.worktreePath,
       activeThreadParentId: s.activeThread?.parentThreadId,
@@ -887,36 +902,6 @@ export const ProjectHeader = memo(function ProjectHeader() {
         </div>
         {activeThreadStatus !== 'setting_up' && (
           <div className="flex flex-shrink-0 items-center gap-2">
-            {activeThreadId && activeThreadStage && activeThreadStage !== 'archived' && (
-              <StageSelectorBadge
-                threadId={activeThreadId!}
-                projectId={activeThreadProjectId!}
-                stage={activeThreadStage}
-              />
-            )}
-            {activeThreadId && (
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    data-testid="header-view-board"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => {
-                      setReviewPaneOpen(false);
-                      navigate(
-                        buildPath(
-                          `/kanban?project=${activeThreadProjectId}&highlight=${activeThreadId}`,
-                        ),
-                      );
-                    }}
-                    className="h-8 w-8 text-muted-foreground"
-                  >
-                    <Columns3 className="icon-base" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>{t('kanban.viewOnBoard', 'View on Board')}</TooltipContent>
-              </Tooltip>
-            )}
             <StartupCommandsPopover projectId={projectId!} />
             {runningWithPort.length > 0 && (
               <Tooltip>

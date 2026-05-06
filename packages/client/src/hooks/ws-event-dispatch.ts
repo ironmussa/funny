@@ -6,9 +6,11 @@ import { showAgentNotification } from '@/hooks/use-notifications';
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
 import { validateContainerUrl } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
+import { buildPath } from '@/lib/url';
 import { invalidateCooldownsForKeys, useGitStatusStore } from '@/stores/git-status-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 import { useThreadStore } from '@/stores/thread-store';
+import { getNavigate } from '@/stores/thread-store-internals';
 
 import { dispatchTestEvent } from './dispatch-test-events';
 
@@ -356,29 +358,55 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
   }
 }
 
-function findThreadTitle(threadId: string): string | undefined {
+function findThread(threadId: string): {
+  title?: string;
+  branch?: string;
+  projectId?: string;
+} {
   const store = useThreadStore.getState();
-  if (store.activeThread?.id === threadId) return store.activeThread.title;
-  for (const threads of Object.values(store.threadsByProject)) {
-    const t = threads.find((th) => th.id === threadId);
-    if (t) return t.title;
+  if (store.activeThread?.id === threadId) {
+    return {
+      title: store.activeThread.title,
+      branch: store.activeThread.branch,
+      projectId: store.activeThread.projectId,
+    };
   }
-  return undefined;
+  for (const [projectId, threads] of Object.entries(store.threadsByProject)) {
+    const t = threads.find((th) => th.id === threadId);
+    if (t) return { title: t.title, branch: t.branch, projectId };
+  }
+  return {};
+}
+
+function buildNotificationTitle(info: { title?: string; branch?: string }): string {
+  const parts = ['funny'];
+  if (info.branch) parts.push(info.branch);
+  if (info.title) parts.push(info.title);
+  return parts.join(' — ');
 }
 
 function maybeNotifyAgentResult(threadId: string, data: any): void {
   const status = data.status as string | undefined;
-  const title = findThreadTitle(threadId) ?? 'Agent';
+  const info = findThread(threadId);
+  const title = buildNotificationTitle(info);
+  const onClick = () => {
+    const navigate = getNavigate();
+    if (navigate && info.projectId) {
+      navigate(buildPath(`/projects/${info.projectId}/threads/${threadId}`));
+    }
+  };
   if (status === 'completed') {
-    showAgentNotification('Agent finished', title, {
+    showAgentNotification(title, 'Agent finished', {
       tag: `agent-result-${threadId}`,
       skipIfViewingThreadId: threadId,
+      onClick,
     });
   } else if (status === 'failed' || status === 'error') {
     const reason = data.errorReason ? ` — ${data.errorReason}` : '';
-    showAgentNotification('Agent failed', `${title}${reason}`, {
+    showAgentNotification(title, `Agent failed${reason}`, {
       tag: `agent-result-${threadId}`,
       skipIfViewingThreadId: threadId,
+      onClick,
     });
   }
 }
@@ -488,6 +516,13 @@ function handlePtySessions(data: any) {
         }, 10000);
       }
     });
+  } else if (data.pending) {
+    // Server is signalling that no runner is connected yet (e.g. refresh racing
+    // the runner's re-handshake). Do NOT mark sessions as checked — the
+    // runner-connect handler on the server will push a fresh pty:list once a
+    // runner is online, which will deliver the real session list. If no runner
+    // ever connects, the safety timeout in `use-ws.ts` still unblocks new
+    // spawns after 15s.
   } else {
     useTerminalStore.getState().markSessionsChecked();
   }

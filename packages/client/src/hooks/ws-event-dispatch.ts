@@ -319,6 +319,15 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
     case 'pty:sessions':
       handlePtySessions(data);
       break;
+    case 'pty:env_activated': {
+      const lines = (data.activations as Array<{ kind: string; detail: string }>).map(
+        (a) => `${a.kind}: ${a.detail}`,
+      );
+      toast.success('Activated environment', {
+        description: lines.join('\n'),
+      });
+      break;
+    }
     case 'thread:queue_update':
       useThreadStore.getState().handleWSQueueUpdate(threadId, data);
       break;
@@ -495,6 +504,7 @@ const ALL_EVENT_TYPES = [
   'pty:exit',
   'pty:error',
   'pty:sessions',
+  'pty:env_activated',
   'thread:queue_update',
   'test:frame',
   'test:output',

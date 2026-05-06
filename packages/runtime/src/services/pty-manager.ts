@@ -13,6 +13,7 @@
  *   4. Null fallback (reports error to client)
  */
 
+import { detectEnv } from '@funny/core';
 import { sql } from 'drizzle-orm';
 
 import { db, getConnection } from '../db/index.js';
@@ -364,7 +365,23 @@ export function spawnPty(
   const tmuxSession = backend.persistent ? `funny-${id}` : undefined;
   activeSessions.set(id, { userId, cwd, projectId, label, tmuxSession, shell: safeShell });
 
-  backend.spawn(id, cwd, cols, rows, process.env as Record<string, string>, safeShell);
+  const spawnEnv: Record<string, string | undefined> = { ...process.env };
+  const detected = detectEnv(cwd, spawnEnv);
+  if (detected.notes.length > 0) {
+    Object.assign(spawnEnv, detected.env);
+    log.info('Activating per-directory env for PTY', {
+      namespace: 'pty-manager',
+      ptyId: id,
+      activations: detected.notes,
+    });
+    wsBroker.emitToUser(userId, {
+      type: 'pty:env_activated' as const,
+      threadId: '',
+      data: { ptyId: id, activations: detected.notes },
+    });
+  }
+
+  backend.spawn(id, cwd, cols, rows, spawnEnv as Record<string, string>, safeShell);
 
   // Persist to DB for restart recovery
   if (backend.persistent && tmuxSession) {

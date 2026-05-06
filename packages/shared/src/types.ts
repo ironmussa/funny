@@ -454,6 +454,11 @@ export interface WSPtySessionsData {
   sessions: WSPtySessionData[];
 }
 
+export interface WSPtyEnvActivatedData {
+  ptyId: string;
+  activations: Array<{ kind: 'python-venv' | 'node-version'; detail: string }>;
+}
+
 export interface WSQueueUpdateData {
   threadId: string;
   queuedCount: number;
@@ -546,6 +551,7 @@ export type WSEvent =
   | { type: 'pty:exit'; threadId: string; data: WSPtyExitData }
   | { type: 'pty:error'; threadId: string; data: WSPtyErrorData }
   | { type: 'pty:sessions'; threadId: ''; data: WSPtySessionsData }
+  | { type: 'pty:env_activated'; threadId: string; data: WSPtyEnvActivatedData }
   | { type: 'thread:created'; threadId: string; data: WSThreadCreatedData }
   | { type: 'thread:deleted'; threadId: string; data: WSThreadDeletedData }
   | { type: 'thread:stage-changed'; threadId: string; data: WSThreadStageChangedData }

@@ -1,5 +1,6 @@
 import { PanelLeft } from 'lucide-react';
 import { lazy, Suspense, useCallback, useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import type { PanelImperativeHandle } from 'react-resizable-panels';
 import { useNavigate } from 'react-router-dom';
 
@@ -12,7 +13,7 @@ import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useRouteSync } from '@/hooks/use-route-sync';
 import { useThreadHistoryTracker } from '@/hooks/use-thread-history-tracker';
 import { useWS } from '@/hooks/use-ws';
-import { TOAST_DURATION } from '@/lib/utils';
+import { cn, TOAST_DURATION } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -180,14 +181,35 @@ export function App() {
   const rightPanelRef = useRef<PanelImperativeHandle | null>(null);
   const terminalPanelRef = useRef<PanelImperativeHandle | null>(null);
 
+  // Animation flags: true while a programmatic collapse/expand is in flight so
+  // we can apply a CSS transition. We DON'T transition during drag — that would
+  // make resizing feel laggy.
+  const [rightAnimating, setRightAnimating] = useState(false);
+  const [terminalAnimating, setTerminalAnimating] = useState(false);
+
   // Sync the right pane's collapsed state with the zustand store. Guard with
   // `isCollapsed()` to avoid an infinite loop with onResize → setReviewPaneOpen.
+  // We use `resize()` instead of `expand()` because v4's expand() falls back to
+  // minSize when the panel was collapsed before ever having a real size.
   useEffect(() => {
     const p = rightPanelRef.current;
     if (!p) return;
     const collapsed = p.isCollapsed();
-    if (reviewPaneOpen && collapsed) p.expand();
-    else if (!reviewPaneOpen && !collapsed) p.collapse();
+    if (reviewPaneOpen && collapsed) {
+      const prev = p.getSize().asPercentage;
+      // flushSync ensures the transition className is applied to the DOM
+      // BEFORE we mutate flex-grow — otherwise the change happens before the
+      // transition exists and there's no animation.
+      flushSync(() => setRightAnimating(true));
+      p.resize(`${prev > 5 ? prev : 30}%`);
+      const t = setTimeout(() => setRightAnimating(false), 260);
+      return () => clearTimeout(t);
+    } else if (!reviewPaneOpen && !collapsed) {
+      flushSync(() => setRightAnimating(true));
+      p.collapse();
+      const t = setTimeout(() => setRightAnimating(false), 260);
+      return () => clearTimeout(t);
+    }
   }, [reviewPaneOpen, isFullScreenView]);
 
   // Sync the terminal pane's collapsed state with the per-project store.
@@ -196,8 +218,18 @@ export function App() {
     const p = terminalPanelRef.current;
     if (!p) return;
     const collapsed = p.isCollapsed();
-    if (terminalPanelVisible && collapsed) p.expand();
-    else if (!terminalPanelVisible && !collapsed) p.collapse();
+    if (terminalPanelVisible && collapsed) {
+      const prev = p.getSize().asPercentage;
+      flushSync(() => setTerminalAnimating(true));
+      p.resize(`${prev > 5 ? prev : 30}%`);
+      const t = setTimeout(() => setTerminalAnimating(false), 260);
+      return () => clearTimeout(t);
+    } else if (!terminalPanelVisible && !collapsed) {
+      flushSync(() => setTerminalAnimating(true));
+      p.collapse();
+      const t = setTimeout(() => setTerminalAnimating(false), 260);
+      return () => clearTimeout(t);
+    }
   }, [terminalPanelVisible, selectedProjectId, showTerminalPanel]);
 
   // Register navigate so the store can trigger navigation (e.g. from toasts)
@@ -322,7 +354,7 @@ export function App() {
           className="min-h-0 flex-1 overflow-hidden"
           data-testid="main-panel-group"
         >
-          <ResizablePanel id="center" defaultSize={70} minSize={30}>
+          <ResizablePanel id="center" defaultSize={70} minSize={15}>
             <ResizablePanelGroup
               id="funny:center-v"
               orientation="vertical"
@@ -343,6 +375,11 @@ export function App() {
                   collapsedSize={0}
                   panelRef={terminalPanelRef}
                   onResize={onTerminalPaneResize}
+                  className={
+                    terminalAnimating
+                      ? 'transition-[flex-grow] duration-[250ms] ease-out'
+                      : undefined
+                  }
                 >
                   <Suspense>
                     <TerminalPanel />
@@ -357,13 +394,15 @@ export function App() {
           <ResizablePanel
             id="right"
             defaultSize={30}
-            minSize={20}
-            maxSize={70}
+            minSize={15}
             collapsible
             collapsedSize={0}
             panelRef={rightPanelRef}
             onResize={onRightPaneResize}
-            className="bg-sidebar"
+            className={cn(
+              'bg-sidebar',
+              rightAnimating && 'transition-[flex-grow] duration-[250ms] ease-out',
+            )}
           >
             <div className="flex h-full min-h-0 flex-col overflow-hidden">
               <div className="min-h-0 flex-1 overflow-hidden">

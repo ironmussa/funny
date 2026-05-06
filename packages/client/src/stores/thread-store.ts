@@ -180,6 +180,7 @@ export interface ThreadState {
     approved: boolean,
     allowedTools?: string[],
     disallowedTools?: string[],
+    options?: { scope?: 'once' | 'always'; pattern?: string; toolInput?: string },
   ) => Promise<boolean>;
   searchThreadContent: (query: string, projectId?: string) => Promise<any>;
 
@@ -1126,13 +1127,14 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     await api.stopThread(threadId);
   },
 
-  approveTool: async (threadId, toolName, approved, allowedTools, disallowedTools) => {
+  approveTool: async (threadId, toolName, approved, allowedTools, disallowedTools, options) => {
     const result = await api.approveTool(
       threadId,
       toolName,
       approved,
       allowedTools,
       disallowedTools,
+      options,
     );
     return result.isOk();
   },

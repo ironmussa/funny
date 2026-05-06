@@ -11,12 +11,19 @@ import type {
 class TestProcess extends BaseAgentProcess {
   public runProcessFn: (() => Promise<void>) | null = null;
   public runProcessCalled = false;
+  public runOnePromptFn: ((prompt: string, images?: unknown[]) => Promise<void>) | null = null;
+  public runOnePromptCalls: Array<{ prompt: string; images?: unknown[] }> = [];
 
   protected async runProcess(): Promise<void> {
     this.runProcessCalled = true;
     if (this.runProcessFn) {
       await this.runProcessFn();
     }
+  }
+
+  protected async runOnePrompt(prompt: string, images?: unknown[]): Promise<void> {
+    this.runOnePromptCalls.push({ prompt, images });
+    if (this.runOnePromptFn) await this.runOnePromptFn(prompt, images);
   }
 
   // Expose protected helpers for testing
@@ -38,6 +45,10 @@ class TestProcess extends BaseAgentProcess {
 
   public callExtractErrorMessage(err: unknown): string {
     return this.extractErrorMessage(err);
+  }
+
+  public async callEnqueuePrompt(prompt: string, images?: unknown[]): Promise<void> {
+    return this.enqueuePrompt(prompt, images);
   }
 }
 
@@ -298,6 +309,84 @@ describe('BaseAgentProcess', () => {
 
     test('handles string input', () => {
       expect(proc.callExtractErrorMessage('raw string error')).toBe('raw string error');
+    });
+  });
+
+  // ── enqueuePrompt (fire-and-forget) ───────────────────────
+  //
+  // Regression: HTTP `POST /messages` previously blocked for the entire
+  // turn because enqueuePrompt awaited the turn completion. That caused
+  // WS tunnel timeouts (30s) and duplicate POSTs for any provider whose
+  // sendPrompt awaited the full turn (Gemini ACP / Codex / Pi).
+  describe('enqueuePrompt', () => {
+    test('returns before the turn completes (fire-and-forget)', async () => {
+      let resolveTurn!: () => void;
+      proc.runOnePromptFn = () =>
+        new Promise((resolve) => {
+          resolveTurn = resolve;
+        });
+
+      const t0 = Date.now();
+      await proc.callEnqueuePrompt('hello');
+      const elapsed = Date.now() - t0;
+
+      // Resolved without waiting for the turn.
+      expect(elapsed).toBeLessThan(50);
+      expect(proc.runOnePromptCalls).toEqual([{ prompt: 'hello', images: undefined }]);
+
+      // Cleanup so the test doesn't leak the pending promise.
+      resolveTurn();
+    });
+
+    test('queues subsequent prompts while a turn is in flight, drains in order', async () => {
+      const releases: Array<() => void> = [];
+      proc.runOnePromptFn = () =>
+        new Promise<void>((resolve) => {
+          releases.push(resolve);
+        });
+
+      await proc.callEnqueuePrompt('first');
+      await proc.callEnqueuePrompt('second');
+      await proc.callEnqueuePrompt('third');
+
+      // Only the first turn is running; rest are queued.
+      expect(proc.runOnePromptCalls.map((c) => c.prompt)).toEqual(['first']);
+
+      releases[0]();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(proc.runOnePromptCalls.map((c) => c.prompt)).toEqual(['first', 'second']);
+
+      releases[1]();
+      await new Promise((r) => setTimeout(r, 0));
+      expect(proc.runOnePromptCalls.map((c) => c.prompt)).toEqual(['first', 'second', 'third']);
+
+      releases[2]();
+    });
+
+    test('throws when the process has exited', async () => {
+      proc.callFinalize();
+      await expect(proc.callEnqueuePrompt('x')).rejects.toThrow('Agent process has exited');
+    });
+
+    test('a failing turn does not poison the queue', async () => {
+      const errors: Error[] = [];
+      proc.on('error', (err) => errors.push(err));
+
+      let attempts = 0;
+      proc.runOnePromptFn = async () => {
+        attempts += 1;
+        if (attempts === 1) throw new Error('boom');
+      };
+
+      await proc.callEnqueuePrompt('a');
+      await proc.callEnqueuePrompt('b');
+
+      // Let microtasks flush.
+      await new Promise((r) => setTimeout(r, 0));
+      await new Promise((r) => setTimeout(r, 0));
+
+      expect(proc.runOnePromptCalls.map((c) => c.prompt)).toEqual(['a', 'b']);
+      expect(errors.map((e) => e.message)).toEqual(['boom']);
     });
   });
 });

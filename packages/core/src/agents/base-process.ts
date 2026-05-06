@@ -123,12 +123,16 @@ export abstract class BaseAgentProcess extends EventEmitter {
   }
 
   /**
-   * Run a single turn under exclusion. If a turn is already running,
-   * queue this one to run after. Used by adapters that support multi-turn
-   * via `sendPrompt()`.
+   * Queue a prompt for execution and return as soon as it's accepted —
+   * does NOT await turn completion. Turn progress and results flow through
+   * 'message' / 'error' events on this EventEmitter.
    *
-   * Subclasses must implement `runOnePrompt(prompt)` to do the actual
-   * per-turn work (reset turn state, call provider's prompt API, emit result).
+   * Why fire-and-forget: callers up the chain (HTTP `POST /messages`) would
+   * otherwise block for the entire turn (potentially minutes), causing WS
+   * tunnel timeouts and duplicate POSTs. The model's response is delivered
+   * to clients via separate event channels regardless of when this resolves.
+   *
+   * Subclasses must implement `runOnePrompt(prompt)` for the per-turn work.
    */
   protected async enqueuePrompt(prompt: string, images?: unknown[]): Promise<void> {
     if (this._exited || this.isAborted) {
@@ -138,23 +142,26 @@ export abstract class BaseAgentProcess extends EventEmitter {
       this.promptQueue.push({ prompt, images });
       return;
     }
+    this.startTurn(prompt, images);
+  }
+
+  private startTurn(prompt: string, images?: unknown[]): void {
     const turn = this.runOnePromptSafe(prompt, images);
     this.currentTurn = turn;
-    try {
-      await turn;
-    } finally {
-      this.currentTurn = null;
-      while (!this._exited && !this.isAborted && this.promptQueue.length > 0) {
-        const next = this.promptQueue.shift()!;
-        const t = this.runOnePromptSafe(next.prompt, next.images);
-        this.currentTurn = t;
-        try {
-          await t;
-        } finally {
-          this.currentTurn = null;
-        }
+    turn.finally(() => {
+      if (this.currentTurn === turn) {
+        this.currentTurn = null;
       }
-    }
+      this.drainQueue();
+    });
+  }
+
+  private drainQueue(): void {
+    if (this._exited || this.isAborted) return;
+    if (this.currentTurn) return;
+    const next = this.promptQueue.shift();
+    if (!next) return;
+    this.startTurn(next.prompt, next.images);
   }
 
   /**

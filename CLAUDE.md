@@ -219,6 +219,10 @@ function parseConfig(raw: string): Result<Config, string> {
 - Chain results with `.map()`, `.mapErr()`, `.andThen()` instead of nested try/catch.
 - On the server, use `result-response.ts` helpers to convert `Result` values into HTTP responses.
 
+## Bug Fixes & Regression Tests
+
+When resolving a bug or problem, always propose adding a test that covers the case (if applicable). The test should fail without the fix and pass with it, so the regression cannot silently come back. If a test is not feasible (e.g., infra-only change, trivial typo, no test harness for that area), say so explicitly instead of skipping silently.
+
 ## Agent Safety Rules
 
 **NEVER start dev servers or long-running processes.** You are running headlessly without a browser — commands like `bun run dev`, `npm run dev`, `yarn dev`, `bun --watch`, or `vite` will hang forever and may kill the main development server via `kill-port.ts`.

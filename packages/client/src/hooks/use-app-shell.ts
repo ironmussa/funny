@@ -108,7 +108,9 @@ export function useAppShell(): ShellState {
     }
   }, [selectedProjectId, selectedProjectName, selectedProjectBranch]);
 
-  useGlobalShortcuts();
+  const toggleCommandPalette = useUIStore((s) => s.toggleCommandPalette);
+  const toggleFileSearch = useUIStore((s) => s.toggleFileSearch);
+  useGlobalShortcuts(toggleCommandPalette, toggleFileSearch);
   useThreadHistoryTracker();
 
   return {

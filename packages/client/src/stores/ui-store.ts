@@ -4,10 +4,6 @@ import { useProjectStore } from './project-store';
 import { useThreadStore, invalidateSelectThread } from './thread-store';
 import { setThreadSelectListener } from './thread-store-internals';
 
-const REVIEW_PANE_WIDTH_KEY = 'review_pane_width';
-const DEFAULT_REVIEW_PANE_WIDTH = 50; // percentage of viewport width
-const MIN_REVIEW_PANE_WIDTH = 20;
-const MAX_REVIEW_PANE_WIDTH = 70;
 const TIMELINE_VISIBLE_KEY = 'timeline_visible';
 const RIGHT_PANE_OPEN_KEY = 'right_pane_open';
 const RIGHT_PANE_TAB_KEY = 'right_pane_tab';
@@ -26,8 +22,6 @@ function persistRightPane(open: boolean, tab?: RightPaneTab) {
 
 interface UIState {
   reviewPaneOpen: boolean;
-  reviewPaneWidth: number; // percentage of viewport width
-  reviewPaneResizing: boolean;
   rightPaneTab: RightPaneTab;
   settingsOpen: boolean;
   activeSettingsPage: string | null;
@@ -67,8 +61,6 @@ interface UIState {
   setTestRunnerOpen: (open: boolean) => void;
   setActivityPaneOpen: (open: boolean) => void;
   setFilesPaneOpen: (open: boolean) => void;
-  setReviewPaneWidth: (width: number) => void;
-  setReviewPaneResizing: (resizing: boolean) => void;
   setRightPaneTab: (tab: RightPaneTab) => void;
   setSettingsOpen: (open: boolean) => void;
   setActiveSettingsPage: (page: string | null) => void;
@@ -124,15 +116,6 @@ export const useUIStore = create<UIState>((set) => ({
       return 'activity' as RightPaneTab;
     }
   })(),
-  reviewPaneWidth: (() => {
-    try {
-      const stored = localStorage.getItem(REVIEW_PANE_WIDTH_KEY);
-      return stored ? Number(stored) : DEFAULT_REVIEW_PANE_WIDTH;
-    } catch {
-      return DEFAULT_REVIEW_PANE_WIDTH;
-    }
-  })(),
-  reviewPaneResizing: false,
   settingsOpen: false,
   activeSettingsPage: null,
   newThreadProjectId: null,
@@ -231,14 +214,6 @@ export const useUIStore = create<UIState>((set) => ({
     persistRightPane(true, tab);
     set({ rightPaneTab: tab, reviewPaneOpen: true });
   },
-  setReviewPaneWidth: (width) => {
-    const clamped = Math.max(MIN_REVIEW_PANE_WIDTH, Math.min(MAX_REVIEW_PANE_WIDTH, width));
-    try {
-      localStorage.setItem(REVIEW_PANE_WIDTH_KEY, String(clamped));
-    } catch {}
-    set({ reviewPaneWidth: clamped });
-  },
-  setReviewPaneResizing: (resizing) => set({ reviewPaneResizing: resizing }),
   setSettingsOpen: (open) =>
     set(
       open

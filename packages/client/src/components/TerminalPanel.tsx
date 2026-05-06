@@ -31,7 +31,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { Input } from '@/components/ui/input';
-import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
@@ -962,8 +961,6 @@ function TerminalSearchOverlay({
   );
 }
 
-const PANEL_HEIGHT = 300;
-
 const TAB_DRAG_TYPE = 'terminal-tab';
 
 interface DraggableTerminalTabProps {
@@ -1200,27 +1197,9 @@ export function TerminalPanel() {
     fetchAvailableShells();
   }, [fetchAvailableShells]);
 
-  const [panelHeight, setPanelHeight] = useState(PANEL_HEIGHT);
   const [searchVisible, setSearchVisible] = useState(false);
   const newTermMenu = useTooltipMenu();
   const signalMenu = useTooltipMenu();
-  const startHeight = useRef(panelHeight);
-
-  const {
-    resizing: dragging,
-    handlePointerDown: handleDragPointerDown,
-    handlePointerMove: handleDragPointerMove,
-    handlePointerUp: handleDragPointerUp,
-  } = useResizeHandle({
-    direction: 'vertical',
-    onResizeStart: () => {
-      startHeight.current = panelHeight;
-    },
-    onResize: (deltaPx) => {
-      // Dragging up (negative delta) increases height
-      setPanelHeight(Math.max(150, Math.min(startHeight.current - deltaPx, 600)));
-    },
-  });
 
   const visibleTabs = useMemo(
     () => tabs.filter((t) => t.projectId === selectedProjectId),
@@ -1360,172 +1339,152 @@ export function TerminalPanel() {
   );
 
   return (
-    <div
-      className={cn(
-        'flex-shrink-0 overflow-hidden',
-        !dragging && 'transition-[height] duration-200 ease-in-out',
-      )}
-      style={{
-        height: panelVisible ? panelHeight : 0,
-      }}
-    >
-      {/* Inner wrapper always keeps full height so xterm terminals preserve their buffer */}
-      <div className="flex flex-col bg-background" style={{ height: panelHeight }}>
-        {/* Drag handle — matches sidebar rail style */}
-        <ResizeHandle
-          direction="vertical"
-          resizing={dragging}
-          onPointerDown={handleDragPointerDown}
-          onPointerMove={handleDragPointerMove}
-          onPointerUp={handleDragPointerUp}
-        />
+    <div className="flex h-full flex-col overflow-hidden bg-background">
+      {/* Tab bar */}
+      <div className="flex h-8 flex-shrink-0 items-center gap-0.5 bg-background px-2">
+        <div className="flex flex-1 items-center gap-0.5 overflow-x-auto">
+          {visibleTabs.map((tab, index) => (
+            <DraggableTerminalTab
+              key={tab.id}
+              tab={tab}
+              index={index}
+              active={effectiveActiveTabId === tab.id}
+              sessionsChecked={sessionsChecked}
+              onActivate={() => {
+                setActiveTab(tab.id);
+                if (!panelVisible && selectedProjectId) togglePanel(selectedProjectId);
+              }}
+              onClose={() => handleCloseTab(tab.id)}
+              onKill={() => handleKillTab(tab.id)}
+              onRename={(label) => renameTab(tab.id, label)}
+            />
+          ))}
+        </div>
 
-        {/* Tab bar */}
-        <div className="flex h-8 flex-shrink-0 items-center gap-0.5 bg-background px-2">
-          <div className="flex flex-1 items-center gap-0.5 overflow-x-auto">
-            {visibleTabs.map((tab, index) => (
-              <DraggableTerminalTab
-                key={tab.id}
-                tab={tab}
-                index={index}
-                active={effectiveActiveTabId === tab.id}
-                sessionsChecked={sessionsChecked}
-                onActivate={() => {
-                  setActiveTab(tab.id);
-                  if (!panelVisible && selectedProjectId) togglePanel(selectedProjectId);
-                }}
-                onClose={() => handleCloseTab(tab.id)}
-                onKill={() => handleKillTab(tab.id)}
-                onRename={(label) => renameTab(tab.id, label)}
-              />
-            ))}
-          </div>
-
-          <DropdownMenu {...newTermMenu.menuProps}>
-            <Tooltip {...newTermMenu.tooltipProps}>
-              <TooltipTrigger asChild>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" size="icon-xs">
-                    <Plus className="icon-sm" />
-                  </Button>
-                </DropdownMenuTrigger>
-              </TooltipTrigger>
-              <TooltipContent>{t('terminal.newTerminal')}</TooltipContent>
-            </Tooltip>
-            <DropdownMenuContent align="start" side="top" {...newTermMenu.contentProps}>
-              {availableShells.map((shell) => (
-                <DropdownMenuItem
-                  key={shell.id}
-                  onClick={() => handleNewTerminal(shell.id)}
-                  data-testid={`terminal-new-${shell.id}`}
-                >
-                  {shell.label}
-                </DropdownMenuItem>
-              ))}
-              {availableShells.length === 0 && (
-                <DropdownMenuItem onClick={() => handleNewTerminal('default')}>
-                  {t('settings.shellDefault')}
-                </DropdownMenuItem>
-              )}
-            </DropdownMenuContent>
-          </DropdownMenu>
-
-          {effectiveActiveTabId &&
-            visibleTabs.find((t) => t.id === effectiveActiveTabId)?.alive &&
-            visibleTabs.find((t) => t.id === effectiveActiveTabId)?.type === 'pty' && (
-              <DropdownMenu {...signalMenu.menuProps}>
-                <Tooltip {...signalMenu.tooltipProps}>
-                  <TooltipTrigger asChild>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon-xs" data-testid="terminal-signal-menu">
-                        <Zap className="icon-sm" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                  </TooltipTrigger>
-                  <TooltipContent>{t('terminal.sendSignal')}</TooltipContent>
-                </Tooltip>
-                <DropdownMenuContent align="end" side="top" {...signalMenu.contentProps}>
-                  <DropdownMenuItem
-                    onClick={() => sendSignal(effectiveActiveTabId, 'SIGINT')}
-                    data-testid="terminal-signal-sigint"
-                  >
-                    SIGINT (Ctrl+C)
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => sendSignal(effectiveActiveTabId, 'SIGTERM')}
-                    data-testid="terminal-signal-sigterm"
-                  >
-                    SIGTERM
-                  </DropdownMenuItem>
-                  <DropdownMenuItem
-                    onClick={() => sendSignal(effectiveActiveTabId, 'SIGKILL')}
-                    className="text-destructive"
-                    data-testid="terminal-signal-sigkill"
-                  >
-                    SIGKILL (Force)
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            )}
-
-          <Tooltip>
+        <DropdownMenu {...newTermMenu.menuProps}>
+          <Tooltip {...newTermMenu.tooltipProps}>
             <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-xs"
-                className="ml-auto"
-                onClick={() => selectedProjectId && togglePanel(selectedProjectId)}
-              >
-                <X className="icon-sm" />
-              </Button>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="icon-xs">
+                  <Plus className="icon-sm" />
+                </Button>
+              </DropdownMenuTrigger>
             </TooltipTrigger>
-            <TooltipContent>{t('terminal.hideTerminal')}</TooltipContent>
+            <TooltipContent>{t('terminal.newTerminal')}</TooltipContent>
           </Tooltip>
-        </div>
+          <DropdownMenuContent align="start" side="top" {...newTermMenu.contentProps}>
+            {availableShells.map((shell) => (
+              <DropdownMenuItem
+                key={shell.id}
+                onClick={() => handleNewTerminal(shell.id)}
+                data-testid={`terminal-new-${shell.id}`}
+              >
+                {shell.label}
+              </DropdownMenuItem>
+            ))}
+            {availableShells.length === 0 && (
+              <DropdownMenuItem onClick={() => handleNewTerminal('default')}>
+                {t('settings.shellDefault')}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
-        {/* Terminal content area */}
-        <div className="relative m-2 min-h-0 flex-1 overflow-hidden bg-background">
-          {searchVisible && effectiveActiveTabId && (
-            <TerminalSearchOverlay activeTabId={effectiveActiveTabId} onClose={closeSearch} />
+        {effectiveActiveTabId &&
+          visibleTabs.find((t) => t.id === effectiveActiveTabId)?.alive &&
+          visibleTabs.find((t) => t.id === effectiveActiveTabId)?.type === 'pty' && (
+            <DropdownMenu {...signalMenu.menuProps}>
+              <Tooltip {...signalMenu.tooltipProps}>
+                <TooltipTrigger asChild>
+                  <DropdownMenuTrigger asChild>
+                    <Button variant="ghost" size="icon-xs" data-testid="terminal-signal-menu">
+                      <Zap className="icon-sm" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                </TooltipTrigger>
+                <TooltipContent>{t('terminal.sendSignal')}</TooltipContent>
+              </Tooltip>
+              <DropdownMenuContent align="end" side="top" {...signalMenu.contentProps}>
+                <DropdownMenuItem
+                  onClick={() => sendSignal(effectiveActiveTabId, 'SIGINT')}
+                  data-testid="terminal-signal-sigint"
+                >
+                  SIGINT (Ctrl+C)
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => sendSignal(effectiveActiveTabId, 'SIGTERM')}
+                  data-testid="terminal-signal-sigterm"
+                >
+                  SIGTERM
+                </DropdownMenuItem>
+                <DropdownMenuItem
+                  onClick={() => sendSignal(effectiveActiveTabId, 'SIGKILL')}
+                  className="text-destructive"
+                  data-testid="terminal-signal-sigkill"
+                >
+                  SIGKILL (Force)
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           )}
-          {visibleTabs.length === 0 ? (
-            <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-              {t('terminal.noProcesses')}
-            </div>
-          ) : (
-            visibleTabs.map((tab) =>
-              tab.type === 'pty' ? (
-                <WebTerminalTabContent
-                  key={tab.id}
-                  id={tab.id}
-                  cwd={tab.cwd}
-                  active={tab.id === effectiveActiveTabId}
-                  panelVisible={panelVisible}
-                  shell={tab.shell}
-                  restored={tab.restored}
-                  projectId={tab.projectId}
-                  label={tab.label}
-                  initialCommand={tab.initialCommand}
-                />
-              ) : tab.commandId ? (
-                <CommandTabContent
-                  key={tab.id}
-                  commandId={tab.commandId}
-                  projectId={tab.projectId}
-                  active={tab.id === effectiveActiveTabId}
-                  alive={tab.alive}
-                />
-              ) : isTauri ? (
-                <TauriTerminalTabContent
-                  key={tab.id}
-                  id={tab.id}
-                  cwd={tab.cwd}
-                  active={tab.id === effectiveActiveTabId}
-                />
-              ) : null,
-            )
-          )}
-        </div>
+
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              className="ml-auto"
+              onClick={() => selectedProjectId && togglePanel(selectedProjectId)}
+            >
+              <X className="icon-sm" />
+            </Button>
+          </TooltipTrigger>
+          <TooltipContent>{t('terminal.hideTerminal')}</TooltipContent>
+        </Tooltip>
+      </div>
+
+      {/* Terminal content area */}
+      <div className="relative m-2 min-h-0 flex-1 overflow-hidden bg-background">
+        {searchVisible && effectiveActiveTabId && (
+          <TerminalSearchOverlay activeTabId={effectiveActiveTabId} onClose={closeSearch} />
+        )}
+        {visibleTabs.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+            {t('terminal.noProcesses')}
+          </div>
+        ) : (
+          visibleTabs.map((tab) =>
+            tab.type === 'pty' ? (
+              <WebTerminalTabContent
+                key={tab.id}
+                id={tab.id}
+                cwd={tab.cwd}
+                active={tab.id === effectiveActiveTabId}
+                panelVisible={panelVisible}
+                shell={tab.shell}
+                restored={tab.restored}
+                projectId={tab.projectId}
+                label={tab.label}
+                initialCommand={tab.initialCommand}
+              />
+            ) : tab.commandId ? (
+              <CommandTabContent
+                key={tab.id}
+                commandId={tab.commandId}
+                projectId={tab.projectId}
+                active={tab.id === effectiveActiveTabId}
+                alive={tab.alive}
+              />
+            ) : isTauri ? (
+              <TauriTerminalTabContent
+                key={tab.id}
+                id={tab.id}
+                cwd={tab.cwd}
+                active={tab.id === effectiveActiveTabId}
+              />
+            ) : null,
+          )
+        )}
       </div>
     </div>
   );

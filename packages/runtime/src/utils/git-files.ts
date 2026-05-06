@@ -2,8 +2,36 @@ import { join } from 'path';
 
 import { gitRead } from '@funny/core/git';
 
+import { log } from '../lib/logger.js';
+
 // ─── Cache for resolveGitFiles ──────────────────────────────
 const GIT_FILES_CACHE_TTL = 5_000; // 5 seconds
+
+/**
+ * Heavy build/dependency directories we never want to surface in the file
+ * picker, even when they're not in `.gitignore`. Keeps `.env`-style ignored
+ * files visible without exploding the index with `node_modules` contents.
+ */
+export const HEAVY_IGNORED_DIRS = new Set([
+  'node_modules',
+  '.git',
+  'dist',
+  'build',
+  '.next',
+  '.turbo',
+  '.cache',
+  'coverage',
+  '.vite',
+  '.parcel-cache',
+]);
+
+function isHeavyIgnored(rel: string): boolean {
+  const segs = rel.split('/');
+  for (const seg of segs) {
+    if (HEAVY_IGNORED_DIRS.has(seg)) return true;
+  }
+  return false;
+}
 
 interface CacheEntry {
   files: string[];
@@ -27,19 +55,57 @@ export function invalidateGitFilesCache(cwd?: string): void {
 
 /**
  * Run `git ls-files` in a directory and return the raw file list.
+ *
+ * Returns BOTH tracked/untracked-not-ignored files AND `.gitignore`-ignored
+ * files (e.g. `.env`, local config). Files inside heavy build dirs like
+ * `node_modules`, `dist`, `.next`, etc. are filtered out so the index stays
+ * usable.
+ *
  * Uses gitRead (read pool, limit 20) instead of execute (general pool, limit 6).
  */
 export async function gitLsFiles(cwd: string): Promise<string[]> {
-  const result = await gitRead(['ls-files', '--cached', '--others', '--exclude-standard'], {
-    cwd,
-    reject: false,
-    timeout: 10_000,
-  });
-  if (result.exitCode !== 0) return [];
-  return result.stdout
-    .split('\n')
-    .map((f) => f.trim())
-    .filter(Boolean);
+  const [tracked, ignored] = await Promise.all([
+    gitRead(['ls-files', '--cached', '--others', '--exclude-standard'], {
+      cwd,
+      reject: false,
+      timeout: 10_000,
+    }),
+    gitRead(['ls-files', '--others', '--ignored', '--exclude-standard'], {
+      cwd,
+      reject: false,
+      timeout: 10_000,
+    }),
+  ]);
+
+  if (tracked.exitCode !== 0) {
+    log.warn('git-files: ls-files (tracked) failed', {
+      namespace: 'git-files',
+      cwd,
+      exitCode: tracked.exitCode,
+    });
+    return [];
+  }
+
+  const out = new Set<string>();
+  for (const line of tracked.stdout.split('\n')) {
+    const f = line.trim();
+    if (f) out.add(f);
+  }
+
+  if (ignored.exitCode === 0) {
+    for (const line of ignored.stdout.split('\n')) {
+      const f = line.trim();
+      if (f && !isHeavyIgnored(f)) out.add(f);
+    }
+  } else {
+    log.warn('git-files: ls-files (ignored) failed', {
+      namespace: 'git-files',
+      cwd,
+      exitCode: ignored.exitCode,
+    });
+  }
+
+  return Array.from(out);
 }
 
 /**

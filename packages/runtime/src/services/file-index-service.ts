@@ -19,26 +19,17 @@ import { stat } from 'fs/promises';
 import { join, relative, sep } from 'path';
 
 import { log } from '../lib/logger.js';
-import { invalidateGitFilesCache, resolveGitFiles } from '../utils/git-files.js';
+import {
+  HEAVY_IGNORED_DIRS,
+  invalidateGitFilesCache,
+  resolveGitFiles,
+} from '../utils/git-files.js';
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 import { threadEventBus } from './thread-event-bus.js';
 
 const WATCH_DEBOUNCE_MS = 80;
 const REBUILD_DEBOUNCE_MS = 250;
 const STALE_TTL_MS = 5 * 60_000;
-
-const IGNORED_DIRS = new Set([
-  'node_modules',
-  '.git',
-  'dist',
-  'build',
-  '.next',
-  '.turbo',
-  '.cache',
-  'coverage',
-  '.vite',
-  '.parcel-cache',
-]);
 
 interface FileIndex {
   /** Sorted list of files (relative POSIX paths). */
@@ -246,11 +237,10 @@ function onFsEvent(projectPath: string, relRaw: string): void {
   // Normalise to POSIX separators (matches `git ls-files` output)
   const rel = sep === '\\' ? relRaw.split(sep).join('/') : relRaw;
 
-  // Filter out paths in ignored directories
-  const firstSeg = rel.split('/', 1)[0];
-  if (IGNORED_DIRS.has(firstSeg)) return;
-  // Also any nested ignored dir (e.g. packages/foo/node_modules/bar)
-  if (rel.includes('/node_modules/') || rel.includes('/.git/')) return;
+  // Filter out paths in heavy build/dependency directories at any depth
+  for (const seg of rel.split('/')) {
+    if (HEAVY_IGNORED_DIRS.has(seg)) return;
+  }
 
   // Stat will tell us whether it's an add/modify or a removal
   void stat(join(projectPath, rel))
@@ -297,17 +287,14 @@ function applyPending(projectPath: string): void {
     return;
   }
 
-  // Apply incrementally: build a new sorted array so we don't share refs
+  // Apply incrementally: build a new sorted array so we don't share refs.
+  // We intentionally include `.gitignore`-ignored files (e.g. `.env`) so they
+  // show up in the picker; the heavy-dir filter in `onFsEvent` already drops
+  // `node_modules`/`dist`/etc. Any false positives wash out on the next
+  // git-driven rebuild.
   const present = new Set(idx.files);
   for (const rel of removed) present.delete(rel);
-  for (const rel of added) {
-    // Respect .gitignore — defer to the next git-driven refresh for accuracy.
-    // For now, only add files that look like they'd be tracked: skip dotfiles
-    // at root and obvious build artefacts. False positives wash out on the
-    // next git:changed rebuild.
-    if (rel.startsWith('.') && !rel.includes('/')) continue;
-    present.add(rel);
-  }
+  for (const rel of added) present.add(rel);
   idx.pending.added.clear();
   idx.pending.removed.clear();
 

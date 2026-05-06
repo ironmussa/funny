@@ -119,6 +119,25 @@ function getStoredFontSize(): FontSize {
   return 'default';
 }
 
+const NOTIFICATIONS_ENABLED_KEY = 'funny_notifications_enabled';
+const NOTIFICATIONS_SOUND_KEY = 'funny_notifications_sound';
+
+function getStoredNotificationsEnabled(): boolean {
+  try {
+    return localStorage.getItem(NOTIFICATIONS_ENABLED_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
+function getStoredNotificationSoundEnabled(): boolean {
+  try {
+    return localStorage.getItem(NOTIFICATIONS_SOUND_KEY) === '1';
+  } catch {
+    return false;
+  }
+}
+
 function applyFontSize(size: FontSize) {
   document.documentElement.style.fontSize = FONT_SIZE_VALUES[size];
   const codePx = CODE_FONT_SIZE_PX[size];
@@ -136,12 +155,16 @@ interface SettingsState {
   _shellsLoaded: boolean;
   toolPermissions: Record<string, ToolPermission>;
   fontSize: FontSize;
+  notificationsEnabled: boolean;
+  notificationSoundEnabled: boolean;
   _initialized: boolean;
   initializeFromProfile: (profile: UserProfile) => void;
   setDefaultEditor: (editor: Editor) => void;
   setUseInternalEditor: (use: boolean) => void;
   setTerminalShell: (shell: TerminalShell) => void;
   setFontSize: (size: FontSize) => void;
+  setNotificationsEnabled: (enabled: boolean) => void;
+  setNotificationSoundEnabled: (enabled: boolean) => void;
   fetchAvailableShells: () => Promise<void>;
   setToolPermission: (toolName: string, permission: ToolPermission) => void;
   resetToolPermissions: () => void;
@@ -178,6 +201,8 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
   _shellsLoaded: false,
   toolPermissions: { ...DEFAULT_TOOL_PERMISSIONS },
   fontSize: getStoredFontSize(),
+  notificationsEnabled: getStoredNotificationsEnabled(),
+  notificationSoundEnabled: getStoredNotificationSoundEnabled(),
   _initialized: false,
 
   initializeFromProfile: (profile) => {
@@ -210,6 +235,18 @@ export const useSettingsStore = create<SettingsState>()((set, get) => ({
       localStorage.setItem(FONT_SIZE_KEY, size);
     } catch {}
     applyFontSize(size);
+  },
+  setNotificationsEnabled: (enabled) => {
+    set({ notificationsEnabled: enabled });
+    try {
+      localStorage.setItem(NOTIFICATIONS_ENABLED_KEY, enabled ? '1' : '0');
+    } catch {}
+  },
+  setNotificationSoundEnabled: (enabled) => {
+    set({ notificationSoundEnabled: enabled });
+    try {
+      localStorage.setItem(NOTIFICATIONS_SOUND_KEY, enabled ? '1' : '0');
+    } catch {}
   },
   fetchAvailableShells: async () => {
     if (get()._shellsLoaded) return;

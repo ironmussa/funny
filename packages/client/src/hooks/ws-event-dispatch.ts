@@ -2,6 +2,7 @@ import { startTransition } from 'react';
 import type { Socket } from 'socket.io-client';
 import { toast } from 'sonner';
 
+import { showAgentNotification } from '@/hooks/use-notifications';
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
 import { validateContainerUrl } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
@@ -145,6 +146,8 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {
         useReviewPaneStore.getState().notifyDirty(threadId);
       });
+
+      maybeNotifyAgentResult(threadId, data);
       break;
     }
     case 'agent:tool_call': {
@@ -350,6 +353,29 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
     case 'worktree:setup_complete':
       useThreadStore.getState().handleWSWorktreeSetupComplete(threadId, data);
       break;
+  }
+}
+
+function findThreadTitle(threadId: string): string | undefined {
+  const store = useThreadStore.getState();
+  if (store.activeThread?.id === threadId) return store.activeThread.title;
+  for (const threads of Object.values(store.threadsByProject)) {
+    const t = threads.find((th) => th.id === threadId);
+    if (t) return t.title;
+  }
+  return undefined;
+}
+
+function maybeNotifyAgentResult(threadId: string, data: any): void {
+  const status = data.status as string | undefined;
+  const title = findThreadTitle(threadId) ?? 'Agent';
+  if (status === 'completed') {
+    showAgentNotification('Agent finished', title, { tag: `agent-result-${threadId}` });
+  } else if (status === 'failed' || status === 'error') {
+    const reason = data.errorReason ? ` — ${data.errorReason}` : '';
+    showAgentNotification('Agent failed', `${title}${reason}`, {
+      tag: `agent-result-${threadId}`,
+    });
   }
 }
 

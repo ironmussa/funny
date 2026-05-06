@@ -23,6 +23,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
+import {
+  playNotificationSound,
+  showAgentNotification,
+  useNotifications,
+} from '@/hooks/use-notifications';
 import { api } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import {
@@ -159,10 +164,14 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
     terminalShell,
     availableShells,
     fontSize,
+    notificationsEnabled,
+    notificationSoundEnabled,
     setDefaultEditor,
     setUseInternalEditor,
     setTerminalShell,
     setFontSize,
+    setNotificationsEnabled,
+    setNotificationSoundEnabled,
     fetchAvailableShells,
   } = useSettingsStore(
     useShallow((s) => ({
@@ -171,13 +180,22 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
       terminalShell: s.terminalShell,
       availableShells: s.availableShells,
       fontSize: s.fontSize,
+      notificationsEnabled: s.notificationsEnabled,
+      notificationSoundEnabled: s.notificationSoundEnabled,
       setDefaultEditor: s.setDefaultEditor,
       setUseInternalEditor: s.setUseInternalEditor,
       setTerminalShell: s.setTerminalShell,
       setFontSize: s.setFontSize,
+      setNotificationsEnabled: s.setNotificationsEnabled,
+      setNotificationSoundEnabled: s.setNotificationSoundEnabled,
       fetchAvailableShells: s.fetchAvailableShells,
     })),
   );
+  const {
+    permission: notificationPermission,
+    requestPermission,
+    supported: notificationsSupported,
+  } = useNotifications();
   const { theme, setTheme } = useTheme();
   const { t, i18n } = useTranslation();
 
@@ -256,6 +274,60 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
     },
     [setFontSize, t],
   );
+
+  const handleNotificationsToggle = useCallback(
+    async (checked: boolean) => {
+      if (checked) {
+        const result = notificationPermission === 'granted' ? 'granted' : await requestPermission();
+        if (result !== 'granted') {
+          toast.error(t('settings.notificationsDenied'));
+          setNotificationsEnabled(false);
+          return;
+        }
+      }
+      setNotificationsEnabled(checked);
+      toast.success(t('settings.saved'), { id: 'settings-saved' });
+    },
+    [notificationPermission, requestPermission, setNotificationsEnabled, t],
+  );
+
+  const handleTestNotification = useCallback(async () => {
+    if (!notificationsSupported) {
+      toast.error(t('settings.notificationsUnsupported'));
+      return;
+    }
+    let perm = notificationPermission;
+    if (perm !== 'granted') {
+      perm = await requestPermission();
+    }
+    if (perm !== 'granted') {
+      toast.error(t('settings.notificationsDenied'));
+      return;
+    }
+    const result = showAgentNotification(
+      t('settings.notificationsTestTitle'),
+      t('settings.notificationsTestBody'),
+      { force: true },
+    );
+    if (result.ok) {
+      toast.success(t('settings.notificationsTestSent'));
+    } else {
+      toast.error(t('settings.notificationsTestFailed', { reason: result.reason }));
+    }
+  }, [notificationPermission, notificationsSupported, requestPermission, t]);
+
+  const handleNotificationSoundToggle = useCallback(
+    (checked: boolean) => {
+      setNotificationSoundEnabled(checked);
+      if (checked) playNotificationSound();
+      toast.success(t('settings.saved'), { id: 'settings-saved' });
+    },
+    [setNotificationSoundEnabled, t],
+  );
+
+  const handleTestNotificationSound = useCallback(() => {
+    playNotificationSound();
+  }, []);
 
   const handleLanguageChange = useCallback(
     (code: string) => {
@@ -393,6 +465,54 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
                     ))}
                   </SelectContent>
                 </Select>
+              </SettingRow>
+              <SettingRow
+                title={t('settings.notifications')}
+                description={
+                  notificationsSupported
+                    ? notificationPermission === 'denied'
+                      ? t('settings.notificationsBlocked')
+                      : t('settings.notificationsDesc')
+                    : t('settings.notificationsUnsupported')
+                }
+              >
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleTestNotification}
+                    disabled={!notificationsSupported || notificationPermission === 'denied'}
+                    data-testid="preferences-notifications-test"
+                  >
+                    {t('settings.notificationsTest')}
+                  </Button>
+                  <Checkbox
+                    checked={notificationsEnabled && notificationPermission === 'granted'}
+                    disabled={!notificationsSupported || notificationPermission === 'denied'}
+                    onCheckedChange={(checked) => handleNotificationsToggle(!!checked)}
+                    data-testid="preferences-notifications-toggle"
+                  />
+                </div>
+              </SettingRow>
+              <SettingRow
+                title={t('settings.notificationsSound')}
+                description={t('settings.notificationsSoundDesc')}
+              >
+                <div className="flex items-center gap-2">
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={handleTestNotificationSound}
+                    data-testid="preferences-notifications-sound-test"
+                  >
+                    {t('settings.notificationsTest')}
+                  </Button>
+                  <Checkbox
+                    checked={notificationSoundEnabled}
+                    onCheckedChange={(checked) => handleNotificationSoundToggle(!!checked)}
+                    data-testid="preferences-notifications-sound-toggle"
+                  />
+                </div>
               </SettingRow>
             </div>
           </>

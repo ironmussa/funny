@@ -28,12 +28,12 @@ import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
-import { useThreadStore } from '@/stores/thread-store';
+import { useThreadProjectId } from '@/stores/thread-context';
 
 /** Navigate to a child thread by updating the URL (so the back button works). */
 function useNavigateToThread() {
   const navigate = useNavigate();
-  const projectId = useThreadStore((s) => s.activeThread?.projectId);
+  const projectId = useThreadProjectId();
   return useCallback(
     (threadId: string) => {
       if (projectId) {

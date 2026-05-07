@@ -17,7 +17,6 @@ interface PromptInputProps {
   isNewThread?: boolean;
   showBacklog?: boolean;
   projectId?: string;
-  threadId?: string | null;
   initialPrompt?: string;
   initialImages?: ImageAttachment[];
   /** Imperative ref — PromptInput writes setPrompt into it so the parent can restore text */
@@ -39,7 +38,6 @@ export const PromptInput = memo(function PromptInput({
   isNewThread = false,
   showBacklog = false,
   projectId: propProjectId,
-  threadId: threadIdProp,
   initialPrompt: initialPromptProp,
   initialImages: initialImagesProp,
   setPromptRef,
@@ -55,7 +53,6 @@ export const PromptInput = memo(function PromptInput({
     queuedCountProp,
     isNewThread,
     propProjectId,
-    threadIdProp,
     initialPromptProp,
   });
 

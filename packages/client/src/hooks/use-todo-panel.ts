@@ -2,7 +2,7 @@ import { useRef, useMemo } from 'react';
 
 import { formatInput, getTodos } from '@/components/tool-cards/utils';
 import type { TodoItem } from '@/components/tool-cards/utils';
-import { useThreadStore } from '@/stores/thread-store';
+import { useThreadMessages } from '@/stores/thread-context';
 
 export interface TodoSnapshot {
   todos: TodoItem[];
@@ -26,16 +26,15 @@ export interface AgentTodos {
  */
 function useTodoWriteCalls(): { id: string; input: any; parentToolCallId?: string }[] {
   const prevRef = useRef<{ id: string; input: any; parentToolCallId?: string }[]>([]);
+  const messages = useThreadMessages();
 
-  return useThreadStore((s) => {
-    const messages = s.activeThread?.messages;
+  return useMemo(() => {
     if (!messages) {
       if (prevRef.current.length === 0) return prevRef.current;
       prevRef.current = [];
       return prevRef.current;
     }
 
-    // Collect TodoWrite tool call references (including parentToolCallId)
     const calls: { id: string; input: any; parentToolCallId?: string }[] = [];
     for (const msg of messages) {
       for (const tc of msg.toolCalls ?? []) {
@@ -43,7 +42,6 @@ function useTodoWriteCalls(): { id: string; input: any; parentToolCallId?: strin
       }
     }
 
-    // Shallow compare: same length and same object references
     const prev = prevRef.current;
     if (prev.length === calls.length && calls.every((c, i) => c === prev[i])) {
       return prev;
@@ -51,7 +49,7 @@ function useTodoWriteCalls(): { id: string; input: any; parentToolCallId?: strin
 
     prevRef.current = calls;
     return calls;
-  });
+  }, [messages]);
 }
 
 /**

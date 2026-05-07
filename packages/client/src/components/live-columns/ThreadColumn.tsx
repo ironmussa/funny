@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
 import { deriveToolLists, useSettingsStore } from '@/stores/settings-store';
+import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore, type ThreadWithMessages } from '@/stores/thread-store';
 
 type OpenLightboxFn = (images: { src: string; alt: string }[], index: number) => void;
@@ -177,65 +178,66 @@ export const ThreadColumn = memo(function ThreadColumn({
   const isRunning = status === 'running';
 
   return (
-    <div
-      className="group/col flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-sm border border-border"
-      data-testid={`grid-column-${threadId}`}
-    >
-      <div className="flex-shrink-0 border-b border-border bg-sidebar/50 px-3 py-2">
-        <div className="flex min-w-0 items-center gap-2">
-          <StatusIcon className={cn('icon-sm shrink-0', statusClass)} />
-          <span className="flex-1 truncate text-sm font-medium" title={thread.title}>
-            {thread.title}
-          </span>
-          {onRemove && (
-            <TooltipIconButton
-              tooltip={t('live.removeFromGrid', 'Remove from grid')}
-              onClick={onRemove}
-              className="h-5 w-5 shrink-0 opacity-0 transition-opacity group-hover/col:opacity-100"
-              data-testid={`grid-remove-${threadId}`}
-            >
-              <X className="icon-xs" />
-            </TooltipIconButton>
-          )}
+    <ThreadProvider threadId={threadId} source="live" liveThread={thread}>
+      <div
+        className="group/col flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-sm border border-border"
+        data-testid={`grid-column-${threadId}`}
+      >
+        <div className="flex-shrink-0 border-b border-border bg-sidebar/50 px-3 py-2">
+          <div className="flex min-w-0 items-center gap-2">
+            <StatusIcon className={cn('icon-sm shrink-0', statusClass)} />
+            <span className="flex-1 truncate text-sm font-medium" title={thread.title}>
+              {thread.title}
+            </span>
+            {onRemove && (
+              <TooltipIconButton
+                tooltip={t('live.removeFromGrid', 'Remove from grid')}
+                onClick={onRemove}
+                className="h-5 w-5 shrink-0 opacity-0 transition-opacity group-hover/col:opacity-100"
+                data-testid={`grid-remove-${threadId}`}
+              >
+                <X className="icon-xs" />
+              </TooltipIconButton>
+            )}
+          </div>
+          <ThreadPowerline
+            thread={thread}
+            projectName={projectName}
+            projectColor={threadProject?.color}
+            className="mt-1"
+            data-testid={`grid-column-powerline-${threadId}`}
+          />
         </div>
-        <ThreadPowerline
-          thread={thread}
-          projectName={projectName}
-          projectColor={threadProject?.color}
-          className="mt-1"
-          data-testid={`grid-column-powerline-${threadId}`}
+
+        <MessageStream
+          ref={streamRef}
+          compact
+          threadId={thread.id}
+          status={status}
+          messages={thread.messages ?? []}
+          threadEvents={thread.threadEvents}
+          compactionEvents={thread.compactionEvents}
+          initInfo={thread.initInfo}
+          resultInfo={thread.resultInfo}
+          waitingReason={thread.waitingReason}
+          pendingPermission={thread.pendingPermission}
+          isExternal={thread.provider === 'external'}
+          model={thread.model}
+          permissionMode={thread.permissionMode}
+          onSend={handleSend}
+          onOpenLightbox={onOpenLightbox}
+          className="min-h-0 flex-1"
+          footer={
+            <PromptInput
+              onSubmit={handleSend}
+              onStop={handleStop}
+              loading={sending}
+              running={isRunning}
+              placeholder={t('thread.nextPrompt')}
+            />
+          }
         />
       </div>
-
-      <MessageStream
-        ref={streamRef}
-        compact
-        threadId={thread.id}
-        status={status}
-        messages={thread.messages ?? []}
-        threadEvents={thread.threadEvents}
-        compactionEvents={thread.compactionEvents}
-        initInfo={thread.initInfo}
-        resultInfo={thread.resultInfo}
-        waitingReason={thread.waitingReason}
-        pendingPermission={thread.pendingPermission}
-        isExternal={thread.provider === 'external'}
-        model={thread.model}
-        permissionMode={thread.permissionMode}
-        onSend={handleSend}
-        onOpenLightbox={onOpenLightbox}
-        className="min-h-0 flex-1"
-        footer={
-          <PromptInput
-            onSubmit={handleSend}
-            onStop={handleStop}
-            loading={sending}
-            running={isRunning}
-            threadId={thread.id}
-            placeholder={t('thread.nextPrompt')}
-          />
-        }
-      />
-    </div>
+    </ThreadProvider>
   );
 });

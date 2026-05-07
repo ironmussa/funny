@@ -51,41 +51,37 @@ export function selectIsTerminal(thread: ThreadWithMessages | null): boolean {
 
 // ── Granular Zustand selector hooks ───────────────────────────────────
 //
-// These subscribe to narrow slices of `activeThread` so components only
-// re-render when the specific slice changes — not on every WS update.
+// @deprecated — use the context-aware hooks from `thread-context.tsx`
+// (`useThreadStatus`, `useThreadId`, etc). Kept temporarily as a safety
+// net during the migration; will be deleted once all consumers are
+// migrated.
 
-/** Subscribe to the active thread's status only. */
+/** @deprecated Use `useThreadStatus` from `@/stores/thread-context`. */
 export function useActiveThreadStatus() {
   return useThreadStore((s) => s.activeThread?.status ?? null);
 }
 
-/** Subscribe to the active thread's ID only. */
+/** @deprecated Use `useThreadId` from `@/stores/thread-context`. */
 export function useActiveThreadId() {
   return useThreadStore((s) => s.activeThread?.id ?? null);
 }
 
-/** Subscribe to the active thread's worktreePath only. */
+/** @deprecated Use `useThreadWorktreePath` from `@/stores/thread-context`. */
 export function useActiveThreadWorktreePath() {
   return useThreadStore((s) => s.activeThread?.worktreePath ?? null);
 }
 
-/** Subscribe to the active thread's projectId only. */
+/** @deprecated Use `useThreadProjectId` from `@/stores/thread-context`. */
 export function useActiveThreadProjectId() {
   return useThreadStore((s) => s.activeThread?.projectId ?? null);
 }
 
-/** Subscribe to the active thread's branch only. */
+/** @deprecated Use `useThreadBranch` from `@/stores/thread-context`. */
 export function useActiveThreadBranch() {
   return useThreadStore((s) => s.activeThread?.branch ?? null);
 }
 
-/**
- * Subscribe to the active thread's `initInfo`.
- *
- * Returns a stable reference: the previous value is kept unless the
- * underlying tools/cwd/model actually changed, avoiding re-renders from
- * unrelated `activeThread` updates.
- */
+/** @deprecated Use `useThreadInitInfo` from `@/stores/thread-context`. */
 export function useActiveInitInfo(): AgentInitInfo | undefined {
   const prevRef = useRef<AgentInitInfo | undefined>(undefined);
 
@@ -110,33 +106,22 @@ export function useActiveInitInfo(): AgentInitInfo | undefined {
   });
 }
 
-/** Subscribe to the active thread's messages array.
- *  Returns the same reference when the array hasn't changed, preventing
- *  downstream memo comparators from failing on status-only store updates. */
+/** @deprecated Use `useThreadMessages` from `@/stores/thread-context`. */
 export function useActiveMessages() {
   return useThreadStore((s) => s.activeThread?.messages ?? null);
 }
 
-/** Subscribe to the active thread's threadEvents array. */
+/** @deprecated Use `useThreadEvents` from `@/stores/thread-context`. */
 export function useActiveThreadEvents() {
   return useThreadStore((s) => s.activeThread?.threadEvents);
 }
 
-/** Subscribe to the active thread's compactionEvents array. */
+/** @deprecated Use `useCompactionEvents` from `@/stores/thread-context`. */
 export function useActiveCompactionEvents() {
   return useThreadStore((s) => s.activeThread?.compactionEvents);
 }
 
-/**
- * Subscribe to the active thread excluding messages/events arrays.
- *
- * During agent streaming, `messages` changes on every WS batch (~20×/sec).
- * This selector strips those high-churn arrays and uses `useShallow` so the
- * returned reference stays stable when only messages changed — preventing
- * the consumer from re-rendering on every batch.
- *
- * Pair with `useActiveMessages()` for message data.
- */
+/** @deprecated Use `useThreadCore` from `@/stores/thread-context`. */
 export function useActiveThreadCore(): ActiveThreadCore | null {
   return useThreadStore(
     useShallow((s) => {

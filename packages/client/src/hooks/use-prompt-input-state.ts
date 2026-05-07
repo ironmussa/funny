@@ -23,6 +23,7 @@ import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useDraftStore } from '@/stores/draft-store';
 import { useProfileStore } from '@/stores/profile-store';
 import { useProjectStore } from '@/stores/project-store';
+import { getThreadById, useThreadId, useThreadSelector } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 
 const queueLog = createClientLogger('PromptInputQueue');
@@ -62,7 +63,6 @@ interface UsePromptInputStateArgs {
   queuedCountProp: number;
   isNewThread: boolean;
   propProjectId?: string;
-  threadIdProp?: string | null;
   initialPromptProp?: string;
 }
 
@@ -81,14 +81,13 @@ export function usePromptInputState({
   queuedCountProp,
   isNewThread,
   propProjectId,
-  threadIdProp,
   initialPromptProp,
 }: UsePromptInputStateArgs) {
   const { t } = useTranslation();
 
-  // Read queuedCount directly from the store to avoid stale prop values.
-  // The prop may lag behind when ThreadView re-renders are deferred by memo().
-  const storeQueuedCount = useThreadStore((s) => s.activeThread?.queuedCount ?? 0);
+  // Read queuedCount via context — single-thread view resolves to activeThread,
+  // grid columns resolve to their column-local thread.
+  const storeQueuedCount = useThreadSelector((t) => t?.queuedCount ?? 0);
   const queuedCount = storeQueuedCount > 0 ? storeQueuedCount : queuedCountProp;
 
   // ── Project defaults ──
@@ -151,17 +150,15 @@ export function usePromptInputState({
     }
   }, [currentProvider, mode]);
 
-  // ── Active thread state ──
-  const activeThreadPermissionMode = useThreadStore((s) => s.activeThread?.permissionMode);
-  const activeThreadWorktreePath = useThreadStore((s) => s.activeThread?.worktreePath);
-  const activeThreadProvider = useThreadStore((s) => s.activeThread?.provider);
-  const activeThreadModel = useThreadStore((s) => s.activeThread?.model);
-  const activeThreadBranch = useThreadStore((s) =>
-    s.activeThread ? resolveThreadBranch(s.activeThread) : undefined,
-  );
-  const activeThreadBaseBranch = useThreadStore((s) => s.activeThread?.baseBranch);
-  const activeThreadContextTokens = useThreadStore(
-    (s) => s.activeThread?.contextUsage?.cumulativeInputTokens ?? 0,
+  // ── Active thread state (resolved via context) ──
+  const activeThreadPermissionMode = useThreadSelector((t) => t?.permissionMode);
+  const activeThreadWorktreePath = useThreadSelector((t) => t?.worktreePath);
+  const activeThreadProvider = useThreadSelector((t) => t?.provider);
+  const activeThreadModel = useThreadSelector((t) => t?.model);
+  const activeThreadBranch = useThreadSelector((t) => (t ? resolveThreadBranch(t) : undefined));
+  const activeThreadBaseBranch = useThreadSelector((t) => t?.baseBranch);
+  const activeThreadContextTokens = useThreadSelector(
+    (t) => t?.contextUsage?.cumulativeInputTokens ?? 0,
   );
   const contextMaxTokens =
     activeThreadProvider && activeThreadModel
@@ -456,8 +453,8 @@ export function usePromptInputState({
   }, [selectedProjectId, projects]);
 
   // ── Queue fetching ──
-  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
-  const effectiveThreadId = threadIdProp ?? selectedThreadId;
+  const contextThreadId = useThreadId();
+  const effectiveThreadId = contextThreadId;
   const lastQueueFetchRef = useRef<{ threadId: string; queuedCount: number } | null>(null);
   // Stable ref for effectiveThreadId — used by queue handlers and draft persistence
   // to avoid recreating callbacks on every thread switch.
@@ -555,7 +552,8 @@ export function usePromptInputState({
         // Sync the store's queuedCount with the server's authoritative value
         const newCount = result.value.queuedCount;
         const state = useThreadStore.getState();
-        const { queuedCountByThread, activeThread } = state;
+        const { queuedCountByThread } = state;
+        const thread = getThreadById(tid);
         const updatedMap =
           newCount > 0
             ? { ...queuedCountByThread, [tid]: newCount }
@@ -564,9 +562,9 @@ export function usePromptInputState({
                 return rest;
               })();
 
-        if (activeThread?.id === tid) {
+        if (thread && state.activeThread?.id === tid) {
           useThreadStore.setState({
-            activeThread: { ...activeThread, queuedCount: newCount },
+            activeThread: { ...state.activeThread, queuedCount: newCount },
             queuedCountByThread: updatedMap,
           });
         } else {

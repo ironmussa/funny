@@ -48,7 +48,7 @@ import { useProjectStore } from '@/stores/project-store';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { type TerminalShell, useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 import { useTerminalStore, type TerminalTab } from '@/stores/terminal-store';
-import { useThreadStore } from '@/stores/thread-store';
+import { useThreadWorktreePath } from '@/stores/thread-context';
 
 const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
 
@@ -1192,7 +1192,7 @@ export function TerminalPanel() {
   const panelVisible = selectedProjectId
     ? (panelVisibleByProject[selectedProjectId] ?? false)
     : false;
-  const activeThreadWorktreePath = useThreadStore((s) => s.activeThread?.worktreePath);
+  const activeThreadWorktreePath = useThreadWorktreePath();
   const availableShells = useSettingsStore((s) => s.availableShells);
   const fetchAvailableShells = useSettingsStore((s) => s.fetchAvailableShells);
 

@@ -9,7 +9,7 @@ import { api } from '@/lib/api';
 import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import { cn } from '@/lib/utils';
 import { useSettingsStore } from '@/stores/settings-store';
-import { useThreadStore } from '@/stores/thread-store';
+import { useThreadId } from '@/stores/thread-context';
 
 import { ExpandedDiffDialog } from './ExpandedDiffDialog';
 import {
@@ -90,7 +90,7 @@ export function EditFileCard({
   const oldString = parsed.old_string as string | undefined;
   const newString = parsed.new_string as string | undefined;
 
-  const threadId = useThreadStore((s) => s.activeThread?.id);
+  const threadId = useThreadId();
 
   const [expanded, setExpanded] = useState(true);
   const [showExpandedDiff, setShowExpandedDiff] = useState(false);

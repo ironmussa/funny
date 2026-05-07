@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 
 import { useProjectStore } from '@/stores/project-store';
-import { useThreadStore } from '@/stores/thread-store';
+import { useThreadProjectId, useThreadWorktreePath } from '@/stores/thread-context';
 
 export * from './format-utils';
 
@@ -9,8 +9,8 @@ export * from './format-utils';
  * Hook that returns the current thread's project path (for stripping from absolute file paths).
  */
 export function useCurrentProjectPath(): string | undefined {
-  const projectId = useThreadStore((s) => s.activeThread?.projectId);
-  const worktreePath = useThreadStore((s) => s.activeThread?.worktreePath);
+  const projectId = useThreadProjectId();
+  const worktreePath = useThreadWorktreePath();
   const projects = useProjectStore((s) => s.projects);
   return useMemo(
     () => worktreePath || projects.find((p) => p.id === projectId)?.path,

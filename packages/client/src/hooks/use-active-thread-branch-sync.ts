@@ -3,7 +3,7 @@ import { useEffect, useRef } from 'react';
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { createClientLogger } from '@/lib/client-logger';
 import { resolveThreadBranch } from '@/lib/utils';
-import { useActiveThreadCore } from '@/stores/thread-selectors';
+import { useThreadCore } from '@/stores/thread-context';
 
 const log = createClientLogger('useActiveThreadBranchSync');
 
@@ -19,7 +19,7 @@ const log = createClientLogger('useActiveThreadBranchSync');
  * directory and never need a project-level checkout.
  */
 export function useActiveThreadBranchSync() {
-  const activeThread = useActiveThreadCore();
+  const activeThread = useThreadCore();
   const { ensureBranch, branchSwitchDialog } = useBranchSwitch();
   const lastSyncedRef = useRef<string | null>(null);
 

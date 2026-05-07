@@ -322,31 +322,33 @@ export function App() {
             </div>
           )}
         </div>
+
+        {/* Global overlays — kept inside ThreadProvider so dialogs that read
+          thread context (e.g. FileSearchDialog → useThreadWorktreePath) work. */}
+        <Toaster position="bottom-right" duration={TOAST_DURATION} />
+        <WorkflowErrorModal />
+        <Suspense>
+          <CircuitBreakerDialog />
+        </Suspense>
+        <Suspense>
+          <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
+        </Suspense>
+        <Suspense>
+          <FileSearchDialog open={fileSearchOpen} onOpenChange={setFileSearchOpen} />
+        </Suspense>
+
+        {/* Internal Monaco Editor Dialog (global, lazy-loaded) */}
+        <Suspense>
+          <MonacoEditorDialog
+            open={internalEditorOpen}
+            onOpenChange={(open) => {
+              if (!open) useInternalEditorStore.getState().closeEditor();
+            }}
+            filePath={internalEditorFilePath || ''}
+            initialContent={internalEditorContent}
+          />
+        </Suspense>
       </ThreadProvider>
-
-      <Toaster position="bottom-right" duration={TOAST_DURATION} />
-      <WorkflowErrorModal />
-      <Suspense>
-        <CircuitBreakerDialog />
-      </Suspense>
-      <Suspense>
-        <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
-      </Suspense>
-      <Suspense>
-        <FileSearchDialog open={fileSearchOpen} onOpenChange={setFileSearchOpen} />
-      </Suspense>
-
-      {/* Internal Monaco Editor Dialog (global, lazy-loaded) */}
-      <Suspense>
-        <MonacoEditorDialog
-          open={internalEditorOpen}
-          onOpenChange={(open) => {
-            if (!open) useInternalEditorStore.getState().closeEditor();
-          }}
-          filePath={internalEditorFilePath || ''}
-          initialContent={internalEditorContent}
-        />
-      </Suspense>
     </SidebarProvider>
   );
 }

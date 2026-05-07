@@ -76,6 +76,9 @@ app.use(
     contentSecurityPolicy: {
       defaultSrc: ["'self'"],
       scriptSrc: ["'self'"],
+      // Monaco editor workers are bundled via Vite's `?worker` imports and
+      // served from same-origin in prod; dev builds may use blob: URLs.
+      workerSrc: ["'self'", 'blob:'],
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'blob:'],
       connectSrc: ["'self'", 'ws:', 'wss:'],

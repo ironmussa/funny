@@ -18,6 +18,7 @@ import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 
+import '@/lib/monaco-setup';
 import { MermaidBlock } from '@/components/MermaidBlock';
 import { Button } from '@/components/ui/button';
 import {

@@ -21,6 +21,7 @@ import {
   EllipsisVertical,
   Trash2,
   FolderOpen,
+  FolderTree,
   FlaskConical,
   Activity,
   Sparkles,
@@ -671,6 +672,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const setTestRunnerOpen = useUIStore((s) => s.setTestRunnerOpen);
   const testRunnerOpen = useUIStore((s) => s.testRunnerOpen);
+  const setFilesPaneOpen = useUIStore((s) => s.setFilesPaneOpen);
   const setActivityPaneOpen = useUIStore((s) => s.setActivityPaneOpen);
   const rightPaneTab = useUIStore((s) => s.rightPaneTab);
   const kanbanContext = useUIStore((s) => s.kanbanContext);
@@ -1048,6 +1050,35 @@ export const ProjectHeader = memo(function ProjectHeader() {
                 </Button>
               </TooltipTrigger>
               <TooltipContent>{t('tests.title', 'Tests')}</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() =>
+                    startTransition(() => {
+                      if (reviewPaneOpen && rightPaneTab === 'files') {
+                        setFilesPaneOpen(false);
+                        updatePanelParam(null);
+                      } else {
+                        setFilesPaneOpen(true);
+                        updatePanelParam('files');
+                      }
+                    })
+                  }
+                  data-testid="header-toggle-project-files"
+                  disabled={!projectId}
+                  className={
+                    reviewPaneOpen && rightPaneTab === 'files'
+                      ? 'text-foreground'
+                      : 'text-muted-foreground'
+                  }
+                >
+                  <FolderTree className="icon-base" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>{t('projectFiles.title', 'Project Files')}</TooltipContent>
             </Tooltip>
             {activeThreadId && <MoreActionsMenu />}
           </div>

@@ -70,6 +70,9 @@ const TestRunnerPane = lazy(() =>
 const ActivityPane = lazy(() =>
   import('@/components/ActivityPane').then((m) => ({ default: m.ActivityPane })),
 );
+const ProjectFilesPane = lazy(() =>
+  import('@/components/ProjectFilesPane').then((m) => ({ default: m.ProjectFilesPane })),
+);
 const TerminalPanel = lazy(() =>
   import('@/components/TerminalPanel').then((m) => ({ default: m.TerminalPanel })),
 );
@@ -318,7 +321,13 @@ export function App() {
               <div className="min-h-0 flex-1 overflow-hidden">
                 <ErrorBoundary area="right-pane">
                   <Suspense>
-                    {rightPaneTab === 'review' ? <ReviewPane /> : <ActivityPane />}
+                    {rightPaneTab === 'review' ? (
+                      <ReviewPane />
+                    ) : rightPaneTab === 'files' ? (
+                      <ProjectFilesPane />
+                    ) : (
+                      <ActivityPane />
+                    )}
                   </Suspense>
                 </ErrorBoundary>
               </div>

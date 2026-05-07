@@ -11,11 +11,7 @@ import { createClientLogger } from '@/lib/client-logger';
 import { emitContextUsage } from '@/lib/context-usage-events';
 import { buildPath } from '@/lib/url';
 
-import {
-  transitionThreadStatus,
-  getThreadActor,
-  wsEventToMachineEvent,
-} from './thread-machine-bridge';
+import { transitionThreadStatus, wsEventToMachineEvent } from './thread-machine-bridge';
 import { useThreadReadStore } from './thread-read-store';
 import {
   bufferWSEvent,
@@ -667,16 +663,13 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
         ...(data.stage ? { stage: data.stage } : {}),
       };
     } else {
-      const actor = getThreadActor(threadId, activeThread.status, activeThread.cost);
-      const snapshot = actor.getSnapshot();
-
       stateUpdate.activeThread = {
         ...activeThread,
         status: resultStatus,
         cost: data.cost ?? activeThread.cost,
         waitingReason: undefined,
         pendingPermission: undefined,
-        resultInfo: snapshot.context.resultInfo ?? {
+        resultInfo: {
           status: resultStatus as 'completed' | 'failed',
           cost: data.cost ?? activeThread.cost,
           duration: data.duration ?? 0,

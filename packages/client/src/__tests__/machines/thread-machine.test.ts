@@ -383,6 +383,122 @@ describe('threadMachine', () => {
       expect(actor.getSnapshot().value).toBe('failed');
       actor.stop();
     });
+
+    test('failed -> completed on late COMPLETE (context-recovery regression)', () => {
+      const actor = createThreadActor('failed');
+      expect(actor.getSnapshot().context.resultInfo?.status).toBe('failed');
+
+      actor.send({ type: 'COMPLETE', cost: 0.07, duration: 1500 });
+      expect(actor.getSnapshot().value).toBe('completed');
+      expect(actor.getSnapshot().context.resultInfo).toEqual({
+        status: 'completed',
+        cost: 0.07,
+        duration: 1500,
+      });
+      actor.stop();
+    });
+
+    test('failed -> failed on late FAIL refreshes resultInfo', () => {
+      const actor = createThreadActor('failed');
+      actor.send({ type: 'FAIL', cost: 0.05, duration: 800 });
+      expect(actor.getSnapshot().value).toBe('failed');
+      expect(actor.getSnapshot().context.resultInfo).toEqual({
+        status: 'failed',
+        cost: 0.05,
+        duration: 800,
+      });
+      actor.stop();
+    });
+
+    test('failed -> waiting on late WAIT clears resultInfo', () => {
+      const actor = createThreadActor('failed');
+      expect(actor.getSnapshot().context.resultInfo).toBeDefined();
+      actor.send({ type: 'WAIT', cost: 0.04, duration: 600 });
+      expect(actor.getSnapshot().value).toBe('waiting');
+      expect(actor.getSnapshot().context.resultInfo).toBeUndefined();
+      actor.stop();
+    });
+  });
+
+  describe('terminal-state late result events (regression)', () => {
+    test('completed -> failed on late FAIL', () => {
+      const actor = createThreadActor('completed');
+      actor.send({ type: 'FAIL', cost: 0.02, duration: 400 });
+      expect(actor.getSnapshot().value).toBe('failed');
+      expect(actor.getSnapshot().context.resultInfo?.status).toBe('failed');
+      actor.stop();
+    });
+
+    test('completed -> completed on late COMPLETE refreshes resultInfo', () => {
+      const actor = createThreadActor('completed');
+      actor.send({ type: 'COMPLETE', cost: 0.99, duration: 9999 });
+      expect(actor.getSnapshot().value).toBe('completed');
+      expect(actor.getSnapshot().context.resultInfo).toEqual({
+        status: 'completed',
+        cost: 0.99,
+        duration: 9999,
+      });
+      actor.stop();
+    });
+
+    test('completed -> waiting on late WAIT', () => {
+      const actor = createThreadActor('completed');
+      actor.send({ type: 'WAIT', cost: 0.01, duration: 100 });
+      expect(actor.getSnapshot().value).toBe('waiting');
+      expect(actor.getSnapshot().context.resultInfo).toBeUndefined();
+      actor.stop();
+    });
+
+    test('stopped -> completed on late COMPLETE', () => {
+      const actor = createThreadActor('stopped');
+      actor.send({ type: 'COMPLETE', cost: 0.1, duration: 1000 });
+      expect(actor.getSnapshot().value).toBe('completed');
+      expect(actor.getSnapshot().context.resultInfo?.status).toBe('completed');
+      actor.stop();
+    });
+
+    test('stopped -> failed on late FAIL', () => {
+      const actor = createThreadActor('stopped');
+      actor.send({ type: 'FAIL', cost: 0.01, duration: 200 });
+      expect(actor.getSnapshot().value).toBe('failed');
+      actor.stop();
+    });
+
+    test('interrupted -> completed on late COMPLETE', () => {
+      const actor = createThreadActor('interrupted');
+      actor.send({ type: 'COMPLETE', cost: 0.1, duration: 1000 });
+      expect(actor.getSnapshot().value).toBe('completed');
+      expect(actor.getSnapshot().context.resultInfo?.status).toBe('completed');
+      actor.stop();
+    });
+
+    test('interrupted -> waiting on late WAIT', () => {
+      const actor = createThreadActor('interrupted');
+      actor.send({ type: 'WAIT', cost: 0.02, duration: 300 });
+      expect(actor.getSnapshot().value).toBe('waiting');
+      actor.stop();
+    });
+
+    test('full bug repro: fail then late completed result yields fresh resultInfo', () => {
+      // Mirrors the production bug: a thread fails, runtime emits a fresh
+      // agent:result with status=completed (no preceding agent:status running),
+      // and the actor must absorb it instead of keeping the stale failed state.
+      const actor = createThreadActor();
+      actor.send({ type: 'START' });
+      actor.send({ type: 'FAIL', cost: 0.001, duration: 50, error: 'stale-session' });
+      expect(actor.getSnapshot().value).toBe('failed');
+      expect(actor.getSnapshot().context.resultInfo?.status).toBe('failed');
+
+      // Late result arrives without a START in between
+      actor.send({ type: 'COMPLETE', cost: 0.08, duration: 1200 });
+      expect(actor.getSnapshot().value).toBe('completed');
+      expect(actor.getSnapshot().context.resultInfo).toEqual({
+        status: 'completed',
+        cost: 0.08,
+        duration: 1200,
+      });
+      actor.stop();
+    });
   });
 
   describe('stopped transitions', () => {

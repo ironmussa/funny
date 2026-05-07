@@ -33,6 +33,11 @@ export type { ResumeReason };
  * - completed → running (FOLLOW_UP — new message after completion)
  * - interrupted → running (RESTART)
  *
+ * Terminal states (completed/failed/stopped/interrupted) ALSO accept
+ * COMPLETE/FAIL/WAIT to absorb late results from background runs that
+ * never emitted START first (e.g. context-recovery / fast-resume paths).
+ * Without this, a stale `resultInfo` would persist across new runs.
+ *
  * The `resumeReason` context field tells downstream code WHY we entered
  * the `running` state, so it can choose the right system prefix for the
  * Claude session resume.
@@ -263,6 +268,18 @@ export const threadMachine = setup({
         FOLLOW_UP: { target: 'running', actions: ['clearResultInfo', 'setResumeFollowUp'] },
         RESTART: { target: 'running', actions: ['clearResultInfo', 'setResumeFollowUp'] },
         START: { target: 'running', actions: ['clearResultInfo', 'setResumeFollowUp'] },
+        COMPLETE: {
+          target: 'completed',
+          actions: ['updateCost', 'setResultInfo', 'clearResumeReason'],
+        },
+        FAIL: {
+          target: 'failed',
+          actions: ['updateCost', 'setResultInfo', 'clearResumeReason'],
+        },
+        WAIT: {
+          target: 'waiting',
+          actions: ['updateCost', 'clearResultInfo', 'clearResumeReason'],
+        },
         STOP: { target: 'stopped', actions: 'clearResultInfo' },
         INTERRUPT: { target: 'interrupted', actions: 'clearResultInfo' },
         SET_STATUS: [
@@ -280,6 +297,18 @@ export const threadMachine = setup({
       on: {
         RESTART: { target: 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
         START: { target: 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
+        COMPLETE: {
+          target: 'completed',
+          actions: ['updateCost', 'setResultInfo', 'clearResumeReason'],
+        },
+        FAIL: {
+          target: 'failed',
+          actions: ['updateCost', 'setResultInfo', 'clearResumeReason'],
+        },
+        WAIT: {
+          target: 'waiting',
+          actions: ['updateCost', 'clearResultInfo', 'clearResumeReason'],
+        },
         SET_STATUS: [
           {
             target: 'running',
@@ -293,6 +322,18 @@ export const threadMachine = setup({
       on: {
         RESTART: { target: 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
         START: { target: 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
+        COMPLETE: {
+          target: 'completed',
+          actions: ['updateCost', 'setResultInfo', 'clearResumeReason'],
+        },
+        FAIL: {
+          target: 'failed',
+          actions: ['updateCost', 'setResultInfo', 'clearResumeReason'],
+        },
+        WAIT: {
+          target: 'waiting',
+          actions: ['updateCost', 'clearResultInfo', 'clearResumeReason'],
+        },
         SET_STATUS: [
           {
             target: 'running',
@@ -306,6 +347,18 @@ export const threadMachine = setup({
       on: {
         RESTART: { target: 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
         START: { target: 'running', actions: ['clearResultInfo', 'setResumeInterrupted'] },
+        COMPLETE: {
+          target: 'completed',
+          actions: ['updateCost', 'setResultInfo', 'clearResumeReason'],
+        },
+        FAIL: {
+          target: 'failed',
+          actions: ['updateCost', 'setResultInfo', 'clearResumeReason'],
+        },
+        WAIT: {
+          target: 'waiting',
+          actions: ['updateCost', 'clearResultInfo', 'clearResumeReason'],
+        },
         SET_STATUS: [
           {
             target: 'running',

@@ -37,9 +37,14 @@ export {
   EMOJI_OPTIONS,
 } from './plan-annotations';
 
-const LazyEditor = lazy(() =>
-  import('@monaco-editor/react').then((mod) => ({ default: mod.Editor })),
-);
+const LazyEditor = lazy(async () => {
+  // Side-effect import: configure Monaco workers + local ESM loader before
+  // the Editor component renders, so it never falls back to the CDN AMD
+  // loader that uses `new Function` (blocked by our strict CSP).
+  await import('@/lib/monaco-setup');
+  const mod = await import('@monaco-editor/react');
+  return { default: mod.Editor };
+});
 
 const LazyReactMarkdown = lazy(() => import('react-markdown'));
 

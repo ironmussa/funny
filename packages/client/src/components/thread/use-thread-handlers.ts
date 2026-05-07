@@ -10,11 +10,12 @@ import { createClientLogger } from '@/lib/client-logger';
 import { buildPath } from '@/lib/url';
 import { useProjectStore } from '@/stores/project-store';
 import { deriveToolLists, useSettingsStore } from '@/stores/settings-store';
+import type { ThreadCore } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 
 const log = createClientLogger('ThreadChatHandlers');
 
-type ActiveThread = NonNullable<ReturnType<typeof useThreadStore.getState>['activeThread']>;
+type ActiveThread = ThreadCore;
 
 export interface PendingSend {
   prompt: string;

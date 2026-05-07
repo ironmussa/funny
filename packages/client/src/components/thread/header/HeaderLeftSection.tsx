@@ -2,7 +2,6 @@ import { ArrowLeft, ExternalLink, FolderOpen } from 'lucide-react';
 import { startTransition, useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { useShallow } from 'zustand/react/shallow';
 
 import {
   Breadcrumb,
@@ -18,6 +17,7 @@ import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { buildPath } from '@/lib/url';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useProjectStore } from '@/stores/project-store';
+import { useThreadId, useThreadProjectId, useThreadSelector } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -207,21 +207,11 @@ function BackButtons({
 export function HeaderLeftSection() {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
-  const {
-    activeThreadId,
-    activeThreadProjectId,
-    activeThreadTitle,
-    activeThreadParentId,
-    activeThreadTemplateId,
-  } = useThreadStore(
-    useShallow((s) => ({
-      activeThreadId: s.activeThread?.id,
-      activeThreadProjectId: s.activeThread?.projectId,
-      activeThreadTitle: s.activeThread?.title,
-      activeThreadParentId: s.activeThread?.parentThreadId,
-      activeThreadTemplateId: s.activeThread?.agentTemplateId,
-    })),
-  );
+  const activeThreadId = useThreadId();
+  const activeThreadProjectId = useThreadProjectId();
+  const activeThreadTitle = useThreadSelector((tt) => tt?.title);
+  const activeThreadParentId = useThreadSelector((tt) => tt?.parentThreadId);
+  const activeThreadTemplateId = useThreadSelector((tt) => tt?.agentTemplateId);
   const activeTemplate = useAgentTemplateStore((s) =>
     activeThreadTemplateId
       ? s.templates.find((tpl) => tpl.id === activeThreadTemplateId)

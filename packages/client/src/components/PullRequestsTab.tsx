@@ -13,10 +13,10 @@ import { createClientLogger } from '@/lib/client-logger';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
 import {
-  useActiveThreadBranch,
-  useActiveThreadProjectId,
-  useActiveThreadWorktreePath,
-} from '@/stores/thread-selectors';
+  useThreadBranch,
+  useThreadProjectId,
+  useThreadWorktreePath,
+} from '@/stores/thread-context';
 
 import { PinnedPRCard } from './PinnedPRCard';
 import { PRDetailDialog } from './PRDetailDialog';
@@ -51,9 +51,9 @@ interface PullRequestsTabProps {
 export function PullRequestsTab({ visible }: PullRequestsTabProps) {
   const { t } = useTranslation();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const activeThreadProjectId = useActiveThreadProjectId();
-  const activeThreadBranch = useActiveThreadBranch();
-  const activeThreadWorktreePath = useActiveThreadWorktreePath();
+  const activeThreadProjectId = useThreadProjectId();
+  const activeThreadBranch = useThreadBranch();
+  const activeThreadWorktreePath = useThreadWorktreePath();
   const projectId = activeThreadProjectId ?? selectedProjectId;
 
   // Branch of the current thread (or project when no thread is active) —

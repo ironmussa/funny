@@ -255,7 +255,9 @@ describe('PromptInput', () => {
       ]),
     );
 
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} threadId="thread-1" queuedCount={2} />);
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} queuedCount={2} />, {
+      threadId: 'thread-1',
+    });
 
     await waitFor(() => {
       expect(screen.getByText('Primer follow-up')).toBeInTheDocument();
@@ -270,7 +272,9 @@ describe('PromptInput', () => {
       ]),
     );
 
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} threadId="thread-1" queuedCount={1} />);
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} queuedCount={1} />, {
+      threadId: 'thread-1',
+    });
 
     await waitFor(() => expect(screen.getByText('Texto original')).toBeInTheDocument());
 
@@ -299,7 +303,9 @@ describe('PromptInput', () => {
       ]),
     );
 
-    renderWithProviders(<PromptInput onSubmit={vi.fn()} threadId="thread-1" queuedCount={1} />);
+    renderWithProviders(<PromptInput onSubmit={vi.fn()} queuedCount={1} />, {
+      threadId: 'thread-1',
+    });
 
     await waitFor(() => expect(screen.getByText('Borrar este mensaje')).toBeInTheDocument());
 

@@ -13,6 +13,7 @@ import { toastError } from '@/lib/toast-error';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useGitStatusForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
+import { useThreadProjectId, useThreadSelector, useThreadStatus } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 
 interface LogEntry {
@@ -38,11 +39,9 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const projectModeId = !effectiveThreadId ? selectedProjectId : null;
   const hasGitContext = !!(effectiveThreadId || projectModeId);
 
-  const baseBranch = useThreadStore((s) => s.activeThread?.baseBranch);
-  const threadBranch = useThreadStore((s) =>
-    s.activeThread ? resolveThreadBranch(s.activeThread) : undefined,
-  );
-  const isAgentRunning = useThreadStore((s) => s.activeThread?.status === 'running');
+  const baseBranch = useThreadSelector((t) => t?.baseBranch);
+  const threadBranch = useThreadSelector((t) => (t ? resolveThreadBranch(t) : undefined));
+  const isAgentRunning = useThreadStatus() === 'running';
   const threadGitStatus = useGitStatusForThread(effectiveThreadId);
   const projectGitStatus = useGitStatusStore((s) =>
     projectModeId ? s.statusByProject[projectModeId] : undefined,
@@ -88,12 +87,12 @@ export function CommitHistoryTab({ visible }: CommitHistoryTabProps) {
   const [remoteUrl, setRemoteUrl] = useState<string | null | undefined>(undefined);
   const [publishDialogOpen, setPublishDialogOpen] = useState(false);
 
-  const threadProjectId = useThreadStore((s) => s.activeThread?.projectId);
+  const threadProjectId = useThreadProjectId();
   const projectBranch = useProjectStore((s) => {
     const pid = projectModeId ?? threadProjectId;
     return pid ? s.branchByProject[pid] : undefined;
   });
-  const isWorktreeMode = useThreadStore((s) => s.activeThread?.mode === 'worktree');
+  const isWorktreeMode = useThreadSelector((t) => t?.mode === 'worktree');
   const effectiveBranch = isWorktreeMode ? threadBranch : projectBranch;
 
   const gitContextKey = `${effectiveThreadId || projectModeId || ''}::${effectiveBranch ?? ''}`;

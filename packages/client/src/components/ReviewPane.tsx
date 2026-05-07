@@ -11,6 +11,12 @@ import { resolveThreadBranch } from '@/lib/utils';
 import { useGitStatusStore, useGitStatusForThread } from '@/stores/git-status-store';
 import { usePRDetail } from '@/stores/pr-detail-store';
 import { useProjectStore } from '@/stores/project-store';
+import {
+  useThreadProjectId,
+  useThreadSelector,
+  useThreadStatus,
+  useThreadWorktreePath,
+} from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore, type ReviewSubTab } from '@/stores/ui-store';
 
@@ -49,10 +55,8 @@ export function ReviewPane() {
   const hasGitContext = !!(effectiveThreadId || projectModeId);
   const gitContextKey = effectiveThreadId || projectModeId;
 
-  // Avoid calling useProjectStore.getState() inside a useThreadStore selector —
-  // it triggers "Cannot update a component while rendering" errors.
-  const worktreePath = useThreadStore((s) => s.activeThread?.worktreePath);
-  const threadProjectId = useThreadStore((s) => s.activeThread?.projectId);
+  const worktreePath = useThreadWorktreePath();
+  const threadProjectId = useThreadProjectId();
   const projectsForPath = useProjectStore((s) => s.projects);
   const basePath = useMemo(() => {
     if (worktreePath) return worktreePath;
@@ -61,14 +65,14 @@ export function ReviewPane() {
     return projectsForPath.find((p) => p.id === pid)?.path ?? '';
   }, [worktreePath, threadProjectId, selectedProjectId, projectsForPath]);
 
-  const isWorktree = useThreadStore((s) => s.activeThread?.mode === 'worktree');
-  const baseBranch = useThreadStore((s) => s.activeThread?.baseBranch);
+  const isWorktree = useThreadSelector((t) => t?.mode === 'worktree');
+  const baseBranch = useThreadSelector((t) => t?.baseBranch);
   // Worktree threads track their own branch; local threads share the project's
   // working directory, so their "current branch" is the project's branch.
-  const threadBranch = useThreadStore((s) => {
-    if (!s.activeThread) return undefined;
-    if (s.activeThread.mode !== 'worktree') return undefined;
-    return resolveThreadBranch(s.activeThread);
+  const threadBranch = useThreadSelector((t) => {
+    if (!t) return undefined;
+    if (t.mode !== 'worktree') return undefined;
+    return resolveThreadBranch(t);
   });
   const projectBranch = useProjectStore((s) => {
     const pid = projectModeId ?? threadProjectId;
@@ -76,7 +80,7 @@ export function ReviewPane() {
   });
   const currentBranch = threadBranch || projectBranch;
 
-  const isAgentRunning = useThreadStore((s) => s.activeThread?.status === 'running');
+  const isAgentRunning = useThreadStatus() === 'running';
   const threadGitStatus = useGitStatusForThread(effectiveThreadId);
   const projectGitStatus = useGitStatusStore((s) =>
     projectModeId ? s.statusByProject[projectModeId] : undefined,

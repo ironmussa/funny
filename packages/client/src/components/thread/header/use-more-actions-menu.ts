@@ -1,7 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
-import { useShallow } from 'zustand/react/shallow';
 
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
@@ -11,6 +10,14 @@ import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
 import { type Editor } from '@/stores/settings-store';
+import {
+  getThreadById,
+  useThreadId,
+  useThreadProjectId,
+  useThreadSelector,
+  useThreadStatus,
+  useThreadWorktreePath,
+} from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -24,29 +31,15 @@ import { threadToMarkdown } from './thread-to-markdown';
 export function useMoreActionsMenu() {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
-  const {
-    threadId,
-    threadProjectId,
-    threadTitle,
-    threadMode,
-    threadBranch,
-    threadPinned,
-    threadWorktreePath,
-    hasMessages,
-    threadStatus,
-  } = useThreadStore(
-    useShallow((s) => ({
-      threadId: s.activeThread?.id,
-      threadProjectId: s.activeThread?.projectId,
-      threadTitle: s.activeThread?.title,
-      threadMode: s.activeThread?.mode,
-      threadBranch: s.activeThread ? resolveThreadBranch(s.activeThread) : undefined,
-      threadPinned: s.activeThread?.pinned,
-      threadWorktreePath: s.activeThread?.worktreePath,
-      hasMessages: (s.activeThread?.messages?.length ?? 0) > 0,
-      threadStatus: s.activeThread?.status,
-    })),
-  );
+  const threadId = useThreadId();
+  const threadProjectId = useThreadProjectId();
+  const threadTitle = useThreadSelector((tt) => tt?.title);
+  const threadMode = useThreadSelector((tt) => tt?.mode);
+  const threadBranch = useThreadSelector((tt) => (tt ? resolveThreadBranch(tt) : undefined));
+  const threadPinned = useThreadSelector((tt) => tt?.pinned);
+  const threadWorktreePath = useThreadWorktreePath();
+  const hasMessages = useThreadSelector((tt) => (tt?.messages?.length ?? 0) > 0);
+  const threadStatus = useThreadStatus();
   const pinThread = useThreadStore((s) => s.pinThread);
   const project = useProjectStore((s) =>
     threadProjectId ? s.projects.find((p) => p.id === threadProjectId) : undefined,
@@ -101,22 +94,23 @@ export function useMoreActionsMenu() {
   );
 
   const handleDeleteConfirm = useCallback(async () => {
-    const state = useThreadStore.getState();
-    const id = state.activeThread?.id;
-    const projId = state.activeThread?.projectId;
-    const title = state.activeThread?.title;
-    if (!id || !projId) return;
+    if (!threadId) return;
+    const thread = getThreadById(threadId);
+    const projId = thread?.projectId;
+    const title = thread?.title;
+    if (!projId) return;
     setDeleteLoading(true);
-    await state.deleteThread(id, projId);
+    await useThreadStore.getState().deleteThread(threadId, projId);
     setDeleteLoading(false);
     setDeleteOpen(false);
     toast.success(t('toast.threadDeleted', { title }));
     navigate(buildPath(`/projects/${projId}`));
-  }, [navigate, t]);
+  }, [navigate, t, threadId]);
 
   const handleCopy = useCallback(
     (includeToolCalls: boolean) => {
-      const messages = useThreadStore.getState().activeThread?.messages;
+      if (!threadId) return;
+      const messages = getThreadById(threadId)?.messages;
       if (!messages?.length) return;
       const md = threadToMarkdown(messages, includeToolCalls);
       if (includeToolCalls) {
@@ -125,7 +119,7 @@ export function useMoreActionsMenu() {
         copyText(md);
       }
     },
-    [copyText, copyTools],
+    [copyText, copyTools, threadId],
   );
 
   const handleOpenInEditor = useCallback(

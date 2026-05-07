@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { useFileIndexStore } from '@/stores/file-index-store';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useProjectStore } from '@/stores/project-store';
-import { useActiveThreadWorktreePath } from '@/stores/thread-selectors';
+import { useThreadWorktreePath } from '@/stores/thread-context';
 
 const log = createClientLogger('file-search-dialog');
 
@@ -31,7 +31,7 @@ export function FileSearchDialog({ open, onOpenChange }: FileSearchDialogProps) 
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projects = useProjectStore((s) => s.projects);
   const project = projects.find((p) => p.id === selectedProjectId);
-  const worktreePath = useActiveThreadWorktreePath();
+  const worktreePath = useThreadWorktreePath();
   const basePath = worktreePath || project?.path;
 
   const ensureIndex = useFileIndexStore((s) => s.ensureIndex);

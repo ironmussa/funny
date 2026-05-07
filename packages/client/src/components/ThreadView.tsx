@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useProjectStore } from '@/stores/project-store';
-import { useActiveThreadCore } from '@/stores/thread-selectors';
+import { useThreadCore } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -20,7 +20,7 @@ export { WaitingActions } from '@/components/thread/WaitingCards';
 export function ThreadView() {
   const { t } = useTranslation();
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
-  const activeThread = useActiveThreadCore();
+  const activeThread = useThreadCore();
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);

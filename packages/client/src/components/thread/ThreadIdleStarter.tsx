@@ -6,13 +6,11 @@ import { PromptInput } from '@/components/PromptInput';
 import { ProjectHeader } from '@/components/thread/ProjectHeader';
 import { api } from '@/lib/api';
 import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
-import { useActiveMessages } from '@/stores/thread-selectors';
+import { useThreadMessages, type ThreadCore } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 
-type ActiveThread = NonNullable<ReturnType<typeof useThreadStore.getState>['activeThread']>;
-
 interface Props {
-  activeThread: ActiveThread;
+  activeThread: ThreadCore;
 }
 
 /**
@@ -25,7 +23,7 @@ interface Props {
  */
 export function ThreadIdleStarter({ activeThread }: Props) {
   const { t } = useTranslation();
-  const stableMessages = useActiveMessages();
+  const stableMessages = useThreadMessages();
   const [sending, setSending] = useState(false);
 
   const initialImages = (() => {
@@ -113,7 +111,6 @@ export function ThreadIdleStarter({ activeThread }: Props) {
             loading={sending}
             isNewThread
             projectId={activeThread.projectId}
-            threadId={activeThread.id}
             initialPrompt={activeThread.initialPrompt}
             initialImages={initialImages}
           />

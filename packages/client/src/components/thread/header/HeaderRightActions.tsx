@@ -10,7 +10,6 @@ import {
 import { startTransition, useCallback, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
-import { useShallow } from 'zustand/react/shallow';
 
 import { DiffStats } from '@/components/DiffStats';
 import { Button } from '@/components/ui/button';
@@ -22,7 +21,14 @@ import { cn } from '@/lib/utils';
 import { useGitStatusForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useTerminalStore } from '@/stores/terminal-store';
-import { useThreadStore } from '@/stores/thread-store';
+import {
+  useThreadBranch,
+  useThreadId,
+  useThreadProjectId,
+  useThreadSelector,
+  useThreadStatus,
+  useThreadWorktreePath,
+} from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 
 import { MoreActionsMenu } from './MoreActionsMenu';
@@ -49,23 +55,12 @@ export function HeaderRightActions() {
     },
     [location.pathname, location.search, navigate],
   );
-  const {
-    activeThreadId,
-    activeThreadProjectId,
-    activeThreadStage,
-    activeThreadStatus,
-    activeThreadWorktreePath,
-    activeThreadBranch,
-  } = useThreadStore(
-    useShallow((s) => ({
-      activeThreadId: s.activeThread?.id,
-      activeThreadProjectId: s.activeThread?.projectId,
-      activeThreadStage: s.activeThread?.stage,
-      activeThreadStatus: s.activeThread?.status,
-      activeThreadWorktreePath: s.activeThread?.worktreePath,
-      activeThreadBranch: s.activeThread?.branch,
-    })),
-  );
+  const activeThreadId = useThreadId();
+  const activeThreadProjectId = useThreadProjectId();
+  const activeThreadStage = useThreadSelector((t) => t?.stage);
+  const activeThreadStatus = useThreadStatus();
+  const activeThreadWorktreePath = useThreadWorktreePath();
+  const activeThreadBranch = useThreadBranch();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const project = useProjectStore((s) =>
     s.projects.find((p) => p.id === (activeThreadProjectId ?? selectedProjectId)),

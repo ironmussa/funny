@@ -20,7 +20,7 @@ import { createClientLogger } from '@/lib/client-logger';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useMediaPreviewStore } from '@/stores/media-preview-store';
 import { useProjectStore } from '@/stores/project-store';
-import { useThreadStore } from '@/stores/thread-store';
+import { useThreadWorktreePath } from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 
 const log = createClientLogger('project-files-pane');
@@ -60,7 +60,7 @@ export function ProjectFilesPane() {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projects = useProjectStore((s) => s.projects);
   const project = projects.find((p) => p.id === selectedProjectId);
-  const activeThreadWorktreePath = useThreadStore((s) => s.activeThread?.worktreePath);
+  const activeThreadWorktreePath = useThreadWorktreePath();
 
   const basePath = useMemo(() => {
     if (designViewDesignId && project?.path) {

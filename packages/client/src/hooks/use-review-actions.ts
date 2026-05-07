@@ -12,7 +12,7 @@ import { createClientLogger } from '@/lib/client-logger';
 import { toastError } from '@/lib/toast-error';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { deriveToolLists, useSettingsStore } from '@/stores/settings-store';
-import { useThreadStore } from '@/stores/thread-store';
+import { getThreadById } from '@/stores/thread-context';
 
 const log = createClientLogger('review-actions');
 
@@ -468,11 +468,12 @@ export function useReviewActions({
   }, [effectiveThreadId, baseBranch, setHasRebaseConflict, t]);
 
   const handleOpenInEditorConflict = useCallback(() => {
-    const worktreePath = useThreadStore.getState().activeThread?.worktreePath;
+    if (!effectiveThreadId) return;
+    const worktreePath = getThreadById(effectiveThreadId)?.worktreePath;
     if (!worktreePath) return;
     const editor = useSettingsStore.getState().defaultEditor;
     browseApi.openInEditor(worktreePath, editor);
-  }, []);
+  }, [effectiveThreadId]);
 
   // ── Network: pull / fetch ──
 

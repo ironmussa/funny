@@ -16,6 +16,7 @@ import { api } from '@/lib/api';
 import { resolveModelLabel } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
+import { useThreadSelector } from '@/stores/thread-context';
 import { selectLastMessage } from '@/stores/thread-selectors';
 
 interface Props {
@@ -27,7 +28,7 @@ interface Props {
 export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
   const { t } = useTranslation();
   const selectThread = useAppStore((s) => s.selectThread);
-  const activeThread = useAppStore((s) => s.activeThread);
+  const activeThread = useThreadSelector((t) => t);
   const [sending, setSending] = useState(false);
   const scrollViewportRef = useRef<HTMLDivElement>(null);
   const userHasScrolledUp = useRef(false);
@@ -327,7 +328,6 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
             onStop={handleStop}
             loading={sending}
             running={isRunning}
-            threadId={activeThread.id}
             placeholder={t('thread.nextPrompt')}
           />
         </>

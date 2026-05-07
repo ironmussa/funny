@@ -30,7 +30,6 @@ import { memo, useState, useEffect, useCallback, useRef, startTransition } from 
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
-import { useShallow } from 'zustand/react/shallow';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { DiffStats } from '@/components/DiffStats';
@@ -76,6 +75,14 @@ import { useGitStatusStore, useGitStatusForThread } from '@/stores/git-status-st
 import { useProjectStore } from '@/stores/project-store';
 import { editorLabels, type Editor } from '@/stores/settings-store';
 import { useTerminalStore } from '@/stores/terminal-store';
+import {
+  getThreadById,
+  useThreadId,
+  useThreadProjectId,
+  useThreadSelector,
+  useThreadStatus,
+  useThreadWorktreePath,
+} from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -110,27 +117,14 @@ function threadToMarkdown(messages: MessageWithToolCalls[], includeToolCalls: bo
 const MoreActionsMenu = memo(function MoreActionsMenu() {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
-  const {
-    threadId,
-    threadProjectId,
-    threadTitle,
-    threadMode,
-    threadBranch,
-    threadPinned,
-    threadStage,
-    hasMessages,
-  } = useThreadStore(
-    useShallow((s) => ({
-      threadId: s.activeThread?.id,
-      threadProjectId: s.activeThread?.projectId,
-      threadTitle: s.activeThread?.title,
-      threadMode: s.activeThread?.mode,
-      threadBranch: s.activeThread ? resolveThreadBranch(s.activeThread) : undefined,
-      threadPinned: s.activeThread?.pinned,
-      threadStage: s.activeThread?.stage,
-      hasMessages: (s.activeThread?.messages?.length ?? 0) > 0,
-    })),
-  );
+  const threadId = useThreadId();
+  const threadProjectId = useThreadProjectId();
+  const threadTitle = useThreadSelector((t) => t?.title);
+  const threadMode = useThreadSelector((t) => t?.mode);
+  const threadBranch = useThreadSelector((t) => (t ? resolveThreadBranch(t) : undefined));
+  const threadPinned = useThreadSelector((t) => t?.pinned);
+  const threadStage = useThreadSelector((t) => t?.stage);
+  const hasMessages = useThreadSelector((t) => (t?.messages?.length ?? 0) > 0);
   const pinThread = useThreadStore((s) => s.pinThread);
   const updateThreadStage = useThreadStore((s) => s.updateThreadStage);
   const timelineVisible = useUIStore((s) => s.timelineVisible);
@@ -146,7 +140,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const isWorktree = threadMode === 'worktree' && !!threadBranch;
-  const threadStatus = useThreadStore((s) => s.activeThread?.status);
+  const threadStatus = useThreadStatus();
   const isBusy = threadStatus === 'running' || threadStatus === 'setting_up';
   const canConvertToWorktree = threadMode !== 'worktree' && !isBusy;
 
@@ -210,22 +204,23 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
   }, [branchName, threadProjectId, threadId]);
 
   const handleDeleteConfirm = useCallback(async () => {
-    const state = useThreadStore.getState();
-    const id = state.activeThread?.id;
-    const projId = state.activeThread?.projectId;
-    const title = state.activeThread?.title;
-    if (!id || !projId) return;
+    if (!threadId) return;
+    const thread = getThreadById(threadId);
+    const projId = thread?.projectId;
+    const title = thread?.title;
+    if (!projId) return;
     setDeleteLoading(true);
-    await state.deleteThread(id, projId);
+    await useThreadStore.getState().deleteThread(threadId, projId);
     setDeleteLoading(false);
     setDeleteOpen(false);
     toast.success(t('toast.threadDeleted', { title }));
     navigate(buildPath(`/projects/${projId}`));
-  }, [navigate, t]);
+  }, [navigate, t, threadId]);
 
   const handleCopy = useCallback(
     (includeToolCalls: boolean) => {
-      const messages = useThreadStore.getState().activeThread?.messages;
+      if (!threadId) return;
+      const messages = getThreadById(threadId)?.messages;
       if (!messages?.length) return;
       const md = threadToMarkdown(messages, includeToolCalls);
       if (includeToolCalls) {
@@ -234,7 +229,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
         copyText(md);
       }
     },
-    [copyText, copyTools],
+    [copyText, copyTools, threadId],
   );
 
   return (
@@ -606,25 +601,13 @@ export const ProjectHeader = memo(function ProjectHeader() {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
   const location = useLocation();
-  const {
-    activeThreadId,
-    activeThreadProjectId,
-    activeThreadTitle,
-    activeThreadStatus,
-    activeThreadWorktreePath,
-    activeThreadParentId,
-    activeThreadTemplateId,
-  } = useThreadStore(
-    useShallow((s) => ({
-      activeThreadId: s.activeThread?.id,
-      activeThreadProjectId: s.activeThread?.projectId,
-      activeThreadTitle: s.activeThread?.title,
-      activeThreadStatus: s.activeThread?.status,
-      activeThreadWorktreePath: s.activeThread?.worktreePath,
-      activeThreadParentId: s.activeThread?.parentThreadId,
-      activeThreadTemplateId: s.activeThread?.agentTemplateId,
-    })),
-  );
+  const activeThreadId = useThreadId();
+  const activeThreadProjectId = useThreadProjectId();
+  const activeThreadTitle = useThreadSelector((t) => t?.title);
+  const activeThreadStatus = useThreadStatus();
+  const activeThreadWorktreePath = useThreadWorktreePath();
+  const activeThreadParentId = useThreadSelector((t) => t?.parentThreadId);
+  const activeThreadTemplateId = useThreadSelector((t) => t?.agentTemplateId);
   const activeTemplate = useAgentTemplateStore((s) =>
     activeThreadTemplateId ? s.templates.find((t) => t.id === activeThreadTemplateId) : undefined,
   );

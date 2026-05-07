@@ -16,7 +16,8 @@ import { TOAST_DURATION } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useProjectStore } from '@/stores/project-store';
-import { setAppNavigate } from '@/stores/thread-store';
+import { ThreadProvider } from '@/stores/thread-context';
+import { setAppNavigate, useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 const AppSidebar = lazy(() =>
@@ -147,6 +148,7 @@ export function App() {
   const internalEditorOpen = useInternalEditorStore((s) => s.isOpen);
   const internalEditorFilePath = useInternalEditorStore((s) => s.filePath);
   const internalEditorContent = useInternalEditorStore((s) => s.initialContent);
+  const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const navigate = useNavigate();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
@@ -246,119 +248,123 @@ export function App() {
       </ErrorBoundary>
       <CollapsedSidebarStrip />
 
-      <div className="flex min-h-0 flex-1 overflow-hidden" data-testid="main-panel-group">
-        {/* Center panel — main content + terminal */}
-        <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-          <SidebarInset className="flex h-full flex-col overflow-hidden">
-            <div className="flex min-h-0 flex-1 overflow-hidden">
-              <ErrorBoundary area="main-content">
-                <Suspense>
-                  {generalSettingsOpen ? (
-                    <GeneralSettingsView />
-                  ) : settingsOpen ? (
-                    <SettingsDetailView />
-                  ) : analyticsOpen ? (
-                    <AnalyticsView />
-                  ) : liveColumnsOpen ? (
-                    <LiveColumnsView />
-                  ) : testRunnerOpen ? (
-                    <TestRunnerPane />
-                  ) : automationInboxOpen ? (
-                    <AutomationInboxView />
-                  ) : addProjectOpen ? (
-                    <AddProjectView />
-                  ) : allThreadsProjectId ? (
-                    <AllThreadsView />
-                  ) : (
-                    <ThreadView />
-                  )}
-                </Suspense>
-              </ErrorBoundary>
-            </div>
-
-            <Suspense>
-              {!(
-                generalSettingsOpen ||
-                settingsOpen ||
-                analyticsOpen ||
-                liveColumnsOpen ||
-                testRunnerOpen ||
-                automationInboxOpen ||
-                addProjectOpen
-              ) && <TerminalPanel />}
-            </Suspense>
-          </SidebarInset>
-        </div>
-
-        {/* Resize handle between center and right pane — only when right pane is shown */}
-        {rightPaneVisible && (
-          <ResizeHandle
-            direction="horizontal"
-            resizing={resizing}
-            onPointerDown={handlePointerDown}
-            onPointerMove={handlePointerMove}
-            onPointerUp={handlePointerUp}
-            data-testid="right-pane-resize-handle"
-          />
-        )}
-
-        {/* Right panel — Review / Tasks / Activity. Outer takes flex width so
-            the center column compresses; inner is anchored to the right edge
-            so the content visually slides in from the right as the outer
-            expands (and slides out to the right when closing). */}
-        {!isFullScreenView && (reviewPaneReady || reviewPaneOpen) && (
-          <div
-            className={cn(
-              'relative min-w-0 flex-shrink-0 overflow-hidden bg-sidebar',
-              !resizing && 'transition-[width] duration-200 ease-linear',
-            )}
-            style={{ width: rightPaneVisible ? `${reviewPaneWidth}vw` : '0vw' }}
-          >
-            <div
-              className="absolute inset-y-0 right-0 flex"
-              style={{ width: `${reviewPaneWidth}vw` }}
-            >
-              <div className="min-h-0 flex-1 overflow-hidden">
-                <ErrorBoundary area="right-pane">
+      <ThreadProvider threadId={selectedThreadId} source="active">
+        <div className="flex min-h-0 flex-1 overflow-hidden" data-testid="main-panel-group">
+          {/* Center panel — main content + terminal */}
+          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+            <SidebarInset className="flex h-full flex-col overflow-hidden">
+              <div className="flex min-h-0 flex-1 overflow-hidden">
+                <ErrorBoundary area="main-content">
                   <Suspense>
-                    {rightPaneTab === 'review' ? (
-                      <ReviewPane />
-                    ) : rightPaneTab === 'files' ? (
-                      <ProjectFilesPane />
+                    {generalSettingsOpen ? (
+                      <GeneralSettingsView />
+                    ) : settingsOpen ? (
+                      <SettingsDetailView />
+                    ) : analyticsOpen ? (
+                      <AnalyticsView />
+                    ) : liveColumnsOpen ? (
+                      <LiveColumnsView />
+                    ) : testRunnerOpen ? (
+                      <TestRunnerPane />
+                    ) : automationInboxOpen ? (
+                      <AutomationInboxView />
+                    ) : addProjectOpen ? (
+                      <AddProjectView />
+                    ) : allThreadsProjectId ? (
+                      <AllThreadsView />
                     ) : (
-                      <ActivityPane />
+                      <ThreadView />
                     )}
                   </Suspense>
                 </ErrorBoundary>
               </div>
-            </div>
+
+              <Suspense>
+                {!(
+                  generalSettingsOpen ||
+                  settingsOpen ||
+                  analyticsOpen ||
+                  liveColumnsOpen ||
+                  testRunnerOpen ||
+                  automationInboxOpen ||
+                  addProjectOpen
+                ) && <TerminalPanel />}
+              </Suspense>
+            </SidebarInset>
           </div>
-        )}
-      </div>
 
-      <Toaster position="bottom-right" duration={TOAST_DURATION} />
-      <WorkflowErrorModal />
-      <Suspense>
-        <CircuitBreakerDialog />
-      </Suspense>
-      <Suspense>
-        <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
-      </Suspense>
-      <Suspense>
-        <FileSearchDialog open={fileSearchOpen} onOpenChange={setFileSearchOpen} />
-      </Suspense>
+          {/* Resize handle between center and right pane — only when right pane is shown */}
+          {rightPaneVisible && (
+            <ResizeHandle
+              direction="horizontal"
+              resizing={resizing}
+              onPointerDown={handlePointerDown}
+              onPointerMove={handlePointerMove}
+              onPointerUp={handlePointerUp}
+              data-testid="right-pane-resize-handle"
+            />
+          )}
 
-      {/* Internal Monaco Editor Dialog (global, lazy-loaded) */}
-      <Suspense>
-        <MonacoEditorDialog
-          open={internalEditorOpen}
-          onOpenChange={(open) => {
-            if (!open) useInternalEditorStore.getState().closeEditor();
-          }}
-          filePath={internalEditorFilePath || ''}
-          initialContent={internalEditorContent}
-        />
-      </Suspense>
+          {/* Right panel — Review / Tasks / Activity. Outer takes flex width so
+              the center column compresses; inner is anchored to the right edge
+              so the content visually slides in from the right as the outer
+              expands (and slides out to the right when closing). */}
+          {!isFullScreenView && (reviewPaneReady || reviewPaneOpen) && (
+            <div
+              className={cn(
+                'relative min-w-0 flex-shrink-0 overflow-hidden bg-sidebar',
+                !resizing && 'transition-[width] duration-200 ease-linear',
+              )}
+              style={{ width: rightPaneVisible ? `${reviewPaneWidth}vw` : '0vw' }}
+            >
+              <div
+                className="absolute inset-y-0 right-0 flex"
+                style={{ width: `${reviewPaneWidth}vw` }}
+              >
+                <div className="min-h-0 flex-1 overflow-hidden">
+                  <ErrorBoundary area="right-pane">
+                    <Suspense>
+                      {rightPaneTab === 'review' ? (
+                        <ReviewPane />
+                      ) : rightPaneTab === 'files' ? (
+                        <ProjectFilesPane />
+                      ) : (
+                        <ActivityPane />
+                      )}
+                    </Suspense>
+                  </ErrorBoundary>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Global overlays — kept inside ThreadProvider so dialogs that read
+          thread context (e.g. FileSearchDialog → useThreadWorktreePath) work. */}
+        <Toaster position="bottom-right" duration={TOAST_DURATION} />
+        <WorkflowErrorModal />
+        <Suspense>
+          <CircuitBreakerDialog />
+        </Suspense>
+        <Suspense>
+          <CommandPalette open={commandPaletteOpen} onOpenChange={setCommandPaletteOpen} />
+        </Suspense>
+        <Suspense>
+          <FileSearchDialog open={fileSearchOpen} onOpenChange={setFileSearchOpen} />
+        </Suspense>
+
+        {/* Internal Monaco Editor Dialog (global, lazy-loaded) */}
+        <Suspense>
+          <MonacoEditorDialog
+            open={internalEditorOpen}
+            onOpenChange={(open) => {
+              if (!open) useInternalEditorStore.getState().closeEditor();
+            }}
+            filePath={internalEditorFilePath || ''}
+            initialContent={internalEditorContent}
+          />
+        </Suspense>
+      </ThreadProvider>
     </SidebarProvider>
   );
 }

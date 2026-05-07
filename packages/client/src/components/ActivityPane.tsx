@@ -29,7 +29,13 @@ import { parseDiffOld, parseDiffNew } from '@/lib/diff-parse';
 import { cn } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
 import { useReviewPaneStore } from '@/stores/review-pane-store';
-import { useThreadStore } from '@/stores/thread-store';
+import {
+  useThreadId,
+  useThreadMessages,
+  useThreadProjectId,
+  useThreadStatus,
+  useThreadWorktreePath,
+} from '@/stores/thread-context';
 import { useUIStore } from '@/stores/ui-store';
 
 import { ExpandedDiffView } from './tool-cards/ExpandedDiffDialog';
@@ -59,9 +65,9 @@ interface RunningAgent {
 /** Only returns active sub-agents (Task tool calls without output). */
 function useRunningAgents(): RunningAgent[] {
   const prevRef = useRef<RunningAgent[]>([]);
+  const messages = useThreadMessages();
 
-  const agents = useThreadStore((s) => {
-    const messages = s.activeThread?.messages;
+  const agents = useMemo<RunningAgent[]>(() => {
     if (!messages) {
       if (prevRef.current.length === 0) return prevRef.current;
       prevRef.current = [];
@@ -108,7 +114,7 @@ function useRunningAgents(): RunningAgent[] {
     }
     prevRef.current = running;
     return running;
-  });
+  }, [messages]);
 
   return agents;
 }
@@ -119,8 +125,8 @@ function useRunningAgents(): RunningAgent[] {
  * so it returns complete results regardless of message pagination limits.
  */
 function useThreadTouchedPaths(): Set<string> {
-  const threadId = useThreadStore((s) => s.activeThread?.id);
-  const isRunning = useThreadStore((s) => s.activeThread?.status === 'running');
+  const threadId = useThreadId();
+  const isRunning = useThreadStatus() === 'running';
   const [paths, setPaths] = useState<Set<string>>(EMPTY_SET);
   const prevRef = useRef<Set<string>>(EMPTY_SET);
   const prevThreadIdRef = useRef<string | undefined>(undefined);
@@ -192,7 +198,7 @@ function useThreadTouchedPaths(): Set<string> {
 }
 
 function useActivityFiles() {
-  const threadId = useThreadStore((s) => s.activeThread?.id);
+  const threadId = useThreadId();
   const dirtySignal = useReviewPaneStore((s) => s.dirtySignal);
   const touchedPaths = useThreadTouchedPaths();
   const [files, setFiles] = useState<FileDiffSummary[]>([]);
@@ -406,7 +412,7 @@ export function ActivityPane() {
   // Agents & todos grouped by agent
   const runningAgents = useRunningAgents();
   const agentTodos = useTodoSnapshotsByAgent();
-  const isThreadRunning = useThreadStore((s) => s.activeThread?.status === 'running');
+  const isThreadRunning = useThreadStatus() === 'running';
 
   // Show main agent card when thread is running or when it has todos
   const showMainAgent = isThreadRunning || agentTodos.mainAgent !== null;
@@ -419,7 +425,7 @@ export function ActivityPane() {
   const [diffCache, setDiffCache] = useState<Map<string, string>>(new Map());
   const [loadingDiff, setLoadingDiff] = useState<string | null>(null);
 
-  const threadId = useThreadStore((s) => s.activeThread?.id);
+  const threadId = useThreadId();
 
   // Reset diff state when switching threads
   const prevMainThreadRef = useRef(threadId);
@@ -433,13 +439,14 @@ export function ActivityPane() {
     }
   }, [threadId]);
 
-  const basePath = useThreadStore((s) => {
-    const wt = s.activeThread?.worktreePath;
+  const wt = useThreadWorktreePath();
+  const pid = useThreadProjectId();
+  const projects = useProjectStore((s) => s.projects);
+  const basePath = useMemo(() => {
     if (wt) return wt;
-    const pid = s.activeThread?.projectId;
     if (!pid) return '';
-    return useProjectStore.getState().projects.find((p) => p.id === pid)?.path ?? '';
-  });
+    return projects.find((p) => p.id === pid)?.path ?? '';
+  }, [wt, pid, projects]);
 
   const loadDiffForFile = useCallback(
     async (filePath: string) => {

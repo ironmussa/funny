@@ -15,16 +15,17 @@ import { useImageLightbox } from '@/hooks/use-image-lightbox';
 import { useTodoSnapshots } from '@/hooks/use-todo-panel';
 import { useProjectStore } from '@/stores/project-store';
 import {
-  useActiveCompactionEvents,
-  useActiveMessages,
-  useActiveThreadEvents,
-} from '@/stores/thread-selectors';
+  useCompactionEvents,
+  useThreadEvents,
+  useThreadMessages,
+  type ThreadCore,
+} from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { useThreadHandlers, type PendingSend } from './use-thread-handlers';
 
-type ActiveThread = NonNullable<ReturnType<typeof useThreadStore.getState>['activeThread']>;
+type ActiveThread = ThreadCore;
 
 function useThreadSearch(
   activeThreadId: string | null,
@@ -185,9 +186,9 @@ interface Props {
 
 export function ThreadChatView({ activeThread }: Props) {
   const { t } = useTranslation();
-  const stableMessages = useActiveMessages();
-  const stableThreadEvents = useActiveThreadEvents();
-  const stableCompactionEvents = useActiveCompactionEvents();
+  const stableMessages = useThreadMessages();
+  const stableThreadEvents = useThreadEvents();
+  const stableCompactionEvents = useCompactionEvents();
   const timelineVisible = useUIStore((s) => s.timelineVisible);
   const loadOlderMessages = useThreadStore((s) => s.loadOlderMessages);
   const hasMore = activeThread.hasMore ?? false;
@@ -311,7 +312,6 @@ export function ThreadChatView({ activeThread }: Props) {
                   onStop={handleStop}
                   loading={sending}
                   running={isRunning && !isExternal}
-                  threadId={activeThread.id}
                   isQueueMode={isQueueMode}
                   queuedCount={activeThread.queuedCount ?? 0}
                   queuedNextMessage={activeThread.queuedNextMessage}

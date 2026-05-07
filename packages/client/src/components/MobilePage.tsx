@@ -9,6 +9,7 @@ import { Toaster } from '@/components/ui/sonner';
 import { useWS } from '@/hooks/use-ws';
 import { TOAST_DURATION } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
+import { ThreadProvider } from '@/stores/thread-context';
 
 type MobileView =
   | { screen: 'projects' }
@@ -57,20 +58,24 @@ export function MobilePage() {
           />
         )}
         {view.screen === 'newThread' && (
-          <NewThreadView
-            projectId={view.projectId}
-            onBack={() => setView({ screen: 'threads', projectId: view.projectId })}
-            onCreated={(threadId) =>
-              setView({ screen: 'chat', projectId: view.projectId, threadId })
-            }
-          />
+          <ThreadProvider threadId={null} source="active">
+            <NewThreadView
+              projectId={view.projectId}
+              onBack={() => setView({ screen: 'threads', projectId: view.projectId })}
+              onCreated={(threadId) =>
+                setView({ screen: 'chat', projectId: view.projectId, threadId })
+              }
+            />
+          </ThreadProvider>
         )}
         {view.screen === 'chat' && (
-          <ChatView
-            projectId={view.projectId}
-            threadId={view.threadId}
-            onBack={() => setView({ screen: 'threads', projectId: view.projectId })}
-          />
+          <ThreadProvider threadId={view.threadId} source="active">
+            <ChatView
+              projectId={view.projectId}
+              threadId={view.threadId}
+              onBack={() => setView({ screen: 'threads', projectId: view.projectId })}
+            />
+          </ThreadProvider>
         )}
       </div>
       <Toaster position="top-center" duration={TOAST_DURATION} />

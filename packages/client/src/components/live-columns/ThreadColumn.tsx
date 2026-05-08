@@ -9,13 +9,12 @@ import { toast } from 'sonner';
 import { PromptInput } from '@/components/PromptInput';
 import { EMPTY_MESSAGES } from '@/components/thread/MemoizedMessageList';
 import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
-import { ThreadPowerline } from '@/components/ThreadPowerline';
+import { ProjectHeader } from '@/components/thread/ProjectHeader';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
 import { statusConfig } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
-import { useProjectStore } from '@/stores/project-store';
 import { deriveToolLists, useSettingsStore } from '@/stores/settings-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
@@ -36,7 +35,6 @@ export const ThreadColumn = memo(function ThreadColumn({
 }: Props) {
   const { t } = useTranslation();
   const streamRef = useRef<MessageStreamHandle>(null);
-  const projects = useProjectStore((s) => s.projects);
   const prefersReducedMotion = useReducedMotion();
 
   const columnRef = useRef<HTMLDivElement>(null);
@@ -109,13 +107,6 @@ export const ThreadColumn = memo(function ThreadColumn({
       onDrop: () => setIsDragging(false),
     });
   }, [threadId, loading]);
-
-  const threadProjectId = thread?.projectId;
-  const threadProject = useMemo(() => {
-    if (!threadProjectId) return null;
-    return projects.find((p) => p.id === threadProjectId) ?? null;
-  }, [threadProjectId, projects]);
-  const projectName = threadProject?.name ?? '';
 
   const [sending, setSending] = useState(false);
 
@@ -243,33 +234,30 @@ export const ThreadColumn = memo(function ThreadColumn({
         )}
         data-testid={`grid-column-${threadId}`}
       >
-        <div
-          ref={dragHandleRef}
-          className="flex-shrink-0 cursor-grab select-none border-b border-border bg-sidebar/50 px-3 py-2 transition-colors hover:bg-sidebar/80 active:cursor-grabbing"
-        >
-          <div className="flex min-w-0 items-center gap-2">
-            <GripVertical className="icon-xs shrink-0 cursor-grab text-muted-foreground active:cursor-grabbing" />
-            <StatusIcon className={cn('icon-sm shrink-0', statusClass)} />
-            <span className="flex-1 truncate text-sm font-medium" title={thread.title}>
-              {thread.title}
-            </span>
-            {onRemove && (
-              <TooltipIconButton
-                tooltip={t('live.removeFromGrid', 'Remove from grid')}
-                onClick={onRemove}
-                className="h-5 w-5 shrink-0 opacity-0 transition-opacity group-hover/col:opacity-100"
-                data-testid={`grid-remove-${threadId}`}
-              >
-                <X className="icon-xs" />
-              </TooltipIconButton>
-            )}
-          </div>
-          <ThreadPowerline
-            thread={thread}
-            projectName={projectName}
-            projectColor={threadProject?.color}
-            className="mt-1"
-            data-testid={`grid-column-powerline-${threadId}`}
+        <div ref={dragHandleRef} className="flex-shrink-0 cursor-grab active:cursor-grabbing">
+          <ProjectHeader
+            hideFiles
+            hideTests
+            hideStartup
+            hideTerminal
+            leading={
+              <>
+                <GripVertical className="icon-xs shrink-0 text-muted-foreground" />
+                <StatusIcon className={cn('icon-sm shrink-0', statusClass)} />
+              </>
+            }
+            trailing={
+              onRemove ? (
+                <TooltipIconButton
+                  tooltip={t('live.removeFromGrid', 'Remove from grid')}
+                  onClick={onRemove}
+                  className="h-5 w-5 shrink-0 opacity-0 transition-opacity group-hover/col:opacity-100"
+                  data-testid={`grid-remove-${threadId}`}
+                >
+                  <X className="icon-xs" />
+                </TooltipIconButton>
+              ) : undefined
+            }
           />
         </div>
 

@@ -21,11 +21,15 @@ export const automationRoutes = new Hono<ServerEnv>();
 
 // GET /api/automations/inbox?projectId=xxx&triageStatus=xxx — must be before /:id
 automationRoutes.get('/inbox', async (c) => {
+  const userId = c.get('userId') as string | undefined;
+  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+
   const projectId = c.req.query('projectId');
   const triageStatus = c.req.query('triageStatus');
 
   const conditions: ReturnType<typeof eq>[] = [
     or(eq(automationRuns.status, 'completed'), eq(automationRuns.status, 'failed')) as any,
+    eq(automations.userId, userId),
   ];
 
   if (triageStatus) {
@@ -75,10 +79,13 @@ automationRoutes.get('/', async (c) => {
 
 // GET /api/automations/:id
 automationRoutes.get('/:id', async (c) => {
+  const userId = c.get('userId') as string | undefined;
+  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+
   const rows = await db
     .select()
     .from(automations)
-    .where(eq(automations.id, c.req.param('id')));
+    .where(and(eq(automations.id, c.req.param('id')), eq(automations.userId, userId)));
 
   if (!rows[0]) return c.json({ error: 'Not found' }, 404);
   return c.json(rows[0]);
@@ -119,8 +126,14 @@ automationRoutes.post('/', async (c) => {
 
 // PATCH /api/automations/:id
 automationRoutes.patch('/:id', async (c) => {
+  const userId = c.get('userId') as string | undefined;
+  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+
   const id = c.req.param('id');
-  const rows = await db.select().from(automations).where(eq(automations.id, id));
+  const rows = await db
+    .select()
+    .from(automations)
+    .where(and(eq(automations.id, id), eq(automations.userId, userId)));
   if (!rows[0]) return c.json({ error: 'Not found' }, 404);
 
   const body = await c.req.json();
@@ -147,8 +160,14 @@ automationRoutes.patch('/:id', async (c) => {
 
 // DELETE /api/automations/:id
 automationRoutes.delete('/:id', async (c) => {
+  const userId = c.get('userId') as string | undefined;
+  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+
   const id = c.req.param('id');
-  const rows = await db.select().from(automations).where(eq(automations.id, id));
+  const rows = await db
+    .select()
+    .from(automations)
+    .where(and(eq(automations.id, id), eq(automations.userId, userId)));
   if (!rows[0]) return c.json({ error: 'Not found' }, 404);
 
   await db.delete(automations).where(eq(automations.id, id));
@@ -162,10 +181,20 @@ automationRoutes.post('/:id/trigger', proxyToRunner);
 
 // GET /api/automations/:id/runs
 automationRoutes.get('/:id/runs', async (c) => {
+  const userId = c.get('userId') as string | undefined;
+  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+
+  const id = c.req.param('id');
+  const owner = await db
+    .select({ id: automations.id })
+    .from(automations)
+    .where(and(eq(automations.id, id), eq(automations.userId, userId)));
+  if (!owner[0]) return c.json({ error: 'Not found' }, 404);
+
   const runs = await db
     .select()
     .from(automationRuns)
-    .where(eq(automationRuns.automationId, c.req.param('id')))
+    .where(eq(automationRuns.automationId, id))
     .orderBy(desc(automationRuns.startedAt));
 
   return c.json(runs);
@@ -173,12 +202,22 @@ automationRoutes.get('/:id/runs', async (c) => {
 
 // PATCH /api/automations/runs/:runId/triage
 automationRoutes.patch('/runs/:runId/triage', async (c) => {
+  const userId = c.get('userId') as string | undefined;
+  if (!userId) return c.json({ error: 'Unauthorized' }, 401);
+
   const runId = c.req.param('runId');
   const body = await c.req.json();
 
   if (!body.triageStatus) {
     return c.json({ error: 'triageStatus is required' }, 400);
   }
+
+  const owner = await db
+    .select({ id: automationRuns.id })
+    .from(automationRuns)
+    .innerJoin(automations, eq(automationRuns.automationId, automations.id))
+    .where(and(eq(automationRuns.id, runId), eq(automations.userId, userId)));
+  if (!owner[0]) return c.json({ error: 'Not found' }, 404);
 
   await db
     .update(automationRuns)

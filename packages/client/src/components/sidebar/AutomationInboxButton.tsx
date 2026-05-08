@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 
 import { NavItem } from '@/components/ui/nav-item';
 import { buildPath } from '@/lib/url';
+import { useAuthStore } from '@/stores/auth-store';
 import { useAutomationStore } from '@/stores/automation-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -15,11 +16,14 @@ export function AutomationInboxButton() {
   const inboxCount = useAutomationStore((s) => s.inboxCount);
   const loadInbox = useAutomationStore((s) => s.loadInbox);
   const automationInboxOpen = useUIStore((s) => s.automationInboxOpen);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   const loadInboxRef = useRef(loadInbox);
   loadInboxRef.current = loadInbox;
 
   useEffect(() => {
+    if (!isAuthenticated) return;
+
     let failures = 0;
     let timer: ReturnType<typeof setTimeout>;
 
@@ -37,7 +41,7 @@ export function AutomationInboxButton() {
 
     poll();
     return () => clearTimeout(timer);
-  }, []);
+  }, [isAuthenticated]);
 
   return (
     <NavItem

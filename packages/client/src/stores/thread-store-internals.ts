@@ -29,9 +29,6 @@ export class ThreadStoreInternals {
   /** React Router navigate function ref */
   private navigateFn: ((path: string) => void) | null = null;
 
-  /** Cache invalidator registered by thread-store (avoids circular import) */
-  private cacheInvalidator: ((threadId: string) => void) | null = null;
-
   /** Callback registered by ui-store to reset UI state on thread select */
   private threadSelectListener: (() => void) | null = null;
 
@@ -118,16 +115,6 @@ export class ThreadStoreInternals {
     return this.navigateFn;
   }
 
-  // ── Thread cache invalidator ──────────────────────────────────
-
-  setCacheInvalidator(fn: (threadId: string) => void): void {
-    this.cacheInvalidator = fn;
-  }
-
-  invalidateThreadCache(threadId: string): void {
-    this.cacheInvalidator?.(threadId);
-  }
-
   // ── Thread-select listener (UI state reset) ──────────────────
 
   setThreadSelectListener(fn: () => void): void {
@@ -147,7 +134,6 @@ export class ThreadStoreInternals {
     this.wsEventBuffer.clear();
     this.threadProjectIndex.clear();
     this.navigateFn = null;
-    this.cacheInvalidator = null;
     this.threadSelectListener = null;
   }
 }
@@ -175,9 +161,5 @@ export const rebuildThreadProjectIndex = (t: Record<string, Array<{ id: string }
 export const getProjectIdForThread = (id: string) => internals.getProjectIdForThread(id);
 export const setAppNavigate = (fn: (path: string) => void) => internals.setAppNavigate(fn);
 export const getNavigate = () => internals.getNavigate();
-export const setCacheInvalidator = (fn: (threadId: string) => void) =>
-  internals.setCacheInvalidator(fn);
-export const invalidateThreadCache = (threadId: string) =>
-  internals.invalidateThreadCache(threadId);
 export const setThreadSelectListener = (fn: () => void) => internals.setThreadSelectListener(fn);
 export const notifyThreadSelected = () => internals.notifyThreadSelected();

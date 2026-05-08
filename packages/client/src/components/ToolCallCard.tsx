@@ -66,12 +66,12 @@ export const ToolCallCard = memo(
       planText,
       childToolCalls,
       displayTime,
-      renderToolCall: (childName, childInput, childOutput) => (
+      renderToolCall: (childTc) => (
         <ToolCallCard
-          key={`${childName}-${typeof childInput === 'string' ? childInput.slice(0, 20) : ''}`}
-          name={childName}
-          input={childInput}
-          output={childOutput}
+          key={childTc.id}
+          name={childTc.name}
+          input={childTc.input}
+          output={childTc.output}
         />
       ),
     });

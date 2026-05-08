@@ -1,5 +1,5 @@
 import { monitorForElements } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
-import { LayoutGrid, Loader2, Plus } from 'lucide-react';
+import { LayoutGrid, Plus } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -10,7 +10,7 @@ import { MAX_GRID_COLS, MAX_GRID_ROWS } from '@/components/live-columns/grid-con
 import { GridCellDropTarget } from '@/components/live-columns/GridCellDropTarget';
 import { GridColumnInsertDropTarget } from '@/components/live-columns/GridColumnInsertDropTarget';
 import { GridPicker } from '@/components/live-columns/GridPicker';
-import { ProjectPickerPopover } from '@/components/live-columns/ProjectPickerPopover';
+import { ProjectPickerDialog } from '@/components/live-columns/ProjectPickerDialog';
 import { ThreadColumn } from '@/components/live-columns/ThreadColumn';
 import { Button } from '@/components/ui/button';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
@@ -18,8 +18,6 @@ import { createClientLogger } from '@/lib/client-logger';
 import { getGridCells, type GridCellAssignments } from '@/lib/grid-storage';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
-
-import { createDraftThread } from './live-columns/draft-thread';
 
 const log = createClientLogger('LiveColumnsView');
 
@@ -63,6 +61,31 @@ export function LiveColumnsView() {
   }, []);
 
   const [gridCells, setGridCells] = useState<GridCellAssignments>(getGridCells);
+  // Tracks cells where the user has pre-selected a project (via the header
+  // "+") but hasn't typed a prompt yet. The EmptyGridCell uses this to skip
+  // the project picker and jump straight to the prompt input — same flow as
+  // clicking "New thread" in an empty cell.
+  const [pendingProjectByCell, setPendingProjectByCell] = useState<Record<number, string>>({});
+
+  // Shared project-picker dialog. The same modal is used by the header "+",
+  // the per-cell "New thread" button, and the Ctrl+N shortcut. The target
+  // tells us what to do once the user picks a project.
+  const [pickerTarget, setPickerTarget] = useState<
+    { kind: 'new-column' } | { kind: 'cell'; cellIndex: number } | null
+  >(null);
+
+  const consumePreset = useCallback((cellIndex: number) => {
+    setPendingProjectByCell((prev) => {
+      if (!(cellIndex in prev)) return prev;
+      const updated = { ...prev };
+      delete updated[cellIndex];
+      return updated;
+    });
+  }, []);
+
+  const presetProjectInCell = useCallback((cellIndex: number, projectId: string) => {
+    setPendingProjectByCell((prev) => ({ ...prev, [cellIndex]: projectId }));
+  }, []);
 
   const assignThreadToCell = useCallback((cellIndex: number, threadId: string) => {
     setGridCells((prev) => {
@@ -110,6 +133,18 @@ export function LiveColumnsView() {
           collapsed[String(oldRow * newCols + newCol)] = val;
         }
         setGridCols(newCols);
+        setPendingProjectByCell((prevPending) => {
+          const remapped: Record<number, string> = {};
+          for (const [key, val] of Object.entries(prevPending)) {
+            const oldIdx = Number(key);
+            const oldCol = oldIdx % gridCols;
+            const oldRow = Math.floor(oldIdx / gridCols);
+            if (oldCol === col) continue;
+            const newCol = oldCol > col ? oldCol - 1 : oldCol;
+            remapped[oldRow * newCols + newCol] = val;
+          }
+          return remapped;
+        });
         localStorage.setItem('funny:grid-cols', String(newCols));
         localStorage.setItem('funny:grid-cells', JSON.stringify(collapsed));
         return collapsed;
@@ -118,48 +153,83 @@ export function LiveColumnsView() {
     [gridCols, gridRows],
   );
 
-  // Header "+" flow: pick a project, then a draft thread is created automatically
-  // and placed in a brand-new column appended at the right of the grid.
-  const [headerCreating, setHeaderCreating] = useState(false);
+  // Header "+" flow: pick a project, append a new empty column, and pre-select
+  // the project in the new column's top cell. The user types a prompt there to
+  // create a fully-initialized thread (same flow as EmptyGridCell). No draft
+  // thread is created up front.
   const handleAddColumnWithProject = useCallback(
-    async (pid: string) => {
-      if (headerCreating) return;
+    (pid: string) => {
       if (gridCols >= MAX_GRID_COLS) {
         toast.info(t('live.gridFull', 'Grid is full'));
         return;
       }
-      setHeaderCreating(true);
-      const project = projects.find((p) => p.id === pid);
-      const threadId = await createDraftThread(pid, project?.defaultMode);
-      if (!threadId) {
-        setHeaderCreating(false);
-        return;
-      }
-      log.info({ projectId: pid, threadId }, 'header new draft thread created');
-      await loadThreadsForProject(pid);
-
       const oldCols = gridCols;
       const newCols = oldCols + 1;
       const insertIndex = oldCols;
+
       setGridCells((prev) => {
         const updated: GridCellAssignments = {};
         for (const [key, val] of Object.entries(prev)) {
-          if (val === threadId) continue;
           const oldIdx = Number(key);
           const oldCol = oldIdx % oldCols;
           const oldRow = Math.floor(oldIdx / oldCols);
           updated[String(oldRow * newCols + oldCol)] = val;
         }
-        updated[String(insertIndex)] = threadId;
         localStorage.setItem('funny:grid-cells', JSON.stringify(updated));
+        return updated;
+      });
+      setPendingProjectByCell((prev) => {
+        const updated: Record<number, string> = {};
+        for (const [key, val] of Object.entries(prev)) {
+          const oldIdx = Number(key);
+          const oldCol = oldIdx % oldCols;
+          const oldRow = Math.floor(oldIdx / oldCols);
+          updated[oldRow * newCols + oldCol] = val;
+        }
+        updated[insertIndex] = pid;
         return updated;
       });
       setGridCols(newCols);
       localStorage.setItem('funny:grid-cols', String(newCols));
-      setHeaderCreating(false);
+      log.info({ projectId: pid, cellIndex: insertIndex }, 'header preset project for new column');
     },
-    [headerCreating, gridCols, projects, loadThreadsForProject, t],
+    [gridCols, t],
   );
+
+  const handlePickerSelect = useCallback(
+    (projectId: string) => {
+      const target = pickerTarget;
+      if (!target) return;
+      if (target.kind === 'new-column') {
+        handleAddColumnWithProject(projectId);
+      } else {
+        presetProjectInCell(target.cellIndex, projectId);
+      }
+      setPickerTarget(null);
+    },
+    [pickerTarget, handleAddColumnWithProject, presetProjectInCell],
+  );
+
+  // Alt+N opens the project picker for a new column (mirrors the header "+").
+  // Scoped to LiveColumnsView so it only fires while the grid is mounted.
+  // Uses capture phase + stopImmediatePropagation to override the global Alt+N.
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+      if (e.key !== 'n' && e.key !== 'N') return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || (e.target as HTMLElement)?.isContentEditable) {
+        return;
+      }
+      if (gridCols >= MAX_GRID_COLS) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      log.info('shortcut.grid_new_thread');
+      setPickerTarget({ kind: 'new-column' });
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [gridCols]);
 
   const [isDragging, setIsDragging] = useState(false);
 
@@ -228,6 +298,17 @@ export function LiveColumnsView() {
             localStorage.setItem('funny:grid-cells', JSON.stringify(updated));
             return updated;
           });
+          setPendingProjectByCell((prevPending) => {
+            const remapped: Record<number, string> = {};
+            for (const [key, val] of Object.entries(prevPending)) {
+              const oldIdx = Number(key);
+              const oldCol = oldIdx % oldCols;
+              const oldRow = Math.floor(oldIdx / oldCols);
+              const newCol = oldCol < insertIndex ? oldCol : oldCol + 1;
+              remapped[oldRow * newCols + newCol] = val;
+            }
+            return remapped;
+          });
           setGridCols(newCols);
           localStorage.setItem('funny:grid-cols', String(newCols));
         }
@@ -241,25 +322,16 @@ export function LiveColumnsView() {
         <span className="flex items-center gap-2 text-sm font-medium">
           <LayoutGrid className="icon-sm text-muted-foreground" /> {t('live.title', 'Grid')}
         </span>
-        <ProjectPickerPopover
-          placeholder={t('kanban.searchProject', 'Search project...')}
-          onSelect={handleAddColumnWithProject}
-          trigger={
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-7 w-7"
-              data-testid="grid-new-thread"
-              disabled={gridCols >= MAX_GRID_COLS || headerCreating}
-            >
-              {headerCreating ? (
-                <Loader2 className="icon-base animate-spin" />
-              ) : (
-                <Plus className="icon-base" />
-              )}
-            </Button>
-          }
-        />
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-7 w-7"
+          data-testid="grid-new-thread"
+          disabled={gridCols >= MAX_GRID_COLS}
+          onClick={() => setPickerTarget({ kind: 'new-column' })}
+        >
+          <Plus className="icon-base" />
+        </Button>
 
         <div className="ml-auto">
           <GridPicker
@@ -309,6 +381,9 @@ export function LiveColumnsView() {
                       <EmptyGridCell
                         cellIndex={cellIndex}
                         onCreated={(newThreadId) => assignThreadToCell(cellIndex, newThreadId)}
+                        initialProjectId={pendingProjectByCell[cellIndex]}
+                        onConsumePreset={() => consumePreset(cellIndex)}
+                        onRequestPickProject={() => setPickerTarget({ kind: 'cell', cellIndex })}
                       />
                     )}
                   </GridCellDropTarget>
@@ -324,6 +399,14 @@ export function LiveColumnsView() {
           ])}
         </div>
       </div>
+
+      <ProjectPickerDialog
+        open={pickerTarget !== null}
+        onOpenChange={(v) => {
+          if (!v) setPickerTarget(null);
+        }}
+        onSelect={handlePickerSelect}
+      />
 
       <ImageLightbox
         images={lightboxImages}

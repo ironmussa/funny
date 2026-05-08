@@ -36,18 +36,29 @@ export const usePiModelsStore = create<PiModelsState>((set, get) => ({
   fetch: async (force = false) => {
     const state = get();
     if (state.status === 'loading') return;
-    if (!force && state.status === 'ready' && Date.now() - state.loadedAt < STALE_MS) {
+    // Honor the cache window for both successful and failed loads, so a missing
+    // Pi install does not re-hit the runner on every PromptInput mount / Strict
+    // Mode double-effect / HMR remount.
+    if (
+      !force &&
+      (state.status === 'ready' || state.status === 'error') &&
+      Date.now() - state.loadedAt < STALE_MS
+    ) {
       return;
     }
 
     set({ status: 'loading' });
     const result = await systemApi.getPiModels(force);
     if (result.isErr()) {
-      log.warn('failed to load pi models', { error: result.error.message });
+      const message = result.error.message ?? 'Failed to fetch pi models';
+      if (state.reason !== 'agent_error' || state.message !== message) {
+        log.warn('failed to load pi models', { error: message });
+      }
       set({
         status: 'error',
         reason: 'agent_error',
-        message: result.error.message ?? 'Failed to fetch pi models',
+        message,
+        loadedAt: Date.now(),
       });
       return;
     }
@@ -63,13 +74,16 @@ export const usePiModelsStore = create<PiModelsState>((set, get) => ({
         loadedAt: Date.now(),
       });
     } else {
-      log.info('pi unavailable', { reason: payload.reason, message: payload.message });
+      if (state.reason !== payload.reason) {
+        log.info('pi unavailable', { reason: payload.reason, message: payload.message });
+      }
       set({
         status: 'error',
         models: [],
         currentModelId: null,
         reason: payload.reason,
         message: payload.message,
+        loadedAt: Date.now(),
       });
     }
   },

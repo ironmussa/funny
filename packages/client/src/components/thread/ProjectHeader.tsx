@@ -26,7 +26,15 @@ import {
   Activity,
   Sparkles,
 } from 'lucide-react';
-import { memo, useState, useEffect, useCallback, useRef, startTransition } from 'react';
+import {
+  memo,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  startTransition,
+  type ReactNode,
+} from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { toast } from 'sonner';
@@ -597,7 +605,23 @@ function StartupCommandsPopover({ projectId }: { projectId: string }) {
 
 const VISIBLE_STAGES: ThreadStage[] = ['backlog', 'planning', 'in_progress', 'review', 'done'];
 
-export const ProjectHeader = memo(function ProjectHeader() {
+interface ProjectHeaderProps {
+  hideFiles?: boolean;
+  hideTests?: boolean;
+  hideStartup?: boolean;
+  hideTerminal?: boolean;
+  leading?: ReactNode;
+  trailing?: ReactNode;
+}
+
+export const ProjectHeader = memo(function ProjectHeader({
+  hideFiles = false,
+  hideTests = false,
+  hideStartup = false,
+  hideTerminal = false,
+  leading,
+  trailing,
+}: ProjectHeaderProps = {}) {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
   const location = useLocation();
@@ -726,7 +750,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
     [location.pathname, location.search, navigate],
   );
 
-  if (!selectedProjectId) return null;
+  if (!projectId) return null;
 
   const handleOpenInEditor = async (editor: Editor) => {
     if (!project) return;
@@ -760,6 +784,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
     <div className="h-12 border-b border-border px-4 py-2">
       <div className="flex items-center justify-between">
         <div className="flex min-w-0 flex-1 items-center gap-2">
+          {leading}
           {kanbanContext && activeThreadId && (
             <Tooltip>
               <TooltipTrigger asChild>
@@ -887,7 +912,7 @@ export const ProjectHeader = memo(function ProjectHeader() {
         </div>
         {activeThreadStatus !== 'setting_up' && (
           <div className="flex flex-shrink-0 items-center gap-2">
-            <StartupCommandsPopover projectId={projectId!} />
+            {!hideStartup && <StartupCommandsPopover projectId={projectId!} />}
             {runningWithPort.length > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -945,40 +970,42 @@ export const ProjectHeader = memo(function ProjectHeader() {
                 ))}
               </DropdownMenuContent>
             </DropdownMenu>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() => {
-                    if (!selectedProjectId) return;
-                    const projectTabs = tabs.filter((t) => t.projectId === selectedProjectId);
+            {!hideTerminal && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() => {
+                      if (!selectedProjectId) return;
+                      const projectTabs = tabs.filter((t) => t.projectId === selectedProjectId);
 
-                    if (projectTabs.length === 0 && !terminalPanelVisible) {
-                      const cwd = activeThreadWorktreePath || project?.path || 'C:\\';
-                      const id = crypto.randomUUID();
-                      const label = 'Terminal 1';
-                      addTab({
-                        id,
-                        label,
-                        cwd,
-                        alive: true,
-                        projectId: selectedProjectId,
-                        type: isTauri ? undefined : 'pty',
-                      });
-                      setPanelVisible(selectedProjectId, true);
-                    } else {
-                      toggleTerminalPanel(selectedProjectId);
-                    }
-                  }}
-                  data-testid="header-toggle-terminal"
-                  className={terminalPanelVisible ? 'text-foreground' : 'text-muted-foreground'}
-                >
-                  <Terminal className="icon-base" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t('terminal.toggle', 'Toggle Terminal')} (Ctrl+`)</TooltipContent>
-            </Tooltip>
+                      if (projectTabs.length === 0 && !terminalPanelVisible) {
+                        const cwd = activeThreadWorktreePath || project?.path || 'C:\\';
+                        const id = crypto.randomUUID();
+                        const label = 'Terminal 1';
+                        addTab({
+                          id,
+                          label,
+                          cwd,
+                          alive: true,
+                          projectId: selectedProjectId,
+                          type: isTauri ? undefined : 'pty',
+                        });
+                        setPanelVisible(selectedProjectId, true);
+                      } else {
+                        toggleTerminalPanel(selectedProjectId);
+                      }
+                    }}
+                    data-testid="header-toggle-terminal"
+                    className={terminalPanelVisible ? 'text-foreground' : 'text-muted-foreground'}
+                  >
+                    <Terminal className="icon-base" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('terminal.toggle', 'Toggle Terminal')} (Ctrl+`)</TooltipContent>
+              </Tooltip>
+            )}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -1014,56 +1041,61 @@ export const ProjectHeader = memo(function ProjectHeader() {
               </TooltipTrigger>
               <TooltipContent>{t('review.title')}</TooltipContent>
             </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() =>
-                    startTransition(() => {
-                      const opening = !testRunnerOpen;
-                      setTestRunnerOpen(opening);
-                      updatePanelParam(opening ? 'tests' : null);
-                    })
-                  }
-                  data-testid="header-toggle-tests"
-                  className={testRunnerOpen ? 'text-foreground' : 'text-muted-foreground'}
-                >
-                  <FlaskConical className="icon-base" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t('tests.title', 'Tests')}</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size="icon-sm"
-                  onClick={() =>
-                    startTransition(() => {
-                      if (reviewPaneOpen && rightPaneTab === 'files') {
-                        setFilesPaneOpen(false);
-                        updatePanelParam(null);
-                      } else {
-                        setFilesPaneOpen(true);
-                        updatePanelParam('files');
-                      }
-                    })
-                  }
-                  data-testid="header-toggle-project-files"
-                  disabled={!projectId}
-                  className={
-                    reviewPaneOpen && rightPaneTab === 'files'
-                      ? 'text-foreground'
-                      : 'text-muted-foreground'
-                  }
-                >
-                  <FolderTree className="icon-base" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t('projectFiles.title', 'Project Files')}</TooltipContent>
-            </Tooltip>
+            {!hideTests && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() =>
+                      startTransition(() => {
+                        const opening = !testRunnerOpen;
+                        setTestRunnerOpen(opening);
+                        updatePanelParam(opening ? 'tests' : null);
+                      })
+                    }
+                    data-testid="header-toggle-tests"
+                    className={testRunnerOpen ? 'text-foreground' : 'text-muted-foreground'}
+                  >
+                    <FlaskConical className="icon-base" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('tests.title', 'Tests')}</TooltipContent>
+              </Tooltip>
+            )}
+            {!hideFiles && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon-sm"
+                    onClick={() =>
+                      startTransition(() => {
+                        if (reviewPaneOpen && rightPaneTab === 'files') {
+                          setFilesPaneOpen(false);
+                          updatePanelParam(null);
+                        } else {
+                          setFilesPaneOpen(true);
+                          updatePanelParam('files');
+                        }
+                      })
+                    }
+                    data-testid="header-toggle-project-files"
+                    disabled={!projectId}
+                    className={
+                      reviewPaneOpen && rightPaneTab === 'files'
+                        ? 'text-foreground'
+                        : 'text-muted-foreground'
+                    }
+                  >
+                    <FolderTree className="icon-base" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('projectFiles.title', 'Project Files')}</TooltipContent>
+              </Tooltip>
+            )}
             {activeThreadId && <MoreActionsMenu />}
+            {trailing}
           </div>
         )}
       </div>

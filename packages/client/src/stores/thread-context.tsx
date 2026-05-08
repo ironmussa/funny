@@ -185,5 +185,5 @@ export function useThreadCore(): ThreadCore | null {
 export function getThreadById(threadId: string): ThreadWithMessages | null {
   const state = useThreadStore.getState();
   if (state.activeThread?.id === threadId) return state.activeThread;
-  return null;
+  return state.liveThreads[threadId] ?? null;
 }

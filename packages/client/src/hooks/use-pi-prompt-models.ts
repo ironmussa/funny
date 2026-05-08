@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { createClientLogger } from '@/lib/client-logger';
@@ -30,13 +30,17 @@ export function usePiPromptModels(baseUnifiedModelGroups: ModelGroup[]): ModelGr
     void fetchPiModels();
   }, [fetchPiModels]);
 
+  // Dedup: only warn once per unique (reason, message) pair, not on every mount.
+  const lastWarnedRef = useRef<string | null>(null);
   useEffect(() => {
-    if (piStatus === 'error' && piMessage) {
-      piLog.warn('pi model discovery failed', {
-        reason: piReason ?? 'unknown',
-        message: piMessage,
-      });
-    }
+    if (piStatus !== 'error' || !piMessage) return;
+    const key = `${piReason ?? 'unknown'}|${piMessage}`;
+    if (lastWarnedRef.current === key) return;
+    lastWarnedRef.current = key;
+    piLog.warn('pi model discovery failed', {
+      reason: piReason ?? 'unknown',
+      message: piMessage,
+    });
   }, [piStatus, piReason, piMessage]);
 
   return useMemo(() => {

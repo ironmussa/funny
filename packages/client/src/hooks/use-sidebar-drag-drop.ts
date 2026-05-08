@@ -24,27 +24,50 @@ export function useSidebarDragDrop({
   reorderProjects,
 }: Options) {
   useEffect(() => {
-    const projectsEl = projectsScrollRef.current;
-    const threadsEl = threadsScrollRef.current;
-    const cleanups: Array<() => void> = [];
-    if (projectsEl) {
-      cleanups.push(
-        autoScrollForElements({
-          element: projectsEl,
-          canScroll: ({ source }) => source.data.type === 'sidebar-project',
-        }),
-      );
+    type Target = {
+      el: HTMLElement;
+      type: 'sidebar-project' | 'grid-thread';
+      cleanup?: () => void;
+    };
+    const targets: Target[] = [];
+    if (projectsScrollRef.current)
+      targets.push({ el: projectsScrollRef.current, type: 'sidebar-project' });
+    if (threadsScrollRef.current)
+      targets.push({ el: threadsScrollRef.current, type: 'grid-thread' });
+
+    const sync = (t: Target) => {
+      const scrollable = t.el.scrollHeight > t.el.clientHeight;
+      if (scrollable && !t.cleanup) {
+        t.cleanup = autoScrollForElements({
+          element: t.el,
+          canScroll: ({ source }) => source.data.type === t.type,
+        });
+      } else if (!scrollable && t.cleanup) {
+        t.cleanup();
+        t.cleanup = undefined;
+      }
+    };
+
+    const ro = new ResizeObserver(() => {
+      for (const t of targets) sync(t);
+    });
+    const mos: MutationObserver[] = [];
+    for (const t of targets) {
+      sync(t);
+      ro.observe(t.el);
+      for (const c of Array.from(t.el.children)) ro.observe(c);
+      const mo = new MutationObserver(() => {
+        for (const c of Array.from(t.el.children)) ro.observe(c);
+        sync(t);
+      });
+      mo.observe(t.el, { childList: true, subtree: true });
+      mos.push(mo);
     }
-    if (threadsEl) {
-      cleanups.push(
-        autoScrollForElements({
-          element: threadsEl,
-          canScroll: ({ source }) => source.data.type === 'grid-thread',
-        }),
-      );
-    }
+
     return () => {
-      for (const c of cleanups) c();
+      ro.disconnect();
+      for (const m of mos) m.disconnect();
+      for (const t of targets) t.cleanup?.();
     };
   }, [projectsScrollRef, threadsScrollRef]);
 

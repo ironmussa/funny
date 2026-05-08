@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 
-import { ToolCallGroup } from '@/components/ToolCallGroup';
+import { ToolCallGroup, type ToolCallItem } from '@/components/ToolCallGroup';
 
 import { AskQuestionCard } from './AskQuestionCard';
 import { BashCard } from './BashCard';
@@ -22,7 +22,7 @@ interface Args {
   childToolCalls?: any[];
   displayTime: string | null;
   /** Forwarded to TaskCard for nested rendering. */
-  renderToolCall: (childName: string, childInput: any, childOutput: any) => ReactNode;
+  renderToolCall: (tc: ToolCallItem) => ReactNode;
 }
 
 /**
@@ -98,7 +98,7 @@ export function dispatchToolCard({
           item.type === 'toolcall-group' ? (
             <ToolCallGroup key={`group-${item.name}-${idx}`} name={item.name} calls={item.calls} />
           ) : (
-            renderToolCall(item.tc.name, item.tc.input, item.tc.output)
+            renderToolCall(item.tc)
           )
         }
       />

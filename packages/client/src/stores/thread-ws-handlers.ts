@@ -11,14 +11,13 @@ import { createClientLogger } from '@/lib/client-logger';
 import { emitContextUsage } from '@/lib/context-usage-events';
 import { buildPath } from '@/lib/url';
 
-import { transitionThreadStatus, wsEventToMachineEvent } from './thread-machine-bridge';
-import { useThreadReadStore } from './thread-read-store';
 import {
-  bufferWSEvent,
-  getNavigate,
-  getProjectIdForThread,
-  invalidateThreadCache,
-} from './thread-store-internals';
+  invalidateThreadData,
+  transitionThreadStatus,
+  wsEventToMachineEvent,
+} from './thread-machine-bridge';
+import { useThreadReadStore } from './thread-read-store';
+import { bufferWSEvent, getNavigate, getProjectIdForThread } from './thread-store-internals';
 import type { AgentInitInfo, ThreadState, ThreadWithMessages } from './thread-types';
 
 const wsLog = createClientLogger('ws-handlers');
@@ -236,7 +235,7 @@ export function handleWSMessage(
   // Drop the cached snapshot for non-active threads so the next selectThread()
   // refetches and shows the new message instead of the frozen pre-switch view.
   if (activeThread?.id !== threadId) {
-    invalidateThreadCache(threadId);
+    invalidateThreadData(threadId);
   }
 
   // Update sidebar snippet for assistant messages on non-active threads
@@ -358,7 +357,7 @@ export function handleWSToolCall(
   // Drop the cached snapshot for non-active threads so the next selectThread()
   // refetches and includes this tool call.
   if (activeThread?.id !== threadId) {
-    invalidateThreadCache(threadId);
+    invalidateThreadData(threadId);
   }
 }
 
@@ -374,7 +373,7 @@ export function handleWSToolOutput(
   if (activeThread?.id !== threadId) {
     if (selectedThreadId === threadId) bufferWSEvent(threadId, 'tool_output', data);
     // Cached snapshot would still hold the tool call without its output.
-    invalidateThreadCache(threadId);
+    invalidateThreadData(threadId);
   } else {
     // Find and update only the specific message containing the tool call.
     for (let i = 0; i < activeThread.messages.length; i++) {
@@ -429,7 +428,7 @@ export function handleWSStatus(
     if (selectedThreadId === threadId) {
       bufferWSEvent(threadId, 'status', data);
     }
-    invalidateThreadCache(threadId);
+    invalidateThreadData(threadId);
   }
 
   const machineEvent = wsEventToMachineEvent('agent:status', data);
@@ -583,13 +582,25 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
 
   // Buffer result events when thread is selected but not yet fully loaded
   if (!activeThread?.id || activeThread.id !== threadId) {
+    wsLog.warn('BUG-HUNT: agent:result activeThread mismatch — UI will not update', {
+      threadId,
+      activeThreadId: activeThread?.id ?? '<null>',
+      selectedThreadId: selectedThreadId ?? '<null>',
+      isSelected: selectedThreadId === threadId,
+    });
     if (selectedThreadId === threadId) {
       bufferWSEvent(threadId, 'result', data);
     }
     // Invalidate the cached snapshot so the next selectThread() refetches and
     // shows the final messages/tool calls/resultInfo. Without this, the user
     // sees the toast for completion but, on click, gets the pre-switch view.
-    invalidateThreadCache(threadId);
+    invalidateThreadData(threadId);
+  } else {
+    wsLog.info('BUG-HUNT: agent:result activeThread match', {
+      threadId,
+      activeThreadId: activeThread.id,
+      selectedThreadId: selectedThreadId ?? '<null>',
+    });
   }
 
   const machineEvent = wsEventToMachineEvent('agent:result', data);

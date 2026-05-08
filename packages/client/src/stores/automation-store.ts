@@ -2,6 +2,10 @@ import type { Automation, AutomationRun, InboxItem } from '@funny/shared';
 import { create } from 'zustand';
 
 import { automationsApi as api } from '@/lib/api/automations';
+import { createClientLogger } from '@/lib/client-logger';
+import { useAuthStore } from '@/stores/auth-store';
+
+const log = createClientLogger('automation-store');
 
 interface AutomationState {
   automationsByProject: Record<string, Automation[]>;
@@ -44,11 +48,16 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
           automationsByProject: { ...state.automationsByProject, [projectId]: automations },
         }));
       },
-      (error) => console.error('[automation-store] Failed to load automations:', error.message),
+      (error) => log.warn('Failed to load automations', { error: error.message }),
     );
   },
 
   loadInbox: async (options?: { projectId?: string; triageStatus?: string }) => {
+    // Skip when no session is established — WS events can arrive during the
+    // login/logout window and the cookie-cache race in Better Auth produces
+    // transient 401s.
+    if (!useAuthStore.getState().isAuthenticated) return;
+
     // Coalesce rapid calls (e.g. handleRunStarted + handleRunCompleted firing together)
     const now = Date.now();
     if (now - _lastInboxFetch < INBOX_COOLDOWN_MS && _inboxInFlight) {
@@ -65,7 +74,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
           const pendingCount = inbox.filter((item) => item.run.triageStatus === 'pending').length;
           set({ inbox, inboxCount: pendingCount });
         } else {
-          console.error('[automation-store] Failed to load inbox:', result.error.message);
+          log.warn('Failed to load inbox', { error: result.error.message });
           throw result.error;
         }
       } finally {
@@ -79,7 +88,7 @@ export const useAutomationStore = create<AutomationState>((set, get) => ({
     const result = await api.listAutomationRuns(automationId);
     result.match(
       (runs) => set({ selectedAutomationRuns: runs }),
-      (error) => console.error('[automation-store] Failed to load runs:', error.message),
+      (error) => log.warn('Failed to load runs', { error: error.message }),
     );
   },
 

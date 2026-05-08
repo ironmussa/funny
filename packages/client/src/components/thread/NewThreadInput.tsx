@@ -36,17 +36,31 @@ function slugifyTitle(title: string, maxLength = 40): string {
   );
 }
 
-export function NewThreadInput() {
+interface NewThreadInputProps {
+  /** Override the project ID (skips reading from global stores). */
+  projectIdOverride?: string;
+  /** Called after a thread is successfully created. If provided, navigation is skipped. */
+  onCreated?: (threadId: string) => void;
+  /** Called when the user cancels (replaces the default global cancelNewThread). */
+  onCancel?: () => void;
+}
+
+export function NewThreadInput({
+  projectIdOverride,
+  onCreated,
+  onCancel,
+}: NewThreadInputProps = {}) {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
-  const effectiveProjectId = selectedProjectId || newThreadProjectId;
+  const effectiveProjectId = projectIdOverride || selectedProjectId || newThreadProjectId;
   const newThreadIdleOnly = useUIStore((s) => s.newThreadIdleOnly);
   const activeDesignId = useUIStore((s) => s.activeDesignId);
   const issueContext = useUIStore((s) => s.newThreadIssueContext);
   const clearIssueContext = useUIStore((s) => s.clearIssueContext);
-  const cancelNewThread = useUIStore((s) => s.cancelNewThread);
+  const cancelNewThreadGlobal = useUIStore((s) => s.cancelNewThread);
+  const cancelNewThread = onCancel ?? cancelNewThreadGlobal;
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
   const projects = useProjectStore((s) => s.projects);
@@ -184,7 +198,11 @@ export function NewThreadInput() {
       setCreating(false);
       setReviewPaneOpen(false);
       toast.success(t('toast.threadCreated', { title: prompt.slice(0, 200) }));
-      cancelNewThread();
+      if (onCreated) {
+        onCreated(result.value.id);
+      } else {
+        cancelNewThread();
+      }
       return true;
     }
 
@@ -219,14 +237,18 @@ export function NewThreadInput() {
 
     // Thread created — skip the blocker and select the new thread.
     justSubmittedRef.current = true;
-    useThreadStore.setState({ selectedThreadId: result.value.id });
     setCreating(false);
     setReviewPaneOpen(false);
-    cancelNewThread();
-    // When inside a design, stay in the design view; the design's thread list
-    // will pick up the new thread and the chat column will render it.
-    if (!activeDesignId) {
-      navigate(buildPath(`/projects/${effectiveProjectId}/threads/${result.value.id}`));
+    if (onCreated) {
+      onCreated(result.value.id);
+    } else {
+      useThreadStore.setState({ selectedThreadId: result.value.id });
+      cancelNewThread();
+      // When inside a design, stay in the design view; the design's thread list
+      // will pick up the new thread and the chat column will render it.
+      if (!activeDesignId) {
+        navigate(buildPath(`/projects/${effectiveProjectId}/threads/${result.value.id}`));
+      }
     }
     loadThreadsForProject(effectiveProjectId);
     return true;

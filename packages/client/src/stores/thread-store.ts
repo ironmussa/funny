@@ -51,7 +51,13 @@ import {
   getProjectPath,
   registerThreadStore,
 } from './store-bridge';
-import { transitionThreadStatus, cleanupThreadActor } from './thread-machine-bridge';
+import {
+  transitionThreadStatus,
+  cleanupThreadActor,
+  prefetchThreadData,
+  loadThreadData,
+  isThreadDataPrefetched,
+} from './thread-machine-bridge';
 import { useThreadReadStore } from './thread-read-store';
 import {
   nextSelectGeneration,
@@ -272,48 +278,17 @@ function flushWSBuffer(threadId: string, store: ThreadState) {
 
 // ── Eager thread prefetch ─────────────────────────────────────────
 // Parse the URL at module-load time. If we're on a thread route, start
-// fetching thread data immediately — in parallel with auth bootstrap and
-// project loading — instead of waiting for useRouteSync.
-const PREFETCH_CACHE_LIMIT = 8;
-const _prefetchCache = new Map<
-  string,
-  {
-    threadPromise: ReturnType<typeof api.getThread>;
-    eventsPromise: ReturnType<typeof api.getThreadEvents>;
-  }
->();
-
-function setPrefetch(
-  threadId: string,
-  entry: {
-    threadPromise: ReturnType<typeof api.getThread>;
-    eventsPromise: ReturnType<typeof api.getThreadEvents>;
-  },
-) {
-  if (_prefetchCache.size >= PREFETCH_CACHE_LIMIT) {
-    const oldest = _prefetchCache.keys().next().value;
-    if (oldest) _prefetchCache.delete(oldest);
-  }
-  _prefetchCache.set(threadId, entry);
-}
-
+// fetching thread data immediately via the thread-data-machine actor —
+// in parallel with auth bootstrap and project loading — instead of waiting
+// for useRouteSync.
 {
   const m = window.location.pathname.match(/\/projects\/[^/]+\/threads\/([^/]+)/);
   if (m) {
-    const threadId = m[1];
-    setPrefetch(threadId, {
-      threadPromise: api.getThread(threadId, 50),
-      eventsPromise: api.getThreadEvents(threadId),
-    });
+    prefetchThreadData(m[1]);
   }
 }
 
 // ── Store ────────────────────────────────────────────────────────
-
-// Abort controller for in-flight selectThread API requests.
-// When a new thread is selected, the previous fetch is aborted immediately
-// to avoid piling up stale network requests during rapid thread switching.
-let _selectAbortController: AbortController | null = null;
 
 // Ref-count for live thread registrations (multiple columns could theoretically
 // show the same thread). When count drops to 0, the thread is removed from liveThreads.
@@ -411,12 +386,6 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // Skip if already loading this exact thread (prevents StrictMode double-fire)
     if (threadId && threadId === getSelectingThreadId()) return;
 
-    // Abort any in-flight fetch from a previous selectThread call.
-    // This prevents piling up stale network requests during rapid clicking.
-    _selectAbortController?.abort();
-    const abortController = new AbortController();
-    _selectAbortController = abortController;
-
     const gen = nextSelectGeneration();
     setSelectingThreadId(threadId);
     // Keep stale activeThread visible during load to avoid layout shift.
@@ -430,7 +399,6 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     useUIStore.setState({ newThreadProjectId: null, allThreadsProjectId: null });
 
     if (!threadId) {
-      _selectAbortController = null;
       setSelectingThreadId(null);
       return;
     }
@@ -440,29 +408,25 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     });
     const startMs = Date.now();
     try {
-      // Use prefetched data if available (fired on hover/module-load), otherwise fetch now
-      const prefetched = _prefetchCache.get(threadId);
-      _prefetchCache.delete(threadId);
-      const fromCache = !!prefetched;
-      const [result, eventsResult] = await Promise.all([
-        prefetched?.threadPromise ?? api.getThread(threadId, 50, abortController.signal),
-        prefetched?.eventsPromise ?? api.getThreadEvents(threadId, abortController.signal),
-      ]);
-      metric('thread.select.network_ms', Date.now() - startMs, {
-        attributes: { 'thread.from_cache': fromCache ? '1' : '0' },
-      });
-
-      if (result.isErr()) {
-        // If aborted (superseded by a newer selectThread), silently bail out
-        if (abortController.signal.aborted) return;
+      const fromCache = isThreadDataPrefetched(threadId);
+      let snapshot;
+      try {
+        snapshot = await loadThreadData(threadId);
+      } catch {
+        metric('thread.select.network_ms', Date.now() - startMs, {
+          attributes: { 'thread.from_cache': fromCache ? '1' : '0' },
+        });
         if (getSelectGeneration() === gen) {
           clearWSBuffer(threadId);
           set({ selectedThreadId: null, activeThread: null });
         }
         return;
       }
+      metric('thread.select.network_ms', Date.now() - startMs, {
+        attributes: { 'thread.from_cache': fromCache ? '1' : '0' },
+      });
 
-      const thread = result.value;
+      const thread = snapshot.thread;
 
       if (getSelectGeneration() !== gen) {
         clearWSBuffer(threadId);
@@ -514,7 +478,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
         }
       }
 
-      const threadEvents = eventsResult.isOk() ? eventsResult.value.events : [];
+      const threadEvents = snapshot.events;
 
       // Reconstruct compactionEvents from persisted thread events so they survive refreshes
       const compactionEvents: CompactionEvent[] = threadEvents
@@ -571,22 +535,14 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       if (getSelectingThreadId() === threadId) {
         setSelectingThreadId(null);
       }
-      // Clear abort controller if this is still the active one
-      if (_selectAbortController === abortController) {
-        _selectAbortController = null;
-      }
     }
   },
 
   prefetchThread: (threadId: string) => {
     if (!threadId) return;
-    if (_prefetchCache.has(threadId)) return;
     if (get().activeThread?.id === threadId) return;
     if (getSelectingThreadId() === threadId) return;
-    setPrefetch(threadId, {
-      threadPromise: api.getThread(threadId, 50),
-      eventsPromise: api.getThreadEvents(threadId),
-    });
+    prefetchThreadData(threadId);
   },
 
   archiveThread: async (threadId, projectId) => {

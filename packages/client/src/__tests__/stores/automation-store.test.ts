@@ -15,6 +15,7 @@ const mockApi = vi.hoisted(() => ({
 
 vi.mock('@/lib/api/automations', () => ({ automationsApi: mockApi }));
 
+import { useAuthStore } from '@/stores/auth-store';
 import { useAutomationStore } from '@/stores/automation-store';
 
 function makeAutomation(overrides: Partial<Automation> = {}): Automation {
@@ -69,6 +70,9 @@ function makeInboxItem(overrides: Partial<{ run: Partial<AutomationRun> }> = {})
 }
 
 beforeEach(() => {
+  // loadInbox bails out when no session is established. Mark the store as
+  // authenticated so the tests exercise the fetch path.
+  useAuthStore.setState({ isAuthenticated: true });
   useAutomationStore.setState({
     automationsByProject: {},
     inbox: [],

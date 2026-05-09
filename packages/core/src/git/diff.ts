@@ -327,9 +327,17 @@ export function getDiffSummary(
 
   return ResultAsync.fromPromise(
     (async () => {
-      // 1. Get base file list (either from native or CLI)
-      let baseFiles: Array<{ path: string; status: FileDiffSummary['status']; staged: boolean }> =
-        [];
+      // 1. Get base file list (either from native or CLI). When the native
+      // path is used, additions/deletions come back in the same call — no
+      // numstat spawns needed. CLI fallback fills them in step 2.
+      type BaseFile = {
+        path: string;
+        status: FileDiffSummary['status'];
+        staged: boolean;
+        additions: number;
+        deletions: number;
+      };
+      let baseFiles: BaseFile[] = [];
       let total = 0;
       let truncated = false;
 
@@ -345,6 +353,8 @@ export function getDiffSummary(
             path: f.path,
             status: f.status as FileDiffSummary['status'],
             staged: f.staged,
+            additions: f.additions,
+            deletions: f.deletions,
           }));
           total = r.total;
           truncated = r.truncated;
@@ -385,94 +395,106 @@ export function getDiffSummary(
         const allUnstaged = [...unstagedFiles, ...untrackedFiles];
         const stagedPaths = new Set(stagedFiles.map((f) => f.path));
 
-        const allFiles: Array<{
-          path: string;
-          status: FileDiffSummary['status'];
-          staged: boolean;
-        }> = [];
+        const allFiles: BaseFile[] = [];
 
         for (const f of stagedFiles) {
           if (exclude.length > 0 && matchesAnyPattern(f.path, exclude)) continue;
-          allFiles.push({ path: f.path, status: f.status, staged: true });
+          allFiles.push({
+            path: f.path,
+            status: f.status,
+            staged: true,
+            additions: 0,
+            deletions: 0,
+          });
         }
         for (const f of allUnstaged) {
           if (stagedPaths.has(f.path)) continue;
           if (exclude.length > 0 && matchesAnyPattern(f.path, exclude)) continue;
-          allFiles.push({ path: f.path, status: f.status, staged: false });
+          allFiles.push({
+            path: f.path,
+            status: f.status,
+            staged: false,
+            additions: 0,
+            deletions: 0,
+          });
         }
 
         total = allFiles.length;
         truncated = maxFiles > 0 && total > maxFiles;
         baseFiles = truncated ? allFiles.slice(0, maxFiles) : allFiles;
-      }
 
-      // 2. Enrich with line stats via numstat (staged and unstaged)
-      const [stagedNumstat, unstagedNumstat] = await Promise.all([
-        gitRead(['diff', '--staged', '--numstat'], { cwd, reject: false }),
-        gitRead(['diff', '--numstat'], { cwd, reject: false }),
-      ]);
+        // 2. Enrich with line stats via numstat (CLI fallback only — the
+        // native path already returns additions/deletions per file).
+        const [stagedNumstat, unstagedNumstat] = await Promise.all([
+          gitRead(['diff', '--staged', '--numstat'], { cwd, reject: false }),
+          gitRead(['diff', '--numstat'], { cwd, reject: false }),
+        ]);
 
-      const statMap = new Map<string, { additions: number; deletions: number; staged: boolean }>();
+        const statMap = new Map<string, { additions: number; deletions: number }>();
 
-      const parseNumstat = (stdout: string, staged: boolean) => {
-        if (!stdout) return;
-        for (const line of stdout.trim().split('\n')) {
-          const parts = line.split('\t');
-          if (parts.length >= 3) {
-            const additions = parseInt(parts[0], 10);
-            const deletions = parseInt(parts[1], 10);
-            const path = parts[2].trim();
-            if (!isNaN(additions) && !isNaN(deletions)) {
-              statMap.set(`${staged ? 's' : 'u'}:${path}`, { additions, deletions, staged });
+        const parseNumstat = (stdout: string, staged: boolean) => {
+          if (!stdout) return;
+          for (const line of stdout.trim().split('\n')) {
+            const parts = line.split('\t');
+            if (parts.length >= 3) {
+              const additions = parseInt(parts[0], 10);
+              const deletions = parseInt(parts[1], 10);
+              const path = parts[2].trim();
+              if (!isNaN(additions) && !isNaN(deletions)) {
+                statMap.set(`${staged ? 's' : 'u'}:${path}`, { additions, deletions });
+              }
             }
           }
+        };
+
+        if (stagedNumstat.exitCode === 0) parseNumstat(stagedNumstat.stdout, true);
+        if (unstagedNumstat.exitCode === 0) parseNumstat(unstagedNumstat.stdout, false);
+
+        // 2b. Untracked files don't appear in `git diff --numstat` because they're not
+        // in git's index yet. Compute their line counts via `git diff --no-index` so the
+        // UI can show +N for newly added files. Skip nested repos (path ends with "/"),
+        // oversized files, and binaries — `git diff --no-index` on a multi-GB binary can
+        // hang for tens of seconds and time the request out.
+        const untrackedToStat = baseFiles.filter((f) => {
+          if (f.staged || f.status !== 'added') return false;
+          if (f.path.endsWith('/')) return false;
+          if (statMap.has(`u:${f.path}`)) return false;
+          return !shouldSkipUntrackedDiff(cwd, f.path);
+        });
+        if (untrackedToStat.length > 0) {
+          await Promise.all(
+            untrackedToStat.map(async (f) => {
+              const r = await gitRead(
+                ['diff', '--no-index', '--numstat', '--', '/dev/null', f.path],
+                { cwd, reject: false },
+              );
+              // Exit code 1 is expected (differences found); only bail on 2+ (error).
+              if (r.exitCode !== 0 && r.exitCode !== 1) return;
+              const line = r.stdout.trim().split('\n')[0];
+              if (!line) return;
+              const parts = line.split('\t');
+              if (parts.length < 3) return;
+              const additions = parseInt(parts[0], 10);
+              const deletions = parseInt(parts[1], 10);
+              if (isNaN(additions) || isNaN(deletions)) return; // binary files → "-\t-"
+              statMap.set(`u:${f.path}`, { additions, deletions });
+            }),
+          );
         }
-      };
 
-      if (stagedNumstat.exitCode === 0) parseNumstat(stagedNumstat.stdout, true);
-      if (unstagedNumstat.exitCode === 0) parseNumstat(unstagedNumstat.stdout, false);
-
-      // 2b. Untracked files don't appear in `git diff --numstat` because they're not
-      // in git's index yet. Compute their line counts via `git diff --no-index` so the
-      // UI can show +N for newly added files. Skip nested repos (path ends with "/"),
-      // oversized files, and binaries — `git diff --no-index` on a multi-GB binary can
-      // hang for tens of seconds and time the request out.
-      const untrackedToStat = baseFiles.filter((f) => {
-        if (f.staged || f.status !== 'added') return false;
-        if (f.path.endsWith('/')) return false;
-        if (statMap.has(`u:${f.path}`)) return false;
-        return !shouldSkipUntrackedDiff(cwd, f.path);
-      });
-      if (untrackedToStat.length > 0) {
-        await Promise.all(
-          untrackedToStat.map(async (f) => {
-            const r = await gitRead(
-              ['diff', '--no-index', '--numstat', '--', '/dev/null', f.path],
-              { cwd, reject: false },
-            );
-            // Exit code 1 is expected (differences found); only bail on 2+ (error).
-            if (r.exitCode !== 0 && r.exitCode !== 1) return;
-            const line = r.stdout.trim().split('\n')[0];
-            if (!line) return;
-            const parts = line.split('\t');
-            if (parts.length < 3) return;
-            const additions = parseInt(parts[0], 10);
-            const deletions = parseInt(parts[1], 10);
-            if (isNaN(additions) || isNaN(deletions)) return; // binary files → "-\t-"
-            statMap.set(`u:${f.path}`, { additions, deletions, staged: false });
-          }),
-        );
+        // Merge numstat results back into baseFiles before classification.
+        baseFiles = baseFiles.map((f) => {
+          const stats = statMap.get(`${f.staged ? 's' : 'u'}:${f.path}`);
+          return stats ? { ...f, additions: stats.additions, deletions: stats.deletions } : f;
+        });
       }
 
-      // 3. Merge stats into baseFiles + classify submodules/nested repos.
+      // 3. Classify submodules/nested repos and emit final summary.
       const files: FileDiffSummary[] = baseFiles.map((f) => {
-        const stats = statMap.get(`${f.staged ? 's' : 'u'}:${f.path}`);
         const { path, isSubmodule } = classifyPath(cwd, f.path);
         return {
           ...f,
           path,
-          additions: stats?.additions ?? 0,
-          deletions: stats?.deletions ?? 0,
           ...(isSubmodule && { kind: 'submodule' as const }),
         };
       });
@@ -563,8 +585,17 @@ export function getFullContextFileDiff(
   filePath: string,
   staged: boolean,
 ): ResultAsync<string, DomainError> {
+  const native = getNativeGit();
   return ResultAsync.fromPromise(
     (async () => {
+      if (native) {
+        try {
+          const diff = await native.getFullContextFileDiff(cwd, filePath, staged);
+          if (diff) return diff;
+        } catch {
+          // Native module failed — fall through to CLI
+        }
+      }
       if (staged) {
         const result = await gitRead(['diff', '--staged', '-U99999', '--', filePath], {
           cwd,

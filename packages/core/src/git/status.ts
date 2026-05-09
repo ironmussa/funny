@@ -275,13 +275,16 @@ export function getStatusSummary(
       const remoteBranch = remoteResult.exitCode === 0 ? remoteResult.stdout.trim() : null;
       const hasRemoteBranch = remoteBranch !== null;
 
-      // If remote exists, we need count against it (two extra commands: ahead + behind).
-      // Otherwise, use the speculative baseBranch count from above.
+      // Unpushed count uses `HEAD --not --remotes` so the Changes badge matches the
+      // History tab's `getUnpushedHashes` (commits not present on any remote ref).
+      // The legacy `<upstream>..HEAD` form disagreed when the upstream pointer was
+      // stale or pointed at a different branch.
+      // When no remote branch exists, fall back to the speculative baseBranch count.
       let unpushedCommitCount = 0;
       let unpulledCommitCount = 0;
       if (hasRemoteBranch) {
-        const [remoteCount, behindCount] = await Promise.all([
-          gitRead(['rev-list', '--count', `${remoteBranch}..HEAD`], {
+        const [unpushedResult, behindCount] = await Promise.all([
+          gitRead(['rev-list', '--count', 'HEAD', '--not', '--remotes'], {
             cwd: worktreeCwd,
             reject: false,
           }),
@@ -291,7 +294,7 @@ export function getStatusSummary(
           }),
         ]);
         unpushedCommitCount =
-          remoteCount.exitCode === 0 ? parseInt(remoteCount.stdout.trim(), 10) || 0 : 0;
+          unpushedResult.exitCode === 0 ? parseInt(unpushedResult.stdout.trim(), 10) || 0 : 0;
         unpulledCommitCount =
           behindCount.exitCode === 0 ? parseInt(behindCount.stdout.trim(), 10) || 0 : 0;
       } else if (baseCountResult && baseCountResult.exitCode === 0) {
@@ -371,6 +374,29 @@ export function getCommittedBranchSummary(
 ): ResultAsync<GitStatusSummary, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
+      // Native fast path: one in-process pass for the diff base...branch line
+      // counts, the merge-base check, and the upstream-existence check; only
+      // the rev-list commit counts shell out (gix's rev_walk miscounts when
+      // merge commits are involved). CLI fallback below mirrors the original
+      // 4-spawn (+2 conditional) shape.
+      const native = getNativeGit();
+      if (native) {
+        try {
+          const r = await native.getBranchSummary(repoCwd, baseBranch, branch);
+          return {
+            dirtyFileCount: 0,
+            unpushedCommitCount: r.unpushedCommitCount,
+            unpulledCommitCount: r.unpulledCommitCount,
+            hasRemoteBranch: r.hasRemoteBranch,
+            isMergedIntoBase: r.isMergedIntoBase,
+            linesAdded: r.linesAdded,
+            linesDeleted: r.linesDeleted,
+          };
+        } catch {
+          // Native module failed — fall through to CLI
+        }
+      }
+
       const [diffResult, remoteResult, baseCountResult, mergedResult] = await Promise.all([
         gitRead(['diff', `${baseBranch}...${branch}`, '--numstat'], {
           cwd: repoCwd,
@@ -410,7 +436,8 @@ export function getCommittedBranchSummary(
       let unpulledCommitCount = 0;
       if (hasRemoteBranch && remoteBranch) {
         const [aheadResult, behindResult] = await Promise.all([
-          gitRead(['rev-list', '--count', `${remoteBranch}..${branch}`], {
+          // Match the History tab: commits on this branch not on any remote ref.
+          gitRead(['rev-list', '--count', branch, '--not', '--remotes'], {
             cwd: repoCwd,
             reject: false,
           }),

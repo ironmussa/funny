@@ -258,8 +258,6 @@ export const useUIStore = create<UIState>((set) => ({
   setSettingsReturnPath: (path) => set({ settingsReturnPath: path }),
   setGeneralSettingsOpen: (open) => {
     if (open) {
-      invalidateSelectThread();
-      useThreadStore.setState({ selectedThreadId: null, activeThread: null });
       persistRightPane(false);
     }
     set(
@@ -276,7 +274,7 @@ export const useUIStore = create<UIState>((set) => ({
             liveColumnsOpen: false,
             testRunnerOpen: false,
           }
-        : { generalSettingsOpen: false, activePreferencesPage: null },
+        : { generalSettingsOpen: false, activePreferencesPage: null, settingsReturnPath: null },
     );
   },
   setActivePreferencesPage: (page) => set({ activePreferencesPage: page }),

@@ -65,6 +65,7 @@ export interface UseReviewActionsResult {
   handleRevertFile: (path: string) => void;
   executeRevert: (path: string) => Promise<void>;
   handleDiscardAll: () => void;
+  handleDiscardFolder: (folderPath: string) => void;
   executeDiscardAll: (paths: string[]) => Promise<void>;
   handleIgnoreFiles: () => void;
   executeIgnoreFiles: (paths: string[]) => Promise<void>;
@@ -178,6 +179,16 @@ export function useReviewActions({
     if (paths.length === 0) return;
     setConfirmDialog({ type: 'discard-all', paths });
   }, [checkedFiles, summaries, setConfirmDialog]);
+
+  const handleDiscardFolder = useCallback(
+    (folderPath: string) => {
+      const prefix = folderPath.endsWith('/') ? folderPath : `${folderPath}/`;
+      const paths = summaries.map((s) => s.path).filter((p) => p.startsWith(prefix));
+      if (paths.length === 0) return;
+      setConfirmDialog({ type: 'discard-all', paths });
+    },
+    [summaries, setConfirmDialog],
+  );
 
   const executeDiscardAll = useCallback(
     async (paths: string[]) => {
@@ -682,6 +693,7 @@ export function useReviewActions({
     handleRevertFile,
     executeRevert,
     handleDiscardAll,
+    handleDiscardFolder,
     executeDiscardAll,
     handleIgnoreFiles,
     executeIgnoreFiles,

@@ -113,6 +113,7 @@ interface ChangesFilesPanelProps {
   handleStageFile: (path: string) => void;
   handleUnstageFile: (path: string) => void;
   handleRevertFile: (path: string) => void;
+  handleDiscardFolder: (folderPath: string) => void;
   handleIgnore: (pattern: string) => void;
   handleCopyPath: (path: string, relative: boolean) => void;
   handleOpenDirectory: (path: string, isFile: boolean) => void;
@@ -162,6 +163,7 @@ export function ChangesFilesPanel({
   handleStageFile,
   handleUnstageFile,
   handleRevertFile,
+  handleDiscardFolder,
   handleIgnore,
   handleCopyPath,
   handleOpenDirectory,
@@ -395,6 +397,17 @@ export function ChangesFilesPanel({
                               {t('sidebar.openDirectory')}
                             </DropdownMenuItem>
                           )}
+                          <DropdownMenuItem
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDiscardFolder(row.path);
+                            }}
+                            className="text-destructive focus:text-destructive"
+                            data-testid={`review-folder-discard-${row.path}`}
+                          >
+                            <Undo2 />
+                            {t('review.discardFolder')}
+                          </DropdownMenuItem>
                           {(() => {
                             const folderOptions = ['/' + row.path, ...getParentFolders(row.path)];
                             if (folderOptions.length === 1) {

@@ -278,6 +278,7 @@
     "moveChangesToBranch": "Move changes to a new branch",
     "continue": "Continue",
     "discardChanges": "Discard changes...",
+    "discardFolder": "Discard folder changes...",
     "ignoreFile": "Ignore file (add to .gitignore)",
     "ignoreFolder": "Ignore folder (add to .gitignore)",
     "ignoreExtension": "Ignore all {{ext}} files (add to .gitignore)",
@@ -770,6 +771,7 @@
   },
   "common": {
     "cancel": "Cancel",
+    "confirm": "Confirm",
     "delete": "Delete",
     "add": "Add",
     "save": "Save",

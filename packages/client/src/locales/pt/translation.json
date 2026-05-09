@@ -270,6 +270,7 @@
     "moveChangesToBranch": "Mover alterações para uma nova branch",
     "continue": "Continuar",
     "discardChanges": "Descartar alterações...",
+    "discardFolder": "Descartar alterações da pasta...",
     "ignoreFile": "Ignorar arquivo (adicionar ao .gitignore)",
     "ignoreFolder": "Ignorar pasta (adicionar ao .gitignore)",
     "ignoreExtension": "Ignorar todos os arquivos {{ext}} (adicionar ao .gitignore)",
@@ -761,6 +762,7 @@
   },
   "common": {
     "cancel": "Cancelar",
+    "confirm": "Confirmar",
     "delete": "Excluir",
     "add": "Adicionar",
     "save": "Salvar",

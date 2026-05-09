@@ -10,6 +10,7 @@ function getLogger(): Logger {
       endpoint: endpoint || 'http://localhost:4000',
       serviceName: 'funny-client',
       enabled: !!endpoint,
+      includeUrl: true,
     });
   }
   return shared;

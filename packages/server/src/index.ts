@@ -294,7 +294,7 @@ if (process.env.NODE_ENV !== 'production') {
         namespace: 'runner-monitor',
         runners: stats.runners,
         browsers: stats.browserClients,
-        runnerDetails,
+        runnerDetails: JSON.stringify(runnerDetails),
       });
     } catch {
       // Ignore — DB may not be ready yet

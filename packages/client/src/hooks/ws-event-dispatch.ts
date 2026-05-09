@@ -139,10 +139,8 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
         for (const entry of toolOutputs) store.handleWSToolOutput(entry.threadId, entry.data);
       }
 
-      requestAnimationFrame(() => {
-        startTransition(() => {
-          useThreadStore.getState().handleWSResult(threadId, data);
-        });
+      startTransition(() => {
+        useThreadStore.getState().handleWSResult(threadId, data);
       });
 
       import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {

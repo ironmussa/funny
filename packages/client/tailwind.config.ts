@@ -141,8 +141,8 @@ const config: Config = {
         },
       },
       animation: {
-        'fade-in': 'fade-in 150ms ease-out',
-        'fade-out': 'fade-out 100ms ease-in',
+        'fade-in': 'fade-in 80ms ease-out',
+        'fade-out': 'fade-out 60ms ease-in',
         'scale-in': 'scale-in 150ms ease-out',
         'slide-in-right': 'slide-in-right 200ms ease-out',
         'slide-down': 'slide-down 150ms ease-out',

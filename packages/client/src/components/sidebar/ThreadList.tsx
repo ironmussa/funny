@@ -175,6 +175,10 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
       if (thread?.mode === 'local') {
         const branch = resolveThreadBranch(thread);
         if (branch) {
+          // Kick off thread data fetch in parallel with the branch preflight so
+          // the network roundtrips overlap instead of serializing. If the user
+          // cancels the branch dialog we just discard the prefetched data.
+          useThreadStore.getState().prefetchThread(threadId);
           const canProceed = await ensureBranch(projectId, branch);
           if (!canProceed) return;
         }

@@ -31,7 +31,7 @@ function CommandDialog({
   return (
     <Dialog {...props}>
       <DialogPortal>
-        <DialogOverlay />
+        <DialogOverlay className="duration-75" />
         <DialogPrimitive.Content
           aria-describedby={undefined}
           onCloseAutoFocus={onCloseAutoFocus}

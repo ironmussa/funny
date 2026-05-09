@@ -6,6 +6,30 @@ export interface BranchDetailedInfo {
   isRemote: boolean;
 }
 
+/**
+ * Summary of committed-only changes between `base_branch` and `branch`,
+ * computed without touching the working tree. Mirrors the TS-side
+ * `getCommittedBranchSummary` shape.
+ */
+export interface BranchSummaryResult {
+  linesAdded: number;
+  linesDeleted: number;
+  unpushedCommitCount: number;
+  unpulledCommitCount: number;
+  hasRemoteBranch: boolean;
+  isMergedIntoBase: boolean;
+}
+
+/**
+ * For each path in `paths`, return the subset that is ignored by .gitignore /
+ * info/exclude / core.excludesFile. Mirrors `git check-ignore --stdin`.
+ *
+ * Paths must be repo-relative with `/` separators. Paths that resolve to a
+ * file inside an ignored directory are also reported as ignored (gix walks
+ * the parent chain when matching).
+ */
+export declare function checkIgnore(cwd: string, paths: Array<string>): Promise<Array<string>>;
+
 export interface CommitFileEntry {
   path: string;
   status: string;
@@ -23,7 +47,15 @@ export interface FileDiffSummaryItem {
   path: string;
   status: string;
   staged: boolean;
+  additions: number;
+  deletions: number;
 }
+
+export declare function getBranchSummary(
+  cwd: string,
+  baseBranch: string,
+  branch: string,
+): Promise<BranchSummaryResult>;
 
 export declare function getCommitBody(cwd: string, hash: string): Promise<string>;
 
@@ -64,6 +96,16 @@ export declare function getSingleFileDiff(
   filePath: string,
   staged: boolean,
 ): Promise<string>;
+
+export declare function getStashFileDiff(
+  cwd: string,
+  stashRef: string,
+  filePath: string,
+): Promise<string>;
+
+export declare function getStashList(cwd: string): Promise<Array<StashEntry>>;
+
+export declare function getStashShow(cwd: string, stashRef: string): Promise<Array<StashFileEntry>>;
 
 export declare function getStatusSummary(
   worktreeCwd: string,
@@ -111,7 +153,27 @@ export interface ListFilesOptions {
   includeIgnored?: boolean;
 }
 
+/**
+ * List repo-relative paths that have any unmerged (conflict) index entries
+ * (stage 1, 2, or 3). Mirrors `git ls-files --unmerged` minus the mode /
+ * hash / stage columns — callers only need the paths to drive conflict
+ * resolution UI.
+ */
+export declare function listUnmergedFiles(cwd: string): Promise<Array<string>>;
+
 /** Simple ping function to verify the native module loads correctly. */
 export declare function ping(): string;
 
 export declare function resetSoft(cwd: string): Promise<void>;
+
+export interface StashEntry {
+  index: string;
+  message: string;
+  relativeDate: string;
+}
+
+export interface StashFileEntry {
+  path: string;
+  additions: number;
+  deletions: number;
+}

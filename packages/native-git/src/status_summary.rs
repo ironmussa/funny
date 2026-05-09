@@ -174,6 +174,24 @@ fn rev_list_count(cwd: &Path, range: &str) -> u32 {
     .unwrap_or(0)
 }
 
+/// Count commits in HEAD that are not reachable from any remote ref.
+/// Mirrors `getUnpushedHashes` (used by the History tab) so the Changes badge agrees.
+fn rev_list_count_unpushed(cwd: &Path) -> u32 {
+  std::process::Command::new("git")
+    .args(["rev-list", "--count", "HEAD", "--not", "--remotes"])
+    .current_dir(cwd)
+    .output()
+    .ok()
+    .and_then(|o| {
+      if o.status.success() {
+        String::from_utf8(o.stdout).ok()?.trim().parse::<u32>().ok()
+      } else {
+        None
+      }
+    })
+    .unwrap_or(0)
+}
+
 /// Intermediate result from the main status scan (Phase 1 + 2a).
 struct StatusPhaseResult {
   dirty_file_count: u32,
@@ -400,7 +418,8 @@ pub async fn get_status_summary(
     let mut unpulled_commit_count: u32 = 0;
 
     if has_remote_branch {
-      unpushed_commit_count = rev_list_count(&worktree_path, &format!("origin/{}..HEAD", branch));
+      // Match the History tab: commits not on any remote ref.
+      unpushed_commit_count = rev_list_count_unpushed(&worktree_path);
       unpulled_commit_count = rev_list_count(&worktree_path, &format!("HEAD..origin/{}", branch));
     } else if let Some(ref base_b) = base_branch {
       unpushed_commit_count = rev_list_count(&worktree_path, &format!("{}..HEAD", base_b));

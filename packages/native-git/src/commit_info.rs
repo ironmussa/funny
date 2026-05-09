@@ -92,11 +92,11 @@ pub(crate) fn count_diff_lines(old: &[u8], new: &[u8]) -> (u32, u32) {
 #[napi]
 pub async fn get_commit_files(cwd: String, hash: String) -> napi::Result<Vec<CommitFileEntry>> {
   with_repo(&cwd, |repo| {
-    _get_commit_files_inner(repo, &hash)
+    commit_files_for_hash(repo, &hash)
   })
 }
 
-fn _get_commit_files_inner(repo: &gix::Repository, hash: &str) -> napi::Result<Vec<CommitFileEntry>> {
+pub(crate) fn commit_files_for_hash(repo: &gix::Repository, hash: &str) -> napi::Result<Vec<CommitFileEntry>> {
   let commit_id = repo
     .rev_parse_single(hash)
     .map_err(|e| napi::Error::from_reason(format!("Failed to parse revision: {e}")))?;

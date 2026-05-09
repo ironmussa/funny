@@ -15,7 +15,7 @@ pub struct GitLogEntry {
 }
 
 /// Format a timestamp as a relative date string (e.g. "2 hours ago", "3 days ago").
-fn format_relative_date(seconds_since_epoch: i64) -> String {
+pub(crate) fn format_relative_date(seconds_since_epoch: i64) -> String {
   let now = SystemTime::now()
     .duration_since(SystemTime::UNIX_EPOCH)
     .map(|d| d.as_secs() as i64)

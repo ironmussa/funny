@@ -388,7 +388,15 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 data-testid="header-menu-pin"
-                onClick={() => pinThread(threadId, threadProjectId!, !threadPinned)}
+                onClick={() => {
+                  const next = !threadPinned;
+                  pinThread(threadId, threadProjectId!, next);
+                  toast.success(
+                    next
+                      ? t('toast.threadPinned', 'Thread pinned')
+                      : t('toast.threadUnpinned', 'Thread unpinned'),
+                  );
+                }}
                 className="cursor-pointer"
               >
                 {threadPinned ? (
@@ -654,9 +662,10 @@ export const ProjectHeader = memo(function ProjectHeader({
     const next = titleDraft.trim();
     if (next && next !== (activeThreadTitle ?? '').trim()) {
       renameThread(activeThreadId, activeThreadProjectId, next);
+      toast.success(t('toast.threadRenamed', { title: next }));
     }
     setIsEditingTitle(false);
-  }, [activeThreadId, activeThreadProjectId, activeThreadTitle, renameThread, titleDraft]);
+  }, [activeThreadId, activeThreadProjectId, activeThreadTitle, renameThread, t, titleDraft]);
 
   const cancelTitleEdit = useCallback(() => {
     setIsEditingTitle(false);
@@ -675,6 +684,7 @@ export const ProjectHeader = memo(function ProjectHeader({
 
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projects = useProjectStore((s) => s.projects);
+  const selectProject = useProjectStore((s) => s.selectProject);
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const setTestRunnerOpen = useUIStore((s) => s.setTestRunnerOpen);
@@ -827,9 +837,16 @@ export const ProjectHeader = memo(function ProjectHeader({
             <BreadcrumbList>
               {project && activeThreadId && (
                 <BreadcrumbItem className="flex-shrink-0">
-                  <BreadcrumbLink className="flex cursor-default items-center gap-1.5 whitespace-nowrap text-sm">
-                    <FolderOpen className="icon-sm text-muted-foreground" />
-                    {project.name}
+                  <BreadcrumbLink asChild>
+                    <button
+                      type="button"
+                      data-testid="header-breadcrumb-project"
+                      onClick={() => selectProject(project.id, { revealIntent: 'nearest' })}
+                      className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-sm"
+                    >
+                      <FolderOpen className="icon-sm text-muted-foreground" />
+                      {project.name}
+                    </button>
                   </BreadcrumbLink>
                 </BreadcrumbItem>
               )}

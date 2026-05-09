@@ -21,6 +21,7 @@ export function useGlobalShortcuts(toggleCommandPalette: () => void, toggleFileS
       if (e.ctrlKey && e.key === 'k') {
         e.preventDefault();
         e.stopPropagation();
+        (window as unknown as { __paletteOpenTs?: number }).__paletteOpenTs = performance.now();
         log.info('shortcut.command_palette');
         toggleCommandPalette();
         return;
@@ -32,6 +33,19 @@ export function useGlobalShortcuts(toggleCommandPalette: () => void, toggleFileS
         e.stopPropagation();
         log.info('shortcut.file_search');
         toggleFileSearch();
+        return;
+      }
+
+      // Ctrl+, to open project settings (general page)
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && !e.metaKey && e.key === ',') {
+        e.preventDefault();
+        e.stopPropagation();
+        const activeThreadProjectId = useThreadStore.getState().activeThread?.projectId ?? null;
+        const projectId = activeThreadProjectId ?? useProjectStore.getState().selectedProjectId;
+        log.info('shortcut.project_settings', { projectId });
+        navigate(
+          buildPath(projectId ? `/projects/${projectId}/settings/general` : `/settings/general`),
+        );
         return;
       }
 

@@ -1,9 +1,9 @@
 import { FolderOpen } from 'lucide-react';
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
-import { settingsItems, settingsLabelKeys } from '@/components/SettingsPanel';
+import { settingsItems, settingsLabelKeys } from '@/components/settings/items';
 import {
   CommandDialog,
   CommandInput,
@@ -13,10 +13,14 @@ import {
   CommandSeparator,
   CommandItem,
 } from '@/components/ui/command';
+import { createClientLogger } from '@/lib/client-logger';
+import { metric } from '@/lib/telemetry';
 import { buildPath } from '@/lib/url';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
+
+const log = createClientLogger('command-palette');
 
 interface CommandPaletteProps {
   open: boolean;
@@ -30,6 +34,26 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   const startNewThread = useUIStore((s) => s.startNewThread);
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
   const navigatedRef = useRef(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const w = window as unknown as { __paletteOpenTs?: number };
+    const t0 = w.__paletteOpenTs;
+    if (t0 == null) return;
+    const commitMs = performance.now() - t0;
+    requestAnimationFrame(() => {
+      const paintMs = performance.now() - t0;
+      log.info('palette.open_timing', {
+        commit_ms: Math.round(commitMs),
+        paint_ms: Math.round(paintMs),
+        project_count: projects.length,
+        settings_count: settingsItems.length,
+      });
+      metric('palette.open.commit_ms', Math.round(commitMs), { type: 'gauge' });
+      metric('palette.open.paint_ms', Math.round(paintMs), { type: 'gauge' });
+      w.__paletteOpenTs = undefined;
+    });
+  }, [open, projects.length]);
 
   const handleProjectSelect = (projectId: string) => {
     navigatedRef.current = true;

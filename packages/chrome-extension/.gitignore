@@ -1,2 +1,5 @@
 *.zip
 .package-staging/
+
+# Compiled output from src/*.ts (built by build.ts)
+*.js

@@ -259,11 +259,11 @@ export function NewThreadInput({
       <div className="w-full max-w-3xl">
         {/* Context bar: Project / Repo / Branch */}
         <div
-          className="mb-3 flex items-center gap-2 text-base text-muted-foreground"
+          className="mb-3 flex h-9 items-center gap-2 text-base text-muted-foreground"
           data-testid="new-thread-context-bar"
         >
           {project && (
-            <span className="flex shrink-0 items-center gap-1.5">
+            <span className="flex h-9 shrink-0 items-center gap-1.5 px-2 py-1">
               <FolderOpen className="h-5 w-5 shrink-0" />
               <span className="truncate font-medium">{project.name}</span>
             </span>
@@ -285,14 +285,16 @@ export function NewThreadInput({
                     href={browseUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex shrink-0 items-center gap-1.5 truncate rounded px-2 py-1 transition-colors hover:bg-muted hover:text-foreground"
+                    className="flex h-9 shrink-0 items-center gap-1.5 truncate rounded px-2 py-1 transition-colors hover:bg-muted hover:text-foreground"
                     data-testid="new-thread-repo-link"
                     title={browseUrl}
                   >
                     {content}
                   </a>
                 ) : (
-                  <span className="flex shrink-0 items-center gap-1.5 truncate">{content}</span>
+                  <span className="flex h-9 shrink-0 items-center gap-1.5 truncate px-2 py-1">
+                    {content}
+                  </span>
                 );
               })()}
             </>
@@ -301,7 +303,7 @@ export function NewThreadInput({
             <>
               <span className="text-muted-foreground/40">/</span>
               {branchPickerLoading ? (
-                <span className="flex items-center gap-1.5 px-2 py-1">
+                <span className="flex h-9 items-center gap-1.5 px-2 py-1">
                   <GitBranch className="h-5 w-5 shrink-0" />
                   <Loader2 className="h-5 w-5 animate-spin" />
                 </span>
@@ -314,7 +316,7 @@ export function NewThreadInput({
                   onChange={handleBranchChange}
                   showCreateNew
                   testId="new-thread-branch-picker"
-                  triggerClassName="flex max-w-[300px] items-center gap-1.5 truncate rounded px-2 py-1 text-base text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none [&_svg]:h-5 [&_svg]:w-5"
+                  triggerClassName="flex h-9 max-w-[300px] items-center gap-1.5 truncate rounded px-2 py-1 text-base text-muted-foreground transition-colors hover:bg-muted hover:text-foreground focus-visible:outline-none [&_svg]:h-5 [&_svg]:w-5"
                 />
               )}
             </>

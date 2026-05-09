@@ -52,6 +52,10 @@ export function stashDrop(cwd: string, stashRef = 'stash@{0}'): ResultAsync<stri
  * Uses @@SEP@@ delimiter to avoid corruption when stash messages contain pipes.
  */
 export function stashList(cwd: string): ResultAsync<StashEntry[], DomainError> {
+  const native = getNativeGit();
+  if (native) {
+    return ResultAsync.fromPromise(native.getStashList(cwd), (error) => internal(String(error)));
+  }
   const SEP = '@@SEP@@';
   return ResultAsync.fromPromise(
     (async () => {
@@ -79,6 +83,12 @@ export function stashShow(
   cwd: string,
   stashRef = 'stash@{0}',
 ): ResultAsync<Array<{ path: string; additions: number; deletions: number }>, DomainError> {
+  const native = getNativeGit();
+  if (native) {
+    return ResultAsync.fromPromise(native.getStashShow(cwd, stashRef), (error) =>
+      internal(String(error)),
+    );
+  }
   return ResultAsync.fromPromise(
     (async () => {
       const result = await gitRead(['stash', 'show', '--numstat', stashRef], {
@@ -110,6 +120,12 @@ export function stashFileDiff(
   stashRef: string,
   filePath: string,
 ): ResultAsync<string, DomainError> {
+  const native = getNativeGit();
+  if (native) {
+    return ResultAsync.fromPromise(native.getStashFileDiff(cwd, stashRef, filePath), (error) =>
+      internal(String(error)),
+    );
+  }
   return ResultAsync.fromPromise(
     (async () => {
       const result = await gitRead(['stash', 'show', '-p', stashRef, '--', filePath], {

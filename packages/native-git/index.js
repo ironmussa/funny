@@ -763,6 +763,8 @@ if (!nativeBinding) {
 }
 
 module.exports = nativeBinding;
+module.exports.checkIgnore = nativeBinding.checkIgnore;
+module.exports.getBranchSummary = nativeBinding.getBranchSummary;
 module.exports.getCommitBody = nativeBinding.getCommitBody;
 module.exports.getCommitFileDiff = nativeBinding.getCommitFileDiff;
 module.exports.getCommitFiles = nativeBinding.getCommitFiles;
@@ -773,10 +775,14 @@ module.exports.getFullContextFileDiff = nativeBinding.getFullContextFileDiff;
 module.exports.getLog = nativeBinding.getLog;
 module.exports.getRemoteUrl = nativeBinding.getRemoteUrl;
 module.exports.getSingleFileDiff = nativeBinding.getSingleFileDiff;
+module.exports.getStashFileDiff = nativeBinding.getStashFileDiff;
+module.exports.getStashList = nativeBinding.getStashList;
+module.exports.getStashShow = nativeBinding.getStashShow;
 module.exports.getStatusSummary = nativeBinding.getStatusSummary;
 module.exports.getUnpushedHashes = nativeBinding.getUnpushedHashes;
 module.exports.listBranches = nativeBinding.listBranches;
 module.exports.listBranchesDetailed = nativeBinding.listBranchesDetailed;
 module.exports.listFiles = nativeBinding.listFiles;
+module.exports.listUnmergedFiles = nativeBinding.listUnmergedFiles;
 module.exports.ping = nativeBinding.ping;
 module.exports.resetSoft = nativeBinding.resetSoft;

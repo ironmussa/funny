@@ -408,55 +408,61 @@ pub async fn get_commit_file_diff(
   hash: String,
   file_path: String,
 ) -> napi::Result<String> {
-  with_repo(&cwd, |repo| {
-    let commit_id = repo
-      .rev_parse_single(hash.as_str())
-      .map_err(|e| napi::Error::from_reason(format!("Failed to parse revision: {e}")))?;
-    let commit = commit_id
-      .object()
-      .map_err(|e| napi::Error::from_reason(format!("Failed to read object: {e}")))?
-      .try_into_commit()
-      .map_err(|e| napi::Error::from_reason(format!("Not a commit: {e}")))?;
+  with_repo(&cwd, |repo| commit_file_diff_inner(repo, &hash, &file_path))
+}
 
-    let commit_tree = commit
-      .tree()
-      .map_err(|e| napi::Error::from_reason(format!("Failed to get tree: {e}")))?;
+pub(crate) fn commit_file_diff_inner(
+  repo: &gix::Repository,
+  hash: &str,
+  file_path: &str,
+) -> napi::Result<String> {
+  let commit_id = repo
+    .rev_parse_single(hash)
+    .map_err(|e| napi::Error::from_reason(format!("Failed to parse revision: {e}")))?;
+  let commit = commit_id
+    .object()
+    .map_err(|e| napi::Error::from_reason(format!("Failed to read object: {e}")))?
+    .try_into_commit()
+    .map_err(|e| napi::Error::from_reason(format!("Not a commit: {e}")))?;
 
-    // Get parent tree blob for this file (first parent, or empty for root commits)
-    let parent_blob: Option<Vec<u8>> = commit
-      .parent_ids()
-      .next()
-      .and_then(|pid| pid.object().ok())
-      .and_then(|obj| obj.try_into_commit().ok())
-      .and_then(|pc| pc.tree().ok())
-      .and_then(|tree| tree.lookup_entry_by_path(&file_path).ok().flatten())
-      .and_then(|entry| entry.object().ok())
-      .map(|obj| obj.detach().data);
+  let commit_tree = commit
+    .tree()
+    .map_err(|e| napi::Error::from_reason(format!("Failed to get tree: {e}")))?;
 
-    // Get blob from commit tree
-    let commit_blob: Option<Vec<u8>> = commit_tree
-      .lookup_entry_by_path(&file_path)
-      .ok()
-      .flatten()
-      .and_then(|entry| entry.object().ok())
-      .map(|obj| obj.detach().data);
+  // Get parent tree blob for this file (first parent, or empty for root commits)
+  let parent_blob: Option<Vec<u8>> = commit
+    .parent_ids()
+    .next()
+    .and_then(|pid| pid.object().ok())
+    .and_then(|obj| obj.try_into_commit().ok())
+    .and_then(|pc| pc.tree().ok())
+    .and_then(|tree| tree.lookup_entry_by_path(file_path).ok().flatten())
+    .and_then(|entry| entry.object().ok())
+    .map(|obj| obj.detach().data);
 
-    let old = parent_blob.as_deref().unwrap_or(b"");
-    let new = commit_blob.as_deref().unwrap_or(b"");
+  // Get blob from commit tree
+  let commit_blob: Option<Vec<u8>> = commit_tree
+    .lookup_entry_by_path(file_path)
+    .ok()
+    .flatten()
+    .and_then(|entry| entry.object().ok())
+    .map(|obj| obj.detach().data);
 
-    if old.is_empty() && new.is_empty() {
-      return Ok(String::new());
-    }
-    if old == new {
-      return Ok(String::new());
-    }
+  let old = parent_blob.as_deref().unwrap_or(b"");
+  let new = commit_blob.as_deref().unwrap_or(b"");
 
-    Ok(compute_and_format(
-      old,
-      new,
-      &file_path,
-      parent_blob.is_none(),
-      commit_blob.is_none(),
-    ))
-  })
+  if old.is_empty() && new.is_empty() {
+    return Ok(String::new());
+  }
+  if old == new {
+    return Ok(String::new());
+  }
+
+  Ok(compute_and_format(
+    old,
+    new,
+    file_path,
+    parent_blob.is_none(),
+    commit_blob.is_none(),
+  ))
 }

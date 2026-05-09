@@ -52,7 +52,7 @@ fn walk_tree(
   }
 }
 
-fn count_lines(data: &[u8]) -> u32 {
+pub(crate) fn count_lines(data: &[u8]) -> u32 {
   if data.is_empty() {
     return 0;
   }
@@ -72,7 +72,7 @@ fn count_lines(data: &[u8]) -> u32 {
   n
 }
 
-fn count_diff_lines(old: &[u8], new: &[u8]) -> (u32, u32) {
+pub(crate) fn count_diff_lines(old: &[u8], new: &[u8]) -> (u32, u32) {
   let is_bin = |d: &[u8]| -> bool {
     if d.is_empty() {
       return false;

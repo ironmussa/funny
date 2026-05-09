@@ -30,7 +30,13 @@ export interface NativeGitLogEntry {
 }
 
 export interface NativeDiffSummaryResult {
-  files: Array<{ path: string; status: string; staged: boolean }>;
+  files: Array<{
+    path: string;
+    status: string;
+    staged: boolean;
+    additions: number;
+    deletions: number;
+  }>;
   total: number;
   truncated: boolean;
 }
@@ -50,6 +56,18 @@ export interface NativeBranchDetailedInfo {
 
 export interface NativeListFilesOptions {
   includeIgnored?: boolean;
+}
+
+export interface NativeStashEntry {
+  index: string;
+  message: string;
+  relativeDate: string;
+}
+
+export interface NativeStashFileEntry {
+  path: string;
+  additions: number;
+  deletions: number;
 }
 
 export interface NativeGitModule {
@@ -78,6 +96,9 @@ export interface NativeGitModule {
   getUnpushedHashes(cwd: string): Promise<string[]>;
   resetSoft(cwd: string): Promise<void>;
   listFiles(cwd: string, options?: NativeListFilesOptions | null): Promise<string[]>;
+  getStashList(cwd: string): Promise<NativeStashEntry[]>;
+  getStashShow(cwd: string, stashRef: string): Promise<NativeStashFileEntry[]>;
+  getStashFileDiff(cwd: string, stashRef: string, filePath: string): Promise<string>;
 }
 
 // Heavy I/O ops (status scan, diff scan) — limit concurrent disk reads
@@ -110,11 +131,15 @@ export interface PooledNativeGitModule {
   getRemoteUrl(cwd: string): Promise<string | null>;
   listBranchesDetailed(cwd: string): Promise<NativeBranchDetailedInfo[]>;
   getSingleFileDiff(cwd: string, filePath: string, staged: boolean): Promise<string>;
+  getFullContextFileDiff(cwd: string, filePath: string, staged: boolean): Promise<string>;
   getCommitFileDiff(cwd: string, hash: string, filePath: string): Promise<string>;
   getCommitFiles(cwd: string, hash: string): Promise<NativeCommitFileEntry[]>;
   getUnpushedHashes(cwd: string): Promise<string[]>;
   resetSoft(cwd: string): Promise<void>;
   listFiles(cwd: string, options?: NativeListFilesOptions | null): Promise<string[]>;
+  getStashList(cwd: string): Promise<NativeStashEntry[]>;
+  getStashShow(cwd: string, stashRef: string): Promise<NativeStashFileEntry[]>;
+  getStashFileDiff(cwd: string, stashRef: string, filePath: string): Promise<string>;
 }
 
 function createPooledModule(mod: NativeGitModule): PooledNativeGitModule {
@@ -130,11 +155,15 @@ function createPooledModule(mod: NativeGitModule): PooledNativeGitModule {
     getRemoteUrl: (...args) => lightPool(() => mod.getRemoteUrl(...args)),
     listBranchesDetailed: (...args) => lightPool(() => mod.listBranchesDetailed(...args)),
     getSingleFileDiff: (...args) => heavyPool(() => mod.getSingleFileDiff(...args)),
+    getFullContextFileDiff: (...args) => heavyPool(() => mod.getFullContextFileDiff(...args)),
     getCommitFileDiff: (...args) => heavyPool(() => mod.getCommitFileDiff(...args)),
     getCommitFiles: (...args) => heavyPool(() => mod.getCommitFiles(...args)),
     getUnpushedHashes: (...args) => lightPool(() => mod.getUnpushedHashes(...args)),
     resetSoft: (...args) => heavyPool(() => mod.resetSoft(...args)),
     listFiles: (...args) => heavyPool(() => mod.listFiles(...args)),
+    getStashList: (...args) => lightPool(() => mod.getStashList(...args)),
+    getStashShow: (...args) => lightPool(() => mod.getStashShow(...args)),
+    getStashFileDiff: (...args) => heavyPool(() => mod.getStashFileDiff(...args)),
   };
 }
 

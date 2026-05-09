@@ -95,30 +95,23 @@ const AnalyticsView = lazy(() =>
 const LiveColumnsView = lazy(() =>
   import('@/components/LiveColumnsView').then((m) => ({ default: m.LiveColumnsView })),
 );
-const commandPaletteImport = () =>
-  import('@/components/CommandPalette').then((m) => ({ default: m.CommandPalette }));
-const CommandPalette = lazy(commandPaletteImport);
-const fileSearchImport = () =>
-  import('@/components/FileSearchDialog').then((m) => ({ default: m.FileSearchDialog }));
-const FileSearchDialog = lazy(fileSearchImport);
-// Prefetch the CommandPalette and ReviewPane chunks on idle so they open instantly
+// Eagerly start the CommandPalette chunk download at module-eval time so
+// Ctrl+K is instant. requestIdleCallback was firing too late on busy main
+// threads and the user saw a load delay before the dialog appeared.
+const commandPaletteImport = import('@/components/CommandPalette').then((m) => ({
+  default: m.CommandPalette,
+}));
+const CommandPalette = lazy(() => commandPaletteImport);
+const fileSearchImport = import('@/components/FileSearchDialog').then((m) => ({
+  default: m.FileSearchDialog,
+}));
+const FileSearchDialog = lazy(() => fileSearchImport);
+// Prefetch ReviewPane on idle so the first toggle is instant.
 if (typeof requestIdleCallback === 'function') {
-  requestIdleCallback(() => {
-    commandPaletteImport();
-  });
-  requestIdleCallback(() => {
-    fileSearchImport();
-  });
   requestIdleCallback(() => {
     reviewPaneImport();
   });
 } else {
-  setTimeout(() => {
-    commandPaletteImport();
-  }, 2000);
-  setTimeout(() => {
-    fileSearchImport();
-  }, 2500);
   setTimeout(() => {
     reviewPaneImport();
   }, 3000);
@@ -253,42 +246,55 @@ export function App() {
           {/* Center panel — main content + terminal */}
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
             <SidebarInset className="flex h-full flex-col overflow-hidden">
-              <div className="flex min-h-0 flex-1 overflow-hidden">
+              <div className="relative flex min-h-0 flex-1 overflow-hidden">
                 <ErrorBoundary area="main-content">
+                  {/* Overlay views — same priority cascade as before. Wrapped in its
+                      own Suspense so a lazy overlay's first-load suspension does not
+                      unmount the persistent ThreadView below. */}
+                  {isFullScreenView && (
+                    <Suspense>
+                      <div className="absolute inset-0 z-10 flex">
+                        {generalSettingsOpen ? (
+                          <GeneralSettingsView />
+                        ) : settingsOpen ? (
+                          <SettingsDetailView />
+                        ) : analyticsOpen ? (
+                          <AnalyticsView />
+                        ) : liveColumnsOpen ? (
+                          <LiveColumnsView />
+                        ) : testRunnerOpen ? (
+                          <TestRunnerPane />
+                        ) : automationInboxOpen ? (
+                          <AutomationInboxView />
+                        ) : addProjectOpen ? (
+                          <AddProjectView />
+                        ) : allThreadsProjectId ? (
+                          <AllThreadsView />
+                        ) : null}
+                      </div>
+                    </Suspense>
+                  )}
+
+                  {/* ThreadView stays mounted under any overlay so returning from
+                      Settings/Analytics/etc. is instant (no message refetch / Monaco
+                      / syntax-highlight re-render). Hidden via display:none when an
+                      overlay is active. */}
                   <Suspense>
-                    {generalSettingsOpen ? (
-                      <GeneralSettingsView />
-                    ) : settingsOpen ? (
-                      <SettingsDetailView />
-                    ) : analyticsOpen ? (
-                      <AnalyticsView />
-                    ) : liveColumnsOpen ? (
-                      <LiveColumnsView />
-                    ) : testRunnerOpen ? (
-                      <TestRunnerPane />
-                    ) : automationInboxOpen ? (
-                      <AutomationInboxView />
-                    ) : addProjectOpen ? (
-                      <AddProjectView />
-                    ) : allThreadsProjectId ? (
-                      <AllThreadsView />
-                    ) : (
+                    <div
+                      className={cn('flex min-h-0 min-w-0 flex-1', isFullScreenView && 'hidden')}
+                    >
                       <ThreadView />
-                    )}
+                    </div>
                   </Suspense>
                 </ErrorBoundary>
               </div>
 
+              {/* TerminalPanel stays mounted to preserve xterm state and PTY
+                  WebSocket connection when overlay views are shown. */}
               <Suspense>
-                {!(
-                  generalSettingsOpen ||
-                  settingsOpen ||
-                  analyticsOpen ||
-                  liveColumnsOpen ||
-                  testRunnerOpen ||
-                  automationInboxOpen ||
-                  addProjectOpen
-                ) && <TerminalPanel />}
+                <div className={cn(isFullScreenView && 'hidden')}>
+                  <TerminalPanel />
+                </div>
               </Suspense>
             </SidebarInset>
           </div>

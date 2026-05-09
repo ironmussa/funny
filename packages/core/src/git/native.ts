@@ -70,6 +70,15 @@ export interface NativeStashFileEntry {
   deletions: number;
 }
 
+export interface NativeBranchSummaryResult {
+  linesAdded: number;
+  linesDeleted: number;
+  unpushedCommitCount: number;
+  unpulledCommitCount: number;
+  hasRemoteBranch: boolean;
+  isMergedIntoBase: boolean;
+}
+
 export interface NativeGitModule {
   ping(): string;
   getStatusSummary(
@@ -101,6 +110,11 @@ export interface NativeGitModule {
   getStashFileDiff(cwd: string, stashRef: string, filePath: string): Promise<string>;
   checkIgnore(cwd: string, paths: string[]): Promise<string[]>;
   listUnmergedFiles(cwd: string): Promise<string[]>;
+  getBranchSummary(
+    cwd: string,
+    baseBranch: string,
+    branch: string,
+  ): Promise<NativeBranchSummaryResult>;
 }
 
 // Heavy I/O ops (status scan, diff scan) — limit concurrent disk reads
@@ -144,6 +158,11 @@ export interface PooledNativeGitModule {
   getStashFileDiff(cwd: string, stashRef: string, filePath: string): Promise<string>;
   checkIgnore(cwd: string, paths: string[]): Promise<string[]>;
   listUnmergedFiles(cwd: string): Promise<string[]>;
+  getBranchSummary(
+    cwd: string,
+    baseBranch: string,
+    branch: string,
+  ): Promise<NativeBranchSummaryResult>;
 }
 
 function createPooledModule(mod: NativeGitModule): PooledNativeGitModule {
@@ -170,6 +189,7 @@ function createPooledModule(mod: NativeGitModule): PooledNativeGitModule {
     getStashFileDiff: (...args) => heavyPool(() => mod.getStashFileDiff(...args)),
     checkIgnore: (...args) => lightPool(() => mod.checkIgnore(...args)),
     listUnmergedFiles: (...args) => lightPool(() => mod.listUnmergedFiles(...args)),
+    getBranchSummary: (...args) => heavyPool(() => mod.getBranchSummary(...args)),
   };
 }
 

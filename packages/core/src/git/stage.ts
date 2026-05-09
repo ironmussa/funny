@@ -11,6 +11,7 @@ import { ok, err, ResultAsync, type Result } from 'neverthrow';
 
 import { git } from './base.js';
 import { toDomainError } from './errors.js';
+import { getNativeGit } from './native.js';
 import { gitRead, gitWrite } from './process.js';
 
 /**
@@ -23,20 +24,40 @@ export function stageFiles(cwd: string, paths: string[]): ResultAsync<void, Doma
 
   return ResultAsync.fromPromise(
     (async () => {
-      // Ask git which of the requested paths are ignored
-      const checkResult = await gitRead(['check-ignore', '--stdin'], {
-        cwd,
-        reject: false,
-        stdin: paths.join('\n'),
-      });
-      const ignoredSet = new Set(
-        checkResult.exitCode === 0 && checkResult.stdout.trim()
-          ? checkResult.stdout
-              .trim()
-              .split('\n')
-              .map((p) => p.trim())
-          : [],
-      );
+      const native = getNativeGit();
+      let ignoredSet: Set<string>;
+
+      // Native check_ignore reads .gitignore / info/exclude / core.excludesFile
+      // through gix in-process — replaces the `git check-ignore --stdin` spawn.
+      let usedNative = false;
+      if (native) {
+        try {
+          const ignored = await native.checkIgnore(cwd, paths);
+          ignoredSet = new Set(ignored);
+          usedNative = true;
+        } catch {
+          ignoredSet = new Set();
+        }
+      } else {
+        ignoredSet = new Set();
+      }
+
+      if (!usedNative) {
+        const checkResult = await gitRead(['check-ignore', '--stdin'], {
+          cwd,
+          reject: false,
+          stdin: paths.join('\n'),
+        });
+        ignoredSet =
+          checkResult.exitCode === 0 && checkResult.stdout.trim()
+            ? new Set(
+                checkResult.stdout
+                  .trim()
+                  .split('\n')
+                  .map((p) => p.trim()),
+              )
+            : new Set();
+      }
 
       const filteredPaths = paths.filter((p) => !ignoredSet.has(p));
       if (filteredPaths.length === 0) return;
@@ -113,6 +134,8 @@ export function revertFiles(cwd: string, paths: string[]): ResultAsync<void, Dom
 
   return ResultAsync.fromPromise(
     (async () => {
+      const native = getNativeGit();
+
       // Identify untracked files so we can handle them differently
       const untrackedResult = await gitRead(['ls-files', '--others', '--exclude-standard'], {
         cwd,
@@ -125,16 +148,31 @@ export function revertFiles(cwd: string, paths: string[]): ResultAsync<void, Dom
       );
 
       // Identify unmerged files (merge conflicts) — these need special handling.
-      // Use ls-files --unmerged which catches all conflict types (UU, AA, AU, UA, DD, etc.)
-      // Output format: "<mode> <hash> <stage>\t<path>" — extract the path after the tab
-      const unmergedResult = await gitRead(['ls-files', '--unmerged'], { cwd });
-      const unmergedSet = new Set(
-        unmergedResult.stdout
-          .split('\n')
-          .map((l) => l.trim())
-          .filter(Boolean)
-          .map((l) => l.split('\t').pop() ?? ''),
-      );
+      // Native list_unmerged_files scans index entries with stage > 0 in-process;
+      // CLI fallback parses `git ls-files --unmerged` ("<mode> <hash> <stage>\t<path>").
+      let unmergedSet: Set<string>;
+      let usedNativeUnmerged = false;
+      if (native) {
+        try {
+          const unmerged = await native.listUnmergedFiles(cwd);
+          unmergedSet = new Set(unmerged);
+          usedNativeUnmerged = true;
+        } catch {
+          unmergedSet = new Set();
+        }
+      } else {
+        unmergedSet = new Set();
+      }
+      if (!usedNativeUnmerged) {
+        const unmergedResult = await gitRead(['ls-files', '--unmerged'], { cwd });
+        unmergedSet = new Set(
+          unmergedResult.stdout
+            .split('\n')
+            .map((l) => l.trim())
+            .filter(Boolean)
+            .map((l) => l.split('\t').pop() ?? ''),
+        );
+      }
 
       for (const path of paths) {
         if (untrackedSet.has(path)) {

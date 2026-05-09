@@ -63,8 +63,11 @@ export function GeneralSettingsView() {
           <div className="flex items-center gap-2">
             <TooltipIconButton
               onClick={() => {
-                useUIStore.getState().setGeneralSettingsOpen(false);
-                navigate(buildPath('/'));
+                const ui = useUIStore.getState();
+                const target = ui.settingsReturnPath ?? '/';
+                ui.setSettingsReturnPath(null);
+                ui.setGeneralSettingsOpen(false);
+                navigate(buildPath(target));
               }}
               className="text-muted-foreground hover:text-foreground"
               data-testid="preferences-back"

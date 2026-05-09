@@ -380,7 +380,14 @@ export function useRouteSync() {
 
     // Preferences (general settings): /preferences/:pageId
     if (preferencesPage) {
-      if (!uiStore.generalSettingsOpen) uiStore.setGeneralSettingsOpen(true);
+      if (!uiStore.generalSettingsOpen) {
+        // Mirror the project-settings flow: persist where the user came from so
+        // the back-arrow can return to the exact thread/route instead of /.
+        if (prevNonSettingsPathRef.current && uiStore.settingsReturnPath === null) {
+          uiStore.setSettingsReturnPath(prevNonSettingsPathRef.current + (location.search || ''));
+        }
+        uiStore.setGeneralSettingsOpen(true);
+      }
       if (uiStore.activePreferencesPage !== preferencesPage)
         uiStore.setActivePreferencesPage(preferencesPage);
       return;

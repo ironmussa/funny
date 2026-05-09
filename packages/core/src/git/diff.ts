@@ -93,8 +93,31 @@ async function getNestedDirtyStats(
   submoduleAbsPath: string,
   pointerMoved: boolean,
 ): Promise<NestedDirtyStats | undefined> {
+  if (!existsSync(join(submoduleAbsPath, '.git'))) return undefined;
+
+  // Try gitoxide first — getStatusSummary computes dirty count + line totals
+  // in a single in-process call, replacing the `git status` + `git diff` pair.
+  // Pass no base branch so it skips upstream rev-list comparisons we don't
+  // need here.
+  const native = getNativeGit();
+  if (native) {
+    try {
+      const r = await native.getStatusSummary(submoduleAbsPath, null, null);
+      if (!pointerMoved && r.dirtyFileCount === 0 && r.linesAdded === 0 && r.linesDeleted === 0) {
+        return undefined;
+      }
+      return {
+        dirtyFileCount: r.dirtyFileCount,
+        linesAdded: r.linesAdded,
+        linesDeleted: r.linesDeleted,
+        pointerMoved,
+      };
+    } catch {
+      // Native module failed — fall through to CLI
+    }
+  }
+
   try {
-    if (!existsSync(join(submoduleAbsPath, '.git'))) return undefined;
     const [statusRes, diffRes] = await Promise.all([
       gitRead(['status', '--porcelain'], { cwd: submoduleAbsPath, reject: false }),
       gitRead(['diff', 'HEAD', '--numstat'], { cwd: submoduleAbsPath, reject: false }),

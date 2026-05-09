@@ -6,12 +6,12 @@ import { useSidebarDragDrop } from '@/hooks/use-sidebar-drag-drop';
 import { useSidebarScrollSync } from '@/hooks/use-sidebar-scroll-sync';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { buildPath } from '@/lib/url';
-import { scrollSidebarItemIntoView } from '@/lib/utils';
+import { cn, scrollSidebarItemIntoView } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
-import { SettingsPanel } from './SettingsPanel';
+import { SettingsPanelBody } from './SettingsPanel';
 import { SidebarDialogs } from './sidebar/SidebarDialogs';
 import { SidebarFooter } from './sidebar/SidebarFooter';
 import { SidebarProjectsSection } from './sidebar/SidebarProjectsSection';
@@ -123,45 +123,51 @@ export function AppSidebar({ singleProjectId }: { singleProjectId?: string | nul
     [showGlobalSearch, navigate],
   );
 
-  if (settingsOpen) {
-    return <SettingsPanel />;
-  }
-
   return (
     <Sidebar collapsible="offcanvas" className="select-none">
-      <SidebarTopBar />
+      {/* Project settings nav — rendered alongside the projects tree so the
+          tree stays mounted (avoiding a costly remount when returning). */}
+      {settingsOpen && <SettingsPanelBody />}
 
-      <SidebarThreadsSection
-        scrollRef={threadsScrollRef}
-        topSentinelRef={threadsTopSentinelRef}
-        onRenameThread={handleRenameThread}
-        onArchiveThread={handleArchiveThreadFromList}
-        onDeleteThread={handleDeleteThreadFromList}
-      />
+      {/* Projects/threads tree — always mounted; hidden via display:none
+          when project settings is open so toggling is instant. Uses
+          `display:contents` so the wrapper is layout-transparent inside
+          the Sidebar's flex column. */}
+      <div className={cn(settingsOpen ? 'hidden' : 'contents')}>
+        <SidebarTopBar />
 
-      <SidebarProjectsSection
-        projects={projects}
-        projectsInitialized={projectsInitialized}
-        selectedProjectId={selectedProjectId}
-        expandedProjects={expandedProjects}
-        threadsByProject={threadsByProject}
-        scrollRef={projectsScrollRef}
-        topSentinelRef={projectsTopSentinelRef}
-        onToggle={handleToggleProject}
-        onSelectProject={handleSelectProject}
-        onNewThread={handleNewThread}
-        onRenameProject={handleRenameProject}
-        onDeleteProject={handleDeleteProject}
-        onSelectThread={handleSelectThread}
-        onRenameThread={handleRenameThread}
-        onArchiveThread={handleArchiveThread}
-        onPinThread={handlePinThread}
-        onDeleteThread={handleDeleteThread}
-        onShowAllThreads={handleShowAllThreads}
-        onShowIssues={handleShowIssues}
-      />
+        <SidebarThreadsSection
+          scrollRef={threadsScrollRef}
+          topSentinelRef={threadsTopSentinelRef}
+          onRenameThread={handleRenameThread}
+          onArchiveThread={handleArchiveThreadFromList}
+          onDeleteThread={handleDeleteThreadFromList}
+        />
 
-      <SidebarFooter />
+        <SidebarProjectsSection
+          projects={projects}
+          projectsInitialized={projectsInitialized}
+          selectedProjectId={selectedProjectId}
+          expandedProjects={expandedProjects}
+          threadsByProject={threadsByProject}
+          scrollRef={projectsScrollRef}
+          topSentinelRef={projectsTopSentinelRef}
+          onToggle={handleToggleProject}
+          onSelectProject={handleSelectProject}
+          onNewThread={handleNewThread}
+          onRenameProject={handleRenameProject}
+          onDeleteProject={handleDeleteProject}
+          onSelectThread={handleSelectThread}
+          onRenameThread={handleRenameThread}
+          onArchiveThread={handleArchiveThread}
+          onPinThread={handlePinThread}
+          onDeleteThread={handleDeleteThread}
+          onShowAllThreads={handleShowAllThreads}
+          onShowIssues={handleShowIssues}
+        />
+
+        <SidebarFooter />
+      </div>
 
       <SidebarDialogs
         archiveConfirm={archiveConfirm}

@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
+import { settingsLabelKeys, type SettingsItemId } from '@/components/settings/items';
 import { SettingsPageContent } from '@/components/settings/SettingsPageContent';
-import { settingsLabelKeys, type SettingsItemId } from '@/components/SettingsPanel';
 import {
   Breadcrumb,
   BreadcrumbItem,

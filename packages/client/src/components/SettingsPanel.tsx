@@ -1,21 +1,8 @@
-import {
-  ArrowLeft,
-  Settings,
-  Server,
-  Sparkles,
-  GitFork,
-  Terminal,
-  FileJson2,
-  Webhook,
-  Timer,
-  Archive,
-  Users,
-  UsersRound,
-  Workflow,
-} from 'lucide-react';
+import { ArrowLeft, Settings, Users, UsersRound } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { settingsItems, settingsLabelKeys } from '@/components/settings/items';
 import {
   Sidebar,
   SidebarContent,
@@ -30,50 +17,21 @@ import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useUIStore } from '@/stores/ui-store';
 
-const baseSettingsItems = [
-  { id: 'general', label: 'General', icon: Settings },
-  { id: 'mcp-server', label: 'MCP Server', icon: Server },
-  { id: 'skills', label: 'Skills', icon: Sparkles },
-  { id: 'worktrees', label: 'Worktrees', icon: GitFork },
-  { id: 'startup-commands', label: 'Startup Commands', icon: Terminal },
-  { id: 'project-config', label: 'Project Config', icon: FileJson2 },
-  { id: 'hooks', label: 'Hooks', icon: Webhook },
-  { id: 'automations', label: 'Automations', icon: Timer },
-  { id: 'pipelines', label: 'Pipelines', icon: Workflow },
-  { id: 'archived-threads', label: 'Archived Threads', icon: Archive },
-] as const;
-
-export const settingsItems = baseSettingsItems;
-export type SettingsItemId = (typeof baseSettingsItems)[number]['id'] | 'users' | 'team-members';
-
-export const settingsLabelKeys: Record<string, string> = {
-  general: 'settings.general',
-  'mcp-server': 'settings.mcpServer',
-  skills: 'settings.skills',
-  worktrees: 'settings.worktrees',
-  'startup-commands': 'startup.title',
-  'project-config': 'projectConfig.title',
-  hooks: 'hooks.title',
-  automations: 'settings.automations',
-  pipelines: 'settings.pipelines',
-  'archived-threads': 'settings.archivedThreads',
-  users: 'users.title',
-  'team-members': 'Team Members',
-};
-
-export function SettingsPanel() {
+export function SettingsPanelBody() {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
   const activeSettingsPage = useUIStore((s) => s.activeSettingsPage);
+  const settingsReturnPath = useUIStore((s) => s.settingsReturnPath);
+  const setSettingsReturnPath = useUIStore((s) => s.setSettingsReturnPath);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const authUser = useAuthStore((s) => s.user);
 
   // Build items list dynamically
   // Hide "Archived Threads" when viewing per-project settings
   const items: Array<{ id: string; label: string; icon: typeof Settings }> = selectedProjectId
-    ? [...baseSettingsItems].filter((item) => item.id !== 'archived-threads')
-    : [...baseSettingsItems];
+    ? [...settingsItems].filter((item) => item.id !== 'archived-threads')
+    : [...settingsItems];
   if (authUser?.role === 'admin') {
     items.push({ id: 'users', label: 'Users', icon: Users });
     items.push({ id: 'team-members', label: 'Team Members', icon: UsersRound });
@@ -83,14 +41,17 @@ export function SettingsPanel() {
     selectedProjectId ? `/projects/${selectedProjectId}/settings/${pageId}` : `/settings/${pageId}`;
 
   return (
-    <Sidebar collapsible="offcanvas">
+    <>
       {/* Header */}
       <SidebarHeader className="px-4 py-3">
         <div className="flex items-center gap-2">
           <TooltipIconButton
             onClick={() => {
               setSettingsOpen(false);
-              navigate(buildPath(selectedProjectId ? `/projects/${selectedProjectId}` : '/'));
+              const target =
+                settingsReturnPath ?? (selectedProjectId ? `/projects/${selectedProjectId}` : '/');
+              setSettingsReturnPath(null);
+              navigate(buildPath(target));
             }}
             className="text-muted-foreground hover:text-foreground"
             data-testid="settings-back"
@@ -122,6 +83,14 @@ export function SettingsPanel() {
           })}
         </SidebarMenu>
       </SidebarContent>
+    </>
+  );
+}
+
+export function SettingsPanel() {
+  return (
+    <Sidebar collapsible="offcanvas">
+      <SettingsPanelBody />
     </Sidebar>
   );
 }

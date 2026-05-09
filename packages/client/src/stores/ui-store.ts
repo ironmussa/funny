@@ -31,6 +31,8 @@ interface UIState {
   rightPaneTab: RightPaneTab;
   settingsOpen: boolean;
   activeSettingsPage: string | null;
+  /** Path the user came from before entering Settings — restored on back-arrow click. */
+  settingsReturnPath: string | null;
   newThreadProjectId: string | null;
   newThreadIdleOnly: boolean;
   allThreadsProjectId: string | null;
@@ -72,6 +74,7 @@ interface UIState {
   setRightPaneTab: (tab: RightPaneTab) => void;
   setSettingsOpen: (open: boolean) => void;
   setActiveSettingsPage: (page: string | null) => void;
+  setSettingsReturnPath: (path: string | null) => void;
   setGeneralSettingsOpen: (open: boolean) => void;
   setActivePreferencesPage: (page: string | null) => void;
   startNewThread: (projectId: string, idleOnly?: boolean) => void;
@@ -135,6 +138,7 @@ export const useUIStore = create<UIState>((set) => ({
   reviewPaneResizing: false,
   settingsOpen: false,
   activeSettingsPage: null,
+  settingsReturnPath: null,
   newThreadProjectId: null,
   newThreadIdleOnly: false,
   allThreadsProjectId: null,
@@ -248,9 +252,10 @@ export const useUIStore = create<UIState>((set) => ({
             addProjectOpen: false,
             testRunnerOpen: false,
           }
-        : { settingsOpen: false, activeSettingsPage: null },
+        : { settingsOpen: false, activeSettingsPage: null, settingsReturnPath: null },
     ),
   setActiveSettingsPage: (page) => set({ activeSettingsPage: page }),
+  setSettingsReturnPath: (path) => set({ settingsReturnPath: path }),
   setGeneralSettingsOpen: (open) => {
     if (open) {
       invalidateSelectThread();

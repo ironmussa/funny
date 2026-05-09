@@ -2,7 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useLocation, useNavigate, matchPath } from 'react-router-dom';
 import { toast } from 'sonner';
 
-import { settingsItems } from '@/components/SettingsPanel';
+import { settingsItems } from '@/components/settings/items';
 import { authClient } from '@/lib/auth-client';
 import { stripOrgPrefix } from '@/lib/url';
 import { useAuthStore } from '@/stores/auth-store';
@@ -271,6 +271,8 @@ export function useRouteSync() {
   // Subscribe only to `initialized` from project-store (not the entire app state)
   const initialized = useProjectStore((s) => s.initialized);
   const restoredRef = useRef(false);
+  // Tracks the last non-settings pathname so we can restore it when leaving Settings.
+  const prevNonSettingsPathRef = useRef<string | null>(null);
 
   // Sync URL → store whenever location changes (wait for auth + projects first)
   useEffect(() => {
@@ -390,12 +392,23 @@ export function useRouteSync() {
     }
 
     if (settingsPage && validSettingsIds.has(settingsPage as any)) {
-      if (!uiStore.settingsOpen) uiStore.setSettingsOpen(true);
+      if (!uiStore.settingsOpen) {
+        // Persist where the user was before entering Settings so the back-arrow
+        // can return to the exact thread/route instead of falling back to the
+        // bare project page (which forces a full thread reload — ~2s perceived).
+        if (prevNonSettingsPathRef.current && uiStore.settingsReturnPath === null) {
+          uiStore.setSettingsReturnPath(prevNonSettingsPathRef.current + (location.search || ''));
+        }
+        uiStore.setSettingsOpen(true);
+      }
       if (uiStore.activeSettingsPage !== settingsPage) uiStore.setActiveSettingsPage(settingsPage);
       if (projectId && projectId !== projectStore.selectedProjectId)
         projectStore.selectProject(projectId);
       return;
     }
+
+    // Track the last non-settings path so we can restore it on back-arrow click.
+    prevNonSettingsPathRef.current = location.pathname;
 
     // Close settings if navigating away from /settings
     if (uiStore.settingsOpen) {

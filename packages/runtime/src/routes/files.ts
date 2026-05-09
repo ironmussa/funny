@@ -139,13 +139,13 @@ app.get('/read', async (c) => {
     if (!isInScope(realPathResult.value, scope)) return deny();
   }
 
-  // Check file size (max 2MB)
+  // Check file size (max 10MB)
   const statsResult = await ResultAsync.fromPromise(stat(filePath), (e: any) =>
     e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),
   );
   if (statsResult.isErr()) return resultToResponse(c, statsResult);
-  if (statsResult.value.size > 2 * 1024 * 1024) {
-    return resultToResponse(c, err(badRequest('File too large for internal editor (max 2MB)')));
+  if (statsResult.value.size > 10 * 1024 * 1024) {
+    return resultToResponse(c, err(badRequest('File too large for internal editor (max 10MB)')));
   }
 
   const contentResult = await ResultAsync.fromPromise(readFile(filePath, 'utf-8'), (e: any) =>

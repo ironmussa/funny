@@ -237,12 +237,14 @@ root.render(
         captureConsole
         level="debug"
         enabled={!!import.meta.env.VITE_OTLP_ENDPOINT}
+        includeUrl={true}
         consoleOptions={{
           captureErrors: true,
           captureUnhandledRejections: true,
           captureLongTasks: true,
           captureSlowEvents: true,
           slowEventThresholdMs: 50,
+          captureStackTrace: true,
         }}
       >
         <TooltipProvider delayDuration={300} skipDelayDuration={0}>

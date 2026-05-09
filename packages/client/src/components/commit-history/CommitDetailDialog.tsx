@@ -1,6 +1,6 @@
 import type { FileDiffSummary, FileStatus } from '@funny/shared';
 import { FileCode, GitBranch, GitCommit, History, Loader2, RotateCcw, X } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -10,6 +10,7 @@ import { FileTree } from '@/components/FileTree';
 import { ExpandedDiffView } from '@/components/tool-cards/ExpandedDiffDialog';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -34,6 +35,11 @@ interface CommitFile {
   additions: number;
   deletions: number;
 }
+
+const SIDEBAR_WIDTH_STORAGE_KEY = 'commit-detail-dialog:sidebar-width';
+const SIDEBAR_MIN_WIDTH = 180;
+const SIDEBAR_MAX_WIDTH = 600;
+const SIDEBAR_DEFAULT_WIDTH = 280;
 
 interface Props {
   selectedCommit: LogEntry | undefined;
@@ -74,6 +80,32 @@ export function CommitDetailDialog({
   const [expandedFile, setExpandedFile] = useState<string | null>(null);
   const [diffContent, setDiffContent] = useState<string | null>(null);
   const [diffLoading, setDiffLoading] = useState(false);
+
+  const [sidebarWidth, setSidebarWidth] = useState<number>(() => {
+    const stored = Number(localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY));
+    return Number.isFinite(stored) && stored >= SIDEBAR_MIN_WIDTH && stored <= SIDEBAR_MAX_WIDTH
+      ? stored
+      : SIDEBAR_DEFAULT_WIDTH;
+  });
+  const sidebarWidthAtDragStart = useRef(sidebarWidth);
+  const { resizing, handlePointerDown, handlePointerMove, handlePointerUp } = useResizeHandle({
+    direction: 'horizontal',
+    onResizeStart: () => {
+      sidebarWidthAtDragStart.current = sidebarWidth;
+    },
+    onResize: (delta) => {
+      const next = Math.max(
+        SIDEBAR_MIN_WIDTH,
+        Math.min(SIDEBAR_MAX_WIDTH, sidebarWidthAtDragStart.current + delta),
+      );
+      setSidebarWidth(next);
+    },
+  });
+
+  useEffect(() => {
+    if (resizing) return;
+    localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, String(sidebarWidth));
+  }, [resizing, sidebarWidth]);
 
   const [checkoutInProgress, setCheckoutInProgress] = useState(false);
   const [revertInProgress, setRevertInProgress] = useState(false);
@@ -399,7 +431,8 @@ export function CommitDetailDialog({
           ) : (
             <div className="flex min-h-0 flex-1">
               <div
-                className="flex w-[280px] shrink-0 flex-col border-r border-border"
+                className="flex shrink-0 flex-col border-r border-border"
+                style={{ width: sidebarWidth }}
                 data-testid="commit-detail-file-tree"
               >
                 {commitFiles.length > 0 && (
@@ -438,6 +471,14 @@ export function CommitDetailDialog({
                   )}
                 </ScrollArea>
               </div>
+              <ResizeHandle
+                direction="horizontal"
+                resizing={resizing}
+                onPointerDown={handlePointerDown}
+                onPointerMove={handlePointerMove}
+                onPointerUp={handlePointerUp}
+                data-testid="commit-detail-sidebar-resize"
+              />
               <div className="flex min-w-0 flex-1 flex-col" data-testid="commit-detail-diff-pane">
                 {!expandedFile ? (
                   <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">

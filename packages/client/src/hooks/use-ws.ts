@@ -142,6 +142,21 @@ function teardown() {
   }
 }
 
+// Throttle resyncs triggered by visibility/focus events so rapid tab swaps
+// don't fan out into multiple simultaneous refresh storms.
+const VISIBILITY_RESYNC_MIN_INTERVAL_MS = 2_000;
+let lastVisibilityResyncAt = 0;
+
+function resyncOnFocus(reason: 'visibility' | 'focus') {
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+  if (!activeSocket?.connected) return;
+  const now = Date.now();
+  if (now - lastVisibilityResyncAt < VISIBILITY_RESYNC_MIN_INTERVAL_MS) return;
+  lastVisibilityResyncAt = now;
+  wsLog.info('Tab regained focus — resyncing threads', { reason });
+  useThreadStore.getState().refreshAllLoadedThreads();
+}
+
 export function useWS() {
   useEffect(() => {
     if (teardownTimer) {
@@ -165,8 +180,18 @@ export function useWS() {
       lastContainerUrl = containerUrl;
     });
 
+    // Resync on tab visibility/focus — covers the case where Chrome throttles
+    // background tabs or the WS dropped a terminal `agent:result` while the
+    // tab was inactive. `refreshAllLoadedThreads` rehydrates status from DB.
+    const onVisibility = () => resyncOnFocus('visibility');
+    const onFocus = () => resyncOnFocus('focus');
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('focus', onFocus);
+
     return () => {
       unsub();
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('focus', onFocus);
       refCount--;
       if (refCount === 0) {
         // Defer teardown so StrictMode/HMR remounts (which fire cleanup then

@@ -1,4 +1,5 @@
 import { GitMerge, RotateCcw } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
@@ -11,14 +12,17 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import type { PullStrategy } from '@/lib/api';
+import { cn } from '@/lib/utils';
+
+type ReconcileStrategy = Exclude<PullStrategy, 'ff-only'>;
 
 interface PullStrategyDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   /** The original pull error message (for display only). */
   errorMessage: string;
-  /** Called with the chosen strategy when the user picks one. */
-  onChoose: (strategy: Exclude<PullStrategy, 'ff-only'>) => void;
+  /** Called with the chosen strategy when the user confirms. */
+  onChoose: (strategy: ReconcileStrategy) => void;
 }
 
 /**
@@ -33,6 +37,11 @@ export function PullStrategyDialog({
   onChoose,
 }: PullStrategyDialogProps) {
   const { t } = useTranslation();
+  const [strategy, setStrategy] = useState<ReconcileStrategy>('rebase');
+
+  useEffect(() => {
+    if (open) setStrategy('rebase');
+  }, [open]);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -51,54 +60,73 @@ export function PullStrategyDialog({
           {errorMessage}
         </div>
 
-        <div className="flex flex-col gap-2">
-          <Button
+        <div className="mt-2 space-y-2">
+          <button
             type="button"
-            variant="default"
-            onClick={() => onChoose('rebase')}
-            className="justify-start"
             data-testid="pull-strategy-rebase"
+            onClick={() => setStrategy('rebase')}
+            className={cn(
+              'flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors',
+              strategy === 'rebase'
+                ? 'border-primary bg-primary/10'
+                : 'border-border hover:bg-accent/50',
+            )}
           >
-            <RotateCcw className="icon-base mr-2" />
-            <span className="flex flex-col items-start text-left">
-              <span>{t('review.pullStrategy.rebase', 'Rebase')}</span>
-              <span className="text-xs font-normal opacity-80">
+            <RotateCcw className="icon-base mt-0.5 shrink-0" />
+            <span className="flex flex-col">
+              <span className="text-sm font-medium text-foreground">
+                {t('review.pullStrategy.rebase', 'Rebase')}
+              </span>
+              <span className="mt-1.5 text-xs text-muted-foreground">
                 {t(
                   'review.pullStrategy.rebaseHint',
                   'Replay your local commits on top of the remote (linear history).',
                 )}
               </span>
             </span>
-          </Button>
+          </button>
 
-          <Button
+          <button
             type="button"
-            variant="outline"
-            onClick={() => onChoose('merge')}
-            className="justify-start"
             data-testid="pull-strategy-merge"
+            onClick={() => setStrategy('merge')}
+            className={cn(
+              'flex w-full items-start gap-3 rounded-lg border p-3 text-left transition-colors',
+              strategy === 'merge'
+                ? 'border-primary bg-primary/10'
+                : 'border-border hover:bg-accent/50',
+            )}
           >
-            <GitMerge className="icon-base mr-2" />
-            <span className="flex flex-col items-start text-left">
-              <span>{t('review.pullStrategy.merge', 'Merge')}</span>
-              <span className="text-xs font-normal opacity-80">
+            <GitMerge className="icon-base mt-0.5 shrink-0" />
+            <span className="flex flex-col">
+              <span className="text-sm font-medium text-foreground">
+                {t('review.pullStrategy.merge', 'Merge')}
+              </span>
+              <span className="mt-1.5 text-xs text-muted-foreground">
                 {t(
                   'review.pullStrategy.mergeHint',
                   'Create a merge commit that joins both histories.',
                 )}
               </span>
             </span>
-          </Button>
+          </button>
         </div>
 
         <DialogFooter>
           <Button
             type="button"
-            variant="ghost"
+            variant="outline"
             onClick={() => onOpenChange(false)}
             data-testid="pull-strategy-cancel"
           >
             {t('common.cancel', 'Cancel')}
+          </Button>
+          <Button
+            type="button"
+            onClick={() => onChoose(strategy)}
+            data-testid="pull-strategy-confirm"
+          >
+            {t('common.confirm', 'Confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -23,6 +23,11 @@ const wsLog = createClientLogger('ws');
 // (React StrictMode double-mounts effects in development).
 let activeSocket: Socket | null = null;
 let refCount = 0;
+// Deferred teardown handle — coalesces StrictMode/HMR remount cycles so we
+// don't tear down a still-handshaking socket and re-run the heavy on-connect
+// refresh path on every Vite HMR update.
+let teardownTimer: ReturnType<typeof setTimeout> | null = null;
+const TEARDOWN_DEFER_MS = 100;
 
 // Re-export for legacy callers that still import from `use-ws`.
 export { connectRemoteWS, disconnectRemoteWS };
@@ -139,8 +144,12 @@ function teardown() {
 
 export function useWS() {
   useEffect(() => {
+    if (teardownTimer) {
+      clearTimeout(teardownTimer);
+      teardownTimer = null;
+    }
     refCount++;
-    if (refCount === 1) connect();
+    if (refCount === 1 && !activeSocket) connect();
 
     // Auto-manage remote WS connections when the active thread is remote
     let lastContainerUrl: string | undefined;
@@ -159,7 +168,16 @@ export function useWS() {
     return () => {
       unsub();
       refCount--;
-      if (refCount === 0) teardown();
+      if (refCount === 0) {
+        // Defer teardown so StrictMode/HMR remounts (which fire cleanup then
+        // immediately re-run the effect) cancel the disconnect instead of
+        // tearing down the live socket mid-handshake.
+        if (teardownTimer) clearTimeout(teardownTimer);
+        teardownTimer = setTimeout(() => {
+          teardownTimer = null;
+          if (refCount === 0) teardown();
+        }, TEARDOWN_DEFER_MS);
+      }
     };
   }, []);
 }

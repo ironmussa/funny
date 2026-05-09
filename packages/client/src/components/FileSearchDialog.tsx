@@ -192,7 +192,7 @@ export function FileSearchDialog({ open, onOpenChange }: FileSearchDialogProps) 
           <DialogTitle className="sr-only">{t('fileSearch.title', 'Search files')}</DialogTitle>
 
           <div className="flex h-12 items-center border-b px-3">
-            <Search className="mr-2 h-4 w-4 shrink-0 opacity-50" />
+            <Search className="mr-2 h-5 w-5 shrink-0 opacity-50" />
             <input
               ref={inputRef}
               data-testid="file-search-input"

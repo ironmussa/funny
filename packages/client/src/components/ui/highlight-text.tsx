@@ -20,6 +20,13 @@ interface HighlightTextProps {
 }
 
 export function HighlightText({ text, query, indices, className }: HighlightTextProps) {
+  // Normalize text only when text changes — the expensive NFKC/NFKD passes
+  // shouldn't re-run on every keystroke as the query changes.
+  const normalizedText = useMemo(() => {
+    const displayText = text.normalize('NFKC');
+    return { displayText, lower: normalize(displayText) };
+  }, [text]);
+
   const parts = useMemo(() => {
     if (!query.trim()) return [{ text, highlight: false }];
 
@@ -40,22 +47,19 @@ export function HighlightText({ text, query, indices, className }: HighlightText
     }
 
     const q = normalize(query);
-    // NFKC ensures fullwidth/compatibility chars map to standard forms
-    // and that each display char maps 1:1 with its normalized counterpart,
-    // keeping slice positions aligned.
-    const displayText = text.normalize('NFKC');
-    const normalizedText = normalize(displayText);
+    const { displayText, lower } = normalizedText;
+    let idx = lower.indexOf(q);
+    if (idx === -1) return [{ text: displayText, highlight: false }];
+
     const result: { text: string; highlight: boolean }[] = [];
     let pos = 0;
-    let idx = normalizedText.indexOf(q, pos);
-
     while (idx !== -1) {
       if (idx > pos) {
         result.push({ text: displayText.slice(pos, idx), highlight: false });
       }
       result.push({ text: displayText.slice(idx, idx + q.length), highlight: true });
       pos = idx + q.length;
-      idx = normalizedText.indexOf(q, pos);
+      idx = lower.indexOf(q, pos);
     }
 
     if (pos < displayText.length) {
@@ -63,7 +67,7 @@ export function HighlightText({ text, query, indices, className }: HighlightText
     }
 
     return result;
-  }, [text, query, indices]);
+  }, [text, query, indices, normalizedText]);
 
   if (!query.trim()) {
     return <span className={className}>{text}</span>;

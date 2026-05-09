@@ -57,6 +57,7 @@ import {
   prefetchThreadData,
   loadThreadData,
   isThreadDataPrefetched,
+  isThreadDataLoaded,
 } from './thread-machine-bridge';
 import { useThreadReadStore } from './thread-read-store';
 import {
@@ -388,13 +389,18 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
     const gen = nextSelectGeneration();
     setSelectingThreadId(threadId);
-    // Keep stale activeThread visible during load to avoid layout shift.
-    // Only clear it if switching to null (deselect) or to a different thread.
+    // When switching to a different thread, only keep the previous activeThread
+    // visible if the target thread's data is already fully cached (instant swap).
+    // Otherwise clear it so ThreadView shows its loading spinner immediately —
+    // showing the previous thread's content during a real network fetch reads
+    // as "click did nothing" and is the dominant source of perceived delay.
     const prevActive = get().activeThread;
-    const keepStale = threadId && prevActive && prevActive.id !== threadId;
+    const isDifferentThread = !!(threadId && prevActive && prevActive.id !== threadId);
+    const cacheHit = !!threadId && isThreadDataLoaded(threadId);
+    const keepStale = isDifferentThread && cacheHit;
     set({
       selectedThreadId: threadId,
-      activeThread: keepStale ? prevActive : threadId ? prevActive : null,
+      activeThread: keepStale ? prevActive : threadId && !isDifferentThread ? prevActive : null,
     });
     useUIStore.setState({ newThreadProjectId: null, allThreadsProjectId: null });
 

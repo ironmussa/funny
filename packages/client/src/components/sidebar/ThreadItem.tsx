@@ -171,7 +171,7 @@ export const ThreadItem = memo(function ThreadItem({
       className={cn(
         'group/thread w-full flex items-stretch rounded-md min-w-0',
         isSelected
-          ? 'bg-foreground/15 text-foreground'
+          ? 'bg-accent text-foreground'
           : 'text-muted-foreground hover:bg-accent/50 hover:text-foreground',
       )}
     >

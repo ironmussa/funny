@@ -115,6 +115,13 @@ export function isThreadDataPrefetched(threadId: string): boolean {
   return snap.matches('loaded') || snap.matches('fetching');
 }
 
+/** Returns true only when the actor has fully loaded data (no in-flight fetch). */
+export function isThreadDataLoaded(threadId: string): boolean {
+  const actor = dataActors.get(threadId);
+  if (!actor) return false;
+  return actor.getSnapshot().matches('loaded');
+}
+
 /** Resolve once the actor finishes loading (reuses any in-flight fetch). */
 export async function loadThreadData(threadId: string): Promise<ThreadDataSnapshot> {
   const actor = getDataActor(threadId);

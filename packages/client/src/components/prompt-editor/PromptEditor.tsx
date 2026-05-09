@@ -34,7 +34,10 @@ import { useTranslation } from 'react-i18next';
 
 import { HighlightText } from '@/components/ui/highlight-text';
 import { api } from '@/lib/api';
+import { metric } from '@/lib/telemetry';
 import { cn } from '@/lib/utils';
+
+const SLASH_RESULTS_LIMIT = 50;
 
 // ── Types ────────────────────────────────────────────────────────
 
@@ -571,14 +574,28 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
         }
         const skills = skillsCacheRef.current ?? [];
         const q = fullQuery.toLowerCase();
-        return skills
-          .filter((s) => s.name.toLowerCase().includes(q))
-          .map((s) => ({
-            id: s.name,
-            label: s.name,
-            description: s.description,
-            type: 'slash' as const,
-          }));
+        const t0 = performance.now();
+        const matched: SuggestionItem[] = [];
+        for (let i = 0; i < skills.length && matched.length < SLASH_RESULTS_LIMIT; i++) {
+          const s = skills[i];
+          if (s.name.toLowerCase().includes(q)) {
+            matched.push({
+              id: s.name,
+              label: s.name,
+              description: s.description,
+              type: 'slash' as const,
+            });
+          }
+        }
+        metric('palette.slash.filter_ms', performance.now() - t0, {
+          type: 'gauge',
+          attributes: {
+            query_len: String(fullQuery.length),
+            total: String(skills.length),
+            matched: String(matched.length),
+          },
+        });
+        return matched;
       },
       command: ({ editor, range, props }: any) => {
         const docSize = editor.state.doc.content.size;

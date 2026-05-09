@@ -580,27 +580,20 @@ export function handleWSStatus(
 export function handleWSResult(get: Get, set: Set, threadId: string, data: any): void {
   const { threadsByProject, activeThread, loadThreadsForProject, selectedThreadId } = get();
 
-  // Buffer result events when thread is selected but not yet fully loaded
+  // When the result event arrives for a thread that isn't the currently
+  // viewed activeThread, two things must happen so the UI stays consistent:
+  //   1. If the user is mid-selection of this thread (selectedThreadId match
+  //      but activeThread not yet hydrated), buffer the event so flushWSBuffer
+  //      replays it once activeThread is loaded.
+  //   2. Invalidate the cached snapshot so the next selectThread() refetches
+  //      the final messages/tool calls/resultInfo from the server.
+  // Sidebar status (threadsByProject) and live-column state are still updated
+  // unconditionally below.
   if (!activeThread?.id || activeThread.id !== threadId) {
-    wsLog.warn('BUG-HUNT: agent:result activeThread mismatch — UI will not update', {
-      threadId,
-      activeThreadId: activeThread?.id ?? '<null>',
-      selectedThreadId: selectedThreadId ?? '<null>',
-      isSelected: selectedThreadId === threadId,
-    });
     if (selectedThreadId === threadId) {
       bufferWSEvent(threadId, 'result', data);
     }
-    // Invalidate the cached snapshot so the next selectThread() refetches and
-    // shows the final messages/tool calls/resultInfo. Without this, the user
-    // sees the toast for completion but, on click, gets the pre-switch view.
     invalidateThreadData(threadId);
-  } else {
-    wsLog.info('BUG-HUNT: agent:result activeThread match', {
-      threadId,
-      activeThreadId: activeThread.id,
-      selectedThreadId: selectedThreadId ?? '<null>',
-    });
   }
 
   const machineEvent = wsEventToMachineEvent('agent:result', data);

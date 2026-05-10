@@ -1,5 +1,5 @@
 import { FolderOpen } from 'lucide-react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
@@ -8,7 +8,6 @@ import {
   CommandDialog,
   CommandInput,
   CommandList,
-  CommandEmpty,
   CommandGroup,
   CommandSeparator,
   CommandItem,
@@ -28,13 +27,59 @@ interface CommandPaletteProps {
 }
 
 export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
-  const { t } = useTranslation();
-  const navigate = useNavigate();
-  const projects = useProjectStore((s) => s.projects);
-  const startNewThread = useUIStore((s) => s.startNewThread);
-  const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
-  const navigatedRef = useRef(false);
+  if (!open) {
+    return null;
+  }
 
+  return <CommandPaletteContent open={open} onOpenChange={onOpenChange} />;
+}
+
+type ProjectEntry = ReturnType<typeof useProjectStore.getState>['projects'][number];
+
+/** Manual filter for projects + settings. cmdk would mount one DOM node per
+ * project (thousands for some users) just to hide most of them; this keeps
+ * the rendered set capped and ranked. Settings are filtered against both
+ * the english label and the translated string for es/pt searchability. */
+function useFilteredCommandItems(
+  projects: ProjectEntry[],
+  search: string,
+  t: (key: string) => string,
+) {
+  const searchLower = search.toLowerCase();
+  const displayProjects = useMemo(() => {
+    if (!searchLower) return projects.slice(0, 50);
+    const scored: Array<{ p: ProjectEntry; rank: number; pos: number }> = [];
+    for (const p of projects) {
+      const nameIdx = p.name.toLowerCase().indexOf(searchLower);
+      const pathIdx = p.path.toLowerCase().indexOf(searchLower);
+      if (nameIdx === -1 && pathIdx === -1) continue;
+      const rank = nameIdx !== -1 ? 0 : 1;
+      const pos = nameIdx !== -1 ? nameIdx : pathIdx;
+      scored.push({ p, rank, pos });
+    }
+    scored.sort((a, b) => a.rank - b.rank || a.pos - b.pos);
+    return scored.slice(0, 50).map((s) => s.p);
+  }, [projects, searchLower]);
+
+  const displaySettings = useMemo(() => {
+    if (!searchLower) return settingsItems;
+    return settingsItems.filter((item) => {
+      const label = item.label.toLowerCase();
+      const translated = t(settingsLabelKeys[item.id] ?? item.label).toLowerCase();
+      return label.includes(searchLower) || translated.includes(searchLower);
+    });
+  }, [searchLower, t]);
+
+  const hasNoResults =
+    !!searchLower && displayProjects.length === 0 && displaySettings.length === 0;
+
+  return { displayProjects, displaySettings, hasNoResults, searchLower };
+}
+
+/** Records commit→paint latency relative to `window.__paletteOpenTs`, the
+ * timestamp the keyboard handler stamps when ⌘K is pressed. Sends one
+ * gauge per open. */
+function usePaletteOpenTiming(open: boolean, projectCount: number) {
   useEffect(() => {
     if (!open) return;
     const w = window as unknown as { __paletteOpenTs?: number };
@@ -46,14 +91,39 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
       log.info('palette.open_timing', {
         commit_ms: Math.round(commitMs),
         paint_ms: Math.round(paintMs),
-        project_count: projects.length,
+        project_count: projectCount,
         settings_count: settingsItems.length,
       });
       metric('palette.open.commit_ms', Math.round(commitMs), { type: 'gauge' });
       metric('palette.open.paint_ms', Math.round(paintMs), { type: 'gauge' });
       w.__paletteOpenTs = undefined;
     });
-  }, [open, projects.length]);
+  }, [open, projectCount]);
+}
+
+function CommandPaletteContent({ open, onOpenChange }: CommandPaletteProps) {
+  const { t } = useTranslation();
+  const navigate = useNavigate();
+  const projects = useProjectStore((s) => s.projects);
+  const startNewThread = useUIStore((s) => s.startNewThread);
+  const setSettingsOpen = useUIStore((s) => s.setSettingsOpen);
+  const navigatedRef = useRef(false);
+  const listRef = useRef<HTMLDivElement>(null);
+  const [search, setSearch] = useState('');
+  const { displayProjects, displaySettings, hasNoResults, searchLower } = useFilteredCommandItems(
+    projects,
+    search,
+    t,
+  );
+
+  // cmdk uses scrollIntoView({block:"nearest"}), which leaves the first
+  // matched item partially clipped under the input when filtering. Reset
+  // scroll to top whenever the search changes so the top match is fully visible.
+  useEffect(() => {
+    listRef.current?.scrollTo({ top: 0 });
+  }, [search]);
+
+  usePaletteOpenTiming(open, projects.length);
 
   const handleProjectSelect = (projectId: string) => {
     navigatedRef.current = true;
@@ -114,20 +184,27 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
   };
 
   return (
-    <CommandDialog open={open} onOpenChange={onOpenChange} onCloseAutoFocus={handleCloseAutoFocus}>
+    <CommandDialog
+      open={open}
+      onOpenChange={onOpenChange}
+      onCloseAutoFocus={handleCloseAutoFocus}
+      shouldFilter={false}
+    >
       <CommandInput
         data-testid="command-palette-search"
         placeholder={t('commandPalette.searchPlaceholder')}
+        value={search}
+        onValueChange={setSearch}
       />
-      <CommandList>
-        <CommandEmpty>{t('commandPalette.noResults')}</CommandEmpty>
-        <CommandGroup heading={t('commandPalette.projects')}>
-          {projects.length === 0 ? (
-            <div className="px-2 py-6 text-center text-sm text-muted-foreground">
-              {t('commandPalette.noProjects')}
-            </div>
-          ) : (
-            projects.map((project) => (
+      <CommandList ref={listRef}>
+        {hasNoResults && (
+          <div className="py-6 text-center text-sm text-muted-foreground">
+            {t('commandPalette.noResults')}
+          </div>
+        )}
+        {displayProjects.length > 0 && (
+          <CommandGroup heading={t('commandPalette.projects')}>
+            {displayProjects.map((project) => (
               <CommandItem
                 key={project.id}
                 data-testid={`command-palette-project-${project.id}`}
@@ -140,26 +217,33 @@ export function CommandPalette({ open, onOpenChange }: CommandPaletteProps) {
                   <span className="truncate text-xs text-muted-foreground">{project.path}</span>
                 </div>
               </CommandItem>
-            ))
-          )}
-        </CommandGroup>
-        <CommandSeparator />
-        <CommandGroup heading={t('commandPalette.settings')}>
-          {settingsItems.map((item) => {
-            const Icon = item.icon;
-            return (
-              <CommandItem
-                key={item.id}
-                data-testid={`command-palette-settings-${item.id}`}
-                value={item.label}
-                onSelect={() => handleSettingsSelect(item.id)}
-              >
-                <Icon className="icon-base" />
-                <span>{t(settingsLabelKeys[item.id] ?? item.label)}</span>
-              </CommandItem>
-            );
-          })}
-        </CommandGroup>
+            ))}
+          </CommandGroup>
+        )}
+        {!searchLower && displayProjects.length === 0 && (
+          <div className="px-2 py-6 text-center text-sm text-muted-foreground">
+            {t('commandPalette.noProjects')}
+          </div>
+        )}
+        {displayProjects.length > 0 && displaySettings.length > 0 && <CommandSeparator />}
+        {displaySettings.length > 0 && (
+          <CommandGroup heading={t('commandPalette.settings')}>
+            {displaySettings.map((item) => {
+              const Icon = item.icon;
+              return (
+                <CommandItem
+                  key={item.id}
+                  data-testid={`command-palette-settings-${item.id}`}
+                  value={item.label}
+                  onSelect={() => handleSettingsSelect(item.id)}
+                >
+                  <Icon className="icon-base" />
+                  <span>{t(settingsLabelKeys[item.id] ?? item.label)}</span>
+                </CommandItem>
+              );
+            })}
+          </CommandGroup>
+        )}
       </CommandList>
     </CommandDialog>
   );

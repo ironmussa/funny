@@ -21,12 +21,24 @@ const Command = React.forwardRef<
 ));
 Command.displayName = CommandPrimitive.displayName;
 
+type CommandPrimitiveProps = React.ComponentPropsWithoutRef<typeof CommandPrimitive>;
+
 function CommandDialog({
   children,
   onCloseAutoFocus,
+  shouldFilter,
+  filter,
+  value,
+  defaultValue,
+  onValueChange,
   ...props
 }: React.ComponentProps<typeof Dialog> & {
   onCloseAutoFocus?: (e: Event) => void;
+  shouldFilter?: CommandPrimitiveProps['shouldFilter'];
+  filter?: CommandPrimitiveProps['filter'];
+  value?: CommandPrimitiveProps['value'];
+  defaultValue?: CommandPrimitiveProps['defaultValue'];
+  onValueChange?: CommandPrimitiveProps['onValueChange'];
 }) {
   return (
     <Dialog {...props}>
@@ -38,7 +50,14 @@ function CommandDialog({
           className="fixed left-[50%] top-[20%] z-50 w-full max-w-lg translate-x-[-50%] overflow-hidden rounded-lg border bg-card p-0 shadow-xl data-[state=closed]:animate-fade-out data-[state=open]:animate-fade-in"
         >
           <DialogTitle className="sr-only">Command palette</DialogTitle>
-          <Command className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3">
+          <Command
+            shouldFilter={shouldFilter}
+            filter={filter}
+            value={value}
+            defaultValue={defaultValue}
+            onValueChange={onValueChange}
+            className="[&_[cmdk-group-heading]]:px-2 [&_[cmdk-group-heading]]:font-medium [&_[cmdk-group-heading]]:text-muted-foreground [&_[cmdk-group]:not([hidden])_~[cmdk-group]]:pt-0 [&_[cmdk-input-wrapper]_svg]:h-5 [&_[cmdk-input-wrapper]_svg]:w-5 [&_[cmdk-input]]:h-12 [&_[cmdk-item]]:px-2 [&_[cmdk-item]]:py-3"
+          >
             {children}
           </Command>
         </DialogPrimitive.Content>

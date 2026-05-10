@@ -1083,6 +1083,12 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    name: '047_projects_closed',
+    async up() {
+      await ctx().addColumn('projects', 'closed', 'INTEGER NOT NULL', '0');
+    },
+  },
 ];
 
 export async function autoMigrate() {

@@ -146,6 +146,7 @@ export function NewThreadInput({
     });
 
   const [creating, setCreating] = useState(false);
+  const [restoredPrompt, setRestoredPrompt] = useState<string | null>(null);
 
   const handleCreate = async (
     prompt: string,
@@ -172,6 +173,7 @@ export function NewThreadInput({
     images?: any[],
   ): Promise<boolean> => {
     if (!effectiveProjectId || creating) return false;
+    setRestoredPrompt(null);
     setCreating(true);
 
     const threadMode = (opts.threadMode as 'local' | 'worktree') || defaultThreadMode;
@@ -191,6 +193,7 @@ export function NewThreadInput({
       if (result.isErr()) {
         toastError(result.error, 'createThread');
         setCreating(false);
+        setRestoredPrompt(prompt);
         return false;
       }
 
@@ -232,6 +235,7 @@ export function NewThreadInput({
     if (result.isErr()) {
       toastError(result.error, 'createThread');
       setCreating(false);
+      setRestoredPrompt(prompt);
       return false;
     }
 
@@ -253,6 +257,20 @@ export function NewThreadInput({
     loadThreadsForProject(effectiveProjectId);
     return true;
   };
+
+  if (creating) {
+    return (
+      <div className="flex flex-1 items-center justify-center px-4 text-muted-foreground">
+        <div
+          className="flex w-full max-w-md flex-col items-center justify-center gap-4"
+          data-testid="new-thread-creating"
+        >
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/50" />
+          <span className="text-sm text-muted-foreground/60">Preparing...</span>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="flex flex-1 items-center justify-center px-4 text-muted-foreground">
@@ -358,7 +376,7 @@ export function NewThreadInput({
           isNewThread
           showBacklog
           projectId={effectiveProjectId || undefined}
-          initialPrompt={issueContext?.prompt}
+          initialPrompt={issueContext?.prompt ?? restoredPrompt ?? undefined}
           onContentChange={handleContentChange}
           onWorktreeModeChange={setIsWorktreeMode}
         />

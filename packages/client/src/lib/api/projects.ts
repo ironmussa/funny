@@ -41,6 +41,7 @@ export const projectsApi = {
       systemPrompt?: string | null;
       launcherUrl?: string | null;
       defaultAgentTemplateId?: string | null;
+      closed?: boolean;
     },
   ) => request<Project>(`/projects/${id}`, { method: 'PATCH', body: JSON.stringify(data) }),
   deleteProject: (id: string) => request<{ ok: boolean }>(`/projects/${id}`, { method: 'DELETE' }),

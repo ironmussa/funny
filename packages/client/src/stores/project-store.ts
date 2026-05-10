@@ -78,6 +78,8 @@ interface ProjectState {
     },
   ) => Promise<void>;
   deleteProject: (projectId: string) => Promise<void>;
+  closeProject: (projectId: string) => Promise<void>;
+  reopenProject: (projectId: string) => Promise<void>;
   reorderProjects: (projectIds: string[]) => Promise<void>;
   setProjectLocalPath: (projectId: string, localPath: string) => Promise<boolean>;
 }
@@ -277,6 +279,29 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
       ...(selectedProjectId === projectId ? { selectedProjectId: null } : {}),
     });
     persistExpandedProjects(nextExpanded);
+  },
+
+  closeProject: async (projectId) => {
+    const result = await projectsApi.updateProject(projectId, { closed: true });
+    if (result.isErr()) return;
+    const { projects, expandedProjects, selectedProjectId } = get();
+    const nextExpanded = new Set(expandedProjects);
+    nextExpanded.delete(projectId);
+    set({
+      projects: projects.map((p) => (p.id === projectId ? result.value : p)),
+      expandedProjects: nextExpanded,
+      ...(selectedProjectId === projectId ? { selectedProjectId: null } : {}),
+    });
+    persistExpandedProjects(nextExpanded);
+  },
+
+  reopenProject: async (projectId) => {
+    const result = await projectsApi.updateProject(projectId, { closed: false });
+    if (result.isErr()) return;
+    const { projects } = get();
+    set({
+      projects: projects.map((p) => (p.id === projectId ? result.value : p)),
+    });
   },
 
   setProjectLocalPath: async (projectId, localPath) => {

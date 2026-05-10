@@ -33,10 +33,12 @@ function toProject(row: ProjectRow): Project {
     urls: urlsRaw,
     systemPrompt,
     launcherUrl,
+    closed,
     ...rest
-  } = row;
+  } = row as ProjectRow & { closed?: number | boolean | null };
   return {
     ...rest,
+    ...(closed ? { closed: true } : {}),
     ...(color != null ? { color } : {}),
     ...(followUpMode && followUpMode !== DEFAULT_FOLLOW_UP_MODE
       ? { followUpMode: followUpMode as FollowUpMode }
@@ -278,6 +280,7 @@ export async function updateProject(
     systemPrompt?: string | null;
     launcherUrl?: string | null;
     defaultAgentTemplateId?: string | null;
+    closed?: boolean;
   },
 ): Promise<Result<Project, DomainError>> {
   const project = await dbGet(db.select().from(schema.projects).where(eq(schema.projects.id, id)));
@@ -339,6 +342,7 @@ export async function updateProject(
   if (fields.launcherUrl !== undefined) updateData.launcherUrl = fields.launcherUrl;
   if (fields.defaultAgentTemplateId !== undefined)
     updateData.defaultAgentTemplateId = fields.defaultAgentTemplateId;
+  if (fields.closed !== undefined) updateData.closed = fields.closed ? 1 : 0;
 
   await dbRun(db.update(schema.projects).set(updateData).where(eq(schema.projects.id, id)));
   return ok(toProject({ ...project, ...updateData } as ProjectRow));

@@ -17,6 +17,8 @@ import {
   CircleDot,
   SquareTerminal,
   Sparkles,
+  EyeOff,
+  RotateCcw,
 } from 'lucide-react';
 import { useState, useRef, useEffect, memo, useCallback, useMemo, type FC } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -149,6 +151,8 @@ interface ProjectItemProps {
   onNewThread: (projectId: string) => void;
   onRenameProject: (projectId: string, currentName: string) => void;
   onDeleteProject: (projectId: string, name: string) => void;
+  onCloseProject?: (projectId: string, name: string) => void;
+  onReopenProject?: (projectId: string, name: string) => void;
   onSelectThread: (projectId: string, threadId: string) => void;
   onRenameThread: (projectId: string, threadId: string, title: string) => void;
   onArchiveThread: (projectId: string, threadId: string, title: string) => void;
@@ -168,6 +172,8 @@ function projectItemAreEqual(prev: ProjectItemProps, next: ProjectItemProps): bo
   if (prev.onNewThread !== next.onNewThread) return false;
   if (prev.onRenameProject !== next.onRenameProject) return false;
   if (prev.onDeleteProject !== next.onDeleteProject) return false;
+  if (prev.onCloseProject !== next.onCloseProject) return false;
+  if (prev.onReopenProject !== next.onReopenProject) return false;
   if (prev.onSelectThread !== next.onSelectThread) return false;
   if (prev.onRenameThread !== next.onRenameThread) return false;
   if (prev.onArchiveThread !== next.onArchiveThread) return false;
@@ -202,6 +208,8 @@ export const ProjectItem = memo(function ProjectItem({
   onNewThread: _onNewThread,
   onRenameProject,
   onDeleteProject,
+  onCloseProject,
+  onReopenProject,
   onSelectThread,
   onRenameThread,
   onArchiveThread,
@@ -486,6 +494,33 @@ export const ProjectItem = memo(function ProjectItem({
                   <Pencil className="icon-sm" />
                   {t('sidebar.renameProject')}
                 </DropdownMenuItem>
+                {onReopenProject ? (
+                  <DropdownMenuItem
+                    data-testid="project-menu-reopen"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setOpenDropdown(false);
+                      onReopenProject(project.id, project.name);
+                    }}
+                  >
+                    <RotateCcw className="icon-sm" />
+                    {t('sidebar.reopenProject')}
+                  </DropdownMenuItem>
+                ) : (
+                  onCloseProject && (
+                    <DropdownMenuItem
+                      data-testid="project-menu-close"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setOpenDropdown(false);
+                        onCloseProject(project.id, project.name);
+                      }}
+                    >
+                      <EyeOff className="icon-sm" />
+                      {t('sidebar.closeProject')}
+                    </DropdownMenuItem>
+                  )
+                )}
                 <DropdownMenuItem
                   data-testid="project-menu-delete"
                   onClick={(e) => {

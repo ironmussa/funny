@@ -33,6 +33,8 @@ export function useSidebarActions() {
   const deleteThread = useThreadStore((s) => s.deleteThread);
   const renameProject = useProjectStore((s) => s.renameProject);
   const deleteProject = useProjectStore((s) => s.deleteProject);
+  const closeProject = useProjectStore((s) => s.closeProject);
+  const reopenProject = useProjectStore((s) => s.reopenProject);
 
   const [archiveConfirm, setArchiveConfirm] = useState<ArchiveConfirmState | null>(null);
   const [deleteThreadConfirm, setDeleteThreadConfirm] = useState<DeleteThreadConfirmState | null>(
@@ -59,9 +61,14 @@ export function useSidebarActions() {
   const handleDeleteThreadConfirm = useCallback(
     async (options?: { deleteBranch?: boolean }) => {
       if (!deleteThreadConfirm) return;
-      setActionLoading(true);
       const { threadId, projectId, title, worktreePath, branchName } = deleteThreadConfirm;
       const wasSelected = useThreadStore.getState().selectedThreadId === threadId;
+
+      // Close the modal up-front. deleteThread is already optimistic (sync UI
+      // updates + fire-and-forget API), so showing a loading spinner mid-exit
+      // animation makes the button content swap during the fade-out and reads
+      // as a flicker.
+      setDeleteThreadConfirm(null);
 
       if (options?.deleteBranch && worktreePath && branchName) {
         await api.removeWorktree(projectId, worktreePath, {
@@ -71,8 +78,6 @@ export function useSidebarActions() {
       }
 
       await deleteThread(threadId, projectId);
-      setActionLoading(false);
-      setDeleteThreadConfirm(null);
       toast.success(t('toast.threadDeleted', { title }));
       if (wasSelected) navigate(buildPath(`/projects/${projectId}`));
     },
@@ -201,6 +206,24 @@ export function useSidebarActions() {
     setDeleteProjectConfirm({ projectId, name });
   }, []);
 
+  const handleCloseProject = useCallback(
+    async (projectId: string, name: string) => {
+      const wasSelected = useProjectStore.getState().selectedProjectId === projectId;
+      await closeProject(projectId);
+      toast.success(t('toast.projectClosed', { name }));
+      if (wasSelected) navigate(buildPath('/'));
+    },
+    [closeProject, t, navigate],
+  );
+
+  const handleReopenProject = useCallback(
+    async (projectId: string, name: string) => {
+      await reopenProject(projectId);
+      toast.success(t('toast.projectReopened', { name }));
+    },
+    [reopenProject, t],
+  );
+
   const handleShowIssues = useCallback((projectId: string) => {
     setIssuesProjectId(projectId);
   }, []);
@@ -235,6 +258,8 @@ export function useSidebarActions() {
     handleDeleteThreadFromList,
     handleRenameProject,
     handleDeleteProject,
+    handleCloseProject,
+    handleReopenProject,
     handleShowIssues,
 
     // branch switch dialog (rendered by parent)

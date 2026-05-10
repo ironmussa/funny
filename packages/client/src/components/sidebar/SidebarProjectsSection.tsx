@@ -1,9 +1,14 @@
 import type { Project, Thread } from '@funny/shared';
-import { FolderPlus } from 'lucide-react';
+import { ChevronRight, FolderPlus } from 'lucide-react';
 import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from '@/components/ui/collapsible';
 import { SidebarContent } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -22,6 +27,8 @@ interface ProjectItemHandlers {
   onNewThread: (projectId: string) => void;
   onRenameProject: (projectId: string, currentName: string) => void;
   onDeleteProject: (projectId: string, name: string) => void;
+  onCloseProject: (projectId: string, name: string) => void;
+  onReopenProject: (projectId: string, name: string) => void;
   onSelectThread: (projectId: string, threadId: string) => void;
   onRenameThread: (projectId: string, threadId: string, newTitle: string) => void;
   onArchiveThread: (projectId: string, threadId: string, title: string) => void;
@@ -60,6 +67,19 @@ export function SidebarProjectsSection({
   const { t } = useTranslation();
   const navigate = useStableNavigate();
   const [scrolled, setScrolled] = useState(false);
+  const [closedExpanded, setClosedExpanded] = useState(false);
+
+  const { onCloseProject, onReopenProject, ...sharedHandlers } = handlers;
+
+  const { activeProjects, closedProjects } = useMemo(() => {
+    const active: Project[] = [];
+    const closed: Project[] = [];
+    for (const p of projects) {
+      if (p.closed) closed.push(p);
+      else active.push(p);
+    }
+    return { activeProjects: active, closedProjects: closed };
+  }, [projects]);
 
   useEffect(() => {
     const root = scrollRef.current;
@@ -81,7 +101,7 @@ export function SidebarProjectsSection({
   const filteredThreadsByProject = useMemo(() => {
     const prev = prevFilteredRef.current;
     const result: Record<string, Thread[]> = {};
-    for (const project of projects) {
+    for (const project of activeProjects) {
       const src = threadsByProject[project.id];
       const filtered = (Array.isArray(src) ? src : []).filter((thread) => !thread.archived);
       const previous = prev[project.id];
@@ -97,15 +117,15 @@ export function SidebarProjectsSection({
     }
     prevFilteredRef.current = result;
     return result;
-  }, [threadsByProject, projects]);
+  }, [threadsByProject, activeProjects]);
 
   const threadsLoadedByProject = useMemo(() => {
     const result: Record<string, boolean> = {};
-    for (const project of projects) {
+    for (const project of activeProjects) {
       result[project.id] = Array.isArray(threadsByProject[project.id]);
     }
     return result;
-  }, [threadsByProject, projects]);
+  }, [threadsByProject, activeProjects]);
 
   return (
     <>
@@ -155,7 +175,7 @@ export function SidebarProjectsSection({
             ))}
           </div>
         )}
-        {projectsInitialized && projects.length === 0 && (
+        {projectsInitialized && activeProjects.length === 0 && closedProjects.length === 0 && (
           <button
             data-testid="sidebar-no-projects-cta"
             onClick={() => navigate(buildPath('/new'))}
@@ -165,7 +185,7 @@ export function SidebarProjectsSection({
           </button>
         )}
         <div className="flex flex-col gap-1.5">
-          {projects.map((project) => (
+          {activeProjects.map((project) => (
             <ProjectItem
               key={project.id}
               project={project}
@@ -173,10 +193,50 @@ export function SidebarProjectsSection({
               threadsLoaded={threadsLoadedByProject[project.id] ?? false}
               isExpanded={expandedProjects.has(project.id)}
               isSelected={selectedProjectId === project.id}
-              {...handlers}
+              onCloseProject={onCloseProject}
+              {...sharedHandlers}
             />
           ))}
         </div>
+        {closedProjects.length > 0 && (
+          <Collapsible
+            open={closedExpanded}
+            onOpenChange={setClosedExpanded}
+            className="mt-3"
+            data-testid="sidebar-closed-projects"
+          >
+            <CollapsibleTrigger
+              data-testid="sidebar-closed-projects-toggle"
+              className="flex w-full items-center gap-1 rounded px-2 py-1 text-xs font-semibold uppercase tracking-wider text-muted-foreground hover:text-foreground"
+            >
+              <ChevronRight
+                className={cn(
+                  'icon-sm transition-transform duration-200',
+                  closedExpanded && 'rotate-90',
+                )}
+              />
+              <span>
+                {t('sidebar.closedProjects')} ({closedProjects.length})
+              </span>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="data-[state=open]:animate-slide-down">
+              <div className="mt-1 flex flex-col gap-1.5">
+                {closedProjects.map((project) => (
+                  <ProjectItem
+                    key={project.id}
+                    project={project}
+                    threads={EMPTY_THREADS}
+                    threadsLoaded={false}
+                    isExpanded={false}
+                    isSelected={selectedProjectId === project.id}
+                    onReopenProject={onReopenProject}
+                    {...sharedHandlers}
+                  />
+                ))}
+              </div>
+            </CollapsibleContent>
+          </Collapsible>
+        )}
       </SidebarContent>
     </>
   );

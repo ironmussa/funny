@@ -50,6 +50,7 @@ export const projects = sqliteTable('projects', {
   defaultAgentTemplateId: text('default_agent_template_id'), // default template for new threads
   userId: text('user_id').notNull(),
   sortOrder: integer('sort_order').notNull().default(0),
+  closed: integer('closed').notNull().default(0),
   createdAt: text('created_at').notNull(),
 });
 

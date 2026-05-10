@@ -66,8 +66,11 @@ export function ThreadView() {
     return (
       <div className="flex h-full min-w-0 flex-1 flex-col">
         {selectedProjectId && <ProjectHeader />}
-        <div className="flex flex-1 items-center justify-center text-muted-foreground">
-          <Loader2 className="icon-lg animate-spin" />
+        <div className="flex flex-1 items-center justify-center px-4 text-muted-foreground">
+          <div className="flex w-full max-w-md flex-col items-center justify-center gap-4">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/50" />
+            <span className="text-sm text-muted-foreground/60">Preparing...</span>
+          </div>
         </div>
       </div>
     );

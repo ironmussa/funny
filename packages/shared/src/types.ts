@@ -207,6 +207,8 @@ export interface Project {
   defaultAgentTemplateId?: string;
   userId: string;
   sortOrder: number;
+  /** When true, the project is hidden from the sidebar's main list and shown under "Closed projects". */
+  closed?: boolean;
   createdAt: string;
   isTeamProject?: boolean;
   /** Name of the organization this project belongs to (set when listing org projects) */

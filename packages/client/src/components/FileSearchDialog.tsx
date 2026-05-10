@@ -27,6 +27,14 @@ const ROW_HEIGHT_PX = 32;
 const LIST_MAX_HEIGHT_PX = 360;
 
 export function FileSearchDialog({ open, onOpenChange }: FileSearchDialogProps) {
+  if (!open) {
+    return null;
+  }
+
+  return <FileSearchDialogContent open={open} onOpenChange={onOpenChange} />;
+}
+
+function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) {
   const { t } = useTranslation();
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const projects = useProjectStore((s) => s.projects);
@@ -46,11 +54,18 @@ export function FileSearchDialog({ open, onOpenChange }: FileSearchDialogProps) 
   const inputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
-  // One worker per dialog mount — terminated on unmount.
   const workerRef = useRef<FileSearchWorkerClient | null>(null);
-  if (!workerRef.current && typeof window !== 'undefined') {
-    workerRef.current = new FileSearchWorkerClient();
-  }
+
+  const getWorker = useCallback(() => {
+    if (!workerRef.current && typeof window !== 'undefined') {
+      workerRef.current = new FileSearchWorkerClient();
+      if (basePath && indexEntry) {
+        workerRef.current.setIndex(`${basePath}:${indexEntry.version}`, indexEntry.files);
+      }
+    }
+    return workerRef.current;
+  }, [basePath, indexEntry]);
+
   useEffect(() => {
     return () => {
       workerRef.current?.dispose();
@@ -68,13 +83,14 @@ export function FileSearchDialog({ open, onOpenChange }: FileSearchDialogProps) 
 
   // Push the index into the worker whenever it changes
   useEffect(() => {
-    if (!basePath || !indexEntry || !workerRef.current) return;
-    workerRef.current.setIndex(`${basePath}:${indexEntry.version}`, indexEntry.files);
-  }, [basePath, indexEntry]);
+    if (!basePath || !indexEntry) return;
+    const w = getWorker();
+    if (w) w.setIndex(`${basePath}:${indexEntry.version}`, indexEntry.files);
+  }, [basePath, indexEntry, getWorker]);
 
   const runSearch = useCallback(
     async (q: string) => {
-      const w = workerRef.current;
+      const w = getWorker();
       if (!w || !indexEntry) {
         setMatches([]);
         setTruncated(false);

@@ -64,6 +64,8 @@ export function AppSidebar({ singleProjectId }: { singleProjectId?: string | nul
     handleDeleteThreadFromList,
     handleRenameProject,
     handleDeleteProject,
+    handleCloseProject,
+    handleReopenProject,
     handleShowIssues,
     branchSwitchDialog,
   } = actions;
@@ -157,6 +159,8 @@ export function AppSidebar({ singleProjectId }: { singleProjectId?: string | nul
           onNewThread={handleNewThread}
           onRenameProject={handleRenameProject}
           onDeleteProject={handleDeleteProject}
+          onCloseProject={handleCloseProject}
+          onReopenProject={handleReopenProject}
           onSelectThread={handleSelectThread}
           onRenameThread={handleRenameThread}
           onArchiveThread={handleArchiveThread}

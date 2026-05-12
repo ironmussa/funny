@@ -1,4 +1,6 @@
 import type { Project } from '@funny/shared';
+import type { DomainError } from '@funny/shared/errors';
+import type { Result } from 'neverthrow';
 import { create } from 'zustand';
 
 import { projectsApi } from '@/lib/api/projects';
@@ -76,7 +78,7 @@ interface ProjectState {
       systemPrompt?: string | null;
       launcherUrl?: string | null;
     },
-  ) => Promise<void>;
+  ) => Promise<Result<Project, DomainError>>;
   deleteProject: (projectId: string) => Promise<void>;
   closeProject: (projectId: string) => Promise<void>;
   reopenProject: (projectId: string) => Promise<void>;
@@ -257,11 +259,13 @@ export const useProjectStore = create<ProjectState>((set, get) => ({
 
   updateProject: async (projectId, data) => {
     const result = await projectsApi.updateProject(projectId, data);
-    if (result.isErr()) return;
-    const { projects } = get();
-    set({
-      projects: projects.map((p) => (p.id === projectId ? result.value : p)),
-    });
+    if (result.isOk()) {
+      const { projects } = get();
+      set({
+        projects: projects.map((p) => (p.id === projectId ? result.value : p)),
+      });
+    }
+    return result;
   },
 
   deleteProject: async (projectId) => {

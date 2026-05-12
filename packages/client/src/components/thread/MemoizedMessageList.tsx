@@ -124,7 +124,11 @@ function messageListAreEqual(
     onOpenLightbox: any;
     onToolRespond?: any;
     onFork?: any;
+    onRewind?: any;
+    onForkAndRewind?: any;
     forkingMessageId?: string | null;
+    rewindDisabled?: boolean;
+    rewindDisabledReason?: string;
     scrollRef: any;
   },
   next: typeof prev,
@@ -140,7 +144,11 @@ function messageListAreEqual(
     prev.onOpenLightbox === next.onOpenLightbox &&
     prev.onToolRespond === next.onToolRespond &&
     prev.onFork === next.onFork &&
+    prev.onRewind === next.onRewind &&
+    prev.onForkAndRewind === next.onForkAndRewind &&
     prev.forkingMessageId === next.forkingMessageId &&
+    prev.rewindDisabled === next.rewindDisabled &&
+    prev.rewindDisabledReason === next.rewindDisabledReason &&
     prev.scrollRef === next.scrollRef
   );
 }
@@ -164,7 +172,11 @@ export const MemoizedMessageList = memo(
       onOpenLightbox: (images: { src: string; alt: string }[], index: number) => void;
       onToolRespond?: (toolCallId: string, answer: string, toolName: string) => void;
       onFork?: (messageId: string) => void;
+      onRewind?: (messageId: string) => void;
+      onForkAndRewind?: (messageId: string) => void;
       forkingMessageId?: string | null;
+      rewindDisabled?: boolean;
+      rewindDisabledReason?: string;
       scrollRef: React.RefObject<HTMLElement | null>;
     }
   >(function MemoizedMessageList(
@@ -181,7 +193,11 @@ export const MemoizedMessageList = memo(
       onOpenLightbox,
       onToolRespond,
       onFork,
+      onRewind,
+      onForkAndRewind,
       forkingMessageId,
+      rewindDisabled,
+      rewindDisabledReason,
       scrollRef,
     },
     ref,
@@ -761,12 +777,25 @@ export const MemoizedMessageList = memo(
               }}
               onImageClick={onOpenLightbox}
               onFork={onFork ? () => onFork(msg.id) : undefined}
+              onRewind={onRewind ? () => onRewind(msg.id) : undefined}
+              onForkAndRewind={onForkAndRewind ? () => onForkAndRewind(msg.id) : undefined}
               forkDisabled={forkingMessageId != null}
+              rewindDisabled={rewindDisabled}
+              rewindDisabledReason={rewindDisabledReason}
             />
           </div>
         );
       },
-      [onOpenLightbox, scrollRef, onFork, forkingMessageId],
+      [
+        onOpenLightbox,
+        scrollRef,
+        onFork,
+        onRewind,
+        onForkAndRewind,
+        forkingMessageId,
+        rewindDisabled,
+        rewindDisabledReason,
+      ],
     );
 
     return (

@@ -40,6 +40,7 @@ interface UIState {
   addProjectOpen: boolean;
   analyticsOpen: boolean;
   liveColumnsOpen: boolean;
+  orchestratorOpen: boolean;
   testRunnerOpen: boolean;
   designViewProjectId: string | null;
   designViewDesignId: string | null;
@@ -85,6 +86,7 @@ interface UIState {
   showGlobalSearch: () => void;
   setAnalyticsOpen: (open: boolean) => void;
   setLiveColumnsOpen: (open: boolean) => void;
+  setOrchestratorOpen: (open: boolean) => void;
   setDesignView: (projectId: string, designId: string) => void;
   closeDesignView: () => void;
   setActiveDesignId: (designId: string | null) => void;
@@ -146,6 +148,7 @@ export const useUIStore = create<UIState>((set) => ({
   addProjectOpen: false,
   analyticsOpen: false,
   liveColumnsOpen: false,
+  orchestratorOpen: false,
   testRunnerOpen: false,
   designViewProjectId: null,
   designViewDesignId: null,
@@ -210,6 +213,7 @@ export const useUIStore = create<UIState>((set) => ({
             automationInboxOpen: false,
             analyticsOpen: false,
             liveColumnsOpen: false,
+            orchestratorOpen: false,
             generalSettingsOpen: false,
           }
         : { testRunnerOpen: false },
@@ -272,6 +276,7 @@ export const useUIStore = create<UIState>((set) => ({
             allThreadsProjectId: null,
             analyticsOpen: false,
             liveColumnsOpen: false,
+            orchestratorOpen: false,
             testRunnerOpen: false,
           }
         : { generalSettingsOpen: false, activePreferencesPage: null, settingsReturnPath: null },
@@ -356,6 +361,7 @@ export const useUIStore = create<UIState>((set) => ({
       settingsOpen: false,
       analyticsOpen: false,
       liveColumnsOpen: false,
+      orchestratorOpen: false,
       reviewPaneOpen: false,
       testRunnerOpen: false,
     });
@@ -378,6 +384,7 @@ export const useUIStore = create<UIState>((set) => ({
             addProjectOpen: false,
             automationInboxOpen: false,
             liveColumnsOpen: false,
+            orchestratorOpen: false,
             testRunnerOpen: false,
           }
         : { analyticsOpen: false },
@@ -401,9 +408,34 @@ export const useUIStore = create<UIState>((set) => ({
             addProjectOpen: false,
             automationInboxOpen: false,
             analyticsOpen: false,
+            orchestratorOpen: false,
             testRunnerOpen: false,
           }
         : { liveColumnsOpen: false },
+    );
+  },
+
+  setOrchestratorOpen: (open) => {
+    if (open) {
+      invalidateSelectThread();
+      useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+      persistRightPane(false);
+    }
+    set(
+      open
+        ? {
+            orchestratorOpen: true,
+            reviewPaneOpen: false,
+            settingsOpen: false,
+            activeSettingsPage: null,
+            allThreadsProjectId: null,
+            addProjectOpen: false,
+            automationInboxOpen: false,
+            analyticsOpen: false,
+            liveColumnsOpen: false,
+            testRunnerOpen: false,
+          }
+        : { orchestratorOpen: false },
     );
   },
 
@@ -421,6 +453,7 @@ export const useUIStore = create<UIState>((set) => ({
       automationInboxOpen: false,
       analyticsOpen: false,
       liveColumnsOpen: false,
+      orchestratorOpen: false,
       testRunnerOpen: false,
     });
   },
@@ -450,6 +483,7 @@ export const useUIStore = create<UIState>((set) => ({
       automationInboxOpen: false,
       analyticsOpen: false,
       liveColumnsOpen: false,
+      orchestratorOpen: false,
       testRunnerOpen: false,
     });
   },

@@ -320,6 +320,14 @@ export async function handleDataMessageWithAck(
         await messageRepo.updateMessage(data.payload.messageId, data.payload.content);
         return undefined; // fire-and-forget
       }
+      case 'data:delete_messages_after': {
+        const messageRepo = getMessageRepo();
+        const deletedCount = await messageRepo.deleteMessagesAfter(
+          data.payload.threadId,
+          data.payload.anchorMessageId,
+        );
+        return { type: 'data:delete_messages_after_response', deletedCount };
+      }
       case 'data:update_tool_call_output': {
         const toolCallRepo = getToolCallRepo();
         await toolCallRepo.updateToolCallOutput(data.payload.toolCallId, data.payload.output);

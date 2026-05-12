@@ -798,7 +798,19 @@
     "showLess": "Mostrar menos",
     "fork": "Bifurcar desde aquí",
     "forkSuccess": "Conversación bifurcada",
-    "forkFailed": "Error al bifurcar la conversación"
+    "forkFailed": "Error al bifurcar la conversación",
+    "threadActions": "Acciones del hilo",
+    "forkConversationFromHere": "Bifurcar conversación desde aquí",
+    "rewindCodeToHere": "Rebobinar código hasta aquí",
+    "forkAndRewindCode": "Bifurcar conversación y rebobinar código",
+    "rewindSuccess_one": "1 archivo rebobinado",
+    "rewindSuccess_other": "{{count}} archivos rebobinados",
+    "rewindFailed": "Error al rebobinar el código",
+    "rewindFailedGeneric": "Error al rebobinar: {{error}}",
+    "rewindNotSupportedProvider": "Rebobinar solo está disponible para hilos de Claude",
+    "rewindNoCheckpoints": "Este hilo se inició sin checkpoints de archivos",
+    "forkAndRewindSuccess": "Conversación bifurcada y código rebobinado",
+    "forkAndRewindFailed": "Error al bifurcar y rebobinar"
   },
   "editor": {
     "failedToLoad": "No se pudo cargar el archivo",

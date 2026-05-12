@@ -85,6 +85,42 @@ export async function authMiddleware(c: Context<ServerEnv>, next: Next) {
     return next();
   }
 
+  // ── Orchestrator auth via shared secret + impersonated user ────
+  // Co-located orchestrator binary calling server-native pipeline endpoints.
+  // Trust boundary: same-host process. The secret + X-Forwarded-User pair
+  // grants the orchestrator the ability to act as `userId` for the duration
+  // of the request — per-tenant guards downstream still apply.
+  //
+  // System mode: when the path is under `/api/orchestrator/system/*`, the
+  // X-Forwarded-User header is OPTIONAL — those endpoints are explicitly
+  // cross-tenant (the brain reads/writes runs and dependencies for ALL users).
+  const ORCH_AUTH_SECRET = process.env.ORCHESTRATOR_AUTH_SECRET;
+  if (ORCH_AUTH_SECRET) {
+    const orchSecret = c.req.header('X-Orchestrator-Auth');
+    if (
+      orchSecret &&
+      orchSecret.length === ORCH_AUTH_SECRET.length &&
+      timingSafeEqual(Buffer.from(orchSecret), Buffer.from(ORCH_AUTH_SECRET))
+    ) {
+      const isSystemPath = path.startsWith('/api/orchestrator/system/');
+      const forwardedUser = c.req.header('X-Forwarded-User');
+      if (!forwardedUser && !isSystemPath) {
+        audit({
+          action: 'auth.orchestrator_rejected',
+          actorId: null,
+          detail: 'X-Orchestrator-Auth without X-Forwarded-User',
+          meta: { path, method: c.req.method },
+        });
+        return c.json({ error: 'X-Forwarded-User required with orchestrator auth' }, 401);
+      }
+      if (forwardedUser) c.set('userId', forwardedUser);
+      c.set('isOrchestrator', true);
+      c.set('isOrchestratorSystem', isSystemPath && !forwardedUser);
+      c.set('isRunner', false);
+      return next();
+    }
+  }
+
   // ── Runner auth via shared secret ──────────────────────────────
   const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET;
   if (RUNNER_AUTH_SECRET) {

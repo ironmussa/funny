@@ -7,6 +7,7 @@ import { designsApi } from './api/designs';
 import { gitApi } from './api/git';
 import { githubApi } from './api/github';
 import { mcpApi } from './api/mcp';
+import { orchestratorApi } from './api/orchestrator';
 import { pipelinesApi } from './api/pipelines';
 import { profileApi } from './api/profile';
 import { projectsApi } from './api/projects';
@@ -32,6 +33,7 @@ export const api = {
   ...skillsApi, // Skills + Plugins
   ...automationsApi, // Automations
   ...pipelinesApi, // Pipelines
+  ...orchestratorApi, // Orchestrator queue
   ...agentTemplatesApi, // Agent Templates (per-user, Deep Agent only)
   ...browseApi, // Browse (filesystem)
   ...githubApi, // GitHub (status, OAuth, repos, issues, PRs, comments)

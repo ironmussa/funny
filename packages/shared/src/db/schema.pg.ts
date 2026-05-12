@@ -98,6 +98,7 @@ export const threads = pgTable('threads', {
   cost: real('cost').notNull().default(0),
   archived: integer('archived').notNull().default(0),
   pinned: integer('pinned').notNull().default(0),
+  orchestratorManaged: integer('orchestrator_managed').notNull().default(0),
   stage: text('stage').notNull().default('backlog'),
   model: text('model').notNull().default(DEFAULT_MODEL),
   initialPrompt: text('initial_prompt'),
@@ -115,6 +116,7 @@ export const threads = pgTable('threads', {
   contextRecoveryReason: text('context_recovery_reason'),
   agentTemplateId: text('agent_template_id'), // agent template used (Deep Agent only)
   templateVariables: text('template_variables'), // JSON: filled variable values
+  fileCheckpointingEnabled: integer('file_checkpointing_enabled').notNull().default(0),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
   completedAt: text('completed_at'),
@@ -321,6 +323,41 @@ export const pipelineRuns = pgTable('pipeline_runs', {
   createdAt: text('created_at').notNull(),
   completedAt: text('completed_at'),
 });
+
+/**
+ * Orchestrator-managed run state.
+ * See sqlite schema for column docs.
+ */
+export const orchestratorRuns = pgTable('orchestrator_runs', {
+  threadId: text('thread_id')
+    .primaryKey()
+    .references(() => threads.id, { onDelete: 'cascade' }),
+  pipelineRunId: text('pipeline_run_id'),
+  attempt: integer('attempt').notNull().default(0),
+  nextRetryAtMs: integer('next_retry_at_ms'),
+  lastEventAtMs: integer('last_event_at_ms').notNull(),
+  lastError: text('last_error'),
+  claimedAtMs: integer('claimed_at_ms').notNull(),
+  userId: text('user_id').notNull(),
+  tokensTotal: integer('tokens_total').notNull().default(0),
+  updatedAtMs: integer('updated_at_ms').notNull(),
+});
+
+/**
+ * Directed dependency edges between threads. See sqlite schema for column docs.
+ */
+export const threadDependencies = pgTable(
+  'thread_dependencies',
+  {
+    threadId: text('thread_id')
+      .notNull()
+      .references(() => threads.id, { onDelete: 'cascade' }),
+    blockedBy: text('blocked_by')
+      .notNull()
+      .references(() => threads.id, { onDelete: 'cascade' }),
+  },
+  (table) => [primaryKey({ columns: [table.threadId, table.blockedBy] })],
+);
 
 export const teamProjects = pgTable(
   'team_projects',

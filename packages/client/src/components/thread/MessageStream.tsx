@@ -60,8 +60,15 @@ export interface MessageStreamProps {
   onToolRespond?: (toolCallId: string, answer: string, toolName: string) => void;
   /** Fork the thread starting from a specific user message — if omitted, the fork button is hidden */
   onFork?: (messageId: string) => void;
+  /** Rewind code (and conversation) to a specific user message in place */
+  onRewind?: (messageId: string) => void;
+  /** Fork the conversation AND rewind code on the new fork */
+  onForkAndRewind?: (messageId: string) => void;
   /** ID of the user message currently being forked (disables other fork buttons) */
   forkingMessageId?: string | null;
+  /** When true, rewind menu items render disabled with `rewindDisabledReason` as tooltip */
+  rewindDisabled?: boolean;
+  rewindDisabledReason?: string;
   /** Model and permission mode for passing to onSend from status cards */
   model?: string;
   permissionMode?: string;
@@ -125,7 +132,11 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
       onPermissionApproval,
       onToolRespond,
       onFork,
+      onRewind,
+      onForkAndRewind,
       forkingMessageId,
+      rewindDisabled,
+      rewindDisabledReason,
       model = '',
       permissionMode = '',
       pagination,
@@ -529,7 +540,11 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
             onOpenLightbox={effectiveOpenLightbox}
             onToolRespond={onToolRespond}
             onFork={onFork}
+            onRewind={onRewind}
+            onForkAndRewind={onForkAndRewind}
             forkingMessageId={forkingMessageId}
+            rewindDisabled={rewindDisabled}
+            rewindDisabledReason={rewindDisabledReason}
             scrollRef={scrollViewportRef}
           />
 

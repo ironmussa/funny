@@ -1,0 +1,68 @@
+# Default pipeline used by the orchestrator to dispatch a queued thread.
+#
+# v3 — full lifecycle: stage/status flips happen here, in the YAML, so
+# the orchestrator's planner stays the source of truth for *eligibility*
+# while the kanban UI sees a clean "backlog → in_progress → review/done"
+# transition driven by the same artifact that runs the work.
+#
+# Flow:
+#   announce-start  → notify (info)
+#   mark-running    → set_status running         (UI: "currently working")
+#   mark-in-progress→ set_stage in_progress      (kanban column)
+#   dispatch        → spawn_agent (the real work)
+#   mark-review     → set_stage review           (kanban column for human gate)
+#   mark-completed  → set_status completed
+#   announce-done   → notify (info)
+#
+# Override at `<repoRoot>/.funny/pipelines/orchestrator-thread.yaml`.
+
+name: orchestrator-thread
+description: Default orchestrator dispatch — runs an agent for a queued thread and flips lifecycle.
+
+inputs:
+  prompt: { type: string }
+  threadId: { type: string }
+
+nodes:
+  - id: announce-start
+    notify:
+      message: "Orchestrator dispatching thread {{ threadId }}"
+      level: info
+
+  - id: mark-running
+    depends_on: [announce-start]
+    set_status:
+      value: running
+      reason: orchestrator-dispatch
+
+  - id: mark-in-progress
+    depends_on: [mark-running]
+    set_stage:
+      value: in_progress
+      reason: orchestrator-dispatch
+
+  - id: dispatch
+    depends_on: [mark-in-progress]
+    spawn_agent:
+      model: sonnet
+      provider: claude
+      permission_mode: autoEdit
+      prompt: "{{ prompt }}"
+
+  - id: mark-review
+    depends_on: [dispatch]
+    set_stage:
+      value: review
+      reason: agent-completed-awaiting-review
+
+  - id: mark-completed
+    depends_on: [dispatch]
+    set_status:
+      value: completed
+      reason: orchestrator-dispatch
+
+  - id: announce-done
+    depends_on: [mark-review, mark-completed]
+    notify:
+      message: "Orchestrator completed thread {{ threadId }}"
+      level: info

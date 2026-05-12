@@ -19,6 +19,8 @@ export type ServerEnv = {
     userId: string;
     userRole: UserRole;
     isRunner: boolean;
+    isOrchestrator: boolean;
+    isOrchestratorSystem: boolean;
     runnerId: string;
     organizationId: string | null;
     organizationName: string | null;

@@ -1089,6 +1089,71 @@ const migrations: Migration[] = [
       await ctx().addColumn('projects', 'closed', 'INTEGER NOT NULL', '0');
     },
   },
+  {
+    // Orchestrator state: tracks which threads have been
+    // claimed for dispatch, attempt counts for retry/backoff, last
+    // event timestamp for stall detection, and aggregated token usage.
+    name: '048_orchestrator_runs',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS orchestrator_runs (
+          thread_id TEXT PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
+          pipeline_run_id TEXT,
+          attempt INTEGER NOT NULL DEFAULT 0,
+          next_retry_at_ms INTEGER,
+          last_event_at_ms INTEGER NOT NULL,
+          last_error TEXT,
+          claimed_at_ms INTEGER NOT NULL,
+          user_id TEXT NOT NULL,
+          tokens_total INTEGER NOT NULL DEFAULT 0,
+          updated_at_ms INTEGER NOT NULL
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_orchestrator_runs_user
+        ON orchestrator_runs (user_id)
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_orchestrator_runs_retry
+        ON orchestrator_runs (next_retry_at_ms)
+      `);
+    },
+  },
+  {
+    name: '049_thread_dependencies',
+    async up() {
+      await ctx().exec(sql`
+        CREATE TABLE IF NOT EXISTS thread_dependencies (
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          blocked_by TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          PRIMARY KEY (thread_id, blocked_by)
+        )
+      `);
+      await ctx().exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_thread_dependencies_blocked_by
+        ON thread_dependencies (blocked_by)
+      `);
+    },
+  },
+  {
+    // Marks threads whose Claude SDK session was started with
+    // `enableFileCheckpointing: true`. Old threads default to 0 — the UI uses
+    // this to gray out "Rewind code" / "Fork + rewind" since those threads
+    // have no per-message file snapshots to restore.
+    name: '050_threads_file_checkpointing_enabled',
+    async up() {
+      await ctx().addColumn('threads', 'file_checkpointing_enabled', 'INTEGER NOT NULL', '0');
+    },
+  },
+  {
+    // Per-thread opt-in flag. When 1, the standalone orchestrator may claim
+    // and dispatch this thread. When 0 (default), threads remain manual —
+    // the orchestrator ignores them in `listEligibleCandidates`.
+    name: '051_threads_orchestrator_managed',
+    async up() {
+      await ctx().addColumn('threads', 'orchestrator_managed', 'INTEGER NOT NULL', '0');
+    },
+  },
 ];
 
 export async function autoMigrate() {

@@ -233,6 +233,23 @@ function parseRoute(pathname: string) {
     };
   }
 
+  // Orchestrator queue: /orchestrator
+  if (p === '/orchestrator') {
+    return {
+      orgSlug,
+      settingsPage: null,
+      preferencesPage: null,
+      projectId: null,
+      threadId: null,
+      globalSearch: false,
+      inbox: false,
+      analytics: false,
+      liveColumns: false,
+      addProject: false,
+      orchestrator: true,
+    };
+  }
+
   // New project: /new
   if (p === '/new') {
     return {
@@ -293,6 +310,7 @@ export function useRouteSync() {
     } = parsed;
     const designId = (parsed as { designId?: string | null }).designId ?? null;
     const designsList = (parsed as { designsList?: boolean }).designsList ?? false;
+    const orchestrator = (parsed as { orchestrator?: boolean }).orchestrator ?? false;
 
     // Restore last route on cold load at root path
     if (!restoredRef.current) {
@@ -306,6 +324,7 @@ export function useRouteSync() {
         !inbox &&
         !analytics &&
         !liveColumns &&
+        !orchestrator &&
         !addProject
       ) {
         try {
@@ -468,6 +487,20 @@ export function useRouteSync() {
     // Close live columns when navigating away
     if (uiStore.liveColumnsOpen) {
       uiStore.setLiveColumnsOpen(false);
+    }
+
+    // Orchestrator queue view
+    if (orchestrator) {
+      if (!uiStore.orchestratorOpen) {
+        uiStore.setOrchestratorOpen(true);
+      }
+      if (uiStore.allThreadsProjectId) uiStore.closeAllThreads();
+      return;
+    }
+
+    // Close orchestrator when navigating away
+    if (uiStore.orchestratorOpen) {
+      uiStore.setOrchestratorOpen(false);
     }
 
     // Add project view: /new

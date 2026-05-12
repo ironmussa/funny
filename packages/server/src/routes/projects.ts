@@ -135,7 +135,14 @@ projectRoutes.patch('/:id', async (c) => {
 
   if (result.isErr()) {
     const e = result.error;
-    const status = e.type === 'CONFLICT' ? 409 : e.type === 'NOT_FOUND' ? 404 : 500;
+    const status =
+      e.type === 'CONFLICT'
+        ? 409
+        : e.type === 'NOT_FOUND'
+          ? 404
+          : e.type === 'BAD_REQUEST'
+            ? 400
+            : 500;
     return c.json({ error: e.message }, status);
   }
 

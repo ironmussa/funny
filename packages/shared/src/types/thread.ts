@@ -28,6 +28,8 @@ export interface Thread {
   cost: number;
   archived?: boolean;
   pinned?: boolean;
+  /** When true, the orchestrator may auto-claim and dispatch this thread. */
+  orchestratorManaged?: boolean;
   automationId?: string;
   source: ThreadSource;
   externalRequestId?: string;
@@ -50,6 +52,12 @@ export interface Thread {
   agentTemplateId?: string;
   /** Filled template variable values (key → value). */
   templateVariables?: Record<string, string>;
+  /**
+   * Whether the underlying SDK session was started with file checkpointing
+   * enabled. When true, "Rewind code to here" / "Fork conversation and rewind
+   * code" are available; otherwise the UI grays them out.
+   */
+  fileCheckpointingEnabled?: boolean;
 }
 
 export interface PaginatedThreadsResponse {

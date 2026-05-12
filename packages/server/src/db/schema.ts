@@ -21,6 +21,8 @@ export {
   mcpOauthTokens,
   pipelines,
   pipelineRuns,
+  orchestratorRuns,
+  threadDependencies,
   teamProjects,
   threadEvents,
   instanceSettings,

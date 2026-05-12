@@ -390,6 +390,7 @@ describe('Database Schema', () => {
           .values({
             id: 'orphan-t',
             projectId: 'nonexistent-project',
+            userId: 'user-1',
             title: 'Orphan',
             mode: 'local',
             permissionMode: 'autoEdit',
@@ -397,6 +398,7 @@ describe('Database Schema', () => {
             cost: 0,
             archived: 0,
             createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
           })
           .run();
       }).toThrow();

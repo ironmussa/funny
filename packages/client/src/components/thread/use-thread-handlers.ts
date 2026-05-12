@@ -11,7 +11,8 @@ import { buildPath } from '@/lib/url';
 import { useProjectStore } from '@/stores/project-store';
 import { deriveToolLists, useSettingsStore } from '@/stores/settings-store';
 import type { ThreadCore } from '@/stores/thread-context';
-import { useThreadStore } from '@/stores/thread-store';
+import { invalidateThreadData } from '@/stores/thread-machine-bridge';
+import { invalidateSelectThread, useThreadStore } from '@/stores/thread-store';
 
 const log = createClientLogger('ThreadChatHandlers');
 
@@ -284,6 +285,75 @@ export function useThreadHandlers(refs: Refs) {
     [forkingMessageId, navigate, refs, t],
   );
 
+  const handleRewind = useCallback(
+    async (messageId: string) => {
+      const thread = refs.activeThreadRef.current;
+      if (!thread || forkingMessageId) return;
+      setForkingMessageId(messageId);
+      try {
+        const result = await api.rewindCode(thread.id, messageId);
+        if (result.isErr()) {
+          log.error('Failed to rewind code', {
+            threadId: thread.id,
+            messageId,
+            error: result.error.message,
+          });
+          toast.error(
+            result.error.type === 'INTERNAL'
+              ? t('thread.rewindFailed', 'Failed to rewind code')
+              : t('thread.rewindFailedGeneric', { error: result.error.message }),
+          );
+          return;
+        }
+        // Force-refresh the thread so the truncated transcript replaces the
+        // current in-memory message list.
+        invalidateThreadData(thread.id);
+        invalidateSelectThread();
+        await useThreadStore.getState().selectThread(thread.id);
+        const filesChanged = result.value.rewind.filesChanged?.length ?? 0;
+        toast.success(
+          t('thread.rewindSuccess', {
+            count: filesChanged,
+            defaultValue_one: 'Rewound 1 file',
+            defaultValue_other: 'Rewound {{count}} files',
+            defaultValue: 'Code rewound',
+          }),
+        );
+      } finally {
+        setForkingMessageId(null);
+      }
+    },
+    [forkingMessageId, refs, t],
+  );
+
+  const handleForkAndRewind = useCallback(
+    async (messageId: string) => {
+      const thread = refs.activeThreadRef.current;
+      if (!thread || forkingMessageId) return;
+      setForkingMessageId(messageId);
+      try {
+        const result = await api.forkAndRewind(thread.id, messageId);
+        if (result.isErr()) {
+          log.error('Failed to fork-and-rewind', {
+            threadId: thread.id,
+            messageId,
+            error: result.error.message,
+          });
+          toast.error(t('thread.forkAndRewindFailed', 'Failed to fork and rewind'));
+          return;
+        }
+        const newThread = result.value.thread;
+        useThreadStore.setState({ selectedThreadId: newThread.id });
+        await useThreadStore.getState().loadThreadsForProject(thread.projectId);
+        navigate(buildPath(`/projects/${thread.projectId}/threads/${newThread.id}`));
+        toast.success(t('thread.forkAndRewindSuccess', 'Forked and rewound code'));
+      } finally {
+        setForkingMessageId(null);
+      }
+    },
+    [forkingMessageId, navigate, refs, t],
+  );
+
   return {
     sending,
     setSending: setSending as Dispatch<SetStateAction<boolean>>,
@@ -297,6 +367,8 @@ export function useThreadHandlers(refs: Refs) {
     handlePermissionApproval,
     handleToolRespond,
     handleFork,
+    handleRewind,
+    handleForkAndRewind,
   };
 }
 

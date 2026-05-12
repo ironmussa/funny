@@ -203,6 +203,91 @@ describe('Thread Routes (Integration)', () => {
     });
   });
 
+  // ── PATCH /api/threads/:id/status ──────────────────────
+
+  describe('PATCH /api/threads/:id/status', () => {
+    test('updates a valid status value', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+
+      const res = await t.requestAs('user-1').patch('/api/threads/t1/status', {
+        value: 'running',
+        reason: 'orchestrator-dispatch',
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.status).toBe('running');
+    });
+
+    test('rejects an invalid status with 400', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+
+      const res = await t.requestAs('user-1').patch('/api/threads/t1/status', {
+        value: 'not-a-status',
+      });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toMatch(/Invalid status/);
+    });
+
+    test('returns 400 when value is missing', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+
+      const res = await t.requestAs('user-1').patch('/api/threads/t1/status', {
+        reason: 'no value',
+      });
+      expect(res.status).toBe(400);
+    });
+
+    test('returns 404 for someone else’s thread (cross-tenant guard)', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-2', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-2' });
+
+      const res = await t.requestAs('user-1').patch('/api/threads/t1/status', {
+        value: 'running',
+      });
+      expect(res.status).toBe(404);
+    });
+  });
+
+  // ── PATCH /api/threads/:id/stage ───────────────────────
+
+  describe('PATCH /api/threads/:id/stage', () => {
+    test('updates a valid stage value', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+
+      const res = await t.requestAs('user-1').patch('/api/threads/t1/stage', {
+        value: 'review',
+        reason: 'agent-completed',
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.stage).toBe('review');
+    });
+
+    test('rejects an invalid stage with 400', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+
+      const res = await t.requestAs('user-1').patch('/api/threads/t1/stage', {
+        value: 'shipped',
+      });
+      expect(res.status).toBe(400);
+      const body = await res.json();
+      expect(body.error).toMatch(/Invalid stage/);
+    });
+
+    test('returns 404 for non-existent thread', async () => {
+      const res = await t.requestAs('user-1').patch('/api/threads/missing/stage', {
+        value: 'in_progress',
+      });
+      expect(res.status).toBe(404);
+    });
+  });
+
   // ── DELETE /api/threads/:id ────────────────────────────
 
   describe('DELETE /api/threads/:id', () => {

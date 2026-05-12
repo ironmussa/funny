@@ -261,6 +261,60 @@ describe('getThreadWithMessages', () => {
   });
 });
 
+describe('deleteMessagesAfter', () => {
+  test('returns 0 when anchor not found', async () => {
+    const deleted = await repo.deleteMessagesAfter('t1', 'missing-id');
+    expect(deleted).toBe(0);
+  });
+
+  test('returns 0 when anchor is the last message', async () => {
+    seedMessage(deps.db, { id: 'm1', timestamp: ts(0), role: 'user', content: 'a' });
+    seedMessage(deps.db, { id: 'm2', timestamp: ts(1), role: 'assistant', content: 'b' });
+    const deleted = await repo.deleteMessagesAfter('t1', 'm2');
+    expect(deleted).toBe(0);
+    const result = await repo.getThreadWithMessages('t1');
+    expect(result!.messages.map((m: any) => m.id)).toEqual(['m1', 'm2']);
+  });
+
+  test('removes every message strictly after the anchor', async () => {
+    seedMessage(deps.db, { id: 'u1', timestamp: ts(0), role: 'user', content: 'first' });
+    seedMessage(deps.db, { id: 'a1', timestamp: ts(1), role: 'assistant', content: 'reply' });
+    seedMessage(deps.db, { id: 'u2', timestamp: ts(2), role: 'user', content: 'second' });
+    seedMessage(deps.db, { id: 'a2', timestamp: ts(3), role: 'assistant', content: 'reply2' });
+    seedMessage(deps.db, { id: 'u3', timestamp: ts(4), role: 'user', content: 'third' });
+
+    const deleted = await repo.deleteMessagesAfter('t1', 'u2');
+
+    expect(deleted).toBe(2);
+    const result = await repo.getThreadWithMessages('t1');
+    expect(result!.messages.map((m: any) => m.id)).toEqual(['u1', 'a1', 'u2']);
+  });
+
+  test('cascades tool call deletion', async () => {
+    seedMessage(deps.db, { id: 'u1', timestamp: ts(0), role: 'user' });
+    seedMessage(deps.db, { id: 'a1', timestamp: ts(1), role: 'assistant' });
+    seedToolCall(deps.db, { id: 'tc-after', messageId: 'a1', name: 'Read' });
+
+    await repo.deleteMessagesAfter('t1', 'u1');
+
+    const { db, schema } = deps;
+    const remaining = db.select().from(schema.toolCalls).all();
+    expect(remaining.find((r: any) => r.id === 'tc-after')).toBeUndefined();
+  });
+
+  test('does not touch other threads', async () => {
+    seedThread(deps.db, { id: 't2' });
+    seedMessage(deps.db, { id: 'a-t1', threadId: 't1', timestamp: ts(0) });
+    seedMessage(deps.db, { id: 'b-t1', threadId: 't1', timestamp: ts(1) });
+    seedMessage(deps.db, { id: 'a-t2', threadId: 't2', timestamp: ts(2) });
+
+    await repo.deleteMessagesAfter('t1', 'a-t1');
+
+    const result = await repo.getThreadWithMessages('t2');
+    expect(result!.messages.map((m: any) => m.id)).toEqual(['a-t2']);
+  });
+});
+
 describe('getThreadMessages (pagination)', () => {
   test('returns messages with hasMore flag', async () => {
     for (let i = 0; i < 5; i++) {

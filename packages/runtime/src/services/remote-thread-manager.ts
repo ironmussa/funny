@@ -43,6 +43,11 @@ export function createRemoteThreadManager(): IThreadManager {
       return remoteUpdateMessage(id, content);
     },
 
+    async deleteMessagesAfter(threadId: string, anchorMessageId: string) {
+      const { remoteDeleteMessagesAfter } = await import('./team-client.js');
+      return remoteDeleteMessagesAfter(threadId, anchorMessageId);
+    },
+
     async insertToolCall(data) {
       const { remoteInsertToolCall } = await import('./team-client.js');
       return remoteInsertToolCall(data);

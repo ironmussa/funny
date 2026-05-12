@@ -95,6 +95,9 @@ const AnalyticsView = lazy(() =>
 const LiveColumnsView = lazy(() =>
   import('@/components/LiveColumnsView').then((m) => ({ default: m.LiveColumnsView })),
 );
+const OrchestratorView = lazy(() =>
+  import('@/components/OrchestratorView').then((m) => ({ default: m.OrchestratorView })),
+);
 // Eagerly start the CommandPalette chunk download at module-eval time so
 // Ctrl+K is instant. requestIdleCallback was firing too late on busy main
 // threads and the user saw a load delay before the dialog appeared.
@@ -137,6 +140,7 @@ export function App() {
   const addProjectOpen = useUIStore((s) => s.addProjectOpen);
   const analyticsOpen = useUIStore((s) => s.analyticsOpen);
   const liveColumnsOpen = useUIStore((s) => s.liveColumnsOpen);
+  const orchestratorOpen = useUIStore((s) => s.orchestratorOpen);
   const testRunnerOpen = useUIStore((s) => s.testRunnerOpen);
   const internalEditorOpen = useInternalEditorStore((s) => s.isOpen);
   const internalEditorFilePath = useInternalEditorStore((s) => s.filePath);
@@ -152,6 +156,7 @@ export function App() {
     generalSettingsOpen ||
     analyticsOpen ||
     liveColumnsOpen ||
+    orchestratorOpen ||
     testRunnerOpen ||
     automationInboxOpen ||
     addProjectOpen ||
@@ -262,6 +267,8 @@ export function App() {
                           <AnalyticsView />
                         ) : liveColumnsOpen ? (
                           <LiveColumnsView />
+                        ) : orchestratorOpen ? (
+                          <OrchestratorView />
                         ) : testRunnerOpen ? (
                           <TestRunnerPane />
                         ) : automationInboxOpen ? (

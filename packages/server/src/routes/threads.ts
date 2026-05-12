@@ -29,8 +29,35 @@ import * as messageQueueRepo from '../services/message-queue-repository.js';
 import { findRunnerForProject } from '../services/runner-manager.js';
 import * as runnerResolver from '../services/runner-resolver.js';
 import type { ResolvedRunner } from '../services/runner-resolver.js';
+import * as threadEventRepo from '../services/thread-event-repository.js';
 import * as threadRegistry from '../services/thread-registry.js';
+import { relayToUser } from '../services/ws-relay.js';
 import { tunnelFetch } from '../services/ws-tunnel.js';
+
+// Canonical thread-lifecycle enums — kept in sync with
+// @funny/shared/primitives (ThreadStatus / ThreadStage). Inlined as
+// arrays so the route can validate at the HTTP boundary without
+// pulling a runtime value from a types-only package.
+const THREAD_STATUS_VALUES = [
+  'setting_up',
+  'idle',
+  'pending',
+  'running',
+  'waiting',
+  'completed',
+  'failed',
+  'stopped',
+  'interrupted',
+] as const;
+
+const THREAD_STAGE_VALUES = [
+  'backlog',
+  'planning',
+  'in_progress',
+  'review',
+  'done',
+  'archived',
+] as const;
 
 const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET!;
 
@@ -341,6 +368,7 @@ threadRoutes.patch('/:id', async (c) => {
     'stage',
     'archived',
     'pinned',
+    'orchestratorManaged',
     'model',
     'mode',
     'branch',
@@ -359,6 +387,9 @@ threadRoutes.patch('/:id', async (c) => {
   // PostgreSQL integer columns need boolean → integer conversion
   if (typeof updates.pinned === 'boolean') updates.pinned = updates.pinned ? 1 : 0;
   if (typeof updates.archived === 'boolean') updates.archived = updates.archived ? 1 : 0;
+  if (typeof updates.orchestratorManaged === 'boolean') {
+    updates.orchestratorManaged = updates.orchestratorManaged ? 1 : 0;
+  }
 
   if (Object.keys(updates).length > 0) {
     await threadRepo.updateThread(id, updates);
@@ -366,6 +397,174 @@ threadRoutes.patch('/:id', async (c) => {
 
   const updated = await threadRepo.getThread(id);
   return c.json(updated);
+});
+
+// ── Lifecycle endpoints used by the YAML pipeline DSL ───────
+//
+// `set_status` / `set_stage` actions in `.funny/pipelines/*.yaml`
+// post to these routes (when the pipeline runs server-side, e.g. in
+// the orchestrator's tunnel adapter). Dedicated endpoints — instead
+// of relying on PATCH /:id — give us strict enum validation and a
+// single emission point for the WS event that the kanban UI listens
+// on.
+threadRoutes.patch('/:id/status', async (c) => {
+  const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+  let body: { value?: unknown; reason?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  if (typeof body.value !== 'string') {
+    return c.json({ error: 'Missing required string field "value"' }, 400);
+  }
+  if (!(THREAD_STATUS_VALUES as readonly string[]).includes(body.value)) {
+    return c.json(
+      {
+        error: `Invalid status "${body.value}". Allowed: ${THREAD_STATUS_VALUES.join(', ')}`,
+      },
+      400,
+    );
+  }
+  const reason = typeof body.reason === 'string' ? body.reason : undefined;
+
+  const thread = await threadRepo.getThread(id);
+  if (!thread || thread.userId !== userId) {
+    return c.json({ error: 'Thread not found' }, 404);
+  }
+
+  await threadRepo.updateThread(id, { status: body.value });
+  relayToUser(userId, {
+    type: 'thread:updated',
+    threadId: id,
+    data: { status: body.value, reason },
+  });
+
+  log.info('Thread status patched', {
+    namespace: 'threads',
+    threadId: id,
+    status: body.value,
+    reason,
+  });
+
+  const updated = await threadRepo.getThread(id);
+  return c.json(updated);
+});
+
+threadRoutes.patch('/:id/stage', async (c) => {
+  const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+  let body: { value?: unknown; reason?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  if (typeof body.value !== 'string') {
+    return c.json({ error: 'Missing required string field "value"' }, 400);
+  }
+  if (!(THREAD_STAGE_VALUES as readonly string[]).includes(body.value)) {
+    return c.json(
+      {
+        error: `Invalid stage "${body.value}". Allowed: ${THREAD_STAGE_VALUES.join(', ')}`,
+      },
+      400,
+    );
+  }
+  const reason = typeof body.reason === 'string' ? body.reason : undefined;
+
+  const thread = await threadRepo.getThread(id);
+  if (!thread || thread.userId !== userId) {
+    return c.json({ error: 'Thread not found' }, 404);
+  }
+
+  const fromStage = thread.stage;
+  await threadRepo.updateThread(id, { stage: body.value });
+  if (body.value !== fromStage) {
+    await stageHistoryRepo.recordStageChange(id, fromStage ?? null, body.value);
+    relayToUser(userId, {
+      type: 'thread:stage-changed',
+      threadId: id,
+      data: {
+        fromStage,
+        toStage: body.value,
+        projectId: thread.projectId,
+        reason,
+      },
+    });
+  }
+
+  log.info('Thread stage patched', {
+    namespace: 'threads',
+    threadId: id,
+    fromStage,
+    toStage: body.value,
+    reason,
+  });
+
+  const updated = await threadRepo.getThread(id);
+  return c.json(updated);
+});
+
+// ── Workflow event fan-out (orchestrator-bound) ─────────────
+//
+// The (co-located) orchestrator binary posts here when a pipeline step
+// emits a generic message — `notify` actions, log lines, etc. The server
+// persists the event as a thread:event in the DB and broadcasts the same
+// envelope shape used by emitWorkflowEvent in the runtime, so existing
+// client listeners work unchanged.
+threadRoutes.post('/:id/workflow-event', async (c) => {
+  const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+
+  let body: { type?: unknown; data?: unknown };
+  try {
+    body = await c.req.json();
+  } catch {
+    return c.json({ error: 'Invalid JSON body' }, 400);
+  }
+
+  if (typeof body.type !== 'string' || !body.type) {
+    return c.json({ error: 'Missing required string field "type"' }, 400);
+  }
+  // Constrain the event type to the workflow:* / pipeline:* namespaces so
+  // a forwarded user can't synthesize unrelated events (eg. agent:result).
+  if (!body.type.startsWith('workflow:') && !body.type.startsWith('pipeline:')) {
+    return c.json({ error: 'type must start with "workflow:" or "pipeline:"' }, 400);
+  }
+  const data: Record<string, unknown> =
+    body.data && typeof body.data === 'object' && !Array.isArray(body.data)
+      ? (body.data as Record<string, unknown>)
+      : {};
+
+  const thread = await threadRepo.getThread(id);
+  if (!thread || thread.userId !== userId) {
+    return c.json({ error: 'Thread not found' }, 404);
+  }
+
+  await threadEventRepo.saveThreadEvent(id, body.type, data);
+
+  // Mirror broadcastThreadEvent shape from packages/runtime/src/services/workflow-event-helpers.ts
+  const eventId = crypto.randomUUID();
+  const createdAt = new Date().toISOString();
+  relayToUser(userId, {
+    type: 'thread:event',
+    threadId: id,
+    data: {
+      event: {
+        id: eventId,
+        threadId: id,
+        type: body.type,
+        data: JSON.stringify(data),
+        createdAt,
+      },
+    },
+  });
+
+  return c.json({ ok: true, eventId });
 });
 
 // ── Thread creation (proxied to runner, then registered locally) ─
@@ -444,6 +643,35 @@ threadRoutes.post('/idle', (c) => createThreadOnRunner(c, '/api/threads/idle'));
 
 // ── Agent operations (proxied to runner) ─────────────────────────
 
+// POST /api/threads/:id/orchestrator/workflow-event — orchestrator-bound
+// Generic event fan-out for the standalone orchestrator. Mirrors the
+// in-process pipeline-adapter's `notify()` path: the orchestrator pushes
+// a workflow event here and the server relays it to the user's browser
+// clients via Socket.IO.
+threadRoutes.post('/:id/orchestrator/workflow-event', async (c) => {
+  const threadId = c.req.param('id');
+  const userId = c.get('userId');
+  if (!userId) return c.json({ error: 'Unauthenticated' }, 401);
+
+  const body = (await c.req.json().catch(() => null)) as {
+    event?: string;
+    data?: Record<string, unknown>;
+  } | null;
+
+  const event = body?.event;
+  if (typeof event !== 'string' || !event.startsWith('workflow:')) {
+    return c.json({ error: 'event must be a string starting with "workflow:"' }, 400);
+  }
+
+  relayToUser(userId, {
+    type: event,
+    threadId,
+    data: { ...(body?.data ?? {}) },
+  });
+
+  return c.json({ ok: true });
+});
+
 // POST /api/threads/:id/message — send message to running agent
 threadRoutes.post('/:id/message', proxyToRunner);
 
@@ -513,6 +741,70 @@ threadRoutes.post('/:id/fork', async (c) => {
       error: (err as Error).message,
     });
     return c.json({ error: 'Thread fork failed' }, 502);
+  }
+});
+
+// POST /api/threads/:id/rewind — proxy to runner
+threadRoutes.post('/:id/rewind', proxyToRunner);
+
+// POST /api/threads/:id/fork-and-rewind — fork conversation, then rewind code
+threadRoutes.post('/:id/fork-and-rewind', async (c) => {
+  const sourceThreadId = c.req.param('id');
+  const userId = c.get('userId') as string;
+
+  const source = await threadRepo.getThread(sourceThreadId);
+  if (!source || source.userId !== userId) {
+    return c.json({ error: 'Thread not found' }, 404);
+  }
+
+  const resolved = await resolveRunnerForProject(source.projectId, userId);
+  if (!resolved) {
+    return c.json({ error: 'No online runner found for this project' }, 502);
+  }
+
+  try {
+    const headers = buildForwardHeaders(
+      userId,
+      c.get('organizationId') as string | undefined,
+      c.get('userRole') as string | undefined,
+      c.get('organizationName') as string | undefined,
+    );
+    const body = await c.req.text();
+    const result = await fetchFromRunner(
+      resolved,
+      `/api/threads/${sourceThreadId}/fork-and-rewind`,
+      { method: 'POST', headers, body },
+    );
+
+    if (!result.ok) {
+      return c.json({ error: `Runner error: ${result.body}` }, result.status as any);
+    }
+
+    const parsed = JSON.parse(result.body);
+    const newThread = parsed?.thread ?? null;
+    const newThreadId = newThread?.id;
+    if (newThreadId && resolved.runnerId !== '__default__') {
+      await threadRegistry.registerThread({
+        id: newThreadId,
+        projectId: source.projectId,
+        runnerId: resolved.runnerId,
+        userId,
+        title: newThread.title,
+        model: newThread.model,
+        mode: newThread.mode,
+        branch: newThread.branch ?? undefined,
+      });
+      runnerResolver.cacheThreadRunner(newThreadId, resolved.runnerId, resolved.httpUrl);
+    }
+
+    return c.json(parsed, 201);
+  } catch (err) {
+    log.error('Failed to fork-and-rewind thread on runner', {
+      namespace: 'threads',
+      sourceThreadId,
+      error: (err as Error).message,
+    });
+    return c.json({ error: 'Thread fork-and-rewind failed' }, 502);
   }
 });
 

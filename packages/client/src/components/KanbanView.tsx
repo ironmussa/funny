@@ -18,6 +18,7 @@ import {
   MoreVertical,
   Square,
   Archive,
+  Workflow,
 } from 'lucide-react';
 import { useState, useEffect, useRef, useMemo, useCallback, memo, startTransition } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -276,6 +277,22 @@ export const KanbanCard = memo(function KanbanCard({
                     {t('sidebar.archive')}
                   </DropdownMenuItem>
                 )}
+                <DropdownMenuItem
+                  data-testid={`kanban-card-toggle-orchestrator-${thread.id}`}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const next = !thread.orchestratorManaged;
+                    const result = await api.setOrchestratorManaged(thread.id, next);
+                    if (result.isErr()) {
+                      toastError(result.error);
+                    }
+                  }}
+                >
+                  <Workflow className="icon-sm" />
+                  {thread.orchestratorManaged
+                    ? t('sidebar.disableOrchestrator', 'Disable orchestrator')
+                    : t('sidebar.enableOrchestrator', 'Enable orchestrator')}
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem
                   data-testid={`kanban-card-delete-${thread.id}`}

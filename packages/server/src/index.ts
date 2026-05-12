@@ -172,6 +172,8 @@ const { analyticsRoutes } = await import('./routes/analytics.js');
 const { pipelineRoutes } = await import('./routes/pipelines.js');
 const { designRoutes, designProjectRoutes } = await import('./routes/designs.js');
 const { agentTemplateRoutes } = await import('./routes/agent-templates.js');
+const { orchestratorRoutes } = await import('./routes/orchestrator.js');
+const { orchestratorSystemRoutes } = await import('./routes/orchestrator-system.js');
 
 app.route('/api/auth', authRoutes);
 app.route('/api/projects', projectRoutes);
@@ -188,6 +190,10 @@ app.route('/api/invite-links', inviteLinkRoutes);
 app.route('/api/designs', designRoutes);
 app.route('/api/projects', designProjectRoutes);
 app.route('/api/agent-templates', agentTemplateRoutes);
+// System routes mounted FIRST so /api/orchestrator/system/* matches them
+// before the user-scoped /api/orchestrator/* tree.
+app.route('/api/orchestrator/system', orchestratorSystemRoutes);
+app.route('/api/orchestrator', orchestratorRoutes);
 
 // Setup status — proxy to runner
 app.get('/api/setup/status', async (c) => {
@@ -225,6 +231,11 @@ const HOST = process.env.HOST || '0.0.0.0';
 // Initialize Socket.IO server with Bun-native engine
 const { createSocketIOServer, closeSocketIO } = await import('./services/socketio.js');
 const { engine: socketEngine } = createSocketIOServer(authInstance, corsOrigins);
+
+// Orchestrator runs as a separate process (`@funny/thread-orchestrator` binary)
+// that talks to the server via /api/orchestrator/system/*. The server no
+// longer hosts the brain in-process — see README "Running the orchestrator
+// standalone" for the migration path.
 
 const server = Bun.serve({
   // Spread Bun engine handler FIRST — provides the `websocket` property

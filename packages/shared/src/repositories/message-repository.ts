@@ -9,7 +9,7 @@
  * DB-agnostic message repository. Accepts db + schema via dependency injection.
  */
 
-import { eq, and, lt, asc, desc, inArray, like } from 'drizzle-orm';
+import { eq, and, gt, lt, asc, desc, inArray, like } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import type {
@@ -295,6 +295,45 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     return results;
   }
 
+  /**
+   * Delete all messages in a thread whose timestamp is strictly after the
+   * given anchor message's timestamp. Tool calls cascade via FK.
+   * Used by "Rewind code to here" to truncate the conversation.
+   */
+  async function deleteMessagesAfter(threadId: string, anchorMessageId: string): Promise<number> {
+    const anchor = await dbGet(
+      db
+        .select({ timestamp: schema.messages.timestamp })
+        .from(schema.messages)
+        .where(
+          and(eq(schema.messages.threadId, threadId), eq(schema.messages.id, anchorMessageId)),
+        ),
+    );
+    if (!anchor) return 0;
+
+    const toDelete = await dbAll(
+      db
+        .select({ id: schema.messages.id })
+        .from(schema.messages)
+        .where(
+          and(
+            eq(schema.messages.threadId, threadId),
+            gt(schema.messages.timestamp, anchor.timestamp),
+          ),
+        ),
+    );
+    if (toDelete.length === 0) return 0;
+    await dbRun(
+      db.delete(schema.messages).where(
+        inArray(
+          schema.messages.id,
+          toDelete.map((r) => r.id),
+        ),
+      ),
+    );
+    return toDelete.length;
+  }
+
   return {
     enrichMessages,
     getThreadWithMessages,
@@ -302,5 +341,6 @@ export function createMessageRepository(deps: MessageRepositoryDeps) {
     searchMessages,
     insertMessage,
     updateMessage,
+    deleteMessagesAfter,
   };
 }

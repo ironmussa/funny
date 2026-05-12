@@ -234,6 +234,70 @@ nodes:
     }
   });
 
+  test('accepts set_status / set_stage actions with optional reason', () => {
+    const yaml = `
+name: lifecycle
+nodes:
+  - id: start
+    set_status:
+      value: running
+      reason: "kicked off"
+  - id: advance
+    depends_on: [start]
+    set_stage:
+      value: in_progress
+`;
+    const result = parsePipelineYaml(yaml);
+    expect(result.ok).toBe(true);
+    if (result.ok) {
+      expect(result.pipeline.nodes[0].set_status?.value).toBe('running');
+      expect(result.pipeline.nodes[0].set_status?.reason).toBe('kicked off');
+      expect(result.pipeline.nodes[1].set_stage?.value).toBe('in_progress');
+    }
+  });
+
+  test('rejects set_status without value (strict mode)', () => {
+    const yaml = `
+name: bad-status
+nodes:
+  - id: a
+    set_status:
+      reason: "missing value"
+`;
+    const result = parsePipelineYaml(yaml);
+    expect(result.ok).toBe(false);
+  });
+
+  test('rejects set_stage with extra unknown fields (strict mode)', () => {
+    const yaml = `
+name: bad-stage
+nodes:
+  - id: a
+    set_stage:
+      value: review
+      bogus: 1
+`;
+    const result = parsePipelineYaml(yaml);
+    expect(result.ok).toBe(false);
+  });
+
+  test('rejects a node that declares both set_status and set_stage', () => {
+    const yaml = `
+name: bad-mix
+nodes:
+  - id: a
+    set_status:
+      value: running
+    set_stage:
+      value: in_progress
+`;
+    const result = parsePipelineYaml(yaml);
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.issues.some((i) => i.message.includes('multiple actions'))).toBe(true);
+    }
+  });
+
   test('formatParseError renders the issues as multi-line text', () => {
     const result = parsePipelineYaml('name: BadName\nnodes: []');
     expect(result.ok).toBe(false);

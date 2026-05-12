@@ -55,6 +55,9 @@ export interface IMessageRepository {
     author?: string | null;
   }): string | Promise<string>;
   updateMessage(id: string, content: string): void | Promise<void>;
+  /** Truncate the thread by removing every message strictly after the
+   *  anchor (used by Rewind code to here). Returns the deleted count. */
+  deleteMessagesAfter(threadId: string, anchorMessageId: string): Promise<number>;
 }
 
 // ── Tool call repository ────────────────────────────────────────
@@ -133,7 +136,7 @@ export interface IProjectRepository {
 
 // ── Thread repository (full CRUD beyond IThreadQuery) ───────────
 
-export interface IThreadRepository extends IThreadQuery {
+export interface IThreadRepository extends IThreadQuery, IMessageRepository, IToolCallRepository {
   listThreads(opts: {
     projectId?: string;
     userId: string;

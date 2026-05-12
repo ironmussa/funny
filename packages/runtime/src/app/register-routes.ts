@@ -8,6 +8,7 @@ import filesRoutes from '../routes/files.js';
 import { gitRoutes } from '../routes/git.js';
 import { githubRoutes } from '../routes/github.js';
 import mcpRoutes from '../routes/mcp.js';
+import { orchestratorRuntimeRoutes } from '../routes/orchestrator.js';
 import { pipelineRuntimeRoutes } from '../routes/pipelines.js';
 import pluginRoutes from '../routes/plugins.js';
 import { projectRoutes } from '../routes/projects.js';
@@ -40,5 +41,6 @@ export function registerRoutes(app: Hono): void {
   app.route('/api/tests', testRoutes);
   app.route('/api/automations', automationRoutes);
   app.route('/api/pipelines', pipelineRuntimeRoutes);
+  app.route('/api/orchestrator', orchestratorRuntimeRoutes);
   app.route('/api/projects', designProjectRoutes);
 }

@@ -68,7 +68,10 @@ export function createTestDb() {
       init_tools TEXT,
       init_cwd TEXT,
       runner_id TEXT,
+      file_checkpointing_enabled INTEGER NOT NULL DEFAULT 0,
+      orchestrator_managed INTEGER NOT NULL DEFAULT 0,
       created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT '',
       completed_at TEXT
     )
   `);
@@ -339,6 +342,7 @@ export function seedThread(
     pinned: overrides.pinned ?? 0,
     stage: overrides.stage ?? 'backlog',
     createdAt: overrides.createdAt ?? new Date().toISOString(),
+    updatedAt: overrides.updatedAt ?? new Date().toISOString(),
     completedAt: overrides.completedAt ?? null,
   };
   db.insert(schema.threads).values(thread).run();

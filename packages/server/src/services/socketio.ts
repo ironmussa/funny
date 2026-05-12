@@ -590,6 +590,27 @@ function setupRunnerNamespace(): void {
       }
       if (msg.event?.type === 'agent:result' && msg.event?.threadId) {
         threadRegistry.updateThreadStatus(msg.event.threadId, 'completed').catch(() => {});
+
+        // Publish to the orchestrator's terminal-event bus so the
+        // dispatcher can resolve its `finished` promise.
+        const status = msg.event.data?.status as string | undefined;
+        const errorText = msg.event.data?.error as string | undefined;
+        const kind: 'completed' | 'failed' | 'stopped' =
+          status === 'completed' ? 'completed' : status === 'stopped' ? 'stopped' : 'failed';
+        const { getAgentTerminalEventBus } = await import('./agent-terminal-event-bus.js');
+        getAgentTerminalEventBus().publish({
+          threadId: msg.event.threadId,
+          kind,
+          error: errorText,
+        });
+        // Mirror to the orchestrator's long-poll buffer so a remote brain
+        // can react to terminal outcomes without an in-process subscription.
+        const { getOrchestratorEventBuffer } = await import('./orchestrator-event-buffer.js');
+        getOrchestratorEventBuffer().publish({
+          kind: 'agent_terminal',
+          threadId: msg.event.threadId,
+          payload: { kind, error: errorText },
+        });
       }
     });
 
@@ -785,6 +806,7 @@ function setupRunnerDataHandlers(
     'data:insert_tool_call',
     'data:update_thread',
     'data:update_message',
+    'data:delete_messages_after',
     'data:update_tool_call_output',
     'data:get_thread',
     'data:get_thread_with_messages',

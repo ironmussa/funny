@@ -21,6 +21,7 @@ function notAvailable(method: string): never {
   throw new Error(`${method} is not available in runner mode — this is a server concern`);
 }
 
+// eslint-disable-next-line max-lines-per-function
 export function createRunnerServiceProvider(): RuntimeServiceProvider {
   return {
     // ── Threads — proxy to server via team-client ────────────
@@ -44,6 +45,9 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
         return [];
       },
       async getThreadByExternalRequestId() {
+        return undefined;
+      },
+      async getThreadBySessionId() {
         return undefined;
       },
       async createThread(data) {
@@ -70,6 +74,10 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
       async updateMessage(id, content) {
         const { remoteUpdateMessage } = await import('./team-client.js');
         return remoteUpdateMessage(id, content);
+      },
+      async deleteMessagesAfter(threadId: string, anchorMessageId: string) {
+        const { remoteDeleteMessagesAfter } = await import('./team-client.js');
+        return remoteDeleteMessagesAfter(threadId, anchorMessageId);
       },
       async insertToolCall(data) {
         const { remoteInsertToolCall } = await import('./team-client.js');

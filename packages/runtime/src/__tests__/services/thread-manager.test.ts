@@ -57,8 +57,17 @@ describe('ThreadManager', () => {
       .get();
   }
 
-  function createThread(data: typeof testDb.schema.threads.$inferInsert) {
-    testDb.db.insert(testDb.schema.threads).values(data).run();
+  function createThread(
+    data: Partial<typeof testDb.schema.threads.$inferInsert> &
+      Pick<typeof testDb.schema.threads.$inferInsert, 'id' | 'projectId' | 'title' | 'mode'>,
+  ) {
+    const row: typeof testDb.schema.threads.$inferInsert = {
+      userId: 'user-1',
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      ...data,
+    };
+    testDb.db.insert(testDb.schema.threads).values(row).run();
 
     // Record initial stage in history
     const initialStage = data.stage ?? 'backlog';

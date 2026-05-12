@@ -46,3 +46,12 @@ export {
 } from './thread-service/update.js';
 
 export { forkThread, type ForkThreadParams } from './thread-service/fork.js';
+
+export {
+  rewindCode,
+  forkAndRewind,
+  type RewindCodeParams,
+  type RewindCodeResult,
+  type ForkAndRewindParams,
+  type ForkAndRewindResult,
+} from './thread-service/rewind.js';

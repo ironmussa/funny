@@ -94,6 +94,31 @@ export interface NotifyOpts {
   level?: 'info' | 'warning' | 'error';
 }
 
+// ── Thread lifecycle action options ─────────────────────────
+//
+// These are typed as plain strings here (not the ThreadStatus /
+// ThreadStage unions) so this types module stays free of a
+// `@funny/shared` import; the runtime provider validates the
+// string against the canonical enum at dispatch time.
+
+export interface SetStatusOpts {
+  /** Thread id whose status should change. */
+  threadId: string;
+  /** New ThreadStatus value (validated by the provider). */
+  value: string;
+  /** Optional reason — surfaced in the WS event payload. */
+  reason?: string;
+}
+
+export interface SetStageOpts {
+  /** Thread id whose stage should change. */
+  threadId: string;
+  /** New ThreadStage value (validated by the provider). */
+  value: string;
+  /** Optional reason — surfaced in the WS event payload. */
+  reason?: string;
+}
+
 // ── Approval (human-in-the-loop) ────────────────────────────
 //
 // Modeled to match Archon's `approval:` node semantics so workflows can be
@@ -156,6 +181,12 @@ export interface ActionProvider {
 
   /** Send a notification / status message. */
   notify(opts: NotifyOpts): Promise<ActionResult>;
+
+  /** Update a thread's status. Validates `value` against ThreadStatus. */
+  setStatus(opts: SetStatusOpts): Promise<ActionResult>;
+
+  /** Update a thread's stage. Validates `value` against ThreadStage. */
+  setStage(opts: SetStageOpts): Promise<ActionResult>;
 
   /**
    * Request a human approval and block until decided (or timeout).

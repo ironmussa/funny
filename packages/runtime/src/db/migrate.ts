@@ -833,6 +833,87 @@ const migrations: Migration[] = [
       `);
     },
   },
+  {
+    // Orchestrator state: tracks which threads have been
+    // claimed for dispatch, attempt counts for retry/backoff, last
+    // event timestamp for stall detection, and aggregated token usage.
+    name: '051_orchestrator_runs',
+    async up() {
+      await exec(sql`
+        CREATE TABLE IF NOT EXISTS orchestrator_runs (
+          thread_id TEXT PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
+          pipeline_run_id TEXT,
+          attempt INTEGER NOT NULL DEFAULT 0,
+          next_retry_at_ms INTEGER,
+          last_event_at_ms INTEGER NOT NULL,
+          last_error TEXT,
+          claimed_at_ms INTEGER NOT NULL,
+          user_id TEXT NOT NULL,
+          tokens_total INTEGER NOT NULL DEFAULT 0,
+          updated_at_ms INTEGER NOT NULL
+        )
+      `);
+      await exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_orchestrator_runs_user
+        ON orchestrator_runs (user_id)
+      `);
+      await exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_orchestrator_runs_retry
+        ON orchestrator_runs (next_retry_at_ms)
+      `);
+    },
+  },
+  {
+    name: '052_thread_dependencies',
+    async up() {
+      await exec(sql`
+        CREATE TABLE IF NOT EXISTS thread_dependencies (
+          thread_id TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          blocked_by TEXT NOT NULL REFERENCES threads(id) ON DELETE CASCADE,
+          PRIMARY KEY (thread_id, blocked_by)
+        )
+      `);
+      await exec(sql`
+        CREATE INDEX IF NOT EXISTS idx_thread_dependencies_blocked_by
+        ON thread_dependencies (blocked_by)
+      `);
+    },
+  },
+  {
+    // Drop orchestrator state tables from the runtime DB. These were
+    // created by 051/052 in an earlier architecture where the orchestrator
+    // was imagined to live in the runtime; now the brain is a separate
+    // process that owns its tables on the SERVER's DB. The runtime never
+    // read or wrote these tables, so the drop is safe.
+    name: '053_drop_orchestrator_runs',
+    async up() {
+      await exec(sql`DROP INDEX IF EXISTS idx_orchestrator_runs_user`);
+      await exec(sql`DROP INDEX IF EXISTS idx_orchestrator_runs_retry`);
+      await exec(sql`DROP TABLE IF EXISTS orchestrator_runs`);
+    },
+  },
+  {
+    name: '054_drop_thread_dependencies',
+    async up() {
+      await exec(sql`DROP INDEX IF EXISTS idx_thread_dependencies_blocked_by`);
+      await exec(sql`DROP TABLE IF EXISTS thread_dependencies`);
+    },
+  },
+  {
+    // See server migration 050 for context — threads created with file
+    // checkpointing on can be rewound via the SDK; older threads cannot, and
+    // the UI grays out the rewind options for them.
+    name: '055_threads_file_checkpointing_enabled',
+    async up() {
+      await addColumn('threads', 'file_checkpointing_enabled', 'INTEGER NOT NULL', '0');
+    },
+  },
+  {
+    name: '056_threads_orchestrator_managed',
+    async up() {
+      await addColumn('threads', 'orchestrator_managed', 'INTEGER NOT NULL', '0');
+    },
+  },
 ];
 
 // ── Public API ──────────────────────────────────────────────────

@@ -222,6 +222,8 @@ export function ThreadChatView({ activeThread }: Props) {
     handlePermissionApproval,
     handleToolRespond,
     handleFork,
+    handleRewind,
+    handleForkAndRewind,
     forkingMessageId,
   } = handlers;
 
@@ -297,7 +299,23 @@ export function ThreadChatView({ activeThread }: Props) {
             onPermissionApproval={handlePermissionApproval}
             onToolRespond={handleToolRespond}
             onFork={handleFork}
+            onRewind={handleRewind}
+            onForkAndRewind={handleForkAndRewind}
             forkingMessageId={forkingMessageId}
+            rewindDisabled={
+              activeThread.provider !== 'claude' || !(activeThread as any).fileCheckpointingEnabled
+            }
+            rewindDisabledReason={
+              activeThread.provider !== 'claude'
+                ? t(
+                    'thread.rewindNotSupportedProvider',
+                    'Rewind is only available for Claude threads',
+                  )
+                : t(
+                    'thread.rewindNoCheckpoints',
+                    'This thread was started without file checkpointing',
+                  )
+            }
             pagination={{ hasMore, loadingMore, load: loadOlderMessages }}
             createdAt={activeThread.createdAt}
             snapshotMap={snapshotMap}

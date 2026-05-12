@@ -204,6 +204,10 @@ export async function forkThread(params: ForkThreadParams) {
     worktreePath: source.worktreePath,
     sessionId: newSessionId,
     parentThreadId: source.id,
+    // Forked SDK sessions start without undo history (per the Claude SDK
+    // docs), so even if the source thread had checkpointing on, the fork's
+    // own future edits start a fresh checkpoint store.
+    fileCheckpointingEnabled: provider === 'claude' ? 1 : 0,
     cost: 0,
     createdAt: now,
     updatedAt: now,

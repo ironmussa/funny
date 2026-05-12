@@ -9,6 +9,7 @@ import {
   MicOff,
   Loader2,
 } from 'lucide-react';
+import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -128,6 +129,16 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   }, [alreadyAnswered, restoredState, output]);
 
   const [activeTab, setActiveTab] = useState(0);
+  const [slideDirection, setSlideDirection] = useState(0);
+  const prefersReducedMotion = useReducedMotion();
+
+  const goToTab = useCallback((nextTab: number) => {
+    setActiveTab((prev) => {
+      if (nextTab === prev) return prev;
+      setSlideDirection(nextTab > prev ? 1 : -1);
+      return nextTab;
+    });
+  }, []);
   const [selections, setSelections] = useState<Map<number, Set<number>>>(
     () => restoredState?.selections ?? new Map(),
   );
@@ -235,13 +246,18 @@ export const AskQuestionCard = memo(function AskQuestionCard({
       return next;
     });
 
+    if (optIndex === OTHER_INDEX) {
+      // Always move caret into the input when "Other" is pressed
+      setTimeout(() => otherEditorRef.current?.focus(), 0);
+      return;
+    }
+
     // Auto-advance to next question if:
     // - Not multi-select (single selection)
-    // - Not selecting "Other" (which requires text input)
     // - Not on the last question
-    if (!multiSelect && optIndex !== OTHER_INDEX && qIndex < questions.length - 1) {
+    if (!multiSelect && qIndex < questions.length - 1) {
       // Use setTimeout to ensure state update completes before advancing
-      setTimeout(() => setActiveTab(qIndex + 1), 150);
+      setTimeout(() => goToTab(qIndex + 1), 150);
     }
   };
 
@@ -363,7 +379,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                 {questions.map((q, i) => (
                   <button
                     key={q.header}
-                    onClick={() => setActiveTab(i)}
+                    onClick={() => goToTab(i)}
                     className={cn(
                       'px-3 py-1.5 text-sm font-medium transition-colors relative',
                       i === activeTab
@@ -383,30 +399,84 @@ export const AskQuestionCard = memo(function AskQuestionCard({
               </div>
             )}
 
-            {/* Active question */}
-            <div className="space-y-2 px-3 py-2">
-              <p className="text-xs leading-relaxed text-foreground">{activeQ.question}</p>
+            {/* Active question — vertical slide between tabs */}
+            <div className="relative overflow-hidden">
+              <AnimatePresence mode="wait" initial={false} custom={slideDirection}>
+                <motion.div
+                  key={activeTab}
+                  custom={slideDirection}
+                  variants={{
+                    enter: (dir: number) => ({
+                      x: prefersReducedMotion ? 0 : dir >= 0 ? 24 : -24,
+                      opacity: prefersReducedMotion ? 1 : 0,
+                    }),
+                    center: { x: 0, opacity: 1 },
+                    exit: (dir: number) => ({
+                      x: prefersReducedMotion ? 0 : dir >= 0 ? -24 : 24,
+                      opacity: prefersReducedMotion ? 1 : 0,
+                    }),
+                  }}
+                  initial="enter"
+                  animate="center"
+                  exit="exit"
+                  transition={{ duration: prefersReducedMotion ? 0 : 0.18, ease: 'easeOut' }}
+                  className="space-y-2 px-3 py-2"
+                >
+                  <p className="text-xs leading-relaxed text-foreground">{activeQ.question}</p>
 
-              {/* Options — use min-height from the tallest question to prevent layout shift (only when interactive) */}
-              <div
-                className="space-y-1"
-                style={
-                  !submitted && maxContentHeight > 0
-                    ? { minHeight: `${maxContentHeight}px` }
-                    : undefined
-                }
-              >
-                {activeQ.options.map((opt, oi) => {
-                  const isSelected = activeSelections.has(oi);
-                  return (
+                  {/* Options — use min-height from the tallest question to prevent layout shift (only when interactive) */}
+                  <div
+                    className="space-y-1"
+                    style={
+                      !submitted && maxContentHeight > 0
+                        ? { minHeight: `${maxContentHeight}px` }
+                        : undefined
+                    }
+                  >
+                    {activeQ.options.map((opt, oi) => {
+                      const isSelected = activeSelections.has(oi);
+                      return (
+                        <button
+                          key={opt.label}
+                          onClick={() => toggleOption(activeTab, oi, activeQ.multiSelect)}
+                          disabled={submitted}
+                          className={cn(
+                            'flex items-start gap-2 w-full text-left rounded-md px-2.5 py-1.5 transition-colors border',
+                            isSelected
+                              ? 'border-primary/50 bg-primary/10'
+                              : 'border-border/40 bg-background/50 hover:border-border hover:bg-accent/30',
+                            submitted && 'opacity-70 cursor-default',
+                          )}
+                        >
+                          <div
+                            className={cn(
+                              'mt-0.5 flex-shrink-0 h-3.5 w-3.5 rounded-full border-2 flex items-center justify-center',
+                              activeQ.multiSelect && 'rounded-sm',
+                              isSelected
+                                ? 'border-primary bg-primary'
+                                : 'border-muted-foreground/40',
+                            )}
+                          >
+                            {isSelected && <Check className="h-2 w-2 text-primary-foreground" />}
+                          </div>
+                          <div className="min-w-0">
+                            <span className="text-xs font-medium text-foreground">{opt.label}</span>
+                            <p className="text-xs leading-snug text-muted-foreground">
+                              {opt.description}
+                            </p>
+                          </div>
+                        </button>
+                      );
+                    })}
+
+                    {/* Other option */}
                     <button
-                      key={opt.label}
-                      onClick={() => toggleOption(activeTab, oi, activeQ.multiSelect)}
+                      onClick={() => toggleOption(activeTab, OTHER_INDEX, activeQ.multiSelect)}
                       disabled={submitted}
                       className={cn(
-                        'flex items-start gap-2 w-full text-left rounded-md px-2.5 py-1.5 transition-colors border',
-                        isSelected
-                          ? 'border-primary/50 bg-primary/10'
+                        'flex items-start gap-2 w-full text-left rounded-md px-2.5 py-1.5 transition-all border',
+                        isOtherSelected
+                          ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
                           : 'border-border/40 bg-background/50 hover:border-border hover:bg-accent/30',
                         submitted && 'opacity-70 cursor-default',
                       )}
@@ -415,173 +485,157 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                         className={cn(
                           'mt-0.5 flex-shrink-0 h-3.5 w-3.5 rounded-full border-2 flex items-center justify-center',
                           activeQ.multiSelect && 'rounded-sm',
-                          isSelected ? 'border-primary bg-primary' : 'border-muted-foreground/40',
+                          isOtherSelected
+                            ? 'border-primary bg-primary'
+                            : 'border-muted-foreground/40',
                         )}
                       >
-                        {isSelected && <Check className="h-2 w-2 text-primary-foreground" />}
+                        {isOtherSelected && <Check className="h-2 w-2 text-primary-foreground" />}
                       </div>
-                      <div className="min-w-0">
-                        <span className="text-xs font-medium text-foreground">{opt.label}</span>
-                        <p className="text-xs leading-snug text-muted-foreground">
-                          {opt.description}
-                        </p>
+                      <div className="flex min-w-0 items-center gap-1.5">
+                        <PenLine
+                          className={cn(
+                            'icon-xs flex-shrink-0 transition-colors',
+                            isOtherSelected ? 'text-primary' : 'text-muted-foreground',
+                          )}
+                        />
+                        <span
+                          className={cn(
+                            'text-xs font-medium transition-colors',
+                            isOtherSelected ? 'text-foreground' : 'text-foreground',
+                          )}
+                        >
+                          {t('tools.other')}
+                        </span>
                       </div>
                     </button>
-                  );
-                })}
 
-                {/* Other option */}
-                <button
-                  onClick={() => toggleOption(activeTab, OTHER_INDEX, activeQ.multiSelect)}
-                  disabled={submitted}
-                  className={cn(
-                    'flex items-start gap-2 w-full text-left rounded-md px-2.5 py-1.5 transition-all border',
-                    isOtherSelected
-                      ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
-                      : 'border-border/40 bg-background/50 hover:border-border hover:bg-accent/30',
-                    submitted && 'opacity-70 cursor-default',
-                  )}
-                >
-                  <div
-                    className={cn(
-                      'mt-0.5 flex-shrink-0 h-3.5 w-3.5 rounded-full border-2 flex items-center justify-center',
-                      activeQ.multiSelect && 'rounded-sm',
-                      isOtherSelected ? 'border-primary bg-primary' : 'border-muted-foreground/40',
-                    )}
-                  >
-                    {isOtherSelected && <Check className="h-2 w-2 text-primary-foreground" />}
-                  </div>
-                  <div className="flex min-w-0 items-center gap-1.5">
-                    <PenLine
-                      className={cn(
-                        'icon-xs flex-shrink-0 transition-colors',
-                        isOtherSelected ? 'text-primary' : 'text-muted-foreground',
-                      )}
-                    />
-                    <span
-                      className={cn(
-                        'text-xs font-medium transition-colors',
-                        isOtherSelected ? 'text-foreground' : 'text-foreground',
-                      )}
-                    >
-                      {t('tools.other')}
-                    </span>
-                  </div>
-                </button>
-
-                {/* Other text input — mini PromptEditor with @ mentions, / commands, and mic */}
-                {isOtherSelected && !submitted && (
-                  <div className="rounded-md border border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50">
-                    <div className="px-2.5 py-1.5">
-                      <PromptEditor
-                        ref={otherEditorRef}
-                        placeholder={t('tools.otherPlaceholder')}
-                        onChange={handleOtherEditorChange}
-                        onSubmit={() => {
-                          // Flush editor text to state before submitting
-                          const text = otherEditorRef.current?.getText() ?? '';
-                          setOtherTexts((prev) => {
-                            const next = new Map(prev);
-                            next.set(activeTab, text);
-                            return next;
-                          });
-                          if (isLastTab || questions.length === 1) {
-                            // Use setTimeout to let state update flush before handleSubmit reads it
-                            setTimeout(handleSubmit, 0);
-                          } else {
-                            setActiveTab((prev) => prev + 1);
-                          }
+                    {/* Other text input — mini PromptEditor with @ mentions, / commands, and mic */}
+                    {isOtherSelected && !submitted && (
+                      <div
+                        onMouseDown={(e) => {
+                          const target = e.target as HTMLElement;
+                          // Mic and editor handle their own focus — don't interfere
+                          if (target.closest('[data-testid="ask-question-dictate"]')) return;
+                          if (target.closest('[data-testid="prompt-editor"]')) return;
+                          // Clicked padding/border — route caret into the input
+                          e.preventDefault();
+                          otherEditorRef.current?.focus();
                         }}
-                        cwd={cwd}
-                        loadSkills={loadSkillsForEditor}
-                        className="max-h-[120px] min-h-[40px] overflow-y-auto text-sm"
-                      />
-                    </div>
-                    {hasAssemblyaiKey && (
-                      <div className="flex items-center justify-end border-t border-border/20 px-1.5 py-0.5">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <Button
-                              data-testid="ask-question-dictate"
-                              onClick={toggleRecording}
-                              variant="ghost"
-                              size="icon-sm"
-                              tabIndex={-1}
-                              aria-label={
-                                isRecording
-                                  ? t('prompt.stopDictation', 'Stop dictation')
-                                  : t('prompt.startDictation', 'Start dictation')
+                        className="rounded-md border border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50"
+                      >
+                        <div className="px-2.5 py-1.5">
+                          <PromptEditor
+                            ref={otherEditorRef}
+                            placeholder={t('tools.otherPlaceholder')}
+                            onChange={handleOtherEditorChange}
+                            onSubmit={() => {
+                              // Flush editor text to state before submitting
+                              const text = otherEditorRef.current?.getText() ?? '';
+                              setOtherTexts((prev) => {
+                                const next = new Map(prev);
+                                next.set(activeTab, text);
+                                return next;
+                              });
+                              if (isLastTab || questions.length === 1) {
+                                // Use setTimeout to let state update flush before handleSubmit reads it
+                                setTimeout(handleSubmit, 0);
+                              } else {
+                                goToTab(activeTab + 1);
                               }
-                              disabled={isTranscribing}
-                              className={cn(
-                                'text-muted-foreground hover:text-foreground',
-                                isRecording && 'text-destructive hover:text-destructive',
-                              )}
-                            >
-                              {isTranscribing ? (
-                                <Loader2 className="icon-xs animate-spin" />
-                              ) : isRecording ? (
-                                <MicOff className="icon-xs" />
-                              ) : (
-                                <Mic className="icon-xs" />
-                              )}
-                            </Button>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {isTranscribing
-                              ? t('prompt.transcribing', 'Transcribing...')
-                              : isRecording
-                                ? t('prompt.stopDictation', 'Stop dictation')
-                                : t('prompt.startDictation', 'Start dictation')}
-                          </TooltipContent>
-                        </Tooltip>
+                            }}
+                            cwd={cwd}
+                            loadSkills={loadSkillsForEditor}
+                            className="max-h-[120px] min-h-[40px] overflow-y-auto text-sm"
+                          />
+                        </div>
+                        {hasAssemblyaiKey && (
+                          <div className="flex items-center justify-end border-t border-border/20 px-1.5 py-0.5">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  data-testid="ask-question-dictate"
+                                  onClick={toggleRecording}
+                                  variant="ghost"
+                                  size="icon-sm"
+                                  tabIndex={-1}
+                                  aria-label={
+                                    isRecording
+                                      ? t('prompt.stopDictation', 'Stop dictation')
+                                      : t('prompt.startDictation', 'Start dictation')
+                                  }
+                                  disabled={isTranscribing}
+                                  className={cn(
+                                    'text-muted-foreground hover:text-foreground',
+                                    isRecording && 'text-destructive hover:text-destructive',
+                                  )}
+                                >
+                                  {isTranscribing ? (
+                                    <Loader2 className="icon-xs animate-spin" />
+                                  ) : isRecording ? (
+                                    <MicOff className="icon-xs" />
+                                  ) : (
+                                    <Mic className="icon-xs" />
+                                  )}
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {isTranscribing
+                                  ? t('prompt.transcribing', 'Transcribing...')
+                                  : isRecording
+                                    ? t('prompt.stopDictation', 'Stop dictation')
+                                    : t('prompt.startDictation', 'Start dictation')}
+                              </TooltipContent>
+                            </Tooltip>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {isOtherSelected && submitted && otherText.trim() && (
+                      <div className="rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-xs text-muted-foreground opacity-70">
+                        {otherText}
                       </div>
                     )}
                   </div>
-                )}
-                {isOtherSelected && submitted && otherText.trim() && (
-                  <div className="rounded-md border border-border/40 bg-background/50 px-2.5 py-1.5 text-xs text-muted-foreground opacity-70">
-                    {otherText}
-                  </div>
-                )}
-              </div>
 
-              {/* Action buttons */}
-              {onRespond && !submitted && (
-                <div className="flex items-center pt-1">
-                  {/* Continue button for "Other" option — shown when user needs to advance manually */}
-                  {isOtherSelected && !isLastTab && (
-                    <button
-                      onClick={() => setActiveTab((prev) => prev + 1)}
-                      disabled={!currentTabAnswered}
-                      className={cn(
-                        'flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
-                        currentTabAnswered
-                          ? 'bg-primary/15 text-primary hover:bg-primary/25'
-                          : 'bg-muted text-muted-foreground cursor-not-allowed',
+                  {/* Action buttons */}
+                  {onRespond && !submitted && (
+                    <div className="flex items-center pt-1">
+                      {/* Continue button for "Other" option — shown when user needs to advance manually */}
+                      {isOtherSelected && !isLastTab && (
+                        <button
+                          onClick={() => goToTab(activeTab + 1)}
+                          disabled={!currentTabAnswered}
+                          className={cn(
+                            'flex items-center gap-1 px-3 py-1.5 rounded-md text-xs font-medium transition-colors',
+                            currentTabAnswered
+                              ? 'bg-primary/15 text-primary hover:bg-primary/25'
+                              : 'bg-muted text-muted-foreground cursor-not-allowed',
+                          )}
+                        >
+                          {t('tools.continue')}
+                          <ChevronRight className="icon-xs" />
+                        </button>
                       )}
-                    >
-                      {t('tools.continue')}
-                      <ChevronRight className="icon-xs" />
-                    </button>
-                  )}
 
-                  {/* Submit button — bottom-right */}
-                  <button
-                    onClick={handleSubmit}
-                    disabled={!allAnswered}
-                    className={cn(
-                      'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ml-auto',
-                      allAnswered
-                        ? 'bg-primary text-primary-foreground hover:bg-primary/90'
-                        : 'bg-muted text-muted-foreground cursor-not-allowed',
-                    )}
-                  >
-                    <Send className="icon-xs" />
-                    {t('tools.respond')}
-                  </button>
-                </div>
-              )}
+                      {/* Submit button — bottom-right */}
+                      <button
+                        onClick={handleSubmit}
+                        disabled={!allAnswered}
+                        className={cn(
+                          'flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-colors ml-auto',
+                          allAnswered
+                            ? 'bg-primary text-primary-foreground hover:bg-primary/90'
+                            : 'bg-muted text-muted-foreground cursor-not-allowed',
+                        )}
+                      >
+                        <Send className="icon-xs" />
+                        {t('tools.respond')}
+                      </button>
+                    </div>
+                  )}
+                </motion.div>
+              </AnimatePresence>
             </div>
           </>
         )}

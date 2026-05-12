@@ -25,6 +25,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { AppShellSkeleton } from './components/AppShellSkeleton';
 import { TooltipProvider } from './components/ui/tooltip';
 import { api } from './lib/api';
+import { initWebVitals } from './lib/web-vitals';
 import { useAuthStore } from './stores/auth-store';
 import { useProfileStore } from './stores/profile-store';
 import { useSettingsStore } from './stores/settings-store';
@@ -53,6 +54,9 @@ const PreviewBrowser = lazy(() =>
 const SetupWizard = lazy(() =>
   import('./components/SetupWizard').then((m) => ({ default: m.SetupWizard })),
 );
+
+// Start Web Vitals capture as early as possible so we measure the real LCP/FCP.
+initWebVitals();
 
 // The preview window sets this flag via Tauri's initialization_script
 const isPreviewWindow = !!(window as unknown as { __PREVIEW_MODE__: unknown }).__PREVIEW_MODE__;

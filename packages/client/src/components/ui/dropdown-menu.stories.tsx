@@ -88,7 +88,7 @@ export const Default: Story = {
               <DropdownMenuSeparator />
               <DropdownMenuItem>
                 <PlusCircle />
-                More...
+                More…
               </DropdownMenuItem>
             </DropdownMenuSubContent>
           </DropdownMenuSub>

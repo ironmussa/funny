@@ -217,7 +217,7 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
                           variant="outline"
                           className="h-4 gap-0.5 border-emerald-500/30 px-1 text-[10px] text-emerald-500"
                         >
-                          <GitBranch className="h-2.5 w-2.5" />
+                          <GitBranch className="size-2.5" />
                           <span className="max-w-[100px] truncate">{issue.linkedBranch}</span>
                         </Badge>
                       )}
@@ -234,7 +234,7 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
                             variant="outline"
                             className="h-4 gap-0.5 border-blue-500/30 px-1 text-[10px] text-blue-500 hover:bg-blue-500/10"
                           >
-                            <GitPullRequest className="h-2.5 w-2.5" />#{issue.linkedPR.number}
+                            <GitPullRequest className="size-2.5" />#{issue.linkedPR.number}
                           </Badge>
                         </a>
                       )}
@@ -261,11 +261,11 @@ export function IssuesDialog({ projectId, open, onOpenChange, onCreateThread }: 
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="h-6 w-6 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100"
+                          className="size-6 shrink-0 p-0 opacity-0 transition-opacity group-hover:opacity-100"
                           onClick={() => handleCreateThread(issue)}
                           data-testid={`issue-create-thread-${issue.number}`}
                         >
-                          <Plus className="h-3.5 w-3.5" />
+                          <Plus className="size-3.5" />
                         </Button>
                       </TooltipTrigger>
                       <TooltipContent side="left">

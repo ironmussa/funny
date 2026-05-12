@@ -67,7 +67,7 @@ export function RunningThreads() {
       title={t('sidebar.activeThreads')}
       count={runningThreads.length}
       iconElement={
-        <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-status-info" />
+        <span className="size-1.5 flex-shrink-0 animate-pulse rounded-full bg-status-info" />
       }
       data-testid="sidebar-running-threads"
     >

@@ -95,9 +95,9 @@ export function usePreviewWindow() {
     const store = usePreviewStore.getState();
     const toClose = store.tabs.filter((t) => t.projectId === projectId);
 
-    for (const tab of toClose) {
-      await tauriEmit('preview:remove-tab', { commandId: tab.commandId });
-    }
+    await Promise.all(
+      toClose.map((tab) => tauriEmit('preview:remove-tab', { commandId: tab.commandId })),
+    );
     store.removeTabsForProject(projectId);
   }, []);
 

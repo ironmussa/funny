@@ -163,6 +163,21 @@ export function PipelineSettings() {
     [flushUpdates],
   );
 
+  // Stable per-field handlers so memo'd children don't re-render on every parent render
+  const handlePrecommitFixModelChange = useCallback(
+    (v: string) => saveField({ precommitFixModel: v }),
+    [saveField],
+  );
+  const handleReviewModelChange = useCallback(
+    (v: string) => saveField({ reviewModel: v }),
+    [saveField],
+  );
+  const handleFixModelChange = useCallback((v: string) => saveField({ fixModel: v }), [saveField]);
+  const handleTestFixModelChange = useCallback(
+    (v: string) => saveField({ testFixModel: v }),
+    [saveField],
+  );
+
   // Save prompt on blur
   const handlePromptBlur = (field: string, value: string) => {
     if (!pipeline) return;
@@ -181,7 +196,7 @@ export function PipelineSettings() {
   }
 
   if (loading || !pipeline) {
-    return <div className="py-8 text-center text-sm text-muted-foreground">Loading...</div>;
+    return <div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>;
   }
 
   return (
@@ -212,7 +227,7 @@ export function PipelineSettings() {
             <SettingRow title="Fixer Model" description="Model for auto-fixing lint errors">
               <ModelSelect
                 value={(pipeline.precommitFixModel as string) || 'sonnet'}
-                onChange={(v) => saveField({ precommitFixModel: v })}
+                onChange={handlePrecommitFixModelChange}
                 testId="pipeline-precommit-model"
               />
             </SettingRow>
@@ -253,14 +268,14 @@ export function PipelineSettings() {
             <SettingRow title="Reviewer Model" description="Model for analyzing code (read-only)">
               <ModelSelect
                 value={(pipeline.reviewModel as string) || 'sonnet'}
-                onChange={(v) => saveField({ reviewModel: v })}
+                onChange={handleReviewModelChange}
                 testId="pipeline-review-model"
               />
             </SettingRow>
             <SettingRow title="Corrector Model" description="Model for fixing issues (worktree)">
               <ModelSelect
                 value={(pipeline.fixModel as string) || 'sonnet'}
-                onChange={(v) => saveField({ fixModel: v })}
+                onChange={handleFixModelChange}
                 testId="pipeline-fix-model"
               />
             </SettingRow>
@@ -315,7 +330,7 @@ export function PipelineSettings() {
                 <SettingRow title="Fixer Model" description="Model for fixing test failures">
                   <ModelSelect
                     value={(pipeline.testFixModel as string) || 'sonnet'}
-                    onChange={(v) => saveField({ testFixModel: v })}
+                    onChange={handleTestFixModelChange}
                     testId="pipeline-test-fix-model"
                   />
                 </SettingRow>
@@ -418,11 +433,12 @@ function PromptField({
   testId: string;
 }) {
   const [localValue, setLocalValue] = useState(value);
+  const [lastSeenValue, setLastSeenValue] = useState(value);
 
-  // Sync local state when external value changes
-  useEffect(() => {
+  if (value !== lastSeenValue) {
+    setLastSeenValue(value);
     setLocalValue(value);
-  }, [value]);
+  }
 
   return (
     <div className="space-y-1.5">

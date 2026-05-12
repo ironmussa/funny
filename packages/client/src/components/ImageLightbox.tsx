@@ -1,5 +1,5 @@
 import { X, ChevronLeft, ChevronRight } from 'lucide-react';
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useEffectEvent } from 'react';
 import { createPortal } from 'react-dom';
 
 interface LightboxImage {
@@ -16,10 +16,14 @@ interface ImageLightboxProps {
 
 export function ImageLightbox({ images, initialIndex = 0, open, onClose }: ImageLightboxProps) {
   const [currentIndex, setCurrentIndex] = useState(initialIndex);
+  const [lastOpenKey, setLastOpenKey] = useState(open ? `${initialIndex}` : null);
 
-  useEffect(() => {
-    setCurrentIndex(initialIndex);
-  }, [initialIndex, open]);
+  // Reset the index whenever the dialog (re-)opens or initialIndex changes.
+  const openKey = open ? `${initialIndex}` : null;
+  if (openKey !== lastOpenKey) {
+    setLastOpenKey(openKey);
+    if (open) setCurrentIndex(initialIndex);
+  }
 
   const goNext = useCallback(() => {
     setCurrentIndex((i) => (i + 1) % images.length);
@@ -29,16 +33,18 @@ export function ImageLightbox({ images, initialIndex = 0, open, onClose }: Image
     setCurrentIndex((i) => (i - 1 + images.length) % images.length);
   }, [images.length]);
 
+  const onKey = useEffectEvent((e: KeyboardEvent) => {
+    if (e.key === 'Escape') onClose();
+    if (e.key === 'ArrowRight') goNext();
+    if (e.key === 'ArrowLeft') goPrev();
+  });
+
   useEffect(() => {
     if (!open) return;
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-      if (e.key === 'ArrowRight') goNext();
-      if (e.key === 'ArrowLeft') goPrev();
-    };
+    const handleKeyDown = (e: KeyboardEvent) => onKey(e);
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [open, onClose, goNext, goPrev]);
+  }, [open]);
 
   if (!open || images.length === 0) return null;
 

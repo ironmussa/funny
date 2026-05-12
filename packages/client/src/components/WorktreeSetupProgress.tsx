@@ -35,8 +35,8 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
         className="flex w-full max-w-md flex-col items-center justify-center gap-4"
         data-testid="worktree-setup-progress"
       >
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/50" />
-        <span className="text-sm text-muted-foreground/60">Preparing...</span>
+        <Loader2 className="size-8 animate-spin text-muted-foreground/50" />
+        <span className="text-sm text-muted-foreground/60">Preparing…</span>
       </div>
     );
   }
@@ -63,12 +63,12 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
             {/* Icon */}
             <div className="flex-shrink-0">
               {focalStep.status === 'running' && (
-                <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                <Loader2 className="size-8 animate-spin text-primary" />
               )}
-              {focalStep.status === 'completed' && <Check className="h-8 w-8 text-emerald-500" />}
-              {focalStep.status === 'failed' && <X className="h-8 w-8 text-destructive" />}
+              {focalStep.status === 'completed' && <Check className="size-8 text-emerald-500" />}
+              {focalStep.status === 'failed' && <X className="size-8 text-destructive" />}
               {focalStep.status === 'pending' && (
-                <Circle className="h-8 w-8 text-muted-foreground/40" />
+                <Circle className="size-8 text-muted-foreground/40" />
               )}
             </div>
 
@@ -109,7 +109,7 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
             <div
               key={step.id}
               className={cn(
-                'h-2 w-2 rounded-full transition-colors duration-300',
+                'size-2 rounded-full transition-colors duration-300',
                 step.status === 'completed' && 'bg-emerald-500',
                 step.status === 'running' && 'bg-primary',
                 step.status === 'failed' && 'bg-destructive',

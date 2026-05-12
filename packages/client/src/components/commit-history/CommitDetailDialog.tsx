@@ -425,7 +425,7 @@ export function CommitDetailDialog({
           </div>
           {filesLoading ? (
             <div className="flex flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="size-4 animate-spin" />
               {t('review.loading', 'Loading changes…')}
             </div>
           ) : (
@@ -482,7 +482,7 @@ export function CommitDetailDialog({
               <div className="flex min-w-0 flex-1 flex-col" data-testid="commit-detail-diff-pane">
                 {!expandedFile ? (
                   <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
-                    <FileCode className="h-8 w-8 opacity-30" />
+                    <FileCode className="size-8 opacity-30" />
                     <p className="text-xs">
                       {t('history.selectFile', 'Select a file to view changes')}
                     </p>

@@ -99,9 +99,20 @@ const THEME_OPTIONS: ThemeOption[] = [
   },
 ];
 
+const displayNamesCache = new Map<string, Intl.DisplayNames>();
+
+function getDisplayNames(code: string): Intl.DisplayNames {
+  let dn = displayNamesCache.get(code);
+  if (!dn) {
+    dn = new Intl.DisplayNames([code], { type: 'language' });
+    displayNamesCache.set(code, dn);
+  }
+  return dn;
+}
+
 function getLanguageName(code: string): string {
   try {
-    const name = new Intl.DisplayNames([code], { type: 'language' }).of(code);
+    const name = getDisplayNames(code).of(code);
     return name ? name.charAt(0).toUpperCase() + name.slice(1) : code;
   } catch {
     return code;

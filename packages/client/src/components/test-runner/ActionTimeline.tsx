@@ -44,10 +44,11 @@ export function ActionTimeline({
 
   const { testStart, totalDuration } = useMemo(() => {
     if (visibleActions.length === 0) return { testStart: 0, totalDuration: 0 };
-    const starts = visibleActions.map((a) => a.startTime).filter(Boolean);
-    const ends = visibleActions
-      .map((a) => (a.endTime ?? a.startTime) + (a.duration ?? 0))
-      .filter(Boolean);
+    const starts = visibleActions.flatMap((a) => (a.startTime ? [a.startTime] : []));
+    const ends = visibleActions.flatMap((a) => {
+      const v = (a.endTime ?? a.startTime) + (a.duration ?? 0);
+      return v ? [v] : [];
+    });
     const start = Math.min(...starts);
     const end = Math.max(...ends, start + 1);
     return { testStart: start, totalDuration: end - start };

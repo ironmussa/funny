@@ -243,7 +243,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             size="icon"
             onClick={goBack}
             disabled={!canGoBack}
-            className="h-6 w-6 flex-shrink-0"
+            className="size-6 flex-shrink-0"
             tooltip={t('folderPicker.back')}
           >
             <ArrowLeft className="icon-sm" />
@@ -252,7 +252,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
             size="icon"
             onClick={goForward}
             disabled={!canGoForward}
-            className="h-6 w-6 flex-shrink-0"
+            className="size-6 flex-shrink-0"
             tooltip={t('folderPicker.forward')}
           >
             <ArrowRight className="icon-sm" />
@@ -370,7 +370,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
                 size="icon"
                 onClick={handleCreateFolder}
                 disabled={!newFolderName.trim()}
-                className="h-6 w-6 flex-shrink-0"
+                className="size-6 flex-shrink-0"
                 tooltip={t('folderPicker.create')}
                 data-testid="folder-picker-new-folder-confirm"
               >
@@ -379,7 +379,7 @@ export function FolderPicker({ onSelect, onClose }: FolderPickerProps) {
               <TooltipIconButton
                 size="icon"
                 onClick={cancelCreateFolder}
-                className="h-6 w-6 flex-shrink-0"
+                className="size-6 flex-shrink-0"
                 tooltip={t('folderPicker.cancel')}
                 data-testid="folder-picker-new-folder-cancel"
               >

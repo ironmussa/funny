@@ -106,9 +106,12 @@ function AuthGate() {
 
     let retries = 0;
     const maxRetries = 3;
+    let retryTimeout: ReturnType<typeof setTimeout> | undefined;
+    let cancelled = false;
 
     const fetchProfile = () => {
       api.getProfile().then((res) => {
+        if (cancelled) return;
         if (res.isOk()) {
           const profile = res.value;
           useProfileStore.getState().setProfile(profile);
@@ -126,7 +129,7 @@ function AuthGate() {
         } else if (retries < maxRetries) {
           // Server might still be starting — retry with backoff
           retries++;
-          setTimeout(fetchProfile, retries * 1000);
+          retryTimeout = setTimeout(fetchProfile, retries * 1000);
         } else {
           // Profile 401 does not auto-logout (see api.ts). Re-check Better Auth session; if the
           // cookie never stuck, this clears isAuthenticated and returns to login with a real cause.
@@ -134,6 +137,7 @@ function AuthGate() {
             .getState()
             .initialize()
             .then(() => {
+              if (cancelled) return;
               if (!useAuthStore.getState().isAuthenticated) return;
               if (!setupCompleted) {
                 setSetupCompleted(false);
@@ -144,6 +148,11 @@ function AuthGate() {
     };
 
     fetchProfile();
+
+    return () => {
+      cancelled = true;
+      if (retryTimeout !== undefined) clearTimeout(retryTimeout);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [canCheckSetup, initializeFromProfile, setTheme]);
 
@@ -181,7 +190,7 @@ function AuthGate() {
       <Suspense
         fallback={
           <div className="flex min-h-screen items-center justify-center bg-background">
-            <div className="text-sm text-muted-foreground">Loading...</div>
+            <div className="text-sm text-muted-foreground">Loading…</div>
           </div>
         }
       >

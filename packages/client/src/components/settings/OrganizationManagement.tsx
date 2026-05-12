@@ -57,19 +57,20 @@ export function OrganizationManagement() {
         const memberMap = new Map<string, string>();
         const session = await authClient.getSession();
         const currentUserId = session.data?.user?.id;
-        for (const org of res.data) {
-          try {
-            const full = await authClient.organization.getFullOrganization({
-              query: { organizationId: (org as any).id },
-            });
-            if (full.data) {
-              const me = (full.data as any).members?.find((m: any) => m.userId === currentUserId);
-              if (me) {
-                memberMap.set((org as any).id, me.role);
-              }
+        const fulls = await Promise.all(
+          res.data.map((org) =>
+            authClient.organization
+              .getFullOrganization({ query: { organizationId: (org as any).id } })
+              .catch(() => null),
+          ),
+        );
+        for (let i = 0; i < res.data.length; i++) {
+          const full = fulls[i];
+          if (full?.data) {
+            const me = (full.data as any).members?.find((m: any) => m.userId === currentUserId);
+            if (me) {
+              memberMap.set((res.data[i] as any).id, me.role);
             }
-          } catch {
-            // Skip if we can't get full org details
           }
         }
         setMemberships(memberMap);
@@ -151,7 +152,7 @@ export function OrganizationManagement() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-        Loading organizations...
+        Loading organizations…
       </div>
     );
   }
@@ -255,7 +256,7 @@ export function OrganizationManagement() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                      className="size-8 text-muted-foreground hover:text-destructive"
                       onClick={() => setDeleteConfirm(org)}
                       data-testid={`org-delete-${org.id}`}
                     >

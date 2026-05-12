@@ -49,7 +49,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
       <ScrollArea className="flex min-h-0 flex-1 flex-col">
         {filteredStashEntries.length === 0 ? (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
-            <Archive className="h-8 w-8 opacity-40" />
+            <Archive className="size-8 opacity-40" />
             <p className="text-xs">
               {currentBranch
                 ? t('review.noStashesOnBranch', {
@@ -86,7 +86,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
                   }}
                   data-testid={`stash-entry-${idx}`}
                 >
-                  <Archive className="h-3 w-3 shrink-0 text-muted-foreground" />
+                  <Archive className="size-3 shrink-0 text-muted-foreground" />
                   <div className="flex min-w-0 flex-1 flex-col">
                     <span className="truncate font-medium">{entry.message}</span>
                     <span className="text-[10px] text-muted-foreground">{entry.relativeDate}</span>
@@ -193,7 +193,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
 
           {stashFilesLoading ? (
             <div className="flex flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
-              <Loader2 className="h-4 w-4 animate-spin" />
+              <Loader2 className="size-4 animate-spin" />
               {t('review.loading', 'Loading changes…')}
             </div>
           ) : (
@@ -246,7 +246,7 @@ export function StashTab({ stash, currentBranch, isAgentRunning, onRequestDrop }
               <div className="flex min-w-0 flex-1 flex-col" data-testid="stash-detail-diff-pane">
                 {!stashDialogFile ? (
                   <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
-                    <FileCode className="h-8 w-8 opacity-30" />
+                    <FileCode className="size-8 opacity-30" />
                     <p className="text-xs">
                       {t('history.selectFile', 'Select a file to view changes')}
                     </p>

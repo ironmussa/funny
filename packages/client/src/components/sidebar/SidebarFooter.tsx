@@ -60,7 +60,7 @@ export function SidebarFooter() {
                   variant="ghost"
                   size="icon-xs"
                   data-testid="sidebar-user-menu"
-                  className="h-7 w-7 shrink-0 text-muted-foreground"
+                  className="size-7 shrink-0 text-muted-foreground"
                 >
                   <MoreVertical className="icon-base" />
                 </Button>
@@ -89,7 +89,7 @@ export function SidebarFooter() {
                 size="icon-xs"
                 data-testid="sidebar-settings"
                 onClick={() => navigate(buildPath('/preferences/general'))}
-                className="ml-auto h-7 w-7 text-muted-foreground"
+                className="ml-auto size-7 text-muted-foreground"
               >
                 <Settings className="icon-base" />
               </Button>

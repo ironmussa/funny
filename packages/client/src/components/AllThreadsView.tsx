@@ -309,7 +309,7 @@ export function AllThreadsView() {
     }
 
     // Sort by selected field and direction
-    result = [...result].sort((a, b) => {
+    result = result.toSorted((a, b) => {
       const dateA = sortField === 'updated' ? (a.completedAt ?? a.createdAt) : a.createdAt;
       const dateB = sortField === 'updated' ? (b.completedAt ?? b.createdAt) : b.createdAt;
       const diff = new Date(dateA).getTime() - new Date(dateB).getTime();
@@ -355,8 +355,6 @@ export function AllThreadsView() {
     showArchived ||
     !!projectFilter;
 
-  if (!allThreadsProjectId) return null;
-
   // Compute counts for status filters
   const statusCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -377,6 +375,8 @@ export function AllThreadsView() {
     }
     return counts;
   }, [allThreads, statusByBranch]);
+
+  if (!allThreadsProjectId) return null;
 
   const threadStatuses: ThreadStatus[] = [
     'running',

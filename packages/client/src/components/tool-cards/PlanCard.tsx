@@ -54,7 +54,7 @@ export function PlanCard({
           </div>
           <TooltipIconButton
             size="icon"
-            className="h-5 w-5"
+            className="size-5"
             onClick={handleCopy}
             data-testid="plan-copy-button"
             tooltip={copied ? t('common.copied') : t('common.copy')}

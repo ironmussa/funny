@@ -1,6 +1,6 @@
 import type { RunTriageStatus } from '@funny/shared';
 import { Check, ChevronsUpDown, Inbox, Settings } from 'lucide-react';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 
 import { Badge } from '@/components/ui/badge';
@@ -38,6 +38,7 @@ export function AutomationInboxView() {
 
   const [filterProjectId, setFilterProjectId] = useState<string | null>(null);
   const [filterOpen, setFilterOpen] = useState(false);
+  const filterListId = useId();
   const [triageStatusFilter, setTriageStatusFilter] = useState<RunTriageStatus | 'all'>('pending');
   const [searchQuery, setSearchQuery] = useState('');
   const [searchCaseSensitive, setSearchCaseSensitive] = useState(false);
@@ -193,6 +194,7 @@ export function AutomationInboxView() {
                 variant="outline"
                 role="combobox"
                 aria-expanded={filterOpen}
+                aria-controls={filterListId}
                 data-testid="inbox-project-filter"
                 className="h-7 w-[200px] justify-between text-xs font-normal"
               >
@@ -205,7 +207,7 @@ export function AutomationInboxView() {
             <PopoverContent className="w-[200px] p-0" align="start">
               <Command>
                 <CommandInput placeholder="Search project..." className="h-8 text-xs" />
-                <CommandList>
+                <CommandList id={filterListId}>
                   <CommandEmpty className="py-3 text-xs">No project found.</CommandEmpty>
                   <CommandGroup>
                     <CommandItem
@@ -256,7 +258,7 @@ export function AutomationInboxView() {
         <div className="p-6">
           {filteredInbox.length === 0 ? (
             <div className="flex h-full flex-col items-center justify-center text-muted-foreground">
-              <Inbox className="mb-3 h-8 w-8 opacity-50" />
+              <Inbox className="mb-3 size-8 opacity-50" />
               <p className="text-sm">No pending reviews.</p>
               <p className="mt-1 text-xs">Automation results that need review will appear here.</p>
             </div>

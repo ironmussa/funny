@@ -6,10 +6,7 @@ import { cn } from '@/lib/utils';
 
 const ResizablePanelGroup = ({ className, ...props }: GroupProps) => (
   <Group
-    className={cn(
-      'flex h-full w-full [&>[data-panel]]:min-h-0 [&>[data-panel]]:min-w-0',
-      className,
-    )}
+    className={cn('flex size-full [&>[data-panel]]:min-h-0 [&>[data-panel]]:min-w-0', className)}
     {...props}
   />
 );
@@ -33,7 +30,7 @@ const ResizableHandle = ({
   >
     {withHandle && (
       <div className="z-10 flex h-4 w-3 items-center justify-center rounded-sm border bg-border">
-        <GripVertical className="h-2.5 w-2.5" />
+        <GripVertical className="size-2.5" />
       </div>
     )}
   </Separator>

@@ -1,6 +1,6 @@
 import type { Meta, StoryObj } from '@storybook/react-vite';
 import { Send, Mic } from 'lucide-react';
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { type ComponentProps, useRef, useState, useCallback, useEffect } from 'react';
 import { fn } from 'storybook/test';
 
 import type { PromptEditorHandle } from '@/components/prompt-editor/PromptEditor';
@@ -185,52 +185,54 @@ export const DictationRecording: Story = {
   },
 };
 
+function DictationPushToTalkStory(args: ComponentProps<typeof PromptInputUI>) {
+  const [isRecording, setIsRecording] = useState(false);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && e.altKey && !isRecording) {
+        setIsRecording(true);
+      }
+    };
+    const handleKeyUp = (e: KeyboardEvent) => {
+      if (isRecording && (e.key === 'Control' || e.key === 'Alt')) {
+        setTimeout(() => setIsRecording(false), 500);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    window.addEventListener('keyup', handleKeyUp);
+    return () => {
+      window.removeEventListener('keydown', handleKeyDown);
+      window.removeEventListener('keyup', handleKeyUp);
+    };
+  }, [isRecording]);
+
+  return (
+    <div className="space-y-3">
+      <div className="rounded-md border border-border/40 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
+        Hold <kbd className="rounded border bg-background px-1 py-0.5 font-mono">Ctrl</kbd> +{' '}
+        <kbd className="rounded border bg-background px-1 py-0.5 font-mono">Alt</kbd> to simulate
+        recording. Release to stop.
+        <span className="ml-2 font-semibold">
+          Status: {isRecording ? '🔴 Recording' : '⚪ Idle'}
+        </span>
+      </div>
+      <PromptInputUI
+        {...args}
+        hasDictation
+        isRecording={isRecording}
+        isTranscribing={false}
+        onToggleRecording={() => setIsRecording((r) => !r)}
+        onStopRecording={() => setIsRecording(false)}
+      />
+    </div>
+  );
+}
+
 /** Interactive push-to-talk: hold Ctrl+Alt to record, release to stop. */
 export const DictationPushToTalk: StoryObj<typeof PromptInputUI> = {
   name: 'Dictation (Push-to-Talk)',
-  render: (args) => {
-    const [isRecording, setIsRecording] = useState(false);
-
-    useEffect(() => {
-      const handleKeyDown = (e: KeyboardEvent) => {
-        if (e.ctrlKey && e.altKey && !isRecording) {
-          setIsRecording(true);
-        }
-      };
-      const handleKeyUp = (e: KeyboardEvent) => {
-        if (isRecording && (e.key === 'Control' || e.key === 'Alt')) {
-          setTimeout(() => setIsRecording(false), 500);
-        }
-      };
-      window.addEventListener('keydown', handleKeyDown);
-      window.addEventListener('keyup', handleKeyUp);
-      return () => {
-        window.removeEventListener('keydown', handleKeyDown);
-        window.removeEventListener('keyup', handleKeyUp);
-      };
-    }, [isRecording]);
-
-    return (
-      <div className="space-y-3">
-        <div className="rounded-md border border-border/40 bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
-          Hold <kbd className="rounded border bg-background px-1 py-0.5 font-mono">Ctrl</kbd> +{' '}
-          <kbd className="rounded border bg-background px-1 py-0.5 font-mono">Alt</kbd> to simulate
-          recording. Release to stop.
-          <span className="ml-2 font-semibold">
-            Status: {isRecording ? '🔴 Recording' : '⚪ Idle'}
-          </span>
-        </div>
-        <PromptInputUI
-          {...args}
-          hasDictation
-          isRecording={isRecording}
-          isTranscribing={false}
-          onToggleRecording={() => setIsRecording((r) => !r)}
-          onStopRecording={() => setIsRecording(false)}
-        />
-      </div>
-    );
-  },
+  render: (args) => <DictationPushToTalkStory {...args} />,
   args: {
     onSubmit: fn(),
     onStop: fn(),
@@ -273,89 +275,91 @@ export const WithLauncher: Story = {
 /*  Minimal — PromptEditor with mic + send only                        */
 /* ------------------------------------------------------------------ */
 
+function MinimalStory() {
+  const editorRef = useRef<PromptEditorHandle>(null);
+  const [hasContent, setHasContent] = useState(false);
+  const [submitted, setSubmitted] = useState<string | null>(null);
+
+  const handleChange = useCallback(() => {
+    const text = (editorRef.current?.getText() ?? '').trim();
+    setHasContent(text.length > 0);
+  }, []);
+
+  const handleSubmit = useCallback(() => {
+    const text = (editorRef.current?.getText() ?? '').trim();
+    if (!text) return;
+    setSubmitted(text);
+    editorRef.current?.clear();
+    setHasContent(false);
+  }, []);
+
+  return (
+    <div className="mx-auto max-w-lg space-y-3">
+      <p className="text-xs text-muted-foreground">
+        Minimal variant used inside tool cards (Plan, AskQuestion). Only mic + send buttons.
+      </p>
+
+      <div className="rounded-md border border-border/40 bg-background/50 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20">
+        <div className="px-2.5 py-1.5">
+          <PromptEditor
+            ref={editorRef}
+            placeholder="Type instructions or feedback..."
+            onSubmit={handleSubmit}
+            onChange={handleChange}
+            className="max-h-[120px] min-h-[40px] overflow-y-auto text-sm"
+          />
+        </div>
+        <div className="flex items-center justify-end gap-1 border-t border-border/20 px-1.5 py-0.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                data-testid="minimal-dictate"
+                variant="ghost"
+                size="icon-sm"
+                tabIndex={-1}
+                className="text-muted-foreground hover:text-foreground"
+              >
+                <Mic className="icon-xs" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Start dictation</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                data-testid="minimal-send"
+                onClick={handleSubmit}
+                variant="ghost"
+                size="icon-sm"
+                tabIndex={-1}
+                disabled={!hasContent}
+                className={cn(
+                  'text-muted-foreground hover:text-foreground',
+                  hasContent && 'text-primary hover:text-primary',
+                )}
+              >
+                <Send className="icon-xs" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Send</TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+
+      {submitted && (
+        <div className="rounded-md border border-border/40 bg-muted/30 p-3">
+          <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
+            Submitted
+          </div>
+          <pre className="whitespace-pre-wrap text-xs text-foreground">{submitted}</pre>
+        </div>
+      )}
+    </div>
+  );
+}
+
 /** Minimal editor with just mic and send buttons (used in tool cards like Plan, AskQuestion). */
 export const Minimal: StoryObj = {
   name: 'Minimal (Mic + Send)',
-  render: () => {
-    const editorRef = useRef<PromptEditorHandle>(null);
-    const [hasContent, setHasContent] = useState(false);
-    const [submitted, setSubmitted] = useState<string | null>(null);
-
-    const handleChange = useCallback(() => {
-      const text = (editorRef.current?.getText() ?? '').trim();
-      setHasContent(text.length > 0);
-    }, []);
-
-    const handleSubmit = useCallback(() => {
-      const text = (editorRef.current?.getText() ?? '').trim();
-      if (!text) return;
-      setSubmitted(text);
-      editorRef.current?.clear();
-      setHasContent(false);
-    }, []);
-
-    return (
-      <div className="mx-auto max-w-lg space-y-3">
-        <p className="text-xs text-muted-foreground">
-          Minimal variant used inside tool cards (Plan, AskQuestion). Only mic + send buttons.
-        </p>
-
-        <div className="rounded-md border border-border/40 bg-background/50 focus-within:border-primary/50 focus-within:ring-1 focus-within:ring-primary/20">
-          <div className="px-2.5 py-1.5">
-            <PromptEditor
-              ref={editorRef}
-              placeholder="Type instructions or feedback..."
-              onSubmit={handleSubmit}
-              onChange={handleChange}
-              className="max-h-[120px] min-h-[40px] overflow-y-auto text-sm"
-            />
-          </div>
-          <div className="flex items-center justify-end gap-1 border-t border-border/20 px-1.5 py-0.5">
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  data-testid="minimal-dictate"
-                  variant="ghost"
-                  size="icon-sm"
-                  tabIndex={-1}
-                  className="text-muted-foreground hover:text-foreground"
-                >
-                  <Mic className="icon-xs" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Start dictation</TooltipContent>
-            </Tooltip>
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  data-testid="minimal-send"
-                  onClick={handleSubmit}
-                  variant="ghost"
-                  size="icon-sm"
-                  tabIndex={-1}
-                  disabled={!hasContent}
-                  className={cn(
-                    'text-muted-foreground hover:text-foreground',
-                    hasContent && 'text-primary hover:text-primary',
-                  )}
-                >
-                  <Send className="icon-xs" />
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>Send</TooltipContent>
-            </Tooltip>
-          </div>
-        </div>
-
-        {submitted && (
-          <div className="rounded-md border border-border/40 bg-muted/30 p-3">
-            <div className="mb-1 text-xs font-semibold uppercase text-muted-foreground">
-              Submitted
-            </div>
-            <pre className="whitespace-pre-wrap text-xs text-foreground">{submitted}</pre>
-          </div>
-        )}
-      </div>
-    );
-  },
+  render: () => <MinimalStory />,
 };

@@ -37,7 +37,7 @@ function WelcomeSlide({ onNext }: { onNext: () => void }) {
     <>
       <div className="space-y-3 text-center">
         <div className="flex items-center justify-center">
-          <Terminal className="h-8 w-8 text-primary" />
+          <Terminal className="size-8 text-primary" />
         </div>
         <h1 className="text-2xl font-bold text-foreground">Welcome to funny</h1>
         <p className="text-sm leading-relaxed text-muted-foreground">
@@ -53,7 +53,7 @@ function WelcomeSlide({ onNext }: { onNext: () => void }) {
         </div>
         <div className="flex items-start gap-2">
           <span className="mt-0.5 font-mono text-xs text-primary">2.</span>
-          <span>Spin up threads — each runs a Claude Code agent</span>
+          <span>Spin up threads: each runs a Claude Code agent</span>
         </div>
         <div className="flex items-start gap-2">
           <span className="mt-0.5 font-mono text-xs text-primary">3.</span>
@@ -106,7 +106,7 @@ function ClaudeCheckSlide({ onNext }: { onNext: () => void }) {
         {checking ? (
           <div className="flex items-center justify-center gap-2 py-2">
             <Loader2 className="icon-lg animate-spin text-muted-foreground" />
-            <span className="text-sm text-muted-foreground">Checking...</span>
+            <span className="text-sm text-muted-foreground">Checking…</span>
           </div>
         ) : status?.available ? (
           <>
@@ -177,7 +177,7 @@ function DoneSlide({ onFinish }: { onFinish: () => void }) {
   return (
     <>
       <div className="space-y-3 text-center">
-        <CheckCircle2 className="mx-auto h-10 w-10 text-status-success" />
+        <CheckCircle2 className="mx-auto size-10 text-status-success" />
         <h2 className="text-lg font-semibold text-foreground">You're all set!</h2>
         <p className="text-sm text-muted-foreground">
           Everything is configured. Add your first project to get started.

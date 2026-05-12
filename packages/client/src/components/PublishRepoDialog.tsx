@@ -161,11 +161,11 @@ export function PublishRepoDialog({
         <Tabs value={tab} onValueChange={(v) => setTab(v as 'github' | 'remote')}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="github" data-testid="publish-tab-github">
-              <Github className="mr-1.5 h-3.5 w-3.5" />
+              <Github className="mr-1.5 size-3.5" />
               GitHub
             </TabsTrigger>
             <TabsTrigger value="remote" data-testid="publish-tab-remote">
-              <Link2 className="mr-1.5 h-3.5 w-3.5" />
+              <Link2 className="mr-1.5 size-3.5" />
               Remote URL
             </TabsTrigger>
           </TabsList>
@@ -227,9 +227,9 @@ export function PublishRepoDialog({
               >
                 <div className="flex items-center gap-2">
                   {isPrivate ? (
-                    <Lock className="h-4 w-4 text-muted-foreground" />
+                    <Lock className="size-4 text-muted-foreground" />
                   ) : (
-                    <Globe className="h-4 w-4 text-muted-foreground" />
+                    <Globe className="size-4 text-muted-foreground" />
                   )}
                   <span className="text-sm">{isPrivate ? 'Private' : 'Public'}</span>
                 </div>
@@ -264,7 +264,7 @@ export function PublishRepoDialog({
                 />
                 <p className="text-xs text-muted-foreground">
                   Sets <code className="text-foreground">origin</code> on this project. The remote
-                  must already exist — create the empty repository on your provider first, then push
+                  must already exist; create the empty repository on your provider first, then push
                   from the toolbar.
                 </p>
               </div>
@@ -293,7 +293,7 @@ export function PublishRepoDialog({
               disabled={publishing || !repoName.trim()}
               data-testid="publish-repo-submit"
             >
-              {publishing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {publishing && <Loader2 className="mr-2 size-4 animate-spin" />}
               Publish repository
             </Button>
           ) : (
@@ -302,7 +302,7 @@ export function PublishRepoDialog({
               disabled={savingRemote || !remoteValid}
               data-testid="publish-remote-submit"
             >
-              {savingRemote && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {savingRemote && <Loader2 className="mr-2 size-4 animate-spin" />}
               Save remote
             </Button>
           )}

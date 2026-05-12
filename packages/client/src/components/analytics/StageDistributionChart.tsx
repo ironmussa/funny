@@ -83,7 +83,7 @@ export function StageDistributionChart({ data }: Props) {
         {chartData.map((entry) => (
           <div key={entry.stage} className="flex items-center gap-3">
             <div
-              className="h-3 w-3 flex-shrink-0 rounded-full"
+              className="size-3 flex-shrink-0 rounded-full"
               style={{ backgroundColor: COLORS[entry.stage] }}
             />
             <div className="min-w-0 flex-1">

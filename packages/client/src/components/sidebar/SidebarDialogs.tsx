@@ -165,9 +165,8 @@ export function SidebarDialogs({
               data-testid="rename-project-input"
               value={renameProjectState?.newName || ''}
               onChange={(e) => {
-                if (renameProjectState) {
-                  setRenameProjectState({ ...renameProjectState, newName: e.target.value });
-                }
+                const value = e.target.value;
+                setRenameProjectState((prev) => (prev ? { ...prev, newName: value } : prev));
               }}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {

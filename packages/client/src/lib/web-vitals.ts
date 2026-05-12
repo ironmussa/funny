@@ -75,10 +75,11 @@ function startCls() {
   const finalize = () => {
     if (max <= 0) return;
     const topSel = maxSources
-      .map((s) =>
-        s.node instanceof Element ? describeElement(s.node)['lcp.element.selector'] : '',
-      )
-      .filter(Boolean)
+      .flatMap((s) => {
+        if (!(s.node instanceof Element)) return [];
+        const sel = describeElement(s.node)['lcp.element.selector'];
+        return sel ? [sel] : [];
+      })
       .slice(0, 3)
       .join(' | ');
     metric('web_vitals.cls', max, {

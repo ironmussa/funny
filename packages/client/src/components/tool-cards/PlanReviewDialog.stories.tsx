@@ -74,7 +74,7 @@ function PlanReviewTrigger({ plan }: { plan: string }) {
                 &quot;{c.selectedText.slice(0, 50)}
                 {c.selectedText.length > 50 ? '...' : ''}&quot;
               </span>
-              {c.comment && <span> — {c.comment}</span>}
+              {c.comment && <span>: {c.comment}</span>}
             </div>
           ))}
         </div>
@@ -137,36 +137,38 @@ export const LongPlan: Story = {
   render: () => <PlanReviewTrigger plan={LONG_PLAN} />,
 };
 
+function WithCommentsStory() {
+  const [open, setOpen] = useState(false);
+  const [comments, setComments] = useState<PlanComment[]>([
+    { selectedText: 'Extract token validation', emoji: '\u{2705}', comment: '' },
+    { selectedText: 'No breaking changes', comment: 'Are we sure about this?' },
+    { selectedText: 'session cookie support', emoji: '\u{1F44D}', comment: 'Great idea' },
+  ]);
+
+  return (
+    <>
+      <Button variant="outline" onClick={() => setOpen(true)} data-testid="plan-review-trigger">
+        Open with Comments (3)
+      </Button>
+      <PlanReviewDialog
+        open={open}
+        onOpenChange={setOpen}
+        plan={SHORT_PLAN}
+        planComments={comments}
+        onAddComment={(text, comment) =>
+          setComments((prev) => [...prev, { selectedText: text, comment }])
+        }
+        onAddEmoji={(text, emoji) =>
+          setComments((prev) => [...prev, { selectedText: text, emoji, comment: '' }])
+        }
+        onRemoveComment={(index) => setComments((prev) => prev.filter((_, i) => i !== index))}
+      />
+    </>
+  );
+}
+
 /** Pre-populated with annotations */
 export const WithComments: Story = {
   args: DUMMY_ARGS,
-  render: () => {
-    const [open, setOpen] = useState(false);
-    const [comments, setComments] = useState<PlanComment[]>([
-      { selectedText: 'Extract token validation', emoji: '\u{2705}', comment: '' },
-      { selectedText: 'No breaking changes', comment: 'Are we sure about this?' },
-      { selectedText: 'session cookie support', emoji: '\u{1F44D}', comment: 'Great idea' },
-    ]);
-
-    return (
-      <>
-        <Button variant="outline" onClick={() => setOpen(true)} data-testid="plan-review-trigger">
-          Open with Comments (3)
-        </Button>
-        <PlanReviewDialog
-          open={open}
-          onOpenChange={setOpen}
-          plan={SHORT_PLAN}
-          planComments={comments}
-          onAddComment={(text, comment) =>
-            setComments((prev) => [...prev, { selectedText: text, comment }])
-          }
-          onAddEmoji={(text, emoji) =>
-            setComments((prev) => [...prev, { selectedText: text, emoji, comment: '' }])
-          }
-          onRemoveComment={(index) => setComments((prev) => prev.filter((_, i) => i !== index))}
-        />
-      </>
-    );
-  },
+  render: () => <WithCommentsStory />,
 };

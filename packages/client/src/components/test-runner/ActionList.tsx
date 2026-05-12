@@ -104,7 +104,7 @@ export function ActionList({
   if (visibleActions.length === 0) {
     return (
       <div className="flex h-full items-center justify-center px-2 text-center text-xs text-muted-foreground">
-        Actions will appear here during test execution...
+        Actions will appear here during test execution…
       </div>
     );
   }

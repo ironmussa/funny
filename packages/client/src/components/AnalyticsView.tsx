@@ -11,7 +11,7 @@ import {
   ChevronDown,
   Check,
 } from 'lucide-react';
-import { useEffect, useState, useMemo } from 'react';
+import { lazy, Suspense, useEffect, useState, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
@@ -21,9 +21,21 @@ import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 
 import { MetricCard } from './analytics/MetricCard';
-import { StageDistributionChart } from './analytics/StageDistributionChart';
-import { TimelineChart } from './analytics/TimelineChart';
 import { TimeRangeSelector, type TimeRange } from './analytics/TimeRangeSelector';
+
+// Lazy-loaded: recharts is ~85KB, only pulled in when the user opens this view
+const StageDistributionChart = lazy(() =>
+  import('./analytics/StageDistributionChart').then((m) => ({ default: m.StageDistributionChart })),
+);
+const TimelineChart = lazy(() =>
+  import('./analytics/TimelineChart').then((m) => ({ default: m.TimelineChart })),
+);
+
+const ChartFallback = () => (
+  <div className="flex h-64 items-center justify-center text-xs text-muted-foreground">
+    Loading…
+  </div>
+);
 
 interface OverviewData {
   currentStageDistribution: Record<string, number>;
@@ -262,7 +274,9 @@ export function AnalyticsView() {
                   <h3 className="mb-4 text-sm font-semibold">
                     {t('analytics.currentDistribution')}
                   </h3>
-                  <StageDistributionChart data={overview.currentStageDistribution} />
+                  <Suspense fallback={<ChartFallback />}>
+                    <StageDistributionChart data={overview.currentStageDistribution} />
+                  </Suspense>
                 </div>
 
                 {/* Timeline */}
@@ -272,15 +286,17 @@ export function AnalyticsView() {
                     data-testid="analytics-timeline-chart"
                   >
                     <h3 className="mb-4 text-sm font-semibold">{t('analytics.timeline')}</h3>
-                    <TimelineChart
-                      created={timeline.createdByDate}
-                      completed={timeline.completedByDate}
-                      movedToPlanning={timeline.movedToPlanningByDate ?? []}
-                      movedToReview={timeline.movedToReviewByDate}
-                      movedToDone={timeline.movedToDoneByDate}
-                      movedToArchived={timeline.movedToArchivedByDate ?? []}
-                      groupBy={groupBy}
-                    />
+                    <Suspense fallback={<ChartFallback />}>
+                      <TimelineChart
+                        created={timeline.createdByDate}
+                        completed={timeline.completedByDate}
+                        movedToPlanning={timeline.movedToPlanningByDate ?? []}
+                        movedToReview={timeline.movedToReviewByDate}
+                        movedToDone={timeline.movedToDoneByDate}
+                        movedToArchived={timeline.movedToArchivedByDate ?? []}
+                        groupBy={groupBy}
+                      />
+                    </Suspense>
                   </div>
                 )}
               </>

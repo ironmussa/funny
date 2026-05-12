@@ -97,7 +97,7 @@ export function WorktreeDeleteDialog({
         <div className="space-y-2">
           {statusLoading ? (
             <div className="flex items-center gap-2 py-2 text-xs text-muted-foreground">
-              <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              <Loader2 className="size-3.5 animate-spin" />
               {t('dialog.worktreeStatusLoading')}
             </div>
           ) : status ? (
@@ -128,7 +128,7 @@ export function WorktreeDeleteDialog({
               )}
               {status.unpushedCommitCount === 0 && status.dirtyFileCount === 0 && (
                 <div className="flex items-center gap-2 py-1 text-xs text-emerald-500">
-                  <CheckCircle2 className="h-3.5 w-3.5" />
+                  <CheckCircle2 className="size-3.5" />
                   {t('dialog.noUnpushedCommits')}
                 </div>
               )}
@@ -154,7 +154,7 @@ export function WorktreeDeleteDialog({
                 checked={deleteBranch}
                 onCheckedChange={(v) => setDeleteBranch(v === true)}
               />
-              <GitBranch className="h-3.5 w-3.5 text-muted-foreground" />
+              <GitBranch className="size-3.5 text-muted-foreground" />
               <span className="text-xs">
                 {t('dialog.deleteBranchOption', { branch: target.branchName })}
               </span>
@@ -177,7 +177,7 @@ export function WorktreeDeleteDialog({
             disabled={loading}
           >
             {loading && (
-              <svg className="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none">
+              <svg className="size-4 animate-spin" viewBox="0 0 24 24" fill="none">
                 <circle
                   className="opacity-25"
                   cx="12"

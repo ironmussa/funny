@@ -205,7 +205,7 @@ export const VirtualDiff = memo(function VirtualDiff({
   const hunkLineMap = useMemo(() => {
     if (!selectable) return new Map<number, number[]>();
     const map = new Map<number, number[]>();
-    const sortedHeaders = [...parsed.hunkHeaders.keys()].sort((a, b) => a - b);
+    const sortedHeaders = Array.from(parsed.hunkHeaders.keys()).toSorted((a, b) => a - b);
     for (let h = 0; h < sortedHeaders.length; h++) {
       const start = sortedHeaders[h];
       const end = h + 1 < sortedHeaders.length ? sortedHeaders[h + 1] : parsed.lines.length;
@@ -234,7 +234,7 @@ export const VirtualDiff = memo(function VirtualDiff({
   const rows = useMemo((): VirtualRow[] => {
     if (!codeFolding) {
       const r: VirtualRow[] = [];
-      const sortedHunks = [...parsed.hunkHeaders.entries()].sort((a, b) => a[0] - b[0]);
+      const sortedHunks = Array.from(parsed.hunkHeaders.entries()).toSorted((a, b) => a[0] - b[0]);
       let nextHunkI = 0;
       for (let i = 0; i < parsed.lines.length; i++) {
         if (nextHunkI < sortedHunks.length && sortedHunks[nextHunkI][0] === i) {
@@ -508,14 +508,7 @@ export const VirtualDiff = memo(function VirtualDiff({
   const effectiveLang = langReady ? lang : 'plaintext';
   const tooManyLines = parsed.lines.length > HIGHLIGHT_MAX_LINES;
   const highlightLang = tooManyLines ? 'plaintext' : effectiveLang;
-
-  if (parsed.lines.length === 0) {
-    return (
-      <p className="p-4 text-xs text-muted-foreground" data-testid={props['data-testid']}>
-        No diff available
-      </p>
-    );
-  }
+  const hasLines = parsed.lines.length > 0;
 
   // ── Drag-select (GitHub Desktop-style click+drag on checkboxes) ──
   const dragRef = useRef<{
@@ -745,7 +738,7 @@ export const VirtualDiff = memo(function VirtualDiff({
                     {selectable && <span className="w-5 flex-shrink-0" />}
                     <span className={cn(gutterWidth, 'flex-shrink-0')} />
                     <span className="truncate">
-                      @@ -{row.oldStart},{row.lineCount} +{row.newStart},{row.lineCount} @@ —{' '}
+                      @@ -{row.oldStart},{row.lineCount} +{row.newStart},{row.lineCount} @@ ·{' '}
                       {row.lineCount} lines hidden
                     </span>
                   </button>
@@ -805,6 +798,14 @@ export const VirtualDiff = memo(function VirtualDiff({
       )}
     </div>
   );
+
+  if (!hasLines) {
+    return (
+      <p className="p-4 text-xs text-muted-foreground" data-testid={props['data-testid']}>
+        No diff available
+      </p>
+    );
+  }
 
   if (!showMinimap) return diffContent;
 

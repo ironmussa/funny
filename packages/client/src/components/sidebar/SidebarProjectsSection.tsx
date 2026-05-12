@@ -4,11 +4,7 @@ import { type RefObject, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Button } from '@/components/ui/button';
-import {
-  Collapsible,
-  CollapsibleContent,
-  CollapsibleTrigger,
-} from '@/components/ui/collapsible';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { SidebarContent } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
@@ -139,7 +135,7 @@ export function SidebarProjectsSection({
               variant="ghost"
               data-testid="sidebar-add-project"
               size="icon"
-              className="h-5 w-5 text-muted-foreground hover:text-foreground"
+              className="size-5 text-muted-foreground hover:text-foreground"
               onClick={() => navigate(buildPath('/new'))}
             >
               <FolderPlus className="icon-sm" />
@@ -168,8 +164,8 @@ export function SidebarProjectsSection({
           >
             {Array.from({ length: 6 }).map((_, i) => (
               <div key={i} className="flex items-center gap-1.5 px-2 py-1">
-                <Skeleton className="h-3.5 w-3.5 rounded" />
-                <Skeleton className="h-3.5 w-3.5 rounded" />
+                <Skeleton className="size-3.5 rounded" />
+                <Skeleton className="size-3.5 rounded" />
                 <Skeleton className="h-3 flex-1" style={{ maxWidth: `${60 + ((i * 37) % 35)}%` }} />
               </div>
             ))}

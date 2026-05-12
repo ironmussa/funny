@@ -15,11 +15,14 @@ import { ThreadColumn } from '@/components/live-columns/ThreadColumn';
 import { Button } from '@/components/ui/button';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { createClientLogger } from '@/lib/client-logger';
-import { getGridCells, type GridCellAssignments } from '@/lib/grid-storage';
+import { GRID_CELLS_KEY, getGridCells, type GridCellAssignments } from '@/lib/grid-storage';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore } from '@/stores/thread-store';
 
 const log = createClientLogger('LiveColumnsView');
+
+const GRID_COLS_KEY = 'funny:grid-cols:v1';
+const GRID_ROWS_KEY = 'funny:grid-rows:v1';
 
 type OpenLightboxFn = (images: { src: string; alt: string }[], index: number) => void;
 
@@ -29,11 +32,11 @@ export function LiveColumnsView() {
   const projects = useProjectStore((s) => s.projects);
   const loadThreadsForProject = useThreadStore((s) => s.loadThreadsForProject);
   const [gridCols, setGridCols] = useState(() => {
-    const saved = localStorage.getItem('funny:grid-cols');
+    const saved = localStorage.getItem(GRID_COLS_KEY);
     return saved ? Math.min(Math.max(Number(saved), 1), MAX_GRID_COLS) : 2;
   });
   const [gridRows, setGridRows] = useState(() => {
-    const saved = localStorage.getItem('funny:grid-rows');
+    const saved = localStorage.getItem(GRID_ROWS_KEY);
     return saved ? Math.min(Math.max(Number(saved), 1), MAX_GRID_ROWS) : 2;
   });
 
@@ -94,7 +97,7 @@ export function LiveColumnsView() {
         if (val === threadId) delete updated[key];
       }
       updated[String(cellIndex)] = threadId;
-      localStorage.setItem('funny:grid-cells', JSON.stringify(updated));
+      localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(updated));
       return updated;
     });
   }, []);
@@ -108,7 +111,7 @@ export function LiveColumnsView() {
         const col = cellIndex % gridCols;
 
         if (gridCols <= 1) {
-          localStorage.setItem('funny:grid-cells', JSON.stringify(updated));
+          localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(updated));
           return updated;
         }
 
@@ -118,7 +121,7 @@ export function LiveColumnsView() {
         });
 
         if (!columnEmpty) {
-          localStorage.setItem('funny:grid-cells', JSON.stringify(updated));
+          localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(updated));
           return updated;
         }
 
@@ -145,8 +148,8 @@ export function LiveColumnsView() {
           }
           return remapped;
         });
-        localStorage.setItem('funny:grid-cols', String(newCols));
-        localStorage.setItem('funny:grid-cells', JSON.stringify(collapsed));
+        localStorage.setItem(GRID_COLS_KEY, String(newCols));
+        localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(collapsed));
         return collapsed;
       });
     },
@@ -175,7 +178,7 @@ export function LiveColumnsView() {
           const oldRow = Math.floor(oldIdx / oldCols);
           updated[String(oldRow * newCols + oldCol)] = val;
         }
-        localStorage.setItem('funny:grid-cells', JSON.stringify(updated));
+        localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(updated));
         return updated;
       });
       setPendingProjectByCell((prev) => {
@@ -190,7 +193,7 @@ export function LiveColumnsView() {
         return updated;
       });
       setGridCols(newCols);
-      localStorage.setItem('funny:grid-cols', String(newCols));
+      localStorage.setItem(GRID_COLS_KEY, String(newCols));
       log.info({ projectId: pid, cellIndex: insertIndex }, 'header preset project for new column');
     },
     [gridCols, t],
@@ -269,7 +272,7 @@ export function LiveColumnsView() {
             }
 
             updated[String(cellIndex)] = threadId;
-            localStorage.setItem('funny:grid-cells', JSON.stringify(updated));
+            localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(updated));
             return updated;
           });
           return;
@@ -295,7 +298,7 @@ export function LiveColumnsView() {
               updated[String(newIdx)] = val;
             }
             updated[String(insertIndex)] = threadId;
-            localStorage.setItem('funny:grid-cells', JSON.stringify(updated));
+            localStorage.setItem(GRID_CELLS_KEY, JSON.stringify(updated));
             return updated;
           });
           setPendingProjectByCell((prevPending) => {
@@ -310,7 +313,7 @@ export function LiveColumnsView() {
             return remapped;
           });
           setGridCols(newCols);
-          localStorage.setItem('funny:grid-cols', String(newCols));
+          localStorage.setItem(GRID_COLS_KEY, String(newCols));
         }
       },
     });
@@ -325,7 +328,7 @@ export function LiveColumnsView() {
         <Button
           variant="ghost"
           size="icon"
-          className="h-7 w-7"
+          className="size-7"
           data-testid="grid-new-thread"
           disabled={gridCols >= MAX_GRID_COLS}
           onClick={() => setPickerTarget({ kind: 'new-column' })}
@@ -340,8 +343,8 @@ export function LiveColumnsView() {
             onChange={(c, r) => {
               setGridCols(c);
               setGridRows(r);
-              localStorage.setItem('funny:grid-cols', String(c));
-              localStorage.setItem('funny:grid-rows', String(r));
+              localStorage.setItem(GRID_COLS_KEY, String(c));
+              localStorage.setItem(GRID_ROWS_KEY, String(r));
             }}
           />
         </div>

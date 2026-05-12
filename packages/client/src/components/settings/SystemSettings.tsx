@@ -67,7 +67,7 @@ export function SystemSettings() {
     return (
       <div className="p-1">
         <h3 className="settings-section-header">System</h3>
-        <p className="text-sm text-muted-foreground">Loading...</p>
+        <p className="text-sm text-muted-foreground">Loading…</p>
       </div>
     );
   }
@@ -135,12 +135,12 @@ export function SystemSettings() {
                 <span className="w-16 font-medium">Rust</span>
                 {nativeGit.rustAvailable ? (
                   <span className="flex items-center gap-1 text-green-500">
-                    <CircleCheck className="h-3 w-3" />
+                    <CircleCheck className="size-3" />
                     {nativeGit.rustVersion}
                   </span>
                 ) : (
                   <span className="flex items-center gap-1 text-muted-foreground">
-                    <CircleX className="h-3 w-3" />
+                    <CircleX className="size-3" />
                     Not installed
                   </span>
                 )}
@@ -192,8 +192,8 @@ export function SystemSettings() {
           {isBuilding && (
             <div className="mt-4 space-y-2">
               <div className="flex items-center gap-2">
-                <Circle className="h-3 w-3 animate-pulse fill-yellow-500 text-yellow-500" />
-                <span className="text-xs font-medium">Building...</span>
+                <Circle className="size-3 animate-pulse fill-yellow-500 text-yellow-500" />
+                <span className="text-xs font-medium">Building…</span>
               </div>
             </div>
           )}
@@ -202,7 +202,7 @@ export function SystemSettings() {
           {buildSucceeded && (
             <div className="mt-4 space-y-2">
               <div className="flex items-center gap-2 text-green-500">
-                <CircleCheck className="h-3.5 w-3.5" />
+                <CircleCheck className="size-3.5" />
                 <span className="text-xs font-medium">Build successful!</span>
               </div>
               <p className="text-xs text-muted-foreground">Restart funny to activate native git.</p>
@@ -212,7 +212,7 @@ export function SystemSettings() {
           {buildFailed && (
             <div className="mt-4 space-y-2">
               <div className="flex items-center gap-2 text-destructive">
-                <CircleX className="h-3.5 w-3.5" />
+                <CircleX className="size-3.5" />
                 <span className="text-xs font-medium">Build failed</span>
               </div>
               <Button

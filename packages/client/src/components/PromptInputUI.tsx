@@ -138,7 +138,7 @@ export const TemplateSelect = memo(function TemplateSelect({
       <span className="flex items-center gap-1.5">
         {tpl.color && (
           <span
-            className="inline-block h-2 w-2 flex-shrink-0 rounded-full"
+            className="inline-block size-2 flex-shrink-0 rounded-full"
             style={{ backgroundColor: tpl.color }}
           />
         )}
@@ -381,6 +381,11 @@ export interface PromptInputUIProps {
 
 // ── Component ────────────────────────────────────────────────────
 
+const RUNTIME_MODES = [
+  { value: 'local', label: 'Local' },
+  { value: 'remote', label: 'Remote' },
+];
+
 export const PromptInputUI = memo(function PromptInputUI({
   onSubmit,
   onStop,
@@ -586,6 +591,16 @@ export const PromptInputUI = memo(function PromptInputUI({
     setEditorEmpty(editorRef.current?.isEmpty() ?? true);
     onEditorChange?.();
   }, [onEditorChange, editorRef]);
+
+  const handleTemplateChange = useCallback((v: string | undefined) => {
+    setSelectedTemplateId(v);
+    setTemplateVarValues({});
+  }, []);
+
+  const handleRuntimeChange = useCallback(
+    (v: string) => onRuntimeChange?.(v as 'local' | 'remote'),
+    [onRuntimeChange],
+  );
 
   const handleCycleMode = useCallback(() => {
     onModeChange(
@@ -1025,10 +1040,7 @@ export const PromptInputUI = memo(function PromptInputUI({
               {isNewThread && isDeepAgent && templates.length > 0 && (
                 <TemplateSelect
                   value={selectedTemplateId}
-                  onChange={(v) => {
-                    setSelectedTemplateId(v);
-                    setTemplateVarValues({});
-                  }}
+                  onChange={handleTemplateChange}
                   templates={templates}
                 />
               )}
@@ -1140,11 +1152,8 @@ export const PromptInputUI = memo(function PromptInputUI({
                 {hasLauncher && (
                   <ModeSelect
                     value={runtime}
-                    onChange={(v) => onRuntimeChange?.(v as 'local' | 'remote')}
-                    modes={[
-                      { value: 'local', label: 'Local' },
-                      { value: 'remote', label: 'Remote' },
-                    ]}
+                    onChange={handleRuntimeChange}
+                    modes={RUNTIME_MODES}
                   />
                 )}
                 {showBacklog && (

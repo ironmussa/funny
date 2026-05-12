@@ -185,7 +185,7 @@ export function SearchBar({
       }}
       data-testid={`${testIdPrefix}-bar`}
     >
-      {showIcon && <Search className="h-3.5 w-3.5 flex-shrink-0 text-muted-foreground" />}
+      {showIcon && <Search className="size-3.5 flex-shrink-0 text-muted-foreground" />}
       <Input
         ref={setInputRef}
         value={query}
@@ -197,9 +197,9 @@ export function SearchBar({
       />
       <span
         aria-hidden={!loading}
-        className="flex h-3.5 w-3.5 flex-shrink-0 items-center justify-center"
+        className="flex size-3.5 flex-shrink-0 items-center justify-center"
       >
-        {loading && <Loader2 className="h-3.5 w-3.5 animate-spin text-muted-foreground" />}
+        {loading && <Loader2 className="size-3.5 animate-spin text-muted-foreground" />}
       </span>
       <span
         className="min-w-[2.5rem] flex-shrink-0 text-center text-xs tabular-nums text-muted-foreground"
@@ -217,7 +217,7 @@ export function SearchBar({
           className={cn(caseSensitive && 'bg-accent text-accent-foreground')}
           data-testid={`${testIdPrefix}-case-sensitive`}
         >
-          <CaseSensitive className="h-3.5 w-3.5" />
+          <CaseSensitive className="size-3.5" />
         </Button>
       )}
       {onWholeWordChange && (
@@ -230,7 +230,7 @@ export function SearchBar({
           className={cn(wholeWord && 'bg-accent text-accent-foreground')}
           data-testid={`${testIdPrefix}-whole-word`}
         >
-          <WholeWord className="h-3.5 w-3.5" />
+          <WholeWord className="size-3.5" />
         </Button>
       )}
       {onRegexChange && (
@@ -243,7 +243,7 @@ export function SearchBar({
           className={cn(regex && 'bg-accent text-accent-foreground')}
           data-testid={`${testIdPrefix}-regex`}
         >
-          <Regex className="h-3.5 w-3.5" />
+          <Regex className="size-3.5" />
         </Button>
       )}
       {showNav && (
@@ -255,7 +255,7 @@ export function SearchBar({
             disabled={!onPrev || totalMatches === 0}
             data-testid={`${testIdPrefix}-prev`}
           >
-            <ArrowUp className="h-3.5 w-3.5" />
+            <ArrowUp className="size-3.5" />
           </Button>
           <Button
             variant="ghost"
@@ -264,7 +264,7 @@ export function SearchBar({
             disabled={!onNext || totalMatches === 0}
             data-testid={`${testIdPrefix}-next`}
           >
-            <ArrowDown className="h-3.5 w-3.5" />
+            <ArrowDown className="size-3.5" />
           </Button>
         </>
       )}
@@ -275,7 +275,7 @@ export function SearchBar({
           onClick={startClose}
           data-testid={`${testIdPrefix}-close`}
         >
-          <X className="h-3.5 w-3.5" />
+          <X className="size-3.5" />
         </Button>
       )}
     </div>

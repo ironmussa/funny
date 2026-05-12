@@ -402,7 +402,7 @@ export function AutomationSettings() {
                         {opt.label}
                       </SelectItem>
                     ))}
-                    <SelectItem value="__custom__">Custom cron...</SelectItem>
+                    <SelectItem value="__custom__">Custom cron…</SelectItem>
                   </SelectContent>
                 </Select>
                 {!SCHEDULE_PRESETS.some((p) => p.value === form.schedule) && (

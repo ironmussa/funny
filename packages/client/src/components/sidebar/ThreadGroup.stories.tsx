@@ -136,7 +136,7 @@ export const ActiveThreads: Story = {
     title: 'Active',
     count: 2,
     iconElement: (
-      <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-status-info" />
+      <span className="size-1.5 flex-shrink-0 animate-pulse rounded-full bg-status-info" />
     ),
     children: null,
   },
@@ -378,7 +378,7 @@ export const FullActivitySection: Story = {
         title="Active"
         count={1}
         iconElement={
-          <span className="h-1.5 w-1.5 flex-shrink-0 animate-pulse rounded-full bg-status-info" />
+          <span className="size-1.5 flex-shrink-0 animate-pulse rounded-full bg-status-info" />
         }
       >
         <ThreadItem

@@ -68,7 +68,7 @@ export function TeamProjects() {
   };
 
   if (loading) {
-    return <div className="p-6 text-sm text-muted-foreground">Loading...</div>;
+    return <div className="p-6 text-sm text-muted-foreground">Loading…</div>;
   }
 
   return (
@@ -138,7 +138,7 @@ export function TeamProjects() {
                 <div className="flex min-w-0 items-center gap-2">
                   {project.color && (
                     <div
-                      className="h-3 w-3 shrink-0 rounded-full"
+                      className="size-3 shrink-0 rounded-full"
                       style={{ backgroundColor: project.color }}
                     />
                   )}

@@ -94,11 +94,13 @@ export const ThreadColumn = memo(function ThreadColumn({
           render: ({ container }) => {
             const rect = el.getBoundingClientRect();
             const preview = document.createElement('div');
-            preview.style.width = `${rect.width}px`;
-            preview.style.height = `${rect.height}px`;
-            preview.style.borderRadius = '8px';
-            preview.style.border = '2px dashed hsl(var(--primary))';
-            preview.style.background = 'hsl(var(--primary) / 0.05)';
+            preview.style.cssText = [
+              `width:${rect.width}px`,
+              `height:${rect.height}px`,
+              'border-radius:8px',
+              'border:2px dashed hsl(var(--primary))',
+              'background:hsl(var(--primary) / 0.05)',
+            ].join(';');
             container.appendChild(preview);
           },
         });
@@ -251,7 +253,7 @@ export const ThreadColumn = memo(function ThreadColumn({
                 <TooltipIconButton
                   tooltip={t('live.removeFromGrid', 'Remove from grid')}
                   onClick={onRemove}
-                  className="h-5 w-5 shrink-0 opacity-0 transition-opacity group-hover/col:opacity-100"
+                  className="size-5 shrink-0 opacity-0 transition-opacity group-hover/col:opacity-100"
                   data-testid={`grid-remove-${threadId}`}
                 >
                   <X className="icon-xs" />

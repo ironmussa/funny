@@ -801,7 +801,19 @@
     "showLess": "Show less",
     "fork": "Fork from here",
     "forkSuccess": "Forked conversation",
-    "forkFailed": "Failed to fork conversation"
+    "forkFailed": "Failed to fork conversation",
+    "threadActions": "Thread actions",
+    "forkConversationFromHere": "Fork conversation from here",
+    "rewindCodeToHere": "Rewind code to here",
+    "forkAndRewindCode": "Fork conversation and rewind code",
+    "rewindSuccess_one": "Rewound 1 file",
+    "rewindSuccess_other": "Rewound {{count}} files",
+    "rewindFailed": "Failed to rewind code",
+    "rewindFailedGeneric": "Rewind failed: {{error}}",
+    "rewindNotSupportedProvider": "Rewind is only available for Claude threads",
+    "rewindNoCheckpoints": "This thread was started without file checkpointing",
+    "forkAndRewindSuccess": "Forked and rewound code",
+    "forkAndRewindFailed": "Failed to fork and rewind"
   },
   "editor": {
     "failedToLoad": "Failed to load file",

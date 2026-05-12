@@ -257,6 +257,30 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       });
       break;
     }
+    case 'thread:claimed': {
+      import('@/stores/orchestrator-store').then(({ useOrchestratorStore }) => {
+        useOrchestratorStore.getState().handleClaimed(threadId, data);
+      });
+      break;
+    }
+    case 'thread:dispatched': {
+      import('@/stores/orchestrator-store').then(({ useOrchestratorStore }) => {
+        useOrchestratorStore.getState().handleDispatched(threadId, data);
+      });
+      break;
+    }
+    case 'thread:retry-queued': {
+      import('@/stores/orchestrator-store').then(({ useOrchestratorStore }) => {
+        useOrchestratorStore.getState().handleRetryQueued(threadId, data);
+      });
+      break;
+    }
+    case 'thread:released': {
+      import('@/stores/orchestrator-store').then(({ useOrchestratorStore }) => {
+        useOrchestratorStore.getState().handleReleased(threadId);
+      });
+      break;
+    }
     case 'thread:created':
       useThreadStore.getState().loadThreadsForProject(data.projectId);
       break;
@@ -526,6 +550,10 @@ const ALL_EVENT_TYPES = [
   'pipeline:run_completed',
   'pipeline:approval_requested',
   'pipeline:approval_resolved',
+  'thread:claimed',
+  'thread:dispatched',
+  'thread:retry-queued',
+  'thread:released',
   'thread:created',
   'thread:comment_deleted',
   'thread:updated',

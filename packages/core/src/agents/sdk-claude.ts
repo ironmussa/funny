@@ -71,6 +71,9 @@ export class SDKClaudeProcess extends BaseAgentProcess {
       disallowedTools: this.options.disallowedTools,
       executable: 'node',
       env: sdkEnv,
+      // Track per-file checkpoints so the UI can offer "Rewind code to here" /
+      // "Fork conversation and rewind code". Required for query.rewindFiles().
+      enableFileCheckpointing: true,
       systemPrompt: this.options.systemPrefix
         ? {
             type: 'preset' as const,

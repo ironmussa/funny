@@ -151,6 +151,36 @@ export const threadsApi = {
       method: 'POST',
       body: JSON.stringify({ messageId, title }),
     }),
+  rewindCode: (threadId: string, messageId: string) =>
+    request<{
+      threadId: string;
+      newSessionId: string;
+      rewind: {
+        canRewind: boolean;
+        error?: string;
+        filesChanged?: string[];
+        insertions?: number;
+        deletions?: number;
+      };
+      deletedMessageCount: number;
+    }>(`/threads/${threadId}/rewind`, {
+      method: 'POST',
+      body: JSON.stringify({ messageId }),
+    }),
+  forkAndRewind: (threadId: string, messageId: string, title?: string) =>
+    request<{
+      thread: Thread;
+      rewind: {
+        canRewind: boolean;
+        error?: string;
+        filesChanged?: string[];
+        insertions?: number;
+        deletions?: number;
+      };
+    }>(`/threads/${threadId}/fork-and-rewind`, {
+      method: 'POST',
+      body: JSON.stringify({ messageId, title }),
+    }),
   approveTool: (
     threadId: string,
     toolName: string,
@@ -202,6 +232,11 @@ export const threadsApi = {
     request<Thread>(`/threads/${threadId}`, {
       method: 'PATCH',
       body: JSON.stringify({ pinned }),
+    }),
+  setOrchestratorManaged: (threadId: string, orchestratorManaged: boolean) =>
+    request<Thread>(`/threads/${threadId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ orchestratorManaged }),
     }),
   renameThread: (threadId: string, title: string) =>
     request<Thread>(`/threads/${threadId}`, {

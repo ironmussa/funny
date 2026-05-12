@@ -138,6 +138,7 @@ export async function createIdleThread(params: CreateIdleThreadParams) {
     templateVariables: params.templateVariables
       ? JSON.stringify(params.templateVariables)
       : undefined,
+    fileCheckpointingEnabled: 1,
     cost: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),
@@ -258,6 +259,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
       templateVariables: params.templateVariables
         ? JSON.stringify(params.templateVariables)
         : undefined,
+      fileCheckpointingEnabled: resolvedProvider === 'claude' ? 1 : 0,
       cost: 0,
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
@@ -447,6 +449,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
     templateVariables: params.templateVariables
       ? JSON.stringify(params.templateVariables)
       : undefined,
+    fileCheckpointingEnabled: resolvedProvider === 'claude' ? 1 : 0,
     cost: 0,
     createdAt: new Date().toISOString(),
     updatedAt: new Date().toISOString(),

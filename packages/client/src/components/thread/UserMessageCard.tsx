@@ -1,9 +1,24 @@
 import type { AgentModel, PermissionMode } from '@funny/shared';
-import { FileText, FolderOpen, ChevronRight, ChevronDown, Slash, GitBranch } from 'lucide-react';
+import {
+  FileText,
+  FolderOpen,
+  ChevronRight,
+  ChevronDown,
+  Slash,
+  GitBranch,
+  Undo2,
+  RotateCcw,
+} from 'lucide-react';
 import { useState, useRef, useLayoutEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Badge } from '@/components/ui/badge';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import type { ReferencedItem } from '@/lib/parse-referenced-files';
 import { parseReferencedFiles } from '@/lib/parse-referenced-files';
@@ -29,8 +44,20 @@ export interface UserMessageCardProps {
   onImageClick?: (images: { src: string; alt: string }[], index: number) => void;
   /** Fork the thread starting from this message */
   onFork?: () => void;
+  /** Rewind code (and conversation) back to this message in place */
+  onRewind?: () => void;
+  /** Fork the conversation AND rewind code on the new fork */
+  onForkAndRewind?: () => void;
   /** Disable the fork button (e.g. while a fork is in flight) */
   forkDisabled?: boolean;
+  /**
+   * Disable the rewind options (e.g. when the thread was started without
+   * file checkpointing or the provider isn't Claude). When true, the rewind
+   * items render grayed-out with a tooltip explaining why.
+   */
+  rewindDisabled?: boolean;
+  /** Reason shown in the disabled-rewind tooltip. */
+  rewindDisabledReason?: string;
   /** data-testid */
   'data-testid'?: string;
 }
@@ -213,7 +240,11 @@ export function UserMessageCard({
   onClick,
   onImageClick,
   onFork,
+  onRewind,
+  onForkAndRewind,
   forkDisabled,
+  rewindDisabled,
+  rewindDisabledReason,
   ...props
 }: UserMessageCardProps) {
   const { t } = useTranslation();
@@ -235,31 +266,68 @@ export function UserMessageCard({
       )}
       onClick={onClick}
     >
-      {/* Fork action — visible on hover */}
-      {onFork && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <button
-              type="button"
-              data-testid={`user-message-fork-${props['data-testid'] ?? ''}`}
-              disabled={forkDisabled}
-              onClick={(e) => {
-                e.stopPropagation();
-                onFork();
-              }}
-              className={cn(
-                'absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded',
-                'bg-background/10 text-background/70 transition-opacity hover:bg-background/20 hover:text-background',
-                'opacity-0 group-hover:opacity-100 focus-visible:opacity-100',
-                forkDisabled && 'cursor-not-allowed opacity-50',
-              )}
-              aria-label={t('thread.fork', 'Fork from here')}
-            >
-              <GitBranch className="icon-xs" />
-            </button>
-          </TooltipTrigger>
-          <TooltipContent side="left">{t('thread.fork', 'Fork from here')}</TooltipContent>
-        </Tooltip>
+      {/* Fork / rewind menu — visible on hover */}
+      {(onFork || onRewind || onForkAndRewind) && (
+        <DropdownMenu>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  data-testid={`user-message-fork-menu-${props['data-testid'] ?? ''}`}
+                  disabled={forkDisabled}
+                  onClick={(e) => e.stopPropagation()}
+                  className={cn(
+                    'absolute right-1.5 top-1.5 z-10 flex h-6 w-6 items-center justify-center rounded',
+                    'bg-background/10 text-background/70 transition-opacity hover:bg-background/20 hover:text-background',
+                    'opacity-0 group-hover:opacity-100 focus-visible:opacity-100 data-[state=open]:opacity-100',
+                    forkDisabled && 'cursor-not-allowed opacity-50',
+                  )}
+                  aria-label={t('thread.threadActions', 'Thread actions')}
+                >
+                  <GitBranch className="icon-xs" />
+                </button>
+              </DropdownMenuTrigger>
+            </TooltipTrigger>
+            <TooltipContent side="left">
+              {t('thread.threadActions', 'Thread actions')}
+            </TooltipContent>
+          </Tooltip>
+          <DropdownMenuContent align="end" className="w-64" onClick={(e) => e.stopPropagation()}>
+            {onFork && (
+              <DropdownMenuItem
+                data-testid={`user-message-fork-${props['data-testid'] ?? ''}`}
+                disabled={forkDisabled}
+                onSelect={() => onFork()}
+              >
+                <GitBranch className="icon-xs" />
+                {t('thread.forkConversationFromHere', 'Fork conversation from here')}
+              </DropdownMenuItem>
+            )}
+            {onRewind && (
+              <DropdownMenuItem
+                data-testid={`user-message-rewind-${props['data-testid'] ?? ''}`}
+                disabled={forkDisabled || rewindDisabled}
+                title={rewindDisabled ? rewindDisabledReason : undefined}
+                onSelect={() => onRewind()}
+              >
+                <Undo2 className="icon-xs" />
+                {t('thread.rewindCodeToHere', 'Rewind code to here')}
+              </DropdownMenuItem>
+            )}
+            {onForkAndRewind && (
+              <DropdownMenuItem
+                data-testid={`user-message-fork-rewind-${props['data-testid'] ?? ''}`}
+                disabled={forkDisabled || rewindDisabled}
+                title={rewindDisabled ? rewindDisabledReason : undefined}
+                onSelect={() => onForkAndRewind()}
+              >
+                <RotateCcw className="icon-xs" />
+                {t('thread.forkAndRewindCode', 'Fork conversation and rewind code')}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       )}
 
       {/* Image attachments */}

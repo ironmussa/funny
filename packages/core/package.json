@@ -11,6 +11,7 @@
     "./git": "./src/git/index.ts",
     "./chrome": "./src/chrome/index.ts",
     "./containers": "./src/containers/index.ts",
+    "./orchestrator": "./src/orchestrator/index.ts",
     "./ports": "./src/ports/index.ts",
     "./symbols": "./src/symbols/index.ts"
   },

@@ -931,6 +931,18 @@ export async function remoteUpdateMessage(messageId: string, content: string): P
   state.socket.emit('data:update_message', { payload: { messageId, content } });
 }
 
+/** Delete every message strictly after the anchor for the given thread.
+ *  Returns the number of rows deleted. Used by "Rewind code to here". */
+export async function remoteDeleteMessagesAfter(
+  threadId: string,
+  anchorMessageId: string,
+): Promise<number> {
+  const response = await sendDataMessage('data:delete_messages_after', {
+    payload: { threadId, anchorMessageId },
+  });
+  return response.deletedCount ?? 0;
+}
+
 /** Save a thread event on the server (fire-and-forget) */
 export async function remoteSaveThreadEvent(
   threadId: string,

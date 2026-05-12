@@ -31,6 +31,8 @@ import type {
   RunCommandOpts,
   NotifyOpts,
   RequestApprovalOpts,
+  SetStatusOpts,
+  SetStageOpts,
 } from '../pipelines/types.js';
 import {
   commitChanges as gitServiceCommit,
@@ -41,9 +43,46 @@ import {
 import { pipelineApprovalStore } from './pipeline-approval-store.js';
 import { threadEventBus } from './thread-event-bus.js';
 import * as tm from './thread-manager.js';
-import { createAndStartThread } from './thread-service.js';
+import {
+  createAndStartThread,
+  emitThreadUpdated,
+  updateThread as updateThreadService,
+} from './thread-service.js';
 import { emitWorkflowEvent } from './workflow-event-helpers.js';
 import { wsBroker } from './ws-broker.js';
+
+// Canonical lifecycle enums — kept in sync with @funny/shared/primitives.
+// Duplicated here as plain arrays so we can validate at the action seam
+// without importing runtime values from a types-only package.
+const THREAD_STATUS_VALUES = [
+  'setting_up',
+  'idle',
+  'pending',
+  'running',
+  'waiting',
+  'completed',
+  'failed',
+  'stopped',
+  'interrupted',
+] as const;
+type ThreadStatusValue = (typeof THREAD_STATUS_VALUES)[number];
+
+const THREAD_STAGE_VALUES = [
+  'backlog',
+  'planning',
+  'in_progress',
+  'review',
+  'done',
+  'archived',
+] as const;
+type ThreadStageValue = (typeof THREAD_STAGE_VALUES)[number];
+
+function isThreadStatus(v: string): v is ThreadStatusValue {
+  return (THREAD_STATUS_VALUES as readonly string[]).includes(v);
+}
+function isThreadStage(v: string): v is ThreadStageValue {
+  return (THREAD_STAGE_VALUES as readonly string[]).includes(v);
+}
 
 // ── RuntimeActionProvider ────────────────────────────────────
 
@@ -174,14 +213,11 @@ export class RuntimeActionProvider implements ActionProvider {
           return { ok: false, error: errorMsg };
         }
 
-        // Get SHA
-        const shaResult = await gitRead(['rev-parse', 'HEAD'], {
-          cwd: opts.cwd,
-          reject: false,
-        });
-        const sha = shaResult.exitCode === 0 ? shaResult.stdout.trim() : undefined;
-
-        return { ok: true, output: result.value, metadata: { sha } };
+        return {
+          ok: true,
+          output: result.value.output,
+          metadata: { sha: result.value.sha },
+        };
       }
 
       // No thread — direct git
@@ -400,6 +436,64 @@ export class RuntimeActionProvider implements ActionProvider {
     });
 
     return { ok: true };
+  }
+
+  async setStatus(opts: SetStatusOpts): Promise<ActionResult> {
+    const { userId } = this.opts;
+    if (!isThreadStatus(opts.value)) {
+      return {
+        ok: false,
+        error: `Invalid ThreadStatus "${opts.value}". Allowed: ${THREAD_STATUS_VALUES.join(', ')}`,
+      };
+    }
+    try {
+      const thread = await tm.getThread(opts.threadId);
+      if (!thread) return { ok: false, error: `Thread ${opts.threadId} not found` };
+      // Cross-tenant guard — never let a pipeline mutate another user's thread.
+      if (thread.userId !== userId) {
+        return { ok: false, error: 'set_status: thread belongs to a different user' };
+      }
+      await tm.updateThread(opts.threadId, { status: opts.value });
+      emitThreadUpdated(userId, opts.threadId, { status: opts.value, reason: opts.reason });
+      log.info('Pipeline set_status applied', {
+        namespace: 'pipeline-adapter',
+        threadId: opts.threadId,
+        status: opts.value,
+        reason: opts.reason,
+      });
+      return { ok: true, output: opts.value, metadata: { reason: opts.reason } };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
+  }
+
+  async setStage(opts: SetStageOpts): Promise<ActionResult> {
+    const { userId } = this.opts;
+    if (!isThreadStage(opts.value)) {
+      return {
+        ok: false,
+        error: `Invalid ThreadStage "${opts.value}". Allowed: ${THREAD_STAGE_VALUES.join(', ')}`,
+      };
+    }
+    try {
+      // Delegate to thread-service so the canonical thread:stage-changed
+      // event fires with fromStage/toStage and (where applicable) the
+      // archive-cleanup side effects run.
+      await updateThreadService({
+        threadId: opts.threadId,
+        userId,
+        stage: opts.value,
+      });
+      log.info('Pipeline set_stage applied', {
+        namespace: 'pipeline-adapter',
+        threadId: opts.threadId,
+        stage: opts.value,
+        reason: opts.reason,
+      });
+      return { ok: true, output: opts.value, metadata: { reason: opts.reason } };
+    } catch (err) {
+      return { ok: false, error: err instanceof Error ? err.message : String(err) };
+    }
   }
 }
 

@@ -24,6 +24,8 @@ import {
   createIdleThread,
   createAndStartThread,
   forkThread,
+  forkAndRewind,
+  rewindCode,
   sendMessage,
   stopThread,
   approveToolCall,
@@ -39,6 +41,8 @@ import {
   createThreadSchema,
   createIdleThreadSchema,
   forkThreadSchema,
+  forkAndRewindSchema,
+  rewindCodeSchema,
   sendMessageSchema,
   updateQueuedMessageSchema,
   approveToolSchema,
@@ -195,6 +199,71 @@ threadRoutes.post('/:id/fork', async (c) => {
     return c.json(newThread, 201);
   } catch (error) {
     log.error('Failed to fork thread', {
+      namespace: 'agent',
+      threadId: id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    span.end('error', error instanceof Error ? error.message : String(error));
+    return handleServiceError(c, error);
+  }
+});
+
+// POST /api/threads/:id/rewind — rewind code + truncate conversation in place
+threadRoutes.post('/:id/rewind', async (c) => {
+  const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId') ?? undefined;
+  const threadResult = await requireThread(id, userId, orgId);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(rewindCodeSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+
+  const span = requestSpan(c, 'thread.rewind_code', { threadId: id });
+  try {
+    const result = await rewindCode({
+      threadId: id,
+      messageId: parsed.value.messageId,
+      userId,
+    });
+    span.end('ok');
+    return c.json(result);
+  } catch (error) {
+    log.error('Failed to rewind thread', {
+      namespace: 'agent',
+      threadId: id,
+      error: error instanceof Error ? error.message : String(error),
+    });
+    span.end('error', error instanceof Error ? error.message : String(error));
+    return handleServiceError(c, error);
+  }
+});
+
+// POST /api/threads/:id/fork-and-rewind — fork the thread then rewind code on the fork
+threadRoutes.post('/:id/fork-and-rewind', async (c) => {
+  const id = c.req.param('id');
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId') ?? undefined;
+  const threadResult = await requireThread(id, userId, orgId);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(forkAndRewindSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+
+  const span = requestSpan(c, 'thread.fork_and_rewind', { threadId: id });
+  try {
+    const result = await forkAndRewind({
+      sourceThreadId: id,
+      messageId: parsed.value.messageId,
+      title: parsed.value.title,
+      userId,
+    });
+    span.end('ok');
+    return c.json(result, 201);
+  } catch (error) {
+    log.error('Failed to fork-and-rewind thread', {
       namespace: 'agent',
       threadId: id,
       error: error instanceof Error ? error.message : String(error),

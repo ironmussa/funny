@@ -50,6 +50,8 @@ export const insertMessage = (data: {
 }) => getServices().threads.insertMessage(data);
 export const updateMessage = (id: string, content: string) =>
   getServices().threads.updateMessage(id, content);
+export const deleteMessagesAfter = (threadId: string, anchorMessageId: string) =>
+  getServices().threads.deleteMessagesAfter(threadId, anchorMessageId);
 
 // ── Tool calls ──────────────────────────────────────────────
 export const insertToolCall = (data: {

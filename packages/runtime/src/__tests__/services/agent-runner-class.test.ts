@@ -99,6 +99,19 @@ function createMockThreadManager(): IThreadManager & {
       const existing = messages.get(id);
       if (existing) messages.set(id, { ...existing, content });
     },
+    async deleteMessagesAfter(threadId: string, anchorMessageId: string) {
+      const anchor = messages.get(anchorMessageId);
+      if (!anchor || anchor.threadId !== threadId) return 0;
+      const anchorTs = anchor.timestamp ?? '';
+      let count = 0;
+      for (const [id, m] of messages) {
+        if (m.threadId === threadId && (m.timestamp ?? '') > anchorTs) {
+          messages.delete(id);
+          count++;
+        }
+      }
+      return count;
+    },
     insertToolCall(data) {
       const id = `tc-${_nextId++}`;
       toolCalls.set(id, { id, ...data });
@@ -281,6 +294,8 @@ describe('AgentRunner class', () => {
       // promise and duplicates every prior assistant message and tool call.
       // Instead, context recovery is triggered: sessionId is cleared and
       // the prompt is rebuilt from DB, giving equivalent continuity.
+      // The Claude SDK resumes safely by sessionId, so it is exempted from
+      // this guard — this test covers a non-Claude provider (gemini).
       tmMock.threads.set('t1', { sessionId: 'sess-abc' });
 
       let capturedOpts: any = null;
@@ -290,7 +305,17 @@ describe('AgentRunner class', () => {
         return lastProcess;
       };
 
-      await runner.startAgent('t1', 'continue', '/tmp');
+      await runner.startAgent(
+        't1',
+        'continue',
+        '/tmp',
+        'gemini-3.1-pro-preview',
+        'autoEdit',
+        undefined,
+        undefined,
+        undefined,
+        'gemini',
+      );
 
       // The stale sessionId must NOT be passed to the new process —
       // recoverThreadContext clears it before the orchestrator sees it.

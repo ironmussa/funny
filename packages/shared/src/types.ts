@@ -489,6 +489,7 @@ export interface WSCommentDeletedData {
 export interface WSThreadUpdatedData {
   status?: string;
   archived?: number;
+  orchestratorManaged?: number;
   branch?: string | null;
   worktreePath?: string | null;
   mode?: string;

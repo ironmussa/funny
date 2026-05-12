@@ -37,6 +37,8 @@ function mockProvider(
     gitPush: vi.fn().mockResolvedValue({ ok: true, output: '' }),
     createPr: vi.fn().mockResolvedValue({ ok: true, output: '' }),
     notify: vi.fn().mockResolvedValue({ ok: true }),
+    setStatus: vi.fn().mockResolvedValue({ ok: true }),
+    setStage: vi.fn().mockResolvedValue({ ok: true }),
     requestApproval: vi
       .fn()
       .mockImplementation(

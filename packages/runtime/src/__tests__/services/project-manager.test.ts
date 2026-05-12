@@ -104,6 +104,7 @@ describe('ProjectManager', () => {
       .values({
         id: 'cascade-t',
         projectId: 'cascade-p',
+        userId: 'user-1',
         title: 'Thread',
         mode: 'local',
         permissionMode: 'autoEdit',
@@ -111,6 +112,7 @@ describe('ProjectManager', () => {
         cost: 0,
         archived: 0,
         createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
       })
       .run();
 

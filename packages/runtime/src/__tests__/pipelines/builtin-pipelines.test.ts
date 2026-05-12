@@ -32,6 +32,8 @@ function mockProvider(overrides: Partial<ActionProvider> = {}): ActionProvider {
     gitPush: vi.fn().mockResolvedValue({ ok: true, output: 'pushed' }),
     createPr: vi.fn().mockResolvedValue({ ok: true, output: 'https://gh/pr/1' }),
     notify: vi.fn().mockResolvedValue({ ok: true }),
+    setStatus: vi.fn().mockResolvedValue({ ok: true }),
+    setStage: vi.fn().mockResolvedValue({ ok: true }),
     requestApproval: vi.fn().mockResolvedValue({ decision: 'approve' }),
     ...overrides,
   };

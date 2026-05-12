@@ -235,7 +235,8 @@ export type RunnerDataMessage =
   | DataUpdateMessage
   | DataUpdateToolCallOutput
   | DataSaveThreadEvent
-  | DataInsertComment;
+  | DataInsertComment
+  | DataDeleteMessagesAfter;
 
 /** Runner → Server: persist a new message */
 export interface DataInsertMessage {
@@ -302,6 +303,23 @@ export interface DataSaveThreadEvent {
   };
 }
 
+/** Runner → Server: delete every message after the anchor in a thread */
+export interface DataDeleteMessagesAfter {
+  type: 'data:delete_messages_after';
+  requestId: string;
+  payload: {
+    threadId: string;
+    anchorMessageId: string;
+  };
+}
+
+/** Server → Runner: response with deleted row count */
+export interface DataDeleteMessagesAfterResponse {
+  type: 'data:delete_messages_after_response';
+  requestId: string;
+  deletedCount: number;
+}
+
 /** Runner → Server: insert a comment */
 export interface DataInsertComment {
   type: 'data:insert_comment';
@@ -316,7 +334,11 @@ export interface DataInsertComment {
 // ─── Data Persistence Responses ─────────────────────────
 // Server → Runner: acknowledge data operations
 
-export type ServerDataResponse = DataInsertMessageResponse | DataInsertToolCallResponse | DataAck;
+export type ServerDataResponse =
+  | DataInsertMessageResponse
+  | DataInsertToolCallResponse
+  | DataDeleteMessagesAfterResponse
+  | DataAck;
 
 /** Server → Runner: response with generated ID for inserted message */
 export interface DataInsertMessageResponse {

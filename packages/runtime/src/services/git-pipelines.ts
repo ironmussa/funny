@@ -626,12 +626,9 @@ async function commitFixNode(ctx: GitPipelineContext): Promise<GitPipelineContex
       throw new Error(e.type === 'PROCESS_ERROR' ? e.stderr || e.message : e.message);
     }
 
-    const shaResult = await gitRead(['rev-parse', 'HEAD'], { cwd: targetCwd, reject: false });
-    const newSha = shaResult.exitCode === 0 ? shaResult.stdout.trim() : undefined;
-
     return {
       ...ctx,
-      commitSha: newSha || ctx.commitSha,
+      commitSha: result.value.sha || ctx.commitSha,
       reviewerThreadId: null,
       correctorThreadId: null,
       patchDiff: null,

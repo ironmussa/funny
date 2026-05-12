@@ -332,6 +332,30 @@ async function dispatch(
     return { output: opts.message };
   }
 
+  if (yamlNode.set_status) {
+    const opts = interpolateObject(yamlNode.set_status, scope);
+    const threadId = resolveThreadId(ctx);
+    const result = await provider.setStatus({
+      threadId,
+      value: opts.value,
+      reason: opts.reason,
+    });
+    if (!result.ok) throw new Error(`set_status[${yamlNode.id}] failed: ${result.error}`);
+    return { output: opts.value, json: { value: opts.value, reason: opts.reason } };
+  }
+
+  if (yamlNode.set_stage) {
+    const opts = interpolateObject(yamlNode.set_stage, scope);
+    const threadId = resolveThreadId(ctx);
+    const result = await provider.setStage({
+      threadId,
+      value: opts.value,
+      reason: opts.reason,
+    });
+    if (!result.ok) throw new Error(`set_stage[${yamlNode.id}] failed: ${result.error}`);
+    return { output: opts.value, json: { value: opts.value, reason: opts.reason } };
+  }
+
   if (yamlNode.pipeline) {
     const subName = yamlNode.pipeline.name;
     const sub = options.subPipelines?.[subName];
@@ -417,6 +441,16 @@ function compileRetry(
 }
 
 // ── Helpers ─────────────────────────────────────────────────
+
+function resolveThreadId(ctx: YamlPipelineContext): string {
+  const raw = ctx.inputs.threadId;
+  if (typeof raw !== 'string' || raw.length === 0) {
+    throw new Error(
+      'set_status / set_stage actions require inputs.threadId — the dispatcher must seed it on YamlPipelineContext.inputs',
+    );
+  }
+  return raw;
+}
 
 function scopeOf(ctx: YamlPipelineContext): TemplateScope {
   // Flat shape so YAML can write `{{branch}}` (input) and `{{review.output.verdict}}` (node output).

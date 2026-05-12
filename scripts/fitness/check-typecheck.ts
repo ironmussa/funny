@@ -32,6 +32,7 @@ const PROJECTS = [
   'packages/shared/tsconfig.json',
   'packages/agent/tsconfig.json',
   'packages/sdk/tsconfig.json',
+  'packages/orchestrator/tsconfig.json',
 ];
 
 const REFRESH = process.argv.includes('--refresh');

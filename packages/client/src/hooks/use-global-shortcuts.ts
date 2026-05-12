@@ -58,6 +58,7 @@ export function useGlobalShortcuts(toggleCommandPalette: () => void, toggleFileS
         e.stopPropagation();
         log.info('shortcut.new_thread', { projectId });
         useUIStore.getState().startNewThread(projectId);
+        navigate(buildPath(`/projects/${projectId}`));
         return;
       }
 

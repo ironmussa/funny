@@ -25,6 +25,8 @@ function mockProvider(overrides: Partial<ActionProvider> = {}): ActionProvider {
     gitPush: vi.fn().mockResolvedValue({ ok: true, output: 'pushed' }),
     createPr: vi.fn().mockResolvedValue({ ok: true, output: 'https://gh/pr/1' }),
     notify: vi.fn().mockResolvedValue({ ok: true }),
+    setStatus: vi.fn().mockResolvedValue({ ok: true, output: 'running' }),
+    setStage: vi.fn().mockResolvedValue({ ok: true, output: 'in_progress' }),
     requestApproval: vi.fn().mockResolvedValue({ decision: 'approve' }),
     ...overrides,
   };
@@ -297,6 +299,82 @@ nodes:
     const result = await runPipeline(pipeline, ctxOf(provider));
     expect(result.outcome).toBe('failed');
     expect(provider.gitPush).not.toHaveBeenCalled();
+  });
+
+  test('set_status dispatches with the seeded threadId from inputs', async () => {
+    const provider = mockProvider();
+    const pipeline = compile(`
+name: lifecycle
+nodes:
+  - id: mark-running
+    set_status:
+      value: running
+      reason: "kicking off"
+    `);
+
+    const result = await runPipeline(pipeline, ctxOf(provider, { threadId: 't-42' }));
+    expect(result.outcome).toBe('completed');
+    expect(provider.setStatus).toHaveBeenCalledWith({
+      threadId: 't-42',
+      value: 'running',
+      reason: 'kicking off',
+    });
+  });
+
+  test('set_stage interpolates value/reason from inputs', async () => {
+    const provider = mockProvider();
+    const pipeline = compile(`
+name: lifecycle
+nodes:
+  - id: advance
+    set_stage:
+      value: "{{nextStage}}"
+      reason: "advanced by {{actor}}"
+    `);
+
+    const result = await runPipeline(
+      pipeline,
+      ctxOf(provider, { threadId: 't-42', nextStage: 'review', actor: 'orchestrator' }),
+    );
+    expect(result.outcome).toBe('completed');
+    expect(provider.setStage).toHaveBeenCalledWith({
+      threadId: 't-42',
+      value: 'review',
+      reason: 'advanced by orchestrator',
+    });
+  });
+
+  test('set_status fails the pipeline when threadId is missing from inputs', async () => {
+    const provider = mockProvider();
+    const pipeline = compile(`
+name: lifecycle-missing-tid
+nodes:
+  - id: mark
+    set_status:
+      value: running
+    `);
+
+    const result = await runPipeline(pipeline, ctxOf(provider, {}));
+    expect(result.outcome).toBe('failed');
+    expect(result.error).toMatch(/threadId/);
+    expect(provider.setStatus).not.toHaveBeenCalled();
+  });
+
+  test('set_stage propagates ActionProvider validation errors', async () => {
+    const provider = mockProvider({
+      setStage: vi.fn().mockResolvedValue({ ok: false, error: 'Invalid ThreadStage "wat"' }),
+    });
+    const pipeline = compile(`
+name: lifecycle-invalid
+nodes:
+  - id: bad
+    set_stage:
+      value: wat
+    `);
+
+    const result = await runPipeline(pipeline, ctxOf(provider, { threadId: 't-1' }));
+    expect(result.outcome).toBe('failed');
+    expect(result.error).toMatch(/Invalid ThreadStage/);
   });
 
   test('loop with until runs the node multiple times', async () => {

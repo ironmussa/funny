@@ -32,14 +32,20 @@ afterEach(async () => {
 // ── Tests ────────────────────────────────────────────────────
 
 describe('loadPipelines', () => {
-  test('loads the four built-in defaults from disk', async () => {
+  test('loads the built-in defaults from disk', async () => {
     const result = await loadPipelines({
       repoRoot: workDir,
       resolveAgent,
     });
 
     const names = [...result.pipelines.keys()].sort();
-    expect(names).toEqual(['code-quality', 'code-review', 'commit', 'pre-push']);
+    expect(names).toEqual([
+      'code-quality',
+      'code-review',
+      'commit',
+      'orchestrator-thread',
+      'pre-push',
+    ]);
 
     for (const p of result.pipelines.values()) {
       expect(p.source).toBe('built-in');

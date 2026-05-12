@@ -24,10 +24,11 @@
   ],
   "scripts": {
     "start": "bun ./bin/funny.js",
-    "dev": "concurrently --kill-others -n server,runner,client -c blue,green,yellow \"bun run dev:server\" \"bun run dev:runtime\" \"bun run dev:client\"",
+    "dev": "concurrently --kill-others -n server,runner,client,orch -c blue,green,yellow,magenta \"bun run dev:server\" \"bun run dev:runtime\" \"bun run dev:client\" \"bun run dev:orchestrator\"",
     "dev:server": "cd packages/server && bun --env-file ../../.env --watch src/index.ts",
     "dev:runtime": "bun --env-file ../../.env --watch --cwd packages/runtime src/index.ts",
     "dev:client": "cd packages/client && npx vite",
+    "dev:orchestrator": "bun --env-file ./.env --watch packages/orchestrator/src/bin/orchestrator.ts",
     "dev:api-acp": "bun --watch --cwd packages/api-acp src/index.ts",
     "run": "concurrently --kill-others -n server,runner,client -c blue,green,yellow \"bun run run:server\" \"bun run run:runtime\" \"bun run run:client\"",
     "run:server": "cd packages/server && bun --env-file ../../.env src/index.ts",

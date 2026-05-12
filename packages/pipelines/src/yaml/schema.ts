@@ -95,6 +95,33 @@ const notifyAction = z
   })
   .strict();
 
+// ── Thread lifecycle actions ────────────────────────────────
+//
+// `set_status` and `set_stage` are domain actions that mutate the
+// dispatched thread's lifecycle fields. They're intentionally
+// thread-implicit: the dispatcher binds them to the thread it's
+// running for, so YAML authors don't have to thread an id through.
+// Values are validated against the runtime ThreadStatus / ThreadStage
+// enums by the ActionProvider — keeping the YAML schema decoupled
+// from runtime type changes (string here, runtime narrows later).
+const setStatusAction = z
+  .object({
+    /** New ThreadStatus value (validated by the runtime provider). */
+    value: z.string(),
+    /** Optional human-readable explanation captured in WS event metadata. */
+    reason: z.string().optional(),
+  })
+  .strict();
+
+const setStageAction = z
+  .object({
+    /** New ThreadStage value (validated by the runtime provider). */
+    value: z.string(),
+    /** Optional human-readable explanation captured in WS event metadata. */
+    reason: z.string().optional(),
+  })
+  .strict();
+
 const approvalAction = z
   .object({
     /** User-facing message (Mustache-templated). */
@@ -162,6 +189,8 @@ const ACTION_KEYS = [
   'git_push',
   'create_pr',
   'notify',
+  'set_status',
+  'set_stage',
   'approval',
   'pipeline',
 ] as const;
@@ -206,6 +235,8 @@ const pipelineNodeShape = z
     git_push: gitPushAction.optional(),
     create_pr: createPrAction.optional(),
     notify: notifyAction.optional(),
+    set_status: setStatusAction.optional(),
+    set_stage: setStageAction.optional(),
     approval: approvalAction.optional(),
     pipeline: pipelineCallAction.optional(),
   })

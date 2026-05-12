@@ -7,7 +7,7 @@
 
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { resolveSDKCliPath } from '@funny/core/agents';
-import { getDiff, addToGitignore, commit, runHookCommand } from '@funny/core/git';
+import { getDiff, addToGitignore, commit, runHookCommand, gitRead } from '@funny/core/git';
 import { badRequest, internal } from '@funny/shared/errors';
 import { Hono } from 'hono';
 import { err } from 'neverthrow';
@@ -51,7 +51,11 @@ commitRoutes.post('/project/:projectId/commit', async (c) => {
   );
   if (result.isErr()) return resultToResponse(c, result);
   _gitStatusCache.delete(projectId);
-  return c.json({ ok: true, output: result.value });
+  // Best-effort SHA capture for orchestrator / automation consumers.
+  const sha = await gitRead(['rev-parse', 'HEAD'], { cwd, reject: false })
+    .then((r) => (r.exitCode === 0 ? r.stdout.trim() : undefined))
+    .catch(() => undefined);
+  return c.json({ ok: true, output: result.value, sha });
 });
 
 // POST /api/git/project/:projectId/run-hook-command
@@ -246,7 +250,7 @@ commitRoutes.post('/:threadId/commit', async (c) => {
   }
   await invalidateGitStatusCache(threadId);
   span.end('ok');
-  return c.json({ ok: true, output: result.value });
+  return c.json({ ok: true, output: result.value.output, sha: result.value.sha });
 });
 
 // POST /api/git/:threadId/run-hook-command

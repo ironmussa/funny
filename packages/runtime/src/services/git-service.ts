@@ -136,7 +136,7 @@ export function commitChanges(
   amend?: boolean,
   noVerify?: boolean,
   workflowId?: string,
-): ResultAsync<string, DomainError> {
+): ResultAsync<{ output: string; sha?: string }, DomainError> {
   return ResultAsync.fromSafePromise(resolveIdentity(userId)).andThen((identity) =>
     gitCommit(cwd, message, identity, amend, noVerify).andThen((output) => {
       // Capture the SHA of the newly created commit (non-critical)
@@ -156,7 +156,7 @@ export function commitChanges(
           workflowId,
         });
         invalidateStatusCache(cwd);
-        return output;
+        return { output, sha: commitSha };
       });
     }),
   );

@@ -18,6 +18,7 @@ import type { ThreadEvent } from '@funny/shared/thread-machine';
 import { log } from '../lib/logger.js';
 import { clearThreadTrace, metric, setThreadTrace, startSpan } from '../lib/telemetry.js';
 import type { AgentEventRouter } from './agent-event-router.js';
+import { shouldForceColdPathRecovery } from './agent-startup/cold-path-guard.js';
 import { loadProjectMcpServers } from './agent-startup/load-mcp-servers.js';
 import { recoverThreadContext } from './agent-startup/recover-context.js';
 import type { AgentStateTracker } from './agent-state.js';
@@ -139,16 +140,22 @@ export class AgentLifecycleManager {
     // assistant message and tool call in the DB. Rebuilding the prompt from
     // DB-side context (via `recoverThreadContext` below) gives the agent
     // equivalent continuity without triggering the replay race.
+    //
+    // The Claude SDK resumes by sessionId without that race, so it is
+    // exempted — forcing recovery there invalidates the prompt cache on
+    // every follow-up and regenerates ~25k tokens of cache_creation per turn.
     if (
-      currentThread?.sessionId &&
-      !this.orchestrator.isRunning(threadId) &&
-      !currentThread.contextRecoveryReason &&
-      !currentThread.mergedAt
+      shouldForceColdPathRecovery({
+        thread: currentThread,
+        isRunning: this.orchestrator.isRunning(threadId),
+        provider,
+      })
     ) {
       log.info('Cold-path session: forcing recovery to avoid loadSession replay race', {
         namespace: 'agent',
         threadId,
-        sessionId: currentThread.sessionId,
+        sessionId: currentThread!.sessionId,
+        provider,
       });
       await this.threadManager.updateThread(threadId, {
         contextRecoveryReason: 'process_lost',

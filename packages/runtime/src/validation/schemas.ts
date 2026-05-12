@@ -208,6 +208,12 @@ export const forkThreadSchema = z.object({
   title: z.string().max(500).optional(),
 });
 
+export const rewindCodeSchema = z.object({
+  messageId: z.string().min(1, 'messageId is required'),
+});
+
+export const forkAndRewindSchema = forkThreadSchema;
+
 export const updateThreadSchema = z.object({
   title: z.string().min(1).max(500).optional(),
   archived: z.boolean().optional(),

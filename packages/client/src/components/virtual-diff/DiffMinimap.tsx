@@ -59,8 +59,7 @@ export const DiffMinimap = memo(function DiffMinimap({
     const dpr = window.devicePixelRatio || 1;
     canvas.width = MINIMAP_WIDTH * dpr;
     canvas.height = height * dpr;
-    canvas.style.width = `${MINIMAP_WIDTH}px`;
-    canvas.style.height = `${height}px`;
+    Object.assign(canvas.style, { width: `${MINIMAP_WIDTH}px`, height: `${height}px` });
 
     const ctx = canvas.getContext('2d');
     if (!ctx) return;

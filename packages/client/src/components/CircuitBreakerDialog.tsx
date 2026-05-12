@@ -17,8 +17,8 @@ export function CircuitBreakerDialog() {
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background">
       <div className="flex max-w-md flex-col items-center gap-6 px-6 text-center">
-        <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
-          <WifiOff className="h-8 w-8 text-destructive" />
+        <div className="flex size-16 items-center justify-center rounded-full bg-destructive/10">
+          <WifiOff className="size-8 text-destructive" />
         </div>
 
         <div className="space-y-2">

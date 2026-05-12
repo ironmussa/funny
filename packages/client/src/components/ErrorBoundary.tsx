@@ -34,10 +34,10 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
     if (this.state.hasError) {
       return (
         <div
-          className="flex h-full w-full flex-1 flex-col items-center justify-center gap-3 p-6 text-center"
+          className="flex size-full flex-1 flex-col items-center justify-center gap-3 p-6 text-center"
           data-testid={`error-boundary-${this.props.area ?? 'unknown'}`}
         >
-          <AlertTriangle className="h-8 w-8 text-status-warning" />
+          <AlertTriangle className="size-8 text-status-warning" />
           <p className="text-sm text-muted-foreground">
             Something went wrong{this.props.area ? ` in ${this.props.area}` : ''}.
           </p>

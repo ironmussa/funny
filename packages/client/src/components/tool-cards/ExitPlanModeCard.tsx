@@ -200,7 +200,7 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-5 w-5"
+                    className="size-5"
                     onClick={() => setReviewOpen(true)}
                     data-testid="plan-expand-button"
                   >
@@ -212,7 +212,7 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
               <Button
                 variant="ghost"
                 size="icon"
-                className="h-5 w-5"
+                className="size-5"
                 onClick={handleCopy}
                 data-testid="plan-copy-button"
               >
@@ -263,7 +263,7 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
             data-testid="plan-accept"
             className="flex w-full items-center gap-3 border-b border-border/40 px-4 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
-            <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-muted-foreground/60" />
+            <CheckCircle2 className="size-4 flex-shrink-0 text-muted-foreground/60" />
             <span>{t('plan.approveAndStart', 'Approve plan and start coding')}</span>
           </button>
 
@@ -273,13 +273,13 @@ export const ExitPlanModeCard = memo(function ExitPlanModeCard({
             data-testid="plan-reject"
             className="flex w-full items-center gap-3 border-b border-border/40 px-4 py-2.5 text-left text-sm text-muted-foreground transition-colors hover:bg-accent hover:text-foreground"
           >
-            <XCircle className="h-4 w-4 flex-shrink-0 text-muted-foreground/60" />
+            <XCircle className="size-4 flex-shrink-0 text-muted-foreground/60" />
             <span>{t('thread.rejectPlan', 'Reject plan')}</span>
           </button>
 
           {/* Row 3: Custom response — single row with inline editor */}
           <div className="flex items-center gap-3 px-4 py-2.5">
-            <Pencil className="h-4 w-4 flex-shrink-0 text-muted-foreground/60" />
+            <Pencil className="size-4 flex-shrink-0 text-muted-foreground/60" />
             <div className="min-w-0 flex-1 rounded-md border border-border/40 bg-background/50 focus-within:border-ring focus-within:ring-1 focus-within:ring-ring/50">
               <div className="px-2.5 py-1.5">
                 <PromptEditor

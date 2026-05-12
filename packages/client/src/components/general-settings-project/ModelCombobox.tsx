@@ -1,5 +1,5 @@
 import { Check, ChevronsUpDown } from 'lucide-react';
-import { useState } from 'react';
+import { useId, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -28,6 +28,7 @@ interface Props {
  */
 export function ModelCombobox({ value, onChange, options, placeholder, searchPlaceholder }: Props) {
   const [open, setOpen] = useState(false);
+  const listId = useId();
   const selected = options.find((o) => o.value === value);
 
   return (
@@ -37,6 +38,7 @@ export function ModelCombobox({ value, onChange, options, placeholder, searchPla
           variant="outline"
           role="combobox"
           aria-expanded={open}
+          aria-controls={listId}
           className="h-8 w-[160px] justify-between text-xs"
         >
           <span className="truncate">{selected?.label ?? placeholder}</span>
@@ -46,7 +48,7 @@ export function ModelCombobox({ value, onChange, options, placeholder, searchPla
       <PopoverContent className="w-[200px] p-0" align="start">
         <Command>
           <CommandInput placeholder={searchPlaceholder} className="h-8 text-xs" />
-          <CommandList>
+          <CommandList id={listId}>
             <CommandEmpty>No results.</CommandEmpty>
             <CommandGroup>
               {options.map((opt) => (

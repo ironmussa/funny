@@ -25,11 +25,14 @@ export function ProjectUrlPatterns({
   onSave: (projectId: string, data: { urls: string[] | null }) => void;
 }) {
   const [urls, setUrls] = useState<string[]>(currentUrls);
+  const [lastSeenUrls, setLastSeenUrls] = useState(currentUrls);
   const { t } = useTranslation();
 
-  useEffect(() => {
+  // Reset local edits when the parent passes a new currentUrls reference.
+  if (currentUrls !== lastSeenUrls) {
+    setLastSeenUrls(currentUrls);
     setUrls(currentUrls);
-  }, [currentUrls]);
+  }
 
   const save = (newUrls: string[]) => {
     const filtered = newUrls.filter((u) => u.trim() !== '');
@@ -83,7 +86,7 @@ export function ProjectUrlPatterns({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => setUrls([...urls, ''])}
+          onClick={() => setUrls((prev) => [...prev, ''])}
           data-testid="settings-url-pattern-add"
         >
           <Plus className="icon-xs mr-1.5" />

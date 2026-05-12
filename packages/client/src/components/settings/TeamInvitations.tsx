@@ -141,7 +141,7 @@ export function TeamInvitations() {
       </h3>
       <div className="overflow-hidden rounded-lg border border-border/50">
         {loading ? (
-          <div className="px-4 py-6 text-center text-sm text-muted-foreground">Loading...</div>
+          <div className="px-4 py-6 text-center text-sm text-muted-foreground">Loading…</div>
         ) : invitations.length === 0 ? (
           <div className="px-4 py-6 text-center text-sm text-muted-foreground">
             No pending invitations
@@ -163,7 +163,7 @@ export function TeamInvitations() {
                 <Badge variant="secondary">{inv.role}</Badge>
                 <TooltipIconButton
                   size="icon"
-                  className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                  className="size-7 text-muted-foreground hover:text-destructive"
                   onClick={() => handleCancel(inv.id)}
                   data-testid={`team-invitation-cancel-${inv.id}`}
                   tooltip={t('common.cancel')}

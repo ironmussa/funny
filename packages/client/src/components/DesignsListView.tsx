@@ -69,7 +69,7 @@ export function DesignsListView() {
   const projectName = project?.name ?? '';
 
   return (
-    <div className="flex h-full w-full flex-col" data-testid="designs-list-view">
+    <div className="flex size-full flex-col" data-testid="designs-list-view">
       <header className="flex h-12 flex-shrink-0 items-center gap-2 border-b border-border bg-background px-4">
         <Button
           data-testid="designs-list-back"
@@ -179,7 +179,7 @@ function NewDesignCard({ onClick, label, hint }: NewDesignCardProps) {
         'hover:border-primary hover:bg-accent/30',
       )}
     >
-      <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary group-hover:bg-primary/20">
+      <div className="flex size-12 items-center justify-center rounded-full bg-primary/10 text-primary group-hover:bg-primary/20">
         <Plus className="icon-base" />
       </div>
       <span className="text-sm font-medium">{label}</span>
@@ -206,7 +206,7 @@ function DesignCard({ design, typeLabel, onClick }: DesignCardProps) {
       )}
     >
       <div className="flex aspect-[4/3] w-full items-center justify-center bg-muted/40">
-        <Sparkles className="h-8 w-8 text-muted-foreground/60" />
+        <Sparkles className="size-8 text-muted-foreground/60" />
       </div>
       <div className="flex flex-col gap-1 border-t border-border px-3 py-2">
         <span className="truncate text-sm font-medium">{design.name}</span>

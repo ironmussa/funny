@@ -235,7 +235,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
           <Tooltip>
             <TooltipTrigger asChild>
               <div className="flex min-w-0 items-center gap-1 text-[10px] text-muted-foreground">
-                <GitBranch className="h-3 w-3 shrink-0" />
+                <GitBranch className="size-3 shrink-0" />
                 <span
                   className="block max-w-[45%] overflow-hidden text-ellipsis whitespace-nowrap"
                   dir="rtl"
@@ -280,7 +280,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
   if (!projectId) {
     return (
       <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
-        <GitPullRequest className="h-8 w-8 opacity-40" />
+        <GitPullRequest className="size-8 opacity-40" />
         <p className="text-xs">
           {t('review.pullRequests.noProject', 'Select a project to view pull requests')}
         </p>
@@ -340,7 +340,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
             className="flex min-w-0 items-center gap-1.5 rounded-md bg-sidebar-accent/50 px-2 py-0.5 text-xs text-muted-foreground"
             data-testid="prs-branch-focus-indicator"
           >
-            <GitBranch className="h-3 w-3 shrink-0" />
+            <GitBranch className="size-3 shrink-0" />
             <span className="truncate font-mono text-[11px]">
               <bdi>{currentBranch}</bdi>
             </span>
@@ -435,7 +435,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
               className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-muted-foreground"
               data-testid="prs-branch-empty"
             >
-              <GitPullRequest className="h-8 w-8 opacity-40" />
+              <GitPullRequest className="size-8 opacity-40" />
               <p className="text-center text-xs">
                 {t('review.pullRequests.noPRForBranch', 'No pull request for this branch yet')}
               </p>
@@ -458,7 +458,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
           )
         ) : prs.length === 0 ? (
           <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
-            <GitPullRequest className="h-8 w-8 opacity-40" />
+            <GitPullRequest className="size-8 opacity-40" />
             <p className="text-xs">
               {state === 'open'
                 ? t('review.pullRequests.noOpenPRs', 'No open pull requests')
@@ -475,7 +475,7 @@ export function PullRequestsTab({ visible }: PullRequestsTabProps) {
                   className="flex items-center gap-1.5 border-b border-sidebar-border bg-sidebar-accent/30 px-3 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground"
                   data-testid="prs-current-branch-header"
                 >
-                  <GitBranch className="h-3 w-3" />
+                  <GitBranch className="size-3" />
                   <span className="truncate">
                     {t('review.pullRequests.currentBranch', 'Current branch')}
                     {currentBranch ? (

@@ -237,7 +237,7 @@ export const WorkflowEventGroup = memo(function WorkflowEventGroup({
         </span>
         {activeProgress.stepLabel && (
           <span className="truncate font-mono text-muted-foreground/70">
-            — {activeProgress.stepLabel}
+            : {activeProgress.stepLabel}
           </span>
         )}
         {badgeCount > 0 && (

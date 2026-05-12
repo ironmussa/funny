@@ -38,10 +38,10 @@ import { StartupCommandsPopover } from './StartupCommandsPopover';
 export function HeaderRightActions() {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
-  const location = useLocation();
+  const { pathname, search: locationSearch } = useLocation();
   const updatePanelParam = useCallback(
     (panel: string | null) => {
-      const params = new URLSearchParams(location.search);
+      const params = new URLSearchParams(locationSearch);
       if (panel) {
         params.set('panel', panel);
       } else {
@@ -51,9 +51,9 @@ export function HeaderRightActions() {
         params.delete('tab');
       }
       const search = params.toString();
-      navigate(`${location.pathname}${search ? `?${search}` : ''}`, { replace: true });
+      navigate(`${pathname}${search ? `?${search}` : ''}`, { replace: true });
     },
-    [location.pathname, location.search, navigate],
+    [pathname, locationSearch, navigate],
   );
   const activeThreadId = useThreadId();
   const activeThreadProjectId = useThreadProjectId();
@@ -374,8 +374,8 @@ function SyncArrows({
         className="inline-flex items-center text-foreground"
         data-testid="header-review-sync-arrows"
       >
-        {hasPendingPush && <ArrowUp className="h-3 w-3" strokeWidth={2.5} />}
-        {hasPendingPull && <ArrowDown className="h-3 w-3" strokeWidth={2.5} />}
+        {hasPendingPush && <ArrowUp className="size-3" strokeWidth={2.5} />}
+        {hasPendingPull && <ArrowDown className="size-3" strokeWidth={2.5} />}
       </span>
     </>
   );

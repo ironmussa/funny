@@ -38,21 +38,21 @@ interface PRSummaryCardProps {
 
 function CheckIcon({ check }: { check: CICheck }) {
   if (check.status !== 'completed') {
-    return <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin text-yellow-500" />;
+    return <Loader2 className="size-3.5 shrink-0 animate-spin text-yellow-500" />;
   }
   switch (check.conclusion) {
     case 'success':
     case 'neutral':
     case 'skipped':
-      return <CheckCircle2 className="h-3.5 w-3.5 shrink-0 text-green-500" />;
+      return <CheckCircle2 className="size-3.5 shrink-0 text-green-500" />;
     case 'failure':
     case 'timed_out':
     case 'action_required':
-      return <XCircle className="h-3.5 w-3.5 shrink-0 text-red-500" />;
+      return <XCircle className="size-3.5 shrink-0 text-red-500" />;
     case 'cancelled':
-      return <Circle className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />;
+      return <Circle className="size-3.5 shrink-0 text-muted-foreground" />;
     default:
-      return <Clock className="h-3.5 w-3.5 shrink-0 text-yellow-500" />;
+      return <Clock className="size-3.5 shrink-0 text-yellow-500" />;
   }
 }
 
@@ -72,7 +72,7 @@ export function PRStateBadge({
         size="xxs"
         className="gap-1 border-purple-500/30 bg-purple-500/15 text-purple-400"
       >
-        <GitMerge className="h-2.5 w-2.5" />
+        <GitMerge className="size-2.5" />
         Merged
       </Badge>
     );
@@ -84,7 +84,7 @@ export function PRStateBadge({
         size="xxs"
         className="gap-1 border-red-500/30 bg-red-500/15 text-red-400"
       >
-        <GitPullRequestClosed className="h-2.5 w-2.5" />
+        <GitPullRequestClosed className="size-2.5" />
         Closed
       </Badge>
     );
@@ -96,7 +96,7 @@ export function PRStateBadge({
         size="xxs"
         className="gap-1 border-muted-foreground/30 bg-muted text-muted-foreground"
       >
-        <GitPullRequest className="h-2.5 w-2.5" />
+        <GitPullRequest className="size-2.5" />
         Draft
       </Badge>
     );
@@ -107,7 +107,7 @@ export function PRStateBadge({
       size="xxs"
       className="gap-1 border-green-500/30 bg-green-500/15 text-green-400"
     >
-      <GitPullRequest className="h-2.5 w-2.5" />
+      <GitPullRequest className="size-2.5" />
       Open
     </Badge>
   );
@@ -119,19 +119,19 @@ function ReviewDecisionBadge({ decision }: { decision: string | null }) {
     case 'APPROVED':
       return (
         <span className="flex items-center gap-1 text-[10px] text-green-400">
-          <CheckCircle2 className="h-3 w-3" /> Approved
+          <CheckCircle2 className="size-3" /> Approved
         </span>
       );
     case 'CHANGES_REQUESTED':
       return (
         <span className="flex items-center gap-1 text-[10px] text-red-400">
-          <AlertCircle className="h-3 w-3" /> Changes requested
+          <AlertCircle className="size-3" /> Changes requested
         </span>
       );
     case 'REVIEW_REQUIRED':
       return (
         <span className="flex items-center gap-1 text-[10px] text-yellow-400">
-          <Clock className="h-3 w-3" /> Review required
+          <Clock className="size-3" /> Review required
         </span>
       );
     default:
@@ -145,13 +145,13 @@ function MergeStatus({ mergeable, merged }: { mergeable: string; merged: boolean
     case 'mergeable':
       return (
         <span className="flex items-center gap-1 text-[10px] text-green-400">
-          <GitMerge className="h-3 w-3" /> Ready to merge
+          <GitMerge className="size-3" /> Ready to merge
         </span>
       );
     case 'conflicting':
       return (
         <span className="flex items-center gap-1 text-[10px] text-red-400">
-          <AlertCircle className="h-3 w-3" /> Merge conflicts
+          <AlertCircle className="size-3" /> Merge conflicts
         </span>
       );
     default:
@@ -198,7 +198,7 @@ export function PRSummaryCard({
 
   // Sort checks: failures first, then pending, then success
   const sortedChecks = detail?.checks
-    ? [...detail.checks].sort((a, b) => {
+    ? detail.checks.toSorted((a, b) => {
         const priority = (c: CICheck) => {
           if (c.status !== 'completed') return 1;
           if (
@@ -274,7 +274,7 @@ export function PRSummaryCard({
               disabled={loadingDetail}
               data-testid="pr-summary-refresh"
             >
-              <RefreshCw className={cn('h-3 w-3', loadingDetail && 'animate-spin')} />
+              <RefreshCw className={cn('size-3', loadingDetail && 'animate-spin')} />
             </Button>
           </TooltipTrigger>
           <TooltipContent>Refresh PR data</TooltipContent>
@@ -288,7 +288,7 @@ export function PRSummaryCard({
               className="text-muted-foreground hover:text-foreground"
               data-testid="pr-summary-external-link"
             >
-              <ExternalLink className="h-3 w-3" />
+              <ExternalLink className="size-3" />
             </a>
           </TooltipTrigger>
           <TooltipContent>Open on GitHub</TooltipContent>
@@ -321,11 +321,7 @@ export function PRSummaryCard({
             className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
             data-testid="pr-summary-checks-toggle"
           >
-            {checksOpen ? (
-              <ChevronDown className="h-3 w-3" />
-            ) : (
-              <ChevronRight className="h-3 w-3" />
-            )}
+            {checksOpen ? <ChevronDown className="size-3" /> : <ChevronRight className="size-3" />}
             <span>
               CI Checks ({detail.checks_passed}/{totalChecks} passed)
               {detail.checks_failed > 0 && (
@@ -353,7 +349,7 @@ export function PRSummaryCard({
                       className="ml-auto shrink-0 text-muted-foreground hover:text-foreground"
                       data-testid={`pr-check-link-${check.id}`}
                     >
-                      <ExternalLink className="h-2.5 w-2.5" />
+                      <ExternalLink className="size-2.5" />
                     </a>
                   )}
                 </div>
@@ -375,8 +371,8 @@ export function PRSummaryCard({
       {/* Loading skeleton when no detail yet */}
       {!detail && loadingDetail && (
         <div className="mt-1 flex items-center gap-2 text-muted-foreground">
-          <Loader2 className="h-3 w-3 animate-spin" />
-          <span className="text-[10px]">Loading PR details...</span>
+          <Loader2 className="size-3 animate-spin" />
+          <span className="text-[10px]">Loading PR details…</span>
         </div>
       )}
     </div>

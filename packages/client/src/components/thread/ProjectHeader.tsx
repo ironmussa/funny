@@ -760,8 +760,6 @@ export const ProjectHeader = memo(function ProjectHeader({
     [location.pathname, location.search, navigate],
   );
 
-  if (!projectId) return null;
-
   const handleOpenInEditor = async (editor: Editor) => {
     if (!project) return;
     const folderPath = activeThreadWorktreePath || project.path;
@@ -789,6 +787,8 @@ export const ProjectHeader = memo(function ProjectHeader({
     const qs = params.toString();
     navigate(buildPath(qs ? `/kanban?${qs}` : '/kanban'));
   }, [kanbanContext, navigate, setReviewPaneOpen]);
+
+  if (!projectId) return null;
 
   return (
     <div className="h-12 border-b border-border px-4 py-2">
@@ -915,7 +915,7 @@ export const ProjectHeader = memo(function ProjectHeader({
                     >
                       {activeTemplate.color && (
                         <span
-                          className="inline-block h-2 w-2 rounded-full"
+                          className="inline-block size-2 rounded-full"
                           style={{ backgroundColor: activeTemplate.color }}
                         />
                       )}

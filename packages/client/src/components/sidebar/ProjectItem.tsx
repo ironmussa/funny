@@ -275,8 +275,8 @@ export const ProjectItem = memo(function ProjectItem({
 
   // Memoize sorted & sliced threads to avoid O(n log n) sort on every render
   const visibleThreads = useMemo(() => {
-    return [...threads]
-      .sort((a, b) => {
+    return threads
+      .toSorted((a, b) => {
         if (a.pinned && !b.pinned) return -1;
         if (!a.pinned && b.pinned) return 1;
         return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
@@ -549,7 +549,7 @@ export const ProjectItem = memo(function ProjectItem({
             >
               {Array.from({ length: 3 }).map((_, i) => (
                 <div key={i} className="flex items-center gap-1.5 py-1">
-                  <Skeleton className="h-3.5 w-3.5 rounded-full" />
+                  <Skeleton className="size-3.5 rounded-full" />
                   <Skeleton className="h-3" style={{ width: `${55 + ((i * 23) % 30)}%` }} />
                 </div>
               ))}

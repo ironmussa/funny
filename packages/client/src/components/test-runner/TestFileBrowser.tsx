@@ -124,7 +124,7 @@ function SpecItem({
             <TooltipIconButton
               data-testid={`test-spec-stop-${spec.file}-${spec.line}`}
               size="icon"
-              className="h-5 w-5 text-destructive opacity-100 hover:text-destructive"
+              className="size-5 text-destructive opacity-100 hover:text-destructive"
               onClick={onStop}
               tooltip={t('common.stop')}
             >
@@ -134,7 +134,7 @@ function SpecItem({
             <TooltipIconButton
               data-testid={`test-spec-play-${spec.file}-${spec.line}`}
               size="icon"
-              className="h-5 w-5 opacity-0 group-hover:opacity-100"
+              className="size-5 opacity-0 group-hover:opacity-100"
               disabled={isRunning}
               onClick={() => onRunSpec(spec.file, spec.line)}
               tooltip={t('common.run')}
@@ -157,7 +157,7 @@ function SpecItem({
             <TooltipIconButton
               data-testid={`test-spec-play-${spec.file}-${spec.line}-${project}`}
               size="icon"
-              className="h-5 w-5 opacity-0 group-hover:opacity-100"
+              className="size-5 opacity-0 group-hover:opacity-100"
               disabled={isRunning}
               onClick={() => onRunSpec(spec.file, spec.line, project)}
               tooltip={`${t('common.run')} (${project})`}
@@ -317,6 +317,8 @@ function TreeItem({
   onExpandFile,
   onStop,
 }: TreeItemProps) {
+  const { t } = useTranslation();
+  const [menuOpen, setMenuOpen] = useState(false);
   const isExpanded = expandedFolders.has(node.path);
 
   if (node.isFolder) {
@@ -371,13 +373,11 @@ function TreeItem({
   }
 
   // File node — expandable to show individual specs
-  const { t } = useTranslation();
   const status = fileStatuses[node.path];
   const isFileExpanded = expandedFiles.has(node.path);
   const specs = fileSpecs[node.path];
   const suites = fileSuites[node.path];
   const isSpecsLoading = specsLoading[node.path];
-  const [menuOpen, setMenuOpen] = useState(false);
 
   const handleToggleFile = () => {
     toggleFile(node.path);
@@ -414,7 +414,7 @@ function TreeItem({
         </button>
         <FileExtensionIcon
           filePath={node.path}
-          className="h-4 w-4 flex-shrink-0 text-muted-foreground/80"
+          className="size-4 flex-shrink-0 text-muted-foreground/80"
         />
         <span className="flex-1 truncate font-mono-explorer text-xs">{node.name}</span>
         <StatusDot status={status} />
@@ -423,7 +423,7 @@ function TreeItem({
             data-testid={`test-stop-${node.path}`}
             variant="ghost"
             size="icon"
-            className="h-5 w-5 text-destructive opacity-100 hover:text-destructive"
+            className="size-5 text-destructive opacity-100 hover:text-destructive"
             onClick={(e) => {
               e.stopPropagation();
               onStop();
@@ -436,7 +436,7 @@ function TreeItem({
             data-testid={`test-play-${node.path}`}
             variant="ghost"
             size="icon"
-            className="h-5 w-5 opacity-0 group-hover:opacity-100"
+            className="size-5 opacity-0 group-hover:opacity-100"
             disabled={isRunning}
             onClick={(e) => {
               e.stopPropagation();
@@ -451,7 +451,7 @@ function TreeItem({
             <button
               data-testid={`test-file-menu-${node.path}`}
               className={cn(
-                'flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-sm hover:bg-sidebar-accent',
+                'flex size-6 flex-shrink-0 items-center justify-center rounded-sm hover:bg-sidebar-accent',
                 menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100',
               )}
               onClick={(e) => e.stopPropagation()}
@@ -484,7 +484,7 @@ function TreeItem({
             style={{ paddingLeft: `${8 + (depth + 1) * INDENT_PX}px` }}
           >
             <Loader2 className="icon-xs animate-spin" />
-            Discovering tests...
+            Discovering tests…
           </div>
         ) : suites && suites.length > 0 ? (
           suites.map((suite) => (
@@ -736,7 +736,7 @@ export function TestFileBrowser({
         {isLoading ? (
           <div className="flex items-center justify-center py-8 text-sm text-muted-foreground">
             <Loader2 className="icon-base mr-2 animate-spin" />
-            Loading tests...
+            Loading tests…
           </div>
         ) : files.length === 0 ? (
           <div className="px-4 py-8 text-center text-sm text-muted-foreground">

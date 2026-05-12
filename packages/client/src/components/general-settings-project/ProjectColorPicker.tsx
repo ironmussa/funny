@@ -43,7 +43,7 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
         <button
           onClick={() => onSave(projectId, { color: null })}
           className={cn(
-            'h-7 w-7 rounded-md border-2 transition-all flex items-center justify-center',
+            'size-7 rounded-md border-2 transition-all flex items-center justify-center',
             !currentColor
               ? 'border-primary shadow-sm'
               : 'border-border hover:border-muted-foreground',
@@ -52,14 +52,14 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
           aria-pressed={!currentColor}
           data-testid="project-color-none"
         >
-          <div className="h-4 w-4 rounded-sm bg-gradient-to-br from-muted-foreground/20 to-muted-foreground/40" />
+          <div className="size-4 rounded-sm bg-gradient-to-br from-muted-foreground/20 to-muted-foreground/40" />
         </button>
         {PASTEL_COLORS.map((color) => (
           <button
             key={color}
             onClick={() => onSave(projectId, { color })}
             className={cn(
-              'h-7 w-7 rounded-md border-2 transition-all',
+              'size-7 rounded-md border-2 transition-all',
               currentColor === color
                 ? 'border-primary shadow-sm scale-110'
                 : 'border-transparent hover:border-muted-foreground',
@@ -78,14 +78,14 @@ export function ProjectColorPicker({ projectId, currentColor, onSave }: Props) {
               aria-label="Open custom color picker"
               data-testid="project-color-custom-trigger"
               className={cn(
-                'h-8 w-8 rounded-lg border-2 shadow-sm cursor-pointer transition-all hover:scale-105',
+                'size-8 rounded-lg border-2 shadow-sm cursor-pointer transition-all hover:scale-105',
                 currentColor ? 'border-primary/50' : 'border-border',
               )}
               style={{ backgroundColor: currentColor || 'transparent' }}
             >
               {!currentColor && (
-                <div className="flex h-full w-full items-center justify-center rounded-md bg-gradient-to-br from-muted-foreground/10 to-muted-foreground/30">
-                  <span className="text-xs text-muted-foreground">—</span>
+                <div className="flex size-full items-center justify-center rounded-md bg-gradient-to-br from-muted-foreground/10 to-muted-foreground/30">
+                  <span className="text-xs text-muted-foreground">-</span>
                 </div>
               )}
             </button>

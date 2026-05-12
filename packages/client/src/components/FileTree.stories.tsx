@@ -95,6 +95,35 @@ type Story = StoryObj<typeof meta>;
 
 /* ── Stories ── */
 
+function DefaultStory() {
+  const [selected, setSelected] = useState<string | null>(
+    'packages/client/src/components/ReviewPane.tsx',
+  );
+  const [checked, setChecked] = useState(new Set(mockFiles.map((f) => f.path)));
+
+  return (
+    <div className="w-80 rounded-md border border-border bg-sidebar">
+      <FileTree
+        files={mockFiles}
+        selectedFile={selected}
+        checkedFiles={checked}
+        onFileClick={(path) => setSelected(path)}
+        onToggleFile={(path) => {
+          setChecked((prev) => {
+            const next = new Set(prev);
+            if (next.has(path)) next.delete(path);
+            else next.add(path);
+            return next;
+          });
+        }}
+        onRevertFile={noop}
+        onIgnore={noop}
+        basePath="/home/user/projects/funny"
+      />
+    </div>
+  );
+}
+
 /** Full file tree with checkboxes and all menu actions. */
 export const Default: Story = {
   args: {
@@ -102,35 +131,25 @@ export const Default: Story = {
     onFileClick: noop,
     basePath: '/home/user/projects/funny',
   },
-  render: () => {
-    const [selected, setSelected] = useState<string | null>(
-      'packages/client/src/components/ReviewPane.tsx',
-    );
-    const [checked, setChecked] = useState(new Set(mockFiles.map((f) => f.path)));
-
-    return (
-      <div className="w-80 rounded-md border border-border bg-sidebar">
-        <FileTree
-          files={mockFiles}
-          selectedFile={selected}
-          checkedFiles={checked}
-          onFileClick={(path) => setSelected(path)}
-          onToggleFile={(path) => {
-            setChecked((prev) => {
-              const next = new Set(prev);
-              if (next.has(path)) next.delete(path);
-              else next.add(path);
-              return next;
-            });
-          }}
-          onRevertFile={noop}
-          onIgnore={noop}
-          basePath="/home/user/projects/funny"
-        />
-      </div>
-    );
-  },
+  render: () => <DefaultStory />,
 };
+
+function WithoutCheckboxesStory() {
+  const [selected, setSelected] = useState<string | null>(
+    'packages/client/src/components/FileTree.tsx',
+  );
+
+  return (
+    <div className="w-80 rounded-md border border-border bg-sidebar">
+      <FileTree
+        files={mockFiles}
+        selectedFile={selected}
+        onFileClick={(path) => setSelected(path)}
+        basePath="/home/user/projects/funny"
+      />
+    </div>
+  );
+}
 
 /** Without checkboxes (read-only navigation, like in ExpandedDiffDialog). */
 export const WithoutCheckboxes: Story = {
@@ -138,23 +157,38 @@ export const WithoutCheckboxes: Story = {
     files: mockFiles,
     onFileClick: noop,
   },
-  render: () => {
-    const [selected, setSelected] = useState<string | null>(
-      'packages/client/src/components/FileTree.tsx',
-    );
-
-    return (
-      <div className="w-80 rounded-md border border-border bg-sidebar">
-        <FileTree
-          files={mockFiles}
-          selectedFile={selected}
-          onFileClick={(path) => setSelected(path)}
-          basePath="/home/user/projects/funny"
-        />
-      </div>
-    );
-  },
+  render: () => <WithoutCheckboxesStory />,
 };
+
+function LargerFontStory() {
+  const [selected, setSelected] = useState<string | null>(
+    'packages/client/src/components/ReviewPane.tsx',
+  );
+  const [checked, setChecked] = useState(new Set(mockFiles.map((f) => f.path)));
+
+  return (
+    <div className="w-80 rounded-md border border-border bg-sidebar">
+      <FileTree
+        files={mockFiles}
+        selectedFile={selected}
+        checkedFiles={checked}
+        fontSize="text-sm"
+        onFileClick={(path) => setSelected(path)}
+        onToggleFile={(path) => {
+          setChecked((prev) => {
+            const next = new Set(prev);
+            if (next.has(path)) next.delete(path);
+            else next.add(path);
+            return next;
+          });
+        }}
+        onRevertFile={noop}
+        onIgnore={noop}
+        basePath="/home/user/projects/funny"
+      />
+    </div>
+  );
+}
 
 /** With text-sm font size (as used in ExpandedDiffDialog). */
 export const LargerFont: Story = {
@@ -163,35 +197,7 @@ export const LargerFont: Story = {
     files: mockFiles,
     onFileClick: noop,
   },
-  render: () => {
-    const [selected, setSelected] = useState<string | null>(
-      'packages/client/src/components/ReviewPane.tsx',
-    );
-    const [checked, setChecked] = useState(new Set(mockFiles.map((f) => f.path)));
-
-    return (
-      <div className="w-80 rounded-md border border-border bg-sidebar">
-        <FileTree
-          files={mockFiles}
-          selectedFile={selected}
-          checkedFiles={checked}
-          fontSize="text-sm"
-          onFileClick={(path) => setSelected(path)}
-          onToggleFile={(path) => {
-            setChecked((prev) => {
-              const next = new Set(prev);
-              if (next.has(path)) next.delete(path);
-              else next.add(path);
-              return next;
-            });
-          }}
-          onRevertFile={noop}
-          onIgnore={noop}
-          basePath="/home/user/projects/funny"
-        />
-      </div>
-    );
-  },
+  render: () => <LargerFontStory />,
 };
 
 /** Empty state — no files. */
@@ -208,25 +214,97 @@ export const Empty: Story = {
   ),
 };
 
+function SingleFileStory() {
+  const files: FileDiffSummary[] = [
+    { path: 'index.ts', status: 'modified', staged: false, additions: 5, deletions: 2 },
+  ];
+  const [selected, setSelected] = useState<string | null>('index.ts');
+
+  return (
+    <div className="w-80 rounded-md border border-border bg-sidebar">
+      <FileTree files={files} selectedFile={selected} onFileClick={(path) => setSelected(path)} />
+    </div>
+  );
+}
+
 /** Single file with no folders. */
 export const SingleFile: Story = {
   args: {
     files: [{ path: 'index.ts', status: 'modified', staged: false, additions: 5, deletions: 2 }],
     onFileClick: noop,
   },
-  render: () => {
-    const files: FileDiffSummary[] = [
-      { path: 'index.ts', status: 'modified', staged: false, additions: 5, deletions: 2 },
-    ];
-    const [selected, setSelected] = useState<string | null>('index.ts');
-
-    return (
-      <div className="w-80 rounded-md border border-border bg-sidebar">
-        <FileTree files={files} selectedFile={selected} onFileClick={(path) => setSelected(path)} />
-      </div>
-    );
-  },
+  render: () => <SingleFileStory />,
 };
+
+function DeepNestingStory() {
+  const files: FileDiffSummary[] = [
+    {
+      path: 'packages/client/src/components/ui/button.tsx',
+      status: 'modified',
+      staged: false,
+      additions: 3,
+      deletions: 1,
+    },
+    {
+      path: 'packages/client/src/components/ui/input.tsx',
+      status: 'modified',
+      staged: false,
+      additions: 7,
+      deletions: 2,
+    },
+    {
+      path: 'packages/client/src/components/ui/dialog.tsx',
+      status: 'added',
+      staged: false,
+      additions: 120,
+      deletions: 0,
+    },
+    {
+      path: 'packages/server/src/routes/auth.ts',
+      status: 'deleted',
+      staged: false,
+      additions: 0,
+      deletions: 80,
+    },
+    {
+      path: 'packages/server/src/routes/projects.ts',
+      status: 'modified',
+      staged: true,
+      additions: 15,
+      deletions: 5,
+    },
+    {
+      path: 'packages/server/src/middleware/cors.ts',
+      status: 'added',
+      staged: false,
+      additions: 25,
+      deletions: 0,
+    },
+  ];
+  const [selected, setSelected] = useState<string | null>(null);
+  const [checked, setChecked] = useState(new Set(files.map((f) => f.path)));
+
+  return (
+    <div className="w-80 rounded-md border border-border bg-sidebar">
+      <FileTree
+        files={files}
+        selectedFile={selected}
+        checkedFiles={checked}
+        onFileClick={(path) => setSelected(path)}
+        onToggleFile={(path) => {
+          setChecked((prev) => {
+            const next = new Set(prev);
+            if (next.has(path)) next.delete(path);
+            else next.add(path);
+            return next;
+          });
+        }}
+        onRevertFile={noop}
+        onIgnore={noop}
+      />
+    </div>
+  );
+}
 
 /** Deep nesting with path compaction. */
 export const DeepNesting: Story = {
@@ -234,73 +312,5 @@ export const DeepNesting: Story = {
     files: mockFiles,
     onFileClick: noop,
   },
-  render: () => {
-    const files: FileDiffSummary[] = [
-      {
-        path: 'packages/client/src/components/ui/button.tsx',
-        status: 'modified',
-        staged: false,
-        additions: 3,
-        deletions: 1,
-      },
-      {
-        path: 'packages/client/src/components/ui/input.tsx',
-        status: 'modified',
-        staged: false,
-        additions: 7,
-        deletions: 2,
-      },
-      {
-        path: 'packages/client/src/components/ui/dialog.tsx',
-        status: 'added',
-        staged: false,
-        additions: 120,
-        deletions: 0,
-      },
-      {
-        path: 'packages/server/src/routes/auth.ts',
-        status: 'deleted',
-        staged: false,
-        additions: 0,
-        deletions: 80,
-      },
-      {
-        path: 'packages/server/src/routes/projects.ts',
-        status: 'modified',
-        staged: true,
-        additions: 15,
-        deletions: 5,
-      },
-      {
-        path: 'packages/server/src/middleware/cors.ts',
-        status: 'added',
-        staged: false,
-        additions: 25,
-        deletions: 0,
-      },
-    ];
-    const [selected, setSelected] = useState<string | null>(null);
-    const [checked, setChecked] = useState(new Set(files.map((f) => f.path)));
-
-    return (
-      <div className="w-80 rounded-md border border-border bg-sidebar">
-        <FileTree
-          files={files}
-          selectedFile={selected}
-          checkedFiles={checked}
-          onFileClick={(path) => setSelected(path)}
-          onToggleFile={(path) => {
-            setChecked((prev) => {
-              const next = new Set(prev);
-              if (next.has(path)) next.delete(path);
-              else next.add(path);
-              return next;
-            });
-          }}
-          onRevertFile={noop}
-          onIgnore={noop}
-        />
-      </div>
-    );
-  },
+  render: () => <DeepNestingStory />,
 };

@@ -569,9 +569,9 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
               className="flex items-center gap-2.5 py-1 text-sm text-muted-foreground"
             >
               <div className="flex items-center gap-1">
-                <span className="inline-block h-1.5 w-1.5 animate-[thinking_1.4s_ease-in-out_infinite] rounded-full bg-muted-foreground/60" />
-                <span className="inline-block h-1.5 w-1.5 animate-[thinking_1.4s_ease-in-out_0.2s_infinite] rounded-full bg-muted-foreground/60" />
-                <span className="inline-block h-1.5 w-1.5 animate-[thinking_1.4s_ease-in-out_0.4s_infinite] rounded-full bg-muted-foreground/60" />
+                <span className="inline-block size-1.5 animate-[thinking_1.4s_ease-in-out_infinite] rounded-full bg-muted-foreground/60" />
+                <span className="inline-block size-1.5 animate-[thinking_1.4s_ease-in-out_0.2s_infinite] rounded-full bg-muted-foreground/60" />
+                <span className="inline-block size-1.5 animate-[thinking_1.4s_ease-in-out_0.4s_infinite] rounded-full bg-muted-foreground/60" />
               </div>
               <span className="text-xs">
                 {t('thread.runningExternally', 'Running externally\u2026')}
@@ -587,7 +587,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
               transition={{ duration: 0.25, ease: 'easeOut' }}
               className="flex items-center gap-2 text-xs text-status-warning/80"
             >
-              <Clock className="h-3.5 w-3.5 animate-pulse text-yellow-400" />
+              <Clock className="size-3.5 animate-pulse text-yellow-400" />
               {t('thread.waitingForResponse')}
             </motion.div>
           )}

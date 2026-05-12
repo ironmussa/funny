@@ -1,12 +1,16 @@
 /**
  * localStorage utilities for persisting grid cell → thread assignments.
  *
- * Key: `funny:grid-cells`
+ * Key: `funny:grid-cells:v1`
  * Value: JSON object mapping cell index (string) → threadId.
  *   e.g. { "0": "abc-123", "2": "def-456" }
+ *
+ * The `:v1` suffix lets a future schema change ignore old data instead of
+ * crashing when it can't parse it.
  */
 
-const STORAGE_KEY = 'funny:grid-cells';
+export const GRID_CELLS_KEY = 'funny:grid-cells:v1';
+const STORAGE_KEY = GRID_CELLS_KEY;
 
 export type GridCellAssignments = Record<string, string>;
 

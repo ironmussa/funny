@@ -65,7 +65,7 @@ export function ThreadStatusPin({
   );
 
   return (
-    <div className={cn('relative h-3.5 w-3.5 flex-shrink-0', className)}>
+    <div className={cn('relative size-3.5 flex-shrink-0', className)}>
       {showPinRest ? (
         <span
           className={cn(
@@ -80,7 +80,7 @@ export function ThreadStatusPin({
           className={cn('absolute inset-0 flex items-center justify-center', hideOnHover)}
           data-testid={`thread-unread-dot-${thread.id}`}
         >
-          <span className="block h-2 w-2 rounded-full bg-blue-500" />
+          <span className="block size-2 rounded-full bg-blue-500" />
         </span>
       ) : (
         <span className={cn('absolute inset-0 flex items-center justify-center', hideOnHover)}>

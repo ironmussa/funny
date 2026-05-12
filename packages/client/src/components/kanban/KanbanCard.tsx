@@ -117,7 +117,7 @@ export const KanbanCard = memo(function KanbanCard({
     >
       <div className="min-w-0 flex-1 px-3.5 py-3">
         <div className="mb-2 flex min-w-0 items-start gap-2">
-          <div className="relative mt-0.5 h-3.5 w-3.5 shrink-0">
+          <div className="relative mt-0.5 size-3.5 shrink-0">
             {thread.pinned && !isBusy ? (
               <span
                 className={cn(

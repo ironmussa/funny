@@ -64,7 +64,7 @@ export function TeamSettings() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-        Loading team settings...
+        Loading team settings…
       </div>
     );
   }

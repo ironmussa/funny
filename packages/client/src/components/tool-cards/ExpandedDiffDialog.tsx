@@ -17,6 +17,7 @@ import {
   useState,
   useCallback,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useTransition,
@@ -368,22 +369,24 @@ export function ExpandedDiffDialog({
   // even when focus is on a nested element inside the dialog.
   // stopImmediatePropagation prevents other capture-phase listeners
   // (e.g. ThreadView search) from also firing.
+  const onDialogKey = useEffectEvent((e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      openSearch();
+    } else if (e.key === 'Escape' && showSearch) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      closeSearch();
+    }
+  });
+
   useEffect(() => {
     if (!open) return;
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        openSearch();
-      } else if (e.key === 'Escape' && showSearch) {
-        e.preventDefault();
-        e.stopImmediatePropagation();
-        closeSearch();
-      }
-    };
+    const handler = (e: KeyboardEvent) => onDialogKey(e);
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [open, openSearch, showSearch, closeSearch]);
+  }, [open]);
 
   // Reset search when file changes
   useEffect(() => {
@@ -622,7 +625,7 @@ export function ExpandedDiffDialog({
                 data-testid="diff-review-threads"
               >
                 <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <MessageSquare className="h-3.5 w-3.5" />
+                  <MessageSquare className="size-3.5" />
                   {fileThreads.length} review {fileThreads.length === 1 ? 'thread' : 'threads'}
                 </div>
                 <div className="space-y-2">
@@ -893,26 +896,28 @@ export function ExpandedDiffView({
   // even when the overlay (rendered via portal) doesn't have focus.
   // stopImmediatePropagation prevents other capture-phase listeners
   // (e.g. ThreadView search) from also firing.
-  useEffect(() => {
-    const handler = (e: KeyboardEvent) => {
-      if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+  const onOuterKey = useEffectEvent((e: KeyboardEvent) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'f') {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      openSearch();
+    } else if (e.key === 'Escape') {
+      if (showSearch) {
         e.preventDefault();
         e.stopImmediatePropagation();
-        openSearch();
-      } else if (e.key === 'Escape') {
-        if (showSearch) {
-          e.preventDefault();
-          e.stopImmediatePropagation();
-          closeSearch();
-        } else if (onClose) {
-          onClose();
-        }
+        closeSearch();
+      } else if (onClose) {
+        onClose();
       }
-    };
+    }
+  });
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => onOuterKey(e);
     // Use capture phase to intercept before other handlers
     window.addEventListener('keydown', handler, true);
     return () => window.removeEventListener('keydown', handler, true);
-  }, [openSearch, showSearch, closeSearch, onClose]);
+  }, []);
 
   // Reset search when file changes
   useEffect(() => {
@@ -1127,7 +1132,7 @@ export function ExpandedDiffView({
             data-testid="diff-view-review-threads"
           >
             <div className="mb-2 flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-              <MessageSquare className="h-3.5 w-3.5" />
+              <MessageSquare className="size-3.5" />
               {fileThreads.length} review {fileThreads.length === 1 ? 'thread' : 'threads'}
             </div>
             <div className="space-y-2">

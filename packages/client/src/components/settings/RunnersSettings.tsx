@@ -199,7 +199,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
         data-testid={`runner-item-${runner.runnerId}`}
       >
         {/* Status dot */}
-        <Circle className={cn('h-2 w-2 shrink-0 fill-current', statusColor(runner.status))} />
+        <Circle className={cn('size-2 shrink-0 fill-current', statusColor(runner.status))} />
 
         {/* Name + meta */}
         <div className="min-w-0 flex-1">
@@ -233,7 +233,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-6 w-6"
+                  className="size-6"
                   data-testid={`runner-item-${runner.runnerId}-expand`}
                 >
                   {open ? (
@@ -248,7 +248,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
           </Tooltip>
           <TooltipIconButton
             size="icon"
-            className="h-6 w-6 text-destructive hover:text-destructive"
+            className="size-6 text-destructive hover:text-destructive"
             onClick={handleDelete}
             disabled={deleting}
             data-testid={`runner-item-${runner.runnerId}-delete`}
@@ -274,7 +274,7 @@ function RunnerCard({ runner, onDeleted }: RunnerCardProps) {
                   <span className="truncate">{project?.name ?? a.projectId}</span>
                   <TooltipIconButton
                     size="icon"
-                    className="h-5 w-5 text-destructive hover:text-destructive"
+                    className="size-5 text-destructive hover:text-destructive"
                     onClick={() => handleUnassign(a.projectId)}
                     data-testid={`runner-item-${runner.runnerId}-unassign-${a.projectId}`}
                     tooltip={t('common.unassign')}
@@ -441,10 +441,10 @@ export function RunnersSettings() {
         </div>
 
         {loadingRunners && runners.length === 0 ? (
-          <p className="text-xs text-muted-foreground">Loading...</p>
+          <p className="text-xs text-muted-foreground">Loading…</p>
         ) : runners.length === 0 ? (
           <div className="rounded-lg border border-dashed border-border/50 px-4 py-6 text-center">
-            <Server className="mx-auto mb-2 h-8 w-8 text-muted-foreground/50" />
+            <Server className="mx-auto mb-2 size-8 text-muted-foreground/50" />
             <p className="text-sm text-muted-foreground">No runners connected yet.</p>
             <p className="mt-1 text-xs text-muted-foreground">
               Copy the install command above and run it on any machine.

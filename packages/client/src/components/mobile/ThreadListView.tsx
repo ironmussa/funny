@@ -13,6 +13,8 @@ interface Props {
   onNewThread: () => void;
 }
 
+const threadDateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
+
 export function ThreadListView({ projectId, onBack, onSelectThread, onNewThread }: Props) {
   const { t } = useTranslation();
   const projects = useAppStore((s) => s.projects);
@@ -71,9 +73,7 @@ export function ThreadListView({ projectId, onBack, onSelectThread, onNewThread 
                 <div className="min-w-0 flex-1">
                   <div className="truncate text-sm font-medium">{thread.title}</div>
                   <div className="mt-0.5 text-xs text-muted-foreground">
-                    {new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' }).format(
-                      new Date(thread.createdAt),
-                    )}
+                    {threadDateFormatter.format(new Date(thread.createdAt))}
                   </div>
                 </div>
                 <StatusBadge status={thread.status} />

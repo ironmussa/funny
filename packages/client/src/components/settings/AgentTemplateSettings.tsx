@@ -160,7 +160,7 @@ export function AgentTemplateSettings() {
         sharedTemplates.length === 0 &&
         builtinTemplates.length === 0 && (
           <div className="rounded-md border border-dashed p-6 text-center text-muted-foreground">
-            <Bot className="mx-auto mb-2 h-8 w-8 opacity-50" />
+            <Bot className="mx-auto mb-2 size-8 opacity-50" />
             <p>No agent templates yet.</p>
             <p className="text-xs">Create one to define a reusable Deep Agent configuration.</p>
           </div>
@@ -193,7 +193,7 @@ export function AgentTemplateSettings() {
       {sharedTemplates.length > 0 && (
         <>
           <div className="mb-2 mt-6 flex items-center gap-2">
-            <Share2 className="h-3 w-3 text-muted-foreground" />
+            <Share2 className="size-3 text-muted-foreground" />
             <h4 className="text-xs font-medium text-muted-foreground">Shared Templates</h4>
           </div>
           <div className="space-y-2">
@@ -217,7 +217,7 @@ export function AgentTemplateSettings() {
       {builtinTemplates.length > 0 && (
         <>
           <div className="mb-2 mt-6 flex items-center gap-2">
-            <Lock className="h-3 w-3 text-muted-foreground" />
+            <Lock className="size-3 text-muted-foreground" />
             <h4 className="text-xs font-medium text-muted-foreground">Built-in Templates</h4>
           </div>
           <div className="space-y-2">
@@ -270,7 +270,7 @@ function TemplateCard({
     >
       {template.color && (
         <div
-          className="h-3 w-3 flex-shrink-0 rounded-full"
+          className="size-3 flex-shrink-0 rounded-full"
           style={{ backgroundColor: template.color }}
         />
       )}
@@ -302,39 +302,39 @@ function TemplateCard({
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6"
+          className="size-6"
           onClick={(e) => {
             e.stopPropagation();
             onExport();
           }}
           data-testid={`agent-template-export-${template.id}`}
         >
-          <Download className="h-3 w-3" />
+          <Download className="size-3" />
         </Button>
         <Button
           variant="ghost"
           size="icon"
-          className="h-6 w-6"
+          className="size-6"
           onClick={(e) => {
             e.stopPropagation();
             onDuplicate();
           }}
           data-testid={`agent-template-duplicate-${template.id}`}
         >
-          <Copy className="h-3 w-3" />
+          <Copy className="size-3" />
         </Button>
         {!isBuiltin && (
           <Button
             variant="ghost"
             size="icon"
-            className="h-6 w-6 text-destructive"
+            className="size-6 text-destructive"
             onClick={(e) => {
               e.stopPropagation();
               onDelete();
             }}
             data-testid={`agent-template-delete-${template.id}`}
           >
-            <Trash2 className="h-3 w-3" />
+            <Trash2 className="size-3" />
           </Button>
         )}
       </div>
@@ -445,7 +445,7 @@ function CollapsibleSection({
   return (
     <Collapsible defaultOpen={defaultOpen}>
       <CollapsibleTrigger className="flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-xs font-medium text-muted-foreground hover:bg-accent/50">
-        <ChevronDown className="h-3 w-3 transition-transform [[data-state=closed]>&]:rotate-[-90deg]" />
+        <ChevronDown className="size-3 transition-transform [[data-state=closed]>&]:rotate-[-90deg]" />
         {title}
       </CollapsibleTrigger>
       <CollapsibleContent>
@@ -497,7 +497,7 @@ function IdentitySection({
             <button
               key={color}
               className={cn(
-                'h-5 w-5 rounded-full border-2 transition-all',
+                'size-5 rounded-full border-2 transition-all',
                 template.color === color ? 'border-foreground scale-110' : 'border-transparent',
               )}
               style={{ backgroundColor: color }}
@@ -770,7 +770,7 @@ function McpServersSection({
                 className="flex items-center gap-2 rounded border px-2 py-1.5 text-xs"
                 data-testid={`agent-template-mcp-server-${idx}`}
               >
-                <Server className="h-3 w-3 flex-shrink-0 text-muted-foreground" />
+                <Server className="size-3 flex-shrink-0 text-muted-foreground" />
                 <span className="font-medium">{srv.name}</span>
                 <span className="rounded bg-muted px-1 py-0.5 text-[10px] text-muted-foreground">
                   {srv.type}
@@ -784,14 +784,14 @@ function McpServersSection({
                     className="rounded p-0.5 text-muted-foreground hover:text-foreground"
                     data-testid={`agent-template-mcp-edit-${idx}`}
                   >
-                    <Pencil className="h-3 w-3" />
+                    <Pencil className="size-3" />
                   </button>
                   <button
                     onClick={() => removeServer(idx)}
                     className="rounded p-0.5 text-muted-foreground hover:text-destructive"
                     data-testid={`agent-template-mcp-delete-${idx}`}
                   >
-                    <Trash2 className="h-3 w-3" />
+                    <Trash2 className="size-3" />
                   </button>
                 </div>
               </div>
@@ -810,7 +810,7 @@ function McpServersSection({
           onClick={() => setAdding(true)}
           data-testid="agent-template-mcp-add"
         >
-          <Plus className="mr-1 h-3 w-3" />
+          <Plus className="mr-1 size-3" />
           Add MCP Server
         </Button>
       )}
@@ -833,8 +833,8 @@ function McpServerForm({
   const [type, setType] = useState<McpServerType>(initial?.type ?? 'stdio');
   const [command, setCommand] = useState(initial?.command ?? '');
   const [url, setUrl] = useState(initial?.url ?? '');
-  const [argsStr, setArgsStr] = useState((initial?.args ?? []).join(', '));
-  const [envStr, setEnvStr] = useState(
+  const [argsStr, setArgsStr] = useState(() => (initial?.args ?? []).join(', '));
+  const [envStr, setEnvStr] = useState(() =>
     Object.entries(initial?.env ?? {})
       .map(([k, v]) => `${k}=${v}`)
       .join('\n'),
@@ -842,10 +842,10 @@ function McpServerForm({
 
   const handleSave = () => {
     if (!name.trim()) return;
-    const args = argsStr
-      .split(',')
-      .map((s) => s.trim())
-      .filter(Boolean);
+    const args = argsStr.split(',').flatMap((s) => {
+      const trimmed = s.trim();
+      return trimmed ? [trimmed] : [];
+    });
     const env: Record<string, string> = {};
     envStr.split('\n').forEach((line) => {
       const eqIdx = line.indexOf('=');
@@ -1042,7 +1042,7 @@ function VariablesSection({
                 className="mt-1 rounded p-0.5 text-muted-foreground hover:text-destructive"
                 data-testid={`agent-template-variable-delete-${idx}`}
               >
-                <Trash2 className="h-3 w-3" />
+                <Trash2 className="size-3" />
               </button>
             </div>
           ))}
@@ -1056,7 +1056,7 @@ function VariablesSection({
         onClick={addVariable}
         data-testid="agent-template-variable-add"
       >
-        <Plus className="mr-1 h-3 w-3" />
+        <Plus className="mr-1 size-3" />
         Add Variable
       </Button>
     </div>
@@ -1087,7 +1087,7 @@ function SharingSection({
             onCheckedChange={(checked) => onSave({ shared: checked === true })}
             data-testid="agent-template-shared"
           />
-          <Share2 className="h-3 w-3 text-muted-foreground" />
+          <Share2 className="size-3 text-muted-foreground" />
         </label>
       </div>
     </div>

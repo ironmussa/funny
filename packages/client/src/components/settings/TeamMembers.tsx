@@ -234,7 +234,7 @@ export function TeamMembers() {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12 text-sm text-muted-foreground">
-        Loading members...
+        Loading members…
       </div>
     );
   }
@@ -369,7 +369,7 @@ export function TeamMembers() {
                     </div>
                     <TooltipIconButton
                       size="icon"
-                      className="h-7 w-7 shrink-0"
+                      className="size-7 shrink-0"
                       onClick={() => handleCopyLink(link)}
                       disabled={!isActive}
                       data-testid={`team-link-copy-${link.id}`}
@@ -383,7 +383,7 @@ export function TeamMembers() {
                     </TooltipIconButton>
                     <TooltipIconButton
                       size="icon"
-                      className="h-7 w-7 shrink-0 text-muted-foreground hover:text-destructive"
+                      className="size-7 shrink-0 text-muted-foreground hover:text-destructive"
                       onClick={() => handleRevokeLink(link.id)}
                       data-testid={`team-link-revoke-${link.id}`}
                       tooltip={t('common.revoke')}
@@ -452,7 +452,7 @@ export function TeamMembers() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-8 w-8 text-muted-foreground hover:text-destructive"
+                  className="size-8 text-muted-foreground hover:text-destructive"
                   onClick={() => setRemoveConfirm(member)}
                   disabled={isLastOwner}
                   data-testid={`team-member-remove-${member.userId}`}
@@ -483,7 +483,7 @@ export function TeamMembers() {
                   <Button
                     variant="ghost"
                     size="icon"
-                    className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                    className="size-7 text-muted-foreground hover:text-destructive"
                     onClick={() => handleCancelInvitation(inv.id)}
                     data-testid={`team-invitation-cancel-${inv.id}`}
                   >

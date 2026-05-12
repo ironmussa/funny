@@ -33,18 +33,18 @@ export function DiffCommentThread({ thread, className }: DiffCommentThreadProps)
     >
       {/* Thread header */}
       <div className="mb-2 flex items-center gap-2 text-[10px] text-muted-foreground">
-        <MessageSquare className="h-3 w-3" />
+        <MessageSquare className="size-3" />
         <span className="font-mono">{thread.path}</span>
         {thread.line && <span>line {thread.line}</span>}
         <div className="flex-1" />
         {thread.is_resolved && (
           <span className="flex items-center gap-0.5 text-green-400">
-            <CheckCircle2 className="h-3 w-3" /> Resolved
+            <CheckCircle2 className="size-3" /> Resolved
           </span>
         )}
         {thread.is_outdated && (
           <span className="flex items-center gap-0.5 text-yellow-400">
-            <Clock className="h-3 w-3" /> Outdated
+            <Clock className="size-3" /> Outdated
           </span>
         )}
       </div>
@@ -62,7 +62,7 @@ export function DiffCommentThread({ thread, className }: DiffCommentThreadProps)
                 <img
                   src={comment.author_avatar_url}
                   alt={comment.author}
-                  className="h-4 w-4 rounded-full"
+                  className="size-4 rounded-full"
                 />
               )}
               <span className="text-[11px] font-medium">{comment.author}</span>

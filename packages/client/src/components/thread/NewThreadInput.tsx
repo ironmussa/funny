@@ -265,8 +265,8 @@ export function NewThreadInput({
           className="flex w-full max-w-md flex-col items-center justify-center gap-4"
           data-testid="new-thread-creating"
         >
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground/50" />
-          <span className="text-sm text-muted-foreground/60">Preparing...</span>
+          <Loader2 className="size-8 animate-spin text-muted-foreground/50" />
+          <span className="text-sm text-muted-foreground/60">Preparing…</span>
         </div>
       </div>
     );
@@ -282,7 +282,7 @@ export function NewThreadInput({
         >
           {project && (
             <span className="flex h-9 shrink-0 items-center gap-1.5 px-2 py-1">
-              <FolderOpen className="h-5 w-5 shrink-0" />
+              <FolderOpen className="size-5 shrink-0" />
               <span className="truncate font-medium">{project.name}</span>
             </span>
           )}
@@ -294,7 +294,7 @@ export function NewThreadInput({
                 const Icon = remoteUrl.includes('github.com') ? Github : Globe;
                 const content = (
                   <>
-                    <Icon className="h-5 w-5 shrink-0" />
+                    <Icon className="size-5 shrink-0" />
                     <span className="truncate font-medium">{formatRemoteUrl(remoteUrl)}</span>
                   </>
                 );
@@ -322,8 +322,8 @@ export function NewThreadInput({
               <span className="text-muted-foreground/40">/</span>
               {branchPickerLoading ? (
                 <span className="flex h-9 items-center gap-1.5 px-2 py-1">
-                  <GitBranch className="h-5 w-5 shrink-0" />
-                  <Loader2 className="h-5 w-5 animate-spin" />
+                  <GitBranch className="size-5 shrink-0" />
+                  <Loader2 className="size-5 animate-spin" />
                 </span>
               ) : (
                 <BranchPicker
@@ -345,7 +345,7 @@ export function NewThreadInput({
             className="mb-1.5 flex items-center gap-1.5 rounded-md border border-emerald-500/20 bg-emerald-500/5 px-2 py-1 text-xs"
             data-testid="issue-context-banner"
           >
-            <CircleDot className="h-3.5 w-3.5 shrink-0 text-emerald-500" />
+            <CircleDot className="size-3.5 shrink-0 text-emerald-500" />
             <span className="truncate text-muted-foreground">
               {t('issues.creatingFromIssue', { title: issueContext.title })}
             </span>
@@ -365,7 +365,7 @@ export function NewThreadInput({
             className="mb-1.5 flex items-center gap-1.5 text-[10px] text-muted-foreground/60"
             data-testid="worktree-preview"
           >
-            <GitFork className="h-3 w-3 shrink-0" />
+            <GitFork className="size-3 shrink-0" />
             <span className="truncate font-mono">{previewBranch}</span>
           </div>
         )}

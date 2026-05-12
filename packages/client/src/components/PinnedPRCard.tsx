@@ -694,7 +694,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
       {!loading && threads.length > 0 && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            <MessageSquare className="h-3 w-3" />
+            <MessageSquare className="size-3" />
             <span>
               {t('review.pullRequests.reviewThreads', 'Review threads')} ({threads.length}
               {unresolvedCount > 0 ? ` · ${unresolvedCount} unresolved` : ''})
@@ -724,9 +724,9 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
                     >
                       <div className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                         {th.is_resolved ? (
-                          <CheckCircle2 className="h-3 w-3 text-green-600" />
+                          <CheckCircle2 className="size-3 text-green-600" />
                         ) : (
-                          <CircleDot className="h-3 w-3" />
+                          <CircleDot className="size-3" />
                         )}
                         <span>
                           Line {th.line ?? th.original_line ?? '?'}
@@ -821,7 +821,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
       {!loading && conversation && conversation.reviews.length > 0 && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            <ThumbsUp className="h-3 w-3" />
+            <ThumbsUp className="size-3" />
             <span>
               {t('review.pullRequests.reviews', 'Reviews')} ({conversation.reviews.length})
             </span>
@@ -834,7 +834,7 @@ export function PinnedPRCard({ pr, projectId, currentUserLogin }: PinnedPRCardPr
       {!loading && conversation && (
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
-            <MessageSquare className="h-3 w-3" />
+            <MessageSquare className="size-3" />
             <span>
               {t('review.pullRequests.conversation', 'Conversation')} (
               {conversation.comments.length})

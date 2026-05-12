@@ -207,7 +207,7 @@ export const WorkflowEventCard = memo(function WorkflowEventCard({
           </span>
           {!isPassed && metadata.error && (
             <span className="min-w-0 truncate font-mono text-destructive/80">
-              — {metadata.error}
+              : {metadata.error}
             </span>
           )}
         </>

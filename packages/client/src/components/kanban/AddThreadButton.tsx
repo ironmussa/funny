@@ -100,7 +100,7 @@ export function AddThreadButton({ projectId, projects, onSelect }: Props) {
                 }}
               >
                 <span
-                  className="h-2.5 w-2.5 shrink-0 rounded-full"
+                  className="size-2.5 shrink-0 rounded-full"
                   style={{ backgroundColor: p.color || colorFromName(p.name) }}
                 />
                 <span className="truncate">{p.name}</span>

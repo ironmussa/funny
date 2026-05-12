@@ -201,14 +201,15 @@ export function PlanReviewDialog({
   // ── Edit mode ──
   const [isEditing, setIsEditing] = useState(false);
   const [editablePlan, setEditablePlan] = useState(plan);
+  const [lastSeenPlan, setLastSeenPlan] = useState(plan);
 
-  // Sync editablePlan when plan prop changes
-  useEffect(() => {
+  // Reset edits when the parent passes a new plan reference.
+  if (plan !== lastSeenPlan) {
+    setLastSeenPlan(plan);
     setEditablePlan(plan);
-  }, [plan]);
+  }
 
-  // Use edited content for rendering
-  const activePlan = isEditing ? editablePlan : editablePlan;
+  const activePlan = editablePlan;
   const sections = useMemo(() => parsePlanSections(activePlan), [activePlan]);
   const hasSections = sections.length > 1 || (sections.length === 1 && sections[0].level > 0);
 
@@ -318,7 +319,7 @@ export function PlanReviewDialog({
             <Suspense
               fallback={
                 <div className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                  Loading editor...
+                  Loading editor…
                 </div>
               }
             >

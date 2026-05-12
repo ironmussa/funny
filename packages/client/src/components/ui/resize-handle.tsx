@@ -31,8 +31,7 @@ export function useResizeHandle({
       dragging.current = true;
       startPos.current = direction === 'horizontal' ? e.clientX : e.clientY;
       setResizing(true);
-      document.body.style.cursor = cursor;
-      document.body.style.userSelect = 'none';
+      Object.assign(document.body.style, { cursor, userSelect: 'none' });
       (e.target as HTMLElement).setPointerCapture(e.pointerId);
       onResizeStart?.();
     },
@@ -53,8 +52,7 @@ export function useResizeHandle({
       if (!dragging.current) return;
       dragging.current = false;
       setResizing(false);
-      document.body.style.cursor = '';
-      document.body.style.userSelect = '';
+      Object.assign(document.body.style, { cursor: '', userSelect: '' });
       (e.target as HTMLElement).releasePointerCapture(e.pointerId);
       onResizeEnd?.();
     },

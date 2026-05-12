@@ -20,8 +20,10 @@ export const BASE = isTauri ? `http://localhost:${serverPort}/api` : '/api';
 const allowedContainerOrigins: string[] =
   (import.meta.env.VITE_ALLOWED_CONTAINER_ORIGINS as string | undefined)
     ?.split(',')
-    .map((s) => s.trim())
-    .filter(Boolean) ?? [];
+    .flatMap((s) => {
+      const trimmed = s.trim();
+      return trimmed ? [trimmed] : [];
+    }) ?? [];
 
 export function validateContainerUrl(raw: unknown): string | null {
   if (typeof raw !== 'string' || raw.length === 0) return null;

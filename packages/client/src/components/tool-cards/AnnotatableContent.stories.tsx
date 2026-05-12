@@ -51,7 +51,7 @@ function InteractiveWrapper({
             <div key={i} className="text-xs text-muted-foreground">
               {c.emoji || 'Comment'}: &quot;{c.selectedText.slice(0, 40)}
               {c.selectedText.length > 40 ? '...' : ''}&quot;
-              {c.comment && <span className="text-foreground"> — {c.comment}</span>}
+              {c.comment && <span className="text-foreground">: {c.comment}</span>}
             </div>
           ))}
         </div>
@@ -129,27 +129,29 @@ export const WithAnnotations: Story = {
   ),
 };
 
+function DisabledStory() {
+  const [comments] = useState<PlanComment[]>([]);
+  return (
+    <div className="w-[500px]">
+      <AnnotatableContent
+        className="rounded-md border border-border p-4 pr-14 opacity-60"
+        planComments={comments}
+        onAddComment={() => {}}
+        onAddEmoji={() => {}}
+        onRemoveComment={() => {}}
+        active={false}
+      >
+        {SAMPLE_TEXT}
+      </AnnotatableContent>
+      <p className="mt-2 text-xs text-muted-foreground">Selection is disabled (active=false)</p>
+    </div>
+  );
+}
+
 /** Disabled state — no selection popover appears */
 export const Disabled: Story = {
   args: DUMMY_ARGS,
-  render: () => {
-    const [comments] = useState<PlanComment[]>([]);
-    return (
-      <div className="w-[500px]">
-        <AnnotatableContent
-          className="rounded-md border border-border p-4 pr-14 opacity-60"
-          planComments={comments}
-          onAddComment={() => {}}
-          onAddEmoji={() => {}}
-          onRemoveComment={() => {}}
-          active={false}
-        >
-          {SAMPLE_TEXT}
-        </AnnotatableContent>
-        <p className="mt-2 text-xs text-muted-foreground">Selection is disabled (active=false)</p>
-      </div>
-    );
-  },
+  render: () => <DisabledStory />,
 };
 
 /** Plain text content */

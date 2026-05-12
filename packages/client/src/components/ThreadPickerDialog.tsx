@@ -105,7 +105,7 @@ function ThreadPickerDialogContent({
             heading={
               <span className="flex items-center gap-1.5">
                 <span
-                  className="inline-block h-2 w-2 rounded-full"
+                  className="inline-block size-2 rounded-full"
                   style={{ backgroundColor: project.color || colorFromName(project.name) }}
                 />
                 {project.name}

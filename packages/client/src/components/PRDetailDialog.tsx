@@ -287,7 +287,7 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
                 className="h-6 w-auto max-w-[400px] text-[11px]"
                 data-testid="pr-detail-commit-select"
               >
-                <GitCommitHorizontal className="mr-1 h-3 w-3 shrink-0 text-muted-foreground" />
+                <GitCommitHorizontal className="mr-1 size-3 shrink-0 text-muted-foreground" />
                 <SelectValue placeholder="All commits">
                   {selectedCommit === 'all' ? (
                     <span className="text-[11px]">All commits ({commits.length})</span>
@@ -336,8 +336,8 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
         {/* ── Body ── */}
         {isLoading ? (
           <div className="flex flex-1 items-center justify-center gap-2 text-xs text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading PR data...
+            <Loader2 className="size-4 animate-spin" />
+            Loading PR data…
           </div>
         ) : error ? (
           <div className="flex flex-1 items-center justify-center text-xs text-muted-foreground">
@@ -373,8 +373,8 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
               <ScrollArea className="min-h-0 flex-1">
                 {loadingCommitFiles ? (
                   <div className="flex items-center justify-center gap-2 py-4 text-xs text-muted-foreground">
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                    Loading...
+                    <Loader2 className="size-3.5 animate-spin" />
+                    Loading…
                   </div>
                 ) : fileSummaries.length === 0 ? (
                   <div className="py-4 text-center text-xs text-muted-foreground">
@@ -399,7 +399,7 @@ export function PRDetailDialog({ open, onOpenChange, projectId, pr }: PRDetailDi
             <div className="flex min-w-0 flex-1 flex-col" data-testid="pr-detail-diff-pane">
               {!selectedFile ? (
                 <div className="flex flex-1 flex-col items-center justify-center gap-2 text-muted-foreground">
-                  <FileCode className="h-8 w-8 opacity-30" />
+                  <FileCode className="size-8 opacity-30" />
                   <p className="text-xs">Select a file to view changes</p>
                 </div>
               ) : (

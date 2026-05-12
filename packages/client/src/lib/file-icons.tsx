@@ -185,10 +185,10 @@ export function getFileIconName(filePath: string): string {
 }
 
 export function getFolderIconName(folderPath: string, isOpen = false): string {
-  const segments = folderPath
-    .split('/')
-    .map((segment) => segment.toLowerCase())
-    .filter(Boolean);
+  const segments = folderPath.split('/').flatMap((segment) => {
+    const lower = segment.toLowerCase();
+    return lower ? [lower] : [];
+  });
 
   for (let index = segments.length - 1; index >= 0; index -= 1) {
     const match = FOLDER_ICON_MAP[segments[index]];

@@ -38,7 +38,7 @@ const fileStatusIcons: Record<string, typeof FileCode> = {
 export function ReviewPane() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const location = useLocation();
+  const { pathname, search: locationSearch } = useLocation();
 
   // ── Stores ──
   const setReviewPaneOpen = useUIStore((s) => s.setReviewPaneOpen);
@@ -229,16 +229,16 @@ export function ReviewPane() {
   const setReviewSubTab = useCallback(
     (tab: ReviewSubTab) => {
       setReviewSubTabStore(tab);
-      const params = new URLSearchParams(location.search);
+      const params = new URLSearchParams(locationSearch);
       if (tab === 'changes') {
         params.delete('tab');
       } else {
         params.set('tab', tab);
       }
       const search = params.toString();
-      navigate(`${location.pathname}${search ? `?${search}` : ''}`, { replace: true });
+      navigate(`${pathname}${search ? `?${search}` : ''}`, { replace: true });
     },
-    [setReviewSubTabStore, location.pathname, location.search, navigate],
+    [setReviewSubTabStore, pathname, locationSearch, navigate],
   );
 
   // Stable callbacks for ExpandedDiffView — avoids re-renders from new closures

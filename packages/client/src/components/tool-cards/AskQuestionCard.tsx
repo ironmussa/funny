@@ -104,8 +104,8 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   displayTime?: string | null;
 }) {
   const { t } = useTranslation();
-  const questions = getQuestions(parsed);
-  if (!questions || questions.length === 0) return null;
+  const questions = useMemo(() => getQuestions(parsed) ?? [], [parsed]);
+  const hasQuestions = questions.length > 0;
 
   cardLog.info('render', {
     questionCount: String(questions.length),
@@ -276,16 +276,14 @@ export const AskQuestionCard = memo(function AskQuestionCard({
     questions.forEach((q, qi) => {
       const selected = selections.get(qi);
       if (selected && selected.size > 0) {
-        const answers = Array.from(selected)
-          .map((i) => {
-            if (i === OTHER_INDEX) {
-              const text = otherTexts.get(qi)?.trim();
-              return text ? `${t('tools.other')} — ${text}` : '';
-            }
-            const opt = q.options[i];
-            return opt ? `${opt.label} — ${opt.description}` : '';
-          })
-          .filter(Boolean);
+        const answers = Array.from(selected).flatMap((i) => {
+          if (i === OTHER_INDEX) {
+            const text = otherTexts.get(qi)?.trim();
+            return text ? [`${t('tools.other')} — ${text}`] : [];
+          }
+          const opt = q.options[i];
+          return opt ? [`${opt.label} — ${opt.description}`] : [];
+        });
         parts.push(`[${q.header}] ${q.question}\n→ ${answers.join('\n→ ')}`);
       }
     });
@@ -339,6 +337,8 @@ export const AskQuestionCard = memo(function AskQuestionCard({
   })();
 
   const isLastTab = activeTab === questions.length - 1;
+
+  if (!hasQuestions) return null;
 
   return (
     <div className="max-w-full overflow-hidden rounded-lg border border-border text-sm">
@@ -450,14 +450,14 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                         >
                           <div
                             className={cn(
-                              'mt-0.5 flex-shrink-0 h-3.5 w-3.5 rounded-full border-2 flex items-center justify-center',
+                              'mt-0.5 flex-shrink-0 size-3.5 rounded-full border-2 flex items-center justify-center',
                               activeQ.multiSelect && 'rounded-sm',
                               isSelected
                                 ? 'border-primary bg-primary'
                                 : 'border-muted-foreground/40',
                             )}
                           >
-                            {isSelected && <Check className="h-2 w-2 text-primary-foreground" />}
+                            {isSelected && <Check className="size-2 text-primary-foreground" />}
                           </div>
                           <div className="min-w-0">
                             <span className="text-xs font-medium text-foreground">{opt.label}</span>
@@ -483,14 +483,14 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                     >
                       <div
                         className={cn(
-                          'mt-0.5 flex-shrink-0 h-3.5 w-3.5 rounded-full border-2 flex items-center justify-center',
+                          'mt-0.5 flex-shrink-0 size-3.5 rounded-full border-2 flex items-center justify-center',
                           activeQ.multiSelect && 'rounded-sm',
                           isOtherSelected
                             ? 'border-primary bg-primary'
                             : 'border-muted-foreground/40',
                         )}
                       >
-                        {isOtherSelected && <Check className="h-2 w-2 text-primary-foreground" />}
+                        {isOtherSelected && <Check className="size-2 text-primary-foreground" />}
                       </div>
                       <div className="flex min-w-0 items-center gap-1.5">
                         <PenLine

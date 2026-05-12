@@ -272,12 +272,12 @@ export function ChangesFilesPanel({
           </div>
         ) : summaries.length === 0 && !loading ? (
           <div className="flex h-full min-h-0 flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
-            <FileCheck2 className="h-8 w-8 opacity-40" />
+            <FileCheck2 className="size-8 opacity-40" />
             <p className="text-xs">{t('review.noChanges')}</p>
           </div>
         ) : filteredDiffs.length === 0 && !loading ? (
           <div className="flex h-full min-h-0 flex-col items-center justify-center gap-2 p-4 text-muted-foreground">
-            <Search className="h-8 w-8 opacity-40" />
+            <Search className="size-8 opacity-40" />
             <p className="text-xs">{t('review.noMatchingFiles', 'No matching files')}</p>
           </div>
         ) : (
@@ -374,7 +374,7 @@ export function ChangesFilesPanel({
                             onClick={(e) => e.stopPropagation()}
                             onPointerDown={(e) => e.stopPropagation()}
                             aria-label={t('review.moreActions', 'More actions')}
-                            className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                            className="flex size-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
                             data-testid={`review-folder-menu-${row.path}`}
                           >
                             <MoreHorizontal className="icon-sm" />
@@ -540,7 +540,7 @@ export function ChangesFilesPanel({
                             ? t('review.collapseSubmodule', { defaultValue: 'Collapse submodule' })
                             : t('review.expandSubmodule', { defaultValue: 'Expand submodule' })
                         }
-                        className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+                        className="flex size-4 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
                         data-testid={`review-submodule-toggle-${f.path}`}
                       >
                         <ChevronRight
@@ -678,7 +678,7 @@ export function ChangesFilesPanel({
                             e.stopPropagation();
                           }}
                           aria-label={t('review.moreActions', 'More actions')}
-                          className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                          className="flex size-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
                         >
                           <MoreHorizontal className="icon-sm" />
                         </button>

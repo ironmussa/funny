@@ -98,7 +98,7 @@ export function AddProjectView() {
       <div className="mx-auto w-full max-w-md space-y-6 px-4 pb-8">
         {!isCloning && (
           <div className="space-y-2 text-center">
-            <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-primary/10">
+            <div className="mx-auto flex size-12 items-center justify-center rounded-full bg-primary/10">
               <Plus className="icon-xl text-primary" />
             </div>
             <h2 className="text-xl font-semibold">{t('sidebar.addProject')}</h2>

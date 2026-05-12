@@ -288,7 +288,7 @@ export function ChatView({ projectId: _projectId, threadId, onBack }: Props) {
 
               {activeThread.status === 'waiting' && activeThread.waitingReason === 'question' && (
                 <div className="flex items-center gap-2 text-xs text-status-warning/80">
-                  <Clock className="h-3.5 w-3.5 animate-pulse text-yellow-400" />
+                  <Clock className="size-3.5 animate-pulse text-yellow-400" />
                   {t('thread.waitingForResponse')}
                 </div>
               )}

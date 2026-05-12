@@ -1,3 +1,4 @@
+import { lazy, Suspense } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { ArchivedThreadsSettings } from '@/components/ArchivedThreadsSettings';
@@ -6,13 +7,17 @@ import { GeneralSettings } from '@/components/GeneralSettings';
 import { McpServerSettings } from '@/components/McpServerSettings';
 import { PipelineSettings } from '@/components/PipelineSettings';
 import { ProjectConfigSettings } from '@/components/ProjectConfigSettings';
-import { ProjectHooksSettings } from '@/components/ProjectHooksSettings';
 import { type SettingsItemId } from '@/components/settings/items';
 import { TeamMembers } from '@/components/settings/TeamMembers';
 import { UserManagement } from '@/components/settings/UserManagement';
 import { SkillsSettings } from '@/components/SkillsSettings';
 import { StartupCommandsSettings } from '@/components/StartupCommandsSettings';
 import { WorktreeSettings } from '@/components/WorktreeSettings';
+
+// Lazy-loaded: pulls in Monaco editor (~3MB) only when the user opens this page
+const ProjectHooksSettings = lazy(() =>
+  import('@/components/ProjectHooksSettings').then((m) => ({ default: m.ProjectHooksSettings })),
+);
 
 interface Props {
   page: SettingsItemId;
@@ -41,7 +46,13 @@ export function SettingsPageContent({ page, label }: Props) {
     case 'project-config':
       return <ProjectConfigSettings />;
     case 'hooks':
-      return <ProjectHooksSettings />;
+      return (
+        <Suspense
+          fallback={<div className="py-8 text-center text-sm text-muted-foreground">Loading…</div>}
+        >
+          <ProjectHooksSettings />
+        </Suspense>
+      );
     case 'automations':
       return <AutomationSettings />;
     case 'pipelines':

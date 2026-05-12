@@ -52,7 +52,7 @@ export const GridColumnInsertDropTarget = memo(function GridColumnInsertDropTarg
     >
       {active && (
         <div className="flex h-full items-center justify-center">
-          <Plus className="h-4 w-4 text-primary/60" />
+          <Plus className="size-4 text-primary/60" />
         </div>
       )}
     </div>

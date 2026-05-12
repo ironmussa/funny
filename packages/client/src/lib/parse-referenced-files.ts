@@ -55,11 +55,14 @@ export function parseReferencedFiles(content: string): {
   // inlineContent: XML block removed, @path markers preserved
   const inlineContent = content.slice(xmlBlock.length);
 
-  // cleanContent: also strip @path mentions (legacy behavior)
+  // cleanContent: also strip @path mentions (legacy behavior).
+  // Build one combined regex so each scan happens in a single pass.
   let cleanContent = inlineContent;
-  for (const item of items) {
-    const escaped = item.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    cleanContent = cleanContent.replace(new RegExp(`@${escaped}\\s?`, 'g'), '');
+  if (items.length > 0) {
+    const alternation = items
+      .map((item) => item.path.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .join('|');
+    cleanContent = cleanContent.replace(new RegExp(`@(?:${alternation})\\s?`, 'g'), '');
   }
 
   return { files: items, cleanContent, inlineContent, fileMap };

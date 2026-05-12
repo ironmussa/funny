@@ -1,5 +1,5 @@
 import { FolderOpen } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
@@ -29,13 +29,17 @@ export function ProjectPathSetting({ projectId, currentPath }: Props) {
   const { t } = useTranslation();
   const updateProject = useProjectStore((s) => s.updateProject);
   const [value, setValue] = useState(currentPath);
+  const [lastSeenPath, setLastSeenPath] = useState(currentPath);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [gitInitOpen, setGitInitOpen] = useState(false);
 
-  useEffect(() => {
+  // Reset the editor value when the parent passes a new path (e.g. after save).
+  // Adjust during render instead of in an effect to avoid a stale first render.
+  if (currentPath !== lastSeenPath) {
+    setLastSeenPath(currentPath);
     setValue(currentPath);
-  }, [currentPath]);
+  }
 
   const dirty = value.trim() !== currentPath && value.trim().length > 0;
 

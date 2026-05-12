@@ -384,7 +384,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
   if (view === 'error') {
     return (
       <div className="flex flex-col items-center gap-4 py-8">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-destructive/10">
+        <div className="flex size-12 items-center justify-center rounded-full bg-destructive/10">
           <Github className="icon-xl text-destructive" />
         </div>
         <div className="space-y-1 text-center">
@@ -415,7 +415,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
   if (view === 'connect') {
     return (
       <div className="flex flex-col items-center gap-4 py-8">
-        <div className="flex h-12 w-12 items-center justify-center rounded-full bg-muted">
+        <div className="flex size-12 items-center justify-center rounded-full bg-muted">
           <Github className="icon-xl" />
         </div>
         <div className="space-y-1 text-center">
@@ -513,7 +513,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
         {/* Header with user info */}
         {ghUser && (
           <div className="mb-3 flex items-center gap-2">
-            <img src={ghUser.avatar_url} alt={ghUser.login} className="h-6 w-6 rounded-full" />
+            <img src={ghUser.avatar_url} alt={ghUser.login} className="size-6 rounded-full" />
             <span className="text-sm font-medium">{ghUser.login}</span>
             {tokenSource === 'cli' ? (
               <span className="ml-auto text-xs text-muted-foreground">
@@ -699,7 +699,7 @@ export function CloneRepoView({ onCloningChange }: CloneRepoViewProps = {}) {
 
     return (
       <div className="flex flex-col items-center gap-4 py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <Loader2 className="size-8 animate-spin text-primary" />
         <p className="text-sm font-medium">
           {t('github.clone.cloning', { repo: selectedRepo?.full_name })}
         </p>

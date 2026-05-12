@@ -136,7 +136,7 @@ function LogTab({ outputLines }: { outputLines: OutputLine[] }) {
     >
       {outputLines.length === 0 ? (
         <div className="flex h-full items-center justify-center text-muted-foreground">
-          Test output will appear here...
+          Test output will appear here…
         </div>
       ) : (
         <pre className="whitespace-pre-wrap break-words px-3 py-1 leading-relaxed text-foreground">
@@ -178,7 +178,7 @@ function ConsoleTab({ entries }: { entries: WSTestConsoleData[] }) {
     >
       {entries.length === 0 ? (
         <div className="flex h-full items-center justify-center text-muted-foreground">
-          Browser console messages will appear here...
+          Browser console messages will appear here…
         </div>
       ) : (
         <div>
@@ -222,7 +222,7 @@ function ErrorsTab({ entries }: { entries: WSTestErrorData[] }) {
           {entries.map((entry, i) => (
             <div key={i} className="border-b border-border/30 px-3 py-2">
               <div className="flex items-start gap-2 text-red-500">
-                <AlertTriangle className="mt-0.5 h-3 w-3 shrink-0" />
+                <AlertTriangle className="mt-0.5 size-3 shrink-0" />
                 <span className="whitespace-pre-wrap break-all">{entry.message}</span>
               </div>
               {entry.source && (
@@ -618,10 +618,6 @@ function PayloadDetail({ entry }: { entry: TestNetworkEntry }) {
   const queryParams = useMemo(() => parseQueryString(entry.url), [entry.url]);
   const hasBody = !!entry.postData;
 
-  if (queryParams.length === 0 && !hasBody) {
-    return <div className="py-4 text-center text-muted-foreground">No payload data</div>;
-  }
-
   // Format body with line numbers
   const bodyLines = useMemo(() => {
     if (!entry.postData) return [];
@@ -633,6 +629,10 @@ function PayloadDetail({ entry }: { entry: TestNetworkEntry }) {
     }
     return text.split('\n');
   }, [entry.postData]);
+
+  if (queryParams.length === 0 && !hasBody) {
+    return <div className="py-4 text-center text-muted-foreground">No payload data</div>;
+  }
 
   return (
     <div className="space-y-1">
@@ -779,7 +779,7 @@ function HeaderRow({
         {statusDot != null && (
           <span
             className={cn(
-              'mr-1.5 inline-block h-2 w-2 rounded-full',
+              'mr-1.5 inline-block size-2 rounded-full',
               statusDot >= 200 && statusDot < 300 && 'bg-green-500',
               statusDot >= 300 && statusDot < 400 && 'bg-yellow-500',
               statusDot >= 400 && 'bg-red-500',
@@ -850,8 +850,8 @@ function SourceTab({
   if (loading) {
     return (
       <div className="flex h-full items-center justify-center gap-2 text-xs text-muted-foreground">
-        <Loader2 className="h-4 w-4 animate-spin" />
-        Loading...
+        <Loader2 className="size-4 animate-spin" />
+        Loading…
       </div>
     );
   }
@@ -952,7 +952,7 @@ function CallTab({
   if (itemCount === 0) {
     return (
       <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
-        Playwright actions will appear here during test execution...
+        Playwright actions will appear here during test execution…
       </div>
     );
   }
@@ -1096,38 +1096,34 @@ export function TestDetailTabs({
         className="h-auto w-full justify-start gap-0 rounded-none border-b bg-transparent p-0"
         data-testid="test-detail-tabs"
       >
-        <TabTrigger value="locator" icon={<Crosshair className="h-3.5 w-3.5" />} label="Locator" />
-        <TabTrigger value="source" icon={<FileCode className="h-3.5 w-3.5" />} label="Source" />
-        <TabTrigger value="call" icon={<Phone className="h-3.5 w-3.5" />} label="Call" />
-        <TabTrigger value="log" icon={<ScrollText className="h-3.5 w-3.5" />} label="Log" />
+        <TabTrigger value="locator" icon={<Crosshair className="size-3.5" />} label="Locator" />
+        <TabTrigger value="source" icon={<FileCode className="size-3.5" />} label="Source" />
+        <TabTrigger value="call" icon={<Phone className="size-3.5" />} label="Call" />
+        <TabTrigger value="log" icon={<ScrollText className="size-3.5" />} label="Log" />
         <TabTrigger
           value="errors"
-          icon={<AlertTriangle className="h-3.5 w-3.5" />}
+          icon={<AlertTriangle className="size-3.5" />}
           label="Errors"
           count={errorEntries.length}
         />
         <TabTrigger
           value="console"
-          icon={<Terminal className="h-3.5 w-3.5" />}
+          icon={<Terminal className="size-3.5" />}
           label="Console"
           count={consoleEntries.length}
         />
         <TabTrigger
           value="network"
-          icon={<Globe className="h-3.5 w-3.5" />}
+          icon={<Globe className="size-3.5" />}
           label="Network"
           count={networkEntries.length}
         />
         <TabTrigger
           value="attachments"
-          icon={<Paperclip className="h-3.5 w-3.5" />}
+          icon={<Paperclip className="size-3.5" />}
           label="Attachments"
         />
-        <TabTrigger
-          value="annotations"
-          icon={<Tag className="h-3.5 w-3.5" />}
-          label="Annotations"
-        />
+        <TabTrigger value="annotations" icon={<Tag className="size-3.5" />} label="Annotations" />
       </TabsList>
 
       <div className="min-h-0 flex-1">

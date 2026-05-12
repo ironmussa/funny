@@ -99,7 +99,7 @@ export function SelectionPopover({
               data-testid="plan-comment-button"
               className="flex items-center gap-1.5 rounded px-2 py-1 text-xs font-medium text-foreground transition-colors hover:bg-accent"
             >
-              <MessageSquare className="h-3.5 w-3.5" />
+              <MessageSquare className="size-3.5" />
               {t('plan.comment', 'Comment')}
             </button>
           </div>
@@ -241,10 +241,7 @@ export function highlightTextInDom(
 
     const mark = document.createElement('mark');
     mark.setAttribute('data-annotation-index', String(annotationIndex));
-    mark.style.backgroundColor = '#FFE500';
-    mark.style.color = 'black';
-    mark.style.padding = '0';
-    mark.style.margin = '0';
+    mark.style.cssText = 'background-color:#FFE500;color:black;padding:0;margin:0';
     mark.textContent = highlighted;
 
     const parent = textNode.parentNode;
@@ -266,7 +263,7 @@ export function highlightTextInDom(
 /** Group annotations that are within `threshold` px vertically */
 function groupAnnotationsByRow(annotations: AnnotationPosition[], threshold = 12) {
   if (annotations.length === 0) return [];
-  const sorted = [...annotations].sort((a, b) => a.top - b.top);
+  const sorted = annotations.toSorted((a, b) => a.top - b.top);
   const groups: { top: number; items: AnnotationPosition[] }[] = [];
   let current = { top: sorted[0].top, items: [sorted[0]] };
 
@@ -305,10 +302,10 @@ export function MarginAnnotations({
               <TooltipTrigger asChild>
                 <button
                   onClick={() => onRemove(a.index)}
-                  className="flex h-4 w-4 items-center justify-center rounded-full text-[10px] transition-colors hover:bg-destructive/20"
+                  className="flex size-4 items-center justify-center rounded-full text-[10px] transition-colors hover:bg-destructive/20"
                   data-testid={`plan-margin-annotation-${a.index}`}
                 >
-                  {a.emoji || <MessageSquare className="h-3 w-3 text-primary" />}
+                  {a.emoji || <MessageSquare className="size-3 text-primary" />}
                 </button>
               </TooltipTrigger>
               <TooltipContent side="left" className="max-w-56 text-xs">

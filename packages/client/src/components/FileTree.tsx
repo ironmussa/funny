@@ -138,7 +138,9 @@ export function buildTreeRows(
   }
 
   function flatten(node: FolderNode, depth: number, pathPrefix: string) {
-    const sortedFolders = [...node.children.entries()].sort(([a], [b]) => a.localeCompare(b));
+    const sortedFolders = Array.from(node.children.entries()).toSorted(([a], [b]) =>
+      a.localeCompare(b),
+    );
     for (const [name, child] of sortedFolders) {
       let compactedName = name;
       let current = child;
@@ -489,7 +491,7 @@ export function FileTree({
                   onClick={(e) => e.stopPropagation()}
                   onPointerDown={(e) => e.stopPropagation()}
                   aria-label={t('review.moreActions', 'More actions')}
-                  className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+                  className="flex size-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
                   data-testid={`${testIdPrefix}-folder-menu-${row.path}`}
                 >
                   <MoreHorizontal className="icon-sm" />
@@ -532,7 +534,7 @@ export function FileTree({
               </DropdownMenuContent>
             </DropdownMenu>
           ) : (
-            <span className="h-6 w-6 flex-shrink-0" />
+            <span className="size-6 flex-shrink-0" />
           )}
         </div>
       );
@@ -578,7 +580,7 @@ export function FileTree({
               onToggleFile(f.path);
             }}
             className={cn(
-              'flex items-center justify-center h-3.5 w-3.5 rounded border transition-colors flex-shrink-0',
+              'flex items-center justify-center size-3.5 rounded border transition-colors flex-shrink-0',
               isChecked
                 ? 'bg-primary border-primary text-primary-foreground'
                 : 'border-muted-foreground/40',
@@ -599,7 +601,7 @@ export function FileTree({
                 ? t('review.collapseSubmodule', { defaultValue: 'Collapse submodule' })
                 : t('review.expandSubmodule', { defaultValue: 'Expand submodule' })
             }
-            className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
+            className="flex size-4 flex-shrink-0 items-center justify-center rounded text-muted-foreground hover:text-foreground"
             data-testid={`${testIdPrefix}-submodule-toggle-${f.path}`}
           >
             <ChevronRight
@@ -609,13 +611,13 @@ export function FileTree({
         )}
         {isSubmodule ? (
           <GitBranch
-            className="h-4 w-4 flex-shrink-0 text-purple-500 dark:text-purple-400"
+            className="size-4 flex-shrink-0 text-purple-500 dark:text-purple-400"
             data-testid={`${testIdPrefix}-submodule-icon-${f.path}`}
           />
         ) : (
           <FileExtensionIcon
             filePath={f.path}
-            className="h-4 w-4 flex-shrink-0 text-muted-foreground/80"
+            className="size-4 flex-shrink-0 text-muted-foreground/80"
           />
         )}
         {searchQuery ? (
@@ -714,7 +716,7 @@ export function FileTree({
               onClick={(e) => e.stopPropagation()}
               onPointerDown={(e) => e.stopPropagation()}
               aria-label={t('review.moreActions', 'More actions')}
-              className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
+              className="flex size-6 flex-shrink-0 items-center justify-center rounded text-muted-foreground opacity-0 transition-all hover:bg-sidebar-accent hover:text-foreground group-hover:opacity-100 data-[state=open]:opacity-100"
               data-testid={`${testIdPrefix}-menu-${f.path}`}
             >
               <MoreHorizontal className="icon-sm" />

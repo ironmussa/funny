@@ -12,7 +12,7 @@ import {
 } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
 import { useMachine } from '@xstate/react';
 import { Plus, X, Square, Loader2, AlertCircle, RotateCcw, Zap } from 'lucide-react';
-import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import { useRef, useState, useCallback, useEffect, useEffectEvent, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -659,7 +659,7 @@ function WebTerminalTabContent({
 
   return (
     <div className={cn('absolute inset-0', active ? 'z-10' : 'z-0 invisible pointer-events-none')}>
-      <div ref={containerRef} className="h-full w-full bg-background" />
+      <div ref={containerRef} className="size-full bg-background" />
       <TerminalPhaseOverlay phase={phase} error={tabError} onRestart={handleRestart} />
     </div>
   );
@@ -1009,17 +1009,19 @@ function DraggableTerminalTab({
     setIsEditing(false);
   }, [tab.label]);
 
+  const onOutsidePointerDown = useEffectEvent((event: PointerEvent) => {
+    const input = inputRef.current;
+    if (!input) return;
+    if (event.target instanceof Node && input.contains(event.target)) return;
+    cancelRename();
+  });
+
   useEffect(() => {
     if (!isEditing) return;
-    const handlePointerDown = (event: PointerEvent) => {
-      const input = inputRef.current;
-      if (!input) return;
-      if (event.target instanceof Node && input.contains(event.target)) return;
-      cancelRename();
-    };
+    const handlePointerDown = (event: PointerEvent) => onOutsidePointerDown(event);
     document.addEventListener('pointerdown', handlePointerDown, true);
     return () => document.removeEventListener('pointerdown', handlePointerDown, true);
-  }, [isEditing, cancelRename]);
+  }, [isEditing]);
 
   useEffect(() => {
     const el = ref.current;
@@ -1082,7 +1084,7 @@ function DraggableTerminalTab({
         >
           {tab.hasBell && !active && (
             <span
-              className="h-1.5 w-1.5 animate-pulse rounded-full bg-yellow-500"
+              className="size-1.5 animate-pulse rounded-full bg-yellow-500"
               data-testid={`terminal-tab-bell-${tab.id}`}
             />
           )}

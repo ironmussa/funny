@@ -144,15 +144,15 @@ export function AcceptInvitePage({ token }: Props) {
         {/* Verifying token */}
         {step === 'verifying' && (
           <>
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
-            <p className="text-sm text-muted-foreground">Verifying invite link...</p>
+            <Loader2 className="mx-auto size-8 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Verifying invite link…</p>
           </>
         )}
 
         {/* Registration / Login form */}
         {step === 'register' && (
           <>
-            <UserPlus className="mx-auto h-8 w-8 text-primary" />
+            <UserPlus className="mx-auto size-8 text-primary" />
             <div>
               <h2 className="text-lg font-semibold text-foreground">Join {orgName}</h2>
               <p className="mt-1 text-sm text-muted-foreground">
@@ -268,7 +268,7 @@ export function AcceptInvitePage({ token }: Props) {
         {/* Accepting invite */}
         {step === 'accepting' && (
           <>
-            <Loader2 className="mx-auto h-8 w-8 animate-spin text-muted-foreground" />
+            <Loader2 className="mx-auto size-8 animate-spin text-muted-foreground" />
             <p className="text-sm text-muted-foreground">Joining {orgName}...</p>
           </>
         )}
@@ -276,7 +276,7 @@ export function AcceptInvitePage({ token }: Props) {
         {/* Success */}
         {step === 'success' && (
           <>
-            <CheckCircle2 className="mx-auto h-8 w-8 text-green-500" />
+            <CheckCircle2 className="mx-auto size-8 text-green-500" />
             <h2 className="text-lg font-semibold text-foreground">You're in!</h2>
             <p className="text-sm text-muted-foreground">
               You've successfully joined <span className="font-medium">{orgName}</span>.
@@ -290,7 +290,7 @@ export function AcceptInvitePage({ token }: Props) {
         {/* Already a member */}
         {step === 'already' && (
           <>
-            <CheckCircle2 className="mx-auto h-8 w-8 text-blue-500" />
+            <CheckCircle2 className="mx-auto size-8 text-blue-500" />
             <h2 className="text-lg font-semibold text-foreground">Already a member</h2>
             <p className="text-sm text-muted-foreground">
               You're already a member of <span className="font-medium">{orgName}</span>.
@@ -304,7 +304,7 @@ export function AcceptInvitePage({ token }: Props) {
         {/* Error */}
         {step === 'error' && (
           <>
-            <XCircle className="mx-auto h-8 w-8 text-destructive" />
+            <XCircle className="mx-auto size-8 text-destructive" />
             <h2 className="text-lg font-semibold text-foreground">Invitation failed</h2>
             <p className="text-sm text-muted-foreground">{errorMessage}</p>
             <Button

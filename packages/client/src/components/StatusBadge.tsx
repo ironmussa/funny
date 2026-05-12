@@ -26,10 +26,10 @@ export function StatusBadge({ status }: { status: ThreadStatus }) {
       className={cn('inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', style)}
     >
       {(status === 'running' || status === 'setting_up') && (
-        <span className="mr-1 h-1.5 w-1.5 animate-pulse rounded-full bg-status-info" />
+        <span className="mr-1 size-1.5 animate-pulse rounded-full bg-status-info" />
       )}
       {status === 'waiting' && (
-        <span className="mr-1 h-1.5 w-1.5 animate-pulse rounded-full bg-status-warning" />
+        <span className="mr-1 size-1.5 animate-pulse rounded-full bg-status-warning" />
       )}
       {statusLabels[status]}
     </span>

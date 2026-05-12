@@ -284,7 +284,7 @@ export function HeaderLeftSection() {
                 >
                   {activeTemplate.color && (
                     <span
-                      className="inline-block h-2 w-2 rounded-full"
+                      className="inline-block size-2 rounded-full"
                       style={{ backgroundColor: activeTemplate.color }}
                     />
                   )}
@@ -303,7 +303,7 @@ export function HeaderLeftSection() {
               target="_blank"
               rel="noopener noreferrer"
               data-testid="header-linear-link"
-              className="flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+              className="flex size-7 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-accent-foreground"
             >
               <ExternalLink className="icon-base" />
             </a>

@@ -21,7 +21,7 @@ export function DiffCommentIndicator({ threads }: DiffCommentIndicatorProps) {
           className="inline-flex items-center gap-0.5 rounded bg-blue-500/20 px-1 py-0.5 text-[10px] font-medium text-blue-400 hover:bg-blue-500/30"
           data-testid={`comment-indicator-${threads[0]?.id}`}
         >
-          <MessageSquare className="h-2.5 w-2.5" />
+          <MessageSquare className="size-2.5" />
           {totalComments}
         </button>
       </PopoverTrigger>

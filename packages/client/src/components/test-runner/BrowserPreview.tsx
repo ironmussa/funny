@@ -417,13 +417,13 @@ export function BrowserPreview({
         <div className="relative flex min-h-0 min-w-0 flex-1 items-center justify-center overflow-auto bg-black/5">
           {!isRunning && !isStreaming ? (
             <div className="flex flex-col items-center gap-2 text-muted-foreground">
-              <Monitor className="h-8 w-8" />
+              <Monitor className="size-8" />
               <span className="text-sm">No test running</span>
             </div>
           ) : isRunning && !isStreaming ? (
             <div className="flex flex-col items-center gap-2 text-muted-foreground">
-              <Loader2 className="h-8 w-8 animate-spin" />
-              <span className="text-sm">Connecting to browser...</span>
+              <Loader2 className="size-8 animate-spin" />
+              <span className="text-sm">Connecting to browser…</span>
             </div>
           ) : null}
           <canvas

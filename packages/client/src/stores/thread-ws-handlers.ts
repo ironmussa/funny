@@ -232,11 +232,11 @@ export function handleWSMessage(
     };
   });
 
-  // Drop the cached snapshot for non-active threads so the next selectThread()
-  // refetches and shows the new message instead of the frozen pre-switch view.
-  if (activeThread?.id !== threadId) {
-    invalidateThreadData(threadId);
-  }
+  // Drop the cached snapshot so the next selectThread() refetches. Must run
+  // even when the thread is currently active — otherwise switching away and
+  // back resolves from the pre-event cache and the new message is invisible
+  // until a hard refresh.
+  invalidateThreadData(threadId);
 
   // Update sidebar snippet for assistant messages on non-active threads
   if (activeThread?.id !== threadId && data.role === 'assistant' && data.content) {
@@ -354,11 +354,10 @@ export function handleWSToolCall(
     };
   });
 
-  // Drop the cached snapshot for non-active threads so the next selectThread()
-  // refetches and includes this tool call.
-  if (activeThread?.id !== threadId) {
-    invalidateThreadData(threadId);
-  }
+  // Drop the cached snapshot so the next selectThread() refetches and includes
+  // this tool call. Runs unconditionally so the active thread's cache stays in
+  // sync with the live activeThread state.
+  invalidateThreadData(threadId);
 }
 
 // ── Tool Output ─────────────────────────────────────────────────
@@ -370,10 +369,12 @@ export function handleWSToolOutput(
   data: { toolCallId: string; output: string },
 ): void {
   const { activeThread, selectedThreadId } = get();
+  // Cached snapshot would still hold the tool call without its output —
+  // invalidate unconditionally so switching away and back doesn't show the
+  // stale pre-output state.
+  invalidateThreadData(threadId);
   if (activeThread?.id !== threadId) {
     if (selectedThreadId === threadId) bufferWSEvent(threadId, 'tool_output', data);
-    // Cached snapshot would still hold the tool call without its output.
-    invalidateThreadData(threadId);
   } else {
     // Find and update only the specific message containing the tool call.
     for (let i = 0; i < activeThread.messages.length; i++) {
@@ -423,12 +424,14 @@ export function handleWSStatus(
 ): void {
   const { threadsByProject, activeThread, loadThreadsForProject, selectedThreadId } = get();
 
-  // Buffer status events when thread is selected but not yet fully loaded
+  // Buffer status events when thread is selected but not yet fully loaded.
+  // Invalidate cache unconditionally so the active thread's snapshot reflects
+  // the new status when the user navigates away and returns.
+  invalidateThreadData(threadId);
   if (!activeThread?.id || activeThread.id !== threadId) {
     if (selectedThreadId === threadId) {
       bufferWSEvent(threadId, 'status', data);
     }
-    invalidateThreadData(threadId);
   }
 
   const machineEvent = wsEventToMachineEvent('agent:status', data);
@@ -580,20 +583,20 @@ export function handleWSStatus(
 export function handleWSResult(get: Get, set: Set, threadId: string, data: any): void {
   const { threadsByProject, activeThread, loadThreadsForProject, selectedThreadId } = get();
 
-  // When the result event arrives for a thread that isn't the currently
-  // viewed activeThread, two things must happen so the UI stays consistent:
-  //   1. If the user is mid-selection of this thread (selectedThreadId match
-  //      but activeThread not yet hydrated), buffer the event so flushWSBuffer
-  //      replays it once activeThread is loaded.
-  //   2. Invalidate the cached snapshot so the next selectThread() refetches
-  //      the final messages/tool calls/resultInfo from the server.
-  // Sidebar status (threadsByProject) and live-column state are still updated
-  // unconditionally below.
+  // Invalidate the cached snapshot unconditionally so the next selectThread()
+  // refetches the final messages/tool calls/resultInfo from the server. This
+  // must run even when the result is for the active thread — otherwise the
+  // user switches away, comes back, and the data-actor returns the stale
+  // pre-completion snapshot, making the thread look as if it never finished.
+  invalidateThreadData(threadId);
+  // When the result event arrives mid-selection (selectedThreadId match but
+  // activeThread not yet hydrated), buffer the event so flushWSBuffer replays
+  // it once activeThread is loaded. Sidebar status (threadsByProject) and
+  // live-column state are still updated unconditionally below.
   if (!activeThread?.id || activeThread.id !== threadId) {
     if (selectedThreadId === threadId) {
       bufferWSEvent(threadId, 'result', data);
     }
-    invalidateThreadData(threadId);
   }
 
   const machineEvent = wsEventToMachineEvent('agent:result', data);

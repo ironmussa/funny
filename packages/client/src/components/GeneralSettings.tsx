@@ -46,7 +46,11 @@ export function GeneralSettings() {
 
   const saveProject = useCallback(
     async (projectId: string, data: Parameters<typeof updateProject>[1]) => {
-      await updateProject(projectId, data);
+      const result = await updateProject(projectId, data);
+      if (result.isErr()) {
+        toast.error(result.error.message, { id: 'project-settings-saved' });
+        return;
+      }
       toast.success(t('settings.projectSaved'), { id: 'project-settings-saved' });
     },
     [updateProject, t],
@@ -112,11 +116,7 @@ export function GeneralSettings() {
             Project
           </h3>
           <div className="mb-6 overflow-hidden rounded-lg border border-border/50">
-            <ProjectPathSetting
-              projectId={selectedProject.id}
-              currentPath={selectedProject.path}
-              onSave={saveProject}
-            />
+            <ProjectPathSetting projectId={selectedProject.id} currentPath={selectedProject.path} />
             <ProjectColorPicker
               projectId={selectedProject.id}
               currentColor={selectedProject.color}

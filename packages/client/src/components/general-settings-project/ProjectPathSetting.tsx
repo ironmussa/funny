@@ -1,28 +1,37 @@
 import { FolderOpen } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { toast } from 'sonner';
 
 import { FolderPicker } from '@/components/FolderPicker';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import { api } from '@/lib/api';
+import { useProjectStore } from '@/stores/project-store';
 
 interface Props {
   projectId: string;
   currentPath: string;
-  onSave: (projectId: string, data: { path: string }) => Promise<void>;
 }
 
-/**
- * Editable text input + folder picker for the project's filesystem path.
- * Extracted from GeneralSettings so the parent doesn't import FolderPicker
- * or the FolderOpen icon.
- */
-export function ProjectPathSetting({ projectId, currentPath, onSave }: Props) {
+const GIT_INIT_TRIGGERS = ['Not a git repository', 'nested inside another git repository'];
+
+export function ProjectPathSetting({ projectId, currentPath }: Props) {
   const { t } = useTranslation();
+  const updateProject = useProjectStore((s) => s.updateProject);
   const [value, setValue] = useState(currentPath);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [gitInitOpen, setGitInitOpen] = useState(false);
 
   useEffect(() => {
     setValue(currentPath);
@@ -30,10 +39,43 @@ export function ProjectPathSetting({ projectId, currentPath, onSave }: Props) {
 
   const dirty = value.trim() !== currentPath && value.trim().length > 0;
 
+  const trySave = async (path: string) => {
+    const result = await updateProject(projectId, { path });
+    if (result.isOk()) {
+      toast.success(t('settings.projectSaved'), { id: 'project-settings-saved' });
+      return { ok: true as const };
+    }
+    return { ok: false as const, message: result.error.message };
+  };
+
   const handleSave = async () => {
     setSaving(true);
     try {
-      await onSave(projectId, { path: value.trim() });
+      const res = await trySave(value.trim());
+      if (!res.ok) {
+        if (GIT_INIT_TRIGGERS.some((s) => res.message.includes(s))) {
+          setGitInitOpen(true);
+        } else {
+          toast.error(res.message, { id: 'project-settings-saved' });
+        }
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleGitInit = async () => {
+    setGitInitOpen(false);
+    setSaving(true);
+    try {
+      const path = value.trim();
+      const initResult = await api.gitInit(path);
+      if (initResult.isErr()) {
+        toast.error(initResult.error.message, { id: 'project-settings-saved' });
+        return;
+      }
+      const res = await trySave(path);
+      if (!res.ok) toast.error(res.message, { id: 'project-settings-saved' });
     } finally {
       setSaving(false);
     }
@@ -90,6 +132,28 @@ export function ProjectPathSetting({ projectId, currentPath, onSave }: Props) {
           onClose={() => setPickerOpen(false)}
         />
       )}
+      <Dialog open={gitInitOpen} onOpenChange={setGitInitOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {t('confirm.gitInitTitle', { defaultValue: 'Initialize Git Repository' })}
+            </DialogTitle>
+            <DialogDescription>{t('confirm.notGitRepo', { path: value.trim() })}</DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              data-testid="settings-git-init-cancel"
+              variant="outline"
+              onClick={() => setGitInitOpen(false)}
+            >
+              {t('common.cancel', { defaultValue: 'Cancel' })}
+            </Button>
+            <Button data-testid="settings-git-init-confirm" onClick={handleGitInit}>
+              {t('confirm.gitInitAction', { defaultValue: 'Initialize' })}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

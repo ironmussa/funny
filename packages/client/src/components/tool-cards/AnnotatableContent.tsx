@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect, useEffectEvent, useCallback } from 'react';
 
 import { cn } from '@/lib/utils';
 
@@ -66,20 +66,22 @@ export function AnnotatableContent({
     window.getSelection()?.removeAllRanges();
   }, []);
 
+  const onOutsideMouseDown = useEffectEvent((e: MouseEvent) => {
+    const popover = document.querySelector('[data-testid="plan-selection-popover"]');
+    if (popover && popover.contains(e.target as Node)) return;
+    clearSelection();
+  });
+
   // Dismiss popover on outside click
   useEffect(() => {
     if (!selection) return;
-    const handleClick = (e: MouseEvent) => {
-      const popover = document.querySelector('[data-testid="plan-selection-popover"]');
-      if (popover && popover.contains(e.target as Node)) return;
-      clearSelection();
-    };
+    const handleClick = (e: MouseEvent) => onOutsideMouseDown(e);
     const timer = setTimeout(() => document.addEventListener('mousedown', handleClick), 100);
     return () => {
       clearTimeout(timer);
       document.removeEventListener('mousedown', handleClick);
     };
-  }, [selection, clearSelection]);
+  }, [selection]);
 
   // ── Highlight annotations + track positions ──
   const [annotationPositions, setAnnotationPositions] = useState<AnnotationPosition[]>([]);

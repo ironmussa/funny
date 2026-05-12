@@ -102,8 +102,7 @@ function useThreadSearch(
       const matchNode = textNode.splitText(index);
       const mark = document.createElement('mark');
       mark.setAttribute('data-search-hl', '');
-      mark.style.backgroundColor = '#FFE500';
-      mark.style.color = 'black';
+      mark.style.cssText = 'background-color:#FFE500;color:black';
       mark.className = 'rounded-sm px-px font-semibold';
       mark.textContent = matchNode.textContent;
       matchNode.parentNode!.replaceChild(mark, matchNode);
@@ -147,8 +146,7 @@ function useThreadSearch(
         marks.forEach((m) => {
           const mEl = m as HTMLElement;
           mEl.removeAttribute('data-search-current');
-          mEl.style.backgroundColor = '#FFE500';
-          mEl.style.boxShadow = '';
+          Object.assign(mEl.style, { backgroundColor: '#FFE500', boxShadow: '' });
         });
         const clampedIdx = Math.max(0, Math.min(withinIdx, marks.length - 1));
         const target = marks[clampedIdx] as HTMLElement | undefined;

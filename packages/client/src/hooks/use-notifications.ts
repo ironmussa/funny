@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { createClientLogger } from '@/lib/client-logger';
 import { useSettingsStore } from '@/stores/settings-store';
@@ -131,10 +131,6 @@ export function showAgentNotification(
  */
 export function useNotifications() {
   const [permission, setPermission] = useState<NotificationPermissionState>(readPermission);
-
-  useEffect(() => {
-    setPermission(readPermission());
-  }, []);
 
   const requestPermission = useCallback(async (): Promise<NotificationPermissionState> => {
     if (!isNotificationsSupported()) return 'unsupported';

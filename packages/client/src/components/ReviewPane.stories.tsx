@@ -452,7 +452,13 @@ function seedStores(
 
 // ── Wrapper ─────────────────────────────────────────────────
 
-function ReviewPaneWrapper({ mockFetchOpts = {} }: { mockFetchOpts?: MockFetchOptions }) {
+const EMPTY_MOCK_OPTS: MockFetchOptions = {};
+
+function ReviewPaneWrapper({
+  mockFetchOpts = EMPTY_MOCK_OPTS,
+}: {
+  mockFetchOpts?: MockFetchOptions;
+}) {
   // Install mock fetch synchronously BEFORE the first render so that
   // ReviewPane's mount effect (which fires before parent effects) hits
   // the mock instead of the real network — fixing "Failed to load changes".

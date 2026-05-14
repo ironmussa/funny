@@ -5,13 +5,15 @@ import '@/i18n/config';
 import { AnnotatableContent } from './AnnotatableContent';
 import type { PlanComment } from './PlanReviewDialog';
 
+const EMPTY_COMMENTS: PlanComment[] = [];
+
 /* -------------------------------------------------------------------------- */
 /*  Interactive wrapper                                                        */
 /* -------------------------------------------------------------------------- */
 
 function InteractiveWrapper({
   children,
-  initialComments = [],
+  initialComments = EMPTY_COMMENTS,
 }: {
   children: React.ReactNode;
   initialComments?: PlanComment[];

@@ -7,41 +7,48 @@ const TooltipProvider = TooltipPrimitive.Provider;
 
 const Tooltip = TooltipPrimitive.Root;
 
-const TooltipTrigger = React.forwardRef<
-  React.ElementRef<typeof TooltipPrimitive.Trigger>,
-  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Trigger>
->(({ onFocusCapture, ...props }, ref) => (
-  <TooltipPrimitive.Trigger
-    ref={ref}
-    onFocusCapture={(event) => {
-      onFocusCapture?.(event);
-      if (event.defaultPrevented || event.isPropagationStopped()) return;
-      const target = event.target as HTMLElement | null;
-      if (target && typeof target.matches === 'function' && !target.matches(':focus-visible')) {
-        event.stopPropagation();
-      }
-    }}
-    {...props}
-  />
-));
-TooltipTrigger.displayName = TooltipPrimitive.Trigger.displayName;
-
-const TooltipContent = React.forwardRef<
-  React.ElementRef<typeof TooltipPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content>
->(({ className, sideOffset = 4, ...props }, ref) => (
-  <TooltipPrimitive.Portal>
-    <TooltipPrimitive.Content
+function TooltipTrigger({
+  onFocusCapture,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Trigger> & {
+  ref?: React.Ref<React.ElementRef<typeof TooltipPrimitive.Trigger>>;
+}) {
+  return (
+    <TooltipPrimitive.Trigger
       ref={ref}
-      sideOffset={sideOffset}
-      className={cn(
-        'z-50 rounded-md border border-white/20 bg-white px-2 py-1 text-xs text-gray-900 shadow-md animate-in fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
-        className,
-      )}
+      onFocusCapture={(event) => {
+        onFocusCapture?.(event);
+        if (event.defaultPrevented || event.isPropagationStopped()) return;
+        const target = event.target as HTMLElement | null;
+        if (target && typeof target.matches === 'function' && !target.matches(':focus-visible')) {
+          event.stopPropagation();
+        }
+      }}
       {...props}
     />
-  </TooltipPrimitive.Portal>
-));
-TooltipContent.displayName = TooltipPrimitive.Content.displayName;
-
+  );
+}
+function TooltipContent({
+  className,
+  sideOffset = 4,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof TooltipPrimitive.Content> & {
+  ref?: React.Ref<React.ElementRef<typeof TooltipPrimitive.Content>>;
+}) {
+  return (
+    <TooltipPrimitive.Portal>
+      <TooltipPrimitive.Content
+        ref={ref}
+        sideOffset={sideOffset}
+        className={cn(
+          'z-50 rounded-md border border-white/20 bg-white px-2 py-1 text-xs text-gray-900 shadow-md animate-in fade-in-0 data-[state=closed]:animate-out data-[state=closed]:fade-out-0',
+          className,
+        )}
+        {...props}
+      />
+    </TooltipPrimitive.Portal>
+  );
+}
 export { Tooltip, TooltipTrigger, TooltipContent, TooltipProvider };

@@ -37,6 +37,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
+import { setDashedDragPreview } from '@/lib/drag-preview';
 import { openDirectoryInEditor, getEditorLabel } from '@/lib/editor-utils';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
@@ -91,6 +92,8 @@ const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThrea
         threadId: thread.id,
         projectId,
       }),
+      onGenerateDragPreview: ({ nativeSetDragImage }) =>
+        setDashedDragPreview({ nativeSetDragImage, source: el }),
       onDragStart: () => setIsDragging(true),
       onDrop: () => setIsDragging(false),
     });

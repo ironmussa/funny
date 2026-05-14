@@ -13,22 +13,23 @@ const NO_GROUP = new Set(['AskUserQuestion', 'ExitPlanMode']);
 export function groupConsecutiveToolCalls(items: { tc: any }[]): ToolItem[] {
   const grouped: ToolItem[] = [];
   for (const item of items) {
+    const { tc } = item;
     const last = grouped[grouped.length - 1];
-    if (!NO_GROUP.has(item.tc.name)) {
-      if (last?.type === 'toolcall' && last.tc.name === item.tc.name) {
+    if (!NO_GROUP.has(tc.name)) {
+      if (last?.type === 'toolcall' && last.tc.name === tc.name) {
         grouped[grouped.length - 1] = {
           type: 'toolcall-group',
-          name: item.tc.name,
-          calls: [last.tc, item.tc],
+          name: tc.name,
+          calls: [last.tc, tc],
         };
         continue;
       }
-      if (last?.type === 'toolcall-group' && last.name === item.tc.name) {
-        last.calls.push(item.tc);
+      if (last?.type === 'toolcall-group' && last.name === tc.name) {
+        last.calls.push(tc);
         continue;
       }
     }
-    grouped.push({ type: 'toolcall', tc: item.tc });
+    grouped.push({ type: 'toolcall', tc });
   }
   return grouped;
 }

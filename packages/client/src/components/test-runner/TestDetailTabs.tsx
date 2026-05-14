@@ -881,6 +881,18 @@ function SourceTab({
 // ─── Tab: Call ─────────────────────────────────────────────
 
 /** Regex to match Playwright action lines from --reporter=line output */
+const PLAYWRIGHT_SNIPPETS = [
+  'page.goto',
+  'page.click',
+  'page.fill',
+  'page.type',
+  'page.press',
+  'page.waitFor',
+  'locator.',
+  'expect(',
+  'navigating to',
+  'waiting for',
+];
 const ACTION_PATTERN =
   /^(\s*)(\d+\s+\|)?\s*(page\.|locator\.|expect\(|await\s+(?:page|locator|expect))/;
 const STEP_PATTERN = /^(\s*)(›|→|⮕|➤|\d+\))\s+(.+)/;
@@ -914,16 +926,7 @@ function CallTab({
       if (
         ACTION_PATTERN.test(text) ||
         STEP_PATTERN.test(text) ||
-        text.includes('page.goto') ||
-        text.includes('page.click') ||
-        text.includes('page.fill') ||
-        text.includes('page.type') ||
-        text.includes('page.press') ||
-        text.includes('page.waitFor') ||
-        text.includes('locator.') ||
-        text.includes('expect(') ||
-        text.includes('navigating to') ||
-        text.includes('waiting for') ||
+        PLAYWRIGHT_SNIPPETS.some((s) => text.includes(s)) ||
         /^\s*\d+\s*\|/.test(text)
       ) {
         result.push({

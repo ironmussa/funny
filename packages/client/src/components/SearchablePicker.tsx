@@ -320,10 +320,11 @@ export function SearchablePicker({
 }
 
 const CREATE_NEW_BRANCH_KEY = '__create_new_branch__';
+const EMPTY_REMOTE_BRANCHES: string[] = [];
 
 export function BranchPicker({
   branches,
-  remoteBranches = [],
+  remoteBranches = EMPTY_REMOTE_BRANCHES,
   defaultBranch,
   selected,
   onChange,

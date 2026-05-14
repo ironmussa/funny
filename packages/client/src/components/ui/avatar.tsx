@@ -79,54 +79,71 @@ const avatarVariants = cva('relative flex shrink-0 overflow-hidden rounded-full'
   },
 });
 
-const Avatar = React.forwardRef<
-  React.ElementRef<typeof AvatarPrimitive.Root>,
-  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root> & VariantProps<typeof avatarVariants>
->(({ className, size, ...props }, ref) => (
-  <AvatarPrimitive.Root ref={ref} className={cn(avatarVariants({ size }), className)} {...props} />
-));
-Avatar.displayName = AvatarPrimitive.Root.displayName;
-
-const AvatarImage = React.forwardRef<
-  React.ElementRef<typeof AvatarPrimitive.Image>,
-  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image>
->(({ className, ...props }, ref) => (
-  <AvatarPrimitive.Image
-    ref={ref}
-    className={cn('aspect-square h-full w-full', className)}
-    {...props}
-  />
-));
-AvatarImage.displayName = AvatarPrimitive.Image.displayName;
-
-const AvatarFallback = React.forwardRef<
-  React.ElementRef<typeof AvatarPrimitive.Fallback>,
-  React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback> & { name?: string }
->(({ className, name, style, ...props }, ref) => (
-  <AvatarPrimitive.Fallback
-    ref={ref}
-    className={cn(
-      'flex h-full w-full items-center justify-center rounded-full',
-      !name && 'bg-muted',
-      className,
-    )}
-    style={
-      name
-        ? (() => {
-            const hue = stringToHue(name);
-            const s = 0.6,
-              l = 0.8;
-            return {
-              backgroundColor: `hsl(${hue}, ${s * 100}%, ${l * 100}%)`,
-              color: contrastingTextColor(hue, s, l),
-              ...style,
-            };
-          })()
-        : style
-    }
-    {...props}
-  />
-));
-AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName;
-
+function Avatar({
+  className,
+  size,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Root> &
+  VariantProps<typeof avatarVariants> & {
+    ref?: React.Ref<React.ElementRef<typeof AvatarPrimitive.Root>>;
+  }) {
+  return (
+    <AvatarPrimitive.Root
+      ref={ref}
+      className={cn(avatarVariants({ size }), className)}
+      {...props}
+    />
+  );
+}
+function AvatarImage({
+  className,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Image> & {
+  ref?: React.Ref<React.ElementRef<typeof AvatarPrimitive.Image>>;
+}) {
+  return (
+    <AvatarPrimitive.Image
+      ref={ref}
+      className={cn('aspect-square h-full w-full', className)}
+      {...props}
+    />
+  );
+}
+function AvatarFallback({
+  className,
+  name,
+  style,
+  ref,
+  ...props
+}: React.ComponentPropsWithoutRef<typeof AvatarPrimitive.Fallback> & { name?: string } & {
+  ref?: React.Ref<React.ElementRef<typeof AvatarPrimitive.Fallback>>;
+}) {
+  return (
+    <AvatarPrimitive.Fallback
+      ref={ref}
+      className={cn(
+        'flex h-full w-full items-center justify-center rounded-full',
+        !name && 'bg-muted',
+        className,
+      )}
+      style={
+        name
+          ? (() => {
+              const hue = stringToHue(name);
+              const s = 0.6,
+                l = 0.8;
+              return {
+                backgroundColor: `hsl(${hue}, ${s * 100}%, ${l * 100}%)`,
+                color: contrastingTextColor(hue, s, l),
+                ...style,
+              };
+            })()
+          : style
+      }
+      {...props}
+    />
+  );
+}
 export { Avatar, AvatarImage, AvatarFallback };

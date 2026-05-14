@@ -119,8 +119,8 @@ export const DiffMinimap = memo(function DiffMinimap({
     };
   }, [scrollElement, totalSize, containerHeight]);
 
-  // Handle click → scroll to position
-  const handleClick = useCallback(
+  // Click on minimap → scroll the viewport to that vertical position
+  const scrollToClick = useCallback(
     (e: React.MouseEvent) => {
       if (!scrollElement || containerHeight === 0) return;
       const rect = e.currentTarget.getBoundingClientRect();
@@ -168,7 +168,7 @@ export const DiffMinimap = memo(function DiffMinimap({
       ref={containerRef}
       className="relative flex-shrink-0 cursor-pointer border-l border-border/50 bg-muted/20"
       style={{ width: MINIMAP_WIDTH }}
-      onClick={handleClick}
+      onClick={scrollToClick}
       data-testid="diff-minimap"
     >
       <canvas ref={canvasRef} className="block" />

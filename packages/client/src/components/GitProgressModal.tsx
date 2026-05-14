@@ -51,27 +51,26 @@ export function useStepTimers(steps: GitProgressStep[], open: boolean) {
   // Track status transitions — seed from persisted timestamps when available
   useEffect(() => {
     const now = Date.now();
+    const startMap = startTimes.current;
+    const endMap = endTimes.current;
     for (const step of steps) {
-      if (step.status === 'running' && !startTimes.current.has(step.id)) {
-        startTimes.current.set(step.id, step.startedAt ?? now);
-        endTimes.current.delete(step.id);
+      if (step.status === 'running' && !startMap.has(step.id)) {
+        startMap.set(step.id, step.startedAt ?? now);
+        endMap.delete(step.id);
       }
-      if (
-        (step.status === 'completed' || step.status === 'failed') &&
-        !endTimes.current.has(step.id)
-      ) {
+      if ((step.status === 'completed' || step.status === 'failed') && !endMap.has(step.id)) {
         // Seed both start and end from persisted timestamps if available
-        if (!startTimes.current.has(step.id) && step.startedAt) {
-          startTimes.current.set(step.id, step.startedAt);
+        if (!startMap.has(step.id) && step.startedAt) {
+          startMap.set(step.id, step.startedAt);
         }
-        if (startTimes.current.has(step.id)) {
-          endTimes.current.set(step.id, step.completedAt ?? now);
+        if (startMap.has(step.id)) {
+          endMap.set(step.id, step.completedAt ?? now);
         }
       }
       // If a step went back to pending (e.g. commit reset on hook failure), clear its timers
       if (step.status === 'pending') {
-        startTimes.current.delete(step.id);
-        endTimes.current.delete(step.id);
+        startMap.delete(step.id);
+        endMap.delete(step.id);
       }
     }
   }, [steps]);

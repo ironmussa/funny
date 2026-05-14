@@ -383,7 +383,7 @@ function TemplateEditor({
             onClick={onClose}
             data-testid="agent-template-editor-close"
           >
-            Done
+            Close editor
           </Button>
         </div>
       </div>

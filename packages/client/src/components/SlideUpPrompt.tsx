@@ -10,18 +10,33 @@ import {
 
 import { PromptInput } from './PromptInput';
 
+type SlideUpSubmitOpts = {
+  provider?: string;
+  model: string;
+  mode: string;
+  effort?: string;
+  threadMode?: string;
+  runtime?: string;
+  baseBranch?: string;
+  sendToBacklog?: boolean;
+  fileReferences?: { path: string; type?: 'file' | 'folder' }[];
+  symbolReferences?: {
+    path: string;
+    name: string;
+    kind: string;
+    line: number;
+    endLine?: number;
+  }[];
+  agentTemplateId?: string;
+  templateVariables?: Record<string, string>;
+};
+
 interface SlideUpPromptProps {
   open: boolean;
   onClose: () => void;
   onSubmit: (
     prompt: string,
-    opts: {
-      model: string;
-      mode: string;
-      threadMode?: string;
-      baseBranch?: string;
-      sendToBacklog?: boolean;
-    },
+    opts: SlideUpSubmitOpts,
     images?: any[],
   ) => Promise<boolean | void> | boolean | void;
   loading?: boolean;
@@ -39,13 +54,7 @@ export function SlideUpPrompt({
 
   const handleSubmit = async (
     prompt: string,
-    opts: {
-      model: string;
-      mode: string;
-      threadMode?: string;
-      baseBranch?: string;
-      sendToBacklog?: boolean;
-    },
+    opts: SlideUpSubmitOpts,
     images?: any[],
   ): Promise<boolean> => {
     const result = await onSubmit(prompt, opts, images);

@@ -203,7 +203,7 @@ export const OpenAndClose: Story = {
           <DialogDescription>Testing open and close.</DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button data-testid="dialog-ok">OK</Button>
+          <Button data-testid="dialog-ok">Confirm action</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

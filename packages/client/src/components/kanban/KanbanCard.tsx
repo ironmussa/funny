@@ -25,6 +25,7 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { api } from '@/lib/api';
+import { setDashedDragPreview } from '@/lib/drag-preview';
 import { statusConfig, timeAgo } from '@/lib/thread-utils';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
@@ -83,6 +84,8 @@ export const KanbanCard = memo(function KanbanCard({
         sourceStage: thread.archived ? 'archived' : thread.stage || 'backlog',
         projectId: thread.projectId,
       }),
+      onGenerateDragPreview: ({ nativeSetDragImage }) =>
+        setDashedDragPreview({ nativeSetDragImage, source: el }),
       onDragStart: () => setIsDragging(true),
       onDrop: () => setIsDragging(false),
     });

@@ -22,11 +22,12 @@ const textareaVariants = cva(
 export interface TextareaProps
   extends Omit<React.ComponentProps<'textarea'>, 'size'>, VariantProps<typeof textareaVariants> {}
 
-const Textarea = React.forwardRef<HTMLTextAreaElement, TextareaProps>(
-  ({ className, size, ...props }, ref) => {
-    return <textarea className={cn(textareaVariants({ size }), className)} ref={ref} {...props} />;
-  },
-);
-Textarea.displayName = 'Textarea';
-
+function Textarea({
+  className,
+  size,
+  ref,
+  ...props
+}: TextareaProps & { ref?: React.Ref<HTMLTextAreaElement> }) {
+  return <textarea className={cn(textareaVariants({ size }), className)} ref={ref} {...props} />;
+}
 export { Textarea, textareaVariants };

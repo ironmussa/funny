@@ -16,7 +16,7 @@ import { ThreadGroup } from './ThreadGroup';
 import { ThreadItem } from './ThreadItem';
 import { ViewAllButton } from './ViewAllButton';
 
-const FINISHED_STATUSES: ThreadStatus[] = ['completed', 'failed', 'stopped', 'interrupted'];
+const FINISHED_STATUSES = new Set<ThreadStatus>(['completed', 'failed', 'stopped', 'interrupted']);
 
 interface FinishedThread extends Thread {
   projectName: string;
@@ -55,11 +55,7 @@ export function RecentThreads({
 
     for (const [projectId, threads] of Object.entries(threadsByProject)) {
       for (const thread of threads) {
-        if (
-          FINISHED_STATUSES.includes(thread.status) &&
-          !thread.archived &&
-          thread.stage !== 'done'
-        ) {
+        if (FINISHED_STATUSES.has(thread.status) && !thread.archived && thread.stage !== 'done') {
           const project = projectMap.get(projectId);
           result.push({
             ...thread,

@@ -14,6 +14,7 @@ import { useTranslation } from 'react-i18next';
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
+import { setDashedDragPreview } from '@/lib/drag-preview';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
@@ -316,6 +317,8 @@ const ThreadListItem = memo(function ThreadListItem({
         threadId: thread.id,
         projectId: thread.projectId,
       }),
+      onGenerateDragPreview: ({ nativeSetDragImage }) =>
+        setDashedDragPreview({ nativeSetDragImage, source: el }),
       onDragStart: () => setIsDragging(true),
       onDrop: () => setIsDragging(false),
     });

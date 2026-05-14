@@ -16,6 +16,8 @@ import {
  *
  * Used by both the inline ExitPlanModeCard and the PlanReviewDialog.
  */
+const EMPTY_DEPS: unknown[] = [];
+
 export function AnnotatableContent({
   children,
   planComments,
@@ -25,7 +27,7 @@ export function AnnotatableContent({
   className,
   active = true,
   /** Extra deps that should trigger re-highlighting (e.g. dialog `open` state) */
-  highlightDeps = [],
+  highlightDeps = EMPTY_DEPS,
   /** Delay before applying highlights (useful for dialog mount) */
   highlightDelay = 0,
 }: {

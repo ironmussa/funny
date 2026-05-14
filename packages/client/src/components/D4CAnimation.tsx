@@ -1,4 +1,4 @@
-import { motion, AnimatePresence, useReducedMotion, type TargetAndTransition } from 'motion/react';
+import { m, AnimatePresence, useReducedMotion, type TargetAndTransition } from 'motion/react';
 import { useState, useEffect } from 'react';
 
 import { cn } from '@/lib/utils';
@@ -49,7 +49,7 @@ export function D4CAnimation({ size = 'default' }: { size?: 'default' | 'sm' }) 
       )}
     >
       <AnimatePresence mode="wait">
-        <motion.span
+        <m.span
           key={emoji + frame}
           initial={prefersReducedMotion ? false : anim.initial}
           animate={anim.animate}
@@ -58,7 +58,7 @@ export function D4CAnimation({ size = 'default' }: { size?: 'default' | 'sm' }) 
           className="inline-block"
         >
           {emoji}
-        </motion.span>
+        </m.span>
       </AnimatePresence>
     </span>
   );

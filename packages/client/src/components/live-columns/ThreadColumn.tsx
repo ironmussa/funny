@@ -1,5 +1,4 @@
 import { draggable } from '@atlaskit/pragmatic-drag-and-drop/element/adapter';
-import { setCustomNativeDragPreview } from '@atlaskit/pragmatic-drag-and-drop/element/set-custom-native-drag-preview';
 import { Loader2, X, GripVertical } from 'lucide-react';
 import { useReducedMotion } from 'motion/react';
 import { memo, startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -12,6 +11,7 @@ import { MessageStream, type MessageStreamHandle } from '@/components/thread/Mes
 import { ProjectHeader } from '@/components/thread/ProjectHeader';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
+import { setDashedDragPreview } from '@/lib/drag-preview';
 import { statusConfig } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
@@ -87,24 +87,8 @@ export const ThreadColumn = memo(function ThreadColumn({
         type: 'grid-thread',
         threadId,
       }),
-      onGenerateDragPreview: ({ nativeSetDragImage }) => {
-        setCustomNativeDragPreview({
-          nativeSetDragImage,
-          getOffset: () => ({ x: 16, y: 16 }),
-          render: ({ container }) => {
-            const rect = el.getBoundingClientRect();
-            const preview = document.createElement('div');
-            preview.style.cssText = [
-              `width:${rect.width}px`,
-              `height:${rect.height}px`,
-              'border-radius:8px',
-              'border:2px dashed hsl(var(--primary))',
-              'background:hsl(var(--primary) / 0.05)',
-            ].join(';');
-            container.appendChild(preview);
-          },
-        });
-      },
+      onGenerateDragPreview: ({ nativeSetDragImage }) =>
+        setDashedDragPreview({ nativeSetDragImage, source: el }),
       onDragStart: () => setIsDragging(true),
       onDrop: () => setIsDragging(false),
     });

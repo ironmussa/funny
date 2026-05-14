@@ -9,6 +9,7 @@ import {
   useCallback,
   useContext,
   useEffect,
+  useEffectEvent,
   useMemo,
   useRef,
   useState,
@@ -146,35 +147,30 @@ export const ColorPickerSelection = memo(({ className, ...props }: ColorPickerSe
             hsl(${hue}, 100%, 50%)`;
   }, [hue]);
 
-  const handlePointerMove = useCallback(
-    (event: PointerEvent) => {
-      if (!(isDragging && containerRef.current)) {
-        return;
-      }
-      const rect = containerRef.current.getBoundingClientRect();
-      const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
-      const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
-      setPositionX(x);
-      setPositionY(y);
-      setSaturation(x * 100);
-      const topLightness = x < 0.01 ? 100 : 50 + 50 * (1 - x);
-      const lightness = topLightness * (1 - y);
-      setLightness(lightness);
-    },
-    [isDragging, setSaturation, setLightness],
-  );
+  const onPointerMoveEvent = useEffectEvent((event: PointerEvent) => {
+    if (!containerRef.current) return;
+    const rect = containerRef.current.getBoundingClientRect();
+    const x = Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width));
+    const y = Math.max(0, Math.min(1, (event.clientY - rect.top) / rect.height));
+    setPositionX(x);
+    setPositionY(y);
+    setSaturation(x * 100);
+    const topLightness = x < 0.01 ? 100 : 50 + 50 * (1 - x);
+    const lightness = topLightness * (1 - y);
+    setLightness(lightness);
+  });
 
   useEffect(() => {
+    if (!isDragging) return;
+    const handlePointerMove = (e: PointerEvent) => onPointerMoveEvent(e);
     const handlePointerUp = () => setIsDragging(false);
-    if (isDragging) {
-      window.addEventListener('pointermove', handlePointerMove);
-      window.addEventListener('pointerup', handlePointerUp);
-    }
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
     return () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
-  }, [isDragging, handlePointerMove]);
+  }, [isDragging]);
 
   return (
     <div
@@ -182,7 +178,7 @@ export const ColorPickerSelection = memo(({ className, ...props }: ColorPickerSe
       onPointerDown={(e) => {
         e.preventDefault();
         setIsDragging(true);
-        handlePointerMove(e.nativeEvent);
+        onPointerMoveEvent(e.nativeEvent);
       }}
       ref={containerRef}
       style={{ background: backgroundGradient }}

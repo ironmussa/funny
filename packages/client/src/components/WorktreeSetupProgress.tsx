@@ -1,5 +1,5 @@
 import { Check, Circle, Loader2, X } from 'lucide-react';
-import { motion, AnimatePresence, useReducedMotion } from 'motion/react';
+import { m, AnimatePresence, useReducedMotion } from 'motion/react';
 import { useMemo } from 'react';
 
 import {
@@ -51,7 +51,7 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
       {/* Focal step with animation */}
       <div className="flex min-h-[100px] w-full items-center justify-center">
         <AnimatePresence mode="wait">
-          <motion.div
+          <m.div
             key={focalStep.id + '-' + focalStep.status}
             initial={prefersReducedMotion ? false : { opacity: 0, y: 12, scale: 0.95 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -98,7 +98,7 @@ export function WorktreeSetupProgress({ steps }: WorktreeSetupProgressProps) {
                 {focalStep.error}
               </pre>
             )}
-          </motion.div>
+          </m.div>
         </AnimatePresence>
       </div>
 

@@ -1,6 +1,6 @@
 import type { ThreadEvent, WaitingReason } from '@funny/shared';
 import { Loader2, ArrowDown, Clock } from 'lucide-react';
-import { motion, useReducedMotion } from 'motion/react';
+import { m, useReducedMotion } from 'motion/react';
 import {
   useState,
   useRef,
@@ -550,7 +550,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
 
           {/* Running indicator */}
           {isRunning && !isExternal && (
-            <motion.div
+            <m.div
               initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
@@ -558,11 +558,11 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
             >
               <D4CAnimation size={compact ? 'sm' : undefined} />
               <span className="text-xs">{t('thread.agentWorking')}</span>
-            </motion.div>
+            </m.div>
           )}
 
           {isRunning && isExternal && (
-            <motion.div
+            <m.div
               initial={prefersReducedMotion ? false : { opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
@@ -576,12 +576,12 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
               <span className="text-xs">
                 {t('thread.runningExternally', 'Running externally\u2026')}
               </span>
-            </motion.div>
+            </m.div>
           )}
 
           {/* Waiting: question */}
           {status === 'waiting' && waitingReason === 'question' && (
-            <motion.div
+            <m.div
               initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, ease: 'easeOut' }}
@@ -589,12 +589,12 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
             >
               <Clock className="size-3.5 animate-pulse text-yellow-400" />
               {t('thread.waitingForResponse')}
-            </motion.div>
+            </m.div>
           )}
 
           {/* Waiting: permission */}
           {status === 'waiting' && waitingReason === 'permission' && pendingPermission && (
-            <motion.div
+            <m.div
               initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, ease: 'easeOut' }}
@@ -606,23 +606,23 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
                 onAlwaysAllow={handlePermissionAlwaysAllow}
                 onDeny={handlePermissionDeny}
               />
-            </motion.div>
+            </m.div>
           )}
 
           {/* Waiting: no specific reason */}
           {status === 'waiting' && !waitingReason && (
-            <motion.div
+            <m.div
               initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.25, ease: 'easeOut' }}
             >
               <WaitingActions onSend={(text) => onSend(text, { model, mode: permissionMode })} />
-            </motion.div>
+            </m.div>
           )}
 
           {/* Result card */}
           {resultInfo && !isRunning && status !== 'stopped' && status !== 'interrupted' && (
-            <motion.div
+            <m.div
               initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
@@ -638,12 +638,12 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
                     : undefined
                 }
               />
-            </motion.div>
+            </m.div>
           )}
 
           {/* Interrupted card */}
           {status === 'interrupted' && (
-            <motion.div
+            <m.div
               initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
@@ -651,12 +651,12 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
               <AgentInterruptedCard
                 onContinue={() => onSend('Continue', { model, mode: permissionMode })}
               />
-            </motion.div>
+            </m.div>
           )}
 
           {/* Stopped card */}
           {status === 'stopped' && (
-            <motion.div
+            <m.div
               initial={prefersReducedMotion ? false : { opacity: 0, y: 6 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.3, ease: 'easeOut' }}
@@ -664,7 +664,7 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
               <AgentStoppedCard
                 onContinue={() => onSend('Continue', { model, mode: permissionMode })}
               />
-            </motion.div>
+            </m.div>
           )}
 
           {/* Prompt pin spacer (full mode only) */}

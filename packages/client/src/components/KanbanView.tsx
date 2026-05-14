@@ -647,11 +647,24 @@ export function KanbanView({
     async (
       prompt: string,
       opts: {
+        provider?: string;
         model: string;
         mode: string;
+        effort?: string;
         threadMode?: string;
+        runtime?: string;
         baseBranch?: string;
         sendToBacklog?: boolean;
+        fileReferences?: { path: string; type?: 'file' | 'folder' }[];
+        symbolReferences?: {
+          path: string;
+          name: string;
+          kind: string;
+          line: number;
+          endLine?: number;
+        }[];
+        agentTemplateId?: string;
+        templateVariables?: Record<string, string>;
       },
       images?: any[],
     ): Promise<boolean> => {
@@ -695,13 +708,20 @@ export function KanbanView({
           projectId: slideUpProjectId,
           title: prompt.slice(0, 200),
           mode: threadMode,
+          runtime: opts.runtime as 'local' | 'remote' | undefined,
+          provider: opts.provider,
           model: opts.model,
           permissionMode: opts.mode,
+          effort: opts.effort,
           baseBranch: opts.baseBranch,
           prompt,
           images,
           allowedTools,
           disallowedTools,
+          fileReferences: opts.fileReferences,
+          symbolReferences: opts.symbolReferences,
+          agentTemplateId: opts.agentTemplateId,
+          templateVariables: opts.templateVariables,
         });
 
         if (result.isErr()) {

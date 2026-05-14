@@ -39,7 +39,7 @@ function WelcomeSlide({ onNext }: { onNext: () => void }) {
         <div className="flex items-center justify-center">
           <Terminal className="size-8 text-primary" />
         </div>
-        <h1 className="text-2xl font-bold text-foreground">Welcome to funny</h1>
+        <h1 className="text-2xl font-semibold text-foreground">Welcome to funny</h1>
         <p className="text-sm leading-relaxed text-muted-foreground">
           Orchestrate multiple Claude Code agents in parallel. Each agent works on its own git
           branch, so they never conflict.

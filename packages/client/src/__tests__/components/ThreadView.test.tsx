@@ -111,11 +111,13 @@ vi.mock('motion/react', () => {
         ([k]) => !['initial', 'animate', 'transition', 'exit', 'layout'].includes(k),
       ),
     );
+  const m = {
+    div: ({ children, ...props }: any) => <div {...filterMotionProps(props)}>{children}</div>,
+    span: ({ children, ...props }: any) => <span {...filterMotionProps(props)}>{children}</span>,
+  };
   return {
-    motion: {
-      div: ({ children, ...props }: any) => <div {...filterMotionProps(props)}>{children}</div>,
-      span: ({ children, ...props }: any) => <span {...filterMotionProps(props)}>{children}</span>,
-    },
+    m,
+    motion: m,
     AnimatePresence: ({ children }: any) => <>{children}</>,
     useReducedMotion: () => false,
   };

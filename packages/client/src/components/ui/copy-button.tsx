@@ -18,43 +18,37 @@ export interface CopyButtonProps extends Omit<ButtonProps, 'onClick' | 'children
   duration?: number;
 }
 
-const CopyButton = React.forwardRef<HTMLButtonElement, CopyButtonProps>(
-  (
-    {
-      value,
-      label = 'Copy',
-      copiedLabel = 'Copied!',
-      duration = 2000,
-      variant = 'ghost',
-      size = 'icon-xs',
-      className,
-      ...props
-    },
-    ref,
-  ) => {
-    const [copied, copy] = useCopyToClipboard(duration);
+function CopyButton({
+  value,
+  label = 'Copy',
+  copiedLabel = 'Copied!',
+  duration = 2000,
+  variant = 'ghost',
+  size = 'icon-xs',
+  className,
+  ref,
+  ...props
+}: CopyButtonProps & { ref?: React.Ref<HTMLButtonElement> }) {
+  const [copied, copy] = useCopyToClipboard(duration);
 
-    return (
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            ref={ref}
-            data-testid="copy-button"
-            variant={variant}
-            size={size}
-            className={cn('text-muted-foreground hover:text-foreground', className)}
-            onClick={() => copy(value)}
-            aria-label={copied ? copiedLabel : label}
-            {...props}
-          >
-            {copied ? <Check /> : <Copy />}
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent>{copied ? copiedLabel : label}</TooltipContent>
-      </Tooltip>
-    );
-  },
-);
-CopyButton.displayName = 'CopyButton';
-
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <Button
+          ref={ref}
+          data-testid="copy-button"
+          variant={variant}
+          size={size}
+          className={cn('text-muted-foreground hover:text-foreground', className)}
+          onClick={() => copy(value)}
+          aria-label={copied ? copiedLabel : label}
+          {...props}
+        >
+          {copied ? <Check /> : <Copy />}
+        </Button>
+      </TooltipTrigger>
+      <TooltipContent>{copied ? copiedLabel : label}</TooltipContent>
+    </Tooltip>
+  );
+}
 export { CopyButton };

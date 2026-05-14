@@ -17,6 +17,7 @@ window.addEventListener(
   },
   true,
 );
+import { domAnimation, LazyMotion } from 'motion/react';
 import { ThemeProvider, useTheme } from 'next-themes';
 import React, { lazy, Suspense, useEffect, useState, useSyncExternalStore } from 'react';
 import ReactDOM from 'react-dom/client';
@@ -261,13 +262,15 @@ root.render(
         }}
       >
         <TooltipProvider delayDuration={300} skipDelayDuration={0}>
-          {isPreviewWindow ? (
-            <Suspense fallback={null}>
-              <PreviewBrowser />
-            </Suspense>
-          ) : (
-            <AuthGate />
-          )}
+          <LazyMotion features={domAnimation} strict>
+            {isPreviewWindow ? (
+              <Suspense fallback={null}>
+                <PreviewBrowser />
+              </Suspense>
+            ) : (
+              <AuthGate />
+            )}
+          </LazyMotion>
         </TooltipProvider>
       </AbbacchioProvider>
     </ThemeProvider>

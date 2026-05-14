@@ -20,19 +20,20 @@ if (isTauri && !isPreviewWindow) {
   (async () => {
     const { listen, emit } = await import('@tauri-apps/api/event');
 
-    // When the preview window signals it's ready, sync all current tabs
-    await listen('preview:ready', () => {
-      const store = usePreviewStore.getState();
-      for (const tab of store.tabs) {
-        emit('preview:add-tab', tab);
-      }
-    });
-
-    // When the preview window closes a tab, update the main store
-    await listen<{ commandId: string }>('preview:tab-closed', (e) => {
-      const store = usePreviewStore.getState();
-      store.removeTab(e.payload.commandId);
-    });
+    await Promise.all([
+      // When the preview window signals it's ready, sync all current tabs
+      listen('preview:ready', () => {
+        const store = usePreviewStore.getState();
+        for (const tab of store.tabs) {
+          emit('preview:add-tab', tab);
+        }
+      }),
+      // When the preview window closes a tab, update the main store
+      listen<{ commandId: string }>('preview:tab-closed', (e) => {
+        const store = usePreviewStore.getState();
+        store.removeTab(e.payload.commandId);
+      }),
+    ]);
   })();
 }
 

@@ -101,9 +101,11 @@ function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>)
   // Build combined regex: slash commands (at start) + @path mentions
   const regexParts: string[] = [];
 
-  // Slash command: /name at start of text or after whitespace
+  // Slash command: /name at start of text or after whitespace, not adjacent to
+  // any path-continuation char (so /home/user/... isn't mistaken for a command,
+  // and the regex can't backtrack to /hom + "e/..." either).
   // Match /word characters, colons, dots, hyphens (e.g. /skill-creator:skill-creator)
-  regexParts.push('(?<=^|\\s)\\/([\\w:.-]+)');
+  regexParts.push('(?<=^|\\s)\\/([\\w:.-]+)(?![\\w/:.-])');
 
   // @path mentions
   if (fileMap.size > 0) {

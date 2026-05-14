@@ -9,7 +9,7 @@ import {
   MicOff,
   Loader2,
 } from 'lucide-react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { AnimatePresence, m, useReducedMotion } from 'motion/react';
 import { useState, useRef, useEffect, useMemo, useCallback, memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -402,7 +402,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
             {/* Active question — vertical slide between tabs */}
             <div className="relative overflow-hidden">
               <AnimatePresence mode="wait" initial={false} custom={slideDirection}>
-                <motion.div
+                <m.div
                   key={activeTab}
                   custom={slideDirection}
                   variants={{
@@ -634,7 +634,7 @@ export const AskQuestionCard = memo(function AskQuestionCard({
                       </button>
                     </div>
                   )}
-                </motion.div>
+                </m.div>
               </AnimatePresence>
             </div>
           </>

@@ -142,6 +142,18 @@ export const WithSlashCommand: Story = {
   },
 };
 
+/** Filesystem paths must NOT render as slash-command chips. */
+export const WithFilesystemPath: Story = {
+  args: {
+    content:
+      'puedes procesar todas las facturas de cloudflare en /home/argenisleon/Downloads/cloudflare y crear un excel',
+    model: 'opus',
+    permissionMode: 'autoEdit',
+    timestamp: new Date().toISOString(),
+    onClick: fn(),
+  },
+};
+
 /** Code snippet in the prompt. */
 export const WithCodeSnippet: Story = {
   args: {

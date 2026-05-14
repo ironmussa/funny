@@ -230,7 +230,7 @@ function VideoPreview({
       src={src}
       data-testid="media-preview-video"
       onError={() => onError?.(new Error(`Failed to load video: ${src}`))}
-      className="max-h-[70vh] w-full bg-black"
+      className="max-h-[70vh] w-full bg-gray-950"
     >
       {name && <track kind="metadata" label={name} />}
       Your browser does not support the video element.

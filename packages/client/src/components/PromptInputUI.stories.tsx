@@ -280,7 +280,7 @@ function MinimalStory() {
   const [hasContent, setHasContent] = useState(false);
   const [submitted, setSubmitted] = useState<string | null>(null);
 
-  const handleChange = useCallback(() => {
+  const trackEditorContent = useCallback(() => {
     const text = (editorRef.current?.getText() ?? '').trim();
     setHasContent(text.length > 0);
   }, []);
@@ -305,7 +305,7 @@ function MinimalStory() {
             ref={editorRef}
             placeholder="Type instructions or feedback..."
             onSubmit={handleSubmit}
-            onChange={handleChange}
+            onChange={trackEditorContent}
             className="max-h-[120px] min-h-[40px] overflow-y-auto text-sm"
           />
         </div>

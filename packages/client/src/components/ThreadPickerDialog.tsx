@@ -30,11 +30,13 @@ interface ThreadPickerDialogProps {
   excludeIds?: string[];
 }
 
+const EMPTY_EXCLUDE_IDS: string[] = [];
+
 export function ThreadPickerDialog({
   open,
   onOpenChange,
   onSelect,
-  excludeIds = [],
+  excludeIds = EMPTY_EXCLUDE_IDS,
 }: ThreadPickerDialogProps) {
   // Skip store subscriptions and all computation when the dialog is closed.
   // This avoids re-rendering on every threadsByProject update and prevents

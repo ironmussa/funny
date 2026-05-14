@@ -1,5 +1,5 @@
 import { ListTodo, X, ChevronDown, ChevronUp, Circle, CircleDot, CircleCheck } from 'lucide-react';
-import { motion } from 'motion/react';
+import { m } from 'motion/react';
 import { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -38,7 +38,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
   }, [scrollTargetIdx, minimized, todos]);
 
   return (
-    <motion.div
+    <m.div
       initial={{ opacity: 0, x: 20 }}
       animate={{ opacity: 1, x: 0 }}
       exit={{ opacity: 0, x: 20 }}
@@ -49,7 +49,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
       <div className="flex items-center gap-2 border-b border-border/50 px-3 py-2">
         <ListTodo className="icon-sm text-muted-foreground" />
         <span className="flex-1 text-xs font-medium">{t('todoPanel.title')}</span>
-        <motion.span
+        <m.span
           key={`${progress.completed}/${progress.total}`}
           initial={{ scale: 1.2 }}
           animate={{ scale: 1 }}
@@ -62,7 +62,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
           )}
         >
           {progress.completed}/{progress.total}
-        </motion.span>
+        </m.span>
         <Tooltip>
           <TooltipTrigger asChild>
             <button
@@ -96,7 +96,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
           {/* Progress bar */}
           <div className="px-3 pt-2">
             <div className="h-1 overflow-hidden rounded-full bg-muted">
-              <motion.div
+              <m.div
                 className={cn(
                   'h-full rounded-full',
                   allDone ? 'bg-status-success/80' : 'bg-status-info/80',
@@ -112,14 +112,14 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
           <ScrollArea viewportRef={listRef} className="max-h-64">
             <div className="space-y-1 px-3 py-1 pb-2">
               {todos.map((todo, i) => (
-                <motion.div
+                <m.div
                   key={todo.content}
                   className="flex items-start gap-2"
                   initial={{ opacity: 0, x: -8 }}
                   animate={{ opacity: 1, x: 0 }}
                   transition={{ duration: 0.2, delay: i * 0.03 }}
                 >
-                  <motion.div
+                  <m.div
                     className="mt-0.5 flex-shrink-0"
                     key={`${todo.content}-${todo.status}`}
                     initial={{ scale: 0.5, opacity: 0 }}
@@ -133,7 +133,7 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
                     ) : (
                       <Circle className="icon-sm text-muted-foreground/50" />
                     )}
-                  </motion.div>
+                  </m.div>
                   <span
                     className={cn(
                       'text-xs leading-relaxed transition-all duration-300',
@@ -144,12 +144,12 @@ export function TodoPanel({ todos, progress, onDismiss }: TodoPanelProps) {
                   >
                     {todo.content}
                   </span>
-                </motion.div>
+                </m.div>
               ))}
             </div>
           </ScrollArea>
         </>
       )}
-    </motion.div>
+    </m.div>
   );
 }

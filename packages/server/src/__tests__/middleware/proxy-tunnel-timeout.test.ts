@@ -18,29 +18,19 @@ mock.module('../../services/ws-relay.js', () => ({
 let tunnelShouldTimeout = false;
 let tunnelCalls = 0;
 
-mock.module('../../services/ws-tunnel.js', () => {
-  class TunnelTimeoutError extends Error {
-    readonly runnerId: string;
-    readonly timeoutMs: number;
-    constructor(runnerId: string, timeoutMs: number) {
-      super(`Tunnel to runner ${runnerId} timed out after ${timeoutMs}ms`);
-      this.name = 'TunnelTimeoutError';
-      this.runnerId = runnerId;
-      this.timeoutMs = timeoutMs;
+import { TunnelTimeoutError } from '../../services/ws-tunnel.js';
+
+mock.module('../../services/ws-tunnel.js', () => ({
+  setIO: () => {},
+  TunnelTimeoutError,
+  tunnelFetch: async (runnerId: string) => {
+    tunnelCalls++;
+    if (tunnelShouldTimeout) {
+      throw new TunnelTimeoutError(runnerId, 30_000);
     }
-  }
-  return {
-    setIO: () => {},
-    TunnelTimeoutError,
-    tunnelFetch: async (runnerId: string) => {
-      tunnelCalls++;
-      if (tunnelShouldTimeout) {
-        throw new TunnelTimeoutError(runnerId, 30_000);
-      }
-      throw new Error('socket not found');
-    },
-  };
-});
+    throw new Error('socket not found');
+  },
+}));
 
 mock.module('../../services/runner-resolver.js', () => ({
   resolveRunner: async () => ({ runnerId: 'runner-1', httpUrl: 'http://runner.local' }),

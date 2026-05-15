@@ -156,13 +156,16 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
       // a second time and duplicate side effects (e.g., persisting a user
       // message twice and enqueuing two prompts on agents that await the
       // full turn in sendPrompt — Gemini/Codex/Pi). Surface 504 instead.
-      if (tunnelErr instanceof TunnelTimeoutError) {
+      if (
+        tunnelErr instanceof TunnelTimeoutError ||
+        (tunnelErr instanceof Error && tunnelErr.name === 'TunnelTimeoutError')
+      ) {
         log.warn('Tunnel request timed out — not falling back', {
           namespace: 'proxy',
           runnerId,
           path,
           method: c.req.method,
-          timeoutMs: tunnelErr.timeoutMs,
+          timeoutMs: (tunnelErr as any).timeoutMs || 30_000,
         });
         return c.json(
           { error: 'Runner did not respond in time. The request may still be processing.' },

@@ -8,6 +8,7 @@ import {
   GitBranch,
   Undo2,
   RotateCcw,
+  MoreVertical,
 } from 'lucide-react';
 import { useState, useRef, useLayoutEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -276,7 +277,7 @@ export function UserMessageCard({
               <DropdownMenuTrigger asChild>
                 <button
                   type="button"
-                  data-testid={`user-message-fork-menu-${props['data-testid'] ?? ''}`}
+                  data-testid={`user-message-actions-menu-${props['data-testid'] ?? ''}`}
                   disabled={forkDisabled}
                   onClick={(e) => e.stopPropagation()}
                   className={cn(
@@ -287,7 +288,7 @@ export function UserMessageCard({
                   )}
                   aria-label={t('thread.threadActions', 'Thread actions')}
                 >
-                  <GitBranch className="icon-xs" />
+                  <MoreVertical className="icon-xs" />
                 </button>
               </DropdownMenuTrigger>
             </TooltipTrigger>

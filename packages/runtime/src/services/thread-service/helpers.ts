@@ -24,6 +24,15 @@ export class ThreadServiceError extends Error {
 
 // ── Helpers ─────────────────────────────────────────────────────
 
+/**
+ * Strip the leading `<referenced-files>...</referenced-files>` block from a
+ * prompt so titles, slugs, and previews don't contain raw XML when the user
+ * attached inline files via the paperclip.
+ */
+export function stripReferencedFilesBlock(text: string): string {
+  return text.replace(/^\s*<referenced-files>[\s\S]*?<\/referenced-files>\s*/, '').trim();
+}
+
 /** Create a URL-safe slug from a title for branch naming */
 export function slugifyTitle(title: string, maxLength = 40): string {
   return (

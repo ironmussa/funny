@@ -37,6 +37,7 @@ import {
   createSetupProgressEmitter,
   emitThreadUpdated,
   slugifyTitle,
+  stripReferencedFilesBlock,
 } from './helpers.js';
 
 /**
@@ -232,9 +233,13 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
 
   const emitSetupProgress = createSetupProgressEmitter(params.userId, threadId);
 
+  // Strip any leading `<referenced-files>` XML block so titles, slugs, and
+  // forwarded prompts don't show raw markup when files were attached inline.
+  const titleSource = params.title || stripReferencedFilesBlock(params.prompt) || params.prompt;
+
   // ── Worktree mode (new worktree) ──────────────────────────────
   if (params.mode === 'worktree' && !params.worktreePath) {
-    const slug = slugifyTitle(params.title || params.prompt);
+    const slug = slugifyTitle(titleSource);
     const projectSlug = slugifyTitle(project.name);
     const branchName = `${projectSlug}/${slug}-${threadId.slice(0, 6)}`;
 
@@ -242,7 +247,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
       id: threadId,
       projectId: params.projectId,
       userId: params.userId,
-      title: params.title || params.prompt,
+      title: titleSource,
       mode: params.mode,
       runtime: (params.runtime || 'local') as 'local' | 'remote',
       provider: resolvedProvider,
@@ -432,7 +437,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
     id: threadId,
     projectId: params.projectId,
     userId: params.userId,
-    title: params.title || params.prompt,
+    title: titleSource,
     mode: params.mode,
     provider: resolvedProvider,
     permissionMode: resolvedPermissionMode,
@@ -521,7 +526,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             projectId: params.projectId,
-            title: params.title || params.prompt,
+            title: titleSource,
             mode: params.mode,
             provider: resolvedProvider,
             model: resolvedModel,

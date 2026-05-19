@@ -48,6 +48,12 @@ export {
 export { forkThread, type ForkThreadParams } from './thread-service/fork.js';
 
 export {
+  uploadFile,
+  type UploadFileParams,
+  type UploadFileResult,
+} from './thread-service/upload.js';
+
+export {
   rewindCode,
   forkAndRewind,
   type RewindCodeParams,

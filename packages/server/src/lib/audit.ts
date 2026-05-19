@@ -35,7 +35,9 @@ export type AuditAction =
   /** Request carrying an orchestrator secret without X-Forwarded-User was rejected. */
   | 'auth.orchestrator_rejected'
   /** Runner-scoped resource access refused because runner.userId ≠ requester/owner. */
-  | 'authz.cross_tenant_refused';
+  | 'authz.cross_tenant_refused'
+  /** ADMIN_PASSWORD env failed the password policy on first-run bootstrap. */
+  | 'auth.weak_admin_password_rejected';
 
 interface AuditEntry {
   action: AuditAction;

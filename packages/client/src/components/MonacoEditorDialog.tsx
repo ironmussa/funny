@@ -1,4 +1,4 @@
-import { Editor, type BeforeMount, type OnMount } from '@monaco-editor/react';
+import type { OnMount } from '@monaco-editor/react';
 import {
   Maximize2,
   Minimize2,
@@ -12,13 +12,12 @@ import {
 } from 'lucide-react';
 import type { editor as monacoEditor } from 'monaco-editor';
 import { useTheme } from 'next-themes';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { type Components } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 
-import '@/lib/monaco-setup';
 import { MermaidBlock } from '@/components/MermaidBlock';
 import { Button } from '@/components/ui/button';
 import {
@@ -45,6 +44,10 @@ interface MonacoEditorDialogProps {
 }
 
 const MONACO_WORD_SEPARATORS = '`~!@#$%^&*()-=+[{]}\\|;:\'",.<>/? \t\n';
+
+const MonacoCodeView = lazy(() =>
+  import('@/components/MonacoCodeView').then((m) => ({ default: m.MonacoCodeView })),
+);
 
 export function MonacoEditorDialog({
   open,
@@ -101,43 +104,6 @@ export function MonacoEditorDialog({
 
   // Derive Monaco theme — monochrome (light) uses VS, everything else is dark-based
   const monacoTheme = resolvedTheme === 'monochrome' ? 'vs' : 'funny-dark';
-
-  const handleBeforeMount: BeforeMount = (monaco) => {
-    monaco.editor.defineTheme('funny-dark', {
-      base: 'vs-dark',
-      inherit: true,
-      rules: [],
-      colors: {
-        'editor.background': '#000000',
-        'editorGutter.background': '#000000',
-        'minimap.background': '#0a0a0a',
-        focusBorder: '#007acc',
-      },
-    });
-
-    const compilerOptions: import('monaco-editor').typescript.CompilerOptions = {
-      jsx: monaco.languages.typescript.JsxEmit.React,
-      jsxFactory: 'React.createElement',
-      reactNamespace: 'React',
-      allowJs: true,
-      allowNonTsExtensions: true,
-      target: monaco.languages.typescript.ScriptTarget.ESNext,
-      module: monaco.languages.typescript.ModuleKind.ESNext,
-      moduleResolution: monaco.languages.typescript.ModuleResolutionKind.NodeJs,
-      noEmit: true,
-    };
-    monaco.languages.typescript.typescriptDefaults.setCompilerOptions(compilerOptions);
-    monaco.languages.typescript.javascriptDefaults.setCompilerOptions(compilerOptions);
-
-    monaco.languages.typescript.typescriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: true,
-      noSyntaxValidation: false,
-    });
-    monaco.languages.typescript.javascriptDefaults.setDiagnosticsOptions({
-      noSemanticValidation: true,
-      noSyntaxValidation: false,
-    });
-  };
 
   // Set initial content when dialog opens
   useEffect(() => {
@@ -413,22 +379,24 @@ export function MonacoEditorDialog({
               </TooltipContent>
             </Tooltip>
           )}
-          <Tooltip>
-            <TooltipTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                onClick={() => setShowMinimap((prev) => !prev)}
-                className="flex-shrink-0 text-muted-foreground"
-                data-testid="editor-toggle-minimap"
-              >
-                {showMinimap ? <EyeOff className="icon-base" /> : <Eye className="icon-base" />}
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent side="bottom">
-              {showMinimap ? t('editor.hideMinimap') : t('editor.showMinimap')}
-            </TooltipContent>
-          </Tooltip>
+          {inCodeView && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setShowMinimap((prev) => !prev)}
+                  className="flex-shrink-0 text-muted-foreground"
+                  data-testid="editor-toggle-minimap"
+                >
+                  {showMinimap ? <EyeOff className="icon-base" /> : <Eye className="icon-base" />}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom">
+                {showMinimap ? t('editor.hideMinimap') : t('editor.showMinimap')}
+              </TooltipContent>
+            </Tooltip>
+          )}
           <Tooltip>
             <TooltipTrigger asChild>
               <Button
@@ -485,25 +453,17 @@ export function MonacoEditorDialog({
               </div>
             </ScrollArea>
           ) : (
-            <Editor
-              height="100%"
-              language={language}
-              theme={monacoTheme}
-              beforeMount={handleBeforeMount}
-              onMount={handleEditorMount}
-              value={content}
-              onChange={(value) => setContent(value || '')}
-              options={{
-                minimap: { enabled: showMinimap },
-                fontSize: codeFontSizePx,
-                fontFamily: "'JetBrains Mono', ui-monospace, monospace",
-                lineNumbers: 'on',
-                automaticLayout: true,
-                scrollBeyondLastLine: false,
-                wordWrap: 'on',
-                fixedOverflowWidgets: true,
-              }}
-            />
+            <Suspense fallback={<div className="h-full" />}>
+              <MonacoCodeView
+                language={language}
+                theme={monacoTheme}
+                content={content}
+                onChange={setContent}
+                onMount={handleEditorMount}
+                showMinimap={showMinimap}
+                codeFontSizePx={codeFontSizePx}
+              />
+            </Suspense>
           )}
         </div>
       </DialogContent>

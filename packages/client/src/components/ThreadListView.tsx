@@ -4,6 +4,7 @@ import { type ReactNode, useState, useRef, useEffect, useCallback } from 'react'
 import { useTranslation } from 'react-i18next';
 
 import { BranchBadge } from '@/components/BranchBadge';
+import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
@@ -229,10 +230,12 @@ export function ThreadListView({
               >
                 <Icon className={cn('icon-base flex-shrink-0', s.className)} />
                 <div className="min-w-0 flex-1">
-                  <HighlightText
-                    text={thread.title}
-                    query={search}
-                    className="block truncate text-sm font-medium"
+                  <ThreadTitle
+                    title={thread.title}
+                    search={search}
+                    className="block text-sm font-medium"
+                    badgeTestId={`thread-list-item-attachments-${thread.id}`}
+                    stopBadgePropagation
                   />
                   {contentSnippets?.get(thread.id) &&
                     search &&

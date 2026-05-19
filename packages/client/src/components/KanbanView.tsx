@@ -27,6 +27,7 @@ import { toast } from 'sonner';
 
 import { ConfirmDialog } from '@/components/ConfirmDialog';
 import { SlideUpPrompt } from '@/components/SlideUpPrompt';
+import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { Button } from '@/components/ui/button';
@@ -163,10 +164,14 @@ export const KanbanCard = memo(function KanbanCard({
             className="mt-0.5"
           />
 
-          <HighlightText
-            text={thread.title}
-            query={search || ''}
+          <ThreadTitle
+            title={thread.title}
+            search={search || ''}
+            multiline
+            containerClassName="flex-1"
             className="line-clamp-6 text-sm font-medium leading-relaxed text-muted-foreground transition-colors group-hover/card:text-foreground"
+            stopBadgePropagation
+            badgeTestId={`kanban-view-card-attachments-${thread.id}`}
           />
         </div>
 

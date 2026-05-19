@@ -73,22 +73,41 @@ function useMermaidSvg(chart: string) {
   return { svg, error };
 }
 
+const MIN_SCALE = 0.2;
+const MAX_SCALE = 5;
+
 type PanZoom = {
+  containerRef: React.RefObject<HTMLDivElement | null>;
   scale: number;
   offset: { x: number; y: number };
-  setScale: (updater: (s: number) => number) => void;
+  zoomBy: (factor: number) => void;
   reset: () => void;
-  onWheel: (e: React.WheelEvent) => void;
   onPointerDown: (e: React.PointerEvent) => void;
   onPointerMove: (e: React.PointerEvent) => void;
   onPointerUp: (e: React.PointerEvent) => void;
   isDragging: boolean;
 };
 
+function clampScale(s: number) {
+  return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s));
+}
+
 function useMermaidPanZoom(): PanZoom {
-  const [scale, setScaleState] = useState(1);
+  const containerRef = useRef<HTMLDivElement | null>(null);
+  const [scale, setScale] = useState(1);
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [isDragging, setIsDragging] = useState(false);
+
+  // Live refs so the native wheel listener always reads current values.
+  const scaleRef = useRef(scale);
+  const offsetRef = useRef(offset);
+  useEffect(() => {
+    scaleRef.current = scale;
+  }, [scale]);
+  useEffect(() => {
+    offsetRef.current = offset;
+  }, [offset]);
+
   const dragRef = useRef<{
     startX: number;
     startY: number;
@@ -96,22 +115,49 @@ function useMermaidPanZoom(): PanZoom {
     originY: number;
   } | null>(null);
 
-  const setScale = useCallback((updater: (s: number) => number) => {
-    setScaleState((prev) => Math.min(5, Math.max(0.2, updater(prev))));
+  // Apply a zoom factor pivoted on a point within the container (mx, my are
+  // pixel coords measured from the container's center). Adjusts offset so the
+  // diagram point under the pivot stays in place.
+  const applyZoom = useCallback((factor: number, mx: number, my: number) => {
+    const prevScale = scaleRef.current;
+    const nextScale = clampScale(prevScale * factor);
+    if (nextScale === prevScale) return;
+    const px = (mx - offsetRef.current.x) / prevScale;
+    const py = (my - offsetRef.current.y) / prevScale;
+    const nextOffset = { x: mx - px * nextScale, y: my - py * nextScale };
+    setScale(nextScale);
+    setOffset(nextOffset);
   }, []);
 
+  const zoomBy = useCallback(
+    (factor: number) => {
+      applyZoom(factor, 0, 0);
+    },
+    [applyZoom],
+  );
+
   const reset = useCallback(() => {
-    setScaleState(1);
+    setScale(1);
     setOffset({ x: 0, y: 0 });
   }, []);
 
-  const onWheel = useCallback(
-    (e: React.WheelEvent) => {
+  // Non-passive wheel listener — React's synthetic wheel handler is passive
+  // by default, so preventDefault() there is a no-op and the page scrolls
+  // along with the zoom gesture. Binding natively fixes that.
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handler = (e: WheelEvent) => {
       e.preventDefault();
-      setScale((prev) => prev + (e.deltaY > 0 ? -0.1 : 0.1));
-    },
-    [setScale],
-  );
+      const rect = el.getBoundingClientRect();
+      const mx = e.clientX - (rect.left + rect.width / 2);
+      const my = e.clientY - (rect.top + rect.height / 2);
+      const factor = e.deltaY > 0 ? 0.9 : 1.1;
+      applyZoom(factor, mx, my);
+    };
+    el.addEventListener('wheel', handler, { passive: false });
+    return () => el.removeEventListener('wheel', handler);
+  }, [applyZoom]);
 
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
@@ -141,11 +187,11 @@ function useMermaidPanZoom(): PanZoom {
   }, []);
 
   return {
+    containerRef,
     scale,
     offset,
-    setScale,
+    zoomBy,
     reset,
-    onWheel,
     onPointerDown,
     onPointerMove,
     onPointerUp,
@@ -174,9 +220,9 @@ export function MermaidBlock({ chart }: { chart: string }) {
         data-testid="mermaid-diagram"
       >
         <div
+          ref={pz.containerRef}
           className="absolute inset-0 flex items-center justify-center"
           style={{ cursor: pz.isDragging ? 'grabbing' : 'grab' }}
-          onWheel={pz.onWheel}
           onPointerDown={pz.onPointerDown}
           onPointerMove={pz.onPointerMove}
           onPointerUp={pz.onPointerUp}
@@ -202,7 +248,7 @@ export function MermaidBlock({ chart }: { chart: string }) {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => pz.setScale((s) => s - 0.2)}
+                  onClick={() => pz.zoomBy(1 / 1.2)}
                   className="text-muted-foreground"
                   data-testid="mermaid-inline-zoom-out"
                 >
@@ -216,7 +262,7 @@ export function MermaidBlock({ chart }: { chart: string }) {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => pz.setScale((s) => s + 0.2)}
+                  onClick={() => pz.zoomBy(1.2)}
                   className="text-muted-foreground"
                   data-testid="mermaid-inline-zoom-in"
                 >
@@ -307,7 +353,6 @@ export function MermaidExpandedDialog({
   onClose: () => void;
 }) {
   const { svg } = useMermaidSvg(chart);
-  const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const pz = useMermaidPanZoom();
   const [copiedCode, copyCode] = useCopyToClipboard();
@@ -382,7 +427,7 @@ export function MermaidExpandedDialog({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => pz.setScale((s) => s - 0.2)}
+                  onClick={() => pz.zoomBy(1 / 1.2)}
                   className="text-muted-foreground"
                   data-testid="mermaid-zoom-out"
                 >
@@ -396,7 +441,7 @@ export function MermaidExpandedDialog({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => pz.setScale((s) => s + 0.2)}
+                  onClick={() => pz.zoomBy(1.2)}
                   className="text-muted-foreground"
                   data-testid="mermaid-zoom-in"
                 >
@@ -450,10 +495,9 @@ export function MermaidExpandedDialog({
         </DialogHeader>
 
         <div
-          ref={containerRef}
+          ref={pz.containerRef}
           className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-background"
           style={{ cursor: pz.isDragging ? 'grabbing' : 'grab' }}
-          onWheel={pz.onWheel}
           onPointerDown={pz.onPointerDown}
           onPointerMove={pz.onPointerMove}
           onPointerUp={pz.onPointerUp}

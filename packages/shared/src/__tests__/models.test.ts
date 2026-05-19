@@ -10,6 +10,7 @@ import {
   getDefaultAllowedTools,
   getAskModeTools,
   isModelForProvider,
+  getAttachmentLimits,
 } from '../models.js';
 
 // ── resolveModelId ──────────────────────────────────────────────
@@ -523,5 +524,38 @@ describe('cross-cutting consistency', () => {
       const labels = getProviderModelsWithLabels(provider);
       expect(labels).toHaveLength(models.length);
     }
+  });
+});
+
+// ── getAttachmentLimits ─────────────────────────────────────────
+
+describe('getAttachmentLimits', () => {
+  test('returns a valid limits tuple for every known provider', () => {
+    const providers = [
+      'claude',
+      'codex',
+      'gemini',
+      'pi',
+      'deepagent',
+      'llm-api',
+      'external',
+    ] as const;
+    for (const provider of providers) {
+      const limits = getAttachmentLimits(provider);
+      expect(limits.inlineMaxBytes).toBeGreaterThan(0);
+      // Tier ordering must always hold: inline ≤ upload ≤ hard.
+      expect(limits.uploadMaxBytes).toBeGreaterThanOrEqual(limits.inlineMaxBytes);
+      expect(limits.hardMaxBytes).toBeGreaterThanOrEqual(limits.uploadMaxBytes);
+    }
+  });
+
+  test('gemini upload cap stays under its 20 MB inline-data API ceiling', () => {
+    const limits = getAttachmentLimits('gemini');
+    expect(limits.hardMaxBytes).toBeLessThanOrEqual(20 * 1024 * 1024);
+  });
+
+  test('claude hard cap stays under its 32 MB request payload ceiling', () => {
+    const limits = getAttachmentLimits('claude');
+    expect(limits.hardMaxBytes).toBeLessThanOrEqual(32 * 1024 * 1024);
   });
 });

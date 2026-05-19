@@ -30,6 +30,28 @@ export interface ModelDefinition {
   i18nKey: string;
 }
 
+/**
+ * Attachment size limits used by the prompt input. Numbers reflect the
+ * upstream API ceilings (request payload limit, inline-data cap) and a
+ * tiered strategy:
+ *
+ *   - `inlineMaxBytes`   → embed file contents directly in the prompt
+ *                          (single turn cost in tokens; cheap UX-wise).
+ *   - `uploadMaxBytes`   → write to runner disk so the agent reads on
+ *                          demand with the Read tool (lazy, paginated).
+ *                          Above `inlineMaxBytes`, below `hardMaxBytes`.
+ *   - `hardMaxBytes`     → reject; file does not fit in a single request
+ *                          payload to the provider.
+ *
+ * Per-provider defaults reflect the smallest provider in the family. A
+ * specific model can tighten or relax via `ModelDefinition.attachmentLimits`.
+ */
+export interface AttachmentLimits {
+  inlineMaxBytes: number;
+  uploadMaxBytes: number;
+  hardMaxBytes: number;
+}
+
 const claudeModels = {
   haiku: {
     id: 'claude-haiku-4-5-20251001',
@@ -256,6 +278,28 @@ const PROVIDER_DEFAULT_MODEL: Record<keyof typeof MODEL_REGISTRY, AgentModel> = 
   deepagent: 'minimax-m2.7',
 };
 
+// ── Per-provider attachment limits ────────────────────────────
+// Values track upstream API ceilings: Anthropic accepts ~32 MB per request,
+// Gemini caps inline data at ~20 MB before requiring the Files API, OpenAI
+// (Codex) accepts ~25 MB. We keep `inlineMaxBytes` low (100 KB) across the
+// board so the prompt stays cheap per turn — larger files should go through
+// the upload path so the agent reads them on demand with the Read tool.
+
+const KB = 1024;
+const MB = 1024 * 1024;
+
+const PROVIDER_ATTACHMENT_LIMITS: Record<AgentProvider, AttachmentLimits> = {
+  claude: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 25 * MB, hardMaxBytes: 30 * MB },
+  codex: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 20 * MB, hardMaxBytes: 25 * MB },
+  gemini: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 18 * MB, hardMaxBytes: 20 * MB },
+  // Pi and DeepAgent route through multiple upstream providers — use the
+  // smallest common ceiling so we never exceed the weakest backend.
+  pi: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
+  deepagent: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
+  'llm-api': { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
+  external: { inlineMaxBytes: 100 * KB, uploadMaxBytes: 10 * MB, hardMaxBytes: 15 * MB },
+};
+
 // ── Provider labels ──────────────────────────────────────────
 
 export interface ModelInfo {
@@ -460,6 +504,14 @@ export function getProviderModelsWithLabels(provider: AgentProvider): ModelInfo[
 /** Get the context window for a model (falls back to 200k if unknown). */
 export function getModelContextWindow(provider: AgentProvider, model: AgentModel): number {
   return getModelDefinition(provider, model)?.contextWindow ?? 200_000;
+}
+
+/**
+ * Get the attachment size limits (inline / upload / hard cap) for a given
+ * provider+model pair. Falls back to the provider default.
+ */
+export function getAttachmentLimits(provider: AgentProvider): AttachmentLimits {
+  return PROVIDER_ATTACHMENT_LIMITS[provider] ?? PROVIDER_ATTACHMENT_LIMITS.claude;
 }
 
 /** Get the i18n key for a model, or undefined if unknown. */

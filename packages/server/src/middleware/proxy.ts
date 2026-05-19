@@ -36,7 +36,13 @@ import { resolveAnyRunner, resolveRunner } from '../services/runner-resolver.js'
 import { isRunnerConnected } from '../services/ws-relay.js';
 import { TunnelTimeoutError, tunnelFetch } from '../services/ws-tunnel.js';
 
-const RUNNER_AUTH_SECRET = process.env.RUNNER_AUTH_SECRET!;
+function getRunnerAuthSecret(): string {
+  const secret = process.env.RUNNER_AUTH_SECRET;
+  if (!secret) {
+    throw new Error('RUNNER_AUTH_SECRET is not set');
+  }
+  return secret;
+}
 
 /**
  * Hono handler that proxies the request to the appropriate runner.
@@ -78,7 +84,7 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
 
   // Build forwarded headers
   const forwardedHeaders: Record<string, string> = {
-    'X-Runner-Auth': RUNNER_AUTH_SECRET,
+    'X-Runner-Auth': getRunnerAuthSecret(),
     'content-type': c.req.header('content-type') || 'application/json',
   };
   if (userId) {
@@ -117,7 +123,7 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
   if (userId) {
     const { signature, timestamp } = signForwardedIdentity(
       { userId, role: userRole ?? null, orgId: orgId ?? null, orgName: orgName ?? null },
-      RUNNER_AUTH_SECRET,
+      getRunnerAuthSecret(),
     );
     forwardedHeaders[SIGNATURE_HEADER] = signature;
     forwardedHeaders[TIMESTAMP_HEADER] = String(timestamp);

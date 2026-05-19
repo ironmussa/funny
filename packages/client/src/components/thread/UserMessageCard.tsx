@@ -251,12 +251,17 @@ export function UserMessageCard({
   ...props
 }: UserMessageCardProps) {
   const { t } = useTranslation();
-  const { inlineContent, fileMap } = parseReferencedFiles(content);
+  const { files, inlineContent, fileMap } = parseReferencedFiles(content);
 
   const allImages = images?.map((i, j) => ({
     src: `data:${i.source.media_type};base64,${i.source.data}`,
     alt: `Attachment ${j + 1}`,
   }));
+
+  // Files attached via the paperclip don't necessarily appear as @path mentions
+  // in the prompt text. Surface any referenced file that isn't already rendered
+  // inline so the user can see what was sent.
+  const unmentionedFiles = files.filter((f) => !inlineContent.includes(`@${f.path}`));
 
   return (
     <div
@@ -348,6 +353,15 @@ export function UserMessageCard({
                 onImageClick?.(allImages, idx);
               }}
             />
+          ))}
+        </div>
+      )}
+
+      {/* Attached files not already @-mentioned inline */}
+      {unmentionedFiles.length > 0 && (
+        <div data-testid="user-message-attached-files" className="mb-2 flex flex-wrap gap-1.5">
+          {unmentionedFiles.map((item) => (
+            <FileChip key={`attached-${item.path}`} item={item} />
           ))}
         </div>
       )}

@@ -16,6 +16,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
+import { cleanThreadTitle } from '@/lib/thread-title';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useAutomationStore } from '@/stores/automation-store';
@@ -284,7 +285,7 @@ export function AutomationInboxView() {
                           {itemProject && (
                             <span className="font-medium">{itemProject.name} · </span>
                           )}
-                          {thread.title}
+                          {cleanThreadTitle(thread.title).displayTitle}
                         </p>
                       </div>
                       <div className="flex items-center gap-2">

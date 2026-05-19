@@ -16,6 +16,7 @@ import { useState, memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PRBadge } from '@/components/PRBadge';
+import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadStatusPin } from '@/components/thread/ThreadStatusPin';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { Button } from '@/components/ui/button';
@@ -214,7 +215,11 @@ export const ThreadItem = memo(function ThreadItem({
             showStatusTooltip
           />
 
-          <span className="truncate text-sm leading-tight">{thread.title}</span>
+          <ThreadTitle
+            title={thread.title}
+            className="text-sm leading-tight"
+            badgeTestId={`thread-item-attachments-${thread.id}`}
+          />
           {/* External creator icon */}
           {thread.createdBy && thread.createdBy !== 'user' && (
             <Tooltip>

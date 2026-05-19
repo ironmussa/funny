@@ -2,6 +2,7 @@ import type { Thread } from '@funny/shared';
 import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
+import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
 import {
   CommandDialog,
@@ -11,8 +12,8 @@ import {
   CommandGroup,
   CommandItem,
 } from '@/components/ui/command';
-import { HighlightText } from '@/components/ui/highlight-text';
 import { colorFromName } from '@/components/ui/project-chip';
+import { cleanThreadTitle } from '@/lib/thread-title';
 import { statusConfig } from '@/lib/thread-utils';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
@@ -117,11 +118,12 @@ function ThreadPickerDialogContent({
             {threads.map((thread) => {
               const StatusIcon = statusConfig[thread.status]?.icon;
               const statusClass = statusConfig[thread.status]?.className ?? '';
+              const { displayTitle } = cleanThreadTitle(thread.title);
               return (
                 <CommandItem
                   key={thread.id}
                   data-testid={`thread-picker-item-${thread.id}`}
-                  value={`${project.name} ${thread.title} ${resolveThreadBranch(thread) ?? ''}`}
+                  value={`${project.name} ${displayTitle} ${resolveThreadBranch(thread) ?? ''}`}
                   onSelect={() => {
                     onSelect(thread.id);
                     onOpenChange(false);
@@ -129,10 +131,11 @@ function ThreadPickerDialogContent({
                 >
                   {StatusIcon && <StatusIcon className={cn('icon-sm shrink-0', statusClass)} />}
                   <div className="flex min-w-0 flex-1 flex-col">
-                    <HighlightText
-                      text={thread.title}
-                      query={search}
-                      className="truncate text-sm"
+                    <ThreadTitle
+                      title={thread.title}
+                      search={search}
+                      className="text-sm"
+                      badgeTestId={`thread-picker-attachments-${thread.id}`}
                     />
                     <ThreadPowerline
                       thread={thread}

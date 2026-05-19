@@ -14,6 +14,7 @@ import { memo, startTransition, useCallback, useEffect, useRef, useState } from 
 import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
+import { ThreadTitle } from '@/components/thread/ThreadAttachmentsBadge';
 import { ThreadPowerline } from '@/components/ThreadPowerline';
 import { Button } from '@/components/ui/button';
 import {
@@ -145,10 +146,14 @@ export const KanbanCard = memo(function KanbanCard({
               {thread.pinned ? <PinOff className="icon-sm" /> : <Pin className="icon-sm" />}
             </span>
           </div>
-          <HighlightText
-            text={thread.title}
-            query={search || ''}
+          <ThreadTitle
+            title={thread.title}
+            search={search || ''}
+            multiline
+            containerClassName="flex-1"
             className="line-clamp-6 text-sm font-medium leading-relaxed text-muted-foreground transition-colors group-hover/card:text-foreground"
+            stopBadgePropagation
+            badgeTestId={`kanban-card-attachments-${thread.id}`}
           />
         </div>
 

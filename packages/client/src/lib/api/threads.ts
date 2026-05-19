@@ -259,6 +259,14 @@ export const threadsApi = {
     }),
   deleteThreadComment: (threadId: string, commentId: string) =>
     request(`/threads/${threadId}/comments/${commentId}`, { method: 'DELETE' }),
+  uploadFile: (
+    threadId: string,
+    body: { provider: string; filename: string; contentBase64: string },
+  ) =>
+    request<{ path: string; size: number }>(`/threads/${threadId}/upload`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
   listArchivedThreads: (params?: { page?: number; limit?: number; search?: string }) => {
     const p = new URLSearchParams();
     if (params?.page) p.set('page', String(params.page));

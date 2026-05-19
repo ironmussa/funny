@@ -84,6 +84,7 @@ export const PromptInput = memo(function PromptInput({
         onModeChange={state.setMode}
         modes={state.modes}
         isNewThread={isNewThread}
+        threadId={state.effectiveThreadId}
         createWorktree={state.createWorktree}
         onCreateWorktreeChange={state.setCreateWorktree}
         runtime={state.runtime}

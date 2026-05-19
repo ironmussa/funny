@@ -1,4 +1,5 @@
 import type { AgentTemplate, ImageAttachment, QueuedMessage, Skill } from '@funny/shared';
+import { getAttachmentLimits } from '@funny/shared/models';
 import {
   ArrowUp,
   ArrowLeft,
@@ -17,6 +18,7 @@ import {
   Trash2,
   Check,
   Bot,
+  FileText,
 } from 'lucide-react';
 import { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -36,6 +38,7 @@ import {
 } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { threadsApi } from '@/lib/api/threads';
 import { cn } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 
@@ -315,6 +318,8 @@ export interface PromptInputUIProps {
 
   // ── Thread context ──
   isNewThread?: boolean;
+  /** Thread ID (set for follow-up messages). Required to upload files larger than the inline tier. */
+  threadId?: string;
   createWorktree?: boolean;
   onCreateWorktreeChange?: (v: boolean) => void;
   runtime?: 'local' | 'remote';
@@ -404,6 +409,7 @@ export const PromptInputUI = memo(function PromptInputUI({
   onModeChange,
   modes,
   isNewThread = false,
+  threadId,
   createWorktree = false,
   onCreateWorktreeChange,
   runtime = 'local',
@@ -457,6 +463,19 @@ export const PromptInputUI = memo(function PromptInputUI({
 
   // ── Local UI state ──
   const [images, setImages] = useState<ImageAttachment[]>(initialImages ?? []);
+  /**
+   * Attached files: small files are inlined (`mode: 'inline'`, content is
+   * embedded in the prompt on submit); larger files are uploaded to the
+   * runner (`mode: 'upload'`, sent as a fileReference for the server to
+   * resolve on disk). `uploading: true` marks an upload in flight.
+   */
+  const [attachedTextFiles, setAttachedTextFiles] = useState<
+    Array<
+      | { mode: 'inline'; name: string; content: string; size: number }
+      | { mode: 'upload'; name: string; path: string; size: number }
+      | { mode: 'uploading'; name: string; size: number }
+    >
+  >([]);
   const [editorEmpty, setEditorEmpty] = useState(true);
   const [isDragging, setIsDragging] = useState(false);
   const [lightboxOpen, setLightboxOpen] = useState(false);
@@ -518,14 +537,43 @@ export const PromptInputUI = memo(function PromptInputUI({
       if (!canProceed) return;
     }
 
-    const submittedPrompt = serialized.text;
+    // Block submit while any upload is still in flight.
+    if (attachedTextFiles.some((f) => f.mode === 'uploading')) {
+      toast.warning(
+        t('prompt.uploadInProgress', {
+          defaultValue: 'Wait for uploads to finish before sending.',
+        }),
+      );
+      return;
+    }
+
+    // Inline-tier files: embed contents in a <referenced-files> block prepended
+    // to the prompt (browsers can't expose paths for these small dropped files).
+    const inlineFiles = attachedTextFiles.filter(
+      (f): f is Extract<typeof f, { mode: 'inline' }> => f.mode === 'inline',
+    );
+    const inlineFilesBlock =
+      inlineFiles.length > 0
+        ? `<referenced-files>\n${inlineFiles
+            .map((f) => `<file path="${f.name.replace(/"/g, '&quot;')}">\n${f.content}\n</file>`)
+            .join('\n')}\n</referenced-files>\n\n`
+        : '';
+    const submittedPrompt = inlineFilesBlock + serialized.text;
     const submittedImages = images.length > 0 ? images : undefined;
-    const submittedFiles =
-      serialized.fileReferences.length > 0 ? serialized.fileReferences : undefined;
+    // Upload-tier files: send their on-disk path as a fileReference so the
+    // server can resolve them via augmentPromptWithFiles (which falls back to
+    // a "use Read tool" note when the file exceeds the inline cap).
+    const uploadedRefs = attachedTextFiles
+      .filter((f): f is Extract<typeof f, { mode: 'upload' }> => f.mode === 'upload')
+      .map((f) => ({ path: f.path, type: 'file' as const }));
+    const mergedFileRefs = [...serialized.fileReferences, ...uploadedRefs];
+    const submittedFiles = mergedFileRefs.length > 0 ? mergedFileRefs : undefined;
     const submittedSymbols =
       serialized.symbolReferences.length > 0 ? serialized.symbolReferences : undefined;
+    const submittedTextFiles = attachedTextFiles;
     editorRef.current?.clear();
     setImages([]);
+    setAttachedTextFiles([]);
     setEditorEmpty(true);
     editorRef.current?.focus();
 
@@ -562,12 +610,14 @@ export const PromptInputUI = memo(function PromptInputUI({
     if (result === false) {
       if (editorJSON) editorRef.current?.setContent(editorJSON);
       setImages(submittedImages ?? []);
+      setAttachedTextFiles(submittedTextFiles);
     }
   }, [
     loading,
     isRecording,
     onStopRecording,
     images,
+    attachedTextFiles,
     t,
     isNewThread,
     createWorktree,
@@ -633,6 +683,134 @@ export const PromptInputUI = memo(function PromptInputUI({
     setImages((prev) => prev.filter((_, i) => i !== index));
   }, []);
 
+  // Browsers do not expose absolute paths for dropped files, so we cannot
+  // send a path the runtime can resolve. Instead we use a tiered strategy:
+  //   - inline (size ≤ inlineMaxBytes): read contents and embed in prompt.
+  //   - upload (size ≤ uploadMaxBytes): POST to /threads/:id/upload, which
+  //     writes the file under .funny/uploads/<threadId>/ on the runner; we
+  //     then send the path as a fileReference and the agent reads on demand.
+  //   - reject (size > uploadMaxBytes): toast error.
+  //
+  // Limits per provider live in PROVIDER_ATTACHMENT_LIMITS (@funny/shared/models).
+  const attachmentLimits = useMemo(
+    () => getAttachmentLimits(provider as Parameters<typeof getAttachmentLimits>[0]),
+    [provider],
+  );
+
+  const fileToBase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const dataUrl = reader.result as string;
+        const idx = dataUrl.indexOf(',');
+        resolve(idx >= 0 ? dataUrl.slice(idx + 1) : dataUrl);
+      };
+      reader.onerror = () => reject(reader.error ?? new Error('FileReader failed'));
+      reader.readAsDataURL(file);
+    });
+
+  const addTextFile = useCallback(
+    async (file: File): Promise<void> => {
+      const { inlineMaxBytes, uploadMaxBytes } = attachmentLimits;
+
+      // Reject: above the upload tier.
+      if (file.size > uploadMaxBytes) {
+        toast.error(
+          t('prompt.fileTooLarge', {
+            defaultValue: '{{name}} is too large ({{size}} MB). Max {{max}} MB.',
+            name: file.name,
+            size: (file.size / (1024 * 1024)).toFixed(1),
+            max: (uploadMaxBytes / (1024 * 1024)).toFixed(0),
+          }),
+        );
+        return;
+      }
+
+      // Inline tier: small enough to embed directly in the prompt.
+      if (file.size <= inlineMaxBytes) {
+        try {
+          const content = await file.text();
+          setAttachedTextFiles((prev) => [
+            ...prev,
+            { mode: 'inline', name: file.name, content, size: file.size },
+          ]);
+        } catch {
+          toast.error(
+            t('prompt.fileReadError', {
+              defaultValue: 'Could not read {{name}}',
+              name: file.name,
+            }),
+          );
+        }
+        return;
+      }
+
+      // Upload tier: requires an existing thread (path is `.funny/uploads/<threadId>/`).
+      if (!threadId) {
+        toast.error(
+          t('prompt.fileUploadNeedsThread', {
+            defaultValue:
+              '{{name}} is too large to inline. Send a first message to start the thread, then attach larger files.',
+            name: file.name,
+          }),
+        );
+        return;
+      }
+
+      // Optimistically add a "uploading" chip so the user sees progress.
+      const tempKey = `${file.name}__${Date.now()}__${Math.random()}`;
+      setAttachedTextFiles((prev) => [
+        ...prev,
+        { mode: 'uploading', name: tempKey, size: file.size },
+      ]);
+      try {
+        const contentBase64 = await fileToBase64(file);
+        const result = await threadsApi.uploadFile(threadId, {
+          provider,
+          filename: file.name,
+          contentBase64,
+        });
+        if (result.isErr()) {
+          setAttachedTextFiles((prev) =>
+            prev.filter((f) => !(f.mode === 'uploading' && f.name === tempKey)),
+          );
+          toast.error(
+            t('prompt.fileUploadError', {
+              defaultValue: 'Upload failed for {{name}}: {{error}}',
+              name: file.name,
+              error: result.error.message,
+            }),
+          );
+          return;
+        }
+        const uploaded = result.value;
+        setAttachedTextFiles((prev) =>
+          prev.map((f) =>
+            f.mode === 'uploading' && f.name === tempKey
+              ? { mode: 'upload', name: file.name, path: uploaded.path, size: uploaded.size }
+              : f,
+          ),
+        );
+      } catch (e) {
+        setAttachedTextFiles((prev) =>
+          prev.filter((f) => !(f.mode === 'uploading' && f.name === tempKey)),
+        );
+        toast.error(
+          t('prompt.fileUploadError', {
+            defaultValue: 'Upload failed for {{name}}: {{error}}',
+            name: file.name,
+            error: e instanceof Error ? e.message : String(e),
+          }),
+        );
+      }
+    },
+    [attachmentLimits, provider, t, threadId],
+  );
+
+  const removeTextFile = useCallback((index: number) => {
+    setAttachedTextFiles((prev) => prev.filter((_, i) => i !== index));
+  }, []);
+
   const handleEditorPaste = useCallback(
     (e: ClipboardEvent) => {
       const items = e.clipboardData?.items;
@@ -672,9 +850,7 @@ export const PromptInputUI = memo(function PromptInputUI({
       if (file.type.startsWith('image/')) {
         await addImageFile(file);
       } else {
-        // Non-image files → insert as file mention in the editor
-        const filePath = (file as any).path || file.name;
-        editorRef.current?.insertFileMention(filePath, 'file');
+        await addTextFile(file);
       }
     }
   };
@@ -686,8 +862,7 @@ export const PromptInputUI = memo(function PromptInputUI({
       if (file.type.startsWith('image/')) {
         await addImageFile(file);
       } else {
-        const filePath = (file as any).path || file.name;
-        editorRef.current?.insertFileMention(filePath, 'file');
+        await addTextFile(file);
       }
     }
     if (fileInputRef.current) fileInputRef.current.value = '';
@@ -968,6 +1143,46 @@ export const PromptInputUI = memo(function PromptInputUI({
                   </button>
                 </div>
               ))}
+            </div>
+          )}
+
+          {/* Attached text file previews */}
+          {attachedTextFiles.length > 0 && (
+            <div className="flex flex-wrap gap-2 px-3 pt-2">
+              {attachedTextFiles.map((f, idx) => {
+                const isUploading = f.mode === 'uploading';
+                const sizeKb = Math.round(f.size / 1024) || '<1';
+                const sizeLabel =
+                  f.size >= 1024 * 1024
+                    ? `${(f.size / (1024 * 1024)).toFixed(1)} MB`
+                    : `${sizeKb} KB`;
+                return (
+                  <div
+                    key={`file-preview-${idx}`}
+                    data-testid={`prompt-attached-file-${idx}`}
+                    className="group relative flex h-8 items-center gap-1.5 rounded border border-input bg-muted/40 pl-2 pr-1 text-xs"
+                    title={`${f.name} (${sizeLabel})${
+                      f.mode === 'upload' ? ` — uploaded to ${f.path}` : ''
+                    }`}
+                  >
+                    {isUploading ? (
+                      <Loader2 className="icon-xs shrink-0 animate-spin text-muted-foreground" />
+                    ) : (
+                      <FileText className="icon-xs shrink-0 text-muted-foreground" />
+                    )}
+                    <span className="max-w-[160px] truncate">{f.name}</span>
+                    <span className="text-muted-foreground">{sizeLabel}</span>
+                    <button
+                      onClick={() => removeTextFile(idx)}
+                      aria-label={t('prompt.removeFile', 'Remove file')}
+                      className="rounded p-0.5 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
+                      disabled={loading || isUploading}
+                    >
+                      <X className="icon-xs" />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           )}
 

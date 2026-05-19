@@ -169,7 +169,7 @@ export function MermaidBlock({ chart }: { chart: string }) {
   return (
     <>
       <div
-        className="group relative overflow-hidden rounded border border-border bg-card"
+        className="group relative overflow-hidden"
         style={{ height: MERMAID_INLINE_HEIGHT }}
         data-testid="mermaid-diagram"
       >

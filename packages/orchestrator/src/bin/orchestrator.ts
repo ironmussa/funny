@@ -7,10 +7,10 @@
  * until SIGTERM/SIGINT.
  *
  * Required env:
- *   FUNNY_SERVER_URL          base URL of the funny server (e.g. http://localhost:3001)
  *   ORCHESTRATOR_AUTH_SECRET  shared secret (must match server-side env)
  *
  * Optional env:
+ *   FUNNY_SERVER_URL           base URL of the funny server (default http://127.0.0.1:3001)
  *   ORCHESTRATOR_POLL_MS       (default 5000)
  *   ORCHESTRATOR_RECONCILE_MS  (default 30000)
  *   ORCHESTRATOR_MAX_GLOBAL    (default 16)
@@ -48,7 +48,7 @@ const log = createConsoleLogger({
 });
 
 const config: StandaloneConfig = {
-  serverUrl: requireEnv('FUNNY_SERVER_URL'),
+  serverUrl: process.env.FUNNY_SERVER_URL?.trim() || 'http://127.0.0.1:3001',
   authSecret: requireEnv('ORCHESTRATOR_AUTH_SECRET'),
   pipelineName: process.env.ORCHESTRATOR_PIPELINE_NAME,
   longPollTimeoutMs: envInt('ORCHESTRATOR_LONG_POLL_MS', 25_000),

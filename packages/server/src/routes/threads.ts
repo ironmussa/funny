@@ -882,7 +882,12 @@ threadRoutes.get('/:id/queue', async (c) => {
 threadRoutes.delete('/:id/queue/:messageId', async (c) => {
   const id = c.req.param('id');
   const messageId = c.req.param('messageId');
-  const success = await messageQueueRepo.cancel(messageId);
+  const userId = c.get('userId') as string;
+
+  const thread = await threadRepo.getThread(id);
+  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
+
+  const success = await messageQueueRepo.cancel(messageId, id);
   const queuedCount = await messageQueueRepo.queueCount(id);
   return c.json({ ok: success, queuedCount });
 });
@@ -891,11 +896,16 @@ threadRoutes.delete('/:id/queue/:messageId', async (c) => {
 threadRoutes.patch('/:id/queue/:messageId', async (c) => {
   const id = c.req.param('id');
   const messageId = c.req.param('messageId');
+  const userId = c.get('userId') as string;
+
+  const thread = await threadRepo.getThread(id);
+  if (!thread || thread.userId !== userId) return c.json({ error: 'Thread not found' }, 404);
+
   const { content } = await c.req.json();
   if (!content || typeof content !== 'string') {
     return c.json({ error: 'content is required' }, 400);
   }
-  const updated = await messageQueueRepo.update(messageId, content);
+  const updated = await messageQueueRepo.update(messageId, id, content);
   const queuedCount = await messageQueueRepo.queueCount(id);
   return c.json({ ok: !!updated, queuedCount, message: updated });
 });

@@ -484,11 +484,27 @@ export async function handleDataMessageWithAck(
         return { type: 'data:list_queue_response', items };
       }
       case 'data:cancel_queued_message': {
-        const success = await messageQueueRepo.cancel(data.messageId);
+        // Ownership guard above already verified message → thread → runnerUserId.
+        // Resolve threadId here so cancel can scope by (messageId, threadId).
+        const q = (await dbGet(
+          db
+            .select({ threadId: schema.messageQueue.threadId })
+            .from(schema.messageQueue)
+            .where(eq(schema.messageQueue.id, data.messageId)),
+        )) as { threadId: string } | undefined;
+        if (!q) return { type: 'data:cancel_queued_message_response', success: false };
+        const success = await messageQueueRepo.cancel(data.messageId, q.threadId);
         return { type: 'data:cancel_queued_message_response', success };
       }
       case 'data:update_queued_message': {
-        const updated = await messageQueueRepo.update(data.messageId, data.content);
+        const q = (await dbGet(
+          db
+            .select({ threadId: schema.messageQueue.threadId })
+            .from(schema.messageQueue)
+            .where(eq(schema.messageQueue.id, data.messageId)),
+        )) as { threadId: string } | undefined;
+        if (!q) return { type: 'data:update_queued_message_response', updated: null };
+        const updated = await messageQueueRepo.update(data.messageId, q.threadId, data.content);
         return { type: 'data:update_queued_message_response', updated };
       }
       case 'data:save_thread_event': {

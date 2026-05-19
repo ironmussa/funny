@@ -213,6 +213,10 @@ export const userProfiles = pgTable('user_profiles', {
   toolPermissions: text('tool_permissions'),
   theme: text('theme'),
   runnerInviteToken: text('runner_invite_token'),
+  /** ISO timestamp when the invite token expires; null = no expiry (legacy) */
+  runnerInviteTokenExpiresAt: text('runner_invite_token_expires_at'),
+  /** ISO timestamp when the invite token was first consumed; null = unused */
+  runnerInviteTokenUsedAt: text('runner_invite_token_used_at'),
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
 });

@@ -177,6 +177,8 @@ export function createTestDb() {
       git_email TEXT,
       provider_keys TEXT,
       runner_invite_token TEXT,
+      runner_invite_token_expires_at TEXT,
+      runner_invite_token_used_at TEXT,
       setup_completed INTEGER NOT NULL DEFAULT 0,
       default_editor TEXT,
       use_internal_editor INTEGER,

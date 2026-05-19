@@ -82,27 +82,29 @@ export async function dequeue(threadId: string): Promise<QueueEntry | null> {
   return row;
 }
 
-export async function cancel(messageId: string): Promise<boolean> {
-  const row = await dbGet(
-    db.select().from(messageQueue).where(eq(messageQueue.id, messageId)),
-  );
-  if (!row) return false;
+export async function cancel(messageId: string, threadId: string): Promise<boolean> {
+  const row = (await dbGet(db.select().from(messageQueue).where(eq(messageQueue.id, messageId)))) as
+    | QueueEntry
+    | undefined;
+  if (!row || row.threadId !== threadId) return false;
   await dbRun(db.delete(messageQueue).where(eq(messageQueue.id, messageId)));
   log.info('Queued message cancelled', { namespace: 'queue', messageId });
   return true;
 }
 
-export async function update(messageId: string, content: string): Promise<QueueEntry | null> {
-  const row = await dbGet(
-    db.select().from(messageQueue).where(eq(messageQueue.id, messageId)),
-  );
-  if (!row) return null;
+export async function update(
+  messageId: string,
+  threadId: string,
+  content: string,
+): Promise<QueueEntry | null> {
+  const row = (await dbGet(db.select().from(messageQueue).where(eq(messageQueue.id, messageId)))) as
+    | QueueEntry
+    | undefined;
+  if (!row || row.threadId !== threadId) return null;
 
-  await dbRun(
-    db.update(messageQueue).set({ content }).where(eq(messageQueue.id, messageId)),
-  );
+  await dbRun(db.update(messageQueue).set({ content }).where(eq(messageQueue.id, messageId)));
   log.info('Queued message updated', { namespace: 'queue', messageId });
-  return { ...(row as QueueEntry), content };
+  return { ...row, content };
 }
 
 export async function listQueue(threadId: string): Promise<QueueEntry[]> {

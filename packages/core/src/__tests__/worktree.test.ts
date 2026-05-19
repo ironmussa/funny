@@ -147,5 +147,27 @@ describe('worktree operations', () => {
       // Should not throw because reject=false
       await removeBranch(repoPath, 'nonexistent-branch');
     });
+
+    test('refuses to act on branch names starting with - (L4 flag-injection)', async () => {
+      // Create a real branch we can verify is NOT touched even though the
+      // attacker tries to pass `--all` or `-rf` as the branch name.
+      executeSync('git', ['branch', 'real-branch'], { cwd: repoPath });
+      await removeBranch(repoPath, '--all');
+      await removeBranch(repoPath, '-rf');
+      const branches = executeSync('git', ['branch', '--list'], { cwd: repoPath }).stdout;
+      // real-branch must still exist — the dash-leading inputs must have been
+      // dropped without ever reaching `git branch -D`.
+      expect(branches).toContain('real-branch');
+    });
+  });
+
+  describe('createWorktree — branch name validation (L4)', () => {
+    test('rejects branch names starting with -', async () => {
+      const result = await createWorktree(repoPath, '-rf');
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.message).toMatch(/must not start with/i);
+      }
+    });
   });
 });

@@ -420,6 +420,37 @@ describe('Thread Routes (Integration)', () => {
       expect(body.ok).toBe(true);
       expect(body.queuedCount).toBe(0);
     });
+
+    test('returns 404 when caller does not own the thread (C1 IDOR)', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessageQueue(t.db as any, { id: 'q1', threadId: 't1', content: 'Theirs' });
+
+      const res = await t.requestAs('user-2').delete('/api/threads/t1/queue/q1');
+      expect(res.status).toBe(404);
+
+      // Verify the queued message was NOT cancelled.
+      const list = await t.requestAs('user-1').get('/api/threads/t1/queue');
+      const body = await list.json();
+      expect(body).toHaveLength(1);
+    });
+
+    test('does not cancel when messageId belongs to a different thread', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db as any, { id: 't2', projectId: 'p1', userId: 'user-1' });
+      seedMessageQueue(t.db as any, { id: 'q1', threadId: 't2', content: 'In t2' });
+
+      const res = await t.requestAs('user-1').delete('/api/threads/t1/queue/q1');
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(false);
+
+      // q1 still exists in t2.
+      const list = await t.requestAs('user-1').get('/api/threads/t2/queue');
+      const lbody = await list.json();
+      expect(lbody).toHaveLength(1);
+    });
   });
 
   describe('PATCH /api/threads/:id/queue/:messageId', () => {
@@ -444,6 +475,39 @@ describe('Thread Routes (Integration)', () => {
 
       const res = await t.requestAs('user-1').patch('/api/threads/t1/queue/q1', {});
       expect(res.status).toBe(400);
+    });
+
+    test('returns 404 when caller does not own the thread (C1 IDOR)', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedMessageQueue(t.db as any, { id: 'q1', threadId: 't1', content: 'Theirs' });
+
+      const res = await t.requestAs('user-2').patch('/api/threads/t1/queue/q1', {
+        content: 'pwned',
+      });
+      expect(res.status).toBe(404);
+
+      const list = await t.requestAs('user-1').get('/api/threads/t1/queue');
+      const body = await list.json();
+      expect(body[0].content).toBe('Theirs');
+    });
+
+    test('does not update when messageId belongs to a different thread', async () => {
+      seedProject(t.db as any, { id: 'p1', userId: 'user-1', path: '/a' });
+      seedThread(t.db as any, { id: 't1', projectId: 'p1', userId: 'user-1' });
+      seedThread(t.db as any, { id: 't2', projectId: 'p1', userId: 'user-1' });
+      seedMessageQueue(t.db as any, { id: 'q1', threadId: 't2', content: 'In t2' });
+
+      const res = await t.requestAs('user-1').patch('/api/threads/t1/queue/q1', {
+        content: 'pwned',
+      });
+      expect(res.status).toBe(200);
+      const body = await res.json();
+      expect(body.ok).toBe(false);
+
+      const list = await t.requestAs('user-1').get('/api/threads/t2/queue');
+      const lbody = await list.json();
+      expect(lbody[0].content).toBe('In t2');
     });
   });
 

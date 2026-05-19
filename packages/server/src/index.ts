@@ -79,6 +79,19 @@ app.use(
       // Monaco editor workers are bundled via Vite's `?worker` imports and
       // served from same-origin in prod; dev builds may use blob: URLs.
       workerSrc: ["'self'", 'blob:'],
+      // Security M3 — known limitation. `'unsafe-inline'` is still required
+      // here because the React SPA uses ~150 inline `style=` props plus
+      // Radix UI primitives (popovers, tooltips, dropdowns) that compute
+      // positioning inline at runtime. Eliminating it requires either:
+      //   (a) migrating those sites to CSS classes / data-attr-driven CSS,
+      //   (b) injecting a CSP nonce into the SPA's <style> sinks (Radix
+      //       supports nonces but each component must be wrapped in a
+      //       NonceProvider, and Vite must emit one per request),
+      //   (c) accepting a per-request hash list, which Radix's dynamic
+      //       positioning styles defeat.
+      // Tracked in SECURITY_AUDIT_TASKS.md (M3). Script-side CSP remains
+      // strict ('self' only) — inline-style XSS is significantly harder to
+      // weaponize than inline-script XSS.
       styleSrc: ["'self'", "'unsafe-inline'"],
       imgSrc: ["'self'", 'data:', 'blob:'],
       connectSrc: ["'self'", 'ws:', 'wss:'],

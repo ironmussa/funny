@@ -23,6 +23,7 @@ import { inviteLinks } from '../db/schema.js';
 import { audit } from '../lib/audit.js';
 import { auth } from '../lib/auth.js';
 import { log } from '../lib/logger.js';
+import { validatePasswordStrength } from '../lib/password-policy.js';
 import type { ServerEnv } from '../lib/types.js';
 
 // ── Helpers ──────────────────────────────────────────────
@@ -190,19 +191,10 @@ inviteLinkPublicRoutes.post('/register', async (c) => {
     return c.json({ error: 'Token, username, and password are required' }, 400);
   }
 
-  // Enforce password strength
-  if (body.password.length < 10) {
-    return c.json({ error: 'Password must be at least 10 characters long' }, 400);
-  }
-  if (
-    !/[A-Z]/.test(body.password) ||
-    !/[a-z]/.test(body.password) ||
-    !/[0-9]/.test(body.password)
-  ) {
-    return c.json(
-      { error: 'Password must contain uppercase, lowercase, and numeric characters' },
-      400,
-    );
+  // Enforce shared password strength policy (Security M5).
+  const strength = validatePasswordStrength(body.password);
+  if (!strength.ok) {
+    return c.json({ error: strength.reason }, 400);
   }
 
   const result = await validateToken(body.token);

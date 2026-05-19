@@ -1154,6 +1154,21 @@ const migrations: Migration[] = [
       await ctx().addColumn('threads', 'orchestrator_managed', 'INTEGER NOT NULL', '0');
     },
   },
+  {
+    // Security H5: bound runner-invite-token lifetime + single-use semantics.
+    // Without an expiry, a leaked invite token grants permanent runner-
+    // registration ability under the victim's account. We add two ISO-timestamp
+    // columns the validator checks on every use:
+    //  - runner_invite_token_expires_at — past => expired
+    //  - runner_invite_token_used_at    — non-null => already consumed
+    // Missing/null `expires_at` means "no expiry recorded" (legacy tokens)
+    // and is treated as expired so they must be rotated.
+    name: '052_runner_invite_token_expires_at',
+    async up() {
+      await ctx().addColumn('user_profiles', 'runner_invite_token_expires_at', 'TEXT');
+      await ctx().addColumn('user_profiles', 'runner_invite_token_used_at', 'TEXT');
+    },
+  },
 ];
 
 export async function autoMigrate() {

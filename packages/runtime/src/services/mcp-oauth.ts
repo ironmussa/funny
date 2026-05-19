@@ -8,6 +8,7 @@
 import { randomBytes, createHash } from 'crypto';
 
 import { log } from '../lib/logger.js';
+import { safeFetch } from '../lib/ssrf-guard.js';
 import { addMcpServer, removeMcpServer } from './mcp-service.js';
 import { getServices } from './service-registry.js';
 
@@ -95,8 +96,9 @@ function generateState(): string {
 // ── OAuth Discovery ───────────────────────────────────────────
 
 async function discoverResourceMetadata(serverUrl: string): Promise<string> {
-  // Hit the MCP server to get a 401 with WWW-Authenticate header
-  const res = await fetch(serverUrl, {
+  // Hit the MCP server to get a 401 with WWW-Authenticate header.
+  // safeFetch enforces SSRF guardrails on user-supplied MCP server URLs.
+  const res = await safeFetch(serverUrl, {
     method: 'GET',
     headers: { Accept: 'application/json' },
     redirect: 'manual',
@@ -111,7 +113,7 @@ async function discoverResourceMetadata(serverUrl: string): Promise<string> {
   // Fallback: try .well-known/oauth-protected-resource
   const url = new URL(serverUrl);
   const wellKnownUrl = `${url.origin}/.well-known/oauth-protected-resource`;
-  const fallbackRes = await fetch(wellKnownUrl);
+  const fallbackRes = await safeFetch(wellKnownUrl);
   if (fallbackRes.ok) {
     const meta = (await fallbackRes.json()) as ProtectedResourceMetadata;
     if (meta.authorization_servers?.[0]) return meta.authorization_servers[0];
@@ -125,12 +127,12 @@ async function fetchAuthServerMetadata(authServerUrl: string): Promise<OAuthServ
 
   // Try .well-known/oauth-authorization-server
   const oauthUrl = `${url.origin}/.well-known/oauth-authorization-server${url.pathname === '/' ? '' : url.pathname}`;
-  let res = await fetch(oauthUrl);
+  let res = await safeFetch(oauthUrl);
 
   if (!res.ok) {
     // Fallback to OpenID Connect discovery
     const oidcUrl = `${url.origin}/.well-known/openid-configuration`;
-    res = await fetch(oidcUrl);
+    res = await safeFetch(oidcUrl);
   }
 
   if (!res.ok) {
@@ -145,7 +147,7 @@ async function registerClient(
   redirectUri: string,
   serverName: string,
 ): Promise<DynamicClientRegistration> {
-  const res = await fetch(registrationEndpoint, {
+  const res = await safeFetch(registrationEndpoint, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
@@ -186,7 +188,7 @@ export async function startOAuthFlow(
   // Step 2: Get protected resource metadata → auth server URL
   let authServerUrl: string;
   try {
-    const resourceMeta = await fetch(resourceMetadataUrl);
+    const resourceMeta = await safeFetch(resourceMetadataUrl);
     if (resourceMeta.ok) {
       const meta = (await resourceMeta.json()) as ProtectedResourceMetadata;
       authServerUrl = meta.authorization_servers?.[0] || new URL(serverUrl).origin;
@@ -279,7 +281,7 @@ export async function handleOAuthCallback(
       tokenBody.set('client_secret', pending.clientSecret);
     }
 
-    const tokenRes = await fetch(pending.tokenEndpoint, {
+    const tokenRes = await safeFetch(pending.tokenEndpoint, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: tokenBody.toString(),

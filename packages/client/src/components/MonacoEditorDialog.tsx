@@ -15,6 +15,7 @@ import { useTheme } from 'next-themes';
 import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import ReactMarkdown, { type Components } from 'react-markdown';
+import rehypeSanitize from 'rehype-sanitize';
 import remarkGfm from 'remark-gfm';
 import { toast } from 'sonner';
 
@@ -305,7 +306,11 @@ export function MonacoEditorDialog({
     () => (
       <ReactMarkdown
         remarkPlugins={[remarkGfm]}
-        rehypePlugins={[[rehypeMarkSearch, { query: activeQuery }]]}
+        // Security L1: sanitize before the search-mark plugin runs so that the
+        // sanitizer cannot strip the <mark> elements injected by
+        // `rehypeMarkSearch` (which it would, since `mark` is not in the
+        // default safelist). Order matters: sanitize → then mark.
+        rehypePlugins={[rehypeSanitize, [rehypeMarkSearch, { query: activeQuery }]]}
         components={markdownPreviewComponents}
       >
         {content}

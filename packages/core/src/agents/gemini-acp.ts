@@ -93,6 +93,24 @@ export class GeminiACPProcess extends BaseAgentProcess {
   /** True while loadSession is replaying historical events. */
   private replayingHistory = false;
 
+  /**
+   * Rolling buffer of recent stderr from the gemini-cli child. Captured so
+   * that when `connection.prompt()` rejects with a terse error from Gemini
+   * (e.g. "Request contains an invalid argument."), the surrounding stderr
+   * context — which often includes the malformed request body or a Google
+   * SDK stack trace — is preserved for diagnosis.
+   */
+  private stderrTail = '';
+  private static readonly STDERR_TAIL_MAX = 32 * 1024;
+
+  private appendStderrTail(chunk: string): void {
+    this.stderrTail += chunk;
+    const max = GeminiACPProcess.STDERR_TAIL_MAX;
+    if (this.stderrTail.length > max) {
+      this.stderrTail = this.stderrTail.slice(this.stderrTail.length - max);
+    }
+  }
+
   private flushPendingThought(): void {
     if (!this.pendingThought) return;
     const { id, text } = this.pendingThought;
@@ -177,6 +195,15 @@ export class GeminiACPProcess extends BaseAgentProcess {
       args.push('--model', this.options.model);
     }
 
+    // Diagnostics: when FUNNY_GEMINI_VERBOSE=1, pass --debug to gemini-cli
+    // and set DEBUG=* so the Google Gen AI SDK logs the request/response
+    // bodies it exchanges with Gemini. Output is captured by the existing
+    // stderr tail buffer and dumped in `acp-timing: prompt-error`.
+    const geminiVerbose = process.env.FUNNY_GEMINI_VERBOSE === '1';
+    if (geminiVerbose) {
+      args.push('--debug');
+    }
+
     // autoEdit mode (full bypass, equivalent to Claude's `bypassPermissions`)
     // ⇒ run gemini with `--yolo` so it auto-approves everything without ever
     // invoking requestPermission. NOTE: this is funny's `autoEdit` mode, NOT
@@ -196,7 +223,11 @@ export class GeminiACPProcess extends BaseAgentProcess {
     const child = spawn(geminiBin, args, {
       stdio: ['pipe', 'pipe', 'pipe'],
       cwd: this.options.cwd,
-      env: { ...process.env, ...this.options.env },
+      env: {
+        ...process.env,
+        ...(geminiVerbose ? { DEBUG: '*' } : {}),
+        ...this.options.env,
+      },
       signal: this.abortController.signal,
       shell: process.platform === 'win32',
     });
@@ -224,9 +255,11 @@ export class GeminiACPProcess extends BaseAgentProcess {
     // with full history. ACP subprocesses write JSON-RPC errors and API errors
     // to stderr — these are critical for the user (rate limits, auth failures, etc.).
     child.stderr?.on('data', (data: Buffer) => {
-      const raw = data.toString().trim();
-      if (!raw) return;
-      const errorText = this.parseStderrError(raw);
+      const raw = data.toString();
+      this.appendStderrTail(raw);
+      const trimmed = raw.trim();
+      if (!trimmed) return;
+      const errorText = this.parseStderrError(trimmed);
       if (errorText) this.emitErrorToolCall(errorText);
     });
 
@@ -494,6 +527,13 @@ export class GeminiACPProcess extends BaseAgentProcess {
         result: this.lastAssistantText || undefined,
       });
     } catch (err: unknown) {
+      const errAny = err as Record<string, unknown> | null;
+      let errSerialized: string;
+      try {
+        errSerialized = JSON.stringify(err, Object.getOwnPropertyNames((err as object) ?? {}));
+      } catch {
+        errSerialized = String(err);
+      }
       dlog.error('acp-timing: prompt-error', {
         sessionId: this.activeSessionId,
         turn: this.numTurns + 1,
@@ -501,6 +541,14 @@ export class GeminiACPProcess extends BaseAgentProcess {
         aborted: this.isAborted,
         hadAssistantText: !!this.lastAssistantText,
         message: err instanceof Error ? err.message : String(err),
+        errName: errAny?.name ?? null,
+        errCode: errAny?.code ?? null,
+        errData: errAny?.data ?? null,
+        errCause: errAny?.cause ?? null,
+        errStack: err instanceof Error ? err.stack : null,
+        errSerialized,
+        stderrTailBytes: this.stderrTail.length,
+        stderrTail: this.stderrTail,
       });
       this.flushPendingThought();
       if (!this.isAborted) {

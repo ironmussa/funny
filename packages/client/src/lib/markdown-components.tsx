@@ -1,8 +1,8 @@
-import { Check, Copy, Maximize2 } from 'lucide-react';
+import { Check, Copy } from 'lucide-react';
 import { lazy, Suspense, useState, useEffect } from 'react';
 import remarkGfm from 'remark-gfm';
 
-import { MermaidBlock, MermaidExpandedDialog } from '@/components/MermaidBlock';
+import { MermaidBlock } from '@/components/MermaidBlock';
 import { Checkbox } from '@/components/ui/checkbox';
 import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { ensureLanguage, highlightCode } from '@/hooks/use-highlight';
@@ -44,39 +44,25 @@ const LazyNestedMarkdown = lazy(() =>
 );
 
 function MermaidCodeBlock({ chart }: { chart: string }) {
-  const [expanded, setExpanded] = useState(false);
   const [copied, copy] = useCopyToClipboard();
 
   return (
-    <>
-      <div className="group/codeblock relative my-2">
-        <div className="overflow-x-auto rounded bg-muted p-2">
-          <div className="mb-1 select-none text-[10px] uppercase tracking-wider text-muted-foreground/80">
-            mermaid
-          </div>
-          <MermaidBlock chart={chart} />
+    <div className="group/codeblock relative my-2">
+      <div className="overflow-x-auto rounded bg-muted p-2">
+        <div className="mb-1 select-none text-[10px] uppercase tracking-wider text-muted-foreground/80">
+          mermaid
         </div>
-        {/* Expand button */}
-        <button
-          data-testid="mermaid-expand"
-          onClick={() => setExpanded(true)}
-          className="absolute right-10 top-2 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background/50 hover:text-foreground group-hover/codeblock:opacity-100"
-          aria-label="Expand diagram"
-        >
-          <Maximize2 className="icon-base" />
-        </button>
-        {/* Copy source button */}
-        <button
-          data-testid="code-block-copy"
-          onClick={() => copy(chart)}
-          className="absolute right-2 top-2 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background/50 hover:text-foreground group-hover/codeblock:opacity-100"
-          aria-label="Copy code"
-        >
-          {copied ? <Check className="icon-base" /> : <Copy className="icon-base" />}
-        </button>
+        <MermaidBlock chart={chart} />
       </div>
-      <MermaidExpandedDialog chart={chart} open={expanded} onClose={() => setExpanded(false)} />
-    </>
+      <button
+        data-testid="code-block-copy"
+        onClick={() => copy(chart)}
+        className="absolute right-2 top-2 rounded p-1 text-muted-foreground opacity-0 transition-opacity hover:bg-background/50 hover:text-foreground group-hover/codeblock:opacity-100"
+        aria-label="Copy code"
+      >
+        {copied ? <Check className="icon-base" /> : <Copy className="icon-base" />}
+      </button>
+    </div>
   );
 }
 

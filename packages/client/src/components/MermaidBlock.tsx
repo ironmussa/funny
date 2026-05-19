@@ -1,4 +1,3 @@
-import DOMPurify from 'dompurify';
 import { Check, Code, Image, Maximize2, Minimize2, X, ZoomIn, ZoomOut } from 'lucide-react';
 import mermaid from 'mermaid';
 import { useTheme } from 'next-themes';
@@ -17,32 +16,38 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { cn } from '@/lib/utils';
 
 /**
- * Security M1: sanitize mermaid's rendered SVG through DOMPurify's SVG profile
- * before we inject it via `dangerouslySetInnerHTML`. Mermaid's own parser
- * escapes text at `securityLevel: 'strict'`, but the SVG output can still
- * contain `<foreignObject>` / `<script>` / `xlink:href="javascript:..."`
- * nodes if a future renderer regression or a malicious chart input slips
- * through. Sanitizing here is defense-in-depth and is cheap (≈1ms for typical
- * diagrams). We keep SVG semantics (USE_PROFILES: svg + svgFilters) and
- * forbid the handful of SVG elements that can carry JS.
+ * Security M1: parse mermaid's SVG output as XML (preserving SVG + XHTML
+ * namespaces) and remove the elements/attributes that can carry JS. Mermaid
+ * already escapes user input at `securityLevel: 'strict'`, so this is
+ * defense-in-depth. We used to delegate to DOMPurify, but its SVG profile
+ * stripped HTML content nested inside `<foreignObject>` (which mermaid uses
+ * for node labels), leaving every node visually empty.
  */
 function sanitizeMermaidSvg(svg: string): string {
   if (!svg) return svg;
-  return DOMPurify.sanitize(svg, {
-    USE_PROFILES: { svg: true, svgFilters: true },
-    FORBID_TAGS: ['script', 'foreignObject'],
-    // Drop any event handler (onload, onclick, …) and javascript: URIs.
-    FORBID_ATTR: [],
-    ADD_DATA_URI_TAGS: [],
-    // The SVG profile already refuses javascript: URIs, but pin it so we
-    // remain safe if the upstream profile loosens in a future release.
-    ALLOWED_URI_REGEXP: /^(?:(?:https?|mailto|tel):|[^a-z]|[a-z+.-]+(?:[^a-z+.\-:]|$))/i,
+  const template = document.createElement('template');
+  template.innerHTML = svg;
+  const root = template.content;
+
+  root.querySelectorAll('script').forEach((n) => n.remove());
+  root.querySelectorAll('*').forEach((el) => {
+    for (const attr of Array.from(el.attributes)) {
+      const name = attr.name.toLowerCase();
+      const value = attr.value.trim().toLowerCase();
+      if (name.startsWith('on')) el.removeAttribute(attr.name);
+      else if (
+        (name === 'href' || name === 'xlink:href' || name === 'src') &&
+        value.startsWith('javascript:')
+      ) {
+        el.removeAttribute(attr.name);
+      }
+    }
   });
+
+  const svgEl = root.querySelector('svg');
+  return svgEl ? svgEl.outerHTML : '';
 }
 
-/**
- * Hook that renders a mermaid chart string into SVG html.
- */
 function useMermaidSvg(chart: string) {
   const [svg, setSvg] = useState<string>('');
   const [error, setError] = useState<string>('');
@@ -68,11 +73,92 @@ function useMermaidSvg(chart: string) {
   return { svg, error };
 }
 
-/**
- * Renders a Mermaid diagram inline (no expand button — that lives in the code-block wrapper).
- */
+type PanZoom = {
+  scale: number;
+  offset: { x: number; y: number };
+  setScale: (updater: (s: number) => number) => void;
+  reset: () => void;
+  onWheel: (e: React.WheelEvent) => void;
+  onPointerDown: (e: React.PointerEvent) => void;
+  onPointerMove: (e: React.PointerEvent) => void;
+  onPointerUp: (e: React.PointerEvent) => void;
+  isDragging: boolean;
+};
+
+function useMermaidPanZoom(): PanZoom {
+  const [scale, setScaleState] = useState(1);
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [isDragging, setIsDragging] = useState(false);
+  const dragRef = useRef<{
+    startX: number;
+    startY: number;
+    originX: number;
+    originY: number;
+  } | null>(null);
+
+  const setScale = useCallback((updater: (s: number) => number) => {
+    setScaleState((prev) => Math.min(5, Math.max(0.2, updater(prev))));
+  }, []);
+
+  const reset = useCallback(() => {
+    setScaleState(1);
+    setOffset({ x: 0, y: 0 });
+  }, []);
+
+  const onWheel = useCallback(
+    (e: React.WheelEvent) => {
+      e.preventDefault();
+      setScale((prev) => prev + (e.deltaY > 0 ? -0.1 : 0.1));
+    },
+    [setScale],
+  );
+
+  const onPointerDown = useCallback(
+    (e: React.PointerEvent) => {
+      if (e.button !== 0) return;
+      e.currentTarget.setPointerCapture(e.pointerId);
+      dragRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        originX: offset.x,
+        originY: offset.y,
+      };
+      setIsDragging(true);
+    },
+    [offset],
+  );
+
+  const onPointerMove = useCallback((e: React.PointerEvent) => {
+    if (!dragRef.current) return;
+    const dx = e.clientX - dragRef.current.startX;
+    const dy = e.clientY - dragRef.current.startY;
+    setOffset({ x: dragRef.current.originX + dx, y: dragRef.current.originY + dy });
+  }, []);
+
+  const onPointerUp = useCallback(() => {
+    dragRef.current = null;
+    setIsDragging(false);
+  }, []);
+
+  return {
+    scale,
+    offset,
+    setScale,
+    reset,
+    onWheel,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    isDragging,
+  };
+}
+
+const MERMAID_INLINE_HEIGHT = 420;
+
 export function MermaidBlock({ chart }: { chart: string }) {
   const { svg, error } = useMermaidSvg(chart);
+  const [expanded, setExpanded] = useState(false);
+  const pz = useMermaidPanZoom();
 
   if (error) {
     return (
@@ -81,26 +167,109 @@ export function MermaidBlock({ chart }: { chart: string }) {
   }
 
   return (
-    <div
-      className="flex justify-center [&>svg]:max-w-full"
-      data-testid="mermaid-diagram"
-      dangerouslySetInnerHTML={{ __html: svg }}
-    />
+    <>
+      <div
+        className="group relative overflow-hidden rounded border border-border bg-card"
+        style={{ height: MERMAID_INLINE_HEIGHT }}
+        data-testid="mermaid-diagram"
+      >
+        <div
+          className="absolute inset-0 flex items-center justify-center"
+          style={{ cursor: pz.isDragging ? 'grabbing' : 'grab' }}
+          onWheel={pz.onWheel}
+          onPointerDown={pz.onPointerDown}
+          onPointerMove={pz.onPointerMove}
+          onPointerUp={pz.onPointerUp}
+          onPointerCancel={pz.onPointerUp}
+        >
+          <div
+            className="[&>svg]:max-w-none"
+            style={{
+              transform: `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
+              transformOrigin: 'center center',
+            }}
+            dangerouslySetInnerHTML={{ __html: svg }}
+          />
+        </div>
+
+        <div className="pointer-events-none absolute right-2 top-2 flex items-center gap-1 opacity-0 transition-opacity group-hover:opacity-100">
+          <div className="pointer-events-auto flex items-center gap-1 rounded-md border border-border bg-background/90 px-1 py-0.5 shadow-sm backdrop-blur">
+            <span className="px-1 text-xs text-muted-foreground">
+              {Math.round(pz.scale * 100)}%
+            </span>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => pz.setScale((s) => s - 0.2)}
+                  className="text-muted-foreground"
+                  data-testid="mermaid-inline-zoom-out"
+                >
+                  <ZoomOut className="icon-base" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Zoom out</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => pz.setScale((s) => s + 0.2)}
+                  className="text-muted-foreground"
+                  data-testid="mermaid-inline-zoom-in"
+                >
+                  <ZoomIn className="icon-base" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Zoom in</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={pz.reset}
+                  className="text-xs text-muted-foreground"
+                  data-testid="mermaid-inline-zoom-reset"
+                >
+                  1:1
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Reset zoom</TooltipContent>
+            </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon-sm"
+                  onClick={() => setExpanded(true)}
+                  className="text-muted-foreground"
+                  data-testid="mermaid-inline-expand"
+                >
+                  <Maximize2 className="icon-base" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Expand</TooltipContent>
+            </Tooltip>
+          </div>
+        </div>
+      </div>
+
+      <MermaidExpandedDialog chart={chart} open={expanded} onClose={() => setExpanded(false)} />
+    </>
   );
 }
 
-/**
- * Converts an SVG string to a PNG blob via an offscreen canvas.
- */
 async function svgToPngBlob(svgHtml: string): Promise<Blob> {
-  // Parse to extract width/height from the SVG element
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgHtml, 'image/svg+xml');
   const svgEl = doc.querySelector('svg');
   const w = svgEl?.getAttribute('width') ? parseFloat(svgEl.getAttribute('width')!) : 800;
   const h = svgEl?.getAttribute('height') ? parseFloat(svgEl.getAttribute('height')!) : 600;
 
-  const scale = 2; // 2x for retina
+  const scale = 2;
   const canvas = document.createElement('canvas');
   canvas.width = w * scale;
   canvas.height = h * scale;
@@ -128,9 +297,6 @@ async function svgToPngBlob(svgHtml: string): Promise<Blob> {
   });
 }
 
-/**
- * Fullscreen dialog for viewing a Mermaid diagram with zoom + pan controls.
- */
 export function MermaidExpandedDialog({
   chart,
   open,
@@ -143,23 +309,13 @@ export function MermaidExpandedDialog({
   const { svg } = useMermaidSvg(chart);
   const containerRef = useRef<HTMLDivElement>(null);
   const [isFullscreen, setIsFullscreen] = useState(false);
-  const [scale, setScale] = useState(1);
-  const [offset, setOffset] = useState({ x: 0, y: 0 });
-  const dragRef = useRef<{
-    startX: number;
-    startY: number;
-    originX: number;
-    originY: number;
-  } | null>(null);
+  const pz = useMermaidPanZoom();
   const [copiedCode, copyCode] = useCopyToClipboard();
   const [copiedImage, setCopiedImage] = useState(false);
 
-  // Reset state when opening
   useEffect(() => {
-    if (open) {
-      setScale(1);
-      setOffset({ x: 0, y: 0 });
-    }
+    if (open) pz.reset();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
   const handleCopyImage = useCallback(async () => {
@@ -173,41 +329,6 @@ export function MermaidExpandedDialog({
       // fallback: ignore if clipboard API not supported
     }
   }, [svg]);
-
-  // Zoom with mouse wheel
-  const handleWheel = useCallback((e: React.WheelEvent) => {
-    e.preventDefault();
-    setScale((prev) => {
-      const delta = e.deltaY > 0 ? -0.1 : 0.1;
-      return Math.min(5, Math.max(0.2, prev + delta));
-    });
-  }, []);
-
-  // Drag to pan
-  const handlePointerDown = useCallback(
-    (e: React.PointerEvent) => {
-      if (e.button !== 0) return; // left click only
-      e.currentTarget.setPointerCapture(e.pointerId);
-      dragRef.current = {
-        startX: e.clientX,
-        startY: e.clientY,
-        originX: offset.x,
-        originY: offset.y,
-      };
-    },
-    [offset],
-  );
-
-  const handlePointerMove = useCallback((e: React.PointerEvent) => {
-    if (!dragRef.current) return;
-    const dx = e.clientX - dragRef.current.startX;
-    const dy = e.clientY - dragRef.current.startY;
-    setOffset({ x: dragRef.current.originX + dx, y: dragRef.current.originY + dy });
-  }, []);
-
-  const handlePointerUp = useCallback(() => {
-    dragRef.current = null;
-  }, []);
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -224,7 +345,6 @@ export function MermaidExpandedDialog({
           <DialogTitle className="flex items-center gap-2 text-sm">Mermaid Diagram</DialogTitle>
           <DialogDescription className="sr-only">Expanded Mermaid diagram view</DialogDescription>
           <div className="flex items-center gap-1">
-            {/* Copy code */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -239,7 +359,6 @@ export function MermaidExpandedDialog({
               </TooltipTrigger>
               <TooltipContent>{copiedCode ? 'Copied!' : 'Copy code'}</TooltipContent>
             </Tooltip>
-            {/* Copy image */}
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
@@ -254,15 +373,16 @@ export function MermaidExpandedDialog({
               </TooltipTrigger>
               <TooltipContent>{copiedImage ? 'Copied!' : 'Copy as image'}</TooltipContent>
             </Tooltip>
-            {/* Separator */}
             <div className="mx-1 h-4 w-px bg-border" />
-            <span className="mr-1 text-xs text-muted-foreground">{Math.round(scale * 100)}%</span>
+            <span className="mr-1 text-xs text-muted-foreground">
+              {Math.round(pz.scale * 100)}%
+            </span>
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => setScale((s) => Math.max(0.2, s - 0.2))}
+                  onClick={() => pz.setScale((s) => s - 0.2)}
                   className="text-muted-foreground"
                   data-testid="mermaid-zoom-out"
                 >
@@ -276,7 +396,7 @@ export function MermaidExpandedDialog({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => setScale((s) => Math.min(5, s + 0.2))}
+                  onClick={() => pz.setScale((s) => s + 0.2)}
                   className="text-muted-foreground"
                   data-testid="mermaid-zoom-in"
                 >
@@ -290,10 +410,7 @@ export function MermaidExpandedDialog({
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  onClick={() => {
-                    setScale(1);
-                    setOffset({ x: 0, y: 0 });
-                  }}
+                  onClick={pz.reset}
                   className="text-xs text-muted-foreground"
                   data-testid="mermaid-zoom-reset"
                 >
@@ -335,17 +452,17 @@ export function MermaidExpandedDialog({
         <div
           ref={containerRef}
           className="flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-background"
-          style={{ cursor: dragRef.current ? 'grabbing' : 'grab' }}
-          onWheel={handleWheel}
-          onPointerDown={handlePointerDown}
-          onPointerMove={handlePointerMove}
-          onPointerUp={handlePointerUp}
-          onPointerCancel={handlePointerUp}
+          style={{ cursor: pz.isDragging ? 'grabbing' : 'grab' }}
+          onWheel={pz.onWheel}
+          onPointerDown={pz.onPointerDown}
+          onPointerMove={pz.onPointerMove}
+          onPointerUp={pz.onPointerUp}
+          onPointerCancel={pz.onPointerUp}
         >
           <div
             className="[&>svg]:max-w-none"
             style={{
-              transform: `translate(${offset.x}px, ${offset.y}px) scale(${scale})`,
+              transform: `translate(${pz.offset.x}px, ${pz.offset.y}px) scale(${pz.scale})`,
               transformOrigin: 'center center',
             }}
             dangerouslySetInnerHTML={{ __html: svg }}

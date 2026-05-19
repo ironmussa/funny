@@ -1,7 +1,9 @@
-import { Loader2 } from 'lucide-react';
+import { Loader2, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
+import { Button } from '@/components/ui/button';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useAppStore } from '@/stores/app-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadCore } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
@@ -25,6 +27,7 @@ export function ThreadView() {
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
   const hasProjects = useProjectStore((s) => s.projects.length > 0);
+  const setAddProjectOpen = useAppStore((s) => s.setAddProjectOpen);
 
   // Show new thread input when a project's "+" was clicked
   if (newThreadProjectId && !selectedThreadId) {
@@ -56,6 +59,16 @@ export function ThreadView() {
             <p className="text-sm">
               {hasProjects ? t('thread.threadsRunParallel') : t('thread.addProjectDescription')}
             </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAddProjectOpen(true)}
+              className="mt-6"
+              data-testid="thread-empty-add-project"
+            >
+              <Plus className="icon-sm" />
+              {t('sidebar.addProject')}
+            </Button>
           </div>
         </div>
       </div>

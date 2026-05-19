@@ -32,6 +32,7 @@ import {
   cancelQueuedMessage,
   updateQueuedMessage as updateQueuedMessageService,
   convertToWorktree,
+  uploadFile,
   ThreadServiceError,
 } from '../services/thread-service.js';
 import type { HonoEnv } from '../types/hono-env.js';
@@ -46,6 +47,7 @@ import {
   sendMessageSchema,
   updateQueuedMessageSchema,
   approveToolSchema,
+  uploadFileSchema,
   validate,
 } from '../validation/schemas.js';
 
@@ -156,6 +158,30 @@ threadRoutes.post('/:id/message', async (c) => {
     span.end('error', error instanceof Error ? error.message : String(error));
     return handleServiceError(c, error);
   }
+});
+
+// POST /api/threads/:id/upload — write a user-attached file into the
+// thread's working directory so the agent can read it on demand.
+threadRoutes.post('/:id/upload', async (c) => {
+  const id = c.req.param('id');
+  const raw = await c.req.json().catch(() => ({}));
+  const parsed = validate(uploadFileSchema, raw);
+  if (parsed.isErr()) return resultToResponse(c, parsed);
+
+  const userId = c.get('userId') as string;
+  const orgId = c.get('organizationId') ?? undefined;
+  const threadResult = await requireThread(id, userId, orgId);
+  if (threadResult.isErr()) return resultToResponse(c, threadResult);
+
+  const result = await uploadFile({
+    threadId: id,
+    userId,
+    organizationId: orgId,
+    provider: parsed.value.provider,
+    filename: parsed.value.filename,
+    contentBase64: parsed.value.contentBase64,
+  });
+  return resultToResponse(c, result);
 });
 
 // POST /api/threads/:id/stop

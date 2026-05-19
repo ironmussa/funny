@@ -675,6 +675,9 @@ threadRoutes.post('/:id/orchestrator/workflow-event', async (c) => {
 // POST /api/threads/:id/message — send message to running agent
 threadRoutes.post('/:id/message', proxyToRunner);
 
+// POST /api/threads/:id/upload — upload a user-attached file to the runner
+threadRoutes.post('/:id/upload', proxyToRunner);
+
 // POST /api/threads/:id/stop — stop running agent
 threadRoutes.post('/:id/stop', proxyToRunner);
 

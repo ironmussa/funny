@@ -92,6 +92,19 @@ const fileReferenceSchema = z.object({
   path: z.string().min(1),
 });
 
+// ── File uploads (drag-drop / picker attachments) ────────────────
+
+// Base64 payload upper bound — ~40 MB encoded ≈ 30 MB binary, which
+// safely covers the largest `uploadMaxBytes` across providers (25 MB
+// for Claude). Per-provider tier enforcement happens in upload.ts.
+const MAX_BASE64_LENGTH = 40 * 1024 * 1024;
+
+export const uploadFileSchema = z.object({
+  provider: agentProviderSchema,
+  filename: z.string().min(1).max(255),
+  contentBase64: z.string().min(1).max(MAX_BASE64_LENGTH),
+});
+
 const symbolReferenceSchema = z.object({
   path: z.string().min(1),
   name: z.string().min(1),

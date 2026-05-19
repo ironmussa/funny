@@ -8,12 +8,12 @@
  */
 
 import type { UserProfile } from '@funny/shared';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 import { nanoid } from 'nanoid';
 
 import { db } from '../db/index.js';
 import { userProfiles } from '../db/schema.js';
-import { encrypt, decrypt } from '../lib/crypto.js';
+import { encrypt, decrypt, isLegacyCiphertext, reencrypt } from '../lib/crypto.js';
 
 // ── Helpers ──────────────────────────────────────────────────
 
@@ -48,6 +48,25 @@ export async function getProviderKey(userId: string, provider: string): Promise<
   const keys = parseProviderKeys(row.providerKeys);
   const encrypted = keys[provider];
   if (!encrypted) return null;
+
+  // Security L3: lazily migrate legacy 3-part ciphertexts to v1 the first
+  // time we read them. After every active row has been touched, the legacy
+  // parse branch in `crypto.ts` can be safely removed.
+  if (isLegacyCiphertext(encrypted)) {
+    const upgraded = reencrypt(encrypted);
+    if (upgraded) {
+      keys[provider] = upgraded;
+      await db
+        .update(userProfiles)
+        .set({
+          providerKeys: JSON.stringify(keys),
+          updatedAt: new Date().toISOString(),
+        })
+        .where(eq(userProfiles.userId, userId));
+      return decrypt(upgraded);
+    }
+  }
+
   return decrypt(encrypted);
 }
 
@@ -208,28 +227,60 @@ export async function isSetupCompleted(userId: string): Promise<boolean> {
 
 // ── Runner Invite Token ─────────────────────────────────
 
-/** Return the runner invite token for a user, generating one if it doesn't exist yet. */
+/**
+ * Default lifetime for a runner invite token. Chosen to balance operator
+ * convenience (setting up a new runner machine days after generating the
+ * token) against the blast radius of a leaked token.
+ */
+export const RUNNER_INVITE_TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;
+
+/**
+ * Return the runner invite token for a user.
+ *
+ * Security H5: tokens have a bounded lifetime (`RUNNER_INVITE_TOKEN_TTL_MS`)
+ * and are single-use. If the current token is expired or already consumed,
+ * a fresh one is minted automatically — same semantics as before from the
+ * caller's perspective, but invalidates leaked/old tokens.
+ */
 export async function getOrCreateRunnerInviteToken(userId: string): Promise<string> {
   const rows = await db
-    .select({ runnerInviteToken: userProfiles.runnerInviteToken })
+    .select({
+      runnerInviteToken: userProfiles.runnerInviteToken,
+      runnerInviteTokenExpiresAt: userProfiles.runnerInviteTokenExpiresAt,
+      runnerInviteTokenUsedAt: userProfiles.runnerInviteTokenUsedAt,
+    })
     .from(userProfiles)
     .where(eq(userProfiles.userId, userId));
 
-  if (rows[0]?.runnerInviteToken) return rows[0].runnerInviteToken;
+  const existing = rows[0];
+  const nowMs = Date.now();
+  const stillValid =
+    existing?.runnerInviteToken &&
+    !existing.runnerInviteTokenUsedAt &&
+    existing.runnerInviteTokenExpiresAt &&
+    Date.parse(existing.runnerInviteTokenExpiresAt) > nowMs;
+  if (stillValid) return existing.runnerInviteToken!;
 
   const token = `utkn_${nanoid(32)}`;
-  const now = new Date().toISOString();
+  const now = new Date(nowMs).toISOString();
+  const expiresAt = new Date(nowMs + RUNNER_INVITE_TOKEN_TTL_MS).toISOString();
 
   if (rows.length > 0) {
     await db
       .update(userProfiles)
-      .set({ runnerInviteToken: token, updatedAt: now })
+      .set({
+        runnerInviteToken: token,
+        runnerInviteTokenExpiresAt: expiresAt,
+        runnerInviteTokenUsedAt: null,
+        updatedAt: now,
+      })
       .where(eq(userProfiles.userId, userId));
   } else {
     await db.insert(userProfiles).values({
       id: nanoid(),
       userId,
       runnerInviteToken: token,
+      runnerInviteTokenExpiresAt: expiresAt,
       setupCompleted: 0,
       createdAt: now,
       updatedAt: now,
@@ -242,7 +293,9 @@ export async function getOrCreateRunnerInviteToken(userId: string): Promise<stri
 /** Regenerate the runner invite token, invalidating the previous one for new registrations. */
 export async function rotateRunnerInviteToken(userId: string): Promise<string> {
   const token = `utkn_${nanoid(32)}`;
-  const now = new Date().toISOString();
+  const nowMs = Date.now();
+  const now = new Date(nowMs).toISOString();
+  const expiresAt = new Date(nowMs + RUNNER_INVITE_TOKEN_TTL_MS).toISOString();
 
   const rows = await db
     .select({ id: userProfiles.id })
@@ -252,13 +305,19 @@ export async function rotateRunnerInviteToken(userId: string): Promise<string> {
   if (rows.length > 0) {
     await db
       .update(userProfiles)
-      .set({ runnerInviteToken: token, updatedAt: now })
+      .set({
+        runnerInviteToken: token,
+        runnerInviteTokenExpiresAt: expiresAt,
+        runnerInviteTokenUsedAt: null,
+        updatedAt: now,
+      })
       .where(eq(userProfiles.userId, userId));
   } else {
     await db.insert(userProfiles).values({
       id: nanoid(),
       userId,
       runnerInviteToken: token,
+      runnerInviteTokenExpiresAt: expiresAt,
       setupCompleted: 0,
       createdAt: now,
       updatedAt: now,
@@ -268,11 +327,43 @@ export async function rotateRunnerInviteToken(userId: string): Promise<string> {
   return token;
 }
 
-/** Validate a runner invite token and return the userId it belongs to, or null if invalid. */
+/**
+ * Validate a runner invite token and return the userId it belongs to.
+ *
+ * Returns null if the token is unknown, expired, or has already been
+ * consumed. On success the token is marked as used (single-use): subsequent
+ * presentations are rejected. Legacy tokens (no `expires_at`) are treated as
+ * expired so they must be rotated.
+ */
 export async function validateRunnerInviteToken(token: string): Promise<string | null> {
   const rows = await db
-    .select({ userId: userProfiles.userId })
+    .select({
+      userId: userProfiles.userId,
+      expiresAt: userProfiles.runnerInviteTokenExpiresAt,
+      usedAt: userProfiles.runnerInviteTokenUsedAt,
+    })
     .from(userProfiles)
     .where(eq(userProfiles.runnerInviteToken, token));
-  return rows[0]?.userId ?? null;
+
+  const row = rows[0];
+  if (!row) return null;
+  if (row.usedAt) return null;
+  if (!row.expiresAt) return null;
+  if (Date.parse(row.expiresAt) <= Date.now()) return null;
+
+  // Mark consumed before returning so a replayed token after this point is
+  // rejected even if the caller re-uses it concurrently. Conditional update
+  // on `runner_invite_token_used_at IS NULL` makes this atomic against a
+  // concurrent second validation.
+  const usedAt = new Date().toISOString();
+  const updated = await db
+    .update(userProfiles)
+    .set({ runnerInviteTokenUsedAt: usedAt })
+    .where(
+      and(eq(userProfiles.runnerInviteToken, token), isNull(userProfiles.runnerInviteTokenUsedAt)),
+    )
+    .returning({ userId: userProfiles.userId });
+
+  if (updated.length === 0) return null;
+  return row.userId;
 }

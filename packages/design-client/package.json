@@ -10,7 +10,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@funny/shared": "*"
+    "@funny/shared": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.8.2",

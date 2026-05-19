@@ -133,6 +133,14 @@ export function createWorktree(
       if (/\.\./.test(branchName)) {
         throw badRequest('Branch name must not contain path traversal sequences (..)');
       }
+      // Security L4: reject branch names that start with `-`. Git treats
+      // leading-dash arguments as flags, so a value like `-rf` or `--exec=cmd`
+      // could turn `git branch <name>` / `git worktree add -b <name>` into a
+      // command-injection vector. The downstream `safeBranchDir` filter
+      // doesn't help here because the *raw* `branchName` is what reaches git.
+      if (branchName.startsWith('-')) {
+        throw badRequest('Branch name must not start with "-"');
+      }
       const safeBranchDir = branchName.replace(/[^a-zA-Z0-9._-]/g, '-'); // Keep only safe chars (no slashes)
       if (!safeBranchDir || safeBranchDir === '.' || safeBranchDir === '..') {
         throw badRequest('Invalid branch name after sanitization');
@@ -234,7 +242,15 @@ export async function removeWorktree(projectPath: string, worktreePath: string):
 }
 
 export async function removeBranch(projectPath: string, branchName: string): Promise<void> {
-  await gitWrite(['branch', '-D', branchName], { cwd: projectPath, reject: false });
+  // Security L4: never pass a value starting with `-` directly to git as an
+  // argument — it would be interpreted as a flag (potentially something like
+  // `--exec=...`). The branch arg position here is positional but git's CLI
+  // does not have a unanimous `--` separator across all commands; the safer
+  // course is to reject the name outright. Caller is responsible for
+  // surfacing this — `removeBranch` is best-effort cleanup that should never
+  // execute on a hostile-looking name.
+  if (branchName.startsWith('-')) return;
+  await gitWrite(['branch', '-D', '--', branchName], { cwd: projectPath, reject: false });
 }
 
 /**
@@ -336,6 +352,12 @@ export function previewWorktree(
 ): ResultAsync<WorktreePreview, DomainError> {
   return ResultAsync.fromPromise(
     (async () => {
+      // Security L4: leading `-` would be a CLI flag once the caller acts on
+      // the preview (e.g. via `worktree add -b <name>`). Reject up front so
+      // the UI gets a clear error instead of executing a flag injection.
+      if (branchName.startsWith('-')) {
+        throw badRequest('Branch name must not start with "-"');
+      }
       const base = getWorktreeBasePath(projectPath);
       const safeBranchDir = branchName.replace(/[^a-zA-Z0-9._-]/g, '-');
       const worktreePath = resolve(base, safeBranchDir);

@@ -47,17 +47,17 @@ runnerRoutes.post('/register', async (c) => {
     });
     return c.json(result, 201);
   } catch (err: any) {
-    const message = err?.message || String(err);
-    const cause = err?.cause?.message || err?.cause || '';
-    const code = err?.code || err?.cause?.code || '';
+    // Full diagnostics go to the structured logger only — never to the client.
+    // Returning err.message risks leaking DB paths, internal codes, or stack
+    // fragments embedded in driver errors.
     log.error('Runner registration failed', {
       namespace: 'runner',
-      error: message,
-      cause: String(cause),
-      code: String(code),
+      error: err?.message || String(err),
+      cause: String(err?.cause?.message || err?.cause || ''),
+      code: String(err?.code || err?.cause?.code || ''),
       stack: err?.stack?.split('\n').slice(0, 5).join(' | ') || '',
     });
-    return c.json({ error: `Registration failed: ${message}` }, 500);
+    return c.json({ error: 'Registration failed' }, 500);
   }
 });
 

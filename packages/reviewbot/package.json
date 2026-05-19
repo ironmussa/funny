@@ -14,9 +14,9 @@
     "test": "bun test"
   },
   "dependencies": {
-    "@funny/core": "*",
+    "@funny/core": "workspace:*",
     "@funny/sdk": "workspace:*",
-    "@funny/shared": "*",
+    "@funny/shared": "workspace:*",
     "hono": "^4.11.9",
     "nanoid": "^5.0.9"
   },

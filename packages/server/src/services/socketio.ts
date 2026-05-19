@@ -554,31 +554,43 @@ function setupRunnerNamespace(): void {
       });
     }
 
+    // Centralized per-event tenant check (Security H2). Returns true if the
+    // payload's `userId` matches the authenticated runner's owner, false
+    // otherwise. Handlers that carry a `userId` MUST gate on this before
+    // doing any work that touches user-scoped state. One audit entry per
+    // rejection.
+    const allowRunnerEvent = (eventName: string, payload: any): boolean => {
+      const targetUserId =
+        payload && typeof payload === 'object' && typeof payload.userId === 'string'
+          ? payload.userId
+          : undefined;
+      if (targetUserId === undefined) return true;
+      if (!runnerUserId || runnerUserId !== targetUserId) {
+        log.warn('Runner attempted cross-tenant event', {
+          namespace: 'socketio',
+          event: eventName,
+          runnerId,
+          runnerUserId,
+          targetUserId,
+        });
+        audit({
+          action: 'authz.cross_tenant_refused',
+          actorId: runnerUserId,
+          detail: `runner ${eventName} refused`,
+          meta: { source: `socketio:${eventName}`, runnerId, targetUserId },
+        });
+        return false;
+      }
+      return true;
+    };
+
     // Handle agent events from runner → relay to browser
     socket.on('runner:agent_event', async (data: unknown) => {
       if (isRateLimited(socket.id, 500, 10_000)) return;
       if (!data || typeof data !== 'object' || Array.isArray(data)) return;
       const msg = data as Record<string, any>;
       if (!msg.userId || typeof msg.userId !== 'string') return;
-
-      // Tenant validation: each runner is associated with a specific userId.
-      // Reject cross-tenant relays and reject legacy runners that have no
-      // owner (runnerUserId === null) so they can't fan out to arbitrary users.
-      if (!runnerUserId || runnerUserId !== msg.userId) {
-        log.warn('Runner attempted cross-tenant event relay', {
-          namespace: 'socketio',
-          runnerId,
-          runnerUserId,
-          targetUserId: msg.userId,
-        });
-        audit({
-          action: 'authz.cross_tenant_refused',
-          actorId: runnerUserId,
-          detail: 'runner agent_event relay refused',
-          meta: { source: 'socketio:runner_agent_event', runnerId, targetUserId: msg.userId },
-        });
-        return;
-      }
+      if (!allowRunnerEvent('runner:agent_event', msg)) return;
 
       wsRelay.relayToUser(msg.userId, msg.event);
 
@@ -620,22 +632,7 @@ function setupRunnerNamespace(): void {
       if (!data || typeof data !== 'object' || Array.isArray(data)) return;
       const relay = data as Record<string, any>;
       if (relay.userId && typeof relay.userId === 'string') {
-        // Tenant validation: same as agent_event
-        if (!runnerUserId || runnerUserId !== relay.userId) {
-          log.warn('Runner attempted cross-tenant browser relay', {
-            namespace: 'socketio',
-            runnerId,
-            runnerUserId,
-            targetUserId: relay.userId,
-          });
-          audit({
-            action: 'authz.cross_tenant_refused',
-            actorId: runnerUserId,
-            detail: 'runner browser_relay refused',
-            meta: { source: 'socketio:runner_browser_relay', runnerId, targetUserId: relay.userId },
-          });
-          return;
-        }
+        if (!allowRunnerEvent('runner:browser_relay', relay)) return;
         wsRelay.relayToUser(relay.userId, relay.data);
       }
     });
@@ -766,6 +763,51 @@ function setupRunnerControlHandlers(socket: Socket, runnerId: string): void {
     try {
       const payload = data?.payload ?? data;
       if (payload?.projectId && payload?.localPath) {
+        // Tenant validation: a runner can only claim assignment for projects
+        // owned by (or shared with) its registered user. Without this gate,
+        // a compromised runner could attach itself to any project and
+        // intercept proxied requests.
+        const runnerUserId = (socket.data?.runnerUserId ?? null) as string | null;
+        if (!runnerUserId) {
+          audit({
+            action: 'authz.cross_tenant_refused',
+            actorId: null,
+            detail: 'runner assign_project refused — runner has no owner',
+            meta: {
+              source: 'socketio:runner_assign_project',
+              runnerId,
+              projectId: payload.projectId,
+            },
+          });
+          ack?.({ ok: false, error: 'Forbidden' });
+          return;
+        }
+        const projectRepo = await import('./project-repository.js');
+        // resolveProjectPath returns ok when the runner's user owns the
+        // project or is a member; otherwise it returns an error. This is the
+        // same access predicate the data-handler uses.
+        const access = await projectRepo.resolveProjectPath(payload.projectId, runnerUserId);
+        if (access.isErr()) {
+          log.warn('Runner attempted cross-tenant project assignment', {
+            namespace: 'socketio',
+            runnerId,
+            runnerUserId,
+            projectId: payload.projectId,
+            reason: access.error.message,
+          });
+          audit({
+            action: 'authz.cross_tenant_refused',
+            actorId: runnerUserId,
+            detail: 'runner assign_project refused',
+            meta: {
+              source: 'socketio:runner_assign_project',
+              runnerId,
+              projectId: payload.projectId,
+            },
+          });
+          ack?.({ ok: false, error: 'Forbidden' });
+          return;
+        }
         const rm = await import('./runner-manager.js');
         await rm.assignProject(runnerId, {
           projectId: payload.projectId,

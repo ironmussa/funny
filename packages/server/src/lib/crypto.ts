@@ -132,6 +132,36 @@ function getKeyById(id: string): Buffer | null {
   return store.keys[id] ?? null;
 }
 
+let legacyDecryptLogged = false;
+function logLegacyDecryptOnce(): void {
+  if (legacyDecryptLogged) return;
+  legacyDecryptLogged = true;
+  log.warn(
+    'Decrypted a legacy (unversioned) ciphertext — schedule a re-encryption pass before this branch is removed',
+    { namespace: 'crypto', deprecation: 'L3' },
+  );
+}
+
+/**
+ * Re-encrypt a value with the active key in the current `v1` format. Use for
+ * lazy migration of legacy ciphertexts: read with `decrypt`, then write back
+ * with `reencrypt` so the legacy branch can eventually be deleted.
+ *
+ * Returns null when the input cannot be decrypted (caller should leave the
+ * row untouched).
+ */
+export function reencrypt(encrypted: string): string | null {
+  const plaintext = decrypt(encrypted);
+  if (plaintext === null) return null;
+  return encrypt(plaintext);
+}
+
+/** True if `encrypted` is in the legacy 3-part format. */
+export function isLegacyCiphertext(encrypted: string): boolean {
+  const parts = encrypted.split(':');
+  return parts.length === 3;
+}
+
 export function encrypt(plaintext: string): string {
   const { id, key } = getActiveKey();
   const iv = randomBytes(IV_LENGTH);
@@ -154,7 +184,14 @@ export function decrypt(encrypted: string): string | null {
     let ciphertext: string;
 
     if (parts.length === 3) {
-      // Legacy format: iv:authTag:ciphertext
+      // Security L3 — legacy unversioned format: `iv:authTag:ciphertext`.
+      //
+      // Deprecated. New writes always use `v1` (see encrypt()); the only
+      // remaining producers are pre-v1 rows already in the database. We log
+      // once per process so operators see when legacy ciphertext is still in
+      // play, and so this branch becomes auditable to remove in a future
+      // release once a backfill migration has re-encrypted everything.
+      logLegacyDecryptOnce();
       keyId = LEGACY_KEY_ID;
       [ivHex, authTagHex, ciphertext] = parts;
     } else if (parts.length === 5 && parts[0] === CURRENT_VERSION) {

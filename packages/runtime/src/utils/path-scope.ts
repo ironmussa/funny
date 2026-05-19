@@ -29,6 +29,26 @@ const BLOCKED_PREFIXES = ['/etc', '/proc', '/sys', '/dev', '/run', '/boot', '/ro
 const BLOCKED_HOME_DIRS = new Set(['.ssh', '.aws', '.gnupg', '.kube', '.config/gcloud', '.docker']);
 
 /**
+ * Windows system roots that must never be enumerated by the picker. Without
+ * this list a logged-in user can list `C:\Windows`, `C:\Program Files`, etc.,
+ * leaking host configuration (Security M6). Matched case-insensitively.
+ */
+const BLOCKED_WINDOWS_PREFIXES = [
+  'C:\\Windows',
+  'C:\\Program Files',
+  'C:\\Program Files (x86)',
+  'C:\\ProgramData',
+  'C:\\$Recycle.Bin',
+  'C:\\System Volume Information',
+];
+
+function isUnderCaseInsensitive(normalizedTarget: string, scope: string): boolean {
+  const t = normalizedTarget.toLowerCase();
+  const s = normalize(resolve(scope)).toLowerCase();
+  return t === s || t.startsWith(s + sep);
+}
+
+/**
  * True if `normalizedTarget` is `scope` or a descendant of `scope`.
  * Uses `path + sep` to prevent sibling-prefix matches (e.g. `/a/bc` under `/a/b`).
  */
@@ -59,6 +79,15 @@ export async function requirePickerPath(path: string): Promise<Response | null> 
 
   if (platform() === 'win32') {
     if (!/^[a-z]:[\\/]/i.test(normalizedTarget)) return deny(403, 'Access denied');
+    for (const prefix of BLOCKED_WINDOWS_PREFIXES) {
+      if (isUnderCaseInsensitive(normalizedTarget, prefix)) {
+        log.warn('Blocked browse request for Windows system dir', {
+          namespace: 'browse',
+          path: normalizedTarget,
+        });
+        return deny(403, 'Access denied');
+      }
+    }
     return null;
   }
 

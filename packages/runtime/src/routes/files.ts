@@ -5,8 +5,8 @@
  * @domain layer: infrastructure
  */
 
-import { readFile, writeFile, stat, lstat, realpath } from 'fs/promises';
-import { basename, dirname, normalize, resolve, sep } from 'path';
+import { readFile, writeFile, stat, realpath } from 'fs/promises';
+import { basename, dirname, join, normalize, resolve, sep } from 'path';
 
 import { WORKTREE_DIR_NAME } from '@funny/core/git';
 import { badRequest, internal, notFound } from '@funny/shared/errors';
@@ -72,6 +72,39 @@ function deny(): Response {
   );
 }
 
+/**
+ * Resolve the user-supplied path to its canonical form by following all
+ * symlinks. Eliminates the TOCTOU between an lstat-based symlink check and
+ * the subsequent read/write — callers MUST perform I/O on the returned path,
+ * never on the original user-supplied path, so a swap between check and use
+ * cannot escape scope.
+ *
+ * For `allowMissing` (used by /write to create new files), canonicalize the
+ * parent directory and rejoin the basename. The parent must already exist;
+ * the basename is appended verbatim so we never re-introduce a swap window.
+ */
+async function canonicalize(
+  filePath: string,
+  allowMissing: boolean,
+): Promise<
+  | { ok: true; canonical: string; existed: boolean }
+  | { ok: false; status: 404 | 500; error: string }
+> {
+  try {
+    const canonical = await realpath(filePath);
+    return { ok: true, canonical, existed: true };
+  } catch (e: any) {
+    if (e?.code !== 'ENOENT') return { ok: false, status: 500, error: 'File access error' };
+    if (!allowMissing) return { ok: false, status: 404, error: 'File not found' };
+    try {
+      const parent = await realpath(dirname(filePath));
+      return { ok: true, canonical: join(parent, basename(filePath)), existed: false };
+    } catch {
+      return { ok: false, status: 404, error: 'File not found' };
+    }
+  }
+}
+
 /** Binary file extensions that should not be edited in the internal editor */
 const BINARY_EXTENSIONS = [
   '.png',
@@ -124,23 +157,19 @@ app.get('/read', async (c) => {
     return resultToResponse(c, err(badRequest('Cannot edit binary files in internal editor')));
   }
 
-  // Symlink escape check: if the requested path is a symlink, the realpath
-  // must land back inside the SAME project scope. A symlink in project A
-  // pointing into project B (or anywhere else) is rejected.
-  const linkStatResult = await ResultAsync.fromPromise(lstat(filePath), (e: any) =>
-    e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),
-  );
-  if (linkStatResult.isErr()) return resultToResponse(c, linkStatResult);
-  if (linkStatResult.value.isSymbolicLink()) {
-    const realPathResult = await ResultAsync.fromPromise(realpath(filePath), (e: any) =>
-      e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),
+  // Resolve once via realpath; perform all subsequent I/O on the canonical
+  // path so a symlink swap between check and read cannot escape scope.
+  const canon = await canonicalize(filePath, false);
+  if (!canon.ok) {
+    return resultToResponse(
+      c,
+      err(canon.status === 404 ? notFound(canon.error) : internal(canon.error)),
     );
-    if (realPathResult.isErr()) return resultToResponse(c, realPathResult);
-    if (!isInScope(realPathResult.value, scope)) return deny();
   }
+  if (!isInScope(canon.canonical, scope)) return deny();
 
   // Check file size (max 10MB)
-  const statsResult = await ResultAsync.fromPromise(stat(filePath), (e: any) =>
+  const statsResult = await ResultAsync.fromPromise(stat(canon.canonical), (e: any) =>
     e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),
   );
   if (statsResult.isErr()) return resultToResponse(c, statsResult);
@@ -148,8 +177,9 @@ app.get('/read', async (c) => {
     return resultToResponse(c, err(badRequest('File too large for internal editor (max 10MB)')));
   }
 
-  const contentResult = await ResultAsync.fromPromise(readFile(filePath, 'utf-8'), (e: any) =>
-    e.code === 'ENOENT' ? notFound('File not found') : internal('File read error'),
+  const contentResult = await ResultAsync.fromPromise(
+    readFile(canon.canonical, 'utf-8'),
+    (e: any) => (e.code === 'ENOENT' ? notFound('File not found') : internal('File read error')),
   );
   if (contentResult.isErr()) return resultToResponse(c, contentResult);
   return c.json({ content: contentResult.value });
@@ -175,23 +205,20 @@ app.post('/write', async (c) => {
   const scope = await resolveProjectScope(filePath, userId);
   if (!scope) return deny();
 
-  // Symlink escape check: if the target exists and is a symlink, its realpath
-  // must stay within the same project scope. New files legitimately miss
-  // (ENOENT) — in that case there's no symlink to check.
-  try {
-    const linkStat = await lstat(filePath);
-    if (linkStat.isSymbolicLink()) {
-      const real = await realpath(filePath);
-      if (!isInScope(real, scope)) return deny();
-    }
-  } catch (e: any) {
-    if (e?.code !== 'ENOENT') {
-      return resultToResponse(c, err(internal('File access error')));
-    }
+  // Resolve to a canonical path before the write. For new files (ENOENT) we
+  // canonicalize the parent dir and rejoin the basename — the basename is not
+  // followed as a symlink, so a swap between check and write cannot escape.
+  const canon = await canonicalize(filePath, true);
+  if (!canon.ok) {
+    return resultToResponse(
+      c,
+      err(canon.status === 404 ? notFound(canon.error) : internal(canon.error)),
+    );
   }
+  if (!isInScope(canon.canonical, scope)) return deny();
 
   const writeResult = await ResultAsync.fromPromise(
-    writeFile(filePath, content, 'utf-8'),
+    writeFile(canon.canonical, content, 'utf-8'),
     (e: any) => internal('File write error'),
   );
   if (writeResult.isErr()) return resultToResponse(c, writeResult);
@@ -250,19 +277,16 @@ app.get('/raw', async (c) => {
   const scope = await resolveProjectScope(filePath, userId);
   if (!scope) return deny();
 
-  const linkStatResult = await ResultAsync.fromPromise(lstat(filePath), (e: any) =>
-    e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),
-  );
-  if (linkStatResult.isErr()) return resultToResponse(c, linkStatResult);
-  if (linkStatResult.value.isSymbolicLink()) {
-    const realPathResult = await ResultAsync.fromPromise(realpath(filePath), (e: any) =>
-      e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),
+  const canon = await canonicalize(filePath, false);
+  if (!canon.ok) {
+    return resultToResponse(
+      c,
+      err(canon.status === 404 ? notFound(canon.error) : internal(canon.error)),
     );
-    if (realPathResult.isErr()) return resultToResponse(c, realPathResult);
-    if (!isInScope(realPathResult.value, scope)) return deny();
   }
+  if (!isInScope(canon.canonical, scope)) return deny();
 
-  const statsResult = await ResultAsync.fromPromise(stat(filePath), (e: any) =>
+  const statsResult = await ResultAsync.fromPromise(stat(canon.canonical), (e: any) =>
     e.code === 'ENOENT' ? notFound('File not found') : internal('File access error'),
   );
   if (statsResult.isErr()) return resultToResponse(c, statsResult);
@@ -276,21 +300,21 @@ app.get('/raw', async (c) => {
     );
   }
 
-  const ext = filePath.includes('.')
-    ? filePath.substring(filePath.lastIndexOf('.') + 1).toLowerCase()
+  const ext = canon.canonical.includes('.')
+    ? canon.canonical.substring(canon.canonical.lastIndexOf('.') + 1).toLowerCase()
     : '';
   const contentType = EXT_TO_MIME[ext] ?? 'application/octet-stream';
 
   // Bun.file returns a BunFile with a Web ReadableStream — passes straight
   // through Hono/Bun's Response without a Node-stream → Web-stream cast.
-  const file = Bun.file(filePath);
+  const file = Bun.file(canon.canonical);
   return new Response(file, {
     status: 200,
     headers: {
       'Content-Type': contentType,
       'Content-Length': String(statsResult.value.size),
       'Cache-Control': 'private, max-age=60',
-      'Content-Disposition': `inline; filename="${encodeURIComponent(basename(filePath))}"`,
+      'Content-Disposition': `inline; filename="${encodeURIComponent(basename(canon.canonical))}"`,
     },
   });
 });

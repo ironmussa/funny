@@ -19,9 +19,28 @@ import { db, dbDialect } from '../db/index.js';
 import { audit } from './audit.js';
 import { DATA_DIR } from './data-dir.js';
 import { log } from './logger.js';
+import { validatePasswordStrength } from './password-policy.js';
 
 const SECRET_PATH = resolve(DATA_DIR, 'auth-secret');
 
+/**
+ * Security M7 (decision needed): there is no graceful rotation flow for the
+ * Better Auth signing secret today. Replacing `BETTER_AUTH_SECRET` (or the
+ * on-disk file) invalidates every signed session immediately — every user is
+ * logged out at the next request. A proper rotation needs:
+ *
+ *   1. Two-secret support — accept tokens signed by either the current
+ *      secret or the previous one for a defined window (e.g. 7 days).
+ *   2. An admin-only "rotate" endpoint that mints a new current secret,
+ *      demotes the old one to "previous", and audits the action.
+ *   3. Operator docs covering both compromise ("rotate now, revoke all
+ *      sessions") and scheduled rotation paths.
+ *
+ * Better Auth does not natively support a secondary verification secret,
+ * so the implementation will require either a custom verifier hook or a
+ * patch upstream. Tracked separately — do not regress this comment until a
+ * design exists.
+ */
 function getOrCreateSecret(): string {
   // Prefer env var (essential for platforms like Railway where the filesystem is ephemeral)
   if (process.env.BETTER_AUTH_SECRET) {
@@ -161,7 +180,16 @@ export async function initBetterAuth(): Promise<void> {
       // which browsers silently reject on http:// origins.
       useSecureCookies: cookieOpts.useSecureCookies ?? cookieOpts.secure,
       defaultCookieAttributes: {
-        sameSite: 'lax',
+        // Security M4: SameSite=Strict. No auth flow in this app brings the
+        // user back via a cross-site redirect that needs the session cookie:
+        //   - sign-in is email+password only (no third-party SSO)
+        //   - the MCP OAuth callback authenticates via a `state` token, not
+        //     the user's session cookie
+        //   - invite-link registration runs on its own public route
+        // Strict eliminates the CSRF residual that Lax permits on top-level
+        // GET navigations. If a future feature adds third-party SSO, this
+        // must be revisited.
+        sameSite: 'strict',
         secure: cookieOpts.secure,
         httpOnly: true,
         path: '/',
@@ -193,8 +221,41 @@ export async function initBetterAuth(): Promise<void> {
 
     const email = process.env.ADMIN_EMAIL ?? 'admin@local.host';
     const username = process.env.ADMIN_USERNAME ?? 'admin';
-    const isGeneratedPassword = !process.env.ADMIN_PASSWORD;
-    const password = process.env.ADMIN_PASSWORD ?? randomBytes(16).toString('base64url');
+
+    // Security M5: ADMIN_PASSWORD, when supplied, must clear the same
+    // strength bar as a user-chosen password from the invite-link route.
+    // Refuse weak values and fall through to a generated password — never
+    // seed the admin account with a value below policy. The
+    // `isGeneratedPassword` flag below also tracks the rejection so the
+    // operator sees the credentials file with the auto-generated value.
+    let password: string;
+    let isGeneratedPassword: boolean;
+    if (process.env.ADMIN_PASSWORD) {
+      const policy = validatePasswordStrength(process.env.ADMIN_PASSWORD);
+      if (!policy.ok) {
+        log.error(
+          'ADMIN_PASSWORD env did not meet password policy — falling back to a generated password',
+          {
+            namespace: 'auth',
+            reason: policy.reason,
+          },
+        );
+        audit({
+          action: 'auth.weak_admin_password_rejected',
+          actorId: null,
+          detail: `ADMIN_PASSWORD env rejected: ${policy.reason}`,
+          meta: {},
+        });
+        password = randomBytes(16).toString('base64url');
+        isGeneratedPassword = true;
+      } else {
+        password = process.env.ADMIN_PASSWORD;
+        isGeneratedPassword = false;
+      }
+    } else {
+      password = randomBytes(16).toString('base64url');
+      isGeneratedPassword = true;
+    }
 
     const hash = await ctx.password.hash(password);
     const created = await ctx.internalAdapter.createUser({

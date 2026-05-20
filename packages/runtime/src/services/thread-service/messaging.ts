@@ -30,6 +30,7 @@ import { startAgent, stopAgent, isAgentRunning } from '../agent-runner.js';
 import { cleanupExternalThread } from '../ingest-mapper.js';
 import { listPermissionRules } from '../permission-rules-client.js';
 import { getServices } from '../service-registry.js';
+import { resolveThreadCwd } from '../thread-context.js';
 import * as tm from '../thread-manager.js';
 import { wsBroker } from '../ws-broker.js';
 import { ThreadServiceError, emitThreadUpdated } from './helpers.js';
@@ -86,6 +87,7 @@ export interface SendMessageResult {
   queuedMessageId?: string;
 }
 
+// eslint-disable-next-line max-lines-per-function
 export async function sendMessage(params: SendMessageParams): Promise<SendMessageResult> {
   const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
@@ -101,17 +103,17 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
     contentPreview: params.content.slice(0, 120),
   });
 
-  let cwd: string;
-  if (thread.worktreePath) {
-    cwd = thread.worktreePath;
-  } else {
-    const pathResult = await getServices().projects.resolveProjectPath(
-      thread.projectId,
-      params.userId,
-    );
-    if (pathResult.isErr()) throw new ThreadServiceError(pathResult.error.message, 400);
-    cwd = pathResult.value;
-  }
+  // Resolve cwd through the single source of truth (covers scratch / worktree /
+  // normal threads). Fetch the project once and reuse for followUpMode below.
+  const project = thread.projectId
+    ? await getServices().projects.getProject(thread.projectId)
+    : null;
+  const cwdResult = resolveThreadCwd(
+    thread as unknown as Parameters<typeof resolveThreadCwd>[0],
+    project ? { path: project.path } : null,
+  );
+  if (cwdResult.isErr()) throw new ThreadServiceError(cwdResult.error.message, 400);
+  const cwd = cwdResult.value;
 
   const effectiveProvider = (params.provider ||
     thread.provider ||
@@ -180,7 +182,6 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
   // This avoids the double-render bug where the stored message and the
   // client-side dequeue buffer both surface the same content twice.
   const agentRunning = isAgentRunning(params.threadId);
-  const project = await getServices().projects.getProject(thread.projectId);
   const followUpMode = project?.followUpMode || DEFAULT_FOLLOW_UP_MODE;
   const isWaitingResponse = thread.status === 'waiting';
   const threadIsTerminal =
@@ -379,17 +380,15 @@ export async function approveToolCall(params: ApproveToolParams): Promise<void> 
   const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
-  let cwd: string;
-  if (thread.worktreePath) {
-    cwd = thread.worktreePath;
-  } else {
-    const pathResult = await getServices().projects.resolveProjectPath(
-      thread.projectId,
-      params.userId,
-    );
-    if (pathResult.isErr()) throw new ThreadServiceError(pathResult.error.message, 400);
-    cwd = pathResult.value;
-  }
+  const project = thread.projectId
+    ? await getServices().projects.getProject(thread.projectId)
+    : null;
+  const cwdResult = resolveThreadCwd(
+    thread as unknown as Parameters<typeof resolveThreadCwd>[0],
+    project ? { path: project.path } : null,
+  );
+  if (cwdResult.isErr()) throw new ThreadServiceError(cwdResult.error.message, 400);
+  const cwd = cwdResult.value;
 
   const tools = params.allowedTools
     ? [...params.allowedTools]

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * Central server migrations — dialect-agnostic.
  *
@@ -1167,6 +1168,16 @@ const migrations: Migration[] = [
     async up() {
       await ctx().addColumn('user_profiles', 'runner_invite_token_expires_at', 'TEXT');
       await ctx().addColumn('user_profiles', 'runner_invite_token_used_at', 'TEXT');
+    },
+  },
+  {
+    // Scratch threads: lightweight, projectless threads. `project_id` is
+    // already nullable at the SQL level (see migration 006_threads) so we
+    // only need the new `is_scratch` boolean column. Existing rows default
+    // to 0 (not scratch).
+    name: '053_threads_is_scratch',
+    async up() {
+      await ctx().addColumn('threads', 'is_scratch', 'INTEGER NOT NULL', '0');
     },
   },
 ];

@@ -1,3 +1,4 @@
+/* eslint-disable max-lines, max-lines-per-function */
 /**
  * @domain subdomain: Git Operations
  * @domain subdomain-type: supporting
@@ -60,7 +61,7 @@ statusRoutes.get('/status', async (c) => {
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
   const project = projectResult.value;
 
-  const { threads } = await tm.listThreads({ projectId, userId });
+  const { threads } = await tm.listThreads({ projectId, userId, isScratch: 'exclude' });
   const worktreeThreads = threads.filter(
     (t) => t.mode === 'worktree' && t.worktreePath && t.branch,
   );

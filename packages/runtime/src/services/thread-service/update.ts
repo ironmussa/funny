@@ -6,6 +6,8 @@
  * @domain emits: thread:stage-changed, thread:deleted
  */
 
+import { rmSync } from 'node:fs';
+
 import {
   createWorktree,
   removeWorktree,
@@ -23,6 +25,7 @@ import { stopCommandsByCwd } from '../command-runner.js';
 import { stopContainer } from '../podman-service.js';
 import type { IProjectRepository } from '../server-interfaces.js';
 import { getServices } from '../service-registry.js';
+import { scratchPathFor } from '../thread-context.js';
 import { threadEventBus } from '../thread-event-bus.js';
 import * as tm from '../thread-manager.js';
 import { wsBroker } from '../ws-broker.js';
@@ -308,7 +311,7 @@ export async function deleteThread(threadId: string): Promise<void> {
 
   threadEventBus.emit('thread:deleted', {
     threadId,
-    projectId: thread.projectId,
+    projectId: thread.projectId ?? '',
     userId: thread.userId,
     worktreePath: thread.worktreePath ?? null,
   });
@@ -339,6 +342,28 @@ export async function deleteThread(threadId: string): Promise<void> {
           log.warn('Failed to remove branch', { namespace: 'cleanup', error: String(e) });
         });
       }
+    }
+  }
+
+  // Scratch threads have a per-thread sandbox at ~/.funny/scratch/<userId>/<threadId>/.
+  // Remove it on delete. Tolerate missing dir (never spawned an agent).
+  if (thread.isScratch) {
+    const scratchPath = scratchPathFor(thread.userId, threadId);
+    try {
+      rmSync(scratchPath, { recursive: true, force: true });
+      log.info('Removed scratch directory', {
+        namespace: 'scratch-threads',
+        threadId,
+        userId: thread.userId,
+        scratchPath,
+      });
+    } catch (e) {
+      log.warn('Failed to remove scratch directory', {
+        namespace: 'scratch-threads',
+        threadId,
+        scratchPath,
+        error: String(e),
+      });
     }
   }
 

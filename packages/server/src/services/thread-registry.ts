@@ -31,14 +31,18 @@ export interface ThreadEntry {
  */
 export async function registerThread(entry: {
   id: string;
-  projectId: string;
+  /** Null at the DB layer for scratch threads (no project). */
+  projectId: string | null;
   runnerId: string;
   userId: string;
   title?: string;
   model?: string;
   mode?: string;
   branch?: string;
+  isScratch?: boolean;
 }): Promise<void> {
+  // DB column accepts null, but Drizzle's insert shape inferred from the
+  // (non-null) schema needs an explicit assertion at this boundary.
   const now = new Date().toISOString();
 
   await db
@@ -54,6 +58,7 @@ export async function registerThread(entry: {
       model: entry.model ?? null,
       mode: entry.mode ?? null,
       branch: entry.branch ?? null,
+      isScratch: entry.isScratch ? 1 : 0,
       createdAt: now,
       updatedAt: now,
     })

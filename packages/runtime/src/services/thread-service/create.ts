@@ -1,3 +1,4 @@
+/* eslint-disable max-lines, max-lines-per-function */
 /**
  * @domain subdomain: Thread Management
  * @domain subdomain-type: core
@@ -173,7 +174,8 @@ export async function createIdleThread(params: CreateIdleThreadParams) {
 // ── Create and Start Thread ─────────────────────────────────────
 
 export interface CreateAndStartThreadParams {
-  projectId: string;
+  /** Null only when isScratch === true. */
+  projectId: string | null;
   userId: string;
   title?: string;
   mode: 'local' | 'worktree';
@@ -195,9 +197,17 @@ export interface CreateAndStartThreadParams {
   designId?: string;
   agentTemplateId?: string;
   templateVariables?: Record<string, string>;
+  /** True for lightweight projectless threads (no git, no worktree). */
+  isScratch?: boolean;
 }
 
 export async function createAndStartThread(params: CreateAndStartThreadParams) {
+  if (params.isScratch) {
+    return createAndStartScratchThread(params);
+  }
+  if (!params.projectId) {
+    throw new ThreadServiceError('projectId is required for non-scratch threads', 400);
+  }
   const project = await getServices().projects.getProject(params.projectId);
   if (!project) throw new ThreadServiceError('Project not found', 404);
 
@@ -567,6 +577,102 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
     resolvedProvider,
     undefined,
     undefined,
+    params.effort,
+  );
+
+  return thread;
+}
+
+// ── Create and Start Scratch Thread ─────────────────────────────
+/**
+ * Scratch threads are the lightweight projectless variant — no git, no
+ * worktree, no branch. The agent runs in `~/.funny/scratch/<userId>/<threadId>/`
+ * (path resolved by `resolveThreadCwd` inside `agent-lifecycle.startAgent`).
+ *
+ * The agent-lifecycle helper creates the directory lazily and emits the
+ * cwd in the `thread:started` event; this function only handles thread-
+ * row creation + first message + agent start.
+ */
+async function createAndStartScratchThread(params: CreateAndStartThreadParams) {
+  const threadId = nanoid();
+  const titleSource = params.title || stripReferencedFilesBlock(params.prompt) || params.prompt;
+
+  const resolvedProvider = (params.provider || 'claude') as AgentProvider;
+  const resolvedModel = (params.model || DEFAULT_MODEL) as AgentModel;
+  const resolvedPermissionMode = (params.permissionMode || 'autoEdit') as PermissionMode;
+
+  log.info('createAndStartScratchThread called', {
+    namespace: 'scratch-threads',
+    threadId,
+    userId: params.userId,
+    promptPreview: params.prompt.slice(0, 120),
+  });
+
+  const thread = {
+    id: threadId,
+    projectId: null as string | null,
+    userId: params.userId,
+    title: titleSource,
+    mode: 'local' as const,
+    runtime: 'local' as const,
+    provider: resolvedProvider,
+    permissionMode: resolvedPermissionMode,
+    model: resolvedModel,
+    source: params.source || 'web',
+    status: 'pending' as const,
+    branch: undefined as string | undefined,
+    baseBranch: undefined as string | undefined,
+    worktreePath: undefined as string | undefined,
+    parentThreadId: params.parentThreadId,
+    designId: params.designId,
+    agentTemplateId: params.agentTemplateId,
+    templateVariables: params.templateVariables
+      ? JSON.stringify(params.templateVariables)
+      : undefined,
+    fileCheckpointingEnabled: resolvedProvider === 'claude' ? 1 : 0,
+    isScratch: 1,
+    cost: 0,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  await tm.createThread(thread as any);
+
+  // Persist the user message ourselves so we can pass skipMessageInsert
+  // to startAgent (matches the worktree-mode pattern above).
+  await tm.insertMessage({
+    threadId,
+    role: 'user',
+    content: params.prompt,
+    images: params.images?.length ? JSON.stringify(params.images) : null,
+  });
+
+  threadEventBus.emit('thread:created', {
+    threadId,
+    // Scratch threads have no project — use the empty-string sentinel.
+    projectId: '',
+    userId: params.userId,
+    cwd: '',
+    worktreePath: null,
+    stage: 'in_progress' as const,
+    status: 'pending',
+  });
+
+  // startAgent will resolve the scratch cwd via resolveThreadCwd and
+  // create the directory before spawning. The cwd we pass here is a
+  // best-effort placeholder; agent-lifecycle overrides it.
+  await startAgent(
+    threadId,
+    params.prompt,
+    '',
+    resolvedModel,
+    resolvedPermissionMode,
+    params.images,
+    params.disallowedTools,
+    params.allowedTools,
+    resolvedProvider,
+    undefined,
+    true, // skipMessageInsert — we already inserted above
     params.effort,
   );
 

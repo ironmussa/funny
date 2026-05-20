@@ -1,0 +1,80 @@
+/**
+ * @domain subdomain: Thread Management
+ * @domain subdomain-type: core
+ * @domain type: domain-service
+ * @domain layer: domain
+ *
+ * Centralizes the scratch-vs-normal-thread divergence. Every caller that
+ * needs the working directory for a thread, or needs to decide whether git
+ * operations are allowed, MUST go through this module — DO NOT inline
+ * `if (thread.isScratch)` checks elsewhere.
+ *
+ * See: openspec/changes/scratch-threads/design.md (D3, D7).
+ */
+
+import { homedir } from 'node:os';
+import { join } from 'node:path';
+
+import type { Thread } from '@funny/shared';
+import { err, ok, type Result } from 'neverthrow';
+
+export type ThreadContextError =
+  | { kind: 'project-required'; message: string }
+  | { kind: 'worktree-missing'; message: string };
+
+export interface ResolveCwdProject {
+  path: string;
+}
+
+/**
+ * Resolve the working directory the agent should run in for the given thread.
+ *
+ * - Scratch threads (`isScratch = true`) → `<userHome>/.funny/scratch/<userId>/<threadId>/`.
+ * - Worktree threads (`mode === 'worktree'`) → `thread.worktreePath`.
+ * - Otherwise → `project.path`.
+ */
+export function resolveThreadCwd(
+  thread: Pick<Thread, 'id' | 'isScratch' | 'userId' | 'mode' | 'worktreePath'>,
+  project: ResolveCwdProject | null,
+): Result<string, ThreadContextError> {
+  if (thread.isScratch) {
+    return ok(scratchPathFor(thread.userId, thread.id));
+  }
+  if (!project) {
+    return err({
+      kind: 'project-required',
+      message: `Thread ${thread.id} is not scratch but has no project`,
+    });
+  }
+  if (thread.mode === 'worktree') {
+    if (!thread.worktreePath) {
+      return err({
+        kind: 'worktree-missing',
+        message: `Worktree thread ${thread.id} has no worktreePath`,
+      });
+    }
+    return ok(thread.worktreePath);
+  }
+  return ok(project.path);
+}
+
+/**
+ * Returns true when git/repo operations (diff, stage, commit, push, PR) are
+ * available for the given thread. False for scratch threads — they have no
+ * repo by design.
+ *
+ * Callers MUST use this helper rather than reading `thread.isScratch`
+ * directly, so the rule stays in one place.
+ */
+export function canDoGitOps(thread: Pick<Thread, 'isScratch'>): boolean {
+  return !thread.isScratch;
+}
+
+/**
+ * Derive (without persisting) the on-disk scratch directory for a thread.
+ * The directory is created lazily on first agent spawn and removed on
+ * thread delete — see `agent-lifecycle.ts` and `thread-service/update.ts`.
+ */
+export function scratchPathFor(userId: string, threadId: string): string {
+  return join(homedir(), '.funny', 'scratch', userId, threadId);
+}

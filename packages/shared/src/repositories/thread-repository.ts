@@ -1,3 +1,4 @@
+/* eslint-disable max-lines, max-lines-per-function */
 /**
  * @domain subdomain: Thread Management
  * @domain subdomain-type: core
@@ -98,20 +99,32 @@ export function createThreadRepository(deps: ThreadRepositoryDeps) {
   }
 
   /** List threads, optionally filtered by projectId, userId, and archive status.
-   *  Supports server-side pagination via limit/offset. */
+   *  Supports server-side pagination via limit/offset.
+   *  `isScratch`:
+   *    - `true`    → only scratch threads (`is_scratch = 1`)
+   *    - `'exclude'` → only non-scratch (`is_scratch = 0`)
+   *    - undefined → no filter
+   */
   async function listThreads(opts: {
     projectId?: string;
     userId: string;
     includeArchived?: boolean;
     organizationId?: string | null;
     designId?: string;
+    isScratch?: boolean | 'exclude';
     limit?: number;
     offset?: number;
   }): Promise<{ threads: any[]; total: number }> {
-    const { projectId, userId, includeArchived, organizationId, designId } = opts;
+    const { projectId, userId, includeArchived, organizationId, designId, isScratch } = opts;
     const limit = opts.limit ?? 50;
     const offset = opts.offset ?? 0;
     const filters: ReturnType<typeof eq>[] = [];
+
+    if (isScratch === true) {
+      filters.push(eq(schema.threads.isScratch, 1));
+    } else if (isScratch === 'exclude') {
+      filters.push(eq(schema.threads.isScratch, 0));
+    }
 
     if (organizationId) {
       // Org mode: only show threads for projects associated with this organization

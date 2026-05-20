@@ -6,6 +6,7 @@
  */
 
 import {
+  NONCE_HEADER,
   SIGNATURE_HEADER,
   TIMESTAMP_HEADER,
   signForwardedIdentity,
@@ -147,20 +148,24 @@ function buildForwardHeaders(
   role?: string,
   orgName?: string,
 ): Record<string, string> {
+  // Default role to 'user' so the signed payload matches what the runtime
+  // verifies (runtime defaults a missing X-Forwarded-Role to 'user' too).
+  const effectiveRole = role ?? 'user';
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
     'X-Forwarded-User': userId,
     'X-Runner-Auth': RUNNER_AUTH_SECRET,
+    'X-Forwarded-Role': effectiveRole,
   };
   if (orgId) headers['X-Forwarded-Org'] = orgId;
   if (orgName) headers['X-Forwarded-Org-Name'] = orgName;
-  if (role) headers['X-Forwarded-Role'] = role;
-  const { signature, timestamp } = signForwardedIdentity(
-    { userId, role: role ?? null, orgId: orgId ?? null, orgName: orgName ?? null },
+  const { signature, timestamp, nonce } = signForwardedIdentity(
+    { userId, role: effectiveRole, orgId: orgId ?? null, orgName: orgName ?? null },
     RUNNER_AUTH_SECRET,
   );
   headers[SIGNATURE_HEADER] = signature;
   headers[TIMESTAMP_HEADER] = String(timestamp);
+  headers[NONCE_HEADER] = nonce;
   return headers;
 }
 
@@ -168,13 +173,18 @@ export const threadRoutes = new Hono<ServerEnv>();
 
 // ── Data CRUD routes (handled natively) ──────────────────────────
 
-// GET /api/threads?projectId=xxx&includeArchived=true&limit=50&offset=0
+// GET /api/threads?projectId=xxx&includeArchived=true&limit=50&offset=0&isScratch=true
 threadRoutes.get('/', async (c) => {
   const userId = c.get('userId') as string;
   const orgId = c.get('organizationId');
   const projectId = c.req.query('projectId');
   const designId = c.req.query('designId');
   const includeArchived = c.req.query('includeArchived') === 'true';
+  // Scratch filter is opt-in. When listing by project, exclude scratch
+  // threads so they never leak into the project sidebar.
+  const isScratchParam = c.req.query('isScratch');
+  const isScratch: boolean | 'exclude' | undefined =
+    isScratchParam === 'true' ? true : projectId ? 'exclude' : undefined;
   const limit = Math.min(200, Math.max(1, parseInt(c.req.query('limit') || '50', 10)));
   const offset = Math.max(0, parseInt(c.req.query('offset') || '0', 10));
 
@@ -184,6 +194,24 @@ threadRoutes.get('/', async (c) => {
     userId,
     includeArchived,
     organizationId: orgId,
+    isScratch,
+    limit,
+    offset,
+  });
+
+  return c.json({ threads, total, hasMore: offset + threads.length < total });
+});
+
+// GET /api/threads/scratch — list the current user's scratch threads
+threadRoutes.get('/scratch', async (c) => {
+  const userId = c.get('userId') as string;
+  const limit = Math.min(200, Math.max(1, parseInt(c.req.query('limit') || '50', 10)));
+  const offset = Math.max(0, parseInt(c.req.query('offset') || '0', 10));
+
+  const { threads, total } = await threadRepo.listThreads({
+    userId,
+    isScratch: true,
+    includeArchived: false,
     limit,
     offset,
   });
@@ -572,16 +600,50 @@ threadRoutes.post('/:id/workflow-event', async (c) => {
 /** Shared handler for creating threads on a runner and registering them locally. */
 async function createThreadOnRunner(c: any, runnerPath: string) {
   const userId = c.get('userId') as string;
-  const body = await c.req.json();
-  const projectId = body.projectId;
+  const rawBody = await c.req.json();
+  const isScratch = rawBody.isScratch === true;
 
-  if (!projectId) {
+  // Validate scratch invariants before any I/O.
+  if (isScratch && rawBody.projectId != null) {
+    return c.json(
+      {
+        error: 'Scratch threads cannot have a project',
+        code: 'scratch-thread-cannot-have-project',
+      },
+      400,
+    );
+  }
+  if (isScratch && rawBody.mode && rawBody.mode !== 'local') {
+    return c.json(
+      { error: 'Scratch threads must use mode = local', code: 'scratch-thread-must-be-local' },
+      400,
+    );
+  }
+
+  // Normalize scratch body so the runtime sees a consistent shape.
+  const body = isScratch
+    ? { ...rawBody, projectId: null, mode: 'local' as const, isScratch: true }
+    : rawBody;
+  const projectId = body.projectId as string | null;
+
+  if (!isScratch && !projectId) {
     return c.json({ error: 'projectId is required' }, 400);
   }
 
-  const resolved = await resolveRunnerForProject(projectId, userId);
+  // Resolve the runner. Scratch threads have no project, so we ask
+  // resolveRunner for any reachable runner that belongs to this user.
+  const resolved = isScratch
+    ? await runnerResolver.resolveRunner(runnerPath, {}, userId)
+    : await resolveRunnerForProject(projectId!, userId);
   if (!resolved) {
-    return c.json({ error: 'No online runner found for this project' }, 502);
+    return c.json(
+      {
+        error: isScratch
+          ? 'No online runner found for this user'
+          : 'No online runner found for this project',
+      },
+      502,
+    );
   }
 
   try {
@@ -616,6 +678,7 @@ async function createThreadOnRunner(c: any, runnerPath: string) {
         // Use runtime response data — the runtime generates the worktree
         // branch name, so body.branch is typically undefined for new threads.
         branch: threadData.branch ?? body.branch,
+        isScratch,
       });
 
       runnerResolver.cacheThreadRunner(threadId, resolved.runnerId, resolved.httpUrl);

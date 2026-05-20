@@ -13,14 +13,7 @@
  * Interfaces are split by responsibility (ISP).
  */
 
-import type {
-  WSEvent,
-  Project,
-  Thread,
-  UserProfile,
-  UpdateProfileRequest,
-  FollowUpMode,
-} from '@funny/shared';
+import type { WSEvent, Project, UserProfile, UpdateProfileRequest } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import type { Result } from 'neverthrow';
 
@@ -141,6 +134,7 @@ export interface IThreadRepository extends IThreadQuery, IMessageRepository, ITo
     projectId?: string;
     userId: string;
     includeArchived?: boolean;
+    isScratch?: boolean | 'exclude';
     limit?: number;
     offset?: number;
   }): Promise<{ threads: any[]; total: number }>;

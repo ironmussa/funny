@@ -159,7 +159,14 @@ export const effortLevelSchema = z.enum(['low', 'medium', 'high', 'xhigh', 'max'
 
 export const createThreadSchema = z
   .object({
-    projectId: z.string().min(1),
+    /**
+     * Project the thread belongs to. Null only for scratch threads
+     * (`isScratch === true`). Defense in depth — the server route
+     * normalizes the body before proxying.
+     */
+    projectId: z.string().min(1).nullable(),
+    /** True for lightweight projectless threads. */
+    isScratch: z.boolean().optional().default(false),
     title: z.string().max(500).optional().default(''),
     mode: threadModeSchema,
     runtime: threadRuntimeSchema.optional().default('local'),
@@ -181,7 +188,30 @@ export const createThreadSchema = z
     agentTemplateId: z.string().optional(),
     templateVariables: z.record(z.string(), z.string()).optional(),
   })
-  .superRefine((data, ctx) => validateProviderModel(data, ctx));
+  .superRefine((data, ctx) => {
+    validateProviderModel(data, ctx);
+    if (data.isScratch && data.projectId != null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'scratch threads cannot have a projectId',
+        path: ['projectId'],
+      });
+    }
+    if (!data.isScratch && data.projectId == null) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'projectId is required for non-scratch threads',
+        path: ['projectId'],
+      });
+    }
+    if (data.isScratch && data.mode !== 'local') {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'scratch threads must use mode = local',
+        path: ['mode'],
+      });
+    }
+  });
 
 export const createIdleThreadSchema = z.object({
   projectId: z.string().min(1),

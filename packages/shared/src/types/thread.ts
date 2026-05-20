@@ -11,7 +11,19 @@ import type {
 
 export interface Thread {
   id: string;
+  /**
+   * Empty string `''` for scratch threads (no project). The DB column is
+   * nullable; the runtime maps null → '' at the boundary. See design D1.
+   */
   projectId: string;
+  /**
+   * True when this is a lightweight projectless thread.
+   * Optional at the type level so existing thread factories/fixtures don't
+   * all need updating, but the DB column is NOT NULL with default 0 — the
+   * value is always present at runtime. Use `canDoGitOps(thread)` instead
+   * of reading this directly. See scratch-threads/design.md (D1).
+   */
+  isScratch?: boolean;
   userId: string;
   title: string;
   mode: ThreadMode;

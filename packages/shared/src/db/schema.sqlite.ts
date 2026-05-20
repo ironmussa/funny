@@ -71,10 +71,10 @@ export const designs = sqliteTable('designs', {
 
 export const threads = sqliteTable('threads', {
   id: text('id').primaryKey(),
-  projectId: text('project_id')
-    .notNull()
-    .references(() => projects.id, { onDelete: 'cascade' }),
+  /** Nullable for scratch threads (no project). */
+  projectId: text('project_id').references(() => projects.id, { onDelete: 'cascade' }),
   userId: text('user_id').notNull(),
+  isScratch: integer('is_scratch').notNull().default(0),
   createdBy: text('created_by'),
   title: text('title').notNull(),
   mode: text('mode').notNull(),

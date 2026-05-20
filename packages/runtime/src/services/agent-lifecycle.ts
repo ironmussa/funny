@@ -1,3 +1,4 @@
+/* eslint-disable max-lines, max-lines-per-function */
 /**
  * @domain subdomain: Agent Execution
  * @domain subdomain-type: core
@@ -9,6 +10,8 @@
  * Manages agent start/stop lifecycle, context recovery, prompt assembly,
  * memory injection, and process adoption across hot-reloads.
  */
+
+import { mkdirSync } from 'node:fs';
 
 import type { AgentOrchestrator } from '@funny/core/agents';
 import type { AgentProvider, AgentModel, PermissionMode, ThreadStatus } from '@funny/shared';
@@ -24,6 +27,7 @@ import { recoverThreadContext } from './agent-startup/recover-context.js';
 import type { AgentStateTracker } from './agent-state.js';
 import type { IThreadManager } from './server-interfaces.js';
 import { getServices } from './service-registry.js';
+import { resolveThreadCwd } from './thread-context.js';
 import { threadEventBus } from './thread-event-bus.js';
 import { transitionStatus } from './thread-status-machine.js';
 
@@ -187,12 +191,62 @@ export class AgentLifecycleManager {
       effectivePrompt = `[PROJECT INSTRUCTIONS]\n${projectSystemPrompt}\n[/PROJECT INSTRUCTIONS]\n\n${effectivePrompt}`;
     }
 
+    // Centralized cwd resolution — covers scratch / worktree / normal threads.
+    // The caller passes a best-effort cwd, but `resolveThreadCwd` is the source
+    // of truth (see scratch-threads design D3).
+    if (thread) {
+      const cwdResult = resolveThreadCwd(
+        thread as unknown as import('@funny/shared').Thread,
+        project ? { path: project.path } : null,
+      );
+      if (cwdResult.isErr()) {
+        const errInfo = cwdResult.error;
+        log.error('Failed to resolve thread cwd', {
+          namespace: 'scratch-threads',
+          threadId,
+          kind: errInfo.kind,
+          message: errInfo.message,
+        });
+        await this.threadManager.updateThread(threadId, {
+          status: 'failed',
+          completedAt: new Date().toISOString(),
+        });
+        this.eventRouter.emitWSToUser(threadId, thread.userId, 'agent:error', {
+          error: errInfo.message,
+        });
+        this.eventRouter.emitWSToUser(threadId, thread.userId, 'agent:status', {
+          status: 'failed',
+        });
+        return;
+      }
+      cwd = cwdResult.value;
+    }
+
+    // Ensure the scratch directory exists on disk before the agent starts.
+    if (thread?.isScratch) {
+      try {
+        mkdirSync(cwd, { recursive: true });
+        log.info('Scratch directory ready', {
+          namespace: 'scratch-threads',
+          threadId,
+          userId: thread.userId,
+          cwd,
+        });
+      } catch (mkErr) {
+        log.error('Failed to create scratch directory', {
+          namespace: 'scratch-threads',
+          threadId,
+          cwd,
+          error: (mkErr as Error).message,
+        });
+        throw mkErr;
+      }
+    }
+
     // Load project MCP servers when none were explicitly provided.
-    // Use the canonical project path (not the worktree cwd) so that
-    // ~/.claude.json project settings and .mcp.json are found correctly.
-    const mcpProjectPath = project?.path ?? cwd;
-    if (!mcpServers) {
-      mcpServers = await loadProjectMcpServers(threadId, mcpProjectPath);
+    // For scratch threads there is no project — skip MCP project context.
+    if (!mcpServers && project?.path) {
+      mcpServers = await loadProjectMcpServers(threadId, project.path);
     }
 
     // Resolve agent template (Deep Agent only)

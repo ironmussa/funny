@@ -195,4 +195,32 @@ describe('sendMessage — idle/backlog regression', () => {
     expect(mocks.tm.getThreadMessages).not.toHaveBeenCalled();
     expect(mocks.tm.insertMessage).toHaveBeenCalledTimes(1);
   });
+
+  test('scratch threads send messages without requiring a project', async () => {
+    mocks.tm.getThread.mockResolvedValue({
+      id: 't-scratch',
+      userId: 'u-1',
+      projectId: '',
+      isScratch: true,
+      status: 'completed',
+      stage: 'in_progress',
+      provider: 'claude',
+      model: 'sonnet',
+      permissionMode: 'autoEdit',
+      sessionId: 'sess-1',
+      worktreePath: null,
+    });
+
+    const result = await sendMessage({
+      threadId: 't-scratch',
+      userId: 'u-1',
+      content: 'follow up',
+    });
+
+    expect(result.ok).toBe(true);
+    // Scratch threads must not hit resolveProjectPath or getProject.
+    expect(mocks.projects.resolveProjectPath).not.toHaveBeenCalled();
+    expect(mocks.projects.getProject).not.toHaveBeenCalled();
+    expect(mocks.tm.insertMessage).toHaveBeenCalledTimes(1);
+  });
 });

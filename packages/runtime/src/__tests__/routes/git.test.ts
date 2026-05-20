@@ -58,6 +58,7 @@ describe('Git Routes', () => {
         .get();
       if (!thread) return null;
       if (thread.worktreePath) return thread.worktreePath;
+      if (!thread.projectId) return null;
       const project = testDb.db
         .select()
         .from(testDb.schema.projects)

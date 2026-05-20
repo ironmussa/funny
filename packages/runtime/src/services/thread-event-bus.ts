@@ -34,6 +34,7 @@ export interface ThreadStageChangedEvent extends ThreadLifecycleContext {
 
 export interface ThreadDeletedEvent {
   threadId: string;
+  /** Empty string `''` for scratch threads (no project). */
   projectId: string;
   userId: string;
   worktreePath: string | null;

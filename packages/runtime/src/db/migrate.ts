@@ -1,3 +1,4 @@
+/* eslint-disable max-lines */
 /**
  * @domain subdomain: Shared Kernel
  * @domain type: adapter
@@ -912,6 +913,13 @@ const migrations: Migration[] = [
     name: '056_threads_orchestrator_managed',
     async up() {
       await addColumn('threads', 'orchestrator_managed', 'INTEGER NOT NULL', '0');
+    },
+  },
+  {
+    // Scratch threads marker. See server migration 053 for context.
+    name: '057_threads_is_scratch',
+    async up() {
+      await addColumn('threads', 'is_scratch', 'INTEGER NOT NULL', '0');
     },
   },
 ];

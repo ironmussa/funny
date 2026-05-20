@@ -8,17 +8,21 @@
  * to a runner's HTTP port) could impersonate any user, including admin.
  *
  * The signature binds the forwarded identity to the shared secret: the server
- * computes an HMAC over `userId | role | orgId | orgName | timestamp` and the
- * runtime recomputes it to verify authenticity. Replay is bounded by rejecting
- * timestamps outside a small skew window.
+ * computes an HMAC over `userId | role | orgId | orgName | timestamp | nonce`
+ * and the runtime recomputes it to verify authenticity. The per-request nonce
+ * makes every signed request unique (so legitimate parallel requests in the
+ * same millisecond don't collide), and the replay cache keyed on the nonce
+ * rejects exact replays inside the skew window.
  */
 
-import { createHmac, timingSafeEqual } from 'crypto';
+import { createHmac, randomUUID, timingSafeEqual } from 'crypto';
 
 /** Name of the signature header */
 export const SIGNATURE_HEADER = 'X-Forwarded-Signature';
 /** Name of the timestamp header (unix ms) */
 export const TIMESTAMP_HEADER = 'X-Forwarded-Timestamp';
+/** Name of the per-request nonce header */
+export const NONCE_HEADER = 'X-Forwarded-Nonce';
 
 /**
  * Accept signatures within ±60 seconds of the server's clock.
@@ -32,9 +36,9 @@ export const SIGNATURE_MAX_SKEW_MS = 60 * 1000;
 
 /**
  * Nonce cache to reject exact replays of a signed request inside the skew
- * window. Keyed by `${userId}|${timestamp}|${signature}` (Security H3) — a
- * re-presented identical triple is rejected even if it would otherwise still
- * be within skew.
+ * window. Keyed by the per-request nonce (Security H3) — the proxy generates
+ * a fresh UUID for every signed request, so legitimate parallel requests
+ * never collide. Only a true replay (same nonce re-presented) is rejected.
  *
  * The cache is process-local (Map) and self-cleans on each verify call by
  * dropping entries whose timestamp has fallen out of the skew window. A hard
@@ -67,32 +71,39 @@ export interface ForwardedIdentity {
   orgName?: string | null;
 }
 
-function canonicalize(identity: ForwardedIdentity, timestamp: number): string {
+function canonicalize(identity: ForwardedIdentity, timestamp: number, nonce: string): string {
   return [
     identity.userId,
     identity.role ?? '',
     identity.orgId ?? '',
     identity.orgName ?? '',
     String(timestamp),
+    nonce,
   ].join('|');
 }
 
 /**
  * Sign a forwarded identity. Returns the headers the proxy should attach.
+ *
+ * `nonce` defaults to a fresh UUIDv4 per call so that parallel requests
+ * sharing a timestamp still produce distinct signatures (otherwise the
+ * runtime's replay cache would false-positive on browser refresh bursts).
  */
 export function signForwardedIdentity(
   identity: ForwardedIdentity,
   secret: string,
   timestamp: number = Date.now(),
-): { signature: string; timestamp: number } {
-  const payload = canonicalize(identity, timestamp);
+  nonce: string = randomUUID(),
+): { signature: string; timestamp: number; nonce: string } {
+  const payload = canonicalize(identity, timestamp, nonce);
   const signature = createHmac('sha256', secret).update(payload).digest('hex');
-  return { signature, timestamp };
+  return { signature, timestamp, nonce };
 }
 
 /**
  * Verify a forwarded identity signature. Returns `true` iff the signature is
- * valid and the timestamp is within the allowed skew.
+ * valid, the timestamp is within the allowed skew, and the nonce has not been
+ * seen before inside that window.
  *
  * Uses constant-time comparison to avoid side-channels on the HMAC.
  */
@@ -101,30 +112,32 @@ export function verifyForwardedIdentity(
   secret: string,
   signature: string | undefined,
   timestamp: string | number | undefined,
+  nonce: string | undefined,
   now: number = Date.now(),
   maxSkewMs: number = SIGNATURE_MAX_SKEW_MS,
 ): boolean {
-  if (!signature || timestamp === undefined || timestamp === null) return false;
+  if (!signature || !nonce || timestamp === undefined || timestamp === null) return false;
 
   const ts = typeof timestamp === 'string' ? Number.parseInt(timestamp, 10) : timestamp;
   if (!Number.isFinite(ts)) return false;
   if (Math.abs(now - ts) > maxSkewMs) return false;
 
-  const expected = createHmac('sha256', secret).update(canonicalize(identity, ts)).digest('hex');
+  const expected = createHmac('sha256', secret)
+    .update(canonicalize(identity, ts, nonce))
+    .digest('hex');
 
   const a = Buffer.from(signature, 'hex');
   const b = Buffer.from(expected, 'hex');
   if (a.length !== b.length) return false;
   if (!timingSafeEqual(a, b)) return false;
 
-  // Replay guard: reject an exact reuse of (userId, timestamp, signature)
-  // inside the skew window. We register *after* the HMAC verifies so callers
-  // can't spam-fill the cache with junk signatures.
+  // Replay guard: reject a true replay of the same nonce inside the skew
+  // window. We register *after* the HMAC verifies so callers can't spam-fill
+  // the cache with junk signatures.
   pruneNonceCache(now, maxSkewMs);
-  const nonceKey = `${identity.userId}|${ts}|${signature}`;
-  if (nonceCache.has(nonceKey)) return false;
+  if (nonceCache.has(nonce)) return false;
   evictOldestIfFull();
-  nonceCache.set(nonceKey, ts);
+  nonceCache.set(nonce, ts);
   return true;
 }
 

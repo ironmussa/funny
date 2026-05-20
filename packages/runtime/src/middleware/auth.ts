@@ -8,10 +8,12 @@
  * The runtime always runs as a remote runner connected to the central server.
  * Auth priority:
  * 1. **X-Runner-Auth + signed identity** — shared secret from server proxy
- *    plus an HMAC over `userId|role|orgId|orgName|timestamp` in the
- *    `X-Forwarded-Signature` / `X-Forwarded-Timestamp` headers. The signature
- *    prevents a client that happens to know the shared secret from forging
- *    `X-Forwarded-User`.
+ *    plus an HMAC over `userId|role|orgId|orgName|timestamp|nonce` in the
+ *    `X-Forwarded-Signature` / `X-Forwarded-Timestamp` / `X-Forwarded-Nonce`
+ *    headers. The signature prevents a client that happens to know the shared
+ *    secret from forging `X-Forwarded-User`; the per-request nonce makes every
+ *    signature unique so parallel requests in the same millisecond don't
+ *    false-trip the replay cache.
  * 2. **Server session** — browser cookie validated against TEAM_SERVER_URL
  * 3. **Better Auth** — local session fallback
  */
@@ -19,6 +21,7 @@
 import { timingSafeEqual } from 'crypto';
 
 import {
+  NONCE_HEADER,
   SIGNATURE_HEADER,
   TIMESTAMP_HEADER,
   verifyForwardedIdentity,
@@ -80,17 +83,20 @@ export async function authMiddleware(c: Context, next: Next) {
 
     const signature = c.req.header(SIGNATURE_HEADER);
     const timestamp = c.req.header(TIMESTAMP_HEADER);
+    const nonce = c.req.header(NONCE_HEADER);
     const valid = verifyForwardedIdentity(
       { userId, role, orgId, orgName },
       RUNNER_AUTH_SECRET,
       signature,
       timestamp,
+      nonce,
     );
     if (!valid) {
       log.warn('Rejected forwarded identity with invalid signature', {
         namespace: 'auth',
         hasSignature: !!signature,
         hasTimestamp: !!timestamp,
+        hasNonce: !!nonce,
       });
       return c.json({ error: 'Unauthorized' }, 401);
     }

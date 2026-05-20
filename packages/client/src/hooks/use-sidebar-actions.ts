@@ -31,6 +31,7 @@ export function useSidebarActions() {
   const renameThread = useThreadStore((s) => s.renameThread);
   const pinThread = useThreadStore((s) => s.pinThread);
   const deleteThread = useThreadStore((s) => s.deleteThread);
+  const deleteScratchThread = useThreadStore((s) => s.deleteScratchThread);
   const renameProject = useProjectStore((s) => s.renameProject);
   const deleteProject = useProjectStore((s) => s.deleteProject);
   const closeProject = useProjectStore((s) => s.closeProject);
@@ -61,7 +62,8 @@ export function useSidebarActions() {
   const handleDeleteThreadConfirm = useCallback(
     async (options?: { deleteBranch?: boolean }) => {
       if (!deleteThreadConfirm) return;
-      const { threadId, projectId, title, worktreePath, branchName } = deleteThreadConfirm;
+      const { threadId, projectId, title, worktreePath, branchName, isScratch } =
+        deleteThreadConfirm;
       const wasSelected = useThreadStore.getState().selectedThreadId === threadId;
 
       // Close the modal up-front. deleteThread is already optimistic (sync UI
@@ -69,6 +71,13 @@ export function useSidebarActions() {
       // animation makes the button content swap during the fade-out and reads
       // as a flicker.
       setDeleteThreadConfirm(null);
+
+      if (isScratch) {
+        await deleteScratchThread(threadId);
+        toast.success(t('toast.threadDeleted', { title }));
+        if (wasSelected) navigate(buildPath('/'));
+        return;
+      }
 
       if (options?.deleteBranch && worktreePath && branchName) {
         await api.removeWorktree(projectId, worktreePath, {
@@ -81,7 +90,7 @@ export function useSidebarActions() {
       toast.success(t('toast.threadDeleted', { title }));
       if (wasSelected) navigate(buildPath(`/projects/${projectId}`));
     },
-    [deleteThreadConfirm, deleteThread, t, navigate],
+    [deleteThreadConfirm, deleteThread, deleteScratchThread, t, navigate],
   );
 
   const handleRenameProjectConfirm = useCallback(async () => {
@@ -114,8 +123,7 @@ export function useSidebarActions() {
 
   const handleSelectThread = useCallback(
     async (projectId: string, threadId: string) => {
-      const threads = useThreadStore.getState().threadsByProject[projectId] ?? [];
-      const thread = threads.find((th) => th.id === threadId);
+      const thread = useThreadStore.getState().threadsById[threadId];
       if (thread?.mode === 'local') {
         const branch = resolveThreadBranch(thread);
         if (branch) {
@@ -137,8 +145,7 @@ export function useSidebarActions() {
   );
 
   const handleArchiveThread = useCallback((projectId: string, threadId: string, title: string) => {
-    const threads = useThreadStore.getState().threadsByProject[projectId] ?? [];
-    const th = threads.find((t) => t.id === threadId);
+    const th = useThreadStore.getState().threadsById[threadId];
     setArchiveConfirm({
       threadId,
       projectId,
@@ -162,8 +169,7 @@ export function useSidebarActions() {
   );
 
   const handleDeleteThread = useCallback((projectId: string, threadId: string, title: string) => {
-    const threads = useThreadStore.getState().threadsByProject[projectId] ?? [];
-    const th = threads.find((t) => t.id === threadId);
+    const th = useThreadStore.getState().threadsById[threadId];
     const isWorktree = th?.mode === 'worktree' && !!th?.branch && th?.provider !== 'external';
     setDeleteThreadConfirm({
       threadId,
@@ -184,8 +190,7 @@ export function useSidebarActions() {
 
   const handleDeleteThreadFromList = useCallback(
     (threadId: string, projectId: string, title: string, isWorktree: boolean) => {
-      const threads = useThreadStore.getState().threadsByProject[projectId] ?? [];
-      const th = threads.find((t) => t.id === threadId);
+      const th = useThreadStore.getState().threadsById[threadId];
       setDeleteThreadConfirm({
         threadId,
         projectId,

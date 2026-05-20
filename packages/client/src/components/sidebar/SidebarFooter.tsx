@@ -1,7 +1,8 @@
-import { LogOut, MoreVertical, Settings, User } from 'lucide-react';
+import { Keyboard, LogOut, MoreVertical, Settings, User } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { AutomationInboxButton } from '@/components/sidebar/AutomationInboxButton';
+import { KeyboardShortcutsDialog } from '@/components/sidebar/KeyboardShortcutsDialog';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -16,6 +17,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { buildPath } from '@/lib/url';
 import { useAuthStore } from '@/stores/auth-store';
+import { useUIStore } from '@/stores/ui-store';
 
 /**
  * Bottom of AppSidebar: automation-inbox button + (when signed in) avatar
@@ -29,6 +31,7 @@ export function SidebarFooter() {
   const navigate = useStableNavigate();
   const authUser = useAuthStore((s) => s.user);
   const logout = useAuthStore((s) => s.logout);
+  const openShortcuts = useUIStore((s) => s.setKeyboardShortcutsOpen);
 
   return (
     <ShadSidebarFooter className="pb-4">
@@ -73,6 +76,13 @@ export function SidebarFooter() {
                   <Settings className="icon-sm" />
                   {t('settings.title')}
                 </DropdownMenuItem>
+                <DropdownMenuItem
+                  data-testid="sidebar-user-shortcuts"
+                  onClick={() => openShortcuts(true)}
+                >
+                  <Keyboard className="icon-sm" />
+                  {t('shortcuts.title')}
+                </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem data-testid="sidebar-logout" onClick={logout}>
                   <LogOut className="icon-sm" />
@@ -98,6 +108,7 @@ export function SidebarFooter() {
           </Tooltip>
         )}
       </div>
+      <KeyboardShortcutsDialog />
     </ShadSidebarFooter>
   );
 }

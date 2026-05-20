@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useThreadsByProject } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
@@ -43,7 +44,7 @@ export function RecentThreads({
   const { t } = useTranslation();
   useMinuteTick();
   const navigate = useNavigate();
-  const threadsByProject = useThreadStore((s) => s.threadsByProject);
+  const threadsByProject = useThreadsByProject();
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const projects = useProjectStore((s) => s.projects);
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);

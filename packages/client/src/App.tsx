@@ -11,6 +11,7 @@ import { useGlobalShortcuts } from '@/hooks/use-global-shortcuts';
 import { useRouteSync } from '@/hooks/use-route-sync';
 import { useThreadHistoryTracker } from '@/hooks/use-thread-history-tracker';
 import { useWS } from '@/hooks/use-ws';
+import { canDoGitOps } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
 import { TOAST_DURATION } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
@@ -129,6 +130,7 @@ const MonacoEditorDialog = lazy(() =>
 export function App() {
   const loadProjects = useProjectStore((s) => s.loadProjects);
   const loadTemplates = useAgentTemplateStore((s) => s.loadTemplates);
+  const loadScratchThreads = useThreadStore((s) => s.loadScratchThreads);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const reviewPaneWidth = useUIStore((s) => s.reviewPaneWidth);
   const setReviewPaneWidth = useUIStore((s) => s.setReviewPaneWidth);
@@ -146,6 +148,7 @@ export function App() {
   const internalEditorFilePath = useInternalEditorStore((s) => s.filePath);
   const internalEditorContent = useInternalEditorStore((s) => s.initialContent);
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
+  const activeThreadCanShowGit = useThreadStore((s) => canDoGitOps(s.activeThread));
   const navigate = useNavigate();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
@@ -203,11 +206,12 @@ export function App() {
   // Sync URL ↔ store
   useRouteSync();
 
-  // Load projects and agent templates on mount (auth already initialized by AuthGate)
+  // Load projects, agent templates, and scratch threads on mount (auth already initialized by AuthGate)
   useEffect(() => {
     loadProjects();
     loadTemplates();
-  }, [loadProjects, loadTemplates]);
+    loadScratchThreads();
+  }, [loadProjects, loadTemplates, loadScratchThreads]);
 
   // Update browser tab title with selected project name
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
@@ -337,9 +341,9 @@ export function App() {
                 <div className="min-h-0 flex-1 overflow-hidden">
                   <ErrorBoundary area="right-pane">
                     <Suspense>
-                      {rightPaneTab === 'review' ? (
+                      {rightPaneTab === 'review' && activeThreadCanShowGit ? (
                         <ReviewPane />
-                      ) : rightPaneTab === 'files' ? (
+                      ) : rightPaneTab === 'files' && activeThreadCanShowGit ? (
                         <ProjectFilesPane />
                       ) : (
                         <ActivityPane />

@@ -39,6 +39,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { api } from '@/lib/api';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { timeAgo } from '@/lib/thread-utils';
+import { canShowPowerline, getThreadRoute } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
@@ -58,6 +59,7 @@ export interface ThreadItemProps {
   onPin?: () => void;
   onDelete?: () => void;
   gitStatus?: GitStatusInfo;
+  href?: string;
 }
 
 // Custom comparator: only re-render when visually-relevant props change.
@@ -75,6 +77,7 @@ function threadItemAreEqual(prev: ThreadItemProps, next: ThreadItemProps): boole
   if (prev.timeValue !== next.timeValue) return false;
   if (prev.projectPath !== next.projectPath) return false;
   if (prev.gitStatus !== next.gitStatus) return false;
+  if (prev.href !== next.href) return false;
   return threadsVisuallyEqual(prev.thread, next.thread);
 }
 
@@ -91,6 +94,7 @@ export const ThreadItem = memo(function ThreadItem({
   onPin,
   onDelete,
   gitStatus,
+  href,
 }: ThreadItemProps) {
   const { t } = useTranslation();
   const [openDropdown, setOpenDropdown] = useState(false);
@@ -145,6 +149,7 @@ export const ThreadItem = memo(function ThreadItem({
   const isSettingUp = thread.status === 'setting_up';
   const isBusy = isRunning || isSettingUp;
   const displayTime = timeValue ?? timeAgo(thread.createdAt, t);
+  const threadHref = href ?? buildPath(getThreadRoute(thread));
 
   // Keep the last known git status so the widget doesn't flicker away
   // during transient undefined gaps (e.g. thread selection race conditions).
@@ -163,7 +168,10 @@ export const ThreadItem = memo(function ThreadItem({
   const hasSnippet = !!thread.lastAssistantMessage;
   const showLaunching = isBusy && !hasSnippet;
   const isBacklog = !hasSnippet && !isBusy && (!thread.stage || thread.stage === 'backlog');
-  const hasPowerline = !!subtitle || !!thread.baseBranch || !!thread.branch;
+  // Scratch threads have no project / branch / worktree — never show the
+  // powerline even if older DB rows still carry a stale `branch` value.
+  const hasPowerline =
+    canShowPowerline(thread) && (!!subtitle || !!thread.baseBranch || !!thread.branch);
   const hasMetadataRow = hasDiffStats || hasPR || hasPowerline;
   const hasSnippetRow = hasSnippet || showLaunching || isBacklog;
 
@@ -188,8 +196,11 @@ export const ThreadItem = memo(function ThreadItem({
           if (e.ctrlKey || e.metaKey) {
             e.preventDefault();
             e.stopPropagation();
-            const url = buildPath(`/projects/${thread.projectId}/threads/${thread.id}`);
-            window.open(url, '_blank', 'noopener,noreferrer,popup=yes,width=1280,height=900');
+            window.open(
+              threadHref,
+              '_blank',
+              'noopener,noreferrer,popup=yes,width=1280,height=900',
+            );
             return;
           }
           onSelect();
@@ -199,8 +210,11 @@ export const ThreadItem = memo(function ThreadItem({
           if (e.button === 1) {
             e.preventDefault();
             e.stopPropagation();
-            const url = buildPath(`/projects/${thread.projectId}/threads/${thread.id}`);
-            window.open(url, '_blank', 'noopener,noreferrer,popup=yes,width=1280,height=900');
+            window.open(
+              threadHref,
+              '_blank',
+              'noopener,noreferrer,popup=yes,width=1280,height=900',
+            );
           }
         }}
         className="flex min-w-0 flex-1 flex-col gap-1 overflow-hidden py-1.5 pl-2 text-left"
@@ -270,16 +284,18 @@ export const ThreadItem = memo(function ThreadItem({
         {/* Row 2: Powerline (project → branch) + Git status + Snippet + Time */}
         {(hasMetadataRow || hasSnippetRow) && (
           <div className="flex min-h-[22px] min-w-0 items-center gap-1.5 pl-5">
-            <ThreadPowerline
-              thread={thread}
-              projectName={subtitle}
-              projectColor={projectColor}
-              projectTooltip={projectPath}
-              gitStatus={effectiveGitStatus}
-              diffStatsSize="xs"
-              variant={isSelected ? 'arrow' : undefined}
-              data-testid={`thread-powerline-${thread.id}`}
-            />
+            {hasPowerline && (
+              <ThreadPowerline
+                thread={thread}
+                projectName={subtitle}
+                projectColor={projectColor}
+                projectTooltip={projectPath}
+                gitStatus={effectiveGitStatus}
+                diffStatsSize="xs"
+                variant={isSelected ? 'arrow' : undefined}
+                data-testid={`thread-powerline-${thread.id}`}
+              />
+            )}
             {hasPR && effectiveGitStatus && (
               <PRBadge
                 prNumber={effectiveGitStatus.prNumber!}

@@ -74,8 +74,15 @@ function seedStores({
 
   useProjectStore.setState({ projects });
 
+  const threadsById: Record<string, Thread> = {};
+  const threadIdsByProject: Record<string, string[]> = {};
+  for (const pid in threadsByProject) {
+    threadIdsByProject[pid] = threadsByProject[pid].map((t) => t.id);
+    for (const t of threadsByProject[pid]) threadsById[t.id] = t;
+  }
   useThreadStore.setState({
-    threadsByProject,
+    threadsById,
+    threadIdsByProject,
     loadThreadsForProject: (() => Promise.resolve()) as any,
   });
 

@@ -16,6 +16,15 @@ import { useRef, useState, useCallback, useEffect, useEffectEvent, useMemo } fro
 import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 
+import {
+  getCssVar,
+  getTerminalTheme,
+  getXtermModules,
+  isTauri,
+  searchAddonRegistry,
+  terminalRegistry,
+  useThemeSync,
+} from '@/components/terminal/xterm-utils';
 import { Button } from '@/components/ui/button';
 import {
   ContextMenu,
@@ -50,105 +59,6 @@ import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { type TerminalShell, useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 import { useTerminalStore, type TerminalTab } from '@/stores/terminal-store';
 import { useThreadWorktreePath } from '@/stores/thread-context';
-
-const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
-
-// ── Pre-cache xterm.js modules ──────────────────────────────────────
-// Import once on module load so that individual tab mounts don't each
-// pay the dynamic-import cost. The promise is shared across all tabs.
-let xtermModulesPromise: Promise<{
-  Terminal: typeof import('@xterm/xterm').Terminal;
-  FitAddon: typeof import('@xterm/addon-fit').FitAddon;
-  WebLinksAddon: typeof import('@xterm/addon-web-links').WebLinksAddon;
-  SearchAddon: typeof import('@xterm/addon-search').SearchAddon;
-}> | null = null;
-
-function getXtermModules() {
-  if (!xtermModulesPromise) {
-    xtermModulesPromise = Promise.all([
-      import('@xterm/xterm'),
-      import('@xterm/addon-fit'),
-      import('@xterm/addon-web-links'),
-      import('@xterm/addon-search'),
-      // @ts-ignore - CSS import handled by Vite bundler
-      import('@xterm/xterm/css/xterm.css'),
-    ]).then(([xterm, fit, webLinks, search]) => ({
-      Terminal: xterm.Terminal,
-      FitAddon: fit.FitAddon,
-      WebLinksAddon: webLinks.WebLinksAddon,
-      SearchAddon: search.SearchAddon,
-    }));
-  }
-  return xtermModulesPromise;
-}
-
-// Registry mapping tabId -> SearchAddon instance, populated by terminal tab
-// components on mount and cleared on unmount. The search overlay reads from
-// this map to drive findNext/findPrevious on the active terminal.
-const searchAddonRegistry = new Map<string, import('@xterm/addon-search').SearchAddon>();
-const terminalRegistry = new Map<string, import('@xterm/xterm').Terminal>();
-
-// Eagerly start loading xterm modules
-if (!isTauri) getXtermModules();
-
-/** Resolve a CSS variable (HSL) to a hex-like string for xterm/ansi-to-html. */
-function getCssVar(name: string): string {
-  const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-  return raw ? `hsl(${raw})` : '#1b1b1b';
-}
-
-/** Resolve a CSS variable that holds a raw hex value. */
-function getRawCssVar(name: string): string {
-  return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-}
-
-function getTerminalTheme() {
-  return {
-    background: getCssVar('--background'),
-    foreground: getCssVar('--foreground'),
-    cursor: getCssVar('--foreground'),
-    selectionBackground: getRawCssVar('--terminal-selection') || '#264f78',
-    scrollbarSliderBackground: `hsl(${getComputedStyle(document.documentElement).getPropertyValue('--muted-foreground').trim()} / 0.25)`,
-    scrollbarSliderHoverBackground: `hsl(${getComputedStyle(document.documentElement).getPropertyValue('--muted-foreground').trim()} / 0.4)`,
-    scrollbarSliderActiveBackground: `hsl(${getComputedStyle(document.documentElement).getPropertyValue('--muted-foreground').trim()} / 0.5)`,
-    black: getRawCssVar('--terminal-black'),
-    red: getRawCssVar('--terminal-red'),
-    green: getRawCssVar('--terminal-green'),
-    yellow: getRawCssVar('--terminal-yellow'),
-    blue: getRawCssVar('--terminal-blue'),
-    magenta: getRawCssVar('--terminal-magenta'),
-    cyan: getRawCssVar('--terminal-cyan'),
-    white: getRawCssVar('--terminal-white'),
-    brightBlack: getRawCssVar('--terminal-bright-black'),
-    brightRed: getRawCssVar('--terminal-bright-red'),
-    brightGreen: getRawCssVar('--terminal-bright-green'),
-    brightYellow: getRawCssVar('--terminal-bright-yellow'),
-    brightBlue: getRawCssVar('--terminal-bright-blue'),
-    brightMagenta: getRawCssVar('--terminal-bright-magenta'),
-    brightCyan: getRawCssVar('--terminal-bright-cyan'),
-    brightWhite: getRawCssVar('--terminal-bright-white'),
-  };
-}
-
-/** Watch for theme changes on <html> class and call back with updated xterm theme.
- *  Also applies the theme immediately on mount to catch any race with CSS loading. */
-function useThemeSync(termRef: React.RefObject<{ terminal: any } | null>) {
-  useEffect(() => {
-    const applyTheme = () => {
-      if (termRef.current?.terminal) {
-        termRef.current.terminal.options.theme = getTerminalTheme();
-      }
-    };
-    // Apply immediately in case terminal was created before CSS vars were ready
-    applyTheme();
-    const observer = new MutationObserver(applyTheme);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class', 'style'],
-    });
-    return () => observer.disconnect();
-  }, [termRef]);
-}
 
 /** Tauri PTY tab — uses xterm.js (lazy-loaded) */
 function TauriTerminalTabContent({

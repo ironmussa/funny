@@ -6,6 +6,7 @@ import { showAgentNotification } from '@/hooks/use-notifications';
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
 import { validateContainerUrl } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
+import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { invalidateCooldownsForKeys, useGitStatusStore } from '@/stores/git-status-store';
 import { useTerminalStore } from '@/stores/terminal-store';
@@ -282,7 +283,14 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
       break;
     }
     case 'thread:created':
-      useThreadStore.getState().loadThreadsForProject(data.projectId);
+      // Scratch threads have no project (projectId is '' / null). Calling
+      // loadThreadsForProject('') would fall through to api.listThreads()
+      // with no filter, leaking every user thread into threadsByProject['']
+      // and duplicating the sidebar Activity section. Scratch threads are
+      // handled separately via addScratchThread on the create path.
+      if (data.projectId) {
+        useThreadStore.getState().loadThreadsForProject(data.projectId);
+      }
       break;
     case 'thread:comment_deleted': {
       const store = useThreadStore.getState();
@@ -384,6 +392,7 @@ function findThread(threadId: string): {
   title?: string;
   branch?: string;
   projectId?: string;
+  isScratch?: boolean;
 } {
   const store = useThreadStore.getState();
   if (store.activeThread?.id === threadId) {
@@ -391,11 +400,17 @@ function findThread(threadId: string): {
       title: store.activeThread.title,
       branch: store.activeThread.branch,
       projectId: store.activeThread.projectId,
+      isScratch: store.activeThread.isScratch,
     };
   }
-  for (const [projectId, threads] of Object.entries(store.threadsByProject)) {
-    const t = threads.find((th) => th.id === threadId);
-    if (t) return { title: t.title, branch: t.branch, projectId };
+  const t = store.threadsById[threadId];
+  if (t) {
+    return {
+      title: t.title,
+      branch: t.branch,
+      projectId: t.projectId,
+      isScratch: !!t.isScratch,
+    };
   }
   return {};
 }
@@ -413,8 +428,11 @@ function maybeNotifyAgentResult(threadId: string, data: any): void {
   const title = buildNotificationTitle(info);
   const onClick = () => {
     const navigate = getNavigate();
-    if (navigate && info.projectId) {
-      navigate(buildPath(`/projects/${info.projectId}/threads/${threadId}`));
+    if (!navigate) return;
+    if (info.isScratch) {
+      navigate(buildPath(getThreadRoute({ id: threadId, projectId: '', isScratch: true })));
+    } else if (info.projectId) {
+      navigate(buildPath(getThreadRoute({ id: threadId, projectId: info.projectId })));
     }
   };
   if (status === 'completed') {

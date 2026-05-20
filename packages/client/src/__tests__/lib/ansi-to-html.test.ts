@@ -17,7 +17,6 @@ describe('createAnsiConverter', () => {
     const converter = createAnsiConverter({
       fg: '#fff',
       bg: 'transparent',
-      // @ts-expect-error — escapeXML is omitted from the public option type.
       escapeXML: false,
     });
     const out = converter.toHtml('<img src=x onerror=alert(1)>');

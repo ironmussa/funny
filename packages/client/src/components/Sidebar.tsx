@@ -5,16 +5,17 @@ import { useSidebarActions } from '@/hooks/use-sidebar-actions';
 import { useSidebarDragDrop } from '@/hooks/use-sidebar-drag-drop';
 import { useSidebarScrollSync } from '@/hooks/use-sidebar-scroll-sync';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
+import { useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
 import { cn, scrollSidebarItemIntoView } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
-import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 import { SettingsPanelBody } from './SettingsPanel';
 import { SidebarDialogs } from './sidebar/SidebarDialogs';
 import { SidebarFooter } from './sidebar/SidebarFooter';
 import { SidebarProjectsSection } from './sidebar/SidebarProjectsSection';
+import { SidebarScratchSection } from './sidebar/SidebarScratchSection';
 import { SidebarThreadsSection } from './sidebar/SidebarThreadsSection';
 import { SidebarTopBar } from './sidebar/SidebarTopBar';
 
@@ -32,7 +33,7 @@ export function AppSidebar({ singleProjectId }: { singleProjectId?: string | nul
   const toggleProject = useProjectStore((s) => s.toggleProject);
   const reorderProjects = useProjectStore((s) => s.reorderProjects);
   // thread-store
-  const threadsByProject = useThreadStore((s) => s.threadsByProject);
+  const threadsByProject = useThreadsByProject();
   // ui-store
   const settingsOpen = useUIStore((s) => s.settingsOpen);
   const startNewThread = useUIStore((s) => s.startNewThread);
@@ -169,6 +170,8 @@ export function AppSidebar({ singleProjectId }: { singleProjectId?: string | nul
           onShowAllThreads={handleShowAllThreads}
           onShowIssues={handleShowIssues}
         />
+
+        <SidebarScratchSection onDeleteThread={setDeleteThreadConfirm} />
 
         <SidebarFooter />
       </div>

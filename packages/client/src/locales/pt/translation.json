@@ -1005,6 +1005,22 @@
     "loginFailed": "Falha no login. Verifique suas credenciais.",
     "logout": "Sair"
   },
+  "shortcuts": {
+    "title": "Atalhos de teclado",
+    "description": "Atalhos de teclado úteis para navegar pelo app mais rápido.",
+    "commandPalette": "Abrir paleta de comandos",
+    "commandPaletteAlt": "Abrir paleta de comandos (alt)",
+    "fileSearch": "Buscar arquivos do projeto",
+    "searchInThread": "Buscar no thread atual",
+    "searchAcrossThreads": "Buscar entre threads",
+    "toggleSidebar": "Mostrar/ocultar sidebar",
+    "projectSettings": "Abrir configurações do projeto",
+    "newThread": "Iniciar novo thread",
+    "nextThread": "Ir para o próximo thread",
+    "prevThread": "Ir para o thread anterior",
+    "toggleTerminal": "Mostrar/ocultar terminal",
+    "openShortcuts": "Mostrar atalhos de teclado"
+  },
   "profile": {
     "title": "Perfil",
     "gitIdentity": "Identidade Git",

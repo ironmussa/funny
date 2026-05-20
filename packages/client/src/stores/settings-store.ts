@@ -4,6 +4,7 @@ import { create } from 'zustand';
 import { profileApi } from '@/lib/api/profile';
 import { systemApi } from '@/lib/api/system';
 
+export type { ToolPermission };
 export type Editor = 'cursor' | 'vscode' | 'windsurf' | 'zed' | 'sublime' | 'vim';
 export type ThreadMode = 'local' | 'worktree';
 export type ClaudeModel = 'haiku' | 'sonnet' | 'opus';

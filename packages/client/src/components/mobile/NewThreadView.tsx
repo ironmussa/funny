@@ -1,12 +1,11 @@
 import { DEFAULT_THREAD_MODE } from '@funny/shared/models';
 import { ArrowLeft } from 'lucide-react';
-import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { PromptInput } from '@/components/PromptInput';
-import { api } from '@/lib/api';
-import { toastError } from '@/lib/toast-error';
+import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { useAppStore } from '@/stores/app-store';
+import { useSettingsStore } from '@/stores/settings-store';
 
 interface Props {
   projectId: string;
@@ -20,37 +19,17 @@ export function NewThreadView({ projectId, onBack, onCreated }: Props) {
   const projects = useAppStore((s) => s.projects);
   const project = projects.find((p) => p.id === projectId);
   const defaultThreadMode = project?.defaultMode ?? DEFAULT_THREAD_MODE;
-  const [creating, setCreating] = useState(false);
+  const toolPermissions = useSettingsStore((s) => s.toolPermissions);
 
-  const handleCreate = async (
-    prompt: string,
-    opts: { model: string; mode: string; threadMode?: string; baseBranch?: string },
-    images?: any[],
-  ): Promise<boolean> => {
-    if (creating) return false;
-    setCreating(true);
-
-    const result = await api.createThread({
-      projectId,
-      title: prompt.slice(0, 200),
-      mode: (opts.threadMode as 'local' | 'worktree') || defaultThreadMode,
-      model: opts.model,
-      permissionMode: opts.mode,
-      baseBranch: opts.baseBranch,
-      prompt,
-      images,
-    });
-
-    if (result.isErr()) {
-      toastError(result.error);
-      setCreating(false);
-      return false;
-    }
-
-    await loadThreadsForProject(projectId);
-    onCreated(result.value.id);
-    return true;
-  };
+  const { creating, createThread } = useThreadCreation({
+    projectId,
+    defaultThreadMode,
+    toolPermissions,
+    onSuccess: async (threadId) => {
+      await loadThreadsForProject(projectId);
+      onCreated(threadId);
+    },
+  });
 
   return (
     <>
@@ -72,7 +51,7 @@ export function NewThreadView({ projectId, onBack, onCreated }: Props) {
         </div>
       </div>
       <PromptInput
-        onSubmit={handleCreate}
+        onSubmit={createThread}
         loading={creating}
         isNewThread
         showBacklog

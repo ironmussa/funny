@@ -1,58 +1,44 @@
 import { DEFAULT_FOLLOW_UP_MODE } from '@funny/shared/models';
 import { useCallback, useState, type Dispatch, type RefObject, type SetStateAction } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 
 import type { MessageStreamHandle } from '@/components/thread/MessageStream';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
-import { buildPath } from '@/lib/url';
+import {
+  buildSendMessagePayload,
+  type SendMessageOpts,
+  type SendMessagePayload,
+} from '@/lib/send-message-payload';
 import { useProjectStore } from '@/stores/project-store';
-import { deriveToolLists, useSettingsStore } from '@/stores/settings-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import type { ThreadCore } from '@/stores/thread-context';
-import { invalidateThreadData } from '@/stores/thread-machine-bridge';
-import { invalidateSelectThread, useThreadStore } from '@/stores/thread-store';
+import { useThreadStore } from '@/stores/thread-store';
 
 const log = createClientLogger('ThreadChatHandlers');
 
 type ActiveThread = ThreadCore;
 
+/**
+ * Captured send opts while the follow-up dialog is open. We freeze the
+ * already-resolved API payload here (including allowedTools/disallowedTools)
+ * so a permission toggle between "Ask" and the user's answer doesn't change
+ * what gets sent.
+ */
 export interface PendingSend {
   prompt: string;
-  opts: {
-    provider?: string;
-    model?: string;
-    permissionMode?: string;
-    allowedTools?: string[];
-    disallowedTools?: string[];
-    fileReferences?: { path: string }[];
-    symbolReferences?: {
-      path: string;
-      name: string;
-      kind: string;
-      line: number;
-      endLine?: number;
-    }[];
-    baseBranch?: string;
-  };
+  /** API-shape payload — already resolved through `buildSendMessagePayload`. */
+  payload: SendMessagePayload;
+  /** Original PromptInput-shape opts — needed for optimistic-message rendering. */
+  rawOpts: SendOpts;
   images?: any[];
 }
 
-export interface SendOpts {
-  provider?: string;
+/** PromptInput-shape opts. `mode` here is the API's permissionMode. */
+export interface SendOpts extends SendMessageOpts {
   model: string;
   mode: string;
-  effort?: string;
-  fileReferences?: { path: string; type?: 'file' | 'folder' }[];
-  symbolReferences?: {
-    path: string;
-    name: string;
-    kind: string;
-    line: number;
-    endLine?: number;
-  }[];
-  baseBranch?: string;
 }
 
 interface Refs {
@@ -64,16 +50,15 @@ interface Refs {
 }
 
 /**
- * All non-search messaging logic for ThreadChatView: send, follow-up dialog,
- * stop, permission approval, tool respond, fork. Pulls api/sonner/settings-
- * store/buildPath/router/client-logger out of ThreadChatView's import graph.
+ * Messaging-only logic for ThreadChatView: send, follow-up dialog, stop,
+ * permission approval, tool respond. Fork / rewind / fork-and-rewind live
+ * in `use-thread-checkpoints` (extracted for clarity; they share their own
+ * in-flight guard).
  */
 export function useThreadHandlers(refs: Refs) {
   const { t } = useTranslation();
-  const navigate = useNavigate();
   const [sending, setSending] = useState(false);
   const [followUpDialogOpen, setFollowUpDialogOpen] = useState(false);
-  const [forkingMessageId, setForkingMessageId] = useState<string | null>(null);
   refs.sendingRef.current = sending;
 
   const handleSend = useCallback(
@@ -91,22 +76,15 @@ export function useThreadHandlers(refs: Refs) {
         .projects.find((p) => p.id === thread.projectId);
       const followUpMode = currentProject?.followUpMode || DEFAULT_FOLLOW_UP_MODE;
 
+      // Build the API payload once — used for the ask-dialog freeze and the
+      // immediate send path so they can't drift.
+      const toolPermissions = useSettingsStore.getState().toolPermissions;
+
       if (threadIsRunning && followUpMode === 'ask') {
-        const { allowedTools, disallowedTools } = deriveToolLists(
-          useSettingsStore.getState().toolPermissions,
-        );
         refs.pendingSendRef.current = {
           prompt,
-          opts: {
-            provider: opts.provider || undefined,
-            model: opts.model || undefined,
-            permissionMode: opts.mode || undefined,
-            allowedTools,
-            disallowedTools,
-            fileReferences: opts.fileReferences,
-            symbolReferences: opts.symbolReferences,
-            baseBranch: opts.baseBranch,
-          },
+          payload: buildSendMessagePayload(opts, toolPermissions, { includeEffort: false }),
+          rawOpts: opts,
           images,
         };
         setFollowUpDialogOpen(true);
@@ -130,26 +108,9 @@ export function useThreadHandlers(refs: Refs) {
           );
       }
       requestAnimationFrame(() => refs.streamRef.current?.scrollToBottom());
-      const { allowedTools, disallowedTools } = deriveToolLists(
-        useSettingsStore.getState().toolPermissions,
-      );
-      const result = await api.sendMessage(
-        thread.id,
-        prompt,
-        {
-          provider: opts.provider || undefined,
-          model: opts.model || undefined,
-          permissionMode: opts.mode || undefined,
-          effort: opts.effort || undefined,
-          allowedTools,
-          disallowedTools,
-          fileReferences: opts.fileReferences,
-          symbolReferences: opts.symbolReferences,
-          baseBranch: opts.baseBranch,
-        },
-        images,
-      );
-      handleSendResult(result, thread.id, threadIsRunning, t);
+      const payload = buildSendMessagePayload(opts, toolPermissions);
+      const result = await api.sendMessage(thread.id, prompt, payload, images);
+      handleSendResult(result, thread.id, { rollbackOnQueue: !threadIsRunning }, t);
       setSending(false);
     },
     [refs, t],
@@ -164,40 +125,27 @@ export function useThreadHandlers(refs: Refs) {
       const thread = refs.activeThreadRef.current;
       if (!thread) return;
       setSending(true);
-      if (action === 'interrupt') toast.info(t('thread.interruptingAgent'));
       if (action === 'interrupt') {
+        toast.info(t('thread.interruptingAgent'));
         useThreadStore
           .getState()
           .appendOptimisticMessage(
             thread.id,
             pending.prompt,
             pending.images,
-            pending.opts.model as any,
-            pending.opts.permissionMode as any,
-            pending.opts.fileReferences as any,
+            pending.rawOpts.model as any,
+            pending.rawOpts.mode as any,
+            pending.rawOpts.fileReferences,
           );
       }
       requestAnimationFrame(() => refs.streamRef.current?.scrollToBottom());
       const result = await api.sendMessage(
         thread.id,
         pending.prompt,
-        { ...pending.opts, forceQueue: action === 'queue' ? true : undefined },
+        { ...pending.payload, forceQueue: action === 'queue' ? true : undefined },
         pending.images,
       );
-      if (result.isErr()) {
-        const err = result.error;
-        toast.error(
-          err.type === 'INTERNAL'
-            ? t('thread.sendFailed')
-            : t('thread.sendFailedGeneric', { error: err.message }),
-        );
-      } else if (result.value && (result.value as any).queued) {
-        if (action === 'interrupt') {
-          useThreadStore.getState().rollbackOptimisticMessage(thread.id);
-        }
-        applyQueuedCount(thread.id, (result.value as any).queuedCount);
-        toast.success(t('thread.messageQueued'));
-      }
+      handleSendResult(result, thread.id, { rollbackOnQueue: action === 'interrupt' }, t);
       setSending(false);
     },
     [refs, t],
@@ -214,7 +162,12 @@ export function useThreadHandlers(refs: Refs) {
     const thread = refs.activeThreadRef.current;
     if (!thread) return;
     const result = await api.stopThread(thread.id);
-    if (result.isErr()) console.error('Stop failed:', result.error);
+    if (result.isErr()) {
+      log.error('stopThread failed', {
+        threadId: thread.id,
+        error: result.error.message,
+      });
+    }
   }, [refs]);
 
   const handlePermissionApproval = useCallback(
@@ -232,7 +185,10 @@ export function useThreadHandlers(refs: Refs) {
               : `Approved: ${toolName}`
             : `Denied: ${toolName}`,
         );
-      const { allowedTools, disallowedTools } = deriveToolLists(
+      // Reuse the shared payload builder to derive allowedTools/disallowedTools.
+      // Prompt/file/baseBranch are not used by approveTool — pass empties.
+      const { allowedTools, disallowedTools } = buildSendMessagePayload(
+        { model: '', mode: '' },
         useSettingsStore.getState().toolPermissions,
       );
       const result = await api.approveTool(
@@ -243,7 +199,14 @@ export function useThreadHandlers(refs: Refs) {
         disallowedTools,
         approved && alwaysAllow ? { scope: 'always', toolInput } : { scope: 'once' },
       );
-      if (result.isErr()) console.error('Permission approval failed:', result.error);
+      if (result.isErr()) {
+        log.error('approveTool failed', {
+          threadId: thread.id,
+          toolName,
+          approved,
+          error: result.error.message,
+        });
+      }
     },
     [refs],
   );
@@ -257,118 +220,17 @@ export function useThreadHandlers(refs: Refs) {
     [refs],
   );
 
-  const handleFork = useCallback(
-    async (messageId: string) => {
-      const thread = refs.activeThreadRef.current;
-      if (!thread || forkingMessageId) return;
-      setForkingMessageId(messageId);
-      try {
-        const result = await api.forkThread(thread.id, messageId);
-        if (result.isErr()) {
-          log.error('Failed to fork thread', {
-            threadId: thread.id,
-            messageId,
-            error: result.error.message,
-          });
-          toast.error(t('thread.forkFailed', 'Failed to fork conversation'));
-          return;
-        }
-        const newThread = result.value;
-        useThreadStore.setState({ selectedThreadId: newThread.id });
-        await useThreadStore.getState().loadThreadsForProject(thread.projectId);
-        navigate(buildPath(`/projects/${thread.projectId}/threads/${newThread.id}`));
-        toast.success(t('thread.forkSuccess', 'Forked conversation'));
-      } finally {
-        setForkingMessageId(null);
-      }
-    },
-    [forkingMessageId, navigate, refs, t],
-  );
-
-  const handleRewind = useCallback(
-    async (messageId: string) => {
-      const thread = refs.activeThreadRef.current;
-      if (!thread || forkingMessageId) return;
-      setForkingMessageId(messageId);
-      try {
-        const result = await api.rewindCode(thread.id, messageId);
-        if (result.isErr()) {
-          log.error('Failed to rewind code', {
-            threadId: thread.id,
-            messageId,
-            error: result.error.message,
-          });
-          toast.error(
-            result.error.type === 'INTERNAL'
-              ? t('thread.rewindFailed', 'Failed to rewind code')
-              : t('thread.rewindFailedGeneric', { error: result.error.message }),
-          );
-          return;
-        }
-        // Force-refresh the thread so the truncated transcript replaces the
-        // current in-memory message list.
-        invalidateThreadData(thread.id);
-        invalidateSelectThread();
-        await useThreadStore.getState().selectThread(thread.id);
-        const filesChanged = result.value.rewind.filesChanged?.length ?? 0;
-        toast.success(
-          t('thread.rewindSuccess', {
-            count: filesChanged,
-            defaultValue_one: 'Rewound 1 file',
-            defaultValue_other: 'Rewound {{count}} files',
-            defaultValue: 'Code rewound',
-          }),
-        );
-      } finally {
-        setForkingMessageId(null);
-      }
-    },
-    [forkingMessageId, refs, t],
-  );
-
-  const handleForkAndRewind = useCallback(
-    async (messageId: string) => {
-      const thread = refs.activeThreadRef.current;
-      if (!thread || forkingMessageId) return;
-      setForkingMessageId(messageId);
-      try {
-        const result = await api.forkAndRewind(thread.id, messageId);
-        if (result.isErr()) {
-          log.error('Failed to fork-and-rewind', {
-            threadId: thread.id,
-            messageId,
-            error: result.error.message,
-          });
-          toast.error(t('thread.forkAndRewindFailed', 'Failed to fork and rewind'));
-          return;
-        }
-        const newThread = result.value.thread;
-        useThreadStore.setState({ selectedThreadId: newThread.id });
-        await useThreadStore.getState().loadThreadsForProject(thread.projectId);
-        navigate(buildPath(`/projects/${thread.projectId}/threads/${newThread.id}`));
-        toast.success(t('thread.forkAndRewindSuccess', 'Forked and rewound code'));
-      } finally {
-        setForkingMessageId(null);
-      }
-    },
-    [forkingMessageId, navigate, refs, t],
-  );
-
   return {
     sending,
     setSending: setSending as Dispatch<SetStateAction<boolean>>,
     followUpDialogOpen,
     setFollowUpDialogOpen,
-    forkingMessageId,
     handleSend,
     handleFollowUpAction,
     handleFollowUpCancel,
     handleStop,
     handlePermissionApproval,
     handleToolRespond,
-    handleFork,
-    handleRewind,
-    handleForkAndRewind,
   };
 }
 
@@ -388,10 +250,21 @@ function applyQueuedCount(threadId: string, responseQueuedCount: unknown) {
   }
 }
 
+/**
+ * Shared post-`sendMessage` handling.
+ *
+ * `rollbackOnQueue`:
+ *   - true  → caller already appended an optimistic message under the
+ *             assumption the request would run; if the server queued it
+ *             instead, drop the optimistic bubble so the user doesn't see
+ *             a phantom assistant reply.
+ *   - false → no optimistic message to roll back (e.g. when the thread was
+ *             already running — the bubble was never added).
+ */
 function handleSendResult(
   result: Awaited<ReturnType<typeof api.sendMessage>>,
   threadId: string,
-  threadIsRunning: boolean,
+  options: { rollbackOnQueue: boolean },
   t: (key: string, opts?: Record<string, unknown>) => string,
 ) {
   if (result.isErr()) {
@@ -404,7 +277,7 @@ function handleSendResult(
     return;
   }
   if (result.value && (result.value as any).queued) {
-    if (!threadIsRunning) {
+    if (options.rollbackOnQueue) {
       useThreadStore.getState().rollbackOptimisticMessage(threadId);
     }
     applyQueuedCount(threadId, (result.value as any).queuedCount);

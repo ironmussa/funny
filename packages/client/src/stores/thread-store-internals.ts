@@ -32,6 +32,9 @@ export class ThreadStoreInternals {
   /** Callback registered by ui-store to reset UI state on thread select */
   private threadSelectListener: (() => void) | null = null;
 
+  /** Callback registered by thread-store so UI actions can clear selection without importing it */
+  private clearThreadSelectionFn: (() => void) | null = null;
+
   // ── Select generation ──────────────────────────────────────────
 
   getSelectGeneration(): number {
@@ -91,12 +94,17 @@ export class ThreadStoreInternals {
 
   // ── Thread → Project index ─────────────────────────────────────
 
-  rebuildThreadProjectIndex(threadsByProject: Record<string, Array<{ id: string }>>): void {
+  /**
+   * Rebuild the threadId → projectId index from the unified store shape.
+   * Walks `threadIdsByProject` directly so no thread row lookup is needed —
+   * the array IDs themselves are the index keys.
+   */
+  rebuildThreadProjectIndex(threadIdsByProject: Record<string, string[]>): void {
     this.threadProjectIndex.clear();
-    for (const pid in threadsByProject) {
-      const threads = threadsByProject[pid];
-      for (let i = 0; i < threads.length; i++) {
-        this.threadProjectIndex.set(threads[i].id, pid);
+    for (const pid in threadIdsByProject) {
+      const ids = threadIdsByProject[pid];
+      for (let i = 0; i < ids.length; i++) {
+        this.threadProjectIndex.set(ids[i], pid);
       }
     }
   }
@@ -125,6 +133,14 @@ export class ThreadStoreInternals {
     this.threadSelectListener?.();
   }
 
+  setClearThreadSelection(fn: () => void): void {
+    this.clearThreadSelectionFn = fn;
+  }
+
+  clearThreadSelection(): void {
+    this.clearThreadSelectionFn?.();
+  }
+
   // ── Reset (for tests) ─────────────────────────────────────────
 
   reset(): void {
@@ -135,6 +151,7 @@ export class ThreadStoreInternals {
     this.threadProjectIndex.clear();
     this.navigateFn = null;
     this.threadSelectListener = null;
+    this.clearThreadSelectionFn = null;
   }
 }
 
@@ -156,10 +173,12 @@ export const bufferWSEvent = (id: string, type: string, data: any) =>
   internals.bufferWSEvent(id, type, data);
 export const getAndClearWSBuffer = (id: string) => internals.getAndClearWSBuffer(id);
 export const clearWSBuffer = (id: string) => internals.clearWSBuffer(id);
-export const rebuildThreadProjectIndex = (t: Record<string, Array<{ id: string }>>) =>
+export const rebuildThreadProjectIndex = (t: Record<string, string[]>) =>
   internals.rebuildThreadProjectIndex(t);
 export const getProjectIdForThread = (id: string) => internals.getProjectIdForThread(id);
 export const setAppNavigate = (fn: (path: string) => void) => internals.setAppNavigate(fn);
 export const getNavigate = () => internals.getNavigate();
 export const setThreadSelectListener = (fn: () => void) => internals.setThreadSelectListener(fn);
 export const notifyThreadSelected = () => internals.notifyThreadSelected();
+export const setClearThreadSelection = (fn: () => void) => internals.setClearThreadSelection(fn);
+export const clearThreadSelection = () => internals.clearThreadSelection();

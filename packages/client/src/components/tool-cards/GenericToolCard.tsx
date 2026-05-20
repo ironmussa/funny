@@ -9,7 +9,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
 import { cn } from '@/lib/utils';
-import { useSettingsStore } from '@/stores/settings-store';
+import { useSettingsStore, type Editor } from '@/stores/settings-store';
 
 interface Props {
   name: string;
@@ -217,7 +217,7 @@ function FileLink({
 }: {
   filePath: string;
   displayPath: string | null;
-  defaultEditor: string;
+  defaultEditor: Editor;
 }) {
   const { t } = useTranslation();
   const editorUri = toEditorUri(filePath, defaultEditor);

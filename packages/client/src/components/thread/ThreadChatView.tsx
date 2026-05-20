@@ -13,6 +13,7 @@ import { PromptTimeline } from '@/components/thread/PromptTimeline';
 import { ThreadSearchBar } from '@/components/thread/ThreadSearchBar';
 import { useImageLightbox } from '@/hooks/use-image-lightbox';
 import { useTodoSnapshots } from '@/hooks/use-todo-panel';
+import { canDoGitOps } from '@/lib/thread-variant';
 import { useProjectStore } from '@/stores/project-store';
 import {
   useCompactionEvents,
@@ -23,6 +24,7 @@ import {
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
+import { useThreadCheckpoints } from './use-thread-checkpoints';
 import { useThreadHandlers, type PendingSend } from './use-thread-handlers';
 
 type ActiveThread = ThreadCore;
@@ -219,11 +221,10 @@ export function ThreadChatView({ activeThread }: Props) {
     handleStop,
     handlePermissionApproval,
     handleToolRespond,
-    handleFork,
-    handleRewind,
-    handleForkAndRewind,
-    forkingMessageId,
   } = handlers;
+  const { handleFork, handleRewind, handleForkAndRewind, forkingMessageId } = useThreadCheckpoints({
+    activeThreadRef,
+  });
 
   // Track which message/tool-call IDs existed when the thread was loaded.
   const knownIdsRef = useRef<Set<string>>(new Set());
@@ -296,9 +297,9 @@ export function ThreadChatView({ activeThread }: Props) {
             onSend={handleSend}
             onPermissionApproval={handlePermissionApproval}
             onToolRespond={handleToolRespond}
-            onFork={handleFork}
-            onRewind={handleRewind}
-            onForkAndRewind={handleForkAndRewind}
+            onFork={canDoGitOps(activeThread) ? handleFork : undefined}
+            onRewind={canDoGitOps(activeThread) ? handleRewind : undefined}
+            onForkAndRewind={canDoGitOps(activeThread) ? handleForkAndRewind : undefined}
             forkingMessageId={forkingMessageId}
             rewindDisabled={
               activeThread.provider !== 'claude' || !(activeThread as any).fileCheckpointingEnabled

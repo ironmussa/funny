@@ -1,4 +1,3 @@
-/* eslint-disable max-lines, max-lines-per-function */
 /**
  * @domain subdomain: Thread Management
  * @domain subdomain-type: core

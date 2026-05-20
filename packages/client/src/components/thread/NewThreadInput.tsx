@@ -8,12 +8,13 @@ import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
 import { useBranchSwitch } from '@/hooks/use-branch-switch';
 import { useSaveBacklogOnLeave } from '@/hooks/use-save-backlog-on-leave';
+import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { api } from '@/lib/api';
-import { toastError } from '@/lib/toast-error';
+import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useProjectStore } from '@/stores/project-store';
-import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -53,9 +54,11 @@ export function NewThreadInput({
   const navigate = useNavigate();
   const { t } = useTranslation();
   const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
+  const newThreadIsScratch = useUIStore((s) => s.newThreadIsScratch);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const effectiveProjectId = projectIdOverride || selectedProjectId || newThreadProjectId;
   const newThreadIdleOnly = useUIStore((s) => s.newThreadIdleOnly);
+  const addScratchThread = useThreadStore((s) => s.addScratchThread);
   const activeDesignId = useUIStore((s) => s.activeDesignId);
   const issueContext = useUIStore((s) => s.newThreadIssueContext);
   const clearIssueContext = useUIStore((s) => s.clearIssueContext);
@@ -138,125 +141,91 @@ export function NewThreadInput({
 
   const { blocker, savingBacklog, handleSaveToBacklog, handleDiscard, handleCancel } =
     useSaveBacklogOnLeave({
-      effectiveProjectId,
+      effectiveProjectId: effectiveProjectId ?? undefined,
       defaultThreadMode,
       latestPromptTextRef,
       hasContentRef,
       justSubmittedRef,
     });
 
-  const [creating, setCreating] = useState(false);
   const [restoredPrompt, setRestoredPrompt] = useState<string | null>(null);
+  const lastPromptRef = useRef('');
 
-  const handleCreate = async (
-    prompt: string,
-    opts: {
-      provider?: string;
-      model: string;
-      mode: string;
-      effort?: string;
-      threadMode?: string;
-      runtime?: string;
-      baseBranch?: string;
-      sendToBacklog?: boolean;
-      fileReferences?: { path: string }[];
-      symbolReferences?: {
-        path: string;
-        name: string;
-        kind: string;
-        line: number;
-        endLine?: number;
-      }[];
-      agentTemplateId?: string;
-      templateVariables?: Record<string, string>;
-    },
-    images?: any[],
-  ): Promise<boolean> => {
-    if (!effectiveProjectId || creating) return false;
-    setRestoredPrompt(null);
-    setCreating(true);
-
-    const threadMode = (opts.threadMode as 'local' | 'worktree') || defaultThreadMode;
-
-    // If idle-only mode or sendToBacklog toggle, create idle thread without executing
-    if (newThreadIdleOnly || opts.sendToBacklog) {
-      const result = await api.createIdleThread({
-        projectId: effectiveProjectId,
-        title: prompt.slice(0, 200),
-        mode: threadMode,
-        baseBranch: opts.baseBranch,
-        prompt,
-        images,
-        designId: activeDesignId ?? undefined,
-      });
-
-      if (result.isErr()) {
-        toastError(result.error, 'createThread');
-        setCreating(false);
-        setRestoredPrompt(prompt);
-        return false;
+  const { creating, createThread: createThreadFromHook } = useThreadCreation({
+    projectId: newThreadIsScratch ? null : (effectiveProjectId ?? null),
+    defaultThreadMode,
+    toolPermissions,
+    isScratch: newThreadIsScratch,
+    forceIdle: newThreadIdleOnly,
+    designId: activeDesignId ?? undefined,
+    onSuccess: async (threadId, kind, thread) => {
+      // justSubmittedRef tells the unsaved-prompt guard to let the navigate
+      // through. Only scratch + normal navigate; idle stays in place.
+      if (kind === 'scratch' || kind === 'normal') {
+        justSubmittedRef.current = true;
       }
-
-      await loadThreadsForProject(effectiveProjectId);
-      setCreating(false);
       setReviewPaneOpen(false);
-      toast.success(t('toast.threadCreated', { title: prompt.slice(0, 200) }));
+
+      if (kind === 'scratch') {
+        addScratchThread(thread);
+        if (onCreated) {
+          onCreated(threadId);
+        } else {
+          useThreadStore.setState({ selectedThreadId: threadId });
+          cancelNewThread();
+          navigate(buildPath(getThreadRoute(thread)));
+        }
+        return;
+      }
+
+      // Idle + normal both refresh the project's thread list.
+      if (effectiveProjectId) {
+        await loadThreadsForProject(effectiveProjectId);
+      }
+
+      if (kind === 'idle') {
+        toast.success(t('toast.threadCreated', { title: thread?.title ?? '' }));
+        if (onCreated) {
+          onCreated(threadId);
+        } else {
+          cancelNewThread();
+        }
+        return;
+      }
+
+      // kind === 'normal'
       if (onCreated) {
-        onCreated(result.value.id);
+        onCreated(threadId);
       } else {
+        useThreadStore.setState({ selectedThreadId: threadId });
         cancelNewThread();
+        // Inside a design view, stay in the design view — the design's
+        // thread list picks up the new thread automatically.
+        if (!activeDesignId && effectiveProjectId) {
+          navigate(buildPath(`/projects/${effectiveProjectId}/threads/${threadId}`));
+        }
       }
-      return true;
-    }
+    },
+  });
 
-    // Normal mode: create and execute thread
-    const { allowedTools, disallowedTools } = deriveToolLists(toolPermissions);
-    const result = await api.createThread({
-      projectId: effectiveProjectId,
-      title: prompt.slice(0, 200),
-      mode: threadMode,
-      runtime: opts.runtime as 'local' | 'remote' | undefined,
-      provider: opts.provider,
-      model: opts.model,
-      permissionMode: opts.mode,
-      effort: opts.effort,
-      baseBranch: opts.baseBranch,
-      prompt,
-      images,
-      allowedTools,
-      disallowedTools,
-      fileReferences: opts.fileReferences,
-      symbolReferences: opts.symbolReferences,
-      designId: activeDesignId ?? undefined,
-      agentTemplateId: opts.agentTemplateId,
-      templateVariables: opts.templateVariables,
-    });
-
-    if (result.isErr()) {
-      toastError(result.error, 'createThread');
-      setCreating(false);
-      setRestoredPrompt(prompt);
-      return false;
-    }
-
-    // Thread created — skip the blocker and select the new thread.
-    justSubmittedRef.current = true;
-    setCreating(false);
-    setReviewPaneOpen(false);
-    if (onCreated) {
-      onCreated(result.value.id);
-    } else {
-      useThreadStore.setState({ selectedThreadId: result.value.id });
-      cancelNewThread();
-      // When inside a design, stay in the design view; the design's thread list
-      // will pick up the new thread and the chat column will render it.
-      if (!activeDesignId) {
-        navigate(buildPath(`/projects/${effectiveProjectId}/threads/${result.value.id}`));
+  const handleCreate = useCallback(
+    async (
+      prompt: string,
+      opts: Parameters<typeof createThreadFromHook>[1],
+      images?: any[],
+    ): Promise<boolean> => {
+      // Reset restored-prompt before the call so the field clears if it succeeds.
+      setRestoredPrompt(null);
+      lastPromptRef.current = prompt;
+      const ok = await createThreadFromHook(prompt, opts, images);
+      if (!ok) {
+        // Restore the user's text so they don't lose it on a failed submit.
+        setRestoredPrompt(lastPromptRef.current);
       }
-    }
-    loadThreadsForProject(effectiveProjectId);
-    return true;
-  };
+      return ok;
+    },
+    [createThreadFromHook],
+  );
 
   if (creating) {
     return (
@@ -267,6 +236,43 @@ export function NewThreadInput({
         >
           <Loader2 className="size-8 animate-spin text-muted-foreground/50" />
           <span className="text-sm text-muted-foreground/60">Preparing…</span>
+        </div>
+      </div>
+    );
+  }
+
+  if (newThreadIsScratch) {
+    // Scratch variant: no project/repo/branch picker, no worktree preview,
+    // no file/symbol references. Just a prompt + model/permission picker.
+    // The handleCreate() branch above routes to api.createScratchThread().
+    return (
+      <div
+        className="flex flex-1 items-center justify-center px-4 text-muted-foreground"
+        data-testid="new-thread-scratch"
+      >
+        <div className="w-full max-w-3xl">
+          <div
+            className="mb-3 flex h-9 items-center gap-2 text-base text-muted-foreground"
+            data-testid="new-thread-context-bar"
+          >
+            <span className="flex h-9 shrink-0 items-center gap-1.5 px-2 py-1">
+              <FolderOpen className="size-5 shrink-0" />
+              <span className="truncate font-medium" data-testid="new-thread-scratch-label">
+                {t('scratch.composeTitle', { defaultValue: 'New scratch thread' })}
+              </span>
+            </span>
+          </div>
+          <div data-testid="new-thread-scratch-prompt">
+            <PromptInput
+              key="scratch"
+              onSubmit={handleCreate}
+              loading={creating}
+              isNewThread
+              isScratch
+              onContentChange={handleContentChange}
+              initialPrompt={restoredPrompt ?? undefined}
+            />
+          </div>
         </div>
       </div>
     );

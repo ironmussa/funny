@@ -1,4 +1,12 @@
-import type { Element, ElementContent, Root, Text } from 'hast';
+type TextNode = { type: 'text'; value: string };
+type ElementNode = {
+  type: 'element';
+  tagName: string;
+  properties?: Record<string, unknown>;
+  children: NodeContent[];
+};
+type NodeContent = TextNode | ElementNode | { type: string; [key: string]: unknown };
+type RootNode = { type: 'root'; children: NodeContent[] };
 
 export interface RehypeMarkSearchOptions {
   query: string;
@@ -14,24 +22,25 @@ export function rehypeMarkSearch(options: RehypeMarkSearchOptions = { query: '' 
   const query = options.query.trim();
   const matchClass = options.matchClass ?? 'md-search-match';
 
-  return (tree: Root) => {
+  return (tree: RootNode) => {
     if (!query) return;
     const lowerQuery = query.toLowerCase();
     const queryLen = query.length;
 
-    function transformChildren(children: ElementContent[]): ElementContent[] {
-      const out: ElementContent[] = [];
+    function transformChildren(children: NodeContent[]): NodeContent[] {
+      const out: NodeContent[] = [];
       for (const child of children) {
         if (child.type === 'element') {
-          const tag = child.tagName;
+          const element = child as ElementNode;
+          const tag = element.tagName;
           if (tag === 'code' || tag === 'pre') {
             out.push(child);
             continue;
           }
-          child.children = transformChildren(child.children);
-          out.push(child);
+          element.children = transformChildren(element.children);
+          out.push(element);
         } else if (child.type === 'text') {
-          out.push(...splitTextNode(child));
+          out.push(...splitTextNode(child as TextNode));
         } else {
           out.push(child);
         }
@@ -39,19 +48,19 @@ export function rehypeMarkSearch(options: RehypeMarkSearchOptions = { query: '' 
       return out;
     }
 
-    function splitTextNode(node: Text): ElementContent[] {
+    function splitTextNode(node: TextNode): NodeContent[] {
       const text = node.value;
       const lower = text.toLowerCase();
       if (!lower.includes(lowerQuery)) return [node];
 
-      const parts: ElementContent[] = [];
+      const parts: NodeContent[] = [];
       let last = 0;
       let idx = lower.indexOf(lowerQuery);
       while (idx !== -1) {
         if (idx > last) {
           parts.push({ type: 'text', value: text.slice(last, idx) });
         }
-        const mark: Element = {
+        const mark: ElementNode = {
           type: 'element',
           tagName: 'mark',
           properties: { className: [matchClass] },
@@ -67,6 +76,6 @@ export function rehypeMarkSearch(options: RehypeMarkSearchOptions = { query: '' 
       return parts;
     }
 
-    tree.children = transformChildren(tree.children as ElementContent[]) as Root['children'];
+    tree.children = transformChildren(tree.children);
   };
 }

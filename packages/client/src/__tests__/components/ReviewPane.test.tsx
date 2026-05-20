@@ -111,9 +111,8 @@ beforeEach(() => {
       baseBranch: 'main',
       messages: [],
     } as any,
-    threadsByProject: {
-      p1: [{ id: 't1', projectId: 'p1', status: 'completed' } as any],
-    },
+    threadsById: { t1: { id: 't1', projectId: 'p1', status: 'completed' } as any },
+    threadIdsByProject: { p1: ['t1'] },
   });
   useUIStore.setState({
     reviewPaneOpen: true,

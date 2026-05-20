@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { useNavigate } from 'react-router-dom';
 
 import { useMinuteTick } from '@/hooks/use-minute-tick';
+import { useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -21,7 +22,7 @@ interface RunningThread extends Thread {
 export function RunningThreads() {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const threadsByProject = useThreadStore((s) => s.threadsByProject);
+  const threadsByProject = useThreadsByProject();
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const projects = useProjectStore((s) => s.projects);
   const statusByBranch = useGitStatusStore((s) => s.statusByBranch);

@@ -5,6 +5,7 @@ import { useNavigate } from 'react-router-dom';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useOrchestratorStore } from '@/stores/orchestrator-store';
@@ -65,7 +66,7 @@ export function OrchestratorView() {
   const loadRuns = useOrchestratorStore((s) => s.loadRuns);
   const refresh = useOrchestratorStore((s) => s.refresh);
 
-  const threadsByProject = useThreadStore((s) => s.threadsByProject);
+  const threadsByProject = useThreadsByProject();
 
   const findThread = useMemo(() => {
     const flat = new Map<string, { id: string; title: string; projectId: string }>();

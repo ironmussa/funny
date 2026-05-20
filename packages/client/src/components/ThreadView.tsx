@@ -26,8 +26,18 @@ export function ThreadView() {
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
+  const newThreadIsScratch = useUIStore((s) => s.newThreadIsScratch);
   const hasProjects = useProjectStore((s) => s.projects.length > 0);
   const setAddProjectOpen = useAppStore((s) => s.setAddProjectOpen);
+
+  // Scratch compose: no project / no header — just the prompt input.
+  if (newThreadIsScratch && !selectedThreadId) {
+    return (
+      <div className="flex h-full min-w-0 flex-1 flex-col">
+        <NewThreadInput />
+      </div>
+    );
+  }
 
   // Show new thread input when a project's "+" was clicked
   if (newThreadProjectId && !selectedThreadId) {

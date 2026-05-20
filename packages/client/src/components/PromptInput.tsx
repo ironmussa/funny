@@ -19,6 +19,7 @@ interface PromptInputProps {
   isQueueMode?: boolean;
   placeholder?: string;
   isNewThread?: boolean;
+  isScratch?: boolean;
   showBacklog?: boolean;
   projectId?: string;
   initialPrompt?: string;
@@ -42,6 +43,7 @@ export const PromptInput = memo(function PromptInput({
   isQueueMode = false,
   placeholder,
   isNewThread = false,
+  isScratch = false,
   showBacklog = false,
   projectId: propProjectId,
   initialPrompt: initialPromptProp,
@@ -84,6 +86,7 @@ export const PromptInput = memo(function PromptInput({
         onModeChange={state.setMode}
         modes={state.modes}
         isNewThread={isNewThread}
+        isScratch={isScratch}
         threadId={state.effectiveThreadId}
         createWorktree={state.createWorktree}
         onCreateWorktreeChange={state.setCreateWorktree}

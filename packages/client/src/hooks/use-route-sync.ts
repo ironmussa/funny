@@ -266,6 +266,40 @@ function parseRoute(pathname: string) {
     };
   }
 
+  // Compose a new scratch thread: /scratch/new
+  if (p === '/scratch/new') {
+    return {
+      orgSlug,
+      settingsPage: null,
+      preferencesPage: null,
+      projectId: null,
+      threadId: null,
+      globalSearch: false,
+      inbox: false,
+      analytics: false,
+      liveColumns: false,
+      addProject: false,
+      scratchNew: true,
+    };
+  }
+
+  // View an existing scratch thread: /scratch/:threadId
+  const scratchThreadMatch = matchPath('/scratch/:threadId', p);
+  if (scratchThreadMatch) {
+    return {
+      orgSlug,
+      settingsPage: null,
+      preferencesPage: null,
+      projectId: null,
+      threadId: scratchThreadMatch.params.threadId!,
+      globalSearch: false,
+      inbox: false,
+      analytics: false,
+      liveColumns: false,
+      addProject: false,
+    };
+  }
+
   return {
     orgSlug,
     settingsPage: null,
@@ -311,6 +345,7 @@ export function useRouteSync() {
     const designId = (parsed as { designId?: string | null }).designId ?? null;
     const designsList = (parsed as { designsList?: boolean }).designsList ?? false;
     const orchestrator = (parsed as { orchestrator?: boolean }).orchestrator ?? false;
+    const scratchNew = (parsed as { scratchNew?: boolean }).scratchNew ?? false;
 
     // Restore last route on cold load at root path
     if (!restoredRef.current) {
@@ -364,7 +399,11 @@ export function useRouteSync() {
           useAuthStore.getState().setActiveOrg(targetOrg.id, targetOrg.name, targetOrg.slug);
           // Clear threads and reload projects for the new org
           useThreadStore.setState({
-            threadsByProject: {},
+            threadsById: {},
+            threadIdsByProject: {},
+            scratchThreadIds: [],
+            threadTotalByProject: {},
+            scratchThreadTotal: 0,
             selectedThreadId: null,
             activeThread: null,
           });
@@ -382,7 +421,11 @@ export function useRouteSync() {
           await authClient.organization.setActive({ organizationId: null as any });
           useAuthStore.getState().setActiveOrg(null, null, null);
           useThreadStore.setState({
-            threadsByProject: {},
+            threadsById: {},
+            threadIdsByProject: {},
+            scratchThreadIds: [],
+            threadTotalByProject: {},
+            scratchThreadTotal: 0,
             selectedThreadId: null,
             activeThread: null,
           });
@@ -514,6 +557,19 @@ export function useRouteSync() {
     // Close add project when navigating away from /new
     if (uiStore.addProjectOpen) {
       uiStore.setAddProjectOpen(false);
+    }
+
+    // Compose a new scratch thread: /scratch/new
+    if (scratchNew) {
+      if (!uiStore.newThreadIsScratch) {
+        uiStore.startNewScratchThread();
+      }
+      return;
+    }
+
+    // Close scratch compose state when navigating away (unless we're going to an existing scratch thread)
+    if (uiStore.newThreadIsScratch && !threadId) {
+      uiStore.cancelNewThread();
     }
 
     // List/Kanban view: /list or /kanban (with optional ?project= query param)

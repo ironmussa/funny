@@ -1,4 +1,4 @@
-import { describe, test, expect, beforeEach, vi } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 
 /**
  * We test store-bridge by dynamically importing it fresh for each test
@@ -65,7 +65,8 @@ describe('store-bridge', () => {
       const bridge = await freshBridge();
 
       const threadStore = createMockStore({
-        threadsByProject: {} as Record<string, any[]>,
+        threadsById: {} as Record<string, any>,
+        threadIdsByProject: {} as Record<string, string[]>,
         threadTotalByProject: {} as Record<string, number>,
       });
 
@@ -75,24 +76,26 @@ describe('store-bridge', () => {
       bridge.batchUpdateThreads([{ projectId: 'p1', threads, total: 1 }]);
 
       const state = threadStore.getState();
-      expect(state.threadsByProject['p1']).toBe(threads);
+      expect(state.threadIdsByProject['p1']).toEqual(['t1']);
+      expect(state.threadsById['t1']).toBe(threads[0]);
       expect(state.threadTotalByProject['p1']).toBe(1);
     });
 
     test('batchUpdateThreads only updates changed entries', async () => {
       const bridge = await freshBridge();
 
-      const existingThreads = [{ id: 't1' }];
+      const existingThread = { id: 't1' };
       const threadStore = createMockStore({
-        threadsByProject: { p1: existingThreads } as Record<string, any[]>,
+        threadsById: { t1: existingThread } as Record<string, any>,
+        threadIdsByProject: { p1: ['t1'] } as Record<string, string[]>,
         threadTotalByProject: { p1: 1 } as Record<string, number>,
       });
 
       const setStateSpy = vi.spyOn(threadStore, 'setState');
       bridge.registerThreadStore(threadStore as any);
 
-      // Pass the same reference -- should NOT trigger setState
-      bridge.batchUpdateThreads([{ projectId: 'p1', threads: existingThreads, total: 1 }]);
+      // Same id list + same total — should NOT trigger setState.
+      bridge.batchUpdateThreads([{ projectId: 'p1', threads: [existingThread], total: 1 }]);
 
       expect(setStateSpy).not.toHaveBeenCalled();
     });
@@ -101,7 +104,8 @@ describe('store-bridge', () => {
       const bridge = await freshBridge();
 
       const threadStore = createMockStore({
-        threadsByProject: {} as Record<string, any[]>,
+        threadsById: {} as Record<string, any>,
+        threadIdsByProject: {} as Record<string, string[]>,
         threadTotalByProject: {} as Record<string, number>,
       });
 
@@ -118,7 +122,7 @@ describe('store-bridge', () => {
 
       const loadThreadsForProject = vi.fn();
       const threadStore = createMockStore({
-        threadsByProject: {} as Record<string, any[]>,
+        threadIdsByProject: {} as Record<string, string[]>,
         loadThreadsForProject,
       });
 
@@ -133,7 +137,7 @@ describe('store-bridge', () => {
 
       const loadThreadsForProject = vi.fn();
       const threadStore = createMockStore({
-        threadsByProject: { p1: [{ id: 't1' }] } as Record<string, any[]>,
+        threadIdsByProject: { p1: ['t1'] } as Record<string, string[]>,
         loadThreadsForProject,
       });
 
@@ -141,6 +145,38 @@ describe('store-bridge', () => {
       bridge.ensureThreadsLoaded('p1');
 
       expect(loadThreadsForProject).not.toHaveBeenCalled();
+    });
+
+    test('getThreadsByProject derives from threadsById + threadIdsByProject', async () => {
+      const bridge = await freshBridge();
+
+      const t1 = { id: 't1', projectId: 'p1', title: 'one' };
+      const t2 = { id: 't2', projectId: 'p2', title: 'two' };
+      const threadStore = createMockStore({
+        threadsById: { t1, t2 } as Record<string, any>,
+        threadIdsByProject: { p1: ['t1'], p2: ['t2'] } as Record<string, string[]>,
+      });
+
+      bridge.registerThreadStore(threadStore as any);
+
+      // Regression: before unified-store, `getThreadsByProject` returned
+      // `state.threadsByProject` directly — once that field was removed it
+      // returned `undefined` and crashed every consumer (git-status-store,
+      // ThreadList, ProjectItem, etc.). It must now derive.
+      const result = bridge.getThreadsByProject();
+      expect(result).toEqual({ p1: [t1], p2: [t2] });
+    });
+
+    test('getThreadsByProject is safe when threadIdsByProject is missing', async () => {
+      const bridge = await freshBridge();
+
+      // Defensive: tests / stories may seed a partial store. Returning
+      // `{}` keeps the contract intact instead of throwing on the
+      // `for (const pid in undefined)` walk.
+      const threadStore = createMockStore({ threadsById: {} });
+      bridge.registerThreadStore(threadStore as any);
+
+      expect(bridge.getThreadsByProject()).toEqual({});
     });
 
     test('clearProjectThreads delegates to thread store', async () => {

@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 
 import { StatusBadge } from '@/components/StatusBadge';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useThreadsForProject } from '@/lib/thread-selectors';
 import { useAppStore } from '@/stores/app-store';
 
 interface Props {
@@ -18,11 +19,10 @@ const threadDateFormatter = new Intl.DateTimeFormat(undefined, { dateStyle: 'med
 export function ThreadListView({ projectId, onBack, onSelectThread, onNewThread }: Props) {
   const { t } = useTranslation();
   const projects = useAppStore((s) => s.projects);
-  const threadsByProject = useAppStore((s) => s.threadsByProject);
   const loadThreadsForProject = useAppStore((s) => s.loadThreadsForProject);
+  const threads = useThreadsForProject(projectId);
 
   const project = projects.find((p) => p.id === projectId);
-  const threads = threadsByProject[projectId] ?? [];
 
   useEffect(() => {
     loadThreadsForProject(projectId);

@@ -3,7 +3,7 @@ import { useNavigate, useLocation } from 'react-router-dom';
 
 type BlockerState = 'idle' | 'blocked';
 
-interface NavigationBlocker {
+export interface NavigationBlocker {
   state: BlockerState;
   proceed: () => void;
   reset: () => void;

@@ -18,13 +18,13 @@ import {
   Trash2,
   Check,
   Bot,
-  FileText,
 } from 'lucide-react';
 import { useState, useRef, useCallback, useMemo, memo, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
+import { AttachmentChip } from '@/components/ui/chip';
 import { Input } from '@/components/ui/input';
 import {
   Select,
@@ -318,6 +318,8 @@ export interface PromptInputUIProps {
 
   // ── Thread context ──
   isNewThread?: boolean;
+  /** Scratch threads can't use worktrees — hides the worktree toggle. */
+  isScratch?: boolean;
   /** Thread ID (set for follow-up messages). Required to upload files larger than the inline tier. */
   threadId?: string;
   createWorktree?: boolean;
@@ -409,6 +411,7 @@ export const PromptInputUI = memo(function PromptInputUI({
   onModeChange,
   modes,
   isNewThread = false,
+  isScratch = false,
   threadId,
   createWorktree = false,
   onCreateWorktreeChange,
@@ -1157,30 +1160,19 @@ export const PromptInputUI = memo(function PromptInputUI({
                     ? `${(f.size / (1024 * 1024)).toFixed(1)} MB`
                     : `${sizeKb} KB`;
                 return (
-                  <div
+                  <AttachmentChip
                     key={`file-preview-${idx}`}
                     data-testid={`prompt-attached-file-${idx}`}
-                    className="group relative flex h-8 items-center gap-1.5 rounded border border-input bg-muted/40 pl-2 pr-1 text-xs"
+                    name={f.name}
+                    size={sizeLabel}
+                    loading={isUploading}
+                    onRemove={() => removeTextFile(idx)}
+                    removeDisabled={loading || isUploading}
+                    removeLabel={t('prompt.removeFile', 'Remove file')}
                     title={`${f.name} (${sizeLabel})${
                       f.mode === 'upload' ? ` — uploaded to ${f.path}` : ''
                     }`}
-                  >
-                    {isUploading ? (
-                      <Loader2 className="icon-xs shrink-0 animate-spin text-muted-foreground" />
-                    ) : (
-                      <FileText className="icon-xs shrink-0 text-muted-foreground" />
-                    )}
-                    <span className="max-w-[160px] truncate">{f.name}</span>
-                    <span className="text-muted-foreground">{sizeLabel}</span>
-                    <button
-                      onClick={() => removeTextFile(idx)}
-                      aria-label={t('prompt.removeFile', 'Remove file')}
-                      className="rounded p-0.5 text-muted-foreground hover:bg-destructive hover:text-destructive-foreground"
-                      disabled={loading || isUploading}
-                    >
-                      <X className="icon-xs" />
-                    </button>
-                  </div>
+                  />
                 );
               })}
             </div>
@@ -1355,15 +1347,17 @@ export const PromptInputUI = memo(function PromptInputUI({
           <div className="border-t border-border px-2 py-1.5">
             {isNewThread ? (
               <div className="no-scrollbar flex items-center gap-1 overflow-x-auto">
-                <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
-                  <Switch
-                    data-testid="prompt-worktree-switch"
-                    checked={createWorktree}
-                    onCheckedChange={onCreateWorktreeChange ?? (() => {})}
-                    tabIndex={-1}
-                  />
-                  <span>{t('thread.mode.worktree')}</span>
-                </label>
+                {!isScratch && (
+                  <label className="flex shrink-0 cursor-pointer items-center gap-1.5 text-xs text-muted-foreground">
+                    <Switch
+                      data-testid="prompt-worktree-switch"
+                      checked={createWorktree}
+                      onCheckedChange={onCreateWorktreeChange ?? (() => {})}
+                      tabIndex={-1}
+                    />
+                    <span>{t('thread.mode.worktree')}</span>
+                  </label>
+                )}
                 {hasLauncher && (
                   <ModeSelect
                     value={runtime}

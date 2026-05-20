@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
+import * as variant from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useGitStatusForThread, useGitStatusStore } from '@/stores/git-status-store';
@@ -58,6 +59,7 @@ export function HeaderRightActions() {
   const activeThreadId = useThreadId();
   const activeThreadProjectId = useThreadProjectId();
   const activeThreadStage = useThreadSelector((t) => t?.stage);
+  const activeThreadCanShowGit = useThreadSelector((t) => variant.canDoGitOps(t));
   const activeThreadStatus = useThreadStatus();
   const activeThreadWorktreePath = useThreadWorktreePath();
   const activeThreadBranch = useThreadBranch();
@@ -241,16 +243,18 @@ export function HeaderRightActions() {
         </TooltipTrigger>
         <TooltipContent>{t('projectFiles.title', 'Project Files')}</TooltipContent>
       </Tooltip>
-      <ReviewToggle
-        showGitStats={!!showGitStats}
-        effectiveGitStatus={effectiveGitStatus}
-        hasPendingPush={hasPendingPush}
-        hasPendingPull={hasPendingPull}
-        unpushedCommitCount={unpushedCommitCount}
-        unpulledCommitCount={unpulledCommitCount}
-        reviewActive={reviewPaneOpen && rightPaneTab === 'review'}
-        onToggle={toggleReview}
-      />
+      {activeThreadCanShowGit && (
+        <ReviewToggle
+          showGitStats={!!showGitStats}
+          effectiveGitStatus={effectiveGitStatus}
+          hasPendingPush={hasPendingPush}
+          hasPendingPull={hasPendingPull}
+          unpushedCommitCount={unpushedCommitCount}
+          unpulledCommitCount={unpulledCommitCount}
+          reviewActive={reviewPaneOpen && rightPaneTab === 'review'}
+          onToggle={toggleReview}
+        />
+      )}
       {activeThreadId && (
         <MoreActionsMenu
           onViewOnBoard={() => {

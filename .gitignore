@@ -33,3 +33,5 @@ storybook-static
 .env.debug
 .env.debug
 openspec/
+# CocoIndex Code (ccc)
+/.cocoindex_code/

@@ -1,19 +1,10 @@
 import type { AgentModel, PermissionMode } from '@funny/shared';
-import {
-  FileText,
-  FolderOpen,
-  ChevronRight,
-  ChevronDown,
-  Slash,
-  GitBranch,
-  Undo2,
-  RotateCcw,
-  MoreVertical,
-} from 'lucide-react';
+import { ChevronRight, ChevronDown, GitBranch, Undo2, RotateCcw, MoreVertical } from 'lucide-react';
 import { useState, useRef, useLayoutEffect, useCallback, useMemo, type ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { Badge } from '@/components/ui/badge';
+import { FileChip, SkillChip } from '@/components/ui/chip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -63,39 +54,26 @@ export interface UserMessageCardProps {
   'data-testid'?: string;
 }
 
-/** Renders a file/folder reference chip inline */
-function FileChip({ item }: { item: ReferencedItem }) {
+/** Renders a file/folder reference chip inline (inverse variant for dark card). */
+function ReferencedFileChip({ item }: { item: ReferencedItem }) {
   return (
-    <span
-      className="mx-0.5 inline-flex items-center gap-1 rounded bg-background/20 px-1.5 py-0.5 align-middle font-mono text-xs text-background/70"
+    <FileChip
+      name={item.path.split('/').pop() ?? item.path}
+      type={item.type}
       title={item.path}
-    >
-      {item.type === 'folder' ? (
-        <FolderOpen className="icon-xs shrink-0" />
-      ) : (
-        <FileText className="icon-xs shrink-0" />
-      )}
-      {item.path.split('/').pop()}
-    </span>
+      variant="inverse"
+    />
   );
 }
 
-/** Renders a slash command chip inline */
-function SlashCommandChip({ name }: { name: string }) {
-  return (
-    <span
-      data-testid="user-message-slash-command"
-      className="mx-0.5 inline-flex items-center gap-1 rounded bg-background/20 px-1.5 py-0.5 align-middle font-mono text-xs text-background/70"
-    >
-      <Slash className="icon-xs shrink-0" />
-      {name}
-    </span>
-  );
+/** Renders a slash command / skill chip inline (inverse variant for dark card). */
+function UserMessageSkillChip({ name }: { name: string }) {
+  return <SkillChip name={name} variant="inverse" data-testid="user-message-slash-command" />;
 }
 
 /**
  * Splits text on @path mentions and /slash-command prefixes, replacing them
- * with inline FileChip / SlashCommandChip components.
+ * with inline file / skill chips.
  * Returns an array of ReactNode (strings and chip elements).
  */
 function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>): ReactNode[] {
@@ -130,12 +108,12 @@ function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>)
 
     if (match[1] !== undefined) {
       // Slash command match (group 1)
-      parts.push(<SlashCommandChip key={`slash-${match.index}`} name={match[1]} />);
+      parts.push(<UserMessageSkillChip key={`slash-${match.index}`} name={match[1]} />);
     } else if (match[2] !== undefined) {
       // @path mention match (group 2)
       const item = fileMap.get(match[2]);
       if (item) {
-        parts.push(<FileChip key={`chip-${match.index}`} item={item} />);
+        parts.push(<ReferencedFileChip key={`chip-${match.index}`} item={item} />);
       }
     }
     lastIndex = match.index + match[0].length;
@@ -234,6 +212,7 @@ function UserMessageContent({
   );
 }
 
+// eslint-disable-next-line max-lines-per-function
 export function UserMessageCard({
   content,
   images,
@@ -361,7 +340,7 @@ export function UserMessageCard({
       {unmentionedFiles.length > 0 && (
         <div data-testid="user-message-attached-files" className="mb-2 flex flex-wrap gap-1.5">
           {unmentionedFiles.map((item) => (
-            <FileChip key={`attached-${item.path}`} item={item} />
+            <ReferencedFileChip key={`attached-${item.path}`} item={item} />
           ))}
         </div>
       )}

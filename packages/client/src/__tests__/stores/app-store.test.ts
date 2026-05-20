@@ -4,6 +4,8 @@ import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 import { useAppStore } from '@/stores/app-store';
 
+import { readProjectThreads, seedThreads } from '../helpers/seed-thread-state';
+
 // project-store and thread-store now import the specific api/* modules
 // directly (not the barrel). Mock those plus the barrel for legacy callers.
 const { mockProjectsApi, mockThreadsApi } = vi.hoisted(() => ({
@@ -35,7 +37,9 @@ describe('AppStore', () => {
     // Reset store to initial state
     useAppStore.setState({
       projects: [],
-      threadsByProject: {},
+      threadsById: {},
+      threadIdsByProject: {},
+      scratchThreadIds: [],
       activeThread: null,
       selectedProjectId: null,
       selectedThreadId: null,
@@ -87,7 +91,7 @@ describe('AppStore', () => {
       );
 
       await useAppStore.getState().loadThreadsForProject('p1');
-      expect(useAppStore.getState().threadsByProject['p1']).toEqual(mockThreads);
+      expect(readProjectThreads(useAppStore.getState(), 'p1')).toEqual(mockThreads);
     });
   });
 
@@ -211,17 +215,17 @@ describe('AppStore', () => {
       useAppStore.setState({
         selectedThreadId: 't1',
         activeThread: { id: 't1' } as any,
-        threadsByProject: {
+        ...seedThreads({
           p1: [{ id: 't1', projectId: 'p1' } as any, { id: 't2', projectId: 'p1' } as any],
-        },
+        }),
       });
 
       await useAppStore.getState().archiveThread('t1', 'p1');
       // Thread stays in list but with archived: true (optimistic update)
-      expect(useAppStore.getState().threadsByProject['p1']).toHaveLength(2);
-      const archivedThread = useAppStore
-        .getState()
-        .threadsByProject['p1'].find((t: any) => t.id === 't1');
+      expect(readProjectThreads(useAppStore.getState(), 'p1')).toHaveLength(2);
+      const archivedThread = readProjectThreads(useAppStore.getState(), 'p1').find(
+        (t: any) => t.id === 't1',
+      );
       expect(archivedThread?.archived).toBe(true);
       // Active thread also gets archived flag
       expect(useAppStore.getState().activeThread?.archived).toBe(true);
@@ -237,9 +241,7 @@ describe('AppStore', () => {
           messages: [],
           status: 'completed',
         } as any,
-        threadsByProject: {
-          p1: [{ id: 't1', status: 'completed' } as any],
-        },
+        ...seedThreads({ p1: [{ id: 't1', status: 'completed' } as any] }),
       });
 
       useAppStore.getState().appendOptimisticMessage('t1', 'Hello agent');
@@ -355,15 +357,13 @@ describe('AppStore', () => {
     describe('handleWSStatus', () => {
       test('updates thread status in threadsByProject', () => {
         useAppStore.setState({
-          threadsByProject: {
-            p1: [{ id: 't1', status: 'running' } as any],
-          },
-          activeThread: { id: 't1', status: 'running' } as any,
+          ...seedThreads({ p1: [{ id: 't1', projectId: 'p1', status: 'running' } as any] }),
+          activeThread: { id: 't1', projectId: 'p1', status: 'running' } as any,
         });
 
         useAppStore.getState().handleWSStatus('t1', { status: 'completed' });
 
-        expect(useAppStore.getState().threadsByProject['p1'][0].status).toBe('completed');
+        expect(readProjectThreads(useAppStore.getState(), 'p1')[0].status).toBe('completed');
         expect(useAppStore.getState().activeThread!.status).toBe('completed');
       });
     });
@@ -371,10 +371,10 @@ describe('AppStore', () => {
     describe('handleWSResult', () => {
       test('updates thread cost and status to completed', () => {
         useAppStore.setState({
-          threadsByProject: {
-            p1: [{ id: 't1', status: 'running', cost: 0 } as any],
-          },
-          activeThread: { id: 't1', status: 'running', cost: 0 } as any,
+          ...seedThreads({
+            p1: [{ id: 't1', projectId: 'p1', status: 'running', cost: 0 } as any],
+          }),
+          activeThread: { id: 't1', projectId: 'p1', status: 'running', cost: 0 } as any,
         });
 
         useAppStore.getState().handleWSResult('t1', { cost: 0.05 });
@@ -390,10 +390,10 @@ describe('AppStore', () => {
   describe('Edge cases', () => {
     test('handleWSResult without cost uses existing cost', () => {
       useAppStore.setState({
-        threadsByProject: {
-          p1: [{ id: 't1', status: 'running', cost: 0.03 } as any],
-        },
-        activeThread: { id: 't1', status: 'running', cost: 0.03 } as any,
+        ...seedThreads({
+          p1: [{ id: 't1', projectId: 'p1', status: 'running', cost: 0.03 } as any],
+        }),
+        activeThread: { id: 't1', projectId: 'p1', status: 'running', cost: 0.03 } as any,
       });
 
       useAppStore.getState().handleWSResult('t1', {});
@@ -404,10 +404,10 @@ describe('AppStore', () => {
 
     test('handleWSResult with cost=0 sets cost to 0', () => {
       useAppStore.setState({
-        threadsByProject: {
-          p1: [{ id: 't1', status: 'running', cost: 0.03 } as any],
-        },
-        activeThread: { id: 't1', status: 'running', cost: 0.03 } as any,
+        ...seedThreads({
+          p1: [{ id: 't1', projectId: 'p1', status: 'running', cost: 0.03 } as any],
+        }),
+        activeThread: { id: 't1', projectId: 'p1', status: 'running', cost: 0.03 } as any,
       });
 
       useAppStore.getState().handleWSResult('t1', { cost: 0 });
@@ -417,13 +417,14 @@ describe('AppStore', () => {
 
     test('handleWSStatus does not crash when threadsByProject is empty', () => {
       useAppStore.setState({
-        threadsByProject: {},
+        threadsById: {},
+        threadIdsByProject: {},
         activeThread: null,
       });
 
       // Should not throw
       useAppStore.getState().handleWSStatus('t1', { status: 'completed' });
-      expect(useAppStore.getState().threadsByProject).toEqual({});
+      expect(useAppStore.getState().threadIdsByProject).toEqual({});
     });
 
     test('handleWSMessage without messageId generates a UUID', () => {
@@ -510,14 +511,12 @@ describe('AppStore', () => {
           messages: [],
           status: 'completed',
         } as any,
-        threadsByProject: {
-          p1: [{ id: 't1', status: 'completed' } as any],
-        },
+        ...seedThreads({ p1: [{ id: 't1', projectId: 'p1', status: 'completed' } as any] }),
       });
 
       useAppStore.getState().appendOptimisticMessage('t1', 'New task');
 
-      const threadInList = useAppStore.getState().threadsByProject['p1'][0];
+      const threadInList = readProjectThreads(useAppStore.getState(), 'p1')[0];
       expect(threadInList.status).toBe('running');
     });
 
@@ -527,9 +526,9 @@ describe('AppStore', () => {
       useAppStore.setState({
         selectedThreadId: 't2',
         activeThread: { id: 't2' } as any,
-        threadsByProject: {
+        ...seedThreads({
           p1: [{ id: 't1', projectId: 'p1' } as any, { id: 't2', projectId: 'p1' } as any],
-        },
+        }),
       });
 
       await useAppStore.getState().archiveThread('t1', 'p1');
@@ -559,7 +558,7 @@ describe('AppStore', () => {
     test('selectProject does not reload threads if already loaded', () => {
       useAppStore.setState({
         expandedProjects: new Set(['p1']),
-        threadsByProject: { p1: [{ id: 't1' } as any] },
+        ...seedThreads({ p1: [{ id: 't1', projectId: 'p1' } as any] }),
       });
 
       useAppStore.getState().selectProject('p1');
@@ -578,7 +577,7 @@ describe('AppStore', () => {
 
     test('toggleProject does not reload threads on re-expand', () => {
       useAppStore.setState({
-        threadsByProject: { p1: [] },
+        ...seedThreads({ p1: [] }),
         expandedProjects: new Set(),
       });
 

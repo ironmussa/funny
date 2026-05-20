@@ -151,8 +151,15 @@ function seedDefault() {
     branchByProject: { 'proj-1': 'master', 'proj-2': 'main' },
   });
 
+  const threadsById: Record<string, Thread> = {};
+  const threadIdsByProject: Record<string, string[]> = {};
+  for (const pid in threadsByProject) {
+    threadIdsByProject[pid] = threadsByProject[pid].map((t) => t.id);
+    for (const t of threadsByProject[pid]) threadsById[t.id] = t;
+  }
   useThreadStore.setState({
-    threadsByProject,
+    threadsById,
+    threadIdsByProject,
     selectedThreadId: 't2',
     activeThread: null,
     setupProgressByThread: {},
@@ -225,7 +232,8 @@ function seedEmpty() {
     branchByProject: {},
   });
   useThreadStore.setState({
-    threadsByProject: {},
+    threadsById: {},
+    threadIdsByProject: {},
     selectedThreadId: null,
     activeThread: null,
     setupProgressByThread: {},
@@ -311,25 +319,25 @@ export const SingleProjectNoActive: Story = {
       initialized: true,
       branchByProject: { 'proj-1': 'master' },
     });
+    const projThreads = [
+      makeThread({ id: 't1', title: 'add the inline diff component' }),
+      makeThread({
+        id: 't2',
+        title: 'fix login redirect',
+        createdAt: new Date(Date.now() - 90 * 60_000).toISOString(),
+        completedAt: new Date(Date.now() - 88 * 60_000).toISOString(),
+      }),
+      makeThread({
+        id: 't3',
+        title: 'upgrade dependencies',
+        status: 'failed',
+        createdAt: new Date(Date.now() - 3 * 60 * 60_000).toISOString(),
+        completedAt: new Date(Date.now() - 178 * 60_000).toISOString(),
+      }),
+    ];
     useThreadStore.setState({
-      threadsByProject: {
-        'proj-1': [
-          makeThread({ id: 't1', title: 'add the inline diff component' }),
-          makeThread({
-            id: 't2',
-            title: 'fix login redirect',
-            createdAt: new Date(Date.now() - 90 * 60_000).toISOString(),
-            completedAt: new Date(Date.now() - 88 * 60_000).toISOString(),
-          }),
-          makeThread({
-            id: 't3',
-            title: 'upgrade dependencies',
-            status: 'failed',
-            createdAt: new Date(Date.now() - 3 * 60 * 60_000).toISOString(),
-            completedAt: new Date(Date.now() - 178 * 60_000).toISOString(),
-          }),
-        ],
-      },
+      threadsById: Object.fromEntries(projThreads.map((t) => [t.id, t])),
+      threadIdsByProject: { 'proj-1': projThreads.map((t) => t.id) },
       selectedThreadId: 't1',
       activeThread: null,
       setupProgressByThread: {},

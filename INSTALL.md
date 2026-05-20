@@ -239,6 +239,7 @@ funny --team http://<central-server-ip>:3002
 > - Read/write access to every git repo the OS user can reach, including worktrees, branches, and commits made under the git identity configured in **Settings > Profile**.
 > - Access to any GitHub Personal Access Tokens or provider API keys the user has saved to their profile (the runner decrypts these locally on demand).
 > - Access to files under `$HOME` that the path-scope allowlist permits (project dirs, worktrees, the file picker's `$HOME` scope), subject to the credential-dir blocklist (`.ssh`, `.aws`, `.gnupg`, `.kube`, `.config/gcloud`, `.docker`).
+> - Write access to `~/.funny/scratch/<userId>/<threadId>/` for any **scratch thread** the user creates. Scratch threads have no project, no git, and no worktree — they are sandboxed only by being a per-thread directory under `~/.funny/scratch/`, so a malicious central server can ask the runner to write arbitrary files under that path.
 >
 > Treat `TEAM_SERVER_URL` like an SSH destination: only point runners at a central server you *already trust* to run arbitrary code on the runner host. Hardening options:
 >

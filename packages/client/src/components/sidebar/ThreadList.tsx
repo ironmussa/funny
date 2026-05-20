@@ -16,6 +16,7 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { setDashedDragPreview } from '@/lib/drag-preview';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
+import { useThreadsByProject } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
@@ -62,7 +63,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
   const { t: _t } = useTranslation();
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
   const navigate = useStableNavigate();
-  const threadsByProject = useThreadStore((s) => s.threadsByProject);
+  const threadsByProject = useThreadsByProject();
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const projects = useProjectStore((s) => s.projects);
 

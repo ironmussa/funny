@@ -2,8 +2,9 @@ import type { GitStatusInfo } from '@funny/shared';
 import { create } from 'zustand';
 
 import { gitApi as api } from '@/lib/api/git';
+import { isScratch } from '@/lib/thread-variant';
 
-import { getThreadsByProject, registerGitStatusStore } from './store-bridge';
+import { findThreadById, getThreadsByProject, registerGitStatusStore } from './store-bridge';
 
 /** Git status for a project root (no threadId) */
 export type ProjectGitStatus = Omit<GitStatusInfo, 'threadId' | 'branchKey'>;
@@ -240,6 +241,11 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
   },
 
   fetchForThread: async (threadId, force) => {
+    // Scratch threads have no git working tree — runtime rejects with 400.
+    // Skip the request entirely so we don't churn the console with errors.
+    // (Unknown threads fall through and the server is the source of truth.)
+    if (isScratch(findThreadById(threadId))) return;
+
     // Resolve branchKey from server mapping or compute client-side from thread data.
     // This ensures threads sharing a branch share the same cooldown key.
     const bk = resolveBranchKey(threadId, get().threadToBranchKey);
@@ -353,6 +359,8 @@ export const useGitStatusStore = create<GitStatusState>((set, get) => ({
     const { statusByBranch } = get();
     const seenBranches = new Set<string>();
     for (const thread of threads) {
+      // Skip scratch threads — they have no git working tree.
+      if (isScratch(thread as any)) continue;
       const bk = branchKey(thread);
       if (!statusByBranch[bk] && !seenBranches.has(bk)) {
         seenBranches.add(bk);

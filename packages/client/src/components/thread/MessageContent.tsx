@@ -33,7 +33,7 @@ const markdownComponents = {
               </a>
             ) : (
               <button
-                onClick={() => openFileInEditor(fileMatch[0], editor)}
+                onClick={() => openFileInEditor(fileMatch[0], defaultEditor)}
                 className="inline cursor-pointer text-primary hover:underline"
               >
                 {children}

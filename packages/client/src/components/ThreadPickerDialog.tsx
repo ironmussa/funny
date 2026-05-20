@@ -13,11 +13,11 @@ import {
   CommandItem,
 } from '@/components/ui/command';
 import { colorFromName } from '@/components/ui/project-chip';
+import { useThreadsByProject } from '@/lib/thread-selectors';
 import { cleanThreadTitle } from '@/lib/thread-title';
 import { statusConfig } from '@/lib/thread-utils';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
-import { useThreadStore } from '@/stores/thread-store';
 
 /** Return the most recent activity timestamp for a thread (completedAt > createdAt). */
 function threadActivityTime(thread: Thread): number {
@@ -63,7 +63,7 @@ function ThreadPickerDialogContent({
   excludeIds,
 }: ThreadPickerDialogProps) {
   const { t } = useTranslation();
-  const threadsByProject = useThreadStore((s) => s.threadsByProject);
+  const threadsByProject = useThreadsByProject();
   const projects = useProjectStore((s) => s.projects);
   const [search, setSearch] = useState('');
 

@@ -28,6 +28,8 @@ export interface DeleteThreadConfirmState {
   projectId: string;
   title: string;
   isWorktree?: boolean;
+  /** Set on a scratch thread — projectId is '' and worktree fields are absent. */
+  isScratch?: boolean;
   worktreePath?: string | null;
   branchName?: string | null;
 }
@@ -74,6 +76,7 @@ interface SidebarDialogsProps {
  *
  * Extracted from Sidebar.tsx as part of the god-file split.
  */
+// eslint-disable-next-line max-lines-per-function
 export function SidebarDialogs({
   archiveConfirm,
   setArchiveConfirm,

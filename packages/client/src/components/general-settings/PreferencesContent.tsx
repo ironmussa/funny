@@ -565,6 +565,7 @@ export function PreferencesContent({ activePreferencesPage }: Props) {
         {activePreferencesPage === 'github' && (
           <ProviderKeyPanel
             id="github"
+            label="GitHub token"
             title={t('profile.githubTokenLabel')}
             description={t('profile.githubTokenDesc')}
             keyInputs={keyInputs}

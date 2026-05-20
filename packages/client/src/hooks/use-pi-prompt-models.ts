@@ -6,8 +6,9 @@ import { usePiModelsStore } from '@/stores/pi-models-store';
 
 const piLog = createClientLogger('PromptInputPiModels');
 
-interface ModelGroup {
+export interface ModelGroup {
   provider: string;
+  providerLabel: string;
   models: { value: string; label: string }[];
   [key: string]: unknown;
 }

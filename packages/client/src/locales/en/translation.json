@@ -1023,6 +1023,22 @@
     "loginFailed": "Login failed. Please check your credentials.",
     "logout": "Log out"
   },
+  "shortcuts": {
+    "title": "Keyboard shortcuts",
+    "description": "Useful keyboard shortcuts to navigate the app faster.",
+    "commandPalette": "Open command palette",
+    "commandPaletteAlt": "Open command palette (alt)",
+    "fileSearch": "Search files in project",
+    "searchInThread": "Search within current thread",
+    "searchAcrossThreads": "Search across threads",
+    "toggleSidebar": "Toggle sidebar",
+    "projectSettings": "Open project settings",
+    "newThread": "Start a new thread",
+    "nextThread": "Go to next thread",
+    "prevThread": "Go to previous thread",
+    "toggleTerminal": "Toggle terminal panel",
+    "openShortcuts": "Show keyboard shortcuts"
+  },
   "profile": {
     "title": "Profile",
     "gitIdentity": "Git Identity",

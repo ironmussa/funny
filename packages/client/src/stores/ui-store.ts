@@ -1,8 +1,11 @@
 import { create } from 'zustand';
 
 import { useProjectStore } from './project-store';
-import { useThreadStore, invalidateSelectThread } from './thread-store';
-import { setThreadSelectListener } from './thread-store-internals';
+import {
+  clearThreadSelection,
+  invalidateSelectThread,
+  setThreadSelectListener,
+} from './thread-store-internals';
 
 const REVIEW_PANE_WIDTH_KEY = 'review_pane_width';
 const DEFAULT_REVIEW_PANE_WIDTH = 50; // percentage of viewport width
@@ -24,6 +27,11 @@ function persistRightPane(open: boolean, tab?: RightPaneTab) {
   } catch {}
 }
 
+function clearSelectedThread() {
+  invalidateSelectThread();
+  clearThreadSelection();
+}
+
 interface UIState {
   reviewPaneOpen: boolean;
   reviewPaneWidth: number; // percentage of viewport width
@@ -35,6 +43,8 @@ interface UIState {
   settingsReturnPath: string | null;
   newThreadProjectId: string | null;
   newThreadIdleOnly: boolean;
+  /** True when the user is composing a scratch (projectless) thread. */
+  newThreadIsScratch: boolean;
   allThreadsProjectId: string | null;
   automationInboxOpen: boolean;
   addProjectOpen: boolean;
@@ -61,10 +71,13 @@ interface UIState {
   newThreadIssueContext: { prompt: string; branchName: string; title: string } | null;
   commandPaletteOpen: boolean;
   fileSearchOpen: boolean;
+  keyboardShortcutsOpen: boolean;
   setCommandPaletteOpen: (open: boolean) => void;
   setFileSearchOpen: (open: boolean) => void;
+  setKeyboardShortcutsOpen: (open: boolean) => void;
   toggleCommandPalette: () => void;
   toggleFileSearch: () => void;
+  toggleKeyboardShortcuts: () => void;
   setReviewSubTab: (tab: ReviewSubTab) => void;
   setReviewPaneOpen: (open: boolean) => void;
   setTestRunnerOpen: (open: boolean) => void;
@@ -79,6 +92,8 @@ interface UIState {
   setGeneralSettingsOpen: (open: boolean) => void;
   setActivePreferencesPage: (page: string | null) => void;
   startNewThread: (projectId: string, idleOnly?: boolean) => void;
+  /** Open the compose form in scratch mode (no project, no git). */
+  startNewScratchThread: () => void;
   cancelNewThread: () => void;
   closeAllThreads: () => void;
   setAutomationInboxOpen: (open: boolean) => void;
@@ -143,6 +158,7 @@ export const useUIStore = create<UIState>((set) => ({
   settingsReturnPath: null,
   newThreadProjectId: null,
   newThreadIdleOnly: false,
+  newThreadIsScratch: false,
   allThreadsProjectId: null,
   automationInboxOpen: false,
   addProjectOpen: false,
@@ -177,10 +193,13 @@ export const useUIStore = create<UIState>((set) => ({
   newThreadIssueContext: null,
   commandPaletteOpen: false,
   fileSearchOpen: false,
+  keyboardShortcutsOpen: false,
   setCommandPaletteOpen: (open) => set({ commandPaletteOpen: open }),
   setFileSearchOpen: (open) => set({ fileSearchOpen: open }),
+  setKeyboardShortcutsOpen: (open) => set({ keyboardShortcutsOpen: open }),
   toggleCommandPalette: () => set((s) => ({ commandPaletteOpen: !s.commandPaletteOpen })),
   toggleFileSearch: () => set((s) => ({ fileSearchOpen: !s.fileSearchOpen })),
+  toggleKeyboardShortcuts: () => set((s) => ({ keyboardShortcutsOpen: !s.keyboardShortcutsOpen })),
   setReviewSubTab: (tab) => {
     try {
       localStorage.setItem(REVIEW_SUB_TAB_KEY, tab);
@@ -197,8 +216,7 @@ export const useUIStore = create<UIState>((set) => ({
   },
   setTestRunnerOpen: (open) => {
     if (open) {
-      invalidateSelectThread();
-      useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+      clearSelectedThread();
       persistRightPane(false);
     }
     set(
@@ -285,8 +303,7 @@ export const useUIStore = create<UIState>((set) => ({
   setActivePreferencesPage: (page) => set({ activePreferencesPage: page }),
   setAutomationInboxOpen: (open) => {
     if (open) {
-      invalidateSelectThread();
-      useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+      clearSelectedThread();
       persistRightPane(false);
     }
     set(
@@ -306,8 +323,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   setAddProjectOpen: (open) => {
     if (open) {
-      invalidateSelectThread();
-      useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+      clearSelectedThread();
       set({
         addProjectOpen: true,
         settingsOpen: false,
@@ -326,13 +342,29 @@ export const useUIStore = create<UIState>((set) => ({
     const project = useProjectStore.getState().projects?.find((p) => p.id === projectId);
     if (project?.needsSetup) return;
 
-    invalidateSelectThread();
+    clearSelectedThread();
     useProjectStore.getState().selectProject(projectId);
-    useThreadStore.setState({ selectedThreadId: null, activeThread: null });
     persistRightPane(false);
     set({
       newThreadProjectId: projectId,
       newThreadIdleOnly: idleOnly ?? false,
+      newThreadIsScratch: false,
+      allThreadsProjectId: null,
+      automationInboxOpen: false,
+      addProjectOpen: false,
+      reviewPaneOpen: false,
+      testRunnerOpen: false,
+    });
+  },
+
+  startNewScratchThread: () => {
+    clearSelectedThread();
+    useProjectStore.getState().selectProject(null);
+    persistRightPane(false);
+    set({
+      newThreadProjectId: null,
+      newThreadIdleOnly: false,
+      newThreadIsScratch: true,
       allThreadsProjectId: null,
       automationInboxOpen: false,
       addProjectOpen: false,
@@ -342,7 +374,12 @@ export const useUIStore = create<UIState>((set) => ({
   },
 
   cancelNewThread: () => {
-    set({ newThreadProjectId: null, newThreadIdleOnly: false, newThreadIssueContext: null });
+    set({
+      newThreadProjectId: null,
+      newThreadIdleOnly: false,
+      newThreadIsScratch: false,
+      newThreadIssueContext: null,
+    });
   },
 
   closeAllThreads: () => {
@@ -350,8 +387,7 @@ export const useUIStore = create<UIState>((set) => ({
   },
 
   showGlobalSearch: () => {
-    invalidateSelectThread();
-    useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+    clearSelectedThread();
     persistRightPane(false);
     set({
       allThreadsProjectId: '__all__',
@@ -369,8 +405,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   setAnalyticsOpen: (open) => {
     if (open) {
-      invalidateSelectThread();
-      useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+      clearSelectedThread();
       persistRightPane(false);
     }
     set(
@@ -393,8 +428,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   setLiveColumnsOpen: (open) => {
     if (open) {
-      invalidateSelectThread();
-      useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+      clearSelectedThread();
       persistRightPane(false);
     }
     set(
@@ -417,8 +451,7 @@ export const useUIStore = create<UIState>((set) => ({
 
   setOrchestratorOpen: (open) => {
     if (open) {
-      invalidateSelectThread();
-      useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+      clearSelectedThread();
       persistRightPane(false);
     }
     set(
@@ -465,8 +498,7 @@ export const useUIStore = create<UIState>((set) => ({
   setActiveDesignId: (designId) => set({ activeDesignId: designId }),
 
   setDesignsListOpen: (projectId) => {
-    invalidateSelectThread();
-    useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+    clearSelectedThread();
     persistRightPane(false);
     set({
       designsListProjectId: projectId,

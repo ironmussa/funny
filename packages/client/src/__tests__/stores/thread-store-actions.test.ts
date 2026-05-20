@@ -77,6 +77,8 @@ vi.mock('@/stores/thread-store-internals', () => ({
   rebuildThreadProjectIndex: vi.fn(),
   invalidateSelectThread: vi.fn(),
   setAppNavigate: vi.fn(),
+  notifyThreadSelected: vi.fn(),
+  setClearThreadSelection: vi.fn(),
 }));
 
 import { useThreadStore } from '@/stores/thread-store';
@@ -342,6 +344,44 @@ describe('thread store actions', () => {
       expect(merged.map((m) => m.id)).toEqual(['real-id', 'reply']);
     });
 
+    test('preserves WS message that lands between fetch and set', async () => {
+      // Regression: refreshActiveThread used to capture activeThread before
+      // its `await api.getThread()`, so a WS agent:message that mutated
+      // activeThread during the in-flight fetch got clobbered when the
+      // post-await `set()` spread the stale capture. The fix reads
+      // activeThread inside `set((state) => …)`.
+      const existing = {
+        id: 'm1',
+        threadId: 't1',
+        role: 'user' as const,
+        content: 'q',
+        timestamp: '2026-01-01T00:00:00.000Z',
+      };
+      const wsMessage = {
+        id: 'm2',
+        threadId: 't1',
+        role: 'assistant' as const,
+        content: 'a',
+        timestamp: '2026-01-01T00:00:01.000Z',
+      };
+      setActiveThread([existing]);
+
+      // Server response races with the WS event: fetch resolves AFTER we
+      // simulate the WS message landing in activeThread, but returns only
+      // the pre-WS state.
+      mockGetThread.mockImplementation(() => {
+        useThreadStore.setState((s) => ({
+          activeThread: { ...s.activeThread!, messages: [existing, wsMessage] },
+        }));
+        return okAsync({ ...baseThread, messages: [existing] });
+      });
+
+      await useThreadStore.getState().refreshActiveThread();
+
+      const merged = useThreadStore.getState().activeThread!.messages;
+      expect(merged.map((m) => m.id)).toEqual(['m1', 'm2']);
+    });
+
     test('keeps locally-newer messages added after the fresh window', async () => {
       const fresh = {
         id: 'm1',
@@ -365,6 +405,19 @@ describe('thread store actions', () => {
 
       const merged = useThreadStore.getState().activeThread!.messages;
       expect(merged.map((m) => m.id)).toEqual(['m1', 'optimistic-new']);
+    });
+  });
+
+  describe('loadThreadsForProject', () => {
+    test('bails on empty projectId so scratch threads do not leak into threadsByProject[""]', async () => {
+      const { threadsApi } = await import('@/lib/api/threads');
+      const listSpy = vi.mocked(threadsApi.listThreads);
+      listSpy.mockClear();
+
+      await useThreadStore.getState().loadThreadsForProject('');
+
+      expect(listSpy).not.toHaveBeenCalled();
+      expect(useThreadStore.getState().threadIdsByProject['']).toBeUndefined();
     });
   });
 });

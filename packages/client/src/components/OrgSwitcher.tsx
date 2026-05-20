@@ -76,7 +76,11 @@ export function OrgSwitcher() {
 
   const clearAndReload = useCallback(async () => {
     useThreadStore.setState({
-      threadsByProject: {},
+      threadsById: {},
+      threadIdsByProject: {},
+      scratchThreadIds: [],
+      threadTotalByProject: {},
+      scratchThreadTotal: 0,
       selectedThreadId: null,
       activeThread: null,
     });

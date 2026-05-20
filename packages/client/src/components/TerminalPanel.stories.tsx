@@ -129,7 +129,8 @@ function seedStores(
   });
 
   useThreadStore.setState({
-    threadsByProject: {},
+    threadsById: {},
+    threadIdsByProject: {},
     selectedThreadId: null,
     activeThread: null,
     setupProgressByThread: {},

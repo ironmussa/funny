@@ -43,6 +43,7 @@ import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { colorFromName } from '@/components/ui/project-chip';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { api } from '@/lib/api';
 import { stageConfig, timeAgo } from '@/lib/thread-utils';
 import { toastError } from '@/lib/toast-error';
@@ -50,7 +51,7 @@ import { buildPath } from '@/lib/url';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
 import { useGitStatusStore, branchKey as computeBranchKey } from '@/stores/git-status-store';
-import { useSettingsStore, deriveToolLists } from '@/stores/settings-store';
+import { useSettingsStore } from '@/stores/settings-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -567,7 +568,6 @@ export function KanbanView({
   const [slideUpOpen, setSlideUpOpen] = useState(false);
   const [slideUpProjectId, setSlideUpProjectId] = useState<string | undefined>(undefined);
   const [slideUpStage, setSlideUpStage] = useState<ThreadStage>('backlog');
-  const [creating, setCreating] = useState(false);
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [mergeWarning, setMergeWarning] = useState<{
     threadId: string;
@@ -648,101 +648,23 @@ export function KanbanView({
     setMergeWarning(null);
   }, [mergeWarning, projectId, threads, updateThreadStage, t]);
 
-  const handlePromptSubmit = useCallback(
-    async (
-      prompt: string,
-      opts: {
-        provider?: string;
-        model: string;
-        mode: string;
-        effort?: string;
-        threadMode?: string;
-        runtime?: string;
-        baseBranch?: string;
-        sendToBacklog?: boolean;
-        fileReferences?: { path: string; type?: 'file' | 'folder' }[];
-        symbolReferences?: {
-          path: string;
-          name: string;
-          kind: string;
-          line: number;
-          endLine?: number;
-        }[];
-        agentTemplateId?: string;
-        templateVariables?: Record<string, string>;
-      },
-      images?: any[],
-    ): Promise<boolean> => {
-      if (!slideUpProjectId || creating) return false;
-      setCreating(true);
+  // Kanban forces idle for backlog/planning columns; in_progress runs normally.
+  const slideUpProject = projects.find((p) => p.id === slideUpProjectId);
+  const slideUpDefaultThreadMode =
+    (slideUpProject?.defaultMode as 'local' | 'worktree') || DEFAULT_THREAD_MODE;
+  const slideUpForceIdle = slideUpStage === 'backlog' || slideUpStage === 'planning';
 
-      const slideUpProject = projects.find((p) => p.id === slideUpProjectId);
-      const threadMode =
-        (opts.threadMode as 'local' | 'worktree') ||
-        slideUpProject?.defaultMode ||
-        DEFAULT_THREAD_MODE;
-      const toIdle =
-        opts.sendToBacklog || slideUpStage === 'backlog' || slideUpStage === 'planning';
-
-      if (toIdle) {
-        // Create idle thread (backlog or planning)
-        const result = await api.createIdleThread({
-          projectId: slideUpProjectId,
-          title: prompt.slice(0, 200),
-          mode: threadMode,
-          baseBranch: opts.baseBranch,
-          prompt,
-          stage: slideUpStage === 'planning' ? 'planning' : undefined,
-          images,
-        });
-
-        if (result.isErr()) {
-          toastError(result.error);
-          setCreating(false);
-          return false;
-        }
-
-        await loadThreadsForProject(slideUpProjectId);
-        setCreating(false);
-        toast.success(t('toast.threadCreated', { title: prompt.slice(0, 200) }));
-        return true;
-      } else {
-        // Create and execute thread (in_progress)
-        const { allowedTools, disallowedTools } = deriveToolLists(toolPermissions);
-        const result = await api.createThread({
-          projectId: slideUpProjectId,
-          title: prompt.slice(0, 200),
-          mode: threadMode,
-          runtime: opts.runtime as 'local' | 'remote' | undefined,
-          provider: opts.provider,
-          model: opts.model,
-          permissionMode: opts.mode,
-          effort: opts.effort,
-          baseBranch: opts.baseBranch,
-          prompt,
-          images,
-          allowedTools,
-          disallowedTools,
-          fileReferences: opts.fileReferences,
-          symbolReferences: opts.symbolReferences,
-          agentTemplateId: opts.agentTemplateId,
-          templateVariables: opts.templateVariables,
-        });
-
-        if (result.isErr()) {
-          toastError(result.error);
-          setCreating(false);
-          return false;
-        }
-
-        await loadThreadsForProject(slideUpProjectId);
-        setCreating(false);
-        toast.success(t('toast.threadCreated', { title: prompt.slice(0, 200) }));
-        return true;
-      }
+  const { creating, createThread: handlePromptSubmit } = useThreadCreation({
+    projectId: slideUpProjectId ?? null,
+    defaultThreadMode: slideUpDefaultThreadMode,
+    toolPermissions,
+    forceIdle: slideUpForceIdle,
+    stage: slideUpStage === 'planning' ? 'planning' : undefined,
+    onSuccess: async (_threadId, _kind, thread) => {
+      if (slideUpProjectId) await loadThreadsForProject(slideUpProjectId);
+      toast.success(t('toast.threadCreated', { title: thread?.title ?? '' }));
     },
-    [slideUpProjectId, slideUpStage, creating, projects, toolPermissions, loadThreadsForProject, t],
-  );
+  });
 
   const projectInfoById = useMemo(() => {
     const map: Record<string, { name: string; color?: string; path?: string }> = {};

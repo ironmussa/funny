@@ -1,11 +1,13 @@
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 
 // Use vi.hoisted() so these mocks are available when vi.mock factories run (which are hoisted)
-const { mockSelectProject, mockSetState, mockInvalidateSelectThread } = vi.hoisted(() => ({
-  mockSelectProject: vi.fn(),
-  mockSetState: vi.fn(),
-  mockInvalidateSelectThread: vi.fn(),
-}));
+const { mockSelectProject, mockInvalidateSelectThread, mockClearThreadSelection } = vi.hoisted(
+  () => ({
+    mockSelectProject: vi.fn(),
+    mockInvalidateSelectThread: vi.fn(),
+    mockClearThreadSelection: vi.fn(),
+  }),
+);
 
 vi.mock('@/stores/project-store', () => ({
   useProjectStore: {
@@ -13,12 +15,10 @@ vi.mock('@/stores/project-store', () => ({
   },
 }));
 
-vi.mock('@/stores/thread-store', () => ({
-  useThreadStore: {
-    setState: mockSetState,
-    getState: () => ({}),
-  },
+vi.mock('@/stores/thread-store-internals', () => ({
   invalidateSelectThread: mockInvalidateSelectThread,
+  clearThreadSelection: mockClearThreadSelection,
+  setThreadSelectListener: vi.fn(),
 }));
 
 import { useUIStore } from '@/stores/ui-store';
@@ -165,9 +165,9 @@ describe('useUIStore', () => {
       expect(mockInvalidateSelectThread).toHaveBeenCalled();
     });
 
-    test('clears thread selection via useThreadStore.setState', () => {
+    test('clears thread selection via thread-store internals', () => {
       useUIStore.getState().startNewThread('project-1');
-      expect(mockSetState).toHaveBeenCalledWith({ selectedThreadId: null, activeThread: null });
+      expect(mockClearThreadSelection).toHaveBeenCalled();
     });
 
     test('sets idleOnly when passed true', () => {
@@ -230,7 +230,7 @@ describe('useUIStore', () => {
 
     test('opening clears thread selection', () => {
       useUIStore.getState().setAutomationInboxOpen(true);
-      expect(mockSetState).toHaveBeenCalledWith({ selectedThreadId: null, activeThread: null });
+      expect(mockClearThreadSelection).toHaveBeenCalled();
     });
 
     test('closing only sets automationInboxOpen to false', () => {
@@ -277,7 +277,7 @@ describe('useUIStore', () => {
 
     test('opening clears thread selection', () => {
       useUIStore.getState().setAddProjectOpen(true);
-      expect(mockSetState).toHaveBeenCalledWith({ selectedThreadId: null, activeThread: null });
+      expect(mockClearThreadSelection).toHaveBeenCalled();
     });
 
     test('closing only sets addProjectOpen to false', () => {
@@ -324,7 +324,7 @@ describe('useUIStore', () => {
 
     test('clears thread selection', () => {
       useUIStore.getState().showGlobalSearch();
-      expect(mockSetState).toHaveBeenCalledWith({ selectedThreadId: null, activeThread: null });
+      expect(mockClearThreadSelection).toHaveBeenCalled();
     });
   });
 
@@ -357,7 +357,7 @@ describe('useUIStore', () => {
 
     test('opening clears thread selection', () => {
       useUIStore.getState().setAnalyticsOpen(true);
-      expect(mockSetState).toHaveBeenCalledWith({ selectedThreadId: null, activeThread: null });
+      expect(mockClearThreadSelection).toHaveBeenCalled();
     });
 
     test('closing only sets analyticsOpen to false', () => {

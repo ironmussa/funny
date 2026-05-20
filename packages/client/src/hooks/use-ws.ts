@@ -59,7 +59,7 @@ function connect() {
     // Re-sync git status — do NOT reset cooldowns; the increased cooldown (5s)
     // naturally throttles the thundering herd. WS git:status events will
     // invalidate specific keys when the server pushes fresh data.
-    const loadedProjectIds = Object.keys(useThreadStore.getState().threadsByProject);
+    const loadedProjectIds = Object.keys(useThreadStore.getState().threadIdsByProject);
     for (const pid of loadedProjectIds) {
       useGitStatusStore.getState().fetchForProject(pid);
     }

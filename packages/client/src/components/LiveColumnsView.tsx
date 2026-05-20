@@ -46,7 +46,7 @@ export function LiveColumnsView() {
   useEffect(() => {
     const state = useThreadStore.getState();
     for (const project of projects) {
-      if (!state.threadsByProject[project.id]) {
+      if (!state.threadIdsByProject[project.id]) {
         loadThreadsForProject(project.id);
       }
     }

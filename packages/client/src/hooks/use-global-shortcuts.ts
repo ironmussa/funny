@@ -10,6 +10,14 @@ import { useUIStore } from '@/stores/ui-store';
 
 const log = createClientLogger('hooks:global-shortcuts');
 
+function isEditableTarget(target: EventTarget | null): boolean {
+  const el = target as HTMLElement | null;
+  if (!el) return false;
+  if (el.isContentEditable) return true;
+  const tag = el.tagName;
+  return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+}
+
 export function useGlobalShortcuts(toggleCommandPalette: () => void, toggleFileSearch: () => void) {
   const navigate = useNavigate();
 
@@ -17,8 +25,11 @@ export function useGlobalShortcuts(toggleCommandPalette: () => void, toggleFileS
     const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown }).__TAURI_INTERNALS__;
 
     const handler = (e: KeyboardEvent) => {
-      // Ctrl+K for command palette (toggle)
-      if (e.ctrlKey && e.key === 'k') {
+      // Ctrl+K or Ctrl+Shift+P for command palette (toggle)
+      if (
+        (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'k') ||
+        (e.ctrlKey && e.shiftKey && !e.altKey && (e.key === 'P' || e.key === 'p'))
+      ) {
         e.preventDefault();
         e.stopPropagation();
         (window as unknown as { __paletteOpenTs?: number }).__paletteOpenTs = performance.now();
@@ -28,11 +39,46 @@ export function useGlobalShortcuts(toggleCommandPalette: () => void, toggleFileS
       }
 
       // Ctrl+P for file search (toggle)
-      if (e.ctrlKey && e.key === 'p') {
+      if (e.ctrlKey && !e.shiftKey && !e.altKey && e.key === 'p') {
         e.preventDefault();
         e.stopPropagation();
         log.info('shortcut.file_search');
         toggleFileSearch();
+        return;
+      }
+
+      // "?" to open keyboard shortcuts dialog (ignored when typing in inputs)
+      if (e.key === '?' && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        if (isEditableTarget(e.target)) return;
+        e.preventDefault();
+        e.stopPropagation();
+        log.info('shortcut.open_shortcuts');
+        useUIStore.getState().toggleKeyboardShortcuts();
+        return;
+      }
+
+      // Alt+] / Alt+[ to navigate threads in active project (next / previous)
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === ']' || e.key === '[')) {
+        if (isEditableTarget(e.target)) return;
+        const activeThreadProjectId = useThreadStore.getState().activeThread?.projectId ?? null;
+        const projectId = activeThreadProjectId ?? useProjectStore.getState().selectedProjectId;
+        if (!projectId) return;
+        const state = useThreadStore.getState();
+        const ids = state.threadIdsByProject[projectId] ?? [];
+        if (ids.length < 2) return;
+        const threads = ids.map((id) => state.threadsById[id]).filter(Boolean);
+        if (threads.length < 2) return;
+        const currentId = state.activeThread?.id ?? null;
+        const currentIdx = currentId ? threads.findIndex((th) => th.id === currentId) : -1;
+        const delta = e.key === ']' ? 1 : -1;
+        const baseIdx = currentIdx >= 0 ? currentIdx : 0;
+        const nextIdx = (baseIdx + delta + threads.length) % threads.length;
+        const next = threads[nextIdx];
+        if (!next) return;
+        e.preventDefault();
+        e.stopPropagation();
+        log.info('shortcut.thread_nav', { direction: delta > 0 ? 'next' : 'prev' });
+        navigate(buildPath(`/projects/${projectId}/threads/${next.id}`));
         return;
       }
 

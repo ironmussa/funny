@@ -99,6 +99,40 @@ export const threadsApi = {
     images?: ImageAttachment[];
     designId?: string;
   }) => request<Thread>('/threads/idle', { method: 'POST', body: JSON.stringify(data) }),
+  /**
+   * Create a scratch thread — projectless, no git, no worktree.
+   * The server enforces projectId=null, mode='local', isScratch=true.
+   */
+  createScratchThread: (data: {
+    prompt: string;
+    model?: string;
+    provider?: string;
+    permissionMode?: string;
+    title?: string;
+    images?: ImageAttachment[];
+  }) =>
+    request<Thread>('/threads', {
+      method: 'POST',
+      body: JSON.stringify({
+        isScratch: true,
+        projectId: null,
+        mode: 'local',
+        prompt: data.prompt,
+        title: data.title,
+        model: data.model,
+        provider: data.provider,
+        permissionMode: data.permissionMode,
+        images: data.images,
+      }),
+    }),
+  /** List the current user's scratch threads. */
+  listScratchThreads: (limit?: number, offset?: number) => {
+    const params = new URLSearchParams();
+    if (limit != null) params.set('limit', String(limit));
+    if (offset != null) params.set('offset', String(offset));
+    const qs = params.toString();
+    return request<PaginatedThreadsResponse>(`/threads/scratch${qs ? `?${qs}` : ''}`);
+  },
   sendMessage: (
     threadId: string,
     content: string,

@@ -9,7 +9,7 @@ import { useThreadHistoryTracker } from '@/hooks/use-thread-history-tracker';
 import { useWS } from '@/hooks/use-ws';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 import { useProjectStore } from '@/stores/project-store';
-import { setAppNavigate } from '@/stores/thread-store';
+import { setAppNavigate, useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
 interface ShellState {
@@ -46,6 +46,7 @@ export function useAppShell(): ShellState {
   const navigate = useNavigate();
   const loadProjects = useProjectStore((s) => s.loadProjects);
   const loadTemplates = useAgentTemplateStore((s) => s.loadTemplates);
+  const loadScratchThreads = useThreadStore((s) => s.loadScratchThreads);
 
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
   const settingsOpen = useUIStore((s) => s.settingsOpen);
@@ -88,7 +89,8 @@ export function useAppShell(): ShellState {
   useEffect(() => {
     loadProjects();
     loadTemplates();
-  }, [loadProjects, loadTemplates]);
+    loadScratchThreads();
+  }, [loadProjects, loadTemplates, loadScratchThreads]);
 
   // Update browser tab title with selected project name + branch
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);

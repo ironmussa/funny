@@ -9,6 +9,7 @@ import { AllThreadsToolbar } from '@/components/all-threads/AllThreadsToolbar';
 import { normalize } from '@/components/ui/highlight-text';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
+import { useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
 import { branchKey as computeBranchKey, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -24,7 +25,7 @@ export function AllThreadsView() {
   const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const allThreadsProjectId = useUIStore((s) => s.allThreadsProjectId);
-  const threadsByProject = useThreadStore((s) => s.threadsByProject);
+  const threadsByProject = useThreadsByProject();
   const threadTotalByProject = useThreadStore((s) => s.threadTotalByProject);
   const loadMoreThreads = useThreadStore((s) => s.loadMoreThreads);
   const projects = useProjectStore((s) => s.projects);

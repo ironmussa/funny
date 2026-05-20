@@ -390,7 +390,8 @@ function seedStores(
 
   if (hasThread) {
     useThreadStore.setState({
-      threadsByProject: { 'proj-1': [thread] },
+      threadsById: { [thread.id]: thread },
+      threadIdsByProject: { 'proj-1': [thread.id] },
       selectedThreadId: 'thread-1',
       activeThread: { ...thread, messages: [] },
       setupProgressByThread: {},
@@ -398,7 +399,8 @@ function seedStores(
     });
   } else {
     useThreadStore.setState({
-      threadsByProject: {},
+      threadsById: {},
+      threadIdsByProject: {},
       selectedThreadId: null,
       activeThread: null,
       setupProgressByThread: {},

@@ -43,8 +43,9 @@ export function createTestDb() {
   testDb.run(sql`
     CREATE TABLE IF NOT EXISTS threads (
       id TEXT PRIMARY KEY,
-      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      project_id TEXT REFERENCES projects(id) ON DELETE CASCADE,
       user_id TEXT NOT NULL DEFAULT '',
+      is_scratch INTEGER NOT NULL DEFAULT 0,
       created_by TEXT,
       title TEXT NOT NULL,
       mode TEXT NOT NULL,

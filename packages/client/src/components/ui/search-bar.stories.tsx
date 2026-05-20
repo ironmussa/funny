@@ -103,13 +103,21 @@ const meta = {
 export default meta;
 type Story = StoryObj<typeof meta>;
 
+const baseArgs = {
+  query: '',
+  onQueryChange: () => {},
+  totalMatches: 0,
+};
+
 export const ListFilter: Story = {
   name: 'List filter (count + case-sensitive)',
+  args: baseArgs,
   render: () => <ListFilterDemo placeholder="Filter files…" />,
 };
 
 export const ListFilterNoCase: Story = {
   name: 'List filter (no case toggle)',
+  args: baseArgs,
   render: () => {
     function Demo() {
       const [query, setQuery] = useState('');
@@ -136,11 +144,13 @@ export const ListFilterNoCase: Story = {
 
 export const FindInText: Story = {
   name: 'Find in text (prev/next nav)',
+  args: baseArgs,
   render: () => <FindInTextDemo />,
 };
 
 export const Loading: Story = {
   name: 'Loading (debounced server search)',
+  args: baseArgs,
   render: () => {
     function Demo() {
       const [query, setQuery] = useState('react');
@@ -165,6 +175,7 @@ export const Loading: Story = {
 
 export const Empty: Story = {
   name: 'Empty (no count, no close button)',
+  args: baseArgs,
   render: () => {
     function Demo() {
       const [query, setQuery] = useState('');

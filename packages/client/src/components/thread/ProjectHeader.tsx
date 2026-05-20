@@ -76,6 +76,7 @@ import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
 import { getEditorLabel } from '@/lib/editor-utils';
 import { stageConfig } from '@/lib/thread-utils';
+import * as variant from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
@@ -150,7 +151,8 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
   const isWorktree = threadMode === 'worktree' && !!threadBranch;
   const threadStatus = useThreadStatus();
   const isBusy = threadStatus === 'running' || threadStatus === 'setting_up';
-  const canConvertToWorktree = threadMode !== 'worktree' && !isBusy;
+  // Scratch threads have no git working tree, so no worktree/branch conversion.
+  const canConvert = useThreadSelector((t) => variant.canConvertToWorktree(t)) && !isBusy;
 
   // Tooltip ↔ DropdownMenu: suppress tooltip while dropdown is open and
   // briefly after it closes (focus-return would otherwise flash the tooltip).
@@ -362,7 +364,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
             )}
             {t('thread.copyWithTools', 'Copy with tool calls')}
           </DropdownMenuItem>
-          {threadId && canConvertToWorktree && (
+          {threadId && canConvert && (
             <>
               <DropdownMenuSeparator />
               <DropdownMenuItem
@@ -638,6 +640,7 @@ export const ProjectHeader = memo(function ProjectHeader({
   const activeThreadTitle = useThreadSelector((t) => t?.title);
   const activeThreadStatus = useThreadStatus();
   const activeThreadWorktreePath = useThreadWorktreePath();
+  const activeThreadCanShowGit = useThreadSelector((t) => variant.canDoGitOps(t));
   const activeThreadParentId = useThreadSelector((t) => t?.parentThreadId);
   const activeThreadTemplateId = useThreadSelector((t) => t?.agentTemplateId);
   const activeTemplate = useAgentTemplateStore((s) =>
@@ -1023,41 +1026,43 @@ export const ProjectHeader = memo(function ProjectHeader({
                 <TooltipContent>{t('terminal.toggle', 'Toggle Terminal')} (Ctrl+`)</TooltipContent>
               </Tooltip>
             )}
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <Button
-                  variant="ghost"
-                  size={showGitStats ? undefined : 'icon-sm'}
-                  onClick={() =>
-                    startTransition(() => {
-                      if (reviewPaneOpen && rightPaneTab === 'review') {
-                        setReviewPaneOpen(false);
-                        updatePanelParam(null);
-                      } else {
-                        setReviewPaneOpen(true);
-                        updatePanelParam('review');
-                      }
-                    })
-                  }
-                  data-testid="header-toggle-review"
-                  className={`${showGitStats ? 'h-8 px-2' : ''} ${reviewPaneOpen && rightPaneTab === 'review' ? 'text-foreground' : 'text-muted-foreground'}`}
-                >
-                  {showGitStats ? (
-                    <DiffStats
-                      linesAdded={effectiveGitStatus.linesAdded}
-                      linesDeleted={effectiveGitStatus.linesDeleted}
-                      dirtyFileCount={effectiveGitStatus.dirtyFileCount}
-                      size="sm"
-                      tooltips={false}
-                      className="font-semibold"
-                    />
-                  ) : (
-                    <GitCompare className="icon-base" />
-                  )}
-                </Button>
-              </TooltipTrigger>
-              <TooltipContent>{t('review.title')}</TooltipContent>
-            </Tooltip>
+            {activeThreadCanShowGit && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size={showGitStats ? undefined : 'icon-sm'}
+                    onClick={() =>
+                      startTransition(() => {
+                        if (reviewPaneOpen && rightPaneTab === 'review') {
+                          setReviewPaneOpen(false);
+                          updatePanelParam(null);
+                        } else {
+                          setReviewPaneOpen(true);
+                          updatePanelParam('review');
+                        }
+                      })
+                    }
+                    data-testid="header-toggle-review"
+                    className={`${showGitStats ? 'h-8 px-2' : ''} ${reviewPaneOpen && rightPaneTab === 'review' ? 'text-foreground' : 'text-muted-foreground'}`}
+                  >
+                    {showGitStats ? (
+                      <DiffStats
+                        linesAdded={effectiveGitStatus.linesAdded}
+                        linesDeleted={effectiveGitStatus.linesDeleted}
+                        dirtyFileCount={effectiveGitStatus.dirtyFileCount}
+                        size="sm"
+                        tooltips={false}
+                        className="font-semibold"
+                      />
+                    ) : (
+                      <GitCompare className="icon-base" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>{t('review.title')}</TooltipContent>
+              </Tooltip>
+            )}
             {!hideTests && (
               <Tooltip>
                 <TooltipTrigger asChild>

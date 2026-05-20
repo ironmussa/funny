@@ -55,7 +55,7 @@ bun run db:studio
 
 ### Monorepo Structure (Bun workspaces)
 
-- **`packages/shared`** — TypeScript types and error definitions (no runtime code). Exports from `src/types.ts` and `src/errors.ts`. Contains interfaces for Project, Thread, Message, ToolCall, FileDiff, WebSocket events, and API request/response types.
+- **`packages/shared`** — Cross-package kernel. Hosts (a) types and error definitions (`src/types.ts`, `src/types/*.ts`, `src/errors.ts`, `src/models.ts`), (b) the shared DB layer used by `server` + `orchestrator` (`src/db/schema.ts`, `src/db/schema.{sqlite,pg}.ts`, `src/db/adapters/{sqlite,pg}.ts`, `src/db/migrate.ts`, `src/db/connection.ts`), (c) factory-pattern repositories (`src/repositories/*.ts` — `createMessageRepository(db)`, `createThreadRepository(db)`, etc.) consumed by server + orchestrator with a caller-supplied DB connection, (d) the runner↔server protocol (`src/runner-protocol.ts`), (e) auth signing helpers (`src/auth/forwarded-identity.ts`), and (f) the thread state machine (`src/thread-machine.ts`). `runtime` does NOT import the repositories — it proxies all persistence to the server via `RuntimeServiceProvider` (see Server Architecture). `client` only imports types from this package, never runtime code.
 - **`packages/core`** — Pure logic shared across server and runtime. Contains git operations (`git/`), agent process management (`agents/`), container/sandbox support (`containers/`), and port allocation (`ports/`). No HTTP or database code.
 - **`packages/runtime`** — Hono HTTP routes and services for agent execution. Manages agent runners, PTY sessions, worktrees, pipelines, and WebSocket broadcasting. Acts as the "runner" in the server+runner architecture.
 - **`packages/server`** — Entry point for the application. Handles authentication (Better Auth), database (Drizzle + SQLite/PostgreSQL), user management, and proxies requests to remote runners. Owns all persistent state.
@@ -99,7 +99,17 @@ bun run db:studio
 
 ### Client Architecture
 
-**State management:** Zustand store in `stores/app-store.ts`. Holds projects, threads, active thread with messages, and UI state (selected IDs, pane visibility).
+**State management:** Zustand stores split by concern (`stores/project-store.ts`, `stores/thread-store.ts`, `stores/ui-store.ts`) plus a backward-compatible facade `stores/app-store.ts` for legacy callers.
+
+**Unified thread index.** Every thread row lives once in `useThreadStore.threadsById: Record<string, Thread>`. Order per bucket is preserved by sibling arrays — `threadIdsByProject: Record<string, string[]>` for project threads and `scratchThreadIds: string[]` for scratch. **Never store a Thread object in two places.** Helpers for atomic writes live in [`stores/thread-mutations.ts`](packages/client/src/stores/thread-mutations.ts) (`replaceProjectThreads`, `appendProjectThreads`, `prependScratchThread`, `removeThread`, `patchThread`, etc.); WS handlers and store actions go through these instead of touching `threadsById` directly. The helper `patchThread(state, id, updater)` also mirrors the change onto `activeThread` when the patched thread is currently active, keeping the right pane in sync without a second write.
+
+**Read-side selectors.** Components consume threads through hooks in [`lib/thread-selectors.ts`](packages/client/src/lib/thread-selectors.ts) — never read `threadsById` / `threadIdsByProject` directly from a component:
+- `useThreadById(id)` — single thread, reactive
+- `useThreadsForProject(pid)` — ordered Thread[] for one project (shallow-equal)
+- `useScratchThreads()` — ordered scratch list (shallow-equal)
+- `useThreadsByProject()` — full `{ projectId → Thread[] }` mapping for cross-project views (Activity, Kanban, AllThreads)
+
+Pure selectors `selectThreadById`, `selectThreadsForProject`, etc. are exported alongside for non-React code.
 
 **Real-time updates:** `hooks/use-ws.ts` connects to `/ws` and dispatches WebSocket events to the store (agent:message, agent:status, agent:result, agent:tool_call).
 
@@ -117,6 +127,24 @@ bun run db:studio
 **Styling:** Tailwind CSS 3 with CSS variable-based theming (shadcn/ui). Uses `cn()` utility from `lib/utils.ts` (clsx + tailwind-merge). Custom scrollbar styles and animations defined in `globals.css` and `tailwind.config.ts`.
 
 **Path alias:** `@/` maps to `packages/client/src/` (configured in both vite.config.ts and tsconfig.json).
+
+### Scratch threads
+
+A **scratch thread** is a lightweight, projectless thread for "bounce ideas / try a regex / sketch throwaway code" workflows — same chat / tool-call / WS pipeline as a normal thread, but with no project, no git, and no worktree.
+
+- **DB shape:** `threads` row with `is_scratch = 1`. `project_id` is `NULL`; the TS type uses `projectId: string` with `''` as the sentinel at the boundary. `Thread.isScratch` is optional at the type level (DB column is NOT NULL with default 0).
+- **Working directory:** `~/.funny/scratch/<userId>/<threadId>/` on the runner. Created lazily on first agent start by `agent-lifecycle.ts`. Removed via `rm -rf` on thread delete by `thread-service/update.ts`.
+- **Always `mode = 'local'`.** Worktree mode is disabled. The server route + runtime schema both reject `mode !== 'local'` with `400 scratch-thread-must-be-local`.
+- **No git, ever.** `/api/git/:threadId/*` returns `400 git-not-allowed-for-scratch` for any scratch thread. The client hides the review pane, diff, commit, push, and PR affordances.
+- **Per-user isolation.** Each user only sees their own scratch threads — same trust boundary as the per-user runner model. Cross-user access returns `404` via the existing ownership check.
+- **Single source of truth: named predicates.** All divergence between scratch and normal threads is consolidated behind two predicate modules — DO NOT sprinkle `if (thread.isScratch)` elsewhere. When you discover a new axis of divergence, add a predicate there, not at the call site:
+  - **Runtime:** `packages/runtime/src/services/thread-context.ts` — exports `resolveThreadCwd(thread, project)`, `canDoGitOps(thread)`, `scratchPathFor(userId, threadId)`. Use these in services / route handlers / agent lifecycle.
+  - **Client:** `packages/client/src/lib/thread-variant.ts` — exports `isScratch(thread)`, `canDoGitOps(thread)`, `canShowPowerline(thread)`, `canConvertToWorktree(thread)`, `canFetchGitStatus(thread)`, `getThreadRoute(thread)`, `getSidebarBucket(thread)`. Use these in components / stores / hooks. The store-level helper `findThreadById(threadId)` in `stores/store-bridge.ts` provides id-based lookup when only the id is in scope.
+- **Sidebar storage.** Both scratch and project threads live in the same `useThreadStore.threadsById` index — only the ordered ID arrays (`scratchThreadIds` vs `threadIdsByProject[pid]`) differentiate the buckets. WS handlers that update sidebar-visible fields MUST go through `patchSidebarThread(get, threadId, updater)` in `thread-ws-handlers.ts`, which delegates to `mutations.patchThread`. Never touch `threadsById` directly outside `thread-mutations.ts`.
+- **Routing.** Compose: `/scratch/new` (triggered by `startNewScratchThread()` in `ui-store.ts`). Detail: `/scratch/:threadId`. Use `getThreadRoute(thread)` from `thread-variant.ts` to build URLs — both scratch and normal routes are covered.
+- **Compose-mode flag.** `ui-store.ts` exposes `newThreadIsScratch` + `startNewScratchThread()` / `cancelNewThread()` for the new-thread input branch. `ThreadView` reads this flag to render the scratch compose UI (no `ProjectHeader`).
+- **Git middleware.** `packages/runtime/src/routes/git.ts` returns `400 git-not-allowed-for-scratch` for every git request against a scratch thread. The client's `canFetchGitStatus(thread)` is the matching predicate — both layers stay aligned.
+- **v1 scope.** No per-project scratch entry point, no age-based cleanup, no "promote scratch → project", no team-shared scratch. Templates/automations are allowed at the type level but not surfaced in the v1 compose UI.
 
 ## Authentication
 

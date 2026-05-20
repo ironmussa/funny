@@ -59,6 +59,7 @@ import {
   isThreadDataPrefetched,
   isThreadDataLoaded,
 } from './thread-machine-bridge';
+import * as mutations from './thread-mutations';
 import { useThreadReadStore } from './thread-read-store';
 import {
   nextSelectGeneration,
@@ -70,9 +71,10 @@ import {
   getSelectingThreadId,
   setSelectingThreadId,
   rebuildThreadProjectIndex,
+  notifyThreadSelected,
+  setClearThreadSelection,
 } from './thread-store-internals';
 import * as wsHandlers from './thread-ws-handlers';
-import { useUIStore } from './ui-store';
 
 // Re-export for external consumers
 export {
@@ -114,7 +116,7 @@ export interface ThreadWithMessages extends Thread {
   initInfo?: AgentInitInfo;
   resultInfo?: AgentResultInfo;
   waitingReason?: WaitingReason;
-  pendingPermission?: { toolName: string };
+  pendingPermission?: { toolName: string; toolInput?: string };
   hasMore?: boolean;
   loadingMore?: boolean;
   contextUsage?: ContextUsage;
@@ -130,9 +132,17 @@ export interface ThreadWithMessages extends Thread {
 }
 
 export interface ThreadState {
-  threadsByProject: Record<string, Thread[]>;
-  /** Total thread count per project (from server pagination) */
+  // ── Single source of truth ─────────────────────────────────
+  /** All known threads keyed by id. The only place a Thread row is stored. */
+  threadsById: Record<string, Thread>;
+  /** Per-project ordered IDs. Order matches the server response. */
+  threadIdsByProject: Record<string, string[]>;
+  /** Scratch threads (no project) — ordered, most recent first. */
+  scratchThreadIds: string[];
+  /** Pagination totals returned by the server. */
   threadTotalByProject: Record<string, number>;
+  scratchThreadTotal: number;
+
   selectedThreadId: string | null;
   activeThread: ThreadWithMessages | null;
   /** Setup progress keyed by threadId — survives thread switches */
@@ -145,6 +155,10 @@ export interface ThreadState {
   liveThreads: Record<string, ThreadWithMessages>;
 
   loadThreadsForProject: (projectId: string, includeArchived?: boolean) => Promise<void>;
+  /** Load the current user's scratch threads. */
+  loadScratchThreads: () => Promise<void>;
+  /** Add a freshly created scratch thread to the local cache. */
+  addScratchThread: (thread: Thread) => void;
   /** Load the next page of threads for a project (appends to existing list) */
   loadMoreThreads: (projectId: string, includeArchived?: boolean) => Promise<void>;
   selectThread: (threadId: string | null) => Promise<void>;
@@ -160,6 +174,8 @@ export interface ThreadState {
   pinThread: (threadId: string, projectId: string, pinned: boolean) => Promise<void>;
   updateThreadStage: (threadId: string, projectId: string, stage: ThreadStage) => Promise<void>;
   deleteThread: (threadId: string, projectId: string) => Promise<void>;
+  /** Delete a scratch thread (no project / no worktree). */
+  deleteScratchThread: (threadId: string) => Promise<void>;
   appendOptimisticMessage: (
     threadId: string,
     content: string,
@@ -328,8 +344,11 @@ function mergeMessagesById(local: LocalMessage[], fresh: LocalMessage[]): LocalM
 }
 
 export const useThreadStore = create<ThreadState>((set, get) => ({
-  threadsByProject: {},
+  threadsById: {},
+  threadIdsByProject: {},
+  scratchThreadIds: [],
   threadTotalByProject: {},
+  scratchThreadTotal: 0,
   selectedThreadId: null,
   activeThread: null,
   setupProgressByThread: {},
@@ -337,7 +356,25 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   queuedCountByThread: {},
   liveThreads: {},
 
+  loadScratchThreads: async () => {
+    const result = await api.listScratchThreads(100);
+    if (result.isOk()) {
+      set((state) =>
+        mutations.replaceScratchThreads(state, result.value.threads, result.value.total),
+      );
+    }
+  },
+
+  addScratchThread: (thread: Thread) => {
+    set((state) => mutations.prependScratchThread(state, thread));
+  },
+
   loadThreadsForProject: async (projectId: string, includeArchived: boolean = false) => {
+    // Reject empty/falsy projectId. An empty string would otherwise reach
+    // api.listThreads(undefined) and return every user thread, then store
+    // them under threadIdsByProject[''], duplicating every sidebar entry.
+    // Scratch threads (projectId === '') are loaded via loadScratchThreads.
+    if (!projectId) return;
     // Deduplicate concurrent loads for the same project + flag combo
     const key = `${projectId}|${includeArchived ? 1 : 0}`;
     const existing = _threadLoadPromises.get(key);
@@ -347,13 +384,14 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       try {
         const result = await api.listThreads(projectId, includeArchived, 50);
         if (result.isOk()) {
-          set((state) => ({
-            threadsByProject: { ...state.threadsByProject, [projectId]: result.value.threads },
-            threadTotalByProject: {
-              ...state.threadTotalByProject,
-              [projectId]: result.value.total,
-            },
-          }));
+          set((state) =>
+            mutations.replaceProjectThreads(
+              state,
+              projectId,
+              result.value.threads,
+              result.value.total,
+            ),
+          );
         }
       } finally {
         _threadLoadPromises.delete(key);
@@ -365,18 +403,12 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
   },
 
   loadMoreThreads: async (projectId: string, includeArchived: boolean = false) => {
-    const { threadsByProject } = get();
-    const currentThreads = threadsByProject[projectId] ?? [];
-    const offset = currentThreads.length;
-    const result = await api.listThreads(projectId, includeArchived, 50, offset);
-    if (result.isOk() && result.value.threads.length > 0) {
-      set((state) => ({
-        threadsByProject: {
-          ...state.threadsByProject,
-          [projectId]: [...(state.threadsByProject[projectId] ?? []), ...result.value.threads],
-        },
-        threadTotalByProject: { ...state.threadTotalByProject, [projectId]: result.value.total },
-      }));
+    const currentIds = get().threadIdsByProject[projectId] ?? [];
+    const result = await api.listThreads(projectId, includeArchived, 50, currentIds.length);
+    if (result.isOk()) {
+      set((state) =>
+        mutations.appendProjectThreads(state, projectId, result.value.threads, result.value.total),
+      );
     }
   },
 
@@ -402,7 +434,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       selectedThreadId: threadId,
       activeThread: keepStale ? prevActive : threadId && !isDifferentThread ? prevActive : null,
     });
-    useUIStore.setState({ newThreadProjectId: null, allThreadsProjectId: null });
+    notifyThreadSelected();
 
     if (!threadId) {
       setSelectingThreadId(null);
@@ -443,7 +475,7 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
       // Ensure project is expanded and threads are loaded
       expandProject(projectId);
-      if (!get().threadsByProject[projectId]) {
+      if (!get().threadIdsByProject[projectId]) {
         get().loadThreadsForProject(projectId);
       }
 
@@ -551,315 +583,176 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     prefetchThreadData(threadId);
   },
 
-  archiveThread: async (threadId, projectId) => {
-    // Optimistic update: update UI immediately
-    const { threadsByProject, activeThread } = get();
-    const projectThreads = threadsByProject[projectId] ?? [];
+  archiveThread: async (threadId) => {
+    set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, archived: true })));
 
-    set({
-      threadsByProject: {
-        ...threadsByProject,
-        [projectId]: projectThreads.map((t) => (t.id === threadId ? { ...t, archived: true } : t)),
-      },
-      activeThread:
-        activeThread?.id === threadId ? { ...activeThread, archived: true } : activeThread,
-    });
-
-    // Make API call in background
     const result = await api.archiveThread(threadId, true);
     if (result.isErr()) {
-      // Revert on error
-      const currentState = get();
-      const currentProjectThreads = currentState.threadsByProject[projectId] ?? [];
-      set({
-        threadsByProject: {
-          ...currentState.threadsByProject,
-          [projectId]: currentProjectThreads.map((t) =>
-            t.id === threadId ? { ...t, archived: false } : t,
-          ),
-        },
-        activeThread:
-          currentState.activeThread?.id === threadId
-            ? { ...currentState.activeThread, archived: false }
-            : currentState.activeThread,
-      });
+      set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, archived: false })));
       return;
     }
     cleanupThreadActor(threadId);
   },
 
-  unarchiveThread: async (threadId, projectId, stage) => {
-    // Optimistic update: update UI immediately
-    const { threadsByProject, activeThread } = get();
-    const projectThreads = threadsByProject[projectId] ?? [];
-    const oldThread = projectThreads.find((t) => t.id === threadId);
-    const oldStage = oldThread?.stage ?? 'backlog';
+  unarchiveThread: async (threadId, _projectId, stage) => {
+    const oldStage = get().threadsById[threadId]?.stage ?? 'backlog';
 
-    set({
-      threadsByProject: {
-        ...threadsByProject,
-        [projectId]: projectThreads.map((t) =>
-          t.id === threadId ? { ...t, archived: false, stage } : t,
-        ),
-      },
-      activeThread:
-        activeThread?.id === threadId ? { ...activeThread, archived: false, stage } : activeThread,
-    });
+    set((state) =>
+      mutations.patchThread(state, threadId, (t) => ({ ...t, archived: false, stage })),
+    );
 
-    // Make API calls in background
     const archiveResult = await api.archiveThread(threadId, false);
     if (archiveResult.isErr()) {
-      // Revert on error
-      const currentState = get();
-      const currentProjectThreads = currentState.threadsByProject[projectId] ?? [];
-      set({
-        threadsByProject: {
-          ...currentState.threadsByProject,
-          [projectId]: currentProjectThreads.map((t) =>
-            t.id === threadId ? { ...t, archived: true, stage: oldStage } : t,
-          ),
-        },
-        activeThread:
-          currentState.activeThread?.id === threadId
-            ? { ...currentState.activeThread, archived: true, stage: oldStage }
-            : currentState.activeThread,
-      });
+      set((state) =>
+        mutations.patchThread(state, threadId, (t) => ({
+          ...t,
+          archived: true,
+          stage: oldStage,
+        })),
+      );
       return;
     }
 
     const stageResult = await api.updateThreadStage(threadId, stage);
     if (stageResult.isErr()) {
-      // If stage update fails, keep unarchived but revert stage
-      const currentState = get();
-      const currentProjectThreads = currentState.threadsByProject[projectId] ?? [];
-      set({
-        threadsByProject: {
-          ...currentState.threadsByProject,
-          [projectId]: currentProjectThreads.map((t) =>
-            t.id === threadId ? { ...t, stage: oldStage } : t,
-          ),
-        },
-        activeThread:
-          currentState.activeThread?.id === threadId
-            ? { ...currentState.activeThread, stage: oldStage }
-            : currentState.activeThread,
-      });
+      set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, stage: oldStage })));
     }
   },
 
-  renameThread: async (threadId, projectId, title) => {
-    const { threadsByProject, activeThread } = get();
-    const projectThreads = threadsByProject[projectId] ?? [];
-    const oldThread = projectThreads.find((t) => t.id === threadId);
-    const oldTitle = oldThread?.title ?? '';
+  renameThread: async (threadId, _projectId, title) => {
+    const oldTitle = get().threadsById[threadId]?.title ?? '';
 
-    set({
-      threadsByProject: {
-        ...threadsByProject,
-        [projectId]: projectThreads.map((t) => (t.id === threadId ? { ...t, title } : t)),
-      },
-      activeThread: activeThread?.id === threadId ? { ...activeThread, title } : activeThread,
-    });
+    set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, title })));
 
     const result = await api.renameThread(threadId, title);
     if (result.isErr()) {
-      const currentState = get();
-      const currentProjectThreads = currentState.threadsByProject[projectId] ?? [];
-      set({
-        threadsByProject: {
-          ...currentState.threadsByProject,
-          [projectId]: currentProjectThreads.map((t) =>
-            t.id === threadId ? { ...t, title: oldTitle } : t,
-          ),
-        },
-        activeThread:
-          currentState.activeThread?.id === threadId
-            ? { ...currentState.activeThread, title: oldTitle }
-            : currentState.activeThread,
-      });
+      set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, title: oldTitle })));
     }
   },
 
-  pinThread: async (threadId, projectId, pinned) => {
-    // Optimistic update: update UI immediately
-    const { threadsByProject, activeThread } = get();
-    const projectThreads = threadsByProject[projectId] ?? [];
-    const oldThread = projectThreads.find((t) => t.id === threadId);
-    const oldPinned = oldThread?.pinned;
+  pinThread: async (threadId, _projectId, pinned) => {
+    const oldPinned = get().threadsById[threadId]?.pinned;
 
-    set({
-      threadsByProject: {
-        ...threadsByProject,
-        [projectId]: projectThreads.map((t) => (t.id === threadId ? { ...t, pinned } : t)),
-      },
-      activeThread: activeThread?.id === threadId ? { ...activeThread, pinned } : activeThread,
-    });
+    set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, pinned })));
 
-    // Make API call in background
     const result = await api.pinThread(threadId, pinned);
     if (result.isErr()) {
-      // Revert on error
-      const currentState = get();
-      const currentProjectThreads = currentState.threadsByProject[projectId] ?? [];
-      set({
-        threadsByProject: {
-          ...currentState.threadsByProject,
-          [projectId]: currentProjectThreads.map((t) =>
-            t.id === threadId ? { ...t, pinned: oldPinned } : t,
-          ),
-        },
-        activeThread:
-          currentState.activeThread?.id === threadId
-            ? { ...currentState.activeThread, pinned: oldPinned }
-            : currentState.activeThread,
-      });
+      set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, pinned: oldPinned })));
     }
   },
 
-  updateThreadStage: async (threadId, projectId, stage) => {
-    // Optimistic update: update UI immediately
-    const { threadsByProject, activeThread } = get();
-    const projectThreads = threadsByProject[projectId] ?? [];
-    const oldThread = projectThreads.find((t) => t.id === threadId);
-    const oldStage = oldThread?.stage ?? 'backlog';
+  updateThreadStage: async (threadId, _projectId, stage) => {
+    const oldStage = get().threadsById[threadId]?.stage ?? 'backlog';
 
-    set({
-      threadsByProject: {
-        ...threadsByProject,
-        [projectId]: projectThreads.map((t) => (t.id === threadId ? { ...t, stage } : t)),
-      },
-      activeThread: activeThread?.id === threadId ? { ...activeThread, stage } : activeThread,
-    });
+    set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, stage })));
 
-    // Make API call in background
     const result = await api.updateThreadStage(threadId, stage);
     if (result.isErr()) {
-      // Revert on error
-      const currentState = get();
-      const currentProjectThreads = currentState.threadsByProject[projectId] ?? [];
-      set({
-        threadsByProject: {
-          ...currentState.threadsByProject,
-          [projectId]: currentProjectThreads.map((t) =>
-            t.id === threadId ? { ...t, stage: oldStage } : t,
-          ),
-        },
-        activeThread:
-          currentState.activeThread?.id === threadId
-            ? { ...currentState.activeThread, stage: oldStage }
-            : currentState.activeThread,
-      });
+      set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, stage: oldStage })));
     }
   },
 
-  deleteThread: async (threadId, projectId) => {
-    // If the thread is still running, stop the agent first so it doesn't
-    // keep executing in the background after we remove it from the UI.
-    const { threadsByProject, selectedThreadId } = get();
-    const projectThreads = threadsByProject[projectId] ?? [];
-    const thread = projectThreads.find((t) => t.id === threadId);
+  deleteThread: async (threadId) => {
+    const thread = get().threadsById[threadId];
     if (thread && (thread.status === 'running' || thread.status === 'waiting')) {
       await api.stopThread(threadId);
     }
-    // Optimistic: update UI immediately, then fire API in background
     cleanupThreadActor(threadId);
-    set({
-      threadsByProject: {
-        ...get().threadsByProject,
-        [projectId]: (get().threadsByProject[projectId] ?? []).filter((t) => t.id !== threadId),
-      },
-    });
-    if (selectedThreadId === threadId) {
+    set((state) => mutations.removeThread(state, threadId));
+    if (get().selectedThreadId === threadId) {
       set({ selectedThreadId: null, activeThread: null });
     }
-    // Fire-and-forget: server cleanup (worktree removal, etc.) runs in background
+    api.deleteThread(threadId);
+  },
+
+  deleteScratchThread: async (threadId) => {
+    const thread = get().threadsById[threadId];
+    if (thread && (thread.status === 'running' || thread.status === 'waiting')) {
+      await api.stopThread(threadId);
+    }
+    cleanupThreadActor(threadId);
+    set((state) => mutations.removeThread(state, threadId));
+    if (get().selectedThreadId === threadId) {
+      set({ selectedThreadId: null, activeThread: null });
+    }
     api.deleteThread(threadId);
   },
 
   appendOptimisticMessage: (threadId, content, images, model, permissionMode, fileReferences) => {
-    const { activeThread, threadsByProject } = get();
-    if (activeThread?.id === threadId) {
-      const pid = activeThread.projectId;
-      const projectThreads = threadsByProject[pid] ?? [];
+    const { activeThread } = get();
+    if (activeThread?.id !== threadId) return;
+    const pid = activeThread.projectId;
 
-      const machineEvent = { type: 'START' as const };
-      const newStatus = transitionThreadStatus(
-        threadId,
-        machineEvent,
-        activeThread.status,
-        activeThread.cost,
-      );
+    const machineEvent = { type: 'START' as const };
+    const newStatus = transitionThreadStatus(
+      threadId,
+      machineEvent,
+      activeThread.status,
+      activeThread.cost,
+    );
 
-      // Pre-populate initInfo so the card renders immediately instead of
-      // waiting for the agent:init WebSocket event from the server.
-      const initInfo =
-        activeThread.initInfo ??
-        (() => {
-          const projectPath = getProjectPath(pid);
-          const cwd = activeThread.worktreePath || projectPath || '';
-          return { model: model || activeThread.model, cwd, tools: [] as string[] };
-        })();
+    // Pre-populate initInfo so the card renders immediately instead of
+    // waiting for the agent:init WebSocket event from the server.
+    const initInfo =
+      activeThread.initInfo ??
+      (() => {
+        const projectPath = getProjectPath(pid);
+        const cwd = activeThread.worktreePath || projectPath || '';
+        return { model: model || activeThread.model, cwd, tools: [] as string[] };
+      })();
 
-      // Build a minimal <referenced-files> XML header so chips render in the message
-      let messageContent = content;
-      if (fileReferences && fileReferences.length > 0) {
-        const tags = fileReferences
-          .map((ref) =>
-            ref.type === 'folder'
-              ? `<folder path="${ref.path}"></folder>`
-              : `<file path="${ref.path}" />`,
-          )
-          .join('\n');
-        messageContent = `<referenced-files>\n${tags}\n</referenced-files>\n${content}`;
-      }
-
-      const newMessage = {
-        id: crypto.randomUUID(),
-        threadId,
-        role: 'user' as MessageRole,
-        content: messageContent,
-        images,
-        timestamp: new Date().toISOString(),
-        model,
-        permissionMode,
-      };
-
-      // For idle threads (backlog/planning), a draft user message already exists —
-      // replace it instead of appending a duplicate.
-      const existingDraftIdx =
-        activeThread.status === 'idle'
-          ? activeThread.messages.findIndex((m) => m.role === 'user')
-          : -1;
-      const nextMessages =
-        existingDraftIdx >= 0
-          ? activeThread.messages.map((m, i) => (i === existingDraftIdx ? newMessage : m))
-          : activeThread.messages.concat(newMessage);
-
-      // Only rebuild threadsByProject if the status actually changed
-      const statusChanged = newStatus !== activeThread.status;
-      const nextThreadsByProject = statusChanged
-        ? {
-            ...threadsByProject,
-            [pid]: projectThreads.map((t) => (t.id === threadId ? { ...t, status: newStatus } : t)),
-          }
-        : threadsByProject;
-
-      set({
-        activeThread: {
-          ...activeThread,
-          initInfo,
-          status: newStatus,
-          // Clear initialPrompt so PromptInput doesn't restore it after send
-          initialPrompt: undefined,
-          waitingReason: undefined,
-          pendingPermission: undefined,
-          permissionMode: permissionMode || activeThread.permissionMode,
-          messages: nextMessages,
-          lastUserMessage: newMessage,
-        },
-        threadsByProject: nextThreadsByProject,
-      });
+    // Build a minimal <referenced-files> XML header so chips render in the message
+    let messageContent = content;
+    if (fileReferences && fileReferences.length > 0) {
+      const tags = fileReferences
+        .map((ref) =>
+          ref.type === 'folder'
+            ? `<folder path="${ref.path}"></folder>`
+            : `<file path="${ref.path}" />`,
+        )
+        .join('\n');
+      messageContent = `<referenced-files>\n${tags}\n</referenced-files>\n${content}`;
     }
+
+    const newMessage = {
+      id: crypto.randomUUID(),
+      threadId,
+      role: 'user' as MessageRole,
+      content: messageContent,
+      images,
+      timestamp: new Date().toISOString(),
+      model,
+      permissionMode,
+    };
+
+    // For idle threads (backlog/planning), a draft user message already exists —
+    // replace it instead of appending a duplicate.
+    const existingDraftIdx =
+      activeThread.status === 'idle'
+        ? activeThread.messages.findIndex((m) => m.role === 'user')
+        : -1;
+    const nextMessages =
+      existingDraftIdx >= 0
+        ? activeThread.messages.map((m, i) => (i === existingDraftIdx ? newMessage : m))
+        : activeThread.messages.concat(newMessage);
+
+    // Patch sidebar row status; activeThread is updated separately below to
+    // also carry the optimistic message/initInfo (which patchThread doesn't).
+    set((state) => mutations.patchThread(state, threadId, (t) => ({ ...t, status: newStatus })));
+    set({
+      activeThread: {
+        ...activeThread,
+        initInfo,
+        status: newStatus,
+        // Clear initialPrompt so PromptInput doesn't restore it after send
+        initialPrompt: undefined,
+        waitingReason: undefined,
+        pendingPermission: undefined,
+        permissionMode: permissionMode || activeThread.permissionMode,
+        messages: nextMessages,
+        lastUserMessage: newMessage,
+      },
+    });
   },
 
   rollbackOptimisticMessage: (threadId) => {
@@ -965,57 +858,67 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
     // were emitted by the server while the WebSocket was disconnected. The
     // server is source of truth for the recent window; older paginated
     // messages already loaded by the client are preserved.
+    //
+    // Use the functional set() form so the merge base + spread base read the
+    // freshest activeThread. Without this, a WS agent:message that arrives
+    // during the await above gets clobbered: the captured `activeThread`
+    // reference doesn't see the WS update, so the merge runs on a stale local
+    // and the spread overwrites the WS-applied message.
     const freshMessages = (thread.messages ?? []) as LocalMessage[];
-    const mergedMessages = mergeMessagesById(activeThread.messages, freshMessages);
-    const recovered = mergedMessages.length - activeThread.messages.length;
-    if (recovered > 0) {
-      refreshLog.info('Recovered missed messages on resync', {
-        threadId: activeThread.id,
-        recovered,
-        local: activeThread.messages.length,
-        fresh: freshMessages.length,
-        merged: mergedMessages.length,
-      });
-      metric('thread.resync.messages_recovered', recovered, {
-        attributes: { 'thread.id': activeThread.id },
-      });
-    }
+    set((state) => {
+      const current = state.activeThread;
+      // Bail if user switched away from this thread mid-fetch.
+      if (!current || current.id !== activeThread.id) return {};
 
-    set({
-      activeThread: {
-        ...activeThread,
-        status: thread.status,
-        cost: thread.cost,
-        stage: thread.stage,
-        completedAt: thread.completedAt,
-        archived: thread.archived,
-        pinned: thread.pinned,
-        mode: thread.mode,
-        branch: thread.branch,
-        worktreePath: thread.worktreePath,
-        baseBranch: thread.baseBranch,
-        initInfo: activeThread.initInfo,
-        resultInfo,
-        threadEvents,
-        messages: mergedMessages,
-        lastUserMessage: thread.lastUserMessage ?? activeThread.lastUserMessage,
-        hasMore: thread.hasMore ?? activeThread.hasMore,
-        compactionEvents:
-          persistedCompaction.length > 0 ? persistedCompaction : activeThread.compactionEvents,
-        contextUsage: activeThread.contextUsage,
-        waitingReason: isServerWaiting ? activeThread.waitingReason : undefined,
-        pendingPermission: isServerWaiting ? activeThread.pendingPermission : undefined,
-      },
+      const mergedMessages = mergeMessagesById(current.messages, freshMessages);
+      const recovered = mergedMessages.length - current.messages.length;
+      if (recovered > 0) {
+        refreshLog.info('Recovered missed messages on resync', {
+          threadId: current.id,
+          recovered,
+          local: current.messages.length,
+          fresh: freshMessages.length,
+          merged: mergedMessages.length,
+        });
+        metric('thread.resync.messages_recovered', recovered, {
+          attributes: { 'thread.id': current.id },
+        });
+      }
+
+      return {
+        activeThread: {
+          ...current,
+          status: thread.status,
+          cost: thread.cost,
+          stage: thread.stage,
+          completedAt: thread.completedAt,
+          archived: thread.archived,
+          pinned: thread.pinned,
+          mode: thread.mode,
+          branch: thread.branch,
+          worktreePath: thread.worktreePath,
+          baseBranch: thread.baseBranch,
+          initInfo: current.initInfo,
+          resultInfo,
+          threadEvents,
+          messages: mergedMessages,
+          lastUserMessage: thread.lastUserMessage ?? current.lastUserMessage,
+          hasMore: thread.hasMore ?? current.hasMore,
+          compactionEvents:
+            persistedCompaction.length > 0 ? persistedCompaction : current.compactionEvents,
+          contextUsage: current.contextUsage,
+          waitingReason: isServerWaiting ? current.waitingReason : undefined,
+          pendingPermission: isServerWaiting ? current.pendingPermission : undefined,
+        },
+      };
     });
   },
 
   refreshAllLoadedThreads: async () => {
-    const { threadsByProject, refreshActiveThread } = get();
-    const projectIds = Object.keys(threadsByProject);
+    const projectIds = Object.keys(get().threadIdsByProject);
 
-    // Fetch all projects in parallel, then batch into a single state update
-    // instead of N separate set() calls (one per project) to avoid cascading
-    // re-renders.
+    // Fetch all projects in parallel, then apply each result through the
+    // shared mutation so threadsById stays the single source of truth.
     const results = await Promise.all(
       projectIds.map(async (pid) => {
         const result = await api.listThreads(pid, false, 50);
@@ -1027,31 +930,28 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
       }),
     );
 
-    const prev = get().threadsByProject;
-    const prevTotals = get().threadTotalByProject;
-    let changed = false;
-    const next: Record<string, Thread[]> = { ...prev };
-    const nextTotals: Record<string, number> = { ...prevTotals };
-    for (const { pid, threads, total } of results) {
-      if (threads && threads !== prev[pid]) {
-        next[pid] = threads;
-        nextTotals[pid] = total;
-        changed = true;
+    set((state) => {
+      let patch: Partial<ThreadState> = {};
+      let workingState = state;
+      for (const { pid, threads, total } of results) {
+        if (!threads) continue;
+        const sub = mutations.replaceProjectThreads(workingState, pid, threads, total);
+        patch = { ...patch, ...sub };
+        workingState = { ...workingState, ...sub } as ThreadState;
       }
-    }
-    if (changed) set({ threadsByProject: next, threadTotalByProject: nextTotals });
+      return patch;
+    });
 
-    await refreshActiveThread();
+    await get().refreshActiveThread();
   },
 
   clearProjectThreads: (projectId: string) => {
-    const { threadsByProject, activeThread } = get();
-    const nextThreads = { ...threadsByProject };
-    delete nextThreads[projectId];
-    const clearSelection = activeThread?.projectId === projectId;
-    set({
-      threadsByProject: nextThreads,
-      ...(clearSelection ? { selectedThreadId: null, activeThread: null } : {}),
+    set((state) => {
+      const clearSelection = state.activeThread?.projectId === projectId;
+      return {
+        ...mutations.clearProjectBucket(state, projectId),
+        ...(clearSelection ? { selectedThreadId: null, activeThread: null } : {}),
+      };
     });
   },
 
@@ -1235,14 +1135,17 @@ export const useThreadStore = create<ThreadState>((set, get) => ({
 
 // Register with the bridge so project-store can access thread state without a direct import
 registerThreadStore(useThreadStore);
+setClearThreadSelection(() => {
+  useThreadStore.setState({ selectedThreadId: null, activeThread: null });
+});
 
 // ── Thread index subscriber ──────────────────────────────────
-// Keep the threadId→projectId index in sync with threadsByProject.
-// This runs synchronously after every store update that touches threadsByProject.
-let _prevThreadsByProject: Record<string, any[]> = {};
+// Keep the threadId→projectId index in sync with threadIdsByProject. Runs
+// synchronously after every store update that touches the project bucket.
+let _prevThreadIdsByProject: Record<string, string[]> = {};
 useThreadStore.subscribe((state) => {
-  if (state.threadsByProject !== _prevThreadsByProject) {
-    _prevThreadsByProject = state.threadsByProject;
-    rebuildThreadProjectIndex(state.threadsByProject);
+  if (state.threadIdsByProject !== _prevThreadIdsByProject) {
+    _prevThreadIdsByProject = state.threadIdsByProject;
+    rebuildThreadProjectIndex(state.threadIdsByProject);
   }
 });

@@ -26,7 +26,6 @@ import { BrowserRouter } from 'react-router-dom';
 import { AppShellSkeleton } from './components/AppShellSkeleton';
 import { TooltipProvider } from './components/ui/tooltip';
 import { api } from './lib/api';
-import { initWebVitals } from './lib/web-vitals';
 import { useAuthStore } from './stores/auth-store';
 import { useProfileStore } from './stores/profile-store';
 import { useSettingsStore } from './stores/settings-store';
@@ -55,9 +54,6 @@ const PreviewBrowser = lazy(() =>
 const SetupWizard = lazy(() =>
   import('./components/SetupWizard').then((m) => ({ default: m.SetupWizard })),
 );
-
-// Start Web Vitals capture as early as possible so we measure the real LCP/FCP.
-initWebVitals();
 
 // The preview window sets this flag via Tauri's initialization_script
 const isPreviewWindow = !!(window as unknown as { __PREVIEW_MODE__: unknown }).__PREVIEW_MODE__;
@@ -249,15 +245,13 @@ root.render(
         endpoint={import.meta.env.VITE_OTLP_ENDPOINT || 'http://localhost:4000'}
         serviceName="funny-client"
         captureConsole
+        captureWebVitals
         level="debug"
         enabled={!!import.meta.env.VITE_OTLP_ENDPOINT}
         includeUrl={true}
         consoleOptions={{
           captureErrors: true,
           captureUnhandledRejections: true,
-          captureLongTasks: true,
-          captureSlowEvents: true,
-          slowEventThresholdMs: 50,
           captureStackTrace: true,
         }}
       >

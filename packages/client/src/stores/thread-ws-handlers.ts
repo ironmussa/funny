@@ -16,6 +16,7 @@ import {
   transitionThreadStatus,
   wsEventToMachineEvent,
 } from './thread-machine-bridge';
+import * as mutations from './thread-mutations';
 import { useThreadReadStore } from './thread-read-store';
 import { bufferWSEvent, getNavigate, getProjectIdForThread } from './thread-store-internals';
 import type { AgentInitInfo, ThreadState, ThreadWithMessages } from './thread-types';
@@ -39,6 +40,42 @@ function updateLiveThread(
   set({ liveThreads: { ...liveThreads, [threadId]: updater(live) } } as any);
 }
 
+// ── Sidebar update helper ─────────────────────────────────────
+//
+// Threads live in a single `threadsById` index; project- vs scratch- buckets
+// are just ordered ID arrays around it. So patching a sidebar-visible field
+// (status, lastAssistantMessage, cost, stage, etc.) is a one-liner via
+// `mutations.patchThread` — regardless of which bucket the thread is in.
+//
+// This wrapper returns `{ found, patch }` so callers can decide whether to
+// fall back to a project refresh for unknown threads. `patch` is `{}` when
+// the updater returned the same Thread reference (no React re-render).
+function patchSidebarThread(
+  get: Get,
+  threadId: string,
+  updater: (thread: Thread) => Thread,
+): { found: boolean; patch: Partial<ThreadState> } {
+  const state = get();
+  if (!state.threadsById || !state.threadsById[threadId]) {
+    return { found: false, patch: {} };
+  }
+  return { found: true, patch: mutations.patchThread(state, threadId, updater) };
+}
+
+/**
+ * Convenience wrapper around `patchSidebarThread` for the common case of
+ * patching `lastAssistantMessage`. Slices content to 120 chars to match the
+ * existing sidebar snippet truncation.
+ */
+function patchSidebarLastAssistant(
+  get: Get,
+  threadId: string,
+  content: string,
+): Partial<ThreadState> {
+  const snippet = content.slice(0, 120);
+  return patchSidebarThread(get, threadId, (t) => ({ ...t, lastAssistantMessage: snippet })).patch;
+}
+
 // ── Debounced "refresh all projects" for unknown threads ─────────
 // When a WS event arrives for a thread not in any loaded project, we need to
 // refresh projects so it appears. But doing this on every event causes an
@@ -53,14 +90,14 @@ function scheduleProjectRefresh(get: Get, specificPid?: string): void {
   if (_refreshAllTimer) return; // already scheduled
   _refreshAllTimer = setTimeout(() => {
     _refreshAllTimer = null;
-    const { threadsByProject, loadThreadsForProject } = get();
+    const { threadIdsByProject, loadThreadsForProject } = get();
     if (_pendingRefreshPids.size > 0) {
       for (const pid of _pendingRefreshPids) {
         loadThreadsForProject(pid);
       }
     } else {
       // No specific project — refresh all loaded projects
-      for (const pid of Object.keys(threadsByProject)) {
+      for (const pid of Object.keys(threadIdsByProject)) {
         loadThreadsForProject(pid);
       }
     }
@@ -118,19 +155,7 @@ export function handleWSMessage(
           activeThread: { ...activeThread, messages: updated },
         };
         if (data.role === 'assistant' && data.content) {
-          const pid = getProjectIdForThread(threadId);
-          if (pid) {
-            const { threadsByProject } = get();
-            const threads = threadsByProject[pid];
-            if (threads) {
-              const tidx = threads.findIndex((t) => t.id === threadId);
-              if (tidx >= 0) {
-                const copy = [...threads];
-                copy[tidx] = { ...copy[tidx], lastAssistantMessage: data.content.slice(0, 120) };
-                earlyUpdate.threadsByProject = { ...threadsByProject, [pid]: copy };
-              }
-            }
-          }
+          Object.assign(earlyUpdate, patchSidebarLastAssistant(get, threadId, data.content));
         }
         set(earlyUpdate as any);
         return;
@@ -182,19 +207,7 @@ export function handleWSMessage(
 
     // Update sidebar snippet for assistant messages (merged into same set())
     if (data.role === 'assistant' && data.content) {
-      const pid = getProjectIdForThread(threadId);
-      if (pid) {
-        const { threadsByProject } = get();
-        const threads = threadsByProject[pid];
-        if (threads) {
-          const idx = threads.findIndex((t) => t.id === threadId);
-          if (idx >= 0) {
-            const updated = [...threads];
-            updated[idx] = { ...updated[idx], lastAssistantMessage: data.content.slice(0, 120) };
-            stateUpdate.threadsByProject = { ...threadsByProject, [pid]: updated };
-          }
-        }
-      }
+      Object.assign(stateUpdate, patchSidebarLastAssistant(get, threadId, data.content));
     }
 
     set(stateUpdate as any);
@@ -240,18 +253,9 @@ export function handleWSMessage(
 
   // Update sidebar snippet for assistant messages on non-active threads
   if (activeThread?.id !== threadId && data.role === 'assistant' && data.content) {
-    const pid = getProjectIdForThread(threadId);
-    if (pid) {
-      const { threadsByProject } = get();
-      const threads = threadsByProject[pid];
-      if (threads) {
-        const idx = threads.findIndex((t) => t.id === threadId);
-        if (idx >= 0) {
-          const updated = [...threads];
-          updated[idx] = { ...updated[idx], lastAssistantMessage: data.content.slice(0, 120) };
-          set({ threadsByProject: { ...threadsByProject, [pid]: updated } });
-        }
-      }
+    const update = patchSidebarLastAssistant(get, threadId, data.content);
+    if (Object.keys(update).length > 0) {
+      set(update as any);
     }
   }
 }
@@ -422,7 +426,7 @@ export function handleWSStatus(
     permissionMode?: string;
   },
 ): void {
-  const { threadsByProject, activeThread, loadThreadsForProject, selectedThreadId } = get();
+  const { activeThread, selectedThreadId } = get();
 
   // Buffer status events when thread is selected but not yet fully loaded.
   // Invalidate cache unconditionally so the active thread's snapshot reflects
@@ -440,50 +444,33 @@ export function handleWSStatus(
     return;
   }
 
-  let foundInSidebar = false;
-  let updatedProject: { pid: string; threads: Thread[] } | null = null;
-
-  const pid = getProjectIdForThread(threadId);
-  if (pid) {
-    const threads = threadsByProject[pid];
-    if (threads) {
-      const idx = threads.findIndex((t) => t.id === threadId);
-      if (idx >= 0) {
-        foundInSidebar = true;
-        const t = threads[idx];
-        const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, t.cost);
-        wsLog.debug('status transition', {
-          threadId,
-          from: t.status,
-          to: newStatus,
-          waitingReason: data.waitingReason ?? '',
-        });
-        if (
-          newStatus !== t.status ||
-          (data.stage && data.stage !== t.stage) ||
-          (data.permissionMode && data.permissionMode !== t.permissionMode)
-        ) {
-          const copy = [...threads];
-          copy[idx] = {
-            ...t,
-            status: newStatus,
-            ...(data.stage ? { stage: data.stage as any } : {}),
-            ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}),
-          };
-          updatedProject = { pid, threads: copy };
-        }
-      }
+  // Apply the status transition to whichever sidebar bucket holds the thread
+  // (project or scratch). `patchSidebarThread` walks both and returns a
+  // single partial state update for atomic application below.
+  const { found: foundInSidebar, patch: sidebarPatch } = patchSidebarThread(get, threadId, (t) => {
+    const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, t.cost);
+    wsLog.debug('status transition', {
+      threadId,
+      from: t.status,
+      to: newStatus,
+      waitingReason: data.waitingReason ?? '',
+    });
+    if (
+      newStatus === t.status &&
+      (!data.stage || data.stage === t.stage) &&
+      (!data.permissionMode || data.permissionMode === t.permissionMode)
+    ) {
+      return t;
     }
-  }
-
-  const stateUpdate: Partial<ThreadState> = {};
-
-  if (updatedProject) {
-    stateUpdate.threadsByProject = {
-      ...threadsByProject,
-      [updatedProject.pid]: updatedProject.threads,
+    return {
+      ...t,
+      status: newStatus,
+      ...(data.stage ? { stage: data.stage as any } : {}),
+      ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}),
     };
-  }
+  });
+
+  const stateUpdate: Partial<ThreadState> = { ...sidebarPatch };
 
   if (activeThread?.id === threadId) {
     const newStatus = transitionThreadStatus(
@@ -581,7 +568,7 @@ export function handleWSStatus(
 // ── Result ──────────────────────────────────────────────────────
 
 export function handleWSResult(get: Get, set: Set, threadId: string, data: any): void {
-  const { threadsByProject, activeThread, loadThreadsForProject, selectedThreadId } = get();
+  const { activeThread, loadThreadsForProject, selectedThreadId } = get();
 
   // Invalidate the cached snapshot unconditionally so the next selectThread()
   // refetches the final messages/tool calls/resultInfo from the server. This
@@ -613,43 +600,34 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
     cost: String(data.cost ?? ''),
     errorReason: data.errorReason ?? '',
   });
-  let updatedProject: { pid: string; threads: Thread[] } | null = null;
 
-  const resultPid = getProjectIdForThread(threadId);
-  if (resultPid) {
-    const threads = threadsByProject[resultPid];
-    if (threads) {
-      const idx = threads.findIndex((t) => t.id === threadId);
-      if (idx >= 0) {
-        const t = threads[idx];
-        const newStatus = transitionThreadStatus(
-          threadId,
-          machineEvent,
-          t.status,
-          data.cost ?? t.cost,
-        );
-        // Use server status as authoritative if xstate transition didn't change state
-        // (e.g., actor was in stale state that didn't accept the event)
-        resultStatus = newStatus !== t.status ? newStatus : serverStatus;
-        const copy = [...threads];
-        copy[idx] = {
-          ...t,
-          status: resultStatus,
-          cost: data.cost ?? t.cost,
-          ...(data.stage ? { stage: data.stage } : {}),
-        };
-        updatedProject = { pid: resultPid, threads: copy };
-      }
+  // Apply the result transition to whichever sidebar bucket holds the thread.
+  // The updater closes over `resultStatus` to also expose the resolved status
+  // back to the caller for the toast/notification + activeThread paths.
+  const { patch: sidebarPatch, found: foundInSidebar } = patchSidebarThread(get, threadId, (t) => {
+    const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, data.cost ?? t.cost);
+    // Use server status as authoritative if xstate transition didn't change state
+    // (e.g., actor was in stale state that didn't accept the event)
+    const nextStatus = newStatus !== t.status ? newStatus : serverStatus;
+    resultStatus = nextStatus;
+    if (
+      nextStatus === t.status &&
+      (data.cost === undefined || data.cost === t.cost) &&
+      (!data.stage || data.stage === t.stage)
+    ) {
+      return t;
     }
-  }
-
-  const stateUpdate: Partial<ThreadState> = {};
-  if (updatedProject) {
-    stateUpdate.threadsByProject = {
-      ...threadsByProject,
-      [updatedProject.pid]: updatedProject.threads,
+    return {
+      ...t,
+      status: nextStatus,
+      cost: data.cost ?? t.cost,
+      ...(data.stage ? { stage: data.stage } : {}),
     };
-  }
+  });
+  const stateUpdate: Partial<ThreadState> = { ...sidebarPatch };
+  // Scratch threads sit outside any project, so the post-result fallback
+  // (`loadThreadsForProject` / `scheduleProjectRefresh`) should be skipped.
+  const sidebarHitScratch = get().scratchThreadIds.includes(threadId);
 
   if (activeThread?.id === threadId) {
     const isWaiting = resultStatus === 'waiting';
@@ -738,11 +716,24 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
 
   if (resultStatus === 'waiting') return;
 
+  // Skip the project-refresh fallback when the thread is scratch — we already
+  // patched scratchThreads above, and scratch threads have no project so a
+  // bare scheduleProjectRefresh() would just storm every loaded project.
+  if (sidebarHitScratch) {
+    notifyThreadResult(threadId, resultStatus, get, data.errorReason);
+    return;
+  }
+
   const projectIdForRefresh =
-    activeThread?.id === threadId ? activeThread.projectId : getProjectIdForThread(threadId);
+    activeThread?.id === threadId && !activeThread.isScratch
+      ? activeThread.projectId
+      : getProjectIdForThread(threadId);
 
   if (projectIdForRefresh) {
     setTimeout(() => loadThreadsForProject(projectIdForRefresh), 500);
+  } else if (foundInSidebar) {
+    // Thread is in the sidebar but we don't know its project (shouldn't
+    // happen for project threads — defensive). Skip the global refresh.
   } else {
     // Thread not found in any loaded project — likely created externally
     // (e.g. Chrome extension ingest). Debounce refresh to avoid API storm.
@@ -750,7 +741,7 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
   }
 
   // Toast notification
-  notifyThreadResult(threadId, resultStatus, updatedProject, get, data.errorReason);
+  notifyThreadResult(threadId, resultStatus, get, data.errorReason);
 }
 
 // ── Queue update ─────────────────────────────────────────────────
@@ -959,23 +950,27 @@ const ERROR_REASON_MESSAGES: Record<string, string> = {
 function notifyThreadResult(
   threadId: string,
   resultStatus: ThreadStatus,
-  updatedProject: { pid: string; threads: Thread[] } | null,
   get: Get,
   errorReason?: string,
 ): void {
   let threadTitle = 'Thread';
   let projectId: string | null = null;
-  if (updatedProject) {
-    const found = updatedProject.threads.find((t) => t.id === threadId);
-    if (found) {
-      threadTitle = found.title ?? threadTitle;
-      projectId = updatedProject.pid;
-    }
+
+  // Look up the thread from the unified index. Project / scratch / unknown
+  // all resolve uniformly. Falls back to activeThread below for cases where
+  // the thread was never loaded into the sidebar.
+  const state = get();
+  const t = state.threadsById[threadId];
+  if (t) {
+    threadTitle = t.title ?? threadTitle;
+    // Scratch threads keep projectId = null, so downstream notification
+    // routing falls through to a no-op rather than guessing.
+    if (!t.isScratch) projectId = t.projectId;
   }
 
   // Fallback: use activeThread if the thread wasn't found in sidebar data
   if (threadTitle === 'Thread') {
-    const { activeThread } = get();
+    const activeThread = state.activeThread;
     if (activeThread?.id === threadId) {
       threadTitle = activeThread.title ?? threadTitle;
       projectId = projectId ?? activeThread.projectId;

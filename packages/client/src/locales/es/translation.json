@@ -1015,6 +1015,22 @@
     "loginFailed": "Inicio de sesión fallido. Verifica tus credenciales.",
     "logout": "Cerrar sesión"
   },
+  "shortcuts": {
+    "title": "Atajos de teclado",
+    "description": "Atajos de teclado útiles para navegar la app más rápido.",
+    "commandPalette": "Abrir paleta de comandos",
+    "commandPaletteAlt": "Abrir paleta de comandos (alt)",
+    "fileSearch": "Buscar archivos del proyecto",
+    "searchInThread": "Buscar dentro del hilo actual",
+    "searchAcrossThreads": "Buscar entre hilos",
+    "toggleSidebar": "Mostrar/ocultar sidebar",
+    "projectSettings": "Abrir configuración del proyecto",
+    "newThread": "Iniciar un nuevo hilo",
+    "nextThread": "Ir al siguiente hilo",
+    "prevThread": "Ir al hilo anterior",
+    "toggleTerminal": "Mostrar/ocultar terminal",
+    "openShortcuts": "Mostrar atajos de teclado"
+  },
   "profile": {
     "title": "Perfil",
     "gitIdentity": "Identidad Git",

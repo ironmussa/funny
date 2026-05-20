@@ -24,6 +24,7 @@
  */
 
 import {
+  NONCE_HEADER,
   SIGNATURE_HEADER,
   TIMESTAMP_HEADER,
   signForwardedIdentity,
@@ -113,20 +114,28 @@ export async function proxyToRunner(c: Context<ServerEnv>): Promise<Response> {
     forwardedHeaders['X-Forwarded-Org-Name'] = orgName;
   }
 
-  const userRole = c.get('userRole') as string | undefined;
-  if (userRole) {
-    forwardedHeaders['X-Forwarded-Role'] = userRole;
-  }
+  // Always forward a role (default 'user') so the signed payload matches what
+  // the runtime verifies — the runtime defaults a missing X-Forwarded-Role to
+  // 'user', and any divergence between signer and verifier breaks the HMAC.
+  const userRole = (c.get('userRole') as string | undefined) || 'user';
+  forwardedHeaders['X-Forwarded-Role'] = userRole;
 
   // HMAC-sign the forwarded identity so the runtime can distinguish a real
   // server-proxied request from a spoofed one carrying the shared secret.
   if (userId) {
-    const { signature, timestamp } = signForwardedIdentity(
-      { userId, role: userRole ?? null, orgId: orgId ?? null, orgName: orgName ?? null },
+    const signedIdentity = {
+      userId,
+      role: userRole,
+      orgId: orgId ?? null,
+      orgName: orgName ?? null,
+    };
+    const { signature, timestamp, nonce } = signForwardedIdentity(
+      signedIdentity,
       getRunnerAuthSecret(),
     );
     forwardedHeaders[SIGNATURE_HEADER] = signature;
     forwardedHeaders[TIMESTAMP_HEADER] = String(timestamp);
+    forwardedHeaders[NONCE_HEADER] = nonce;
   }
 
   // Read body for non-GET/HEAD requests

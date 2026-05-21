@@ -111,7 +111,8 @@ projectCommandsRoutes.post('/:id/commands/:cmdId/start', requireAdmin, async (c)
     }
   }
 
-  await startCommand(cmdId, cmd.command, cwd, projectId, cmd.label, options);
+  const startResult = await startCommand(cmdId, cmd.command, cwd, projectId, cmd.label, options);
+  if (startResult.isErr()) return resultToResponse(c, startResult);
   return c.json({ ok: true });
 });
 

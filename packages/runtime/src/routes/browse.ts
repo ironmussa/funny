@@ -368,8 +368,9 @@ app.get('/files/index', async (c) => {
     }
   }
 
-  const snapshot = await getFileIndex(dirPath);
-  return c.json({ files: snapshot.files, version: snapshot.version });
+  const snapshotResult = await getFileIndex(dirPath);
+  if (snapshotResult.isErr()) return resultToResponse(c, snapshotResult);
+  return c.json({ files: snapshotResult.value.files, version: snapshotResult.value.version });
 });
 
 // List files and folders in a git repository (respects .gitignore)

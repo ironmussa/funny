@@ -18,6 +18,9 @@ import { watch, type FSWatcher } from 'fs';
 import { stat } from 'fs/promises';
 import { join, relative, sep } from 'path';
 
+import { internal, type DomainError } from '@funny/shared/errors';
+import { ResultAsync } from 'neverthrow';
+
 import { log } from '../lib/logger.js';
 import {
   HEAVY_IGNORED_DIRS,
@@ -65,7 +68,13 @@ export interface FileIndexSnapshot {
  * return the cached snapshot in O(1). Stale entries (>5 min) are rebuilt in
  * the background but the cached result is returned immediately.
  */
-export async function getFileIndex(projectPath: string): Promise<FileIndexSnapshot> {
+export function getFileIndex(projectPath: string): ResultAsync<FileIndexSnapshot, DomainError> {
+  return ResultAsync.fromPromise(getFileIndexImpl(projectPath), (err) =>
+    internal(String((err as Error)?.message ?? err)),
+  );
+}
+
+async function getFileIndexImpl(projectPath: string): Promise<FileIndexSnapshot> {
   const existing = indexes.get(projectPath);
 
   if (!existing) {
@@ -75,13 +84,15 @@ export async function getFileIndex(projectPath: string): Promise<FileIndexSnapsh
 
   // Background staleness refresh — return current snapshot immediately
   if (Date.now() - existing.lastBuiltAt > STALE_TTL_MS && !existing.rebuilding) {
-    refreshIndex(projectPath).catch((err) => {
-      log.warn('File index: background refresh failed', {
-        namespace: 'file-index',
-        projectPath,
-        error: String(err),
-      });
-    });
+    refreshIndex(projectPath).match(
+      () => undefined,
+      (e) =>
+        log.warn('File index: background refresh failed', {
+          namespace: 'file-index',
+          projectPath,
+          error: e.message,
+        }),
+    );
   }
 
   return { files: existing.files, version: existing.version, fresh: false };
@@ -121,7 +132,13 @@ export function invalidateFileIndex(projectPath: string): void {
  * Force a fresh rebuild from `git ls-files`. Used when the watcher reports
  * many changes at once or when external git ops happen (branch switch, pull).
  */
-export async function refreshIndex(projectPath: string): Promise<void> {
+export function refreshIndex(projectPath: string): ResultAsync<void, DomainError> {
+  return ResultAsync.fromPromise(refreshIndexImpl(projectPath), (err) =>
+    internal(String((err as Error)?.message ?? err)),
+  );
+}
+
+async function refreshIndexImpl(projectPath: string): Promise<void> {
   const existing = indexes.get(projectPath);
   if (existing?.rebuilding) {
     await existing.rebuilding;

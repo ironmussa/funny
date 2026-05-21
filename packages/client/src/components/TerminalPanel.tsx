@@ -430,11 +430,13 @@ function WebTerminalTabContent({
       // Register the PTY data callback. Any data that arrived before
       // registration (e.g. from an early pty:restore response) is replayed
       // immediately via the store's pending buffer.
-      registerPtyCallback(id, (data: string) => {
+      registerPtyCallback(id, (data) => {
         if (!cancelled) {
           send({ type: 'DATA_RECEIVED' });
           useTerminalStore.getState().markAlive(id);
         }
+        // terminal.write accepts both string and Uint8Array natively.
+        // Binary chunks from the runtime hot path arrive as Uint8Array.
         terminal.write(data);
         // Auto-execute initial command once the shell is ready (first output = prompt)
         if (!initialCommandSentRef.current && initialCommand) {

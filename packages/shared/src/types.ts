@@ -433,7 +433,14 @@ export interface WSAutomationRunCompletedData {
 
 export interface WSPtyDataData {
   ptyId: string;
-  data: string;
+  /**
+   * Terminal output bytes. The hot path (PTY → coalescer → WS) sends raw
+   * UTF-8 bytes as Uint8Array so Socket.IO uses a binary frame instead of
+   * JSON-escaping the string — this is the largest performance win for
+   * heavy stdout (npm install, cat, yes). String form is still accepted
+   * for restore/capture/adopt paths that don't go through the coalescer.
+   */
+  data: string | Uint8Array;
 }
 
 export interface WSPtyExitData {

@@ -156,6 +156,16 @@ class WSBroker {
   emitToUser(userId: string, event: WSEvent): void {
     this.notifyListeners(event, userId);
 
+    // In production runner mode the only consumer is the listener above
+    // (forwardEventToCentral → Socket.IO). Skip JSON.stringify entirely
+    // when no native clients are attached — saves CPU on the hot PTY path
+    // and avoids Buffer.toJSON() expanding binary pty:data payloads into
+    // {type:'Buffer',data:[…]} arrays for the size guard.
+    if (this.clients.size === 0) {
+      metric('ws.events', 1, { type: 'sum', attributes: { event: event.type, sent: '0' } });
+      return;
+    }
+
     const payload = JSON.stringify(event);
     if (!this.checkPayloadSize(payload, event)) return;
     const dead: ServerWebSocket<unknown>[] = [];

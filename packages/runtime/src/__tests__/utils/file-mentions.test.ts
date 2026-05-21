@@ -4,7 +4,7 @@ import { join } from 'path';
 
 import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 
-import { augmentPromptWithFiles } from '../../utils/file-mentions.js';
+import { augmentPromptWithFiles, stripInlineReferencedContent } from '../../utils/file-mentions.js';
 
 describe('augmentPromptWithFiles', () => {
   let testDir: string;
@@ -238,5 +238,132 @@ describe('augmentPromptWithFiles', () => {
 
     expect(result).toContain('<file path="empty.txt">');
     expect(result).toContain('</file>');
+  });
+});
+
+describe('stripInlineReferencedContent', () => {
+  test('collapses <file>…content…</file> to a self-closing tag', () => {
+    const augmented =
+      '<referenced-files>\n<file path="src/a.ts">\nconst x = 1;\n</file>\n</referenced-files>\n\nhi';
+    const out = stripInlineReferencedContent(augmented);
+    expect(out).toBe('<referenced-files>\n<file path="src/a.ts" />\n</referenced-files>\n\nhi');
+  });
+
+  test('preserves self-closing <file path="X" /> as-is', () => {
+    const input = '<referenced-files>\n<file path="src/a.ts" />\n</referenced-files>\n\nhi';
+    expect(stripInlineReferencedContent(input)).toBe(input);
+  });
+
+  test('preserves attributes other than path (e.g. note=…)', () => {
+    const input =
+      '<referenced-files>\n<file path="x" note="too big">\nfoo\n</file>\n</referenced-files>';
+    const out = stripInlineReferencedContent(input);
+    expect(out).toBe('<referenced-files>\n<file path="x" note="too big" />\n</referenced-files>');
+  });
+
+  test('handles file content that itself contains </referenced-files> literal', () => {
+    // Real regression: thread-store.ts has the string `</referenced-files>` in
+    // its source. When that file got inlined and persisted, the client-side
+    // parser (non-greedy regex) terminated the block early and dumped the rest
+    // of the source code into the message body.
+    const evil =
+      '<referenced-files>\n<file path="thread-store.ts">\n' +
+      'messageContent = `<referenced-files>\\n${tags}\\n</referenced-files>\\n${content}`;\n' +
+      '</file>\n</referenced-files>\n\nhello';
+    const out = stripInlineReferencedContent(evil);
+    expect(out).toBe(
+      '<referenced-files>\n<file path="thread-store.ts" />\n</referenced-files>\n\nhello',
+    );
+    // No source code should leak through.
+    expect(out).not.toContain('messageContent');
+    expect(out).not.toContain('${content}');
+  });
+
+  test('collapses <folder>…</folder> (used by augmentPromptWithFiles for directories)', () => {
+    const input =
+      '<referenced-files>\n<folder path="src">\n<file path="src/a.ts">\nfoo\n</file>\n</folder>\n</referenced-files>';
+    const out = stripInlineReferencedContent(input);
+    expect(out).toBe('<referenced-files>\n<folder path="src"></folder>\n</referenced-files>');
+  });
+
+  test('collapses <symbol>…</symbol> to a self-closing tag', () => {
+    const input =
+      '<referenced-symbols>\n<symbol path="x.ts" name="foo" kind="function" line="1">\nfunction foo() {}\n</symbol>\n</referenced-symbols>';
+    const out = stripInlineReferencedContent(input);
+    expect(out).toBe(
+      '<referenced-symbols>\n<symbol path="x.ts" name="foo" kind="function" line="1" />\n</referenced-symbols>',
+    );
+  });
+
+  test('handles multiple sibling <file> blocks independently', () => {
+    const input =
+      '<referenced-files>\n' +
+      '<file path="a.ts">\naaa\n</file>\n' +
+      '<file path="b.ts">\nbbb\n</file>\n' +
+      '</referenced-files>';
+    const out = stripInlineReferencedContent(input);
+    expect(out).toBe(
+      '<referenced-files>\n<file path="a.ts" />\n<file path="b.ts" />\n</referenced-files>',
+    );
+  });
+
+  test('returns content unchanged when there are no XML blocks', () => {
+    const plain = 'hello world\nno tags here';
+    expect(stripInlineReferencedContent(plain)).toBe(plain);
+  });
+});
+
+describe('stripInlineReferencedContent', () => {
+  test('replaces <file path="X">...content...</file> with self-closing tag', () => {
+    const input =
+      '<referenced-files>\n<file path="a.ts">\nconst x = 1;\n</file>\n</referenced-files>\nhello';
+    const out = stripInlineReferencedContent(input);
+    expect(out).toBe('<referenced-files>\n<file path="a.ts" />\n</referenced-files>\nhello');
+  });
+
+  test('preserves already-self-closing <file path="X" />', () => {
+    const input = '<referenced-files>\n<file path="a.ts" />\n</referenced-files>';
+    expect(stripInlineReferencedContent(input)).toBe(input);
+  });
+
+  test('handles inline content that itself contains </referenced-files>', () => {
+    // Regression: file contents that contain literal `</referenced-files>` text
+    // used to break the client-side parser, leaking source code into the message
+    // body. After stripping, those inner literals are gone — only the path remains.
+    const malicious =
+      '<referenced-files>\n<file path="thread-store.ts">\n' +
+      'const block = `<referenced-files>\\n${tags}\\n</referenced-files>`;\n' +
+      'rest of file\n' +
+      '</file>\n</referenced-files>\nprompt';
+    const out = stripInlineReferencedContent(malicious);
+    expect(out).toBe(
+      '<referenced-files>\n<file path="thread-store.ts" />\n</referenced-files>\nprompt',
+    );
+    expect(out).not.toContain('const block');
+  });
+
+  test('strips folder contents while keeping the path-only wrapper', () => {
+    const input =
+      '<folder path="src">\n<file path="src/a.ts">aaa</file>\n<file path="src/b.ts">bbb</file>\n</folder>';
+    expect(stripInlineReferencedContent(input)).toBe('<folder path="src"></folder>');
+  });
+
+  test('strips symbol contents to self-closing form', () => {
+    const input = '<symbol path="a.ts" name="foo" kind="function" line="1">\nfn body\n</symbol>';
+    expect(stripInlineReferencedContent(input)).toBe(
+      '<symbol path="a.ts" name="foo" kind="function" line="1" />',
+    );
+  });
+
+  test('preserves attributes on stripped tags (e.g. note="...")', () => {
+    const input = '<file path="big.txt" note="File too large">contents</file>';
+    expect(stripInlineReferencedContent(input)).toBe(
+      '<file path="big.txt" note="File too large" />',
+    );
+  });
+
+  test('is a no-op on plain prompt text', () => {
+    const input = 'just a regular prompt without any tags';
+    expect(stripInlineReferencedContent(input)).toBe(input);
   });
 });

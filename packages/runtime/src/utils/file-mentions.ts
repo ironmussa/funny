@@ -148,3 +148,28 @@ export async function augmentPromptWithSymbols(
   const symbolContext = `<referenced-symbols>\n${sections.join('\n')}\n</referenced-symbols>\n\n`;
   return symbolContext + prompt;
 }
+
+/**
+ * Strip inline file/folder/symbol contents from a stored user message so the UI
+ * shows path references only. The agent's prompt (with full contents) is what
+ * we pass to `startAgent`; what we persist in the messages table should be a
+ * lightweight metadata version, otherwise:
+ *   1. The card displays the whole source file as plain text.
+ *   2. The client-side parser (`parseReferencedFiles`) breaks when the inlined
+ *      content itself contains literal `</referenced-files>` / `</file>` text.
+ *
+ * Self-closing tags (`<file path="X" />`) are preserved as-is.
+ */
+export function stripInlineReferencedContent(content: string): string {
+  let out = content;
+  out = out.replace(/<file\b([^>]*?(?<!\/))>[\s\S]*?<\/file>/g, (_m, attrs) => `<file${attrs} />`);
+  out = out.replace(
+    /<folder\b([^>]*?(?<!\/))>[\s\S]*?<\/folder>/g,
+    (_m, attrs) => `<folder${attrs}></folder>`,
+  );
+  out = out.replace(
+    /<symbol\b([^>]*?(?<!\/))>[\s\S]*?<\/symbol>/g,
+    (_m, attrs) => `<symbol${attrs} />`,
+  );
+  return out;
+}

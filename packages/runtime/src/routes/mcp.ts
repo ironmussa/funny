@@ -127,8 +127,9 @@ app.post('/oauth/start', async (c) => {
         return `${u.protocol}//${u.host}`;
       })();
 
-  const { authUrl } = await startOAuthFlow(serverName, server.url, projectPath, callbackBaseUrl);
-  return c.json({ authUrl });
+  const oauthResult = await startOAuthFlow(serverName, server.url, projectPath, callbackBaseUrl);
+  if (oauthResult.isErr()) return resultToResponse(c, oauthResult);
+  return c.json({ authUrl: oauthResult.value.authUrl });
 });
 
 // Set a manual bearer token for an MCP server

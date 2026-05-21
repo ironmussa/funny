@@ -7,6 +7,9 @@
 
 import { randomBytes, createHash } from 'crypto';
 
+import { badRequest, internal, type DomainError } from '@funny/shared/errors';
+import { ResultAsync } from 'neverthrow';
+
 import { log } from '../lib/logger.js';
 import { safeFetch } from '../lib/ssrf-guard.js';
 import { addMcpServer, removeMcpServer } from './mcp-service.js';
@@ -169,7 +172,22 @@ async function registerClient(
 
 // ── Main OAuth flow ───────────────────────────────────────────
 
-export async function startOAuthFlow(
+export function startOAuthFlow(
+  serverName: string,
+  serverUrl: string,
+  projectPath: string,
+  callbackBaseUrl: string,
+): ResultAsync<{ authUrl: string; state: string }, DomainError> {
+  return ResultAsync.fromPromise(
+    startOAuthFlowImpl(serverName, serverUrl, projectPath, callbackBaseUrl),
+    (err) => {
+      if ((err as DomainError).type) return err as DomainError;
+      return internal(String((err as Error)?.message ?? err));
+    },
+  );
+}
+
+async function startOAuthFlowImpl(
   serverName: string,
   serverUrl: string,
   projectPath: string,
@@ -211,7 +229,7 @@ export async function startOAuthFlow(
     clientId = client.client_id;
     clientSecret = client.client_secret;
   } else {
-    throw new Error(
+    throw badRequest(
       'This MCP server does not support dynamic client registration. ' +
         'You may need to authenticate via the Claude Code terminal (/mcp) instead.',
     );

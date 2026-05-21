@@ -76,7 +76,7 @@ function SidebarProvider({
   // Resizable sidebar width (persisted in localStorage)
   const [sidebarWidth, _setSidebarWidth] = React.useState(() => {
     const stored = localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
-    return stored ? Number(stored) : 320;
+    return stored ? Number(stored) : 240;
   });
   const [isResizing, setIsResizing] = React.useState(false);
   const setSidebarWidth = React.useCallback((width: number) => {

@@ -1030,6 +1030,8 @@
     "newScratchThread": "Iniciar un nuevo scratchpad",
     "nextThread": "Ir al siguiente hilo",
     "prevThread": "Ir al hilo anterior",
+    "backThread": "Volver al hilo visitado anterior",
+    "forwardThread": "Avanzar al siguiente hilo visitado",
     "toggleTerminal": "Mostrar/ocultar terminal",
     "openShortcuts": "Mostrar atajos de teclado"
   },

@@ -8,7 +8,7 @@ import {
 } from './thread-store-internals';
 
 const REVIEW_PANE_WIDTH_KEY = 'review_pane_width';
-const DEFAULT_REVIEW_PANE_WIDTH = 50; // percentage of viewport width
+const DEFAULT_REVIEW_PANE_WIDTH = 28; // percentage of viewport width
 const MIN_REVIEW_PANE_WIDTH = 20;
 const MAX_REVIEW_PANE_WIDTH = 70;
 const TIMELINE_VISIBLE_KEY = 'timeline_visible';

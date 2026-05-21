@@ -12,11 +12,65 @@ interface MonacoCodeViewProps {
   codeFontSizePx: number;
 }
 
+let dotenvRegistered = false;
+
+function registerDotenvLanguage(monaco: typeof import('monaco-editor')) {
+  if (dotenvRegistered) return;
+  dotenvRegistered = true;
+
+  monaco.languages.register({ id: 'dotenv', extensions: ['.env'], aliases: ['dotenv', 'env'] });
+
+  monaco.languages.setMonarchTokensProvider('dotenv', {
+    defaultToken: '',
+    tokenizer: {
+      root: [
+        [/^\s*#.*$/, 'comment'],
+        [/^\s*[\w.-]+(?==)/, 'variable.name'],
+        [/=/, 'delimiter', '@value'],
+      ],
+      value: [
+        [/\\./, 'string.escape'],
+        [/\$\{[^}]*\}/, 'variable'],
+        [/\$\w+/, 'variable'],
+        [/"([^"\\]|\\.)*"/, 'string'],
+        [/'([^'\\]|\\.)*'/, 'string'],
+        [/#.*$/, 'comment', '@pop'],
+        [/$/, '', '@pop'],
+        [/[^\s#"'$\\]+/, 'string'],
+        [/\s+/, 'white'],
+      ],
+    },
+  });
+
+  monaco.languages.setLanguageConfiguration('dotenv', {
+    comments: { lineComment: '#' },
+    brackets: [
+      ['{', '}'],
+      ['[', ']'],
+      ['(', ')'],
+    ],
+    autoClosingPairs: [
+      { open: '"', close: '"' },
+      { open: "'", close: "'" },
+      { open: '{', close: '}' },
+    ],
+  });
+}
+
 const handleBeforeMount: BeforeMount = (monaco) => {
+  registerDotenvLanguage(monaco);
+
   monaco.editor.defineTheme('funny-dark', {
     base: 'vs-dark',
     inherit: true,
-    rules: [],
+    rules: [
+      { token: 'variable.name.dotenv', foreground: '9CDCFE' },
+      { token: 'delimiter.dotenv', foreground: 'D4D4D4' },
+      { token: 'string.dotenv', foreground: 'CE9178' },
+      { token: 'variable.dotenv', foreground: '4FC1FF' },
+      { token: 'string.escape.dotenv', foreground: 'D7BA7D' },
+      { token: 'comment.dotenv', foreground: '6A9955', fontStyle: 'italic' },
+    ],
     colors: {
       'editor.background': '#000000',
       'editorGutter.background': '#000000',

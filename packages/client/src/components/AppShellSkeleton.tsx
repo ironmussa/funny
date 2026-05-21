@@ -1,7 +1,7 @@
 import { Skeleton } from '@/components/ui/skeleton';
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'sidebar_width';
-const DEFAULT_SIDEBAR_WIDTH = 320;
+const DEFAULT_SIDEBAR_WIDTH = 240;
 
 /** Read persisted sidebar width so the skeleton matches the real sidebar exactly. */
 function getSidebarWidth(): number {

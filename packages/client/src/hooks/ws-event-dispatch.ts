@@ -156,13 +156,24 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
     case 'agent:result': {
       lastStatusByThread.delete(threadId);
 
+      const resultStatus = String(data.status ?? '');
       wsLog.info('agent:result', {
         threadId,
-        status: data.status ?? '',
+        status: resultStatus,
         cost: String(data.cost ?? ''),
         errorReason: data.errorReason ?? '',
         isWaiting: String(data.status === 'waiting'),
       });
+      // Permanent counter: lets us see in Abbacchio whether the result event
+      // even reached the client. A stuck "loading" thread with no `ws.result`
+      // sample means the event was dropped at the transport layer.
+      metric('ws.result_received', 1, { attributes: { status: resultStatus } });
+      // Permanent span: covers the gap between "event arrived" and "store
+      // applied final state" — surfaces React 19 transition lag under load.
+      const dispatchSpan = startSpan('ws.dispatch_result', {
+        attributes: { status: resultStatus },
+      });
+
       if (rafId !== null) {
         cancelAnimationFrame(rafId);
         rafId = null;
@@ -183,6 +194,7 @@ function dispatchEvent(type: string, threadId: string, data: any): void {
 
       startTransition(() => {
         useThreadStore.getState().handleWSResult(threadId, data);
+        dispatchSpan.end('OK');
       });
 
       import('@/stores/review-pane-store').then(({ useReviewPaneStore }) => {

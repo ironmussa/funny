@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { io, type Socket } from 'socket.io-client';
 
 import { createClientLogger } from '@/lib/client-logger';
+import { metric } from '@/lib/telemetry';
 import { useCircuitBreakerStore } from '@/stores/circuit-breaker-store';
 import { useGitStatusStore } from '@/stores/git-status-store';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
@@ -51,8 +52,18 @@ function connect() {
   activeSocket = socket;
 
   socket.on('connect', () => {
-    wsLog.info('Socket.IO connected', {
-      transport: socket.io.engine?.transport?.name ?? 'unknown',
+    const transport = socket.io.engine?.transport?.name ?? 'unknown';
+    wsLog.info('Socket.IO connected', { transport });
+    // Permanent metric: in prod we want to know if the user landed on
+    // long-polling (reverse-proxy without WS upgrade) — that's the most
+    // common cause of trailing `agent:result` events going missing.
+    metric('ws.connected', 1, { attributes: { transport } });
+    // Track transport upgrades (polling → websocket) so we can correlate
+    // dropped trailing events with sockets that never finished upgrading.
+    socket.io.engine?.on('upgrade', (t: any) => {
+      const name = typeof t === 'string' ? t : (t?.name ?? 'unknown');
+      wsLog.info('Socket.IO transport upgraded', { transport: name });
+      metric('ws.transport_upgrade', 1, { attributes: { transport: name } });
     });
 
     useCircuitBreakerStore.getState().recordSuccess();

@@ -1,3 +1,4 @@
+import { Fragment } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import {
@@ -7,7 +8,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { cn } from '@/lib/utils';
+import { Kbd, KbdGroup } from '@/components/ui/kbd';
 import { useUIStore } from '@/stores/ui-store';
 
 type Shortcut = {
@@ -27,22 +28,11 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ['Alt', 'S'], labelKey: 'shortcuts.newScratchThread' },
   { keys: ['Alt', ']'], labelKey: 'shortcuts.nextThread' },
   { keys: ['Alt', '['], labelKey: 'shortcuts.prevThread' },
+  { keys: ['Alt', '←'], labelKey: 'shortcuts.backThread' },
+  { keys: ['Alt', '→'], labelKey: 'shortcuts.forwardThread' },
   { keys: ['Ctrl', '`'], labelKey: 'shortcuts.toggleTerminal' },
   { keys: ['?'], labelKey: 'shortcuts.openShortcuts' },
 ];
-
-function Kbd({ children, className }: { children: React.ReactNode; className?: string }) {
-  return (
-    <kbd
-      className={cn(
-        'inline-flex h-6 min-w-6 items-center justify-center rounded border border-border bg-muted px-1.5 font-mono text-xs font-medium text-foreground',
-        className,
-      )}
-    >
-      {children}
-    </kbd>
-  );
-}
 
 export function KeyboardShortcutsDialog() {
   const { t } = useTranslation();
@@ -64,14 +54,14 @@ export function KeyboardShortcutsDialog() {
               data-testid={`shortcut-row-${s.labelKey}`}
             >
               <span className="text-foreground">{t(s.labelKey)}</span>
-              <span className="flex items-center gap-1">
+              <KbdGroup>
                 {s.keys.map((k, i) => (
-                  <span key={`${k}-${i}`} className="flex items-center gap-1">
+                  <Fragment key={`${k}-${i}`}>
                     {i > 0 && <span className="text-muted-foreground">+</span>}
                     <Kbd>{k}</Kbd>
-                  </span>
+                  </Fragment>
                 ))}
-              </span>
+              </KbdGroup>
             </li>
           ))}
         </ul>

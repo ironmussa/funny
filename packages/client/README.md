@@ -108,6 +108,69 @@ import { api } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 ```
 
+## Logging & Telemetry
+
+The client ships logs, metrics and traces to [Abbacchio](https://abbacchio.dev) via OTLP. Instrumentation is **permanent** — we don't add/remove log lines per investigation. Instead, every call site picks the right level once, and visibility is controlled at runtime.
+
+### How it works
+
+- **Logger:** `createClientLogger(namespace)` from `@/lib/client-logger.ts` returns a namespaced logger with `.error / .warn / .info / .debug / .trace` methods.
+- **Metrics & spans:** `metric(name, value, { attributes })` and `startSpan(name, { attributes })` from `@/lib/telemetry.ts`.
+- **OTLP endpoint:** set via `VITE_OTLP_ENDPOINT`. When unset, logging is a no-op (safe to run offline).
+
+### Levels and when they fire
+
+| Level   | Use for                                                          | Prod default |
+| ------- | ---------------------------------------------------------------- | ------------ |
+| `error` | Unexpected failure paths                                         | **on**       |
+| `warn`  | Recoverable anomalies, unexpected branches                       | **on**       |
+| `info`  | Per-session milestones (WS connect, `agent:result`, route change)| **on**       |
+| `debug` | High-frequency traces (every WS chunk, RAF flush, status txn)    | off          |
+| `trace` | Extreme detail (per-keystroke, per-frame)                        | off          |
+
+In dev the floor is `debug` (everything visible). In prod the floor is `info` — `debug` and `trace` are dropped unless you opt in.
+
+### Turning logs on/off in production (no redeploy)
+
+Open DevTools console on the production site and run:
+
+```js
+// Raise the global floor — see every debug line from every namespace
+__funnyLog.setLevel('debug');
+
+// Raise just one namespace — e.g. only WebSocket traces
+__funnyLog.setNamespaceLevel('ws', 'debug');
+
+// Reset back to defaults (info in prod, debug in dev)
+__funnyLog.clear();
+```
+
+The setting persists across reloads via `localStorage`. Reload after changing the level so loggers created at module-init pick it up.
+
+You can also set the keys directly:
+
+| Key                          | Value                                            | Effect                          |
+| ---------------------------- | ------------------------------------------------ | ------------------------------- |
+| `funny:log-level`            | `trace` \| `debug` \| `info` \| `warn` \| `error`| Global floor                    |
+| `funny:log-ns:<namespace>`   | same as above                                    | Override one namespace          |
+
+Example: `localStorage.setItem('funny:log-ns:ws', 'debug')` and reload to debug just the WebSocket layer in production.
+
+### When to use a metric vs. a log
+
+- "X happened with value Y, and I want it always visible" → **metric**, not a log. Metrics are orders of magnitude cheaper and graphable in Abbacchio.
+- Causal chain across async boundaries (event arrived → store applied) → **span** via `startSpan`.
+- Discrete milestone or unexpected condition → `info` / `warn` / `error` log.
+
+### Permanent diagnostic instrumentation
+
+These exist to diagnose production-only issues without redeploying. They're documented in `packages/client/CLAUDE.md` so future contributors don't remove them:
+
+- `ws.connected` (counter, `transport`) — fires on every Socket.IO connect. Surfaces reverse-proxy WS-upgrade failures (a `transport=polling` sample is the smoking gun for dropped trailing events).
+- `ws.transport_upgrade` (counter, `transport`) — fires when polling upgrades to websocket.
+- `ws.result_received` (counter, `status`) — fires on every `agent:result`. Lets you distinguish "event never arrived" from "event arrived but UI didn't update".
+- `ws.dispatch_result` (span, `status`) — wraps the result-to-store-applied path. Surfaces React 19 transition lag.
+
 ## Scripts
 
 ```bash

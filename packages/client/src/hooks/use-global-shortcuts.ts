@@ -6,8 +6,14 @@ import { createClientLogger } from '@/lib/client-logger';
 import { buildPath } from '@/lib/url';
 import { useProjectStore } from '@/stores/project-store';
 import { SCRATCH_TERMINAL_SCOPE_ID, useTerminalStore } from '@/stores/terminal-store';
+import { type ThreadHistoryEntry, useThreadHistoryStore } from '@/stores/thread-history-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
+
+function routeForHistoryEntry(entry: ThreadHistoryEntry): string {
+  if (entry.isScratch) return `/scratch/${entry.threadId}`;
+  return `/projects/${entry.projectId}/threads/${entry.threadId}`;
+}
 
 const log = createClientLogger('hooks:global-shortcuts');
 
@@ -58,18 +64,59 @@ export function useGlobalShortcuts(toggleCommandPalette: () => void, toggleFileS
         return;
       }
 
-      // Alt+] / Alt+[ to navigate threads in active project (next / previous)
-      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === ']' || e.key === '[')) {
+      // Alt+ArrowLeft / Alt+ArrowRight to walk through visited threads (browser-style)
+      if (
+        e.altKey &&
+        !e.ctrlKey &&
+        !e.metaKey &&
+        !e.shiftKey &&
+        (e.key === 'ArrowLeft' || e.key === 'ArrowRight')
+      ) {
         if (isEditableTarget(e.target)) return;
+        const history = useThreadHistoryStore.getState();
+        const entry = e.key === 'ArrowLeft' ? history.goBack() : history.goForward();
+        if (!entry) return;
+        e.preventDefault();
+        e.stopPropagation();
+        log.info('shortcut.thread_history', {
+          direction: e.key === 'ArrowLeft' ? 'back' : 'forward',
+        });
+        navigate(buildPath(routeForHistoryEntry(entry)));
+        return;
+      }
+
+      // Alt+] / Alt+[ to navigate threads in active project (next / previous).
+      // Intentionally fires even when an editable element (e.g. the prompt
+      // input) has focus — after navigating to a new thread the prompt input
+      // auto-focuses, so requiring non-editable focus would make the second
+      // press a no-op.
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === ']' || e.key === '[')) {
         const activeThreadProjectId = useThreadStore.getState().activeThread?.projectId ?? null;
         const projectId = activeThreadProjectId ?? useProjectStore.getState().selectedProjectId;
         if (!projectId) return;
         const state = useThreadStore.getState();
         const ids = state.threadIdsByProject[projectId] ?? [];
         if (ids.length < 2) return;
-        const threads = ids.map((id) => state.threadsById[id]).filter(Boolean);
+        // Match the sidebar's visible order + slice (see ProjectItem.tsx):
+        // pinned first, then most-recent createdAt first, archived hidden,
+        // capped at the top 5 visible rows so cycling stays within what the
+        // user actually sees in the sidebar.
+        const threads = ids
+          .map((id) => state.threadsById[id])
+          .filter((th): th is NonNullable<typeof th> => !!th && !th.archived)
+          .sort((a, b) => {
+            if (a.pinned && !b.pinned) return -1;
+            if (!a.pinned && b.pinned) return 1;
+            return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+          })
+          .slice(0, 5);
         if (threads.length < 2) return;
-        const currentId = state.activeThread?.id ?? null;
+        // Prefer `selectedThreadId` over `activeThread?.id`: on rapid Alt+]/Alt+[
+        // presses, `activeThread` is briefly null while the next thread loads,
+        // but `selectedThreadId` is updated synchronously by `selectThread()`.
+        // Without this, consecutive presses snapped to `threads[1]` /
+        // `threads[length-1]` regardless of current position.
+        const currentId = state.selectedThreadId ?? state.activeThread?.id ?? null;
         const currentIdx = currentId ? threads.findIndex((th) => th.id === currentId) : -1;
         const delta = e.key === ']' ? 1 : -1;
         const baseIdx = currentIdx >= 0 ? currentIdx : 0;

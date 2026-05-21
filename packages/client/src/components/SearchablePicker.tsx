@@ -359,9 +359,14 @@ export function BranchPicker({
   const newBranchInputRef = useRef<HTMLInputElement>(null);
 
   const remoteSet = useMemo(() => new Set(remoteBranches), [remoteBranches]);
+  const localSet = useMemo(() => new Set(branches), [branches]);
 
   const items: SearchablePickerItem[] = useMemo(() => {
-    const branchItems = branches
+    const allBranches: string[] = [...branches];
+    for (const r of remoteBranches) {
+      if (!localSet.has(r)) allBranches.push(r);
+    }
+    const branchItems = allBranches
       .map((b) => {
         const badges: string[] = [];
         if (b === defaultBranch) badges.push('default');
@@ -383,7 +388,7 @@ export function BranchPicker({
       return [...extraItems, ...branchItems];
     }
     return branchItems;
-  }, [branches, selected, extraItems, defaultBranch, remoteSet]);
+  }, [branches, remoteBranches, selected, extraItems, defaultBranch, remoteSet, localSet]);
 
   const handleSelect = useCallback(
     (key: string) => {

@@ -32,7 +32,7 @@ export function WriteFileCard({
   displayTime?: string | null;
 }) {
   const { t } = useTranslation();
-  const [expanded, setExpanded] = useState(false);
+  const [expanded, setExpanded] = useState(true);
   const defaultEditor = useSettingsStore((s) => s.defaultEditor);
   const filePath = parsed.file_path as string | undefined;
   const projectPath = useCurrentProjectPath();

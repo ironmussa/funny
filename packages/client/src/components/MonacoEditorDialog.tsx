@@ -64,7 +64,7 @@ export function MonacoEditorDialog({
   const [showMinimap, setShowMinimap] = useState(true);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const ext = getFileExtension(filePath);
-  const language = getMonacoLanguage(ext);
+  const language = getMonacoLanguage(ext, filePath);
   const isMarkdown = language === 'markdown';
 
   const [showPreview, setShowPreview] = useState(isMarkdown);
@@ -517,8 +517,13 @@ function getFileExtension(filePath: string): string {
   return '';
 }
 
-function getMonacoLanguage(ext: string): string {
+function getMonacoLanguage(ext: string, filePath?: string): string {
+  if (filePath) {
+    const name = getFileName(filePath);
+    if (/^\.env(\..+)?$/.test(name) || name === '.env') return 'dotenv';
+  }
   const langMap: Record<string, string> = {
+    env: 'dotenv',
     ts: 'typescript',
     tsx: 'typescript',
     js: 'javascript',

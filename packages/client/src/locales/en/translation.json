@@ -1038,6 +1038,8 @@
     "newScratchThread": "Start a new scratch thread",
     "nextThread": "Go to next thread",
     "prevThread": "Go to previous thread",
+    "backThread": "Back to previously visited thread",
+    "forwardThread": "Forward to next visited thread",
     "toggleTerminal": "Toggle terminal panel",
     "openShortcuts": "Show keyboard shortcuts"
   },

@@ -30,7 +30,7 @@ const threadViewImport = import('@/components/ThreadView').then((m) => ({ defaul
 const ThreadView = lazy(() => threadViewImport);
 
 const SIDEBAR_WIDTH_STORAGE_KEY = 'sidebar_width';
-const DEFAULT_SIDEBAR_WIDTH = 320;
+const DEFAULT_SIDEBAR_WIDTH = 240;
 
 /** Placeholder matching the persisted sidebar width to avoid CLS during lazy load */
 function SidebarPlaceholder() {

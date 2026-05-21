@@ -20,6 +20,7 @@ const MAX_HISTORY = 50;
 export interface ThreadHistoryEntry {
   threadId: string;
   projectId: string;
+  isScratch?: boolean;
 }
 
 interface ThreadHistoryState {

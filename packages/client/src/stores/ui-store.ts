@@ -342,9 +342,9 @@ export const useUIStore = create<UIState>((set) => ({
     const project = useProjectStore.getState().projects?.find((p) => p.id === projectId);
     if (project?.needsSetup) return;
 
-    clearSelectedThread();
-    useProjectStore.getState().selectProject(projectId);
-    persistRightPane(false);
+    // Set the compose flag BEFORE clearing thread selection — the invariant
+    // guard subscribes to thread-store changes and would otherwise re-select
+    // the previous thread (from a stale URL) before the flag is visible to it.
     set({
       newThreadProjectId: projectId,
       newThreadIdleOnly: idleOnly ?? false,
@@ -355,12 +355,14 @@ export const useUIStore = create<UIState>((set) => ({
       reviewPaneOpen: false,
       testRunnerOpen: false,
     });
+    clearSelectedThread();
+    useProjectStore.getState().selectProject(projectId);
+    persistRightPane(false);
   },
 
   startNewScratchThread: () => {
-    clearSelectedThread();
-    useProjectStore.getState().selectProject(null);
-    persistRightPane(false);
+    // Set the compose flag BEFORE clearing thread selection — see note in
+    // startNewThread above for why order matters.
     set({
       newThreadProjectId: null,
       newThreadIdleOnly: false,
@@ -371,6 +373,9 @@ export const useUIStore = create<UIState>((set) => ({
       reviewPaneOpen: false,
       testRunnerOpen: false,
     });
+    clearSelectedThread();
+    useProjectStore.getState().selectProject(null);
+    persistRightPane(false);
   },
 
   cancelNewThread: () => {

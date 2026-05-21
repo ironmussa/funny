@@ -58,7 +58,7 @@ export function MobilePage() {
           />
         )}
         {view.screen === 'newThread' && (
-          <ThreadProvider threadId={null} source="active">
+          <ThreadProvider threadId={null}>
             <NewThreadView
               projectId={view.projectId}
               onBack={() => setView({ screen: 'threads', projectId: view.projectId })}
@@ -69,7 +69,7 @@ export function MobilePage() {
           </ThreadProvider>
         )}
         {view.screen === 'chat' && (
-          <ThreadProvider threadId={view.threadId} source="active">
+          <ThreadProvider threadId={view.threadId}>
             <ChatView
               projectId={view.projectId}
               threadId={view.threadId}

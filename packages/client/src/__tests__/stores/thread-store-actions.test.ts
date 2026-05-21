@@ -199,8 +199,11 @@ describe('thread store actions', () => {
     };
 
     const setActiveThread = (messages: any[]) => {
+      const thread = { ...(baseThread as any), messages };
       useThreadStore.setState({
-        activeThread: { ...(baseThread as any), messages },
+        selectedThreadId: thread.id,
+        threadDataById: { [thread.id]: thread },
+        activeThread: thread,
       } as any);
     };
 
@@ -367,12 +370,17 @@ describe('thread store actions', () => {
       setActiveThread([existing]);
 
       // Server response races with the WS event: fetch resolves AFTER we
-      // simulate the WS message landing in activeThread, but returns only
+      // simulate the WS message landing in the payload map, but returns only
       // the pre-WS state.
       mockGetThread.mockImplementation(() => {
-        useThreadStore.setState((s) => ({
-          activeThread: { ...s.activeThread!, messages: [existing, wsMessage] },
-        }));
+        useThreadStore.setState((s) => {
+          const tid = s.selectedThreadId!;
+          const next = { ...s.threadDataById[tid]!, messages: [existing, wsMessage] };
+          return {
+            threadDataById: { ...s.threadDataById, [tid]: next },
+            activeThread: next,
+          };
+        });
         return okAsync({ ...baseThread, messages: [existing] });
       });
 

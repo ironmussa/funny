@@ -44,6 +44,7 @@ import { ResizeHandle, useResizeHandle } from '@/components/ui/resize-handle';
 import { SearchBar } from '@/components/ui/search-bar';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { showAgentNotification } from '@/hooks/use-notifications';
+import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import { useTooltipMenu } from '@/hooks/use-tooltip-menu';
 import { getActiveWS } from '@/hooks/use-ws';
 import { createAnsiConverter } from '@/lib/ansi-to-html';
@@ -57,7 +58,11 @@ import {
 import { useProjectStore } from '@/stores/project-store';
 import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { type TerminalShell, useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
-import { useTerminalStore, type TerminalTab } from '@/stores/terminal-store';
+import {
+  SCRATCH_TERMINAL_SCOPE_ID,
+  useTerminalStore,
+  type TerminalTab,
+} from '@/stores/terminal-store';
 import { useThreadWorktreePath } from '@/stores/thread-context';
 
 /** Tauri PTY tab — uses xterm.js (lazy-loaded) */
@@ -207,6 +212,7 @@ function WebTerminalTabContent({
   projectId,
   label,
   initialCommand,
+  scratchThreadId,
 }: {
   id: string;
   cwd: string;
@@ -217,6 +223,7 @@ function WebTerminalTabContent({
   projectId?: string;
   label?: string;
   initialCommand?: string;
+  scratchThreadId?: string;
 }) {
   const containerRef = useRef<HTMLDivElement>(null);
   const termRef = useRef<{ terminal: any; fitAddon: any } | null>(null);
@@ -255,11 +262,15 @@ function WebTerminalTabContent({
     ws.emit('pty:spawn', {
       id,
       cwd,
-      projectId,
+      // For scratch tabs we route through the server's "any runner owned by
+      // this user" branch — sending the synthetic '__scratch__' as projectId
+      // would fail the server's project ownership lookup.
+      ...(scratchThreadId ? {} : { projectId }),
       label,
       rows,
       cols,
       ...(shell !== 'default' && { shell }),
+      ...(scratchThreadId && { scratchThreadId }),
     });
   };
   emitRestoreRef.current = () => {
@@ -1098,7 +1109,7 @@ export function TerminalPanel() {
     })),
   );
   const projects = useProjectStore((s) => s.projects);
-  const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
+  const { scopeId: selectedProjectId, scratchThreadId } = useTerminalScope();
   const panelVisible = selectedProjectId
     ? (panelVisibleByProject[selectedProjectId] ?? false)
     : false;
@@ -1147,8 +1158,11 @@ export function TerminalPanel() {
   const handleNewTerminal = useCallback(
     (shell: TerminalShell) => {
       if (!selectedProjectId) return;
-      const project = projects.find((p) => p.id === selectedProjectId);
-      const cwd = activeThreadWorktreePath || project?.path || 'C:\\';
+      const isScratchScope = selectedProjectId === SCRATCH_TERMINAL_SCOPE_ID;
+      const project = isScratchScope ? null : projects.find((p) => p.id === selectedProjectId);
+      // For scratch scope, cwd is a display-only placeholder — the runner
+      // derives the real path from `scratchThreadId` on the spawn payload.
+      const cwd = isScratchScope ? '~' : activeThreadWorktreePath || project?.path || 'C:\\';
       const id = crypto.randomUUID();
       const detected = availableShells.find((s) => s.id === shell);
       const shellName = detected?.label ?? 'Terminal';
@@ -1163,6 +1177,7 @@ export function TerminalPanel() {
         type: isTauri ? undefined : 'pty',
         shell,
         createdAt: Date.now(),
+        scratchThreadId: isScratchScope ? (scratchThreadId ?? undefined) : undefined,
       });
       // Panel must be visible for the spawn effect to emit pty:spawn
       // (see !panelVisible guard in XtermTerminal). Auto-expand if collapsed.
@@ -1171,6 +1186,7 @@ export function TerminalPanel() {
     [
       projects,
       selectedProjectId,
+      scratchThreadId,
       visibleTabs,
       addTab,
       activeThreadWorktreePath,
@@ -1416,6 +1432,7 @@ export function TerminalPanel() {
                   projectId={tab.projectId}
                   label={tab.label}
                   initialCommand={tab.initialCommand}
+                  scratchThreadId={tab.scratchThreadId}
                 />
               ) : tab.commandId ? (
                 <CommandTabContent

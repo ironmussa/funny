@@ -3,6 +3,15 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 
 import type { TerminalShell } from './settings-store';
 
+/**
+ * Synthetic project-id used for terminal tabs that belong to a scratch
+ * thread (which has no real project). Tabs grouped under this id are
+ * filtered/displayed exactly like project tabs — the runner derives the
+ * actual cwd from `scratchThreadId` on the spawn payload, not from
+ * `tab.cwd`.
+ */
+export const SCRATCH_TERMINAL_SCOPE_ID = '__scratch__';
+
 export interface TerminalTab {
   id: string;
   label: string;
@@ -28,6 +37,9 @@ export interface TerminalTab {
   hasBell?: boolean;
   /** Command to auto-execute after the PTY shell is ready (startup commands) */
   initialCommand?: string;
+  /** Scratch thread id when this tab is for a scratch (projectless) thread.
+   * The runner uses this to derive the cwd as `~/.funny/scratch/<userId>/<threadId>`. */
+  scratchThreadId?: string;
 }
 
 // Buffer for pty:data that arrives before a callback is registered.

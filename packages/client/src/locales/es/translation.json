@@ -204,6 +204,7 @@
     "searchClose": "Cerrar búsqueda",
     "searchPrev": "Resultado anterior",
     "searchNext": "Siguiente resultado",
+    "openInEditor": "Abrir en editor",
     "source": {
       "web": "Creado desde la interfaz web",
       "chrome_extension": "Creado desde la extensión de Chrome",
@@ -1026,6 +1027,7 @@
     "toggleSidebar": "Mostrar/ocultar sidebar",
     "projectSettings": "Abrir configuración del proyecto",
     "newThread": "Iniciar un nuevo hilo",
+    "newScratchThread": "Iniciar un nuevo scratchpad",
     "nextThread": "Ir al siguiente hilo",
     "prevThread": "Ir al hilo anterior",
     "toggleTerminal": "Mostrar/ocultar terminal",

@@ -39,6 +39,7 @@ import {
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { threadsApi } from '@/lib/api/threads';
+import { dragHasFileMention, readFileMentionDragData } from '@/lib/file-mention-dnd';
 import { cn } from '@/lib/utils';
 import { useAgentTemplateStore } from '@/stores/agent-template-store';
 
@@ -833,7 +834,9 @@ export const PromptInputUI = memo(function PromptInputUI({
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (e.dataTransfer.types.includes('Files')) setIsDragging(true);
+    if (e.dataTransfer.types.includes('Files') || dragHasFileMention(e.dataTransfer)) {
+      setIsDragging(true);
+    }
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
@@ -847,6 +850,14 @@ export const PromptInputUI = memo(function PromptInputUI({
     e.stopPropagation();
     setIsDragging(false);
     if (loading) return;
+
+    const mention = readFileMentionDragData(e.dataTransfer);
+    if (mention) {
+      editorRef.current?.insertFileMention(mention.path, mention.fileType);
+      editorRef.current?.focus();
+      return;
+    }
+
     const files = e.dataTransfer?.files;
     if (!files || files.length === 0) return;
     for (const file of Array.from(files)) {
@@ -1188,6 +1199,7 @@ export const PromptInputUI = memo(function PromptInputUI({
               onCycleMode={handleCycleMode}
               onChange={handleEditorChange}
               onPaste={handleEditorPaste}
+              onFileMentionDrop={() => setIsDragging(false)}
               cwd={editorCwd}
               loadSkills={loadSkills}
               containerRef={promptBoxRef}

@@ -40,6 +40,7 @@ import {
   getEditorLabel,
 } from '@/lib/editor-utils';
 import { FileExtensionIcon } from '@/lib/file-icons';
+import { setFileMentionDragData } from '@/lib/file-mention-dnd';
 import { cn } from '@/lib/utils';
 
 const log = createClientLogger('file-tree');
@@ -445,6 +446,13 @@ export function FileTree({
             paddingLeft: `${8 + row.depth * INDENT_PX}px`,
           }}
           onClick={() => toggleFolder(row.path)}
+          draggable
+          onDragStart={(e) => {
+            setFileMentionDragData(e.dataTransfer, {
+              path: row.path,
+              fileType: 'folder',
+            });
+          }}
           data-testid={`${testIdPrefix}-folder-${row.path}`}
         >
           <ChevronRight
@@ -564,6 +572,13 @@ export function FileTree({
         onClick={() => {
           if (Date.now() - dropdownCloseRef.current < 400) return;
           onFileClick(f.path);
+        }}
+        draggable
+        onDragStart={(e) => {
+          setFileMentionDragData(e.dataTransfer, {
+            path: f.path,
+            fileType: 'file',
+          });
         }}
         data-testid={`${testIdPrefix}-file-${f.path}`}
       >

@@ -48,6 +48,7 @@ import {
   openFileInInternalEditor,
 } from '@/lib/editor-utils';
 import { FileExtensionIcon } from '@/lib/file-icons';
+import { setFileMentionDragData } from '@/lib/file-mention-dnd';
 import { cn } from '@/lib/utils';
 
 import { DiffStats } from '../DiffStats';
@@ -339,6 +340,13 @@ export function ChangesFilesPanel({
                         paddingLeft,
                       }}
                       onClick={() => toggleFolder(row.path)}
+                      draggable
+                      onDragStart={(e) => {
+                        setFileMentionDragData(e.dataTransfer, {
+                          path: row.path,
+                          fileType: 'folder',
+                        });
+                      }}
                       data-testid={`review-folder-${row.path}`}
                     >
                       <ChevronRight
@@ -491,6 +499,13 @@ export function ChangesFilesPanel({
                       // "No diff available" before the useEffect-on-expandedFile
                       // fires the request.
                       loadDiffForFile(f.path);
+                    }}
+                    draggable
+                    onDragStart={(e) => {
+                      setFileMentionDragData(e.dataTransfer, {
+                        path: f.path,
+                        fileType: 'file',
+                      });
                     }}
                   >
                     <TriCheckbox

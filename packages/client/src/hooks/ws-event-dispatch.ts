@@ -6,6 +6,7 @@ import { showAgentNotification } from '@/hooks/use-notifications';
 import { closePreviewForCommand } from '@/hooks/use-preview-window';
 import { validateContainerUrl } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
+import { metric, startSpan } from '@/lib/telemetry';
 import { getThreadRoute } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { invalidateCooldownsForKeys, useGitStatusStore } from '@/stores/git-status-store';
@@ -28,10 +29,21 @@ interface BufferedMessage {
   data: any;
 }
 
+// Keyed by `${threadId}:${messageId}` so streaming chunks of the SAME message
+// collapse (server emits each chunk with cumulative content + same messageId)
+// but DIFFERENT messages for the same thread are preserved. Previously this
+// was keyed by threadId alone, which dropped earlier messages when multiple
+// arrived between flushes — e.g. while the tab was hidden and RAF was paused.
 let pendingMessages = new Map<string, BufferedMessage>();
 let pendingToolOutputs: Array<{ threadId: string; data: any }> = [];
 let pendingStatuses = new Map<string, BufferedMessage>();
 let rafId: number | null = null;
+
+function pendingMessageKey(threadId: string, data: any): string {
+  // Fall back to threadId when messageId is missing (defensive — server should
+  // always include it). Without messageId we can't dedupe across chunks anyway.
+  return `${threadId}:${data?.messageId ?? ''}`;
+}
 
 // Server sometimes emits identical agent:status events back-to-back. Dedup
 // per-thread so Zustand doesn't fire duplicate updates.
@@ -49,6 +61,18 @@ function flushBatch() {
   pendingToolOutputs = [];
   pendingStatuses.clear();
 
+  const total = msgs.length + toolOutputs.length + statuses.length;
+  if (total === 0) return;
+
+  const span = startSpan('ws.flushBatch', {
+    attributes: {
+      'batch.messages': msgs.length,
+      'batch.tool_outputs': toolOutputs.length,
+      'batch.statuses': statuses.length,
+    },
+  });
+  const t0 = performance.now();
+
   startTransition(() => {
     const store = useThreadStore.getState();
     for (const entry of statuses) {
@@ -61,6 +85,13 @@ function flushBatch() {
       store.handleWSToolOutput(entry.threadId, entry.data);
     }
   });
+
+  const elapsed = performance.now() - t0;
+  span.end();
+  metric('ws.flushBatch.size', total, { type: 'gauge' });
+  if (elapsed > 16) {
+    metric('ws.flushBatch.slow', 1, { type: 'sum', attributes: { reason: 'over-1-frame' } });
+  }
 }
 
 function scheduleFlush() {
@@ -75,10 +106,20 @@ function scheduleFlush() {
  */
 function dispatchEvent(type: string, threadId: string, data: any): void {
   switch (type) {
-    case 'agent:message':
-      pendingMessages.set(threadId, { threadId, data });
+    case 'agent:message': {
+      const key = pendingMessageKey(threadId, data);
+      const collapsed = pendingMessages.has(key);
+      wsLog.info('agent:message received', {
+        threadId,
+        messageId: data?.messageId ?? '',
+        role: data?.role ?? '',
+        contentChars: String(data?.content?.length ?? 0),
+        collapsedPrevious: String(collapsed),
+      });
+      pendingMessages.set(key, { threadId, data });
       scheduleFlush();
       break;
+    }
     case 'agent:tool_output':
       pendingToolOutputs.push({ threadId, data });
       scheduleFlush();
@@ -598,13 +639,41 @@ const ALL_EVENT_TYPES = [
   'runner:status',
 ];
 
+// Tracks Socket.IO listeners we attached, so HMR (or any future dispose path)
+// can detach them. Without this, every HMR replacement of this module leaves
+// a ghost handler attached to the same socket — and the old handler closes
+// over the OLD module's `pendingMessages` / `lastStatusByThread` / store
+// reference, producing duplicate `agent:message received` logs and
+// `activeMatch=false` artifacts during dev. (Not a prod problem, but it
+// poisons debugging.)
+const registeredSockets = new Map<Socket, Array<{ event: string; handler: (e: any) => void }>>();
+
 export function registerSocketIOHandlers(socket: Socket): void {
+  const attached: Array<{ event: string; handler: (e: any) => void }> = [];
   for (const eventType of ALL_EVENT_TYPES) {
-    socket.on(eventType, (eventData: any) => {
+    const handler = (eventData: any) => {
       const threadId = eventData.threadId ?? '';
       const data = eventData.data ?? eventData;
       dispatchEvent(eventType, threadId, data);
-    });
+    };
+    socket.on(eventType, handler);
+    attached.push({ event: eventType, handler });
+  }
+  registeredSockets.set(socket, attached);
+}
+
+export function unregisterSocketIOHandlers(socket: Socket): void {
+  const attached = registeredSockets.get(socket);
+  if (!attached) return;
+  for (const { event, handler } of attached) {
+    socket.off(event, handler);
+  }
+  registeredSockets.delete(socket);
+}
+
+function unregisterAllSocketIOHandlers(): void {
+  for (const [socket] of registeredSockets) {
+    unregisterSocketIOHandlers(socket);
   }
 }
 
@@ -686,4 +755,23 @@ export function clearWSDispatchState(): void {
 /** Toggle the "stopped" flag so reconnect attempts halt during teardown. */
 export function setWSStopped(value: boolean): void {
   stopped = value;
+}
+
+// ── HMR cleanup ─────────────────────────────────────────────────
+// Vite re-evaluates this module on hot updates. Without an explicit dispose,
+// the previous module instance keeps its socket.on listeners attached, its
+// own pendingMessages map, and its own reference to useThreadStore. The
+// result during dev is ghost handlers running in parallel with the live
+// ones — exact symptom we hunted: duplicate `agent:message received` logs,
+// `activeMatch=false` from a handler closed over a stale store snapshot,
+// and "final response not shown" right after a save.
+//
+// This block is dev-only; in production Vite strips `import.meta.hot`.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    setWSStopped(true);
+    unregisterAllSocketIOHandlers();
+    disconnectAllRemote();
+    clearWSDispatchState();
+  });
 }

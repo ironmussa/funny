@@ -27,6 +27,10 @@ interface ThreadSearchBarProps {
     withinIdx: number,
     reportMarkCount?: (messageId: string, count: number) => void,
   ) => void;
+  /** data-testid prefix for the underlying SearchBar. Default: "thread-search". */
+  testIdPrefix?: string;
+  /** Override container className (positioning). Default: chat-view absolute style. */
+  className?: string;
 }
 
 function countOccurrences(haystack: string, needle: string, caseSensitive: boolean): number {
@@ -49,6 +53,8 @@ export function ThreadSearchBar({
   open,
   onClose,
   onNavigateToMessage,
+  testIdPrefix = 'thread-search',
+  className = 'absolute right-4 top-0 z-30 gap-1.5 rounded-b-lg border border-t-0 border-border bg-popover px-2 py-1.5 shadow-md',
 }: ThreadSearchBarProps) {
   const { t } = useTranslation();
   const [query, setQuery] = useState('');
@@ -212,8 +218,8 @@ export function ThreadSearchBar({
       loading={loading}
       placeholder={t('thread.searchPlaceholder', 'Search in thread...')}
       showIcon={false}
-      testIdPrefix="thread-search"
-      className="absolute right-4 top-0 z-30 gap-1.5 rounded-b-lg border border-t-0 border-border bg-popover px-2 py-1.5 shadow-md"
+      testIdPrefix={testIdPrefix}
+      className={className}
     />
   );
 }

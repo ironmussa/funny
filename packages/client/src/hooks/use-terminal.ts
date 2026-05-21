@@ -1,8 +1,10 @@
 import { FitAddon } from '@xterm/addon-fit';
 import { WebLinksAddon } from '@xterm/addon-web-links';
+import { WebglAddon } from '@xterm/addon-webgl';
 import { Terminal } from '@xterm/xterm';
 import { useEffect, useRef } from 'react';
 
+import { attachWebglRenderer } from '@/components/terminal/xterm-utils';
 import { useSettingsStore, EDITOR_FONT_SIZE_PX } from '@/stores/settings-store';
 import { useTerminalStore } from '@/stores/terminal-store';
 
@@ -78,6 +80,7 @@ export function useTerminal({ id, cwd, containerRef }: UseTerminalOptions) {
     terminal.loadAddon(fitAddon);
     terminal.loadAddon(webLinksAddon);
     terminal.open(containerRef.current);
+    attachWebglRenderer(terminal, WebglAddon);
     // Re-apply theme after terminal is attached to DOM
     terminal.options.theme = getTerminalTheme();
 

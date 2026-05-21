@@ -413,16 +413,19 @@ export class AgentMessageHandler {
           input: JSON.stringify(block.input),
         });
 
-        // Ensure there's always a parent assistant message for tool calls
+        // Ensure there's always a parent assistant message for tool calls.
+        // The DB row is required as FK target for tool_calls.messageId, but
+        // we deliberately do NOT emit `agent:message` for this empty
+        // placeholder — the client would just store an empty assistant
+        // bubble that render-items.ts filters out anyway, and across many
+        // CLI messages this used to produce dozens of empty rows in the
+        // client store (and matching log spam). `handleWSToolCall` creates
+        // a synthetic parent message on demand when the first tool_call
+        // referencing this messageId arrives, so the client stays correct.
         let parentMsgId = this.state.currentAssistantMsgId.get(threadId) || cliMap.get(cliMsgId);
         if (!parentMsgId) {
           parentMsgId = await this.threadManager.insertMessage({
             threadId,
-            role: 'assistant',
-            content: '',
-          });
-          await this.emitWS(threadId, 'agent:message', {
-            messageId: parentMsgId,
             role: 'assistant',
             content: '',
           });

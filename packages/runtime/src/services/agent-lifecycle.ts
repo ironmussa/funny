@@ -20,6 +20,7 @@ import type { ThreadEvent } from '@funny/shared/thread-machine';
 
 import { log } from '../lib/logger.js';
 import { clearThreadTrace, metric, setThreadTrace, startSpan } from '../lib/telemetry.js';
+import { stripInlineReferencedContent } from '../utils/file-mentions.js';
 import type { AgentEventRouter } from './agent-event-router.js';
 import { shouldForceColdPathRecovery } from './agent-startup/cold-path-guard.js';
 import { loadProjectMcpServers } from './agent-startup/load-mcp-servers.js';
@@ -122,12 +123,15 @@ export class AgentLifecycleManager {
       completedAt: null,
     });
 
-    // Save user message in DB (skip when a draft message already exists)
+    // Save user message in DB (skip when a draft message already exists).
+    // The `prompt` we receive here is the agent-ready prompt (with file/symbol
+    // contents inlined when references were used). Persist a path-only version
+    // so the UI renders chips instead of dumping the full source files.
     if (!skipMessageInsert) {
       await this.threadManager.insertMessage({
         threadId,
         role: 'user',
-        content: prompt,
+        content: stripInlineReferencedContent(prompt),
         images: images ? JSON.stringify(images) : null,
         model,
         permissionMode,

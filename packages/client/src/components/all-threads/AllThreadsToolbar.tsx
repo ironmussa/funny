@@ -47,6 +47,9 @@ interface Props {
   setGitFilter: Dispatch<SetStateAction<Set<string>>>;
   modeFilter: Set<string>;
   setModeFilter: Dispatch<SetStateAction<Set<string>>>;
+  typeFilter: Set<string>;
+  onTypeToggle: (value: string) => void;
+  typeCounts: Record<string, number>;
   statusCounts: Record<string, number>;
   gitCounts: Record<string, number>;
   threadStatuses: ThreadStatus[];
@@ -99,6 +102,9 @@ export function AllThreadsToolbar(props: Props) {
     setGitFilter,
     modeFilter,
     setModeFilter,
+    typeFilter,
+    onTypeToggle,
+    typeCounts,
     statusCounts,
     gitCounts,
     threadStatuses,
@@ -172,6 +178,24 @@ export function AllThreadsToolbar(props: Props) {
         ]}
         selected={modeFilter}
         onToggle={toggleFilter(setModeFilter)}
+      />
+
+      <FilterDropdown
+        testId="all-threads-type-filter"
+        label={t('allThreads.filterType', { defaultValue: 'Type' })}
+        options={[
+          {
+            value: 'scratch',
+            label: t('sidebar.scratchTitle', { defaultValue: 'Scratch' }),
+          },
+          {
+            value: 'normal',
+            label: t('allThreads.typeNormal', { defaultValue: 'Project' }),
+          },
+        ]}
+        selected={typeFilter}
+        onToggle={onTypeToggle}
+        counts={typeCounts}
       />
 
       <div className="h-4 w-px bg-border" />

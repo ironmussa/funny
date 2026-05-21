@@ -171,7 +171,7 @@ export function AppSidebar({ singleProjectId }: { singleProjectId?: string | nul
           onShowIssues={handleShowIssues}
         />
 
-        <SidebarScratchSection onDeleteThread={setDeleteThreadConfirm} />
+        <SidebarScratchSection />
 
         <SidebarFooter />
       </div>

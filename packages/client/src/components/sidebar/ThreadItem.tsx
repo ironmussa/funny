@@ -11,6 +11,7 @@ import {
   GitFork,
   GitBranch,
   Loader2,
+  StickyNote,
 } from 'lucide-react';
 import { useState, memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -39,7 +40,7 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { api } from '@/lib/api';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { timeAgo } from '@/lib/thread-utils';
-import { canShowPowerline, getThreadRoute } from '@/lib/thread-variant';
+import { canShowPowerline, getThreadRoute, isScratch } from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
@@ -170,9 +171,11 @@ export const ThreadItem = memo(function ThreadItem({
   const isBacklog = !hasSnippet && !isBusy && (!thread.stage || thread.stage === 'backlog');
   // Scratch threads have no project / branch / worktree — never show the
   // powerline even if older DB rows still carry a stale `branch` value.
+  // Instead they get a scratch-pad icon as the row's identifier.
+  const scratch = isScratch(thread);
   const hasPowerline =
     canShowPowerline(thread) && (!!subtitle || !!thread.baseBranch || !!thread.branch);
-  const hasMetadataRow = hasDiffStats || hasPR || hasPowerline;
+  const hasMetadataRow = hasDiffStats || hasPR || hasPowerline || scratch;
   const hasSnippetRow = hasSnippet || showLaunching || isBacklog;
 
   return (
@@ -295,6 +298,24 @@ export const ThreadItem = memo(function ThreadItem({
                 variant={isSelected ? 'arrow' : undefined}
                 data-testid={`thread-powerline-${thread.id}`}
               />
+            )}
+            {scratch && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <span
+                    data-testid={`thread-scratch-badge-${thread.id}`}
+                    className="flex flex-shrink-0 items-center gap-1 rounded bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground"
+                  >
+                    <StickyNote className="icon-xs" />
+                    {t('sidebar.scratchTitle', { defaultValue: 'Scratch' })}
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="top" className="text-xs">
+                  {t('thread.scratchTooltip', {
+                    defaultValue: 'Scratch thread — no project, no git',
+                  })}
+                </TooltipContent>
+              </Tooltip>
             )}
             {hasPR && effectiveGitStatus && (
               <PRBadge

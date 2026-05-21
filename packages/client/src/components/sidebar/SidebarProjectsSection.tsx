@@ -63,7 +63,9 @@ export function SidebarProjectsSection({
   const { t } = useTranslation();
   const navigate = useStableNavigate();
   const [scrolled, setScrolled] = useState(false);
+  const [atBottom, setAtBottom] = useState(true);
   const [closedExpanded, setClosedExpanded] = useState(false);
+  const bottomSentinelRef = useRef<HTMLDivElement | null>(null);
 
   const { onCloseProject, onReopenProject, ...sharedHandlers } = handlers;
 
@@ -79,15 +81,20 @@ export function SidebarProjectsSection({
 
   useEffect(() => {
     const root = scrollRef.current;
-    const sentinel = topSentinelRef.current;
-    if (!root || !sentinel) return;
+    const top = topSentinelRef.current;
+    const bottom = bottomSentinelRef.current;
+    if (!root || !top || !bottom) return;
     const io = new IntersectionObserver(
-      () => {
-        setScrolled(root.scrollTop > 0);
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.target === top) setScrolled(root.scrollTop > 0);
+          else if (entry.target === bottom) setAtBottom(entry.isIntersecting);
+        }
       },
       { root, threshold: 0 },
     );
-    io.observe(sentinel);
+    io.observe(top);
+    io.observe(bottom);
     return () => io.disconnect();
   }, [scrollRef, topSentinelRef]);
 
@@ -126,9 +133,14 @@ export function SidebarProjectsSection({
   return (
     <>
       <div className="flex shrink-0 items-center justify-between px-4 pb-2 pt-4">
-        <h2 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+        <button
+          type="button"
+          onClick={() => navigate(buildPath('/list'))}
+          data-testid="sidebar-projects-open-list"
+          className="text-xs font-semibold uppercase tracking-wider text-muted-foreground transition-colors hover:text-foreground"
+        >
           {t('sidebar.projects')}
-        </h2>
+        </button>
         <Tooltip>
           <TooltipTrigger asChild>
             <Button
@@ -146,8 +158,12 @@ export function SidebarProjectsSection({
       </div>
       <SidebarContent
         ref={scrollRef}
-        className="relative px-2 pb-2 contain-paint"
-        onScroll={(e) => setScrolled(e.currentTarget.scrollTop > 0)}
+        className="relative px-2 contain-paint"
+        onScroll={(e) => {
+          const el = e.currentTarget;
+          setScrolled(el.scrollTop > 0);
+          setAtBottom(el.scrollHeight - el.scrollTop - el.clientHeight < 1);
+        }}
       >
         <div ref={topSentinelRef} aria-hidden className="h-px shrink-0" />
         <div
@@ -233,6 +249,13 @@ export function SidebarProjectsSection({
             </CollapsibleContent>
           </Collapsible>
         )}
+        <div
+          className={cn(
+            'sticky bottom-0 left-0 right-0 h-8 -mt-8 bg-gradient-to-t from-sidebar to-transparent pointer-events-none z-10 shrink-0 transition-opacity',
+            atBottom ? 'opacity-0' : 'opacity-100',
+          )}
+        />
+        <div ref={bottomSentinelRef} aria-hidden className="h-2 shrink-0" />
       </SidebarContent>
     </>
   );

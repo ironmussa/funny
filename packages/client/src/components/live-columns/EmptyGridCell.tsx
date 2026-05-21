@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react';
+import { Plus, Sparkles } from 'lucide-react';
 import { memo, useCallback, useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
@@ -22,6 +22,7 @@ export const EmptyGridCell = memo(function EmptyGridCell({
 }: Props) {
   const { t } = useTranslation();
   const [selectedProject, setSelectedProject] = useState<string | null>(initialProjectId ?? null);
+  const [scratchMode, setScratchMode] = useState(false);
 
   // Sync from preset coming in via props (header "+" or Ctrl+N landed a project
   // in this cell). Mount-time presets and post-mount presets are handled the
@@ -30,6 +31,7 @@ export const EmptyGridCell = memo(function EmptyGridCell({
   useEffect(() => {
     if (initialProjectId && initialProjectId !== selectedProject) {
       setSelectedProject(initialProjectId);
+      setScratchMode(false);
       onConsumePreset?.();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -37,12 +39,24 @@ export const EmptyGridCell = memo(function EmptyGridCell({
 
   const handleCancel = useCallback(() => {
     setSelectedProject(null);
+    setScratchMode(false);
   }, []);
+
+  if (scratchMode) {
+    return (
+      <div
+        className="flex h-full w-full flex-col rounded-sm border-2 border-dashed border-border/60 bg-muted/10"
+        data-testid={`grid-empty-cell-${cellIndex}`}
+      >
+        <NewThreadInput isScratchOverride onCreated={onCreated} onCancel={handleCancel} />
+      </div>
+    );
+  }
 
   if (!selectedProject) {
     return (
       <div
-        className="flex h-full w-full items-center justify-center rounded-sm border-2 border-dashed border-border/60 bg-muted/10 p-4 transition-colors hover:border-primary/50 hover:bg-muted/30"
+        className="flex h-full w-full items-center justify-center gap-2 rounded-sm border-2 border-dashed border-border/60 bg-muted/10 p-4 transition-colors hover:border-primary/50 hover:bg-muted/30"
         data-testid={`grid-empty-cell-${cellIndex}`}
       >
         <Button
@@ -54,6 +68,16 @@ export const EmptyGridCell = memo(function EmptyGridCell({
         >
           <Plus className="icon-sm" />
           {t('live.newThread', 'New thread')}
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-7"
+          data-testid={`grid-empty-new-scratch-${cellIndex}`}
+          onClick={() => setScratchMode(true)}
+        >
+          <Sparkles className="icon-sm" />
+          {t('live.newScratch', 'New scratch')}
         </Button>
       </div>
     );

@@ -74,7 +74,6 @@ import { useCopyToClipboard } from '@/hooks/use-copy-to-clipboard';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { api } from '@/lib/api';
-import { getEditorLabel } from '@/lib/editor-utils';
 import { stageConfig } from '@/lib/thread-utils';
 import * as variant from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
@@ -123,7 +122,17 @@ function threadToMarkdown(messages: MessageWithToolCalls[], includeToolCalls: bo
   return lines.join('\n');
 }
 
-const MoreActionsMenu = memo(function MoreActionsMenu() {
+interface MoreActionsMenuProps {
+  onOpenInEditor?: (editor: Editor) => void;
+  editorLabels?: Record<Editor, string>;
+  hideTimeline?: boolean;
+}
+
+const MoreActionsMenu = memo(function MoreActionsMenu({
+  onOpenInEditor,
+  editorLabels: editorLabelsProp,
+  hideTimeline = false,
+}: MoreActionsMenuProps = {}) {
   const { t } = useTranslation();
   const navigate = useStableNavigate();
   const threadId = useThreadId();
@@ -133,9 +142,11 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
   const threadBranch = useThreadSelector((t) => (t ? resolveThreadBranch(t) : undefined));
   const threadPinned = useThreadSelector((t) => t?.pinned);
   const threadStage = useThreadSelector((t) => t?.stage);
+  const isScratchThread = useThreadSelector((t) => variant.isScratch(t));
   const hasMessages = useThreadSelector((t) => (t?.messages?.length ?? 0) > 0);
   const pinThread = useThreadStore((s) => s.pinThread);
   const updateThreadStage = useThreadStore((s) => s.updateThreadStage);
+  const deleteScratchThread = useThreadStore((s) => s.deleteScratchThread);
   const timelineVisible = useUIStore((s) => s.timelineVisible);
   const setTimelineVisible = useUIStore((s) => s.setTimelineVisible);
   const reviewPaneOpen = useUIStore((s) => s.reviewPaneOpen);
@@ -143,7 +154,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
   const rightPaneTab = useUIStore((s) => s.rightPaneTab);
   const setActivityPaneOpen = useUIStore((s) => s.setActivityPaneOpen);
   const activityActive = reviewPaneOpen && rightPaneTab === 'activity';
-  const showStage = !!threadId && !!threadStage && threadStage !== 'archived';
+  const showStage = !!threadId && !!threadStage && threadStage !== 'archived' && !isScratchThread;
   const [copiedText, copyText] = useCopyToClipboard();
   const [copiedTools, copyTools] = useCopyToClipboard();
   const [deleteOpen, setDeleteOpen] = useState(false);
@@ -216,16 +227,28 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
   const handleDeleteConfirm = useCallback(async () => {
     if (!threadId) return;
     const thread = getThreadById(threadId);
-    const projId = thread?.projectId;
-    const title = thread?.title;
-    if (!projId) return;
+    if (!thread) return;
+    const title = thread.title;
     setDeleteLoading(true);
+    if (variant.isScratch(thread)) {
+      await deleteScratchThread(threadId);
+      setDeleteLoading(false);
+      setDeleteOpen(false);
+      toast.success(t('toast.threadDeleted', { title }));
+      navigate(buildPath('/'));
+      return;
+    }
+    const projId = thread.projectId;
+    if (!projId) {
+      setDeleteLoading(false);
+      return;
+    }
     await useThreadStore.getState().deleteThread(threadId, projId);
     setDeleteLoading(false);
     setDeleteOpen(false);
     toast.success(t('toast.threadDeleted', { title }));
     navigate(buildPath(`/projects/${projId}`));
-  }, [navigate, t, threadId]);
+  }, [navigate, t, threadId, deleteScratchThread]);
 
   const handleCopy = useCallback(
     (includeToolCalls: boolean) => {
@@ -264,7 +287,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
           <TooltipContent>{t('thread.moreActions', 'More actions')}</TooltipContent>
         </Tooltip>
         <DropdownMenuContent align="end">
-          {(showStage || threadId) && (
+          {(showStage || (threadId && !isScratchThread)) && (
             <>
               {showStage && (
                 <DropdownMenuSub>
@@ -299,7 +322,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
                   </DropdownMenuPortal>
                 </DropdownMenuSub>
               )}
-              {threadId && (
+              {threadId && !isScratchThread && (
                 <DropdownMenuItem
                   data-testid="header-menu-view-board"
                   onClick={() => {
@@ -327,7 +350,7 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
             <Activity className={`icon-base mr-2 ${activityActive ? 'text-primary' : ''}`} />
             {t('activity.title', 'Activity')}
           </DropdownMenuItem>
-          {threadId && (
+          {threadId && !hideTimeline && (
             <DropdownMenuItem
               data-testid="header-menu-toggle-timeline"
               onClick={() => setTimelineVisible(!timelineVisible)}
@@ -364,6 +387,31 @@ const MoreActionsMenu = memo(function MoreActionsMenu() {
             )}
             {t('thread.copyWithTools', 'Copy with tool calls')}
           </DropdownMenuItem>
+          {onOpenInEditor && editorLabelsProp && (
+            <>
+              <DropdownMenuSeparator />
+              <DropdownMenuSub>
+                <DropdownMenuSubTrigger data-testid="header-menu-open-editor">
+                  <ExternalLink className="icon-base mr-2" />
+                  {t('thread.openInEditor', 'Open in Editor')}
+                </DropdownMenuSubTrigger>
+                <DropdownMenuPortal>
+                  <DropdownMenuSubContent>
+                    {(Object.keys(editorLabelsProp) as Editor[]).map((editor) => (
+                      <DropdownMenuItem
+                        key={editor}
+                        data-testid={`header-menu-open-editor-${editor}`}
+                        onClick={() => onOpenInEditor(editor)}
+                        className="cursor-pointer"
+                      >
+                        {editorLabelsProp[editor]}
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuSubContent>
+                </DropdownMenuPortal>
+              </DropdownMenuSub>
+            </>
+          )}
           {threadId && canConvert && (
             <>
               <DropdownMenuSeparator />
@@ -620,6 +668,7 @@ interface ProjectHeaderProps {
   hideTests?: boolean;
   hideStartup?: boolean;
   hideTerminal?: boolean;
+  hideTimeline?: boolean;
   leading?: ReactNode;
   trailing?: ReactNode;
 }
@@ -629,6 +678,7 @@ export const ProjectHeader = memo(function ProjectHeader({
   hideTests = false,
   hideStartup = false,
   hideTerminal = false,
+  hideTimeline = false,
   leading,
   trailing,
 }: ProjectHeaderProps = {}) {
@@ -641,6 +691,7 @@ export const ProjectHeader = memo(function ProjectHeader({
   const activeThreadStatus = useThreadStatus();
   const activeThreadWorktreePath = useThreadWorktreePath();
   const activeThreadCanShowGit = useThreadSelector((t) => variant.canDoGitOps(t));
+  const activeThreadIsScratch = useThreadSelector((t) => variant.isScratch(t));
   const activeThreadParentId = useThreadSelector((t) => t?.parentThreadId);
   const activeThreadTemplateId = useThreadSelector((t) => t?.agentTemplateId);
   const activeTemplate = useAgentTemplateStore((s) =>
@@ -732,18 +783,6 @@ export const ProjectHeader = memo(function ProjectHeader({
     }
   }, [activeThreadId, selectedProjectId, fetchForThread, fetchProjectStatus]);
 
-  // Tooltip ↔ DropdownMenu: suppress tooltip while editor dropdown is open
-  const [editorTooltipBlocked, setEditorTooltipBlocked] = useState(false);
-  const [editorTooltipOpen, setEditorTooltipOpen] = useState(false);
-  const handleEditorDropdown = useCallback((open: boolean) => {
-    if (open) {
-      setEditorTooltipBlocked(true);
-    } else {
-      (document.activeElement as HTMLElement)?.blur();
-      setTimeout(() => setEditorTooltipBlocked(false), 150);
-    }
-  }, []);
-
   /** Update the ?panel= query param in the URL without a full navigation. */
   const updatePanelParam = useCallback(
     (panel: string | null) => {
@@ -791,7 +830,7 @@ export const ProjectHeader = memo(function ProjectHeader({
     navigate(buildPath(qs ? `/kanban?${qs}` : '/kanban'));
   }, [kanbanContext, navigate, setReviewPaneOpen]);
 
-  if (!projectId) return null;
+  if (!projectId && !activeThreadIsScratch) return null;
 
   return (
     <div className="h-12 border-b border-border px-4 py-2">
@@ -839,16 +878,17 @@ export const ProjectHeader = memo(function ProjectHeader({
           <Breadcrumb className="min-w-0">
             <BreadcrumbList>
               {project && activeThreadId && (
-                <BreadcrumbItem className="flex-shrink-0">
+                <BreadcrumbItem className="shrink-0">
                   <BreadcrumbLink asChild>
                     <button
                       type="button"
                       data-testid="header-breadcrumb-project"
                       onClick={() => selectProject(project.id, { revealIntent: 'nearest' })}
-                      className="flex cursor-pointer items-center gap-1.5 whitespace-nowrap text-sm"
+                      title={project.name}
+                      className="flex cursor-pointer items-center gap-1.5 text-sm"
                     >
-                      <FolderOpen className="icon-sm text-muted-foreground" />
-                      {project.name}
+                      <FolderOpen className="icon-sm shrink-0 text-muted-foreground" />
+                      <span className="whitespace-nowrap">{project.name}</span>
                     </button>
                   </BreadcrumbLink>
                 </BreadcrumbItem>
@@ -932,8 +972,10 @@ export const ProjectHeader = memo(function ProjectHeader({
         </div>
         {activeThreadStatus !== 'setting_up' && (
           <div className="flex flex-shrink-0 items-center gap-2">
-            {!hideStartup && <StartupCommandsPopover projectId={projectId!} />}
-            {runningWithPort.length > 0 && (
+            {!hideStartup && !activeThreadIsScratch && projectId && (
+              <StartupCommandsPopover projectId={projectId} />
+            )}
+            {!activeThreadIsScratch && runningWithPort.length > 0 && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -957,40 +999,7 @@ export const ProjectHeader = memo(function ProjectHeader({
                 <TooltipContent>{t('preview.openPreview')}</TooltipContent>
               </Tooltip>
             )}
-            <DropdownMenu onOpenChange={handleEditorDropdown}>
-              <Tooltip
-                open={!editorTooltipBlocked && editorTooltipOpen}
-                onOpenChange={setEditorTooltipOpen}
-              >
-                <TooltipTrigger asChild>
-                  <DropdownMenuTrigger asChild>
-                    <Button
-                      data-testid="header-open-editor"
-                      variant="ghost"
-                      size="icon-sm"
-                      className="text-muted-foreground"
-                    >
-                      <ExternalLink className="icon-base" />
-                    </Button>
-                  </DropdownMenuTrigger>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {t('sidebar.openInEditor', { editor: getEditorLabel() })}
-                </TooltipContent>
-              </Tooltip>
-              <DropdownMenuContent align="end">
-                {(Object.keys(editorLabels) as Editor[]).map((editor) => (
-                  <DropdownMenuItem
-                    key={editor}
-                    onClick={() => handleOpenInEditor(editor)}
-                    className="cursor-pointer"
-                  >
-                    {editorLabels[editor]}
-                  </DropdownMenuItem>
-                ))}
-              </DropdownMenuContent>
-            </DropdownMenu>
-            {!hideTerminal && (
+            {!hideTerminal && !activeThreadIsScratch && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -1063,7 +1072,7 @@ export const ProjectHeader = memo(function ProjectHeader({
                 <TooltipContent>{t('review.title')}</TooltipContent>
               </Tooltip>
             )}
-            {!hideTests && (
+            {!hideTests && !activeThreadIsScratch && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -1085,7 +1094,7 @@ export const ProjectHeader = memo(function ProjectHeader({
                 <TooltipContent>{t('tests.title', 'Tests')}</TooltipContent>
               </Tooltip>
             )}
-            {!hideFiles && (
+            {!hideFiles && !activeThreadIsScratch && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
@@ -1116,7 +1125,13 @@ export const ProjectHeader = memo(function ProjectHeader({
                 <TooltipContent>{t('projectFiles.title', 'Project Files')}</TooltipContent>
               </Tooltip>
             )}
-            {activeThreadId && <MoreActionsMenu />}
+            {activeThreadId && (
+              <MoreActionsMenu
+                onOpenInEditor={!activeThreadIsScratch ? handleOpenInEditor : undefined}
+                editorLabels={!activeThreadIsScratch ? editorLabels : undefined}
+                hideTimeline={hideTimeline}
+              />
+            )}
             {trailing}
           </div>
         )}

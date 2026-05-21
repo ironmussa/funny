@@ -40,6 +40,8 @@ function slugifyTitle(title: string, maxLength = 40): string {
 interface NewThreadInputProps {
   /** Override the project ID (skips reading from global stores). */
   projectIdOverride?: string;
+  /** Force scratch mode regardless of the global UI store flag. */
+  isScratchOverride?: boolean;
   /** Called after a thread is successfully created. If provided, navigation is skipped. */
   onCreated?: (threadId: string) => void;
   /** Called when the user cancels (replaces the default global cancelNewThread). */
@@ -48,13 +50,15 @@ interface NewThreadInputProps {
 
 export function NewThreadInput({
   projectIdOverride,
+  isScratchOverride,
   onCreated,
   onCancel,
 }: NewThreadInputProps = {}) {
   const navigate = useNavigate();
   const { t } = useTranslation();
   const newThreadProjectId = useUIStore((s) => s.newThreadProjectId);
-  const newThreadIsScratch = useUIStore((s) => s.newThreadIsScratch);
+  const newThreadIsScratchStore = useUIStore((s) => s.newThreadIsScratch);
+  const newThreadIsScratch = isScratchOverride ?? newThreadIsScratchStore;
   const selectedProjectId = useProjectStore((s) => s.selectedProjectId);
   const effectiveProjectId = projectIdOverride || selectedProjectId || newThreadProjectId;
   const newThreadIdleOnly = useUIStore((s) => s.newThreadIdleOnly);
@@ -287,21 +291,31 @@ export function NewThreadInput({
           data-testid="new-thread-context-bar"
         >
           {project && (
-            <span className="flex h-9 shrink-0 items-center gap-1.5 px-2 py-1">
+            <span
+              className="flex h-9 min-w-0 max-w-[140px] items-center gap-1.5 px-2 py-1 md:max-w-[200px]"
+              title={project.name}
+            >
               <FolderOpen className="size-5 shrink-0" />
-              <span className="truncate font-medium">{project.name}</span>
+              <span className="flex min-w-0 items-center font-medium">
+                <span className="truncate">{project.name.slice(0, -8)}</span>
+                <span className="flex-shrink-0">{project.name.slice(-8)}</span>
+              </span>
             </span>
           )}
           {project && remoteUrl && (
             <>
-              <span className="text-muted-foreground/40">/</span>
+              <span className="shrink-0 text-muted-foreground/40">/</span>
               {(() => {
                 const browseUrl = remoteUrlToBrowseUrl(remoteUrl);
                 const Icon = remoteUrl.includes('github.com') ? Github : Globe;
+                const formatted = formatRemoteUrl(remoteUrl);
                 const content = (
                   <>
                     <Icon className="size-5 shrink-0" />
-                    <span className="truncate font-medium">{formatRemoteUrl(remoteUrl)}</span>
+                    <span className="flex min-w-0 items-center font-medium">
+                      <span className="truncate">{formatted.slice(0, -8)}</span>
+                      <span className="flex-shrink-0">{formatted.slice(-8)}</span>
+                    </span>
                   </>
                 );
                 return browseUrl ? (
@@ -309,14 +323,14 @@ export function NewThreadInput({
                     href={browseUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="flex h-9 shrink-0 items-center gap-1.5 truncate rounded px-2 py-1 transition-colors hover:bg-muted hover:text-foreground"
+                    className="flex h-9 min-w-0 max-w-[180px] items-center gap-1.5 rounded px-2 py-1 transition-colors hover:bg-muted hover:text-foreground md:max-w-[280px]"
                     data-testid="new-thread-repo-link"
                     title={browseUrl}
                   >
                     {content}
                   </a>
                 ) : (
-                  <span className="flex h-9 shrink-0 items-center gap-1.5 truncate px-2 py-1">
+                  <span className="flex h-9 min-w-0 max-w-[180px] items-center gap-1.5 px-2 py-1 md:max-w-[280px]">
                     {content}
                   </span>
                 );

@@ -5,6 +5,7 @@
  * pipeline engine. The new architecture uses git-pipelines.ts for
  * the review-fix sub-pipeline, which startPipelineRun lazy-imports.
  */
+import { okAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 // ── Mocks ─────────────────────────────────────────────────────
@@ -143,8 +144,8 @@ vi.mock('../../services/agent-runner.js', () => ({
 vi.mock('@funny/core/git', () => ({
   gitRead: vi.fn(),
   gitWrite: vi.fn(),
-  removeWorktree: vi.fn().mockResolvedValue(undefined),
-  removeBranch: vi.fn().mockResolvedValue(undefined),
+  removeWorktree: vi.fn().mockReturnValue(okAsync(undefined)),
+  removeBranch: vi.fn().mockReturnValue(okAsync(undefined)),
 }));
 vi.mock('../../services/git-service.js', () => ({
   commitChanges: vi.fn(),

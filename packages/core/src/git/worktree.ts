@@ -39,10 +39,12 @@ export function getWorktreeBasePath(projectPath: string): string {
   return resolve(dirname(projectPath), WORKTREE_DIR_NAME, projectName);
 }
 
-export async function getWorktreeBase(projectPath: string): Promise<string> {
+export function getWorktreeBase(projectPath: string): ResultAsync<string, DomainError> {
   const base = getWorktreeBasePath(projectPath);
-  await mkdir(base, { recursive: true });
-  return base;
+  return ResultAsync.fromPromise(
+    mkdir(base, { recursive: true }).then(() => base),
+    (error) => internal(String(error)),
+  );
 }
 
 export interface WorktreeInfo {
@@ -128,7 +130,9 @@ export function createWorktree(
         }
       }
 
-      const base = await getWorktreeBase(projectPath);
+      const baseResult = await getWorktreeBase(projectPath);
+      if (baseResult.isErr()) throw baseResult.error;
+      const base = baseResult.value;
       // Sanitize branch name: strict whitelist, reject traversal attempts entirely
       if (/\.\./.test(branchName)) {
         throw badRequest('Branch name must not contain path traversal sequences (..)');
@@ -219,29 +223,43 @@ export function listWorktrees(projectPath: string): ResultAsync<WorktreeInfo[], 
   });
 }
 
-export async function removeWorktree(projectPath: string, worktreePath: string): Promise<void> {
-  const result = await gitWrite(['worktree', 'remove', '-f', worktreePath], {
-    cwd: projectPath,
-    reject: false,
-  });
+export function removeWorktree(
+  projectPath: string,
+  worktreePath: string,
+): ResultAsync<void, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      const result = await gitWrite(['worktree', 'remove', '-f', worktreePath], {
+        cwd: projectPath,
+        reject: false,
+      });
 
-  // If git worktree remove succeeded or the directory is already gone, we're done.
-  if (result.exitCode === 0 || !existsSync(worktreePath)) return;
+      // If git worktree remove succeeded or the directory is already gone, we're done.
+      if (result.exitCode === 0 || !existsSync(worktreePath)) return;
 
-  // Fallback: on Windows, file locks (antivirus, IDE, stale processes) commonly
-  // prevent `git worktree remove`. Force-delete the directory, then prune the
-  // worktree bookkeeping so git stays consistent.
-  await rm(worktreePath, { recursive: true, force: true });
-  await gitWrite(['worktree', 'prune'], { cwd: projectPath, reject: false });
+      // Fallback: on Windows, file locks (antivirus, IDE, stale processes) commonly
+      // prevent `git worktree remove`. Force-delete the directory, then prune the
+      // worktree bookkeeping so git stays consistent.
+      await rm(worktreePath, { recursive: true, force: true });
+      await gitWrite(['worktree', 'prune'], { cwd: projectPath, reject: false });
 
-  if (existsSync(worktreePath)) {
-    throw new Error(
-      `Failed to remove worktree directory: ${worktreePath} — ${result.stderr.trim()}`,
-    );
-  }
+      if (existsSync(worktreePath)) {
+        throw internal(
+          `Failed to remove worktree directory: ${worktreePath} — ${result.stderr.trim()}`,
+        );
+      }
+    })(),
+    (error) => {
+      if ((error as DomainError).type) return error as DomainError;
+      return internal(String(error));
+    },
+  );
 }
 
-export async function removeBranch(projectPath: string, branchName: string): Promise<void> {
+export function removeBranch(
+  projectPath: string,
+  branchName: string,
+): ResultAsync<void, DomainError> {
   // Security L4: never pass a value starting with `-` directly to git as an
   // argument — it would be interpreted as a flag (potentially something like
   // `--exec=...`). The branch arg position here is positional but git's CLI
@@ -249,8 +267,15 @@ export async function removeBranch(projectPath: string, branchName: string): Pro
   // course is to reject the name outright. Caller is responsible for
   // surfacing this — `removeBranch` is best-effort cleanup that should never
   // execute on a hostile-looking name.
-  if (branchName.startsWith('-')) return;
-  await gitWrite(['branch', '-D', '--', branchName], { cwd: projectPath, reject: false });
+  if (branchName.startsWith('-')) {
+    return ResultAsync.fromSafePromise(Promise.resolve());
+  }
+  return ResultAsync.fromPromise(
+    gitWrite(['branch', '-D', '--', branchName], { cwd: projectPath, reject: false }).then(
+      () => undefined,
+    ),
+    (error) => internal(String(error)),
+  );
 }
 
 /**
@@ -301,49 +326,54 @@ export async function getLastGitActivity(worktreePath: string): Promise<number |
  * then removes any leftover directories under the worktree base that
  * are no longer registered with git.
  */
-export async function pruneOrphanWorktrees(projectPath: string): Promise<number> {
-  // Run git worktree prune to clean stale entries
-  await gitWrite(['worktree', 'prune'], { cwd: projectPath, reject: false });
+export function pruneOrphanWorktrees(projectPath: string): ResultAsync<number, DomainError> {
+  return ResultAsync.fromPromise(
+    (async () => {
+      // Run git worktree prune to clean stale entries
+      await gitWrite(['worktree', 'prune'], { cwd: projectPath, reject: false });
 
-  const base = getWorktreeBasePath(projectPath);
-  if (!existsSync(base)) return 0;
+      const base = getWorktreeBasePath(projectPath);
+      if (!existsSync(base)) return 0;
 
-  // List registered worktrees
-  const listResult = await gitRead(['worktree', 'list', '--porcelain'], {
-    cwd: projectPath,
-    reject: false,
-  });
-  const registeredPaths = new Set<string>();
-  if (listResult.exitCode === 0) {
-    for (const line of listResult.stdout.split('\n')) {
-      if (line.startsWith('worktree ')) {
-        registeredPaths.add(normalize(line.slice('worktree '.length)));
-      }
-    }
-  }
-
-  // Check for orphan directories under the worktree base
-  let pruned = 0;
-  try {
-    const { readdir } = await import('fs/promises');
-    const entries = await readdir(base, { withFileTypes: true });
-    for (const entry of entries) {
-      if (!entry.isDirectory()) continue;
-      const dirPath = normalize(resolve(base, entry.name));
-      if (!registeredPaths.has(dirPath)) {
-        try {
-          await rm(dirPath, { recursive: true, force: true });
-          pruned++;
-        } catch {
-          // Best-effort cleanup
+      // List registered worktrees
+      const listResult = await gitRead(['worktree', 'list', '--porcelain'], {
+        cwd: projectPath,
+        reject: false,
+      });
+      const registeredPaths = new Set<string>();
+      if (listResult.exitCode === 0) {
+        for (const line of listResult.stdout.split('\n')) {
+          if (line.startsWith('worktree ')) {
+            registeredPaths.add(normalize(line.slice('worktree '.length)));
+          }
         }
       }
-    }
-  } catch {
-    // Base directory unreadable — nothing to prune
-  }
 
-  return pruned;
+      // Check for orphan directories under the worktree base
+      let pruned = 0;
+      try {
+        const { readdir } = await import('fs/promises');
+        const entries = await readdir(base, { withFileTypes: true });
+        for (const entry of entries) {
+          if (!entry.isDirectory()) continue;
+          const dirPath = normalize(resolve(base, entry.name));
+          if (!registeredPaths.has(dirPath)) {
+            try {
+              await rm(dirPath, { recursive: true, force: true });
+              pruned++;
+            } catch {
+              // Best-effort cleanup
+            }
+          }
+        }
+      } catch {
+        // Base directory unreadable — nothing to prune
+      }
+
+      return pruned;
+    })(),
+    (error) => internal(String(error)),
+  );
 }
 
 export function previewWorktree(

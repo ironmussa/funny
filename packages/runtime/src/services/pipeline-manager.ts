@@ -472,19 +472,23 @@ export async function cleanupReviewerThread(
 
   if (reviewerThread.worktreePath && reviewerThread.mode === 'worktree') {
     const { removeWorktree, removeBranch } = await import('@funny/core/git');
-    await removeWorktree(project.path, reviewerThread.worktreePath).catch((e) => {
-      log.warn('Pipeline: failed to remove reviewer worktree', {
-        namespace: 'pipeline',
-        error: String(e),
-      });
-    });
-    if (reviewerThread.branch) {
-      await removeBranch(project.path, reviewerThread.branch).catch((e) => {
-        log.warn('Pipeline: failed to remove reviewer branch', {
+    await removeWorktree(project.path, reviewerThread.worktreePath).match(
+      () => undefined,
+      (e) =>
+        log.warn('Pipeline: failed to remove reviewer worktree', {
           namespace: 'pipeline',
           error: String(e),
-        });
-      });
+        }),
+    );
+    if (reviewerThread.branch) {
+      await removeBranch(project.path, reviewerThread.branch).match(
+        () => undefined,
+        (e) =>
+          log.warn('Pipeline: failed to remove reviewer branch', {
+            namespace: 'pipeline',
+            error: String(e),
+          }),
+      );
     }
   }
 

@@ -421,19 +421,23 @@ export function merge(params: MergeParams): ResultAsync<string, DomainError> {
             }
 
             if (params.cleanup && thread.worktreePath) {
-              await removeWorktree(project.path, thread.worktreePath).catch((e) =>
-                log.warn('Worktree directory could not be removed (will be orphaned)', {
-                  namespace: 'git',
-                  worktreePath: thread.worktreePath,
-                  error: String(e),
-                }),
+              await removeWorktree(project.path, thread.worktreePath).match(
+                () => undefined,
+                (e) =>
+                  log.warn('Worktree directory could not be removed (will be orphaned)', {
+                    namespace: 'git',
+                    worktreePath: thread.worktreePath,
+                    error: String(e),
+                  }),
               );
 
-              await removeBranch(project.path, thread.branch!).catch((e) =>
-                log.warn('Failed to remove branch after merge', {
-                  namespace: 'git',
-                  error: String(e),
-                }),
+              await removeBranch(project.path, thread.branch!).match(
+                () => undefined,
+                (e) =>
+                  log.warn('Failed to remove branch after merge', {
+                    namespace: 'git',
+                    error: String(e),
+                  }),
               );
               await tm.updateThread(params.threadId, {
                 worktreePath: null,

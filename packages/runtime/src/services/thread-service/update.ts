@@ -18,6 +18,7 @@ import {
 import { setupWorktree } from '@funny/core/ports';
 import type { WSEvent, AgentProvider, AgentModel, PermissionMode } from '@funny/shared';
 import { DEFAULT_MODEL, DEFAULT_PROVIDER, DEFAULT_PERMISSION_MODE } from '@funny/shared/models';
+import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { startAgent, stopAgent, isAgentRunning, cleanupThreadState } from '../agent-runner.js';
@@ -48,7 +49,15 @@ export interface UpdateThreadParams {
   stage?: string;
 }
 
-export async function updateThread(params: UpdateThreadParams) {
+export function updateThread(
+  params: UpdateThreadParams,
+): ResultAsync<Awaited<ReturnType<typeof updateThreadImpl>>, ThreadServiceError> {
+  return ResultAsync.fromPromise(updateThreadImpl(params), (err) =>
+    err instanceof ThreadServiceError ? err : new ThreadServiceError(String(err), 500),
+  );
+}
+
+async function updateThreadImpl(params: UpdateThreadParams) {
   const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
@@ -82,13 +91,15 @@ export async function updateThread(params: UpdateThreadParams) {
     const archivePath = archivePathResult.isOk() ? archivePathResult.value : undefined;
     if (archivePath) {
       await stopCommandsByCwd(thread.worktreePath).catch(() => {});
-      await removeWorktree(archivePath, thread.worktreePath).catch((e) => {
-        log.warn('Failed to remove worktree', { namespace: 'cleanup', error: String(e) });
-      });
+      await removeWorktree(archivePath, thread.worktreePath).match(
+        () => undefined,
+        (e) => log.warn('Failed to remove worktree', { namespace: 'cleanup', error: String(e) }),
+      );
       if (thread.branch) {
-        await removeBranch(archivePath, thread.branch).catch((e) => {
-          log.warn('Failed to remove branch', { namespace: 'cleanup', error: String(e) });
-        });
+        await removeBranch(archivePath, thread.branch).match(
+          () => undefined,
+          (e) => log.warn('Failed to remove branch', { namespace: 'cleanup', error: String(e) }),
+        );
       }
     }
     updates.worktreePath = null;
@@ -305,7 +316,13 @@ async function autoStartIdleThread(
 
 // ── Delete Thread ───────────────────────────────────────────────
 
-export async function deleteThread(threadId: string): Promise<void> {
+export function deleteThread(threadId: string): ResultAsync<void, ThreadServiceError> {
+  return ResultAsync.fromPromise(deleteThreadImpl(threadId), (err) =>
+    err instanceof ThreadServiceError ? err : new ThreadServiceError(String(err), 500),
+  );
+}
+
+async function deleteThreadImpl(threadId: string): Promise<void> {
   const thread = await tm.getThread(threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
@@ -334,13 +351,15 @@ export async function deleteThread(threadId: string): Promise<void> {
     );
     const deletePath = deletePathResult.isOk() ? deletePathResult.value : undefined;
     if (deletePath) {
-      await removeWorktree(deletePath, thread.worktreePath).catch((e) => {
-        log.warn('Failed to remove worktree', { namespace: 'cleanup', error: String(e) });
-      });
+      await removeWorktree(deletePath, thread.worktreePath).match(
+        () => undefined,
+        (e) => log.warn('Failed to remove worktree', { namespace: 'cleanup', error: String(e) }),
+      );
       if (thread.branch) {
-        await removeBranch(deletePath, thread.branch).catch((e) => {
-          log.warn('Failed to remove branch', { namespace: 'cleanup', error: String(e) });
-        });
+        await removeBranch(deletePath, thread.branch).match(
+          () => undefined,
+          (e) => log.warn('Failed to remove branch', { namespace: 'cleanup', error: String(e) }),
+        );
       }
     }
   }
@@ -371,11 +390,13 @@ export async function deleteThread(threadId: string): Promise<void> {
   if (thread.containerName && thread.runtime === 'remote') {
     const project = await getServices().projects.getProject(thread.projectId);
     if (project?.launcherUrl) {
-      stopContainer({ containerName: thread.containerName, launcherUrl: project.launcherUrl })
-        .then(() => {})
-        .catch((e) =>
-          log.warn('Failed to stop container', { namespace: 'podman', error: String(e) }),
-        );
+      void stopContainer({
+        containerName: thread.containerName,
+        launcherUrl: project.launcherUrl,
+      }).match(
+        () => undefined,
+        (e) => log.warn('Failed to stop container', { namespace: 'podman', error: String(e) }),
+      );
     }
   }
 
@@ -386,7 +407,17 @@ export async function deleteThread(threadId: string): Promise<void> {
 
 // ── Convert Local Thread to Worktree ────────────────────────
 
-export async function convertToWorktree(
+export function convertToWorktree(
+  threadId: string,
+  userId: string,
+  baseBranch?: string,
+): ResultAsync<void, ThreadServiceError> {
+  return ResultAsync.fromPromise(convertToWorktreeImpl(threadId, userId, baseBranch), (err) =>
+    err instanceof ThreadServiceError ? err : new ThreadServiceError(String(err), 500),
+  );
+}
+
+async function convertToWorktreeImpl(
   threadId: string,
   userId: string,
   baseBranch?: string,
@@ -452,16 +483,17 @@ export async function convertToWorktree(
       }
       const wtPath = wtResult.value;
 
-      try {
-        const setup = await setupWorktree(projectPath, wtPath, emitSetupProgress);
-        if (setup.postCreateErrors.length) {
-          log.warn('Worktree postCreate errors during convert', {
-            threadId,
-            errors: setup.postCreateErrors,
-          });
-        }
-      } catch (err) {
-        log.warn('Failed to setup worktree during convert', { threadId, error: String(err) });
+      const setup = await setupWorktree(projectPath, wtPath, emitSetupProgress);
+      if (setup.isOk() && setup.value.postCreateErrors.length) {
+        log.warn('Worktree postCreate errors during convert', {
+          threadId,
+          errors: setup.value.postCreateErrors,
+        });
+      } else if (setup.isErr()) {
+        log.warn('Failed to setup worktree during convert', {
+          threadId,
+          error: setup.error.message,
+        });
       }
 
       // Update thread: convert to worktree mode

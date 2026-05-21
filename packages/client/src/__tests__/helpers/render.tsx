@@ -27,9 +27,7 @@ export function renderWithProviders(
     return (
       <MemoryRouter initialEntries={[route ?? '/']}>
         <TooltipProvider>
-          <ThreadProvider threadId={resolvedThreadId} source="active">
-            {children}
-          </ThreadProvider>
+          <ThreadProvider threadId={resolvedThreadId}>{children}</ThreadProvider>
         </TooltipProvider>
       </MemoryRouter>
     );

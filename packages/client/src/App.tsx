@@ -149,6 +149,7 @@ export function App() {
   const internalEditorContent = useInternalEditorStore((s) => s.initialContent);
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const activeThreadCanShowGit = useThreadStore((s) => canDoGitOps(s.activeThread));
+  const hasSelectedProject = useProjectStore((s) => s.selectedProjectId != null);
   const navigate = useNavigate();
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false);
   const [fileSearchOpen, setFileSearchOpen] = useState(false);
@@ -250,7 +251,7 @@ export function App() {
       </ErrorBoundary>
       <CollapsedSidebarStrip />
 
-      <ThreadProvider threadId={selectedThreadId} source="active">
+      <ThreadProvider threadId={selectedThreadId}>
         <div className="flex min-h-0 flex-1 overflow-hidden" data-testid="main-panel-group">
           {/* Center panel — main content + terminal */}
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -343,7 +344,8 @@ export function App() {
                     <Suspense>
                       {rightPaneTab === 'review' && activeThreadCanShowGit ? (
                         <ReviewPane />
-                      ) : rightPaneTab === 'files' && activeThreadCanShowGit ? (
+                      ) : rightPaneTab === 'files' &&
+                        (activeThreadCanShowGit || hasSelectedProject) ? (
                         <ProjectFilesPane />
                       ) : (
                         <ActivityPane />

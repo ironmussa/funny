@@ -1,6 +1,17 @@
 /**
  * WebSocket event handlers for thread-store.
- * Each handler receives Zustand's get/set accessors plus the event payload.
+ *
+ * Each handler patches a single source of truth — `threadDataById` via
+ * `mutations.applyThreadDataPatch`. The mutation helper mirrors onto the
+ * `activeThread` field iff the patched thread is the currently-selected
+ * one, so the right pane stays in sync without a separate write path.
+ *
+ * Threads visible only in a live column (no `selectedThreadId` match) get
+ * the same patch through the same map — no per-surface duplication.
+ *
+ * If the thread isn't loaded into `threadDataById` yet (rare: WS arrived
+ * during a select that hasn't hydrated) the event is buffered and
+ * replayed once `selectThread` lands the snapshot.
  */
 
 import type { Thread, MessageRole, ThreadStatus, ImageAttachment } from '@funny/shared';
@@ -19,26 +30,12 @@ import {
 import * as mutations from './thread-mutations';
 import { useThreadReadStore } from './thread-read-store';
 import { bufferWSEvent, getNavigate, getProjectIdForThread } from './thread-store-internals';
-import type { AgentInitInfo, ThreadState, ThreadWithMessages } from './thread-types';
+import type { AgentInitInfo, ThreadState } from './thread-types';
 
 const wsLog = createClientLogger('ws-handlers');
 
 type Get = () => ThreadState;
 type Set = (partial: Partial<ThreadState> | ((state: ThreadState) => Partial<ThreadState>)) => void;
-
-// ── Live thread update helper ──────────────────────────────────
-// Applies a mutation to a live-column thread if it's registered.
-function updateLiveThread(
-  get: Get,
-  set: Set,
-  threadId: string,
-  updater: (thread: ThreadWithMessages) => ThreadWithMessages,
-): void {
-  const { liveThreads } = get();
-  const live = liveThreads[threadId];
-  if (!live) return;
-  set({ liveThreads: { ...liveThreads, [threadId]: updater(live) } } as any);
-}
 
 // ── Sidebar update helper ─────────────────────────────────────
 //
@@ -74,6 +71,23 @@ function patchSidebarLastAssistant(
 ): Partial<ThreadState> {
   const snippet = content.slice(0, 120);
   return patchSidebarThread(get, threadId, (t) => ({ ...t, lastAssistantMessage: snippet })).patch;
+}
+
+/** True when the thread payload is loaded in the unified map. */
+function isHydrated(state: ThreadState, threadId: string): boolean {
+  return !!state.threadDataById[threadId];
+}
+
+/**
+ * Buffer the event when the thread is being selected but not yet hydrated.
+ * Returns true when buffering happened so callers can short-circuit.
+ */
+function maybeBuffer(state: ThreadState, threadId: string, type: string, data: unknown): boolean {
+  if (state.selectedThreadId === threadId && !isHydrated(state, threadId)) {
+    bufferWSEvent(threadId, type, data);
+    return true;
+  }
+  return false;
 }
 
 // ── Debounced "refresh all projects" for unknown threads ─────────
@@ -118,14 +132,9 @@ const pendingDequeuedMessages = new Map<string, DequeuedMessageBuffer>();
 // ── Init ────────────────────────────────────────────────────────
 
 export function handleWSInit(get: Get, set: Set, threadId: string, data: AgentInitInfo): void {
-  const { activeThread } = get();
-  if (activeThread?.id === threadId) {
-    set({ activeThread: { ...activeThread, initInfo: data } });
-  }
-  // If not active, thread-store-internals will buffer it via setBufferedInitInfo
-  // (caller handles this since it needs the initInfoBuffer from internals)
-
-  updateLiveThread(get, set, threadId, (live) => ({ ...live, initInfo: data }));
+  set((state) =>
+    mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, initInfo: data })),
+  );
 }
 
 // ── Message ─────────────────────────────────────────────────────
@@ -136,127 +145,98 @@ export function handleWSMessage(
   threadId: string,
   data: { messageId?: string; role: string; content: string; author?: string },
 ): void {
-  const { activeThread, selectedThreadId } = get();
+  const state = get();
+  const hydrated = isHydrated(state, threadId);
 
-  if (activeThread?.id === threadId) {
-    const messageId = data.messageId;
-
-    if (messageId) {
-      const existingIdx = activeThread.messages.findIndex((m) => m.id === messageId);
-      if (existingIdx >= 0) {
-        const updated = [...activeThread.messages];
-        updated[existingIdx] = {
-          ...updated[existingIdx],
-          content: data.content,
-          ...(data.author ? { author: data.author } : {}),
-        };
-        // Merge sidebar snippet update into same set() for existing message updates
-        const earlyUpdate: Partial<ThreadState> = {
-          activeThread: { ...activeThread, messages: updated },
-        };
-        if (data.role === 'assistant' && data.content) {
-          Object.assign(earlyUpdate, patchSidebarLastAssistant(get, threadId, data.content));
-        }
-        set(earlyUpdate as any);
-        return;
-      }
-    }
-
-    // If there's a buffered dequeued user message, prepend it before this
-    // assistant message so the user message appears in the correct position
-    const dequeuedMsg = pendingDequeuedMessages.get(threadId);
-    const extraMessages: typeof activeThread.messages = [];
-    if (dequeuedMsg) {
-      pendingDequeuedMessages.delete(threadId);
-      extraMessages.push({
-        id: crypto.randomUUID(),
-        threadId,
-        role: 'user' as MessageRole,
-        content: dequeuedMsg.content,
-        images: dequeuedMsg.images,
-        timestamp: new Date().toISOString(),
-      });
-    }
-
-    const newMsg = {
-      id: messageId || crypto.randomUUID(),
-      threadId,
-      role: data.role as MessageRole,
-      content: data.content,
-      timestamp: new Date().toISOString(),
-      ...(data.author ? { author: data.author } : {}),
-    };
-
-    // Update lastUserMessage when a dequeued user message or user-role WS message arrives
-    const lastUserMessage =
-      extraMessages.length > 0
-        ? extraMessages[extraMessages.length - 1]
-        : data.role === 'user'
-          ? newMsg
-          : activeThread.lastUserMessage;
-
-    // Build the state update — combine activeThread + sidebar snippet
-    // into a single set() call to avoid double store updates per message.
-    const stateUpdate: Partial<ThreadState> = {
-      activeThread: {
-        ...activeThread,
-        lastUserMessage,
-        messages: [...activeThread.messages, ...extraMessages, newMsg],
-      },
-    };
-
-    // Update sidebar snippet for assistant messages (merged into same set())
-    if (data.role === 'assistant' && data.content) {
-      Object.assign(stateUpdate, patchSidebarLastAssistant(get, threadId, data.content));
-    }
-
-    set(stateUpdate as any);
-  } else if (selectedThreadId === threadId) {
-    bufferWSEvent(threadId, 'message', data);
-  }
-
-  // Update live thread for live-column real-time streaming
-  updateLiveThread(get, set, threadId, (live) => {
-    const messageId = data.messageId;
-    if (messageId) {
-      const idx = live.messages.findIndex((m) => m.id === messageId);
-      if (idx >= 0) {
-        const updated = [...live.messages];
-        updated[idx] = {
-          ...updated[idx],
-          content: data.content,
-          ...(data.author ? { author: data.author } : {}),
-        };
-        return { ...live, messages: updated };
-      }
-    }
-    const newMsg = {
-      id: messageId || crypto.randomUUID(),
-      threadId,
-      role: data.role as MessageRole,
-      content: data.content,
-      timestamp: new Date().toISOString(),
-      ...(data.author ? { author: data.author } : {}),
-    };
-    return {
-      ...live,
-      messages: [...live.messages, newMsg],
-      ...(data.role === 'user' ? { lastUserMessage: newMsg } : {}),
-    };
+  wsLog.info('handleWSMessage applying', {
+    threadId,
+    messageId: data?.messageId ?? '',
+    role: data?.role ?? '',
+    contentChars: String(data?.content?.length ?? 0),
+    selectedMatch: String(state.selectedThreadId === threadId),
+    hydrated: String(hydrated),
   });
 
   // Drop the cached snapshot so the next selectThread() refetches. Must run
-  // even when the thread is currently active — otherwise switching away and
-  // back resolves from the pre-event cache and the new message is invisible
-  // until a hard refresh.
+  // even for the active thread — otherwise switching away and back resolves
+  // from the pre-event cache and the new message is invisible.
   invalidateThreadData(threadId);
 
-  // Update sidebar snippet for assistant messages on non-active threads
-  if (activeThread?.id !== threadId && data.role === 'assistant' && data.content) {
-    const update = patchSidebarLastAssistant(get, threadId, data.content);
-    if (Object.keys(update).length > 0) {
-      set(update as any);
+  if (!hydrated) {
+    if (maybeBuffer(state, threadId, 'message', data)) return;
+    // Not hydrated and not selected — still update the sidebar snippet so
+    // the row shows the latest assistant message.
+    if (data.role === 'assistant' && data.content) {
+      const patch = patchSidebarLastAssistant(get, threadId, data.content);
+      if (Object.keys(patch).length > 0) set(patch as any);
     }
+    return;
+  }
+
+  // Apply the message to the loaded payload — works whether the thread is
+  // in the right pane, a live column, or both.
+  set((s) =>
+    mutations.applyThreadDataPatch(s, threadId, (t) => {
+      const messageId = data.messageId;
+
+      if (messageId) {
+        const existingIdx = t.messages.findIndex((m) => m.id === messageId);
+        if (existingIdx >= 0) {
+          const updated = [...t.messages];
+          updated[existingIdx] = {
+            ...updated[existingIdx],
+            content: data.content,
+            ...(data.author ? { author: data.author } : {}),
+          };
+          return { ...t, messages: updated };
+        }
+      }
+
+      // If there's a buffered dequeued user message, prepend it before this
+      // assistant message so the user message appears in the correct position.
+      // This now works for any hydrated thread (was previously limited to active).
+      const dequeuedMsg = pendingDequeuedMessages.get(threadId);
+      const extraMessages: typeof t.messages = [];
+      if (dequeuedMsg) {
+        pendingDequeuedMessages.delete(threadId);
+        extraMessages.push({
+          id: crypto.randomUUID(),
+          threadId,
+          role: 'user' as MessageRole,
+          content: dequeuedMsg.content,
+          images: dequeuedMsg.images,
+          timestamp: new Date().toISOString(),
+        });
+      }
+
+      const newMsg = {
+        id: messageId || crypto.randomUUID(),
+        threadId,
+        role: data.role as MessageRole,
+        content: data.content,
+        timestamp: new Date().toISOString(),
+        ...(data.author ? { author: data.author } : {}),
+      };
+
+      const lastUserMessage =
+        extraMessages.length > 0
+          ? extraMessages[extraMessages.length - 1]
+          : data.role === 'user'
+            ? newMsg
+            : t.lastUserMessage;
+
+      return {
+        ...t,
+        lastUserMessage,
+        messages: [...t.messages, ...extraMessages, newMsg],
+      };
+    }),
+  );
+
+  // Sidebar snippet for assistant messages (independent of payload patch).
+  if (data.role === 'assistant' && data.content) {
+    const patch = patchSidebarLastAssistant(get, threadId, data.content);
+    if (Object.keys(patch).length > 0) set(patch as any);
   }
 }
 
@@ -275,41 +255,52 @@ export function handleWSToolCall(
     parentToolCallId?: string;
   },
 ): void {
-  const { activeThread, selectedThreadId } = get();
+  const state = get();
 
-  if (activeThread?.id === threadId) {
-    const toolCallId = data.toolCallId || crypto.randomUUID();
-    const tcEntry = {
-      id: toolCallId,
-      messageId: data.messageId || '',
-      name: data.name,
-      input: JSON.stringify(data.input),
-      timestamp: new Date().toISOString(),
-      ...(data.author ? { author: data.author } : {}),
-      ...(data.parentToolCallId ? { parentToolCallId: data.parentToolCallId } : {}),
-    };
+  // Drop the cached snapshot so the next selectThread() refetches and includes
+  // this tool call. Runs unconditionally so the active thread's cache stays in
+  // sync with the live payload.
+  invalidateThreadData(threadId);
 
-    if (activeThread.messages.some((m) => m.toolCalls?.some((tc: any) => tc.id === toolCallId)))
-      return;
+  if (!isHydrated(state, threadId)) {
+    maybeBuffer(state, threadId, 'tool_call', data);
+    return;
+  }
 
-    if (data.messageId) {
-      const msgIdx = activeThread.messages.findIndex((m) => m.id === data.messageId);
-      if (msgIdx >= 0) {
-        const messages = activeThread.messages.slice();
-        const msg = messages[msgIdx];
-        messages[msgIdx] = {
-          ...msg,
-          toolCalls: (msg.toolCalls ?? []).concat(tcEntry),
-        };
-        set({ activeThread: { ...activeThread, messages } });
-        return;
+  set((s) =>
+    mutations.applyThreadDataPatch(s, threadId, (t) => {
+      const toolCallId = data.toolCallId || crypto.randomUUID();
+      const tcEntry = {
+        id: toolCallId,
+        messageId: data.messageId || '',
+        name: data.name,
+        input: JSON.stringify(data.input),
+        timestamp: new Date().toISOString(),
+        ...(data.author ? { author: data.author } : {}),
+        ...(data.parentToolCallId ? { parentToolCallId: data.parentToolCallId } : {}),
+      };
+
+      // De-dup against any existing entry — WS retries can land twice.
+      if (t.messages.some((m) => m.toolCalls?.some((tc: any) => tc.id === toolCallId))) {
+        return t;
       }
-    }
 
-    set({
-      activeThread: {
-        ...activeThread,
-        messages: activeThread.messages.concat({
+      if (data.messageId) {
+        const msgIdx = t.messages.findIndex((m) => m.id === data.messageId);
+        if (msgIdx >= 0) {
+          const messages = t.messages.slice();
+          const msg = messages[msgIdx];
+          messages[msgIdx] = {
+            ...msg,
+            toolCalls: (msg.toolCalls ?? []).concat(tcEntry),
+          };
+          return { ...t, messages };
+        }
+      }
+
+      return {
+        ...t,
+        messages: t.messages.concat({
           id: data.messageId || crypto.randomUUID(),
           threadId,
           role: 'assistant' as MessageRole,
@@ -317,51 +308,9 @@ export function handleWSToolCall(
           timestamp: new Date().toISOString(),
           toolCalls: [tcEntry],
         }),
-      },
-    });
-  } else if (selectedThreadId === threadId) {
-    bufferWSEvent(threadId, 'tool_call', data);
-  }
-
-  // Update live thread for live-column real-time streaming
-  updateLiveThread(get, set, threadId, (live) => {
-    const tcId = data.toolCallId || crypto.randomUUID();
-    const tcEntry = {
-      id: tcId,
-      messageId: data.messageId || '',
-      name: data.name,
-      input: JSON.stringify(data.input),
-      timestamp: new Date().toISOString(),
-      ...(data.author ? { author: data.author } : {}),
-      ...(data.parentToolCallId ? { parentToolCallId: data.parentToolCallId } : {}),
-    };
-    if (live.messages.some((m) => m.toolCalls?.some((tc: any) => tc.id === tcId))) return live;
-    if (data.messageId) {
-      const msgIdx = live.messages.findIndex((m) => m.id === data.messageId);
-      if (msgIdx >= 0) {
-        const messages = live.messages.slice();
-        const msg = messages[msgIdx];
-        messages[msgIdx] = { ...msg, toolCalls: (msg.toolCalls ?? []).concat(tcEntry) };
-        return { ...live, messages };
-      }
-    }
-    return {
-      ...live,
-      messages: live.messages.concat({
-        id: data.messageId || crypto.randomUUID(),
-        threadId,
-        role: 'assistant' as MessageRole,
-        content: '',
-        timestamp: new Date().toISOString(),
-        toolCalls: [tcEntry],
-      }),
-    };
-  });
-
-  // Drop the cached snapshot so the next selectThread() refetches and includes
-  // this tool call. Runs unconditionally so the active thread's cache stays in
-  // sync with the live activeThread state.
-  invalidateThreadData(threadId);
+      };
+    }),
+  );
 }
 
 // ── Tool Output ─────────────────────────────────────────────────
@@ -372,44 +321,34 @@ export function handleWSToolOutput(
   threadId: string,
   data: { toolCallId: string; output: string },
 ): void {
-  const { activeThread, selectedThreadId } = get();
   // Cached snapshot would still hold the tool call without its output —
   // invalidate unconditionally so switching away and back doesn't show the
   // stale pre-output state.
   invalidateThreadData(threadId);
-  if (activeThread?.id !== threadId) {
-    if (selectedThreadId === threadId) bufferWSEvent(threadId, 'tool_output', data);
-  } else {
-    // Find and update only the specific message containing the tool call.
-    for (let i = 0; i < activeThread.messages.length; i++) {
-      const msg = activeThread.messages[i];
-      if (!msg.toolCalls) continue;
-      const tcIdx = msg.toolCalls.findIndex((tc: any) => tc.id === data.toolCallId);
-      if (tcIdx < 0) continue;
-      const messages = activeThread.messages.slice();
-      const updatedTCs = [...msg.toolCalls];
-      updatedTCs[tcIdx] = { ...updatedTCs[tcIdx], output: data.output };
-      messages[i] = { ...msg, toolCalls: updatedTCs };
-      set({ activeThread: { ...activeThread, messages } });
-      break;
-    }
+
+  const state = get();
+  if (!isHydrated(state, threadId)) {
+    maybeBuffer(state, threadId, 'tool_output', data);
+    return;
   }
 
-  // Update live thread
-  updateLiveThread(get, set, threadId, (live) => {
-    for (let i = 0; i < live.messages.length; i++) {
-      const msg = live.messages[i];
-      if (!msg.toolCalls) continue;
-      const tcIdx = msg.toolCalls.findIndex((tc: any) => tc.id === data.toolCallId);
-      if (tcIdx < 0) continue;
-      const messages = live.messages.slice();
-      const updatedTCs = [...msg.toolCalls];
-      updatedTCs[tcIdx] = { ...updatedTCs[tcIdx], output: data.output };
-      messages[i] = { ...msg, toolCalls: updatedTCs };
-      return { ...live, messages };
-    }
-    return live;
-  });
+  set((s) =>
+    mutations.applyThreadDataPatch(s, threadId, (t) => {
+      // Find and update only the specific message containing the tool call.
+      for (let i = 0; i < t.messages.length; i++) {
+        const msg = t.messages[i];
+        if (!msg.toolCalls) continue;
+        const tcIdx = msg.toolCalls.findIndex((tc: any) => tc.id === data.toolCallId);
+        if (tcIdx < 0) continue;
+        const messages = t.messages.slice();
+        const updatedTCs = [...msg.toolCalls];
+        updatedTCs[tcIdx] = { ...updatedTCs[tcIdx], output: data.output };
+        messages[i] = { ...msg, toolCalls: updatedTCs };
+        return { ...t, messages };
+      }
+      return t;
+    }),
+  );
 }
 
 // ── Status ──────────────────────────────────────────────────────
@@ -426,16 +365,15 @@ export function handleWSStatus(
     permissionMode?: string;
   },
 ): void {
-  const { activeThread, selectedThreadId } = get();
-
   // Buffer status events when thread is selected but not yet fully loaded.
   // Invalidate cache unconditionally so the active thread's snapshot reflects
   // the new status when the user navigates away and returns.
   invalidateThreadData(threadId);
-  if (!activeThread?.id || activeThread.id !== threadId) {
-    if (selectedThreadId === threadId) {
-      bufferWSEvent(threadId, 'status', data);
-    }
+
+  const state = get();
+  if (!isHydrated(state, threadId)) {
+    maybeBuffer(state, threadId, 'status', data);
+    // Sidebar still gets the status update below.
   }
 
   const machineEvent = wsEventToMachineEvent('agent:status', data);
@@ -470,72 +408,29 @@ export function handleWSStatus(
     };
   });
 
-  const stateUpdate: Partial<ThreadState> = { ...sidebarPatch };
-
-  if (activeThread?.id === threadId) {
-    const newStatus = transitionThreadStatus(
-      threadId,
-      machineEvent,
-      activeThread.status,
-      activeThread.cost,
-    );
-    const statusChanged = newStatus !== activeThread.status;
-    const stageChanged = !!data.stage && data.stage !== activeThread.stage;
-    const permModeChanged =
-      !!data.permissionMode && data.permissionMode !== activeThread.permissionMode;
+  // Apply the same transition to the loaded payload (right pane / live column).
+  const payloadPatch = mutations.applyThreadDataPatch(state, threadId, (t) => {
+    const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, t.cost);
+    const statusChanged = newStatus !== t.status;
+    const stageChanged = !!data.stage && data.stage !== t.stage;
+    const permModeChanged = !!data.permissionMode && data.permissionMode !== t.permissionMode;
     const waitingReasonChanged =
-      data.waitingReason !== undefined && data.waitingReason !== activeThread.waitingReason;
-    const permReqChanged = !!data.permissionRequest !== !!activeThread.pendingPermission;
-
+      data.waitingReason !== undefined && data.waitingReason !== t.waitingReason;
+    const permReqChanged = !!data.permissionRequest !== !!t.pendingPermission;
     if (
-      statusChanged ||
-      stageChanged ||
-      permModeChanged ||
-      waitingReasonChanged ||
-      permReqChanged
+      !(statusChanged || stageChanged || permModeChanged || waitingReasonChanged || permReqChanged)
     ) {
-      // If transitioning to waiting, include waitingReason and permissionRequest
-      if (newStatus === 'waiting' && !data.waitingReason) {
-        wsLog.warn('BUG-HUNT: agent:status waiting but NO waitingReason', {
-          threadId,
-          dataStatus: data.status,
-        });
-      }
-      if (newStatus === 'waiting') {
-        stateUpdate.activeThread = {
-          ...activeThread,
-          status: newStatus,
-          waitingReason: data.waitingReason as any,
-          pendingPermission: data.permissionRequest,
-          ...(data.stage ? { stage: data.stage as any } : {}),
-          ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}),
-        };
-      } else {
-        stateUpdate.activeThread = {
-          ...activeThread,
-          status: newStatus,
-          waitingReason: undefined,
-          pendingPermission: undefined,
-          ...(newStatus === 'stopped' || newStatus === 'interrupted'
-            ? { resultInfo: undefined }
-            : {}),
-          ...(data.stage ? { stage: data.stage as any } : {}),
-          ...(data.permissionMode ? { permissionMode: data.permissionMode as any } : {}),
-        };
-      }
+      return t;
     }
-  }
-
-  if (Object.keys(stateUpdate).length > 0) {
-    set(stateUpdate as any);
-  }
-
-  // Update live thread status
-  updateLiveThread(get, set, threadId, (live) => {
-    const newStatus = transitionThreadStatus(threadId, machineEvent, live.status, live.cost);
+    if (newStatus === 'waiting' && !data.waitingReason) {
+      wsLog.warn('BUG-HUNT: agent:status waiting but NO waitingReason', {
+        threadId,
+        dataStatus: data.status,
+      });
+    }
     if (newStatus === 'waiting') {
       return {
-        ...live,
+        ...t,
         status: newStatus,
         waitingReason: data.waitingReason as any,
         pendingPermission: data.permissionRequest,
@@ -544,7 +439,7 @@ export function handleWSStatus(
       };
     }
     return {
-      ...live,
+      ...t,
       status: newStatus,
       waitingReason: undefined,
       pendingPermission: undefined,
@@ -554,9 +449,15 @@ export function handleWSStatus(
     };
   });
 
+  const combined = { ...sidebarPatch, ...payloadPatch };
+  if (Object.keys(combined).length > 0) {
+    set(combined as any);
+  }
+
   if (!foundInSidebar) {
-    if (activeThread?.id === threadId) {
-      scheduleProjectRefresh(get, activeThread.projectId);
+    const pid = state.threadDataById[threadId]?.projectId;
+    if (pid) {
+      scheduleProjectRefresh(get, pid);
     } else {
       // Thread not found in any loaded project — likely created externally
       // (e.g. Chrome extension ingest). Debounce refresh to avoid API storm.
@@ -568,22 +469,18 @@ export function handleWSStatus(
 // ── Result ──────────────────────────────────────────────────────
 
 export function handleWSResult(get: Get, set: Set, threadId: string, data: any): void {
-  const { activeThread, loadThreadsForProject, selectedThreadId } = get();
-
   // Invalidate the cached snapshot unconditionally so the next selectThread()
-  // refetches the final messages/tool calls/resultInfo from the server. This
-  // must run even when the result is for the active thread — otherwise the
-  // user switches away, comes back, and the data-actor returns the stale
-  // pre-completion snapshot, making the thread look as if it never finished.
+  // refetches the final messages/tool calls/resultInfo from the server. Must
+  // run even for the active thread — otherwise the user switches away, comes
+  // back, and the data-actor returns the stale pre-completion snapshot,
+  // making the thread look as if it never finished.
   invalidateThreadData(threadId);
-  // When the result event arrives mid-selection (selectedThreadId match but
-  // activeThread not yet hydrated), buffer the event so flushWSBuffer replays
-  // it once activeThread is loaded. Sidebar status (threadsByProject) and
-  // live-column state are still updated unconditionally below.
-  if (!activeThread?.id || activeThread.id !== threadId) {
-    if (selectedThreadId === threadId) {
-      bufferWSEvent(threadId, 'result', data);
-    }
+
+  const state = get();
+  const loadThreadsForProject = state.loadThreadsForProject;
+  if (!isHydrated(state, threadId)) {
+    maybeBuffer(state, threadId, 'result', data);
+    // Sidebar status still applied below.
   }
 
   const machineEvent = wsEventToMachineEvent('agent:result', data);
@@ -599,11 +496,12 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
     serverStatus,
     cost: String(data.cost ?? ''),
     errorReason: data.errorReason ?? '',
+    hydrated: String(isHydrated(state, threadId)),
   });
 
   // Apply the result transition to whichever sidebar bucket holds the thread.
   // The updater closes over `resultStatus` to also expose the resolved status
-  // back to the caller for the toast/notification + activeThread paths.
+  // back to the caller for the toast/notification + payload paths.
   const { patch: sidebarPatch, found: foundInSidebar } = patchSidebarThread(get, threadId, (t) => {
     const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, data.cost ?? t.cost);
     // Use server status as authoritative if xstate transition didn't change state
@@ -624,77 +522,38 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
       ...(data.stage ? { stage: data.stage } : {}),
     };
   });
-  const stateUpdate: Partial<ThreadState> = { ...sidebarPatch };
   // Scratch threads sit outside any project, so the post-result fallback
   // (`loadThreadsForProject` / `scheduleProjectRefresh`) should be skipped.
-  const sidebarHitScratch = get().scratchThreadIds.includes(threadId);
+  const sidebarHitScratch = state.scratchThreadIds.includes(threadId);
 
-  if (activeThread?.id === threadId) {
-    const isWaiting = resultStatus === 'waiting';
-
-    if (isWaiting) {
+  const payloadPatch = mutations.applyThreadDataPatch(state, threadId, (t) => {
+    const newStatus = transitionThreadStatus(threadId, machineEvent, t.status, data.cost ?? t.cost);
+    const finalStatus = newStatus !== t.status ? newStatus : serverStatus;
+    if (finalStatus === 'waiting') {
       if (!data.waitingReason) {
         wsLog.warn(
           'BUG-HUNT: agent:result waiting but NO waitingReason — will show generic WaitingActions instead of question/plan card',
           { threadId },
         );
       }
-      stateUpdate.activeThread = {
-        ...activeThread,
-        status: resultStatus,
-        cost: data.cost ?? activeThread.cost,
-        waitingReason: data.waitingReason,
-        pendingPermission: data.permissionRequest,
-        ...(data.stage ? { stage: data.stage } : {}),
-      };
-    } else {
-      stateUpdate.activeThread = {
-        ...activeThread,
-        status: resultStatus,
-        cost: data.cost ?? activeThread.cost,
-        waitingReason: undefined,
-        pendingPermission: undefined,
-        resultInfo: {
-          status: resultStatus as 'completed' | 'failed',
-          cost: data.cost ?? activeThread.cost,
-          duration: data.duration ?? 0,
-          error: data.error,
-        },
-        ...(data.stage ? { stage: data.stage } : {}),
-      };
-    }
-  }
-
-  set(stateUpdate as any);
-
-  // Update live thread
-  updateLiveThread(get, set, threadId, (live) => {
-    const newStatus = transitionThreadStatus(
-      threadId,
-      machineEvent,
-      live.status,
-      data.cost ?? live.cost,
-    );
-    const finalStatus = newStatus !== live.status ? newStatus : serverStatus;
-    if (finalStatus === 'waiting') {
       return {
-        ...live,
+        ...t,
         status: finalStatus,
-        cost: data.cost ?? live.cost,
+        cost: data.cost ?? t.cost,
         waitingReason: data.waitingReason,
         pendingPermission: data.permissionRequest,
         ...(data.stage ? { stage: data.stage } : {}),
       };
     }
     return {
-      ...live,
+      ...t,
       status: finalStatus,
-      cost: data.cost ?? live.cost,
+      cost: data.cost ?? t.cost,
       waitingReason: undefined,
       pendingPermission: undefined,
       resultInfo: {
         status: finalStatus as 'completed' | 'failed',
-        cost: data.cost ?? live.cost,
+        cost: data.cost ?? t.cost,
         duration: data.duration ?? 0,
         error: data.error,
       },
@@ -702,10 +561,12 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
     };
   });
 
+  set({ ...sidebarPatch, ...payloadPatch } as any);
+
   // If the thread the user is currently viewing just finished, mark it as read
   // so it doesn't show an unread blue dot in the sidebar.
   if (
-    activeThread?.id === threadId &&
+    state.selectedThreadId === threadId &&
     (resultStatus === 'completed' ||
       resultStatus === 'failed' ||
       resultStatus === 'stopped' ||
@@ -724,9 +585,10 @@ export function handleWSResult(get: Get, set: Set, threadId: string, data: any):
     return;
   }
 
+  const payloadEntry = get().threadDataById[threadId];
   const projectIdForRefresh =
-    activeThread?.id === threadId && !activeThread.isScratch
-      ? activeThread.projectId
+    payloadEntry && !payloadEntry.isScratch
+      ? payloadEntry.projectId
       : getProjectIdForThread(threadId);
 
   if (projectIdForRefresh) {
@@ -758,10 +620,9 @@ export function handleWSQueueUpdate(
     dequeuedImages?: ImageAttachment[];
   },
 ): void {
-  const { activeThread } = get();
-
-  // Buffer dequeued message — will be injected on next agent:init to ensure
-  // it appears after the previous agent's response (correct visual ordering)
+  // Buffer dequeued message — will be injected on next agent:message to ensure
+  // it appears after the previous agent's response (correct visual ordering).
+  // Works for any thread, regardless of which surface holds it.
   if (data.dequeuedMessage) {
     pendingDequeuedMessages.set(threadId, {
       content: data.dequeuedMessage,
@@ -769,46 +630,23 @@ export function handleWSQueueUpdate(
     });
   }
 
-  // Always persist to the byThread map so the count survives thread switches
-  const { queuedCountByThread } = get();
-  const updatedMap =
-    data.queuedCount > 0
-      ? { ...queuedCountByThread, [threadId]: data.queuedCount }
-      : (() => {
-          const { [threadId]: _, ...rest } = queuedCountByThread;
-          return rest;
-        })();
-
-  if (activeThread?.id === threadId) {
-    wsLog.info('handleWSQueueUpdate: setting queuedCount on activeThread', {
-      threadId,
-      queuedCount: String(data.queuedCount),
-      nextMessage: data.nextMessage?.slice(0, 50) ?? 'none',
-      prevQueuedCount: String(activeThread.queuedCount ?? 'undefined'),
-    });
-    set({
-      activeThread: {
-        ...activeThread,
+  set((state) => {
+    const updatedMap =
+      data.queuedCount > 0
+        ? { ...state.queuedCountByThread, [threadId]: data.queuedCount }
+        : (() => {
+            const { [threadId]: _, ...rest } = state.queuedCountByThread;
+            return rest;
+          })();
+    return {
+      queuedCountByThread: updatedMap,
+      ...mutations.applyThreadDataPatch(state, threadId, (t) => ({
+        ...t,
         queuedCount: data.queuedCount,
         queuedNextMessage: data.nextMessage,
-      },
-      queuedCountByThread: updatedMap,
-    });
-  } else {
-    // Even when not the active thread, persist the count for later
-    set({ queuedCountByThread: updatedMap });
-    wsLog.warn('handleWSQueueUpdate: activeThread mismatch — count persisted to map', {
-      threadId,
-      activeThreadId: activeThread?.id ?? 'null',
-      queuedCount: String(data.queuedCount),
-    });
-  }
-
-  updateLiveThread(get, set, threadId, (live) => ({
-    ...live,
-    queuedCount: data.queuedCount,
-    queuedNextMessage: data.nextMessage,
-  }));
+      })),
+    };
+  });
 }
 
 // ── Compact boundary ────────────────────────────────────────────
@@ -819,21 +657,23 @@ export function handleWSCompactBoundary(
   threadId: string,
   data: { trigger: 'manual' | 'auto'; preTokens: number; timestamp: string },
 ): void {
-  const { activeThread, selectedThreadId } = get();
-  if (activeThread?.id !== threadId) {
-    if (selectedThreadId === threadId) bufferWSEvent(threadId, 'compact_boundary', data);
-  } else {
-    set({
-      activeThread: {
-        ...activeThread,
-        compactionEvents: [...(activeThread.compactionEvents ?? []), data],
-      },
-    });
+  const state = get();
+  if (!isHydrated(state, threadId)) {
+    maybeBuffer(state, threadId, 'compact_boundary', data);
+    return;
   }
-
-  updateLiveThread(get, set, threadId, (live) => ({
-    ...live,
-    compactionEvents: [...(live.compactionEvents ?? []), data],
+  // Mirror the server-side reset of cumulativeInputTokens (agent-message-handler.ts).
+  // Without this the context-usage ring stays frozen at the pre-compaction value
+  // until the next agent turn emits a fresh context_usage event.
+  const resetUsage = { cumulativeInputTokens: 0, lastInputTokens: 0, lastOutputTokens: 0 };
+  emitContextUsage(threadId, resetUsage);
+  set((s) => ({
+    contextUsageByThread: { ...s.contextUsageByThread, [threadId]: resetUsage },
+    ...mutations.applyThreadDataPatch(s, threadId, (t) => ({
+      ...t,
+      contextUsage: resetUsage,
+      compactionEvents: [...(t.compactionEvents ?? []), data],
+    })),
   }));
 }
 
@@ -845,7 +685,6 @@ export function handleWSContextUsage(
   threadId: string,
   data: { inputTokens: number; outputTokens: number; cumulativeInputTokens: number },
 ): void {
-  const { activeThread, selectedThreadId, contextUsageByThread } = get();
   const usage = {
     cumulativeInputTokens: data.cumulativeInputTokens,
     lastInputTokens: data.inputTokens,
@@ -856,20 +695,19 @@ export function handleWSContextUsage(
   // context-usage-storage subscribes to this event and writes to localStorage.
   emitContextUsage(threadId, usage);
 
-  // Always persist to the map so it survives thread switches
-  const updates: Partial<ThreadState> = {
-    contextUsageByThread: { ...contextUsageByThread, [threadId]: usage },
-  };
-
-  if (activeThread?.id === threadId) {
-    updates.activeThread = { ...activeThread, contextUsage: usage };
-  } else if (selectedThreadId === threadId) {
-    bufferWSEvent(threadId, 'context_usage', data);
-  }
-
-  set(updates as any);
-
-  updateLiveThread(get, set, threadId, (live) => ({ ...live, contextUsage: usage }));
+  set((state) => {
+    const updates: Partial<ThreadState> = {
+      contextUsageByThread: { ...state.contextUsageByThread, [threadId]: usage },
+    };
+    if (!isHydrated(state, threadId)) {
+      if (state.selectedThreadId === threadId) bufferWSEvent(threadId, 'context_usage', data);
+      return updates;
+    }
+    return {
+      ...updates,
+      ...mutations.applyThreadDataPatch(state, threadId, (t) => ({ ...t, contextUsage: usage })),
+    };
+  });
 }
 
 // ── Error ────────────────────────────────────────────────────────
@@ -887,25 +725,26 @@ export function handleWSError(
 ): void {
   const errorMessage = data.error ?? 'Unknown error';
 
-  // Delegate status transition to the existing handler (updates sidebar + activeThread)
+  // Delegate status transition to the existing handler (updates sidebar + payload)
   handleWSStatus(get, set, threadId, { status: 'failed' });
 
-  // Now enrich the activeThread with resultInfo so AgentResultCard renders the error
-  const { activeThread } = get();
-  if (activeThread?.id === threadId) {
-    set({
-      activeThread: {
-        ...activeThread,
-        ...get().activeThread, // pick up status changes from handleWSStatus
-        resultInfo: activeThread.resultInfo ?? {
-          status: 'failed' as const,
-          cost: activeThread.cost ?? 0,
-          duration: 0,
-          error: errorMessage,
-        },
-      },
-    });
-  }
+  // Now enrich the payload with resultInfo so AgentResultCard renders the error.
+  // Works for any hydrated thread (right pane or live column).
+  set((state) =>
+    mutations.applyThreadDataPatch(state, threadId, (t) =>
+      t.resultInfo
+        ? t
+        : {
+            ...t,
+            resultInfo: {
+              status: 'failed' as const,
+              cost: t.cost ?? 0,
+              duration: 0,
+              error: errorMessage,
+            },
+          },
+    ),
+  );
 
   // Show an immediate toast with a user-friendly error
   toast.error(friendlyAgentError(errorMessage), { duration: 8000 });
@@ -957,8 +796,8 @@ function notifyThreadResult(
   let projectId: string | null = null;
 
   // Look up the thread from the unified index. Project / scratch / unknown
-  // all resolve uniformly. Falls back to activeThread below for cases where
-  // the thread was never loaded into the sidebar.
+  // all resolve uniformly. Falls back to the loaded payload below for cases
+  // where the thread was never loaded into the sidebar.
   const state = get();
   const t = state.threadsById[threadId];
   if (t) {
@@ -968,12 +807,12 @@ function notifyThreadResult(
     if (!t.isScratch) projectId = t.projectId;
   }
 
-  // Fallback: use activeThread if the thread wasn't found in sidebar data
+  // Fallback: use the loaded payload if the thread wasn't found in sidebar data.
   if (threadTitle === 'Thread') {
-    const activeThread = state.activeThread;
-    if (activeThread?.id === threadId) {
-      threadTitle = activeThread.title ?? threadTitle;
-      projectId = projectId ?? activeThread.projectId;
+    const payload = state.threadDataById[threadId];
+    if (payload) {
+      threadTitle = payload.title ?? threadTitle;
+      projectId = projectId ?? payload.projectId;
     }
   }
 

@@ -9,7 +9,7 @@ import {
   wsEventToMachineEvent,
   type ThreadContext,
 } from '@funny/shared/thread-machine';
-import { createActor, waitFor } from 'xstate';
+import { createActor } from 'xstate';
 
 import { threadDataMachine, type ThreadDataSnapshot } from '@/machines/thread-data-machine';
 
@@ -122,20 +122,90 @@ export function isThreadDataLoaded(threadId: string): boolean {
   return actor.getSnapshot().matches('loaded');
 }
 
-/** Resolve once the actor finishes loading (reuses any in-flight fetch). */
-export async function loadThreadData(threadId: string): Promise<ThreadDataSnapshot> {
+/**
+ * Hard cap on how long `loadThreadData` will wait for the actor to reach a
+ * terminal state. Without a bound, an actor whose fetch never resolves (or
+ * gets stuck mid-flight) would hang the caller forever — and since
+ * `selectThread` keys "this thread is currently loading" off the resolution
+ * of this promise, the UI would stop responding to clicks on that thread.
+ */
+const LOAD_THREAD_TIMEOUT_MS = 15_000;
+
+/**
+ * Hard cap on retries when the actor cycles through `unloaded` due to
+ * repeated `INVALIDATE` events. Each transition to `unloaded` while a caller
+ * is waiting triggers a fresh `LOAD`. If invalidates keep pouring in faster
+ * than the fetcher can complete, we bail out instead of refetching forever.
+ */
+const LOAD_THREAD_MAX_REATTEMPTS = 5;
+
+/**
+ * Resolve once the actor finishes loading (reuses any in-flight fetch).
+ *
+ * Resilient to two failure modes that previously hung the caller:
+ *  - `INVALIDATE` during `fetching` (a WS event arrived for the thread while
+ *    its `selectThread` was awaiting initial load) — the actor transitions
+ *    `fetching → unloaded`, the old `invoke` is torn down, and the original
+ *    `waitFor(loaded || failed)` never matched. Now we observe the unloaded
+ *    state and re-send `LOAD` so the awaiter eventually gets a snapshot.
+ *  - Indefinite hangs — bounded by `LOAD_THREAD_TIMEOUT_MS` so the caller
+ *    can recover (clears `selectingThreadId`, allows re-clicking the thread).
+ */
+export function loadThreadData(threadId: string): Promise<ThreadDataSnapshot> {
   const actor = getDataActor(threadId);
-  actor.send({ type: 'LOAD' });
-  const finalSnap = await waitFor(
-    actor,
-    (snap) => snap.matches('loaded') || snap.matches('failed'),
-    { timeout: Infinity },
-  );
-  if (finalSnap.matches('failed')) {
-    throw new Error(finalSnap.context.error ?? 'failed to load thread data');
-  }
-  if (!finalSnap.context.data) {
-    throw new Error('thread data actor reached loaded state without data');
-  }
-  return finalSnap.context.data;
+
+  return new Promise<ThreadDataSnapshot>((resolve, reject) => {
+    let settled = false;
+    let reattempts = 0;
+    const subscription = actor.subscribe((snap) => {
+      if (settled) return;
+      if (snap.matches('loaded')) {
+        settled = true;
+        clearTimeout(timeoutHandle);
+        subscription.unsubscribe();
+        if (snap.context.data) resolve(snap.context.data);
+        else reject(new Error('thread data actor reached loaded state without data'));
+        return;
+      }
+      if (snap.matches('failed')) {
+        settled = true;
+        clearTimeout(timeoutHandle);
+        subscription.unsubscribe();
+        reject(new Error(snap.context.error ?? 'failed to load thread data'));
+        return;
+      }
+      if (snap.matches('unloaded')) {
+        // Either we just started observing and need to kick off the fetch,
+        // or an INVALIDATE just transitioned us back here mid-flight.
+        if (reattempts >= LOAD_THREAD_MAX_REATTEMPTS) {
+          settled = true;
+          clearTimeout(timeoutHandle);
+          subscription.unsubscribe();
+          reject(
+            new Error(
+              `thread data actor for ${threadId} kept invalidating during fetch (${reattempts} retries)`,
+            ),
+          );
+          return;
+        }
+        reattempts += 1;
+        actor.send({ type: 'LOAD' });
+      }
+      // `fetching` is a transient state — wait for the next snapshot.
+    });
+
+    const timeoutHandle = setTimeout(() => {
+      if (settled) return;
+      settled = true;
+      subscription.unsubscribe();
+      reject(
+        new Error(`thread data actor for ${threadId} timed out after ${LOAD_THREAD_TIMEOUT_MS}ms`),
+      );
+    }, LOAD_THREAD_TIMEOUT_MS);
+
+    // Kick off the load. The subscribe callback above also fires on the
+    // initial snapshot, so if the actor is already in `loaded` / `failed`,
+    // resolution happens synchronously without ever hitting `unloaded`.
+    actor.send({ type: 'LOAD' });
+  });
 }

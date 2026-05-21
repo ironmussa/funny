@@ -1,19 +1,12 @@
 /**
  * ThreadContext — tells each subtree "which thread to read from".
  *
- * Replaces the global `s.activeThread` reads scattered across components.
- * Components no longer hard-code their data source — the surrounding
- * provider does. This unblocks N-thread views (live-columns grid) where
- * each column needs its own thread without hacking shared hooks.
+ * Resolves through the unified `threadDataById` map in the store. Both the
+ * right pane and the live-columns grid use the same provider with the same
+ * resolution path — the only difference is which `threadId` the provider
+ * carries. No `source` distinction, no externally-supplied payload.
  *
- * Two sources are supported:
- *   - `active`  → resolves through `s.activeThread` (Zustand subscription).
- *                 Used by the single-thread view at the App root.
- *   - `live`    → resolves through the `liveThread` carried in context.
- *                 Used by ThreadColumn inside the grid view, which already
- *                 manages its own thread state locally.
- *
- * No fallback: hooks throw when used without a provider.
+ * Hooks throw when used without a provider.
  */
 
 import { createContext, useContext, useMemo, useRef, type ReactNode } from 'react';
@@ -22,35 +15,19 @@ import { useShallow } from 'zustand/react/shallow';
 import type { AgentInitInfo, ThreadWithMessages } from './thread-store';
 import { useThreadStore } from './thread-store';
 
-export type ThreadSource = 'active' | 'live';
-
 interface ThreadContextValue {
   threadId: string | null;
-  source: ThreadSource;
-  /** Only used when source === 'live'. Carried in context (not the store). */
-  liveThread: ThreadWithMessages | null;
 }
 
 const ThreadContext = createContext<ThreadContextValue | null>(null);
 
 interface ThreadProviderProps {
   threadId: string | null;
-  source: ThreadSource;
-  /** Required when source === 'live'. Ignored when source === 'active'. */
-  liveThread?: ThreadWithMessages | null;
   children: ReactNode;
 }
 
-export function ThreadProvider({
-  threadId,
-  source,
-  liveThread = null,
-  children,
-}: ThreadProviderProps) {
-  const value = useMemo<ThreadContextValue>(
-    () => ({ threadId, source, liveThread }),
-    [threadId, source, liveThread],
-  );
+export function ThreadProvider({ threadId, children }: ThreadProviderProps) {
+  const value = useMemo<ThreadContextValue>(() => ({ threadId }), [threadId]);
   return <ThreadContext.Provider value={value}>{children}</ThreadContext.Provider>;
 }
 
@@ -62,28 +39,19 @@ function useThreadContext(): ThreadContextValue {
   return ctx;
 }
 
-/**
- * Resolves the thread inside a Zustand selector.
- * For `active`, reads from store.activeThread.
- * For `live`, returns the context-carried thread (does not read store).
- */
+/** Resolves the thread payload inside a Zustand selector. */
 function resolveThread(
-  state: { activeThread: ThreadWithMessages | null },
+  state: { threadDataById: Record<string, ThreadWithMessages> },
   ctx: ThreadContextValue,
 ): ThreadWithMessages | null {
   if (!ctx.threadId) return null;
-  if (ctx.source === 'active') return state.activeThread;
-  return ctx.liveThread;
+  return state.threadDataById[ctx.threadId] ?? null;
 }
 
 // ── Public hooks ─────────────────────────────────────────────────────
 
 export function useThreadId(): string | undefined {
   return useThreadContext().threadId ?? undefined;
-}
-
-export function useThreadSource(): ThreadSource {
-  return useThreadContext().source;
 }
 
 /**
@@ -131,9 +99,9 @@ export function useCompactionEvents() {
 }
 
 /**
- * Subscribe to `initInfo` with ref stability — same logic as the legacy
- * `useActiveInitInfo`: keep the previous reference unless tools/cwd/model
- * actually changed, so unrelated updates don't cascade.
+ * Subscribe to `initInfo` with ref stability — keep the previous reference
+ * unless tools/cwd/model actually changed, so unrelated updates don't
+ * cascade.
  */
 export function useThreadInitInfo(): AgentInitInfo | undefined {
   const ctx = useThreadContext();
@@ -179,11 +147,10 @@ export function useThreadCore(): ThreadCore | null {
 // ── Imperative utility ────────────────────────────────────────────────
 //
 // For event handlers / effect callbacks where hooks aren't available.
-// Walks both the active thread and `threadsByProject` for a base-Thread
-// match. Returns null if the id isn't found in any known location.
+// Returns the loaded payload if present, otherwise the base Thread row
+// from the sidebar index, otherwise null.
 
 export function getThreadById(threadId: string): ThreadWithMessages | null {
   const state = useThreadStore.getState();
-  if (state.activeThread?.id === threadId) return state.activeThread;
-  return state.liveThreads[threadId] ?? null;
+  return state.threadDataById[threadId] ?? null;
 }

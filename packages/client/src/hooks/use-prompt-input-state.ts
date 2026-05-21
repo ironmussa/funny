@@ -24,6 +24,7 @@ import { useDraftStore } from '@/stores/draft-store';
 import { useProfileStore } from '@/stores/profile-store';
 import { useProjectStore } from '@/stores/project-store';
 import { getThreadById, useThreadId, useThreadSelector } from '@/stores/thread-context';
+import * as mutations from '@/stores/thread-mutations';
 import { useThreadStore } from '@/stores/thread-store';
 
 const queueLog = createClientLogger('PromptInputQueue');
@@ -564,27 +565,27 @@ export function usePromptInputState({
       if (result.isOk()) {
         setQueuedMessages((prev) => prev.filter((m) => m.id !== messageId));
 
-        // Sync the store's queuedCount with the server's authoritative value
+        // Sync the store's queuedCount with the server's authoritative value.
+        // Single write path: patch the unified payload map (mirrors onto
+        // activeThread when this is the selected thread) plus the persistent
+        // by-thread map that survives thread switches.
         const newCount = result.value.queuedCount;
-        const state = useThreadStore.getState();
-        const { queuedCountByThread, activeThread } = state;
-        const updatedMap =
-          newCount > 0
-            ? { ...queuedCountByThread, [tid]: newCount }
-            : (() => {
-                const { [tid]: _, ...rest } = queuedCountByThread;
-                return rest;
-              })();
-
-        const updates: Record<string, any> = { queuedCountByThread: updatedMap };
-        if (activeThread?.id === tid) {
-          updates.activeThread = { ...activeThread, queuedCount: newCount };
-        }
-        const lt = state.liveThreads[tid];
-        if (lt) {
-          updates.liveThreads = { ...state.liveThreads, [tid]: { ...lt, queuedCount: newCount } };
-        }
-        useThreadStore.setState(updates);
+        useThreadStore.setState((state) => {
+          const updatedMap =
+            newCount > 0
+              ? { ...state.queuedCountByThread, [tid]: newCount }
+              : (() => {
+                  const { [tid]: _, ...rest } = state.queuedCountByThread;
+                  return rest;
+                })();
+          return {
+            queuedCountByThread: updatedMap,
+            ...mutations.applyThreadDataPatch(state, tid, (t) => ({
+              ...t,
+              queuedCount: newCount,
+            })),
+          };
+        });
       } else {
         toastError(result.error);
       }

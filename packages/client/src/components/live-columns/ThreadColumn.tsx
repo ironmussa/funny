@@ -9,8 +9,11 @@ import { PromptInput } from '@/components/PromptInput';
 import { EMPTY_MESSAGES } from '@/components/thread/MemoizedMessageList';
 import { MessageStream, type MessageStreamHandle } from '@/components/thread/MessageStream';
 import { ProjectHeader } from '@/components/thread/ProjectHeader';
+import { ThreadSearchBar } from '@/components/thread/ThreadSearchBar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
+import { useThreadSearchState } from '@/hooks/use-thread-search';
 import { api } from '@/lib/api';
+import { createClientLogger } from '@/lib/client-logger';
 import { setDashedDragPreview } from '@/lib/drag-preview';
 import { statusConfig } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
@@ -18,6 +21,8 @@ import { useAppStore } from '@/stores/app-store';
 import { deriveToolLists, useSettingsStore } from '@/stores/settings-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
+
+const log = createClientLogger('ThreadColumn');
 
 type OpenLightboxFn = (images: { src: string; alt: string }[], index: number) => void;
 
@@ -41,7 +46,9 @@ export const ThreadColumn = memo(function ThreadColumn({
   const dragHandleRef = useRef<HTMLDivElement>(null);
   const [isDragging, setIsDragging] = useState(false);
 
-  // Register for live WS updates; fetch + unregister on unmount
+  // Register for WS updates; fetch + unregister on unmount. The register
+  // call anchors `threadDataById[threadId]` so the same map that backs the
+  // right pane also keeps this column hydrated.
   const registerLiveThread = useThreadStore((s) => s.registerLiveThread);
   const unregisterLiveThread = useThreadStore((s) => s.unregisterLiveThread);
 
@@ -57,8 +64,10 @@ export const ThreadColumn = memo(function ThreadColumn({
     };
   }, [threadId, registerLiveThread, unregisterLiveThread]);
 
-  // Subscribe to live thread data pushed by WS handlers
-  const thread = useThreadStore((s) => s.liveThreads[threadId] ?? null);
+  // Read directly from the unified payload map. WS handlers patch it in
+  // place; selecting this thread in the right pane points `activeThread`
+  // at the same entry.
+  const thread = useThreadStore((s) => s.threadDataById[threadId] ?? null);
   const loading = thread === null;
 
   // Track which message/tool-call IDs existed when the thread was loaded.
@@ -81,8 +90,7 @@ export const ThreadColumn = memo(function ThreadColumn({
     const handle = dragHandleRef.current;
     if (!el || !handle) return;
     return draggable({
-      element: el,
-      dragHandle: handle,
+      element: handle,
       getInitialData: () => ({
         type: 'grid-thread',
         threadId,
@@ -163,6 +171,37 @@ export const ThreadColumn = memo(function ThreadColumn({
     await api.stopThread(threadId);
   }, [threadId]);
 
+  // Per-column search: Ctrl+F opens search for the column under focus or
+  // pointer hover. Mirrors ThreadChatView but scoped so only one column
+  // claims the shortcut. stopImmediatePropagation prevents siblings from
+  // also opening, and the browser's default find is preempted.
+  const { searchOpen, setSearchOpen, handleSearchNavigate, handleSearchClose } =
+    useThreadSearchState(streamRef);
+  const isHoveredRef = useRef(false);
+
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (!e.ctrlKey || e.shiftKey || e.metaKey || e.altKey) return;
+      if (e.key !== 'f' && e.key !== 'F') return;
+      const target = e.target as Element | null;
+      if (target && target.closest('.xterm')) return;
+      const root = columnRef.current;
+      if (!root) return;
+      const focusInside = document.activeElement ? root.contains(document.activeElement) : false;
+      if (!focusInside && !isHoveredRef.current) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      log.info({ threadId }, 'shortcut.grid_thread_search');
+      setSearchOpen(true);
+      const input = root.querySelector<HTMLInputElement>(
+        `[data-testid="grid-search-${threadId}-input"]`,
+      );
+      if (input) requestAnimationFrame(() => input.focus());
+    };
+    window.addEventListener('keydown', handler, true);
+    return () => window.removeEventListener('keydown', handler, true);
+  }, [threadId, setSearchOpen]);
+
   const status = thread?.status ?? 'idle';
   const StatusIcon = statusConfig[status]?.icon ?? Loader2;
   const statusClass = statusConfig[status]?.className ?? '';
@@ -211,14 +250,20 @@ export const ThreadColumn = memo(function ThreadColumn({
   const isRunning = status === 'running';
 
   return (
-    <ThreadProvider threadId={threadId} source="live" liveThread={thread}>
+    <ThreadProvider threadId={threadId}>
       <div
         ref={columnRef}
         className={cn(
-          'group/col flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-sm border border-border',
+          'group/col relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden rounded-sm border border-border',
           isDragging && 'opacity-50',
         )}
         data-testid={`grid-column-${threadId}`}
+        onPointerEnter={() => {
+          isHoveredRef.current = true;
+        }}
+        onPointerLeave={() => {
+          isHoveredRef.current = false;
+        }}
       >
         <div ref={dragHandleRef} className="flex-shrink-0 cursor-grab active:cursor-grabbing">
           <ProjectHeader
@@ -226,6 +271,7 @@ export const ThreadColumn = memo(function ThreadColumn({
             hideTests
             hideStartup
             hideTerminal
+            hideTimeline
             leading={
               <>
                 <GripVertical className="icon-xs shrink-0 text-muted-foreground" />
@@ -246,6 +292,15 @@ export const ThreadColumn = memo(function ThreadColumn({
             }
           />
         </div>
+
+        <ThreadSearchBar
+          threadId={threadId}
+          open={searchOpen}
+          onClose={handleSearchClose}
+          onNavigateToMessage={handleSearchNavigate}
+          testIdPrefix={`grid-search-${threadId}`}
+          className="absolute right-2 top-9 z-30 gap-1.5 rounded-md border border-border bg-popover px-2 py-1.5 shadow-md"
+        />
 
         <MessageStream
           ref={streamRef}

@@ -40,11 +40,11 @@ function makeState(overrides: Partial<ThreadState> = {}): ThreadState {
     threadTotalByProject: {},
     scratchThreadTotal: 0,
     selectedThreadId: null,
+    threadDataById: {},
     activeThread: null,
     setupProgressByThread: {},
     contextUsageByThread: {},
     queuedCountByThread: {},
-    liveThreads: {},
     ...overrides,
   } as ThreadState;
 }

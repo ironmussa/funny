@@ -40,8 +40,16 @@ vi.mock('@/stores/thread-store-internals', () => ({
 
 vi.mock('sonner', () => ({ toast: { success: vi.fn(), error: vi.fn(), info: vi.fn() } }));
 
-const { handleWSMessage, handleWSToolCall, handleWSToolOutput, handleWSStatus, handleWSResult } =
-  await import('@/stores/thread-ws-handlers');
+vi.mock('@/lib/context-usage-events', () => ({ emitContextUsage: vi.fn() }));
+
+const {
+  handleWSMessage,
+  handleWSToolCall,
+  handleWSToolOutput,
+  handleWSStatus,
+  handleWSResult,
+  handleWSCompactBoundary,
+} = await import('@/stores/thread-ws-handlers');
 
 const THREAD_ID = 'thread-active';
 
@@ -61,11 +69,11 @@ function makeState(overrides: Record<string, unknown> = {}) {
     threadTotalByProject: { p1: 1 },
     scratchThreadTotal: 0,
     selectedThreadId: THREAD_ID,
+    threadDataById: { [THREAD_ID]: activeThread },
     activeThread,
     setupProgressByThread: {},
     contextUsageByThread: {},
     queuedCountByThread: {},
-    liveThreads: {},
     loadThreadsForProject: vi.fn(),
     ...overrides,
   } as any;
@@ -131,6 +139,7 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
       threadsById: { 'scratch-1': scratchThread },
       threadIdsByProject: {},
       scratchThreadIds: ['scratch-1'],
+      threadDataById: {},
     });
     const { get, set } = makeGetSet(state);
 
@@ -156,6 +165,7 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
       threadsById: { 'scratch-3': scratchThread },
       threadIdsByProject: {},
       scratchThreadIds: ['scratch-3'],
+      threadDataById: {},
     });
     const { get, set } = makeGetSet(state);
 
@@ -167,6 +177,31 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
     expect(state.threadsById['scratch-3'].lastAssistantMessage).toBe(
       'La capital de Francia es París.',
     );
+  });
+
+  test('handleWSCompactBoundary resets contextUsage so the ring updates', () => {
+    const usageBefore = {
+      cumulativeInputTokens: 175_000,
+      lastInputTokens: 5_000,
+      lastOutputTokens: 1_200,
+    };
+    const state = makeState({
+      contextUsageByThread: { [THREAD_ID]: usageBefore },
+      threadDataById: {
+        [THREAD_ID]: { ...makeState().activeThread, contextUsage: usageBefore },
+      },
+    });
+    const { get, set } = makeGetSet(state);
+
+    handleWSCompactBoundary(get, set, THREAD_ID, {
+      trigger: 'manual',
+      preTokens: 175_000,
+      timestamp: new Date().toISOString(),
+    });
+
+    expect(state.contextUsageByThread[THREAD_ID].cumulativeInputTokens).toBe(0);
+    expect(state.threadDataById[THREAD_ID].contextUsage.cumulativeInputTokens).toBe(0);
+    expect(state.threadDataById[THREAD_ID].compactionEvents).toHaveLength(1);
   });
 
   test('handleWSResult updates a scratch thread via threadsById', () => {
@@ -185,6 +220,7 @@ describe('thread-ws-handlers — cache invalidation for the active thread', () =
       threadsById: { 'scratch-2': scratchThread },
       threadIdsByProject: {},
       scratchThreadIds: ['scratch-2'],
+      threadDataById: {},
     });
     const { get, set } = makeGetSet(state);
 

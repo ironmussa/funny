@@ -15,6 +15,7 @@ import {
   disconnectRemoteWS,
   registerSocketIOHandlers,
   setWSStopped,
+  unregisterSocketIOHandlers,
 } from './ws-event-dispatch';
 
 const wsLog = createClientLogger('ws');
@@ -137,6 +138,7 @@ function teardown() {
   disconnectAllRemote();
   clearWSDispatchState();
   if (activeSocket) {
+    unregisterSocketIOHandlers(activeSocket);
     activeSocket.disconnect();
     activeSocket = null;
   }
@@ -210,4 +212,26 @@ export function useWS() {
 /** Get the active Socket.IO instance (for sending messages from components) */
 export function getActiveWS(): Socket | null {
   return activeSocket;
+}
+
+// ── HMR cleanup ─────────────────────────────────────────────────
+// Vite re-evaluates this module on hot updates. The `useWS` React effect
+// only re-runs on component unmount, NOT on module replacement — so the
+// `activeSocket` from the previous module instance stays alive with its
+// (now-stale) listeners pointing at the previous `ws-event-dispatch`
+// module. That produces ghost handlers running in parallel with the live
+// ones: each WS event is dispatched N times, and the ghosts' stale
+// `useThreadStore` closures `set()` over the live store with empty
+// activeThread snapshots — wiping the assistant text bubble right after
+// it was applied. Tearing the socket down on dispose forces a clean
+// reconnect on the next module evaluation.
+if (import.meta.hot) {
+  import.meta.hot.dispose(() => {
+    refCount = 0;
+    if (teardownTimer) {
+      clearTimeout(teardownTimer);
+      teardownTimer = null;
+    }
+    teardown();
+  });
 }

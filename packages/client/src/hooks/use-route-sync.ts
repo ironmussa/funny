@@ -4,11 +4,14 @@ import { toast } from 'sonner';
 
 import { settingsItems } from '@/components/settings/items';
 import { authClient } from '@/lib/auth-client';
+import { createClientLogger } from '@/lib/client-logger';
 import { stripOrgPrefix } from '@/lib/url';
 import { useAuthStore } from '@/stores/auth-store';
 import { useProjectStore } from '@/stores/project-store';
 import { useThreadStore, getSelectingThreadId } from '@/stores/thread-store';
 import { useUIStore, type ReviewSubTab } from '@/stores/ui-store';
+
+const routeSyncLog = createClientLogger('route-sync');
 
 const LAST_ROUTE_KEY = 'funny_last_route';
 
@@ -646,6 +649,10 @@ export function useRouteSync() {
         if (!uiStore.reviewPaneOpen || uiStore.rightPaneTab !== 'review') {
           uiStore.setReviewPaneOpen(true);
         }
+      } else if (panelParam === 'files') {
+        if (!uiStore.reviewPaneOpen || uiStore.rightPaneTab !== 'files') {
+          uiStore.setFilesPaneOpen(true);
+        }
       } else if (panelParam === 'tests') {
         if (!uiStore.testRunnerOpen) {
           uiStore.setTestRunnerOpen(true);
@@ -677,6 +684,10 @@ export function useRouteSync() {
         if (!uiStore.reviewPaneOpen || uiStore.rightPaneTab !== 'review') {
           uiStore.setReviewPaneOpen(true);
         }
+      } else if (panelParam === 'files') {
+        if (!uiStore.reviewPaneOpen || uiStore.rightPaneTab !== 'files') {
+          uiStore.setFilesPaneOpen(true);
+        }
       } else if (panelParam === 'tests') {
         if (!uiStore.testRunnerOpen) {
           uiStore.setTestRunnerOpen(true);
@@ -689,4 +700,49 @@ export function useRouteSync() {
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- navigate is stable from useNavigate
   }, [location.pathname, location.search, initialized, navigate]);
+
+  // Invariant guard: URL is the source of truth for which thread is active.
+  // If anything (org switch, error path, external setState) makes
+  // `activeThread` diverge from the URL's threadId while the URL hasn't
+  // changed, the location-only effect above never re-fires — leaving
+  // WS handlers to drop messages for the URL's thread because
+  // `activeThread?.id !== threadId`. Subscribe to the store so any
+  // divergence triggers a re-select.
+  useEffect(() => {
+    if (!initialized) return;
+    const unsubscribe = useThreadStore.subscribe((state, prev) => {
+      // Only react to changes in active/selected — ignore unrelated store updates.
+      if (
+        state.activeThread === prev.activeThread &&
+        state.selectedThreadId === prev.selectedThreadId
+      ) {
+        return;
+      }
+      const { threadId } = parseRoute(location.pathname);
+      if (!threadId) return;
+      // The user just clicked "+" to compose a new thread (scratch or project).
+      // `startNew*Thread()` cleared the selection synchronously, but `navigate()`
+      // hasn't reflected in `location.pathname` yet — re-selecting from the stale
+      // URL would clobber the compose flow and the user would have to click twice.
+      const ui = useUIStore.getState();
+      if (ui.newThreadIsScratch || ui.newThreadProjectId) return;
+      if (getSelectingThreadId() === threadId) return;
+      if (state.activeThread?.id === threadId) return;
+      if (state.selectedThreadId === threadId && state.activeThread === null) {
+        // selectThread is mid-flight (set selectedThreadId, cleared activeThread,
+        // awaiting fetch). Don't re-trigger.
+        return;
+      }
+      routeSyncLog.warn('invariant re-select', {
+        urlThreadId: threadId,
+        storeActiveId: state.activeThread?.id ?? 'null',
+        storeSelectedId: state.selectedThreadId ?? 'null',
+        prevActiveId: prev.activeThread?.id ?? 'null',
+        prevSelectedId: prev.selectedThreadId ?? 'null',
+      });
+      useThreadStore.getState().selectThread(threadId);
+    });
+    return unsubscribe;
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- location.pathname read at callback time
+  }, [initialized, location.pathname]);
 }

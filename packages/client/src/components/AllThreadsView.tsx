@@ -9,7 +9,7 @@ import { AllThreadsToolbar } from '@/components/all-threads/AllThreadsToolbar';
 import { normalize } from '@/components/ui/highlight-text';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { api } from '@/lib/api';
-import { useThreadsByProject } from '@/lib/thread-selectors';
+import { useScratchThreads, useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
 import { branchKey as computeBranchKey, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
@@ -26,6 +26,7 @@ export function AllThreadsView() {
   const [searchParams, setSearchParams] = useSearchParams();
   const allThreadsProjectId = useUIStore((s) => s.allThreadsProjectId);
   const threadsByProject = useThreadsByProject();
+  const scratchThreads = useScratchThreads();
   const threadTotalByProject = useThreadStore((s) => s.threadTotalByProject);
   const loadMoreThreads = useThreadStore((s) => s.loadMoreThreads);
   const projects = useProjectStore((s) => s.projects);
@@ -56,6 +57,8 @@ export function AllThreadsView() {
     if (sortParam) params.sort = sortParam;
     const dirParam = searchParams.get('dir');
     if (dirParam) params.dir = dirParam;
+    const scratchParam = searchParams.get('scratch');
+    if (scratchParam) params.scratch = scratchParam;
     return params;
   };
 
@@ -73,6 +76,15 @@ export function AllThreadsView() {
       const statuses = paramStatus.split(',').filter(Boolean);
       setStatusFilter(new Set(statuses));
     }
+
+    // Sync ?scratch=1 → typeFilter
+    const paramScratch = searchParams.get('scratch') === '1';
+    setTypeFilter((prev) => {
+      const hasScratch = prev.has('scratch');
+      if (paramScratch && !hasScratch) return new Set(['scratch']);
+      if (!paramScratch && prev.size === 1 && hasScratch) return new Set();
+      return prev;
+    });
 
     // Sync sort params from URL
     const paramSort = searchParams.get('sort');
@@ -93,6 +105,22 @@ export function AllThreadsView() {
     setSearchParams(buildSearchParams({ project: projectId }), { replace: true });
   };
 
+  const handleTypeToggle = useCallback(
+    (value: string) => {
+      setTypeFilter((prev) => {
+        const next = new Set(prev);
+        if (next.has(value)) next.delete(value);
+        else next.add(value);
+        const params = new URLSearchParams(searchParams);
+        if (next.size === 1 && next.has('scratch')) params.set('scratch', '1');
+        else params.delete('scratch');
+        setSearchParams(params, { replace: true });
+        return next;
+      });
+    },
+    [searchParams, setSearchParams],
+  );
+
   const searchInputRef = useRef<HTMLInputElement>(null);
   const searchKeyDownRef = useRef<((e: React.KeyboardEvent) => void) | null>(null);
   const [search, setSearch] = useState('');
@@ -104,6 +132,9 @@ export function AllThreadsView() {
   });
   const [gitFilter, setGitFilter] = useState<Set<string>>(new Set());
   const [modeFilter, setModeFilter] = useState<Set<string>>(new Set());
+  const [typeFilter, setTypeFilter] = useState<Set<string>>(() =>
+    searchParams.get('scratch') === '1' ? new Set(['scratch']) : new Set(),
+  );
   const [showArchived, setShowArchived] = useState(false);
   const [sortField, setSortField] = useState<SortField>(() => {
     const paramSort = searchParams.get('sort');
@@ -222,22 +253,24 @@ export function AllThreadsView() {
   }, [projects]);
 
   const storeThreads = useMemo(() => {
-    const all = Object.values(threadsByProject).flat();
+    const all = [...Object.values(threadsByProject).flat(), ...scratchThreads];
     if (projectFilter) {
       return all.filter((t) => t.projectId === projectFilter);
     }
     return all;
-  }, [threadsByProject, projectFilter]);
+  }, [threadsByProject, projectFilter, scratchThreads]);
 
   // Check if any relevant project has more threads on the server than loaded
+  const scratchOnlyFilter = typeFilter.size === 1 && typeFilter.has('scratch');
   const hasMoreServerThreads = useMemo(() => {
+    if (scratchOnlyFilter) return false;
     const relevantProjects = projectFilter ? [projectFilter] : projects.map((p) => p.id);
     return relevantProjects.some((pid) => {
       const loaded = (threadsByProject[pid] ?? []).length;
       const total = threadTotalByProject[pid] ?? 0;
       return loaded < total;
     });
-  }, [threadsByProject, threadTotalByProject, projectFilter, projects]);
+  }, [threadsByProject, threadTotalByProject, projectFilter, projects, scratchOnlyFilter]);
 
   const [loadingMore, setLoadingMore] = useState(false);
   const handleLoadMore = useCallback(async () => {
@@ -309,6 +342,11 @@ export function AllThreadsView() {
       result = result.filter((t) => modeFilter.has(t.mode));
     }
 
+    // Type filter (scratch vs normal)
+    if (typeFilter.size > 0) {
+      result = result.filter((t) => typeFilter.has(t.isScratch ? 'scratch' : 'normal'));
+    }
+
     // Sort by selected field and direction
     result = result.toSorted((a, b) => {
       const dateA = sortField === 'updated' ? (a.completedAt ?? a.createdAt) : a.createdAt;
@@ -325,6 +363,7 @@ export function AllThreadsView() {
     statusFilter,
     gitFilter,
     modeFilter,
+    typeFilter,
     statusByBranch,
     projectFilter,
     projectNameById,
@@ -338,11 +377,14 @@ export function AllThreadsView() {
     setStatusFilter(new Set());
     setGitFilter(new Set());
     setModeFilter(new Set());
+    setTypeFilter(new Set());
     setShowArchived(false);
     if (projectFilter) {
       setProjectFilter(null);
     }
-    setSearchParams(buildSearchParams({ project: null }), { replace: true });
+    const next = buildSearchParams({ project: null });
+    delete next.scratch;
+    setSearchParams(next, { replace: true });
   };
 
   const handleSearchChange = (value: string) => {
@@ -353,8 +395,18 @@ export function AllThreadsView() {
     statusFilter.size > 0 ||
     gitFilter.size > 0 ||
     modeFilter.size > 0 ||
+    typeFilter.size > 0 ||
     showArchived ||
     !!projectFilter;
+
+  // Counts for type filter (scratch vs normal)
+  const typeCounts = useMemo(() => {
+    const counts: Record<string, number> = { scratch: 0, normal: 0 };
+    for (const t of allThreads) {
+      counts[t.isScratch ? 'scratch' : 'normal']++;
+    }
+    return counts;
+  }, [allThreads]);
 
   // Compute counts for status filters
   const statusCounts = useMemo(() => {
@@ -412,12 +464,18 @@ export function AllThreadsView() {
             ) : (
               <Search className="icon-sm text-muted-foreground" />
             )}
-            {projectFilter && filteredProject ? t('allThreads.title') : t('allThreads.globalTitle')}
+            {scratchOnlyFilter
+              ? t('sidebar.scratchTitle', { defaultValue: 'Scratch' })
+              : projectFilter && filteredProject
+                ? t('allThreads.title')
+                : t('allThreads.globalTitle')}
           </h2>
           <p className="text-sm text-muted-foreground">
-            {projectFilter && filteredProject
-              ? `${filteredProject.name} · ${allThreads.length} ${t('allThreads.threads')}`
-              : `${projects.length} ${t('allThreads.projects')} · ${allThreads.length} ${t('allThreads.threads')}`}
+            {scratchOnlyFilter
+              ? `${allThreads.length} ${t('allThreads.threads')}`
+              : projectFilter && filteredProject
+                ? `${filteredProject.name} · ${allThreads.length} ${t('allThreads.threads')}`
+                : `${projects.length} ${t('allThreads.projects')} · ${allThreads.length} ${t('allThreads.threads')}`}
           </p>
         </div>
       </div>
@@ -448,6 +506,9 @@ export function AllThreadsView() {
         setGitFilter={setGitFilter}
         modeFilter={modeFilter}
         setModeFilter={setModeFilter}
+        typeFilter={typeFilter}
+        onTypeToggle={handleTypeToggle}
+        typeCounts={typeCounts}
         statusCounts={statusCounts}
         gitCounts={gitCounts}
         threadStatuses={threadStatuses}

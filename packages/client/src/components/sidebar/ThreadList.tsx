@@ -16,8 +16,9 @@ import { useMinuteTick } from '@/hooks/use-minute-tick';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
 import { setDashedDragPreview } from '@/lib/drag-preview';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
-import { useThreadsByProject } from '@/lib/thread-selectors';
+import { useScratchThreads, useThreadsByProject } from '@/lib/thread-selectors';
 import { timeAgo } from '@/lib/thread-utils';
+import { getThreadRoute, isScratch } from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { resolveThreadBranch } from '@/lib/utils';
 import { cn } from '@/lib/utils';
@@ -64,6 +65,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
   useMinuteTick(); // re-render every 60s so timeAgo stays fresh
   const navigate = useStableNavigate();
   const threadsByProject = useThreadsByProject();
+  const scratchThreads = useScratchThreads();
   const selectedThreadId = useThreadStore((s) => s.selectedThreadId);
   const projects = useProjectStore((s) => s.projects);
 
@@ -78,22 +80,34 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
       projects.map((p) => [p.id, { name: p.name, path: p.path, color: p.color }]),
     );
 
-    for (const [projectId, projectThreads] of Object.entries(threadsByProject)) {
-      for (const thread of projectThreads) {
-        if (VISIBLE_STATUSES.has(thread.status) && !thread.archived && thread.stage !== 'done') {
-          const project = projectMap.get(projectId);
-          const enriched: EnrichedThread = {
-            ...thread,
-            projectName: project?.name ?? projectId,
-            projectPath: project?.path ?? '',
-            projectColor: project?.color,
-          };
+    const includeThread = (
+      thread: Thread,
+      projectName: string,
+      projectPath: string,
+      projectColor?: string,
+    ) => {
+      if (!VISIBLE_STATUSES.has(thread.status) || thread.archived || thread.stage === 'done')
+        return;
+      const enriched: EnrichedThread = {
+        ...thread,
+        projectName,
+        projectPath,
+        projectColor,
+      };
+      // Reuse previous reference if visual fields are identical
+      const cached = enrichedCacheRef.current.get(thread.id);
+      result.push(cached && enrichedThreadVisuallyEqual(cached, enriched) ? cached : enriched);
+    };
 
-          // Reuse previous reference if visual fields are identical
-          const cached = enrichedCacheRef.current.get(thread.id);
-          result.push(cached && enrichedThreadVisuallyEqual(cached, enriched) ? cached : enriched);
-        }
+    for (const [projectId, projectThreads] of Object.entries(threadsByProject)) {
+      const project = projectMap.get(projectId);
+      for (const thread of projectThreads) {
+        includeThread(thread, project?.name ?? projectId, project?.path ?? '', project?.color);
       }
+    }
+
+    for (const thread of scratchThreads) {
+      includeThread(thread, _t('sidebar.scratchTitle', { defaultValue: 'Scratch' }), '');
     }
 
     // Running threads always go first, then sort each group by most recent
@@ -120,7 +134,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
     enrichedCacheRef.current = nextCache;
 
     return { threads: visible, totalCount: result.length };
-  }, [threadsByProject, projects]);
+  }, [threadsByProject, scratchThreads, projects, _t]);
 
   // Compute branch keys for visible threads to scope git status selectors.
   const threadBranchKeys = useMemo(
@@ -172,9 +186,12 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
   // ThreadItem is memo'd, so stable references prevent unnecessary re-renders.
   const handleSelect = useCallback(
     async (threadId: string, projectId: string) => {
-      // Check if the thread requires a branch switch (local mode only)
       const thread = threadsRef.current.find((th) => th.id === threadId);
-      if (thread?.mode === 'local') {
+      const scratch = isScratch(thread);
+
+      // Check if the thread requires a branch switch (local mode only).
+      // Scratch threads have no git working tree — never run the branch preflight.
+      if (!scratch && thread?.mode === 'local') {
         const branch = resolveThreadBranch(thread);
         if (branch) {
           // Kick off thread data fetch in parallel with the branch preflight so
@@ -187,10 +204,13 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
       }
 
       // Ensure the project is expanded so the thread row is mounted in the
-      // projects list before we try to scroll to it.
-      const projectStore = useProjectStore.getState();
-      if (!projectStore.expandedProjects.has(projectId)) {
-        projectStore.toggleProject(projectId);
+      // projects list before we try to scroll to it. Scratch threads live in
+      // their own sidebar section — no project tree to expand.
+      if (!scratch) {
+        const projectStore = useProjectStore.getState();
+        if (!projectStore.expandedProjects.has(projectId)) {
+          projectStore.toggleProject(projectId);
+        }
       }
 
       // Run state changes at full priority so the center pane updates in
@@ -204,7 +224,9 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
       ) {
         store.selectThread(threadId);
       }
-      navigate(buildPath(`/projects/${projectId}/threads/${threadId}`));
+      navigate(
+        buildPath(thread ? getThreadRoute(thread) : `/projects/${projectId}/threads/${threadId}`),
+      );
     },
     [navigate, ensureBranch],
   );
@@ -346,7 +368,7 @@ const ThreadListItem = memo(function ThreadListItem({
         projectColor={thread.projectColor}
         timeValue={isRunning ? undefined : timeAgo(thread.completedAt ?? thread.createdAt, t)}
         gitStatus={gitStatus}
-        href={buildPath(`/projects/${thread.projectId}/threads/${thread.id}`)}
+        href={buildPath(getThreadRoute(thread))}
         onSelect={handleSelect}
         onRename={handleRename}
         onArchive={isRunning ? undefined : handleArchive}

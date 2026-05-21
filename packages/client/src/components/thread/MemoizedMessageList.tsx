@@ -650,15 +650,20 @@ export const MemoizedMessageList = memo(
 
         if (item.type === 'message') {
           const msg = item.msg;
-          const estimatedH = estimateItemHeight(item, containerWidth, fontConfig);
+          // `contentVisibility:auto` was previously applied here for paint
+          // virtualization. It broke a specific pattern: the server inserts
+          // an empty assistant placeholder (content=''), Chrome remembers
+          // the small rendered size, then the WS event updates the message
+          // content (same msgId, content='…') — React re-renders the
+          // subtree but the slot's c-v:auto skips the repaint, leaving the
+          // user with a visible "task complete" indicator but no response
+          // text until a forced paint (tab switch, scroll, focus). Removed
+          // for messages; tool cards keep c-v:auto because their content
+          // size is fixed at creation.
           return (
             <div
               key={key}
               data-item-key={key}
-              style={{
-                contentVisibility: 'auto',
-                containIntrinsicSize: `auto ${estimatedH}px`,
-              }}
               className="group/msg relative w-full text-sm text-foreground"
             >
               <div className="break-words text-sm leading-relaxed">

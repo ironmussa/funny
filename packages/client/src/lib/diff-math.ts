@@ -1,3 +1,5 @@
+import { metric, startSpan } from '@/lib/telemetry';
+
 /* ── Types ── */
 
 export type ConflictRole = 'marker-start' | 'ours' | 'separator' | 'theirs' | 'marker-end';
@@ -139,6 +141,9 @@ export function annotateConflicts(lines: DiffLine[]): ConflictBlock[] {
 }
 
 export function parseUnifiedDiff(diff: string): ParsedDiff {
+  const span = startSpan('diff.parseUnifiedDiff', {
+    attributes: { 'input.bytes': diff.length },
+  });
   const raw = diff.split('\n');
   const lines: DiffLine[] = [];
   const hunkHeaders = new Map<number, string>();
@@ -171,6 +176,12 @@ export function parseUnifiedDiff(diff: string): ParsedDiff {
   }
 
   const conflictBlocks = annotateConflicts(lines);
+  span.end();
+  metric('diff.parse.lines', lines.length, { type: 'gauge' });
+  metric('diff.parse.hunks', hunkHeaders.size, { type: 'gauge' });
+  if (conflictBlocks.length > 0) {
+    metric('diff.parse.conflict_blocks', conflictBlocks.length, { type: 'sum' });
+  }
   return { lines, hunkHeaders, conflictBlocks };
 }
 

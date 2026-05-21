@@ -1,5 +1,6 @@
 import { highlightLine } from '@/hooks/use-highlight';
 import { escapeRegExp } from '@/lib/diff-math';
+import { metric } from '@/lib/telemetry';
 
 export { countTextMatches, escapeRegExp } from '@/lib/diff-math';
 
@@ -7,12 +8,38 @@ export { countTextMatches, escapeRegExp } from '@/lib/diff-math';
 
 export const highlightCache = new Map<string, string>();
 
+// Module-local counters flushed periodically to keep hot path allocation-free.
+// metric() is gated on telemetry-enabled, so the flush itself is near-free when disabled.
+let hCacheHits = 0;
+let hCacheMisses = 0;
+let hMissTotalMs = 0;
+let hEvictions = 0;
+let hCalls = 0;
+const HIGHLIGHT_FLUSH_EVERY = 2000;
+
+function flushHighlightMetrics(): void {
+  if (hCacheHits) metric('diff.highlight.cache.hits', hCacheHits, { type: 'sum' });
+  if (hCacheMisses) metric('diff.highlight.cache.misses', hCacheMisses, { type: 'sum' });
+  if (hMissTotalMs)
+    metric('diff.highlight.miss.total_ms', Math.round(hMissTotalMs), { type: 'sum' });
+  if (hEvictions) metric('diff.highlight.cache.evictions', hEvictions, { type: 'sum' });
+  metric('diff.highlight.cache.size', highlightCache.size, { type: 'gauge' });
+  hCacheHits = 0;
+  hCacheMisses = 0;
+  hMissTotalMs = 0;
+  hEvictions = 0;
+  hCalls = 0;
+}
+
 export function getCachedHighlight(text: string, lang: string): string {
   const key = `${lang}:${text}`;
   let cached = highlightCache.get(key);
   if (cached === undefined) {
+    const t0 = performance.now();
     cached = highlightLine(text, lang);
+    hMissTotalMs += performance.now() - t0;
     highlightCache.set(key, cached);
+    hCacheMisses++;
     if (highlightCache.size > 20_000) {
       const iter = highlightCache.keys();
       for (let i = 0; i < 5_000; i++) {
@@ -20,8 +47,12 @@ export function getCachedHighlight(text: string, lang: string): string {
         if (k.done) break;
         highlightCache.delete(k.value);
       }
+      hEvictions++;
     }
+  } else {
+    hCacheHits++;
   }
+  if (++hCalls >= HIGHLIGHT_FLUSH_EVERY) flushHighlightMetrics();
   return cached;
 }
 

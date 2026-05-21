@@ -24,6 +24,7 @@ const SHORTCUTS: Shortcut[] = [
   { keys: ['Ctrl', 'B'], labelKey: 'shortcuts.toggleSidebar' },
   { keys: ['Ctrl', ','], labelKey: 'shortcuts.projectSettings' },
   { keys: ['Alt', 'N'], labelKey: 'shortcuts.newThread' },
+  { keys: ['Alt', 'S'], labelKey: 'shortcuts.newScratchThread' },
   { keys: ['Alt', ']'], labelKey: 'shortcuts.nextThread' },
   { keys: ['Alt', '['], labelKey: 'shortcuts.prevThread' },
   { keys: ['Ctrl', '`'], labelKey: 'shortcuts.toggleTerminal' },

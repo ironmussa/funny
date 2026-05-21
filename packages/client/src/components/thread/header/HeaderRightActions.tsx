@@ -16,12 +16,13 @@ import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { usePreviewWindow } from '@/hooks/use-preview-window';
 import { useStableNavigate } from '@/hooks/use-stable-navigate';
+import { useTerminalScope } from '@/hooks/use-terminal-scope';
 import * as variant from '@/lib/thread-variant';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useGitStatusForThread, useGitStatusStore } from '@/stores/git-status-store';
 import { useProjectStore } from '@/stores/project-store';
-import { useTerminalStore } from '@/stores/terminal-store';
+import { SCRATCH_TERMINAL_SCOPE_ID, useTerminalStore } from '@/stores/terminal-store';
 import {
   useThreadBranch,
   useThreadId,
@@ -80,8 +81,9 @@ export function HeaderRightActions() {
   const setPanelVisible = useTerminalStore((s) => s.setPanelVisible);
   const addTab = useTerminalStore((s) => s.addTab);
   const tabs = useTerminalStore((s) => s.tabs);
-  const terminalPanelVisible = selectedProjectId
-    ? (panelVisibleByProject[selectedProjectId] ?? false)
+  const { scopeId: terminalScopeId, scratchThreadId: terminalScratchThreadId } = useTerminalScope();
+  const terminalPanelVisible = terminalScopeId
+    ? (panelVisibleByProject[terminalScopeId] ?? false)
     : false;
   const gitStatus = useGitStatusForThread(activeThreadId ?? undefined);
   const projectGitStatus = useGitStatusStore((s) =>
@@ -122,21 +124,25 @@ export function HeaderRightActions() {
     });
 
   const handleTerminalClick = () => {
-    if (!selectedProjectId) return;
-    const projectTabs = tabs.filter((tab) => tab.projectId === selectedProjectId);
-    if (projectTabs.length === 0 && !terminalPanelVisible) {
-      const cwd = activeThreadWorktreePath || project?.path || 'C:\\';
+    if (!terminalScopeId) return;
+    const isScratchScope = terminalScopeId === SCRATCH_TERMINAL_SCOPE_ID;
+    const scopeTabs = tabs.filter((tab) => tab.projectId === terminalScopeId);
+    if (scopeTabs.length === 0 && !terminalPanelVisible) {
+      // For scratch scope, cwd is a display placeholder — the runner resolves
+      // the real path from `scratchThreadId`.
+      const cwd = isScratchScope ? '~' : activeThreadWorktreePath || project?.path || 'C:\\';
       addTab({
         id: crypto.randomUUID(),
         label: 'Terminal 1',
         cwd,
         alive: true,
-        projectId: selectedProjectId,
+        projectId: terminalScopeId,
         type: isTauri ? undefined : 'pty',
+        scratchThreadId: isScratchScope ? (terminalScratchThreadId ?? undefined) : undefined,
       });
-      setPanelVisible(selectedProjectId, true);
+      setPanelVisible(terminalScopeId, true);
     } else {
-      toggleTerminalPanel(selectedProjectId);
+      toggleTerminalPanel(terminalScopeId);
     }
   };
 

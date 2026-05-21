@@ -1,10 +1,11 @@
 import { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 
+import { getTerminalScope } from '@/hooks/use-terminal-scope';
 import { createClientLogger } from '@/lib/client-logger';
 import { buildPath } from '@/lib/url';
 import { useProjectStore } from '@/stores/project-store';
-import { useTerminalStore } from '@/stores/terminal-store';
+import { SCRATCH_TERMINAL_SCOPE_ID, useTerminalStore } from '@/stores/terminal-store';
 import { useThreadStore } from '@/stores/thread-store';
 import { useUIStore } from '@/stores/ui-store';
 
@@ -108,6 +109,16 @@ export function useGlobalShortcuts(toggleCommandPalette: () => void, toggleFileS
         return;
       }
 
+      // Alt+S to start a new scratch thread (projectless)
+      if (e.altKey && !e.ctrlKey && !e.metaKey && !e.shiftKey && (e.key === 's' || e.key === 'S')) {
+        e.preventDefault();
+        e.stopPropagation();
+        log.info('shortcut.new_scratch_thread');
+        useUIStore.getState().startNewScratchThread();
+        navigate(buildPath('/scratch/new'));
+        return;
+      }
+
       // Ctrl+Shift+F for thread search — scope to current thread's project by default
       if (e.ctrlKey && e.shiftKey && e.key === 'F') {
         e.preventDefault();
@@ -123,25 +134,32 @@ export function useGlobalShortcuts(toggleCommandPalette: () => void, toggleFileS
         e.preventDefault();
         log.info('shortcut.terminal_toggle');
         const store = useTerminalStore.getState();
-        const { selectedProjectId: storeProjectId, projects } = useProjectStore.getState();
-        const activeThreadProjectId = useThreadStore.getState().activeThread?.projectId ?? null;
-        const selectedProjectId = storeProjectId ?? activeThreadProjectId;
-        if (!selectedProjectId) return;
-        const projectTabs = store.tabs.filter((t) => t.projectId === selectedProjectId);
-        const isVisible = store.panelVisibleByProject[selectedProjectId] ?? false;
-        if (projectTabs.length === 0 && !isVisible) {
-          const project = projects.find((p: any) => p.id === selectedProjectId);
-          const cwd = project?.path ?? 'C:\\';
+        const { projects } = useProjectStore.getState();
+        const { scopeId, scratchThreadId } = getTerminalScope();
+        if (!scopeId) return;
+        const scopeTabs = store.tabs.filter((t) => t.projectId === scopeId);
+        const isVisible = store.panelVisibleByProject[scopeId] ?? false;
+        if (scopeTabs.length === 0 && !isVisible) {
+          let cwd: string;
+          if (scopeId === SCRATCH_TERMINAL_SCOPE_ID) {
+            // Runner derives the actual cwd from `scratchThreadId`; this
+            // placeholder is for display only.
+            cwd = '~';
+          } else {
+            const project = projects.find((p: any) => p.id === scopeId);
+            cwd = project?.path ?? 'C:\\';
+          }
           store.addTab({
             id: crypto.randomUUID(),
             label: 'Terminal 1',
             cwd,
             alive: true,
-            projectId: selectedProjectId,
+            projectId: scopeId,
             type: isTauri ? undefined : 'pty',
+            scratchThreadId: scratchThreadId ?? undefined,
           });
         } else {
-          store.togglePanel(selectedProjectId);
+          store.togglePanel(scopeId);
         }
       }
     };

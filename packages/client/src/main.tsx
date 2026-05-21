@@ -245,7 +245,6 @@ root.render(
         endpoint={import.meta.env.VITE_OTLP_ENDPOINT || 'http://localhost:4000'}
         serviceName="funny-client"
         captureConsole
-        captureWebVitals
         level="debug"
         enabled={!!import.meta.env.VITE_OTLP_ENDPOINT}
         includeUrl={true}

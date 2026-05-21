@@ -206,6 +206,7 @@
     "searchClose": "Close search",
     "searchPrev": "Previous result",
     "searchNext": "Next result",
+    "openInEditor": "Open in Editor",
     "source": {
       "web": "Created from web UI",
       "chrome_extension": "Created from Chrome extension",
@@ -1034,6 +1035,7 @@
     "toggleSidebar": "Toggle sidebar",
     "projectSettings": "Open project settings",
     "newThread": "Start a new thread",
+    "newScratchThread": "Start a new scratch thread",
     "nextThread": "Go to next thread",
     "prevThread": "Go to previous thread",
     "toggleTerminal": "Toggle terminal panel",

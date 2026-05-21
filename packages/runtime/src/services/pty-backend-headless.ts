@@ -20,6 +20,7 @@ import { Terminal as HeadlessTerminal } from '@xterm/headless';
 import type { Subprocess } from 'bun';
 
 import { log } from '../lib/logger.js';
+import { metric, recordHistogram, startSpan } from '../lib/telemetry.js';
 import type { PtyBackend, PtyBackendCallbacks } from './pty-backend.js';
 import { detectShells } from './shell-detector.js';
 
@@ -32,6 +33,21 @@ interface HeadlessSession {
 }
 
 const SCROLLBACK_LINES = 2000;
+
+// Aggregated PTY write throughput — flushed periodically rather than per-chunk
+// to keep the data callback allocation-free at high stream rates.
+let ptyBytesWritten = 0;
+let ptyWriteCount = 0;
+const PTY_WRITE_FLUSH_EVERY = 1000;
+function accountWrite(byteLen: number): void {
+  ptyBytesWritten += byteLen;
+  if (++ptyWriteCount >= PTY_WRITE_FLUSH_EVERY) {
+    metric('pty.write.bytes', ptyBytesWritten, { type: 'sum', unit: 'By' });
+    metric('pty.write.count', ptyWriteCount, { type: 'sum' });
+    ptyBytesWritten = 0;
+    ptyWriteCount = 0;
+  }
+}
 
 function resolveShell(shellId?: string): { exe: string; args: string[] } {
   if (!shellId || shellId === 'default') {
@@ -109,6 +125,7 @@ export class HeadlessPtyBackend implements PtyBackend {
             const str = data.toString();
             // Write to headless terminal to track state
             headless.write(str);
+            accountWrite(str.length);
             const s = sessions.get(id);
             if (s) {
               s.dirty = true;
@@ -227,15 +244,22 @@ export class HeadlessPtyBackend implements PtyBackend {
     const session = this.sessions.get(id);
     if (!session) return null;
 
+    if (!session.dirty && session.cachedSerialization !== null) {
+      metric('pty.capturePane.cache_hit', 1, { type: 'sum' });
+      return session.cachedSerialization;
+    }
+
+    const span = startSpan('pty.capturePane', { attributes: { ptyId: id } });
     try {
-      if (!session.dirty && session.cachedSerialization !== null) {
-        return session.cachedSerialization;
-      }
       const state = session.serialize.serialize();
       session.cachedSerialization = state;
       session.dirty = false;
+      span.attributes['bytes'] = state.length;
+      span.end('ok');
+      recordHistogram('pty.capturePane.bytes', state.length, { unit: 'By' });
       return state;
     } catch (err: any) {
+      span.end('error', err?.message);
       log.error('Failed to serialize terminal state', {
         namespace: 'pty-headless',
         ptyId: id,
@@ -250,18 +274,27 @@ export class HeadlessPtyBackend implements PtyBackend {
    * Called during shutdown so state can be persisted to DB.
    */
   serializeAll(): Map<string, string> {
+    const span = startSpan('pty.serializeAll', {
+      attributes: { sessions: this.sessions.size },
+    });
     const states = new Map<string, string>();
+    let totalBytes = 0;
+    let cacheHits = 0;
     for (const [id, session] of this.sessions) {
       try {
         let state: string;
         if (!session.dirty && session.cachedSerialization !== null) {
           state = session.cachedSerialization;
+          cacheHits++;
         } else {
           state = session.serialize.serialize();
           session.cachedSerialization = state;
           session.dirty = false;
         }
-        if (state) states.set(id, state);
+        if (state) {
+          states.set(id, state);
+          totalBytes += state.length;
+        }
       } catch (err: any) {
         log.error('Failed to serialize session for persistence', {
           namespace: 'pty-headless',
@@ -270,6 +303,9 @@ export class HeadlessPtyBackend implements PtyBackend {
         });
       }
     }
+    span.attributes['total.bytes'] = totalBytes;
+    span.attributes['cache.hits'] = cacheHits;
+    span.end('ok');
     return states;
   }
 

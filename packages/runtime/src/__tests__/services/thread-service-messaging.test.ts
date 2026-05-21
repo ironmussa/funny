@@ -56,6 +56,7 @@ vi.mock('../../services/ws-broker.js', () => ({
 vi.mock('../../utils/file-mentions.js', () => ({
   augmentPromptWithFiles: vi.fn(async (content: string) => content),
   augmentPromptWithSymbols: vi.fn(async (content: string) => content),
+  stripInlineReferencedContent: vi.fn((content: string) => content),
 }));
 
 vi.mock('../../services/thread-manager.js', () => mocks.tm);
@@ -100,7 +101,7 @@ describe('sendMessage — idle/backlog regression', () => {
       content: 'first prompt',
     });
 
-    expect(result.ok).toBe(true);
+    expect(result.isOk()).toBe(true);
     expect(mocks.tm.getThreadMessages).toHaveBeenCalledWith({
       threadId: 't-idle',
       limit: 1,
@@ -132,7 +133,7 @@ describe('sendMessage — idle/backlog regression', () => {
       content: 'new prompt',
     });
 
-    expect(result.ok).toBe(true);
+    expect(result.isOk()).toBe(true);
     expect(mocks.tm.updateMessage).toHaveBeenCalledWith('msg-draft', expect.any(Object));
     expect(mocks.tm.insertMessage).not.toHaveBeenCalled();
   });
@@ -159,7 +160,7 @@ describe('sendMessage — idle/backlog regression', () => {
       content: 'Fix the login bug',
     });
 
-    expect(result.ok).toBe(true);
+    expect(result.isOk()).toBe(true);
     expect(mocks.tm.updateThread).toHaveBeenCalledWith(
       't-draft',
       expect.objectContaining({
@@ -190,7 +191,7 @@ describe('sendMessage — idle/backlog regression', () => {
       content: 'follow up',
     });
 
-    expect(result.ok).toBe(true);
+    expect(result.isOk()).toBe(true);
     // Idle/backlog branch should be skipped entirely.
     expect(mocks.tm.getThreadMessages).not.toHaveBeenCalled();
     expect(mocks.tm.insertMessage).toHaveBeenCalledTimes(1);
@@ -217,7 +218,7 @@ describe('sendMessage — idle/backlog regression', () => {
       content: 'follow up',
     });
 
-    expect(result.ok).toBe(true);
+    expect(result.isOk()).toBe(true);
     // Scratch threads must not hit resolveProjectPath or getProject.
     expect(mocks.projects.resolveProjectPath).not.toHaveBeenCalled();
     expect(mocks.projects.getProject).not.toHaveBeenCalled();

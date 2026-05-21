@@ -18,11 +18,13 @@ import {
   DEFAULT_PERMISSION_MODE,
   DEFAULT_FOLLOW_UP_MODE,
 } from '@funny/shared/models';
+import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import {
   augmentPromptWithFiles,
   augmentPromptWithSymbols,
+  stripInlineReferencedContent,
   type FileRef,
   type SymbolRef,
 } from '../../utils/file-mentions.js';
@@ -34,6 +36,10 @@ import { resolveThreadCwd } from '../thread-context.js';
 import * as tm from '../thread-manager.js';
 import { wsBroker } from '../ws-broker.js';
 import { ThreadServiceError, emitThreadUpdated } from './helpers.js';
+
+function toThreadServiceError(err: unknown): ThreadServiceError {
+  return err instanceof ThreadServiceError ? err : new ThreadServiceError(String(err), 500);
+}
 
 /**
  * Augment a list of allowedTools with tool names that have an "always allow"
@@ -87,8 +93,14 @@ export interface SendMessageResult {
   queuedMessageId?: string;
 }
 
+export function sendMessage(
+  params: SendMessageParams,
+): ResultAsync<SendMessageResult, ThreadServiceError> {
+  return ResultAsync.fromPromise(sendMessageImpl(params), toThreadServiceError);
+}
+
 // eslint-disable-next-line max-lines-per-function
-export async function sendMessage(params: SendMessageParams): Promise<SendMessageResult> {
+async function sendMessageImpl(params: SendMessageParams): Promise<SendMessageResult> {
   const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
@@ -171,9 +183,12 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
     }
   }
 
-  // Augment prompt with file/symbol contents
+  // Augment prompt with file/symbol contents — this is what the agent sees.
   let augmentedContent = await augmentPromptWithFiles(params.content, params.fileReferences, cwd);
   augmentedContent = await augmentPromptWithSymbols(augmentedContent, params.symbolReferences, cwd);
+  // What we persist in the messages table is the path-only metadata version,
+  // so the UI shows file chips instead of inlining the entire source.
+  const persistedContent = stripInlineReferencedContent(augmentedContent);
 
   // Decide whether this send will be queued. When queued, we deliberately
   // skip persisting the user message to `messages` here — the message lives
@@ -205,7 +220,7 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
       });
       if (draftMsgs[0]) {
         await tm.updateMessage(draftMsgs[0].id, {
-          content: augmentedContent,
+          content: persistedContent,
           images: params.images?.length ? JSON.stringify(params.images) : null,
         });
       }
@@ -213,7 +228,7 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
       await tm.insertMessage({
         threadId: params.threadId,
         role: 'user',
-        content: augmentedContent,
+        content: persistedContent,
         images: params.images?.length ? JSON.stringify(params.images) : null,
         model: effectiveModel,
         permissionMode: effectivePermission,
@@ -340,7 +355,11 @@ export async function sendMessage(params: SendMessageParams): Promise<SendMessag
 
 // ── Stop Thread ─────────────────────────────────────────────────
 
-export async function stopThread(threadId: string): Promise<void> {
+export function stopThread(threadId: string): ResultAsync<void, ThreadServiceError> {
+  return ResultAsync.fromPromise(stopThreadImpl(threadId), toThreadServiceError);
+}
+
+async function stopThreadImpl(threadId: string): Promise<void> {
   const thread = await tm.getThread(threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
   if (thread.provider === 'external') {
@@ -376,7 +395,11 @@ function deriveBashPrefix(toolInput: string | undefined): string | null {
   return firstToken || null;
 }
 
-export async function approveToolCall(params: ApproveToolParams): Promise<void> {
+export function approveToolCall(params: ApproveToolParams): ResultAsync<void, ThreadServiceError> {
+  return ResultAsync.fromPromise(approveToolCallImpl(params), toThreadServiceError);
+}
+
+async function approveToolCallImpl(params: ApproveToolParams): Promise<void> {
   const thread = await tm.getThread(params.threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 
@@ -482,7 +505,17 @@ export async function approveToolCall(params: ApproveToolParams): Promise<void> 
 
 // ── Queue Operations ────────────────────────────────────────────
 
-export async function cancelQueuedMessage(
+export function cancelQueuedMessage(
+  threadId: string,
+  messageId: string,
+): ResultAsync<{ queuedCount: number }, ThreadServiceError> {
+  return ResultAsync.fromPromise(
+    cancelQueuedMessageImpl(threadId, messageId),
+    toThreadServiceError,
+  );
+}
+
+async function cancelQueuedMessageImpl(
   threadId: string,
   messageId: string,
 ): Promise<{ queuedCount: number }> {
@@ -507,7 +540,18 @@ export async function cancelQueuedMessage(
   return { queuedCount: qCount };
 }
 
-export async function updateQueuedMessage(
+export function updateQueuedMessage(
+  threadId: string,
+  messageId: string,
+  content: string,
+): ResultAsync<{ queuedCount: number; queuedMessage: any }, ThreadServiceError> {
+  return ResultAsync.fromPromise(
+    updateQueuedMessageImpl(threadId, messageId, content),
+    toThreadServiceError,
+  );
+}
+
+async function updateQueuedMessageImpl(
   threadId: string,
   messageId: string,
   content: string,
@@ -535,7 +579,14 @@ export async function updateQueuedMessage(
 
 // ── Comment Operations ──────────────────────────────────────────
 
-export async function deleteComment(threadId: string, commentId: string): Promise<void> {
+export function deleteComment(
+  threadId: string,
+  commentId: string,
+): ResultAsync<void, ThreadServiceError> {
+  return ResultAsync.fromPromise(deleteCommentImpl(threadId, commentId), toThreadServiceError);
+}
+
+async function deleteCommentImpl(threadId: string, commentId: string): Promise<void> {
   const thread = await tm.getThread(threadId);
   if (!thread) throw new ThreadServiceError('Thread not found', 404);
 

@@ -26,6 +26,7 @@
 import { forkSession, query } from '@anthropic-ai/claude-agent-sdk';
 import type { Query, RewindFilesResult } from '@anthropic-ai/claude-agent-sdk';
 import { resolveSDKCliPath } from '@funny/core/agents';
+import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { metric, startSpan } from '../../lib/telemetry.js';
@@ -188,7 +189,15 @@ async function resolveAnchor(params: {
 
 // ── Public API ──────────────────────────────────────────────────────
 
-export async function rewindCode(params: RewindCodeParams): Promise<RewindCodeResult> {
+export function rewindCode(
+  params: RewindCodeParams,
+): ResultAsync<RewindCodeResult, ThreadServiceError> {
+  return ResultAsync.fromPromise(rewindCodeImpl(params), (err) =>
+    err instanceof ThreadServiceError ? err : new ThreadServiceError(String(err), 500),
+  );
+}
+
+async function rewindCodeImpl(params: RewindCodeParams): Promise<RewindCodeResult> {
   const span = startSpan('thread.rewind_code', {
     attributes: { threadId: params.threadId },
   });
@@ -250,7 +259,15 @@ export async function rewindCode(params: RewindCodeParams): Promise<RewindCodeRe
   }
 }
 
-export async function forkAndRewind(params: ForkAndRewindParams): Promise<ForkAndRewindResult> {
+export function forkAndRewind(
+  params: ForkAndRewindParams,
+): ResultAsync<ForkAndRewindResult, ThreadServiceError> {
+  return ResultAsync.fromPromise(forkAndRewindImpl(params), (err) =>
+    err instanceof ThreadServiceError ? err : new ThreadServiceError(String(err), 500),
+  );
+}
+
+async function forkAndRewindImpl(params: ForkAndRewindParams): Promise<ForkAndRewindResult> {
   const span = startSpan('thread.fork_and_rewind', {
     attributes: { threadId: params.sourceThreadId },
   });
@@ -264,12 +281,14 @@ export async function forkAndRewind(params: ForkAndRewindParams): Promise<ForkAn
       userId: params.userId,
     });
 
-    const newThread = await forkThread({
+    const forkResult = await forkThread({
       sourceThreadId: params.sourceThreadId,
       messageId: params.messageId,
       userId: params.userId,
       title: params.title,
     });
+    if (forkResult.isErr()) throw forkResult.error;
+    const newThread = forkResult.value;
     const newSessionId = (newThread as any).sessionId as string | null;
     const newCwd = (newThread as any).worktreePath ?? anchor.cwd;
     if (!newSessionId) {

@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { ok, err } from 'neverthrow';
+import { ok, err, okAsync } from 'neverthrow';
 import { describe, test, expect, vi, beforeEach } from 'vitest';
 
 const { mockListWorktrees, mockCreateWorktree, mockRemoveWorktree } = vi.hoisted(() => ({
@@ -12,7 +12,7 @@ vi.mock('@funny/core/git', () => ({
   listWorktrees: mockListWorktrees,
   createWorktree: mockCreateWorktree,
   removeWorktree: mockRemoveWorktree,
-  pruneOrphanWorktrees: vi.fn().mockResolvedValue(0),
+  pruneOrphanWorktrees: vi.fn().mockReturnValue(okAsync(0)),
 }));
 
 const { mockRequireProject } = vi.hoisted(() => ({
@@ -37,7 +37,7 @@ describe('Worktree Routes', () => {
 
     mockListWorktrees.mockReturnValue(ok([{ path: '/tmp/wt1', branch: 'feature/x' }]) as any);
     mockCreateWorktree.mockReturnValue(ok('/tmp/wt-new') as any);
-    mockRemoveWorktree.mockReturnValue(ok(undefined) as any);
+    mockRemoveWorktree.mockReturnValue(okAsync(undefined) as any);
     mockRequireProject.mockReturnValue(ok({ id: 'p1', path: '/tmp/project', name: 'Test' }) as any);
 
     app = new Hono();

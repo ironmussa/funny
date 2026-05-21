@@ -81,7 +81,7 @@ worktreeRoutes.get('/', async (c) => {
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
   // Prune orphan worktrees before listing (best-effort, non-blocking on failure)
-  await pruneOrphanWorktrees(projectResult.value.path).catch(() => {});
+  await pruneOrphanWorktrees(projectResult.value.path);
 
   const worktreesResult = await listWorktrees(projectResult.value.path);
   if (worktreesResult.isErr()) return resultToResponse(c, worktreesResult);
@@ -121,10 +121,12 @@ worktreeRoutes.delete('/', async (c) => {
   );
   if (projectResult.isErr()) return resultToResponse(c, projectResult);
 
-  await removeWorktree(projectResult.value.path, worktreePath);
+  const removeResult = await removeWorktree(projectResult.value.path, worktreePath);
+  if (removeResult.isErr()) return resultToResponse(c, removeResult);
 
   if (deleteBranch && branchName) {
-    await removeBranch(projectResult.value.path, branchName);
+    const branchResult = await removeBranch(projectResult.value.path, branchName);
+    if (branchResult.isErr()) return resultToResponse(c, branchResult);
   }
 
   return c.json({ ok: true });

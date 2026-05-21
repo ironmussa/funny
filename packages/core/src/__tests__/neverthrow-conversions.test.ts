@@ -1,3 +1,4 @@
+import { okAsync } from 'neverthrow';
 import { vi, describe, test, expect, beforeEach } from 'vitest';
 
 vi.mock('../git/process.js', () => ({
@@ -128,7 +129,7 @@ describe('setupWorktree', () => {
       portGroups: [{ name: 'web', defaultPort: 3000, envVars: ['PORT'] }],
       envFiles: ['.env'],
     });
-    mockGetWorktreeBase.mockResolvedValue('/worktrees');
+    mockGetWorktreeBase.mockReturnValue(okAsync('/worktrees'));
     mockAllocatePorts.mockResolvedValue(mockPorts);
 
     const result = await setupWorktree('/project', '/worktree');
@@ -162,7 +163,7 @@ describe('setupWorktree', () => {
       portGroups: [{ name: 'web', defaultPort: 3000, envVars: ['PORT'] }],
       envFiles: ['.env'],
     });
-    mockGetWorktreeBase.mockResolvedValue('/worktrees');
+    mockGetWorktreeBase.mockReturnValue(okAsync('/worktrees'));
     mockAllocatePorts.mockRejectedValue(new Error('No ports available'));
 
     const result = await setupWorktree('/project', '/worktree');

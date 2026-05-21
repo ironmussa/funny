@@ -1,5 +1,8 @@
 import { join, dirname } from 'path';
 
+import { internal, type DomainError } from '@funny/shared/errors';
+import { ResultAsync } from 'neverthrow';
+
 import type { SymbolInfo, SymbolKind } from './types.js';
 
 // ── Lazy-loaded tree-sitter ──────────────────────────────────
@@ -250,7 +253,16 @@ function isMethodNode(nodeType: string): boolean {
  * @param filePath - Path used to determine the language (by extension)
  * @returns Array of symbols found
  */
-export async function extractSymbols(content: string, filePath: string): Promise<SymbolInfo[]> {
+export function extractSymbols(
+  content: string,
+  filePath: string,
+): ResultAsync<SymbolInfo[], DomainError> {
+  return ResultAsync.fromPromise(extractSymbolsImpl(content, filePath), (error) =>
+    internal(`Symbol extraction failed: ${error}`),
+  );
+}
+
+async function extractSymbolsImpl(content: string, filePath: string): Promise<SymbolInfo[]> {
   const langName = getLanguageName(filePath);
   if (!langName) return [];
 

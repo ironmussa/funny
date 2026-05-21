@@ -130,7 +130,9 @@ async function collectSiblingPorts(
 ): Promise<Set<number>> {
   const ports = new Set<number>();
 
-  const worktreeBase = await getWorktreeBase(projectPath);
+  const worktreeBaseResult = await getWorktreeBase(projectPath);
+  if (worktreeBaseResult.isErr()) return ports;
+  const worktreeBase = worktreeBaseResult.value;
 
   if (!existsSync(worktreeBase)) return ports;
 

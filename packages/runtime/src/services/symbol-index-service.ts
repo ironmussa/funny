@@ -66,11 +66,12 @@ export async function indexProject(projectPath: string): Promise<void> {
           if (existing && existing.mtime === mtime) return;
 
           const content = await readFile(fullPath, 'utf-8');
-          const symbols = await extractSymbols(content, relPath);
+          const symbolsResult = await extractSymbols(content, relPath);
+          if (symbolsResult.isErr()) return; // parse error — skip silently
 
-          index!.files.set(relPath, { path: relPath, symbols, mtime });
+          index!.files.set(relPath, { path: relPath, symbols: symbolsResult.value, mtime });
         } catch {
-          // File unreadable or parse error — skip silently
+          // File unreadable — skip silently
         }
       }),
     );

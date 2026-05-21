@@ -185,9 +185,8 @@ function flushCoalesce(ptyId: string, reason: 'size' | 'timer' | 'close'): void 
     clearTimeout(buf.timer);
     buf.timer = null;
   }
-  const data = buf.chunks.length === 1 ? buf.chunks[0] : buf.chunks.join('');
+  const joined = buf.chunks.length === 1 ? buf.chunks[0] : buf.chunks.join('');
   const chunkCount = buf.chunkCount;
-  const byteCount = buf.bytes;
   // Free the empty buffer — a fresh chunk will recreate it on demand.
   coalesceBuffers.delete(ptyId);
 
@@ -198,15 +197,20 @@ function flushCoalesce(ptyId: string, reason: 'size' | 'timer' | 'close'): void 
     return;
   }
 
+  // Convert to a UTF-8 byte buffer so Socket.IO emits a binary frame
+  // (rather than JSON-escaping each byte). This is the biggest win for
+  // heavy stdout: no per-byte escape, no JSON.parse on the receiver.
+  const payload = Buffer.from(joined, 'utf8');
+
   wsBroker.emitToUser(session.userId, {
     type: 'pty:data' as const,
     threadId: '',
-    data: { ptyId, data },
+    data: { ptyId, data: payload },
   });
 
   metric('pty.flush', 1, { attributes: { reason } });
   recordHistogram('pty.flush_chunks', chunkCount);
-  recordHistogram('pty.flush_bytes', byteCount, { unit: 'By' });
+  recordHistogram('pty.flush_bytes', payload.byteLength, { unit: 'By' });
 }
 
 function enqueueCoalesce(ptyId: string, data: string): void {

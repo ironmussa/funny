@@ -20,6 +20,7 @@ import { sql } from 'drizzle-orm';
 
 import { db, getConnection } from '../db/index.js';
 import { log } from '../lib/logger.js';
+import { metric, recordHistogram } from '../lib/telemetry.js';
 import type { PtyBackend } from './pty-backend.js';
 import { validateShellId } from './shell-detector.js';
 import { wsBroker } from './ws-broker.js';
@@ -152,6 +153,88 @@ function clearScrollback(ptyId: string): void {
   scrollbackSizes.delete(ptyId);
 }
 
+// ── PTY → WS output coalescing ───────────────────────────────────────
+// High-throughput shell output (e.g. `cat large`, `yes`, npm install) hits
+// the onData callback once per PTY read syscall — typically every few KB.
+// Each callback previously produced one full JSON-serialized WS frame, which
+// is the dominant CPU cost on the runtime under load. We coalesce contiguous
+// chunks into a single pty:data event:
+//   - flush when the buffered output reaches FLUSH_BYTES
+//   - otherwise flush after FLUSH_MS via a single timer
+//   - flush on session close (exit/error/kill) so no bytes are lost
+//
+// FLUSH_MS is intentionally small (≈120 Hz) so interactive echo latency
+// stays imperceptible while still aggregating during bursts.
+
+const FLUSH_BYTES = Number(process.env.PTY_FLUSH_BYTES) || 64 * 1024;
+const FLUSH_MS = Number(process.env.PTY_FLUSH_MS) || 8;
+
+interface CoalesceBuffer {
+  chunks: string[];
+  bytes: number;
+  chunkCount: number;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+const coalesceBuffers = new Map<string, CoalesceBuffer>();
+
+function flushCoalesce(ptyId: string, reason: 'size' | 'timer' | 'close'): void {
+  const buf = coalesceBuffers.get(ptyId);
+  if (!buf || buf.chunks.length === 0) return;
+  if (buf.timer) {
+    clearTimeout(buf.timer);
+    buf.timer = null;
+  }
+  const data = buf.chunks.length === 1 ? buf.chunks[0] : buf.chunks.join('');
+  const chunkCount = buf.chunkCount;
+  const byteCount = buf.bytes;
+  // Free the empty buffer — a fresh chunk will recreate it on demand.
+  coalesceBuffers.delete(ptyId);
+
+  const session = activeSessions.get(ptyId);
+  if (!session?.userId) {
+    // Session was already torn down — drop silently. Counters still recorded.
+    metric('pty.flush', 1, { attributes: { reason, dropped: 'true' } });
+    return;
+  }
+
+  wsBroker.emitToUser(session.userId, {
+    type: 'pty:data' as const,
+    threadId: '',
+    data: { ptyId, data },
+  });
+
+  metric('pty.flush', 1, { attributes: { reason } });
+  recordHistogram('pty.flush_chunks', chunkCount);
+  recordHistogram('pty.flush_bytes', byteCount, { unit: 'By' });
+}
+
+function enqueueCoalesce(ptyId: string, data: string): void {
+  let buf = coalesceBuffers.get(ptyId);
+  if (!buf) {
+    buf = { chunks: [], bytes: 0, chunkCount: 0, timer: null };
+    coalesceBuffers.set(ptyId, buf);
+  }
+  buf.chunks.push(data);
+  buf.bytes += data.length;
+  buf.chunkCount += 1;
+
+  if (buf.bytes >= FLUSH_BYTES) {
+    flushCoalesce(ptyId, 'size');
+    return;
+  }
+  if (!buf.timer) {
+    buf.timer = setTimeout(() => flushCoalesce(ptyId, 'timer'), FLUSH_MS);
+  }
+}
+
+function dropCoalesce(ptyId: string): void {
+  const buf = coalesceBuffers.get(ptyId);
+  if (!buf) return;
+  if (buf.timer) clearTimeout(buf.timer);
+  coalesceBuffers.delete(ptyId);
+}
+
 // ── Wire backend callbacks to WS broker ─────────────────────────────
 
 backend.init({
@@ -170,14 +253,15 @@ backend.init({
       });
       return;
     }
-    wsBroker.emitToUser(session.userId, {
-      type: 'pty:data' as const,
-      threadId: '',
-      data: { ptyId, data },
-    });
+    enqueueCoalesce(ptyId, data);
   },
 
   onExit(ptyId, exitCode) {
+    // Flush any pending output so the client renders the final bytes
+    // BEFORE seeing the exit event.
+    flushCoalesce(ptyId, 'close');
+    dropCoalesce(ptyId);
+
     const session = activeSessions.get(ptyId);
     log.info('PTY exited', { namespace: 'pty-manager', ptyId, exitCode });
 
@@ -226,6 +310,11 @@ backend.init({
     }
 
     log.error('PTY error', { namespace: 'pty-manager', ptyId, error });
+
+    // Flush any buffered output before the error event so we never lose
+    // the last bytes the PTY managed to produce.
+    flushCoalesce(ptyId, 'close');
+    dropCoalesce(ptyId);
 
     if (!session?.userId) {
       log.warn('PTY error for session without userId — dropping', {
@@ -497,6 +586,10 @@ export function signalPty(id: string, signal: number): void {
 
 export function killPty(id: string): void {
   log.info('Requesting kill PTY', { namespace: 'pty-manager', ptyId: id });
+  // Flush buffered output before tearing down so the client receives
+  // whatever the PTY had emitted just before the kill request.
+  flushCoalesce(id, 'close');
+  dropCoalesce(id);
   backend.kill(id);
   activeSessions.delete(id);
   clearScrollback(id);
@@ -507,6 +600,16 @@ export function killPty(id: string): void {
 }
 
 export function killAllPtys(): void {
+  // Snapshot the keys: flushCoalesce mutates coalesceBuffers as it drains.
+  for (const ptyId of [...coalesceBuffers.keys()]) {
+    flushCoalesce(ptyId, 'close');
+  }
+  // Any entries still present had no pending data — clear pending timers
+  // (none expected, but be defensive).
+  for (const buf of coalesceBuffers.values()) {
+    if (buf.timer) clearTimeout(buf.timer);
+  }
+  coalesceBuffers.clear();
   backend.killAll();
   activeSessions.clear();
   scrollbackBuffers.clear();

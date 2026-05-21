@@ -12,7 +12,7 @@
  *   4. Kill cleanup
  */
 
-import { describe, test, expect, beforeEach } from 'vitest';
+import { describe, test, expect, beforeEach, vi, afterEach } from 'vitest';
 
 // ── Scrollback ring buffer (extracted from pty-manager.ts) ──────────
 
@@ -599,5 +599,191 @@ describe('buildVenvActivateCommand', () => {
     expect(buildVenvActivateCommand('/path with spaces/.venv', 'bash')).toBe(
       `source '/path with spaces/.venv'/bin/activate && clear\r`,
     );
+  });
+});
+
+// ── Output coalescing (extracted from pty-manager.ts) ────────────────
+//
+// The production version wires onData → wsBroker through this same
+// state machine; here we extract it so the timer + size thresholds can
+// be tested deterministically without a real WebSocket.
+
+type FlushReason = 'size' | 'timer' | 'close';
+
+interface CoalesceBuf {
+  chunks: string[];
+  bytes: number;
+  chunkCount: number;
+  timer: ReturnType<typeof setTimeout> | null;
+}
+
+class OutputCoalescer {
+  private buffers = new Map<string, CoalesceBuf>();
+
+  constructor(
+    private readonly flushBytes: number,
+    private readonly flushMs: number,
+    private readonly emit: (
+      ptyId: string,
+      data: string,
+      info: { reason: FlushReason; chunks: number; bytes: number },
+    ) => void,
+  ) {}
+
+  enqueue(ptyId: string, data: string): void {
+    let buf = this.buffers.get(ptyId);
+    if (!buf) {
+      buf = { chunks: [], bytes: 0, chunkCount: 0, timer: null };
+      this.buffers.set(ptyId, buf);
+    }
+    buf.chunks.push(data);
+    buf.bytes += data.length;
+    buf.chunkCount += 1;
+    if (buf.bytes >= this.flushBytes) {
+      this.flush(ptyId, 'size');
+      return;
+    }
+    if (!buf.timer) {
+      buf.timer = setTimeout(() => this.flush(ptyId, 'timer'), this.flushMs);
+    }
+  }
+
+  flush(ptyId: string, reason: FlushReason): void {
+    const buf = this.buffers.get(ptyId);
+    if (!buf || buf.chunks.length === 0) return;
+    if (buf.timer) {
+      clearTimeout(buf.timer);
+      buf.timer = null;
+    }
+    const data = buf.chunks.length === 1 ? buf.chunks[0] : buf.chunks.join('');
+    const chunkCount = buf.chunkCount;
+    const byteCount = buf.bytes;
+    this.buffers.delete(ptyId);
+    this.emit(ptyId, data, { reason, chunks: chunkCount, bytes: byteCount });
+  }
+
+  drop(ptyId: string): void {
+    const buf = this.buffers.get(ptyId);
+    if (!buf) return;
+    if (buf.timer) clearTimeout(buf.timer);
+    this.buffers.delete(ptyId);
+  }
+
+  flushAll(reason: FlushReason): void {
+    for (const ptyId of this.buffers.keys()) this.flush(ptyId, reason);
+  }
+
+  get pendingCount(): number {
+    return this.buffers.size;
+  }
+}
+
+describe('OutputCoalescer', () => {
+  type Emitted = {
+    ptyId: string;
+    data: string;
+    info: { reason: FlushReason; chunks: number; bytes: number };
+  };
+  let emitted: Emitted[];
+  let coalescer: OutputCoalescer;
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    emitted = [];
+    coalescer = new OutputCoalescer(64, 8, (ptyId, data, info) => {
+      emitted.push({ ptyId, data, info });
+    });
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test('enqueue under threshold and timer does not emit immediately', () => {
+    coalescer.enqueue('pty-1', 'hi');
+    expect(emitted).toHaveLength(0);
+  });
+
+  test('multiple small chunks coalesce into a single emit on timer', () => {
+    coalescer.enqueue('pty-1', 'hel');
+    coalescer.enqueue('pty-1', 'lo ');
+    coalescer.enqueue('pty-1', 'world');
+    expect(emitted).toHaveLength(0);
+
+    vi.advanceTimersByTime(8);
+
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].data).toBe('hello world');
+    expect(emitted[0].info.reason).toBe('timer');
+    expect(emitted[0].info.chunks).toBe(3);
+    expect(emitted[0].info.bytes).toBe(11);
+  });
+
+  test('reaching flushBytes triggers immediate size flush', () => {
+    // 64 byte threshold, push 70 in one call
+    coalescer.enqueue('pty-1', 'a'.repeat(70));
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].info.reason).toBe('size');
+    expect(emitted[0].data.length).toBe(70);
+  });
+
+  test('size flush after partial fill emits and resets', () => {
+    coalescer.enqueue('pty-1', 'a'.repeat(30));
+    coalescer.enqueue('pty-1', 'b'.repeat(40)); // total 70 ≥ 64
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].info.reason).toBe('size');
+    expect(emitted[0].info.chunks).toBe(2);
+    expect(emitted[0].data).toBe('a'.repeat(30) + 'b'.repeat(40));
+
+    // Buffer should be empty now — next chunk waits for the timer again
+    coalescer.enqueue('pty-1', 'next');
+    expect(emitted).toHaveLength(1);
+    vi.advanceTimersByTime(8);
+    expect(emitted).toHaveLength(2);
+    expect(emitted[1].data).toBe('next');
+  });
+
+  test('close flush drains pending data with reason=close', () => {
+    coalescer.enqueue('pty-1', 'final');
+    coalescer.flush('pty-1', 'close');
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].info.reason).toBe('close');
+    expect(emitted[0].data).toBe('final');
+  });
+
+  test('drop clears timer without emitting', () => {
+    coalescer.enqueue('pty-1', 'discarded');
+    coalescer.drop('pty-1');
+    vi.advanceTimersByTime(100);
+    expect(emitted).toHaveLength(0);
+    expect(coalescer.pendingCount).toBe(0);
+  });
+
+  test('flush on unknown ptyId is a no-op', () => {
+    coalescer.flush('nonexistent', 'close');
+    expect(emitted).toHaveLength(0);
+  });
+
+  test('per-pty isolation — flushing one does not flush another', () => {
+    coalescer.enqueue('pty-1', 'one');
+    coalescer.enqueue('pty-2', 'two');
+    coalescer.flush('pty-1', 'close');
+    expect(emitted).toHaveLength(1);
+    expect(emitted[0].ptyId).toBe('pty-1');
+    expect(coalescer.pendingCount).toBe(1);
+
+    vi.advanceTimersByTime(8);
+    expect(emitted).toHaveLength(2);
+    expect(emitted[1].ptyId).toBe('pty-2');
+    expect(emitted[1].data).toBe('two');
+  });
+
+  test('flushAll drains every pending buffer', () => {
+    coalescer.enqueue('pty-1', 'a');
+    coalescer.enqueue('pty-2', 'b');
+    coalescer.enqueue('pty-3', 'c');
+    coalescer.flushAll('close');
+    expect(emitted).toHaveLength(3);
+    expect(emitted.every((e) => e.info.reason === 'close')).toBe(true);
   });
 });

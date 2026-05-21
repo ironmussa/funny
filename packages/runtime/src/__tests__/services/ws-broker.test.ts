@@ -296,4 +296,78 @@ describe('WSBroker', () => {
       expect(ws2.send).toHaveBeenCalledTimes(1);
     });
   });
+
+  // ───────────────────────── Binary pty:data ────────────────────────────
+  // The PTY → server hop sends raw bytes inside the event so Socket.IO
+  // emits a binary frame instead of JSON-escaping the string. The broker
+  // must (a) deliver the event to listeners untouched so the Uint8Array
+  // survives the hop, and (b) skip JSON.stringify entirely when no
+  // native clients are attached — otherwise Buffer.toJSON() blows up the
+  // payload size for the size guard.
+
+  describe('binary pty:data path', () => {
+    test('listener receives Uint8Array payload unmodified', () => {
+      const listener = vi.fn();
+      broker.onEvent(listener);
+
+      const bytes = new Uint8Array([0xc3, 0xa9, 0x0a]); // "é\n" UTF-8
+      const event = {
+        type: 'pty:data',
+        threadId: '',
+        data: { ptyId: 'p1', data: bytes },
+      } as any;
+
+      broker.emitToUser('user-X', event);
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      const [delivered, deliveredUserId] = listener.mock.calls[0];
+      expect(deliveredUserId).toBe('user-X');
+      // Same Uint8Array reference reaches the forwarder — Socket.IO will
+      // then promote it to a binary attachment.
+      expect(delivered.data.data).toBe(bytes);
+      expect(delivered.data.data).toBeInstanceOf(Uint8Array);
+    });
+
+    test('no native clients → skips JSON.stringify entirely (fast path)', () => {
+      // The whole point of the fast path: with zero native clients we must
+      // NOT serialize, NOT call ws.send, NOT log a payload-size warning,
+      // and Buffer payloads must pass through without choking the guard.
+      const bytes = Buffer.alloc(2 * 1024 * 1024); // 2 MB binary payload
+      const event = {
+        type: 'pty:data',
+        threadId: '',
+        data: { ptyId: 'p1', data: bytes },
+      } as any;
+
+      const listener = vi.fn();
+      broker.onEvent(listener);
+
+      // Spy on JSON.stringify to make sure we don't run it.
+      const stringifySpy = vi.spyOn(JSON, 'stringify');
+      try {
+        broker.emitToUser('any-user', event);
+      } finally {
+        stringifySpy.mockRestore();
+      }
+
+      expect(listener).toHaveBeenCalledTimes(1);
+      expect(stringifySpy).not.toHaveBeenCalled();
+      // Size guard MUST NOT fire — Buffer.toJSON() expansion previously
+      // produced a megabyte-sized JSON array even for compact binary data,
+      // tripping the large/dropped warnings.
+      expect(log.warn).not.toHaveBeenCalled();
+    });
+
+    test('with native clients attached, sending still works (legacy path)', () => {
+      // Standalone mode still has the JSON path for any directly-attached
+      // ws. We only need to confirm the new fast-path bail does NOT
+      // silently swallow events when clients exist.
+      const ws = makeMockWs();
+      broker.addClient(ws, 'user-Z');
+
+      broker.emitToUser('user-Z', makeEvent('agent:message', 'thread-Z'));
+
+      expect(ws.send).toHaveBeenCalledTimes(1);
+    });
+  });
 });

@@ -44,7 +44,11 @@ export interface TerminalTab {
 
 // Buffer for pty:data that arrives before a callback is registered.
 // Stored outside Zustand to avoid re-renders on every data chunk.
-const pendingPtyData = new Map<string, string[]>();
+// Accepts both string and Uint8Array — the hot path (PTY → server) now
+// sends raw UTF-8 bytes as binary frames to skip JSON.stringify; the
+// restore/adopt paths still send strings.
+type PtyChunk = string | Uint8Array;
+const pendingPtyData = new Map<string, PtyChunk[]>();
 
 interface TerminalState {
   tabs: TerminalTab[];
@@ -54,7 +58,7 @@ interface TerminalState {
   /** Output buffer per commandId for server-managed commands */
   commandOutput: Record<string, string>;
   /** PTY data callbacks: ptyId -> callback function */
-  ptyDataCallbacks: Record<string, (data: string) => void>;
+  ptyDataCallbacks: Record<string, (data: PtyChunk) => void>;
   /** Whether the server's pty:sessions response has been processed after WS connect */
   sessionsChecked: boolean;
 
@@ -71,9 +75,9 @@ interface TerminalState {
   appendCommandOutput: (commandId: string, data: string) => void;
   markCommandExited: (commandId: string) => void;
   setTabError: (ptyId: string, error: string) => void;
-  registerPtyCallback: (ptyId: string, callback: (data: string) => void) => void;
+  registerPtyCallback: (ptyId: string, callback: (data: PtyChunk) => void) => void;
   unregisterPtyCallback: (ptyId: string) => void;
-  emitPtyData: (ptyId: string, data: string) => void;
+  emitPtyData: (ptyId: string, data: PtyChunk) => void;
   setBellActive: (id: string) => void;
   clearBell: (id: string) => void;
   /** Metrics for running commands (uptime, memory, restart count) */
@@ -229,13 +233,18 @@ export const useTerminalStore = create<TerminalState>()(
 
       registerPtyCallback: (ptyId, callback) => {
         // Replay any data that arrived before the callback was registered
-        // (e.g. pty:restore response arriving while xterm was still loading)
+        // (e.g. pty:restore response arriving while xterm was still loading).
+        // Replay each chunk individually — buffered chunks are a mix of
+        // strings (restore/adopt) and Uint8Arrays (hot path binary frames);
+        // Array.join() would stringify Uint8Arrays as "1,2,3,…" and corrupt
+        // the stream, so we hand each chunk to the callback as-is.
         const buffered = pendingPtyData.get(ptyId);
         if (buffered && buffered.length > 0) {
-          const joined = buffered.join('');
           pendingPtyData.delete(ptyId);
           // Replay in a microtask so the callback is set in state first
-          queueMicrotask(() => callback(joined));
+          queueMicrotask(() => {
+            for (const chunk of buffered) callback(chunk);
+          });
         }
         set((state) => ({
           ptyDataCallbacks: { ...state.ptyDataCallbacks, [ptyId]: callback },
@@ -251,9 +260,14 @@ export const useTerminalStore = create<TerminalState>()(
       },
 
       emitPtyData: (ptyId, data) => {
+        // Socket.IO may surface binary attachments as ArrayBuffer; xterm only
+        // accepts string | Uint8Array, so normalize once here at the boundary
+        // instead of at every write site.
+        const normalized: PtyChunk =
+          data instanceof ArrayBuffer ? new Uint8Array(data) : (data as PtyChunk);
         const callback = get().ptyDataCallbacks[ptyId];
         if (callback) {
-          callback(data);
+          callback(normalized);
         } else {
           // Buffer data until the xterm callback is registered.
           // This happens when pty:restore response arrives before the
@@ -263,7 +277,7 @@ export const useTerminalStore = create<TerminalState>()(
             buf = [];
             pendingPtyData.set(ptyId, buf);
           }
-          buf.push(data);
+          buf.push(normalized);
         }
       },
 

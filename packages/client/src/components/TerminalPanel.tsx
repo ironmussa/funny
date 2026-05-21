@@ -17,6 +17,7 @@ import { useTranslation } from 'react-i18next';
 import { useShallow } from 'zustand/react/shallow';
 
 import {
+  attachWebglRenderer,
   getCssVar,
   getTerminalTheme,
   getXtermModules,
@@ -87,12 +88,14 @@ function TauriTerminalTabContent({
     let isMounted = true;
 
     (async () => {
-      const [{ Terminal }, { FitAddon }, { WebLinksAddon }, { SearchAddon }] = await Promise.all([
-        import('@xterm/xterm'),
-        import('@xterm/addon-fit'),
-        import('@xterm/addon-web-links'),
-        import('@xterm/addon-search'),
-      ]);
+      const [{ Terminal }, { FitAddon }, { WebLinksAddon }, { SearchAddon }, { WebglAddon }] =
+        await Promise.all([
+          import('@xterm/xterm'),
+          import('@xterm/addon-fit'),
+          import('@xterm/addon-web-links'),
+          import('@xterm/addon-search'),
+          import('@xterm/addon-webgl'),
+        ]);
       // @ts-ignore - CSS import handled by Vite bundler
       await import('@xterm/xterm/css/xterm.css');
 
@@ -114,6 +117,7 @@ function TauriTerminalTabContent({
       terminal.loadAddon(webLinksAddon);
       terminal.loadAddon(searchAddon);
       terminal.open(containerRef.current);
+      attachWebglRenderer(terminal, WebglAddon);
       searchAddonRegistry.set(id, searchAddon);
       terminalRegistry.set(id, terminal);
       terminal.attachCustomKeyEventHandler((e) => {
@@ -351,7 +355,8 @@ function WebTerminalTabContent({
     let cleanup: (() => void) | null = null;
 
     (async () => {
-      const { Terminal, FitAddon, WebLinksAddon, SearchAddon } = await getXtermModules();
+      const { Terminal, FitAddon, WebLinksAddon, SearchAddon, WebglAddon } =
+        await getXtermModules();
       if (cancelled || !containerRef.current) return;
 
       const terminal = new Terminal({
@@ -370,6 +375,7 @@ function WebTerminalTabContent({
       terminal.loadAddon(webLinksAddon);
       terminal.loadAddon(searchAddon);
       terminal.open(containerRef.current);
+      attachWebglRenderer(terminal, WebglAddon);
       searchAddonRegistry.set(id, searchAddon);
       terminalRegistry.set(id, terminal);
       terminal.attachCustomKeyEventHandler((e) => {
@@ -424,11 +430,13 @@ function WebTerminalTabContent({
       // Register the PTY data callback. Any data that arrived before
       // registration (e.g. from an early pty:restore response) is replayed
       // immediately via the store's pending buffer.
-      registerPtyCallback(id, (data: string) => {
+      registerPtyCallback(id, (data) => {
         if (!cancelled) {
           send({ type: 'DATA_RECEIVED' });
           useTerminalStore.getState().markAlive(id);
         }
+        // terminal.write accepts both string and Uint8Array natively.
+        // Binary chunks from the runtime hot path arrive as Uint8Array.
         terminal.write(data);
         // Auto-execute initial command once the shell is ready (first output = prompt)
         if (!initialCommandSentRef.current && initialCommand) {

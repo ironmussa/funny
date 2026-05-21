@@ -34,6 +34,7 @@ import { useTranslation } from 'react-i18next';
 
 import { HighlightText } from '@/components/ui/highlight-text';
 import { api } from '@/lib/api';
+import { readFileMentionDragData } from '@/lib/file-mention-dnd';
 import { metric } from '@/lib/telemetry';
 import { cn } from '@/lib/utils';
 
@@ -77,6 +78,8 @@ interface PromptEditorProps {
   onChange?: () => void;
   /** Called when image is pasted */
   onPaste?: (e: ClipboardEvent) => void;
+  /** Called after the editor consumes a file-mention drop (so outer wrappers can reset drag state) */
+  onFileMentionDrop?: () => void;
   /** Effective cwd for file browsing */
   cwd?: string;
   /** Callback to load skills on first / trigger */
@@ -350,6 +353,7 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
     onCycleMode,
     onChange,
     onPaste,
+    onFileMentionDrop,
     cwd,
     loadSkills,
     className,
@@ -835,6 +839,8 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
   onCycleModeRef.current = onCycleMode;
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const onFileMentionDropRef = useRef(onFileMentionDrop);
+  onFileMentionDropRef.current = onFileMentionDrop;
 
   const editor = useEditor({
     immediatelyRender: true,
@@ -957,6 +963,37 @@ export const PromptEditor = forwardRef<PromptEditorHandle, PromptEditorProps>(fu
           }
         }
         return false;
+      },
+      handleDrop: (view, event) => {
+        const dt = (event as DragEvent).dataTransfer;
+        if (!dt) return false;
+        const mention = readFileMentionDragData(dt);
+        if (!mention) return false;
+        event.preventDefault();
+        event.stopPropagation();
+        const { schema } = view.state;
+        const mentionType = schema.nodes.fileMention;
+        if (!mentionType) return false;
+        const label = mention.path.split('/').pop() ?? mention.path;
+        const node = mentionType.create({
+          id: mention.path,
+          label,
+          path: mention.path,
+          fileType: mention.fileType,
+        });
+        const space = schema.text(' ');
+        const dropPos = view.posAtCoords({
+          left: (event as DragEvent).clientX,
+          top: (event as DragEvent).clientY,
+        });
+        const insertAt = dropPos ? dropPos.pos : view.state.selection.from;
+        const tr = view.state.tr.insert(insertAt, [node, space]);
+        const after = insertAt + node.nodeSize + space.nodeSize;
+        tr.setSelection(TextSelection.create(tr.doc, after));
+        view.dispatch(tr);
+        view.focus();
+        onFileMentionDropRef.current?.();
+        return true;
       },
     },
     onUpdate: ({ editor: ed }) => {

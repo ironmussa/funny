@@ -15,7 +15,7 @@
 
 import type { WSEvent, Project, UserProfile, UpdateProfileRequest } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
-import type { Result } from 'neverthrow';
+import type { Result, ResultAsync } from 'neverthrow';
 
 // ── Thread query / mutation ────────────────────────────────────
 
@@ -379,7 +379,7 @@ export interface IMcpOauthService {
     serverUrl: string,
     projectPath: string,
     callbackBaseUrl: string,
-  ): Promise<{ authUrl: string; state: string }>;
+  ): ResultAsync<{ authUrl: string; state: string }, DomainError>;
   handleOAuthCallback(
     code: string,
     state: string,

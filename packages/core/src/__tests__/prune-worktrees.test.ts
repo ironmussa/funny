@@ -39,7 +39,8 @@ describe('pruneOrphanWorktrees', () => {
 
   test('returns 0 when no worktree base directory exists', async () => {
     const pruned = await pruneOrphanWorktrees(repoPath);
-    expect(pruned).toBe(0);
+    expect(pruned.isOk()).toBe(true);
+    expect(pruned._unsafeUnwrap()).toBe(0);
   });
 
   test('returns 0 when all worktrees are registered', async () => {
@@ -47,7 +48,8 @@ describe('pruneOrphanWorktrees', () => {
     expect(result.isOk()).toBe(true);
 
     const pruned = await pruneOrphanWorktrees(repoPath);
-    expect(pruned).toBe(0);
+    expect(pruned.isOk()).toBe(true);
+    expect(pruned._unsafeUnwrap()).toBe(0);
   });
 
   test('removes orphan directories not registered with git', async () => {
@@ -63,7 +65,8 @@ describe('pruneOrphanWorktrees', () => {
     expect(existsSync(orphanPath)).toBe(true);
 
     const pruned = await pruneOrphanWorktrees(repoPath);
-    expect(pruned).toBe(1);
+    expect(pruned.isOk()).toBe(true);
+    expect(pruned._unsafeUnwrap()).toBe(1);
     expect(existsSync(orphanPath)).toBe(false);
   });
 
@@ -75,7 +78,8 @@ describe('pruneOrphanWorktrees', () => {
     expect(existsSync(wtPath)).toBe(true);
 
     const pruned = await pruneOrphanWorktrees(repoPath);
-    expect(pruned).toBe(0);
+    expect(pruned.isOk()).toBe(true);
+    expect(pruned._unsafeUnwrap()).toBe(0);
     expect(existsSync(wtPath)).toBe(true);
   });
 
@@ -94,7 +98,8 @@ describe('pruneOrphanWorktrees', () => {
     }
 
     const pruned = await pruneOrphanWorktrees(repoPath);
-    expect(pruned).toBe(3);
+    expect(pruned.isOk()).toBe(true);
+    expect(pruned._unsafeUnwrap()).toBe(3);
 
     for (let i = 0; i < 3; i++) {
       expect(existsSync(resolve(base, `orphan-${i}`))).toBe(false);

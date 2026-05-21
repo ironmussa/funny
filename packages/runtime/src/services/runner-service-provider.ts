@@ -12,7 +12,8 @@
  *  - Uses the wsBroker for local WebSocket event delivery
  */
 
-import { ok, err } from 'neverthrow';
+import { internal } from '@funny/shared/errors';
+import { ok, err, errAsync } from 'neverthrow';
 
 import type { RuntimeServiceProvider } from './service-provider.js';
 import { wsBroker } from './ws-broker.js';
@@ -342,8 +343,8 @@ export function createRunnerServiceProvider(): RuntimeServiceProvider {
     },
 
     mcpOauth: {
-      async startOAuthFlow() {
-        notAvailable('startOAuthFlow');
+      startOAuthFlow() {
+        return errAsync(internal('startOAuthFlow is not available in runner mode'));
       },
       async handleOAuthCallback() {
         return { serverName: '', success: false, error: 'Not available in runner mode' };

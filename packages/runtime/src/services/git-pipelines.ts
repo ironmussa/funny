@@ -424,7 +424,7 @@ async function reviewNode(
 
   ctx.setStep('review', { status: 'running' });
 
-  const reviewerThread = await createAndStartThread({
+  const reviewerThreadResult = await createAndStartThread({
     projectId: ctx.projectId,
     userId: ctx.userId,
     title: `Pipeline review (iteration ${ctx.iteration})`,
@@ -437,6 +437,8 @@ async function reviewNode(
     parentThreadId: ctx.threadId,
     baseBranch,
   });
+  if (reviewerThreadResult.isErr()) throw reviewerThreadResult.error;
+  const reviewerThread = reviewerThreadResult.value;
 
   log.info('Pipeline: reviewer thread created', {
     namespace: 'pipeline',
@@ -493,7 +495,7 @@ async function fixNode(ctx: GitPipelineContext, signal: AbortSignal): Promise<Gi
 
   ctx.setStep('fix', { status: 'running' });
 
-  const correctorThread = await createAndStartThread({
+  const correctorThreadResult = await createAndStartThread({
     projectId: ctx.projectId,
     userId: ctx.userId,
     title: `Pipeline fix (iteration ${ctx.iteration})`,
@@ -505,6 +507,8 @@ async function fixNode(ctx: GitPipelineContext, signal: AbortSignal): Promise<Gi
     prompt,
     parentThreadId: ctx.threadId,
   });
+  if (correctorThreadResult.isErr()) throw correctorThreadResult.error;
+  const correctorThread = correctorThreadResult.value;
 
   log.info('Pipeline: corrector thread created', {
     namespace: 'pipeline',
@@ -718,7 +722,7 @@ async function testFixerNode(ctx: GitPipelineContext): Promise<GitPipelineContex
     ctx.testFixerPrompt,
   );
 
-  const fixerThread = await createAndStartThread({
+  const fixerThreadResult = await createAndStartThread({
     projectId: ctx.projectId,
     userId: ctx.userId,
     title: `Test fix (iteration ${ctx.testIteration})`,
@@ -730,6 +734,8 @@ async function testFixerNode(ctx: GitPipelineContext): Promise<GitPipelineContex
     prompt,
     parentThreadId: ctx.threadId,
   });
+  if (fixerThreadResult.isErr()) throw fixerThreadResult.error;
+  const fixerThread = fixerThreadResult.value;
 
   log.info('Pipeline: test fixer thread created', {
     namespace: 'pipeline',
@@ -1146,7 +1152,7 @@ async function attemptPrecommitAutoFix(params: AutoFixParams): Promise<boolean> 
     // Create a separate thread for the fixer agent
     let fixerThread: { id: string };
     try {
-      fixerThread = await createAndStartThread({
+      const fixerThreadResult = await createAndStartThread({
         projectId,
         userId,
         title: `Pre-commit fix: ${hookLabel} (attempt ${attempt})`,
@@ -1158,6 +1164,8 @@ async function attemptPrecommitAutoFix(params: AutoFixParams): Promise<boolean> 
         prompt,
         parentThreadId: threadId,
       });
+      if (fixerThreadResult.isErr()) throw fixerThreadResult.error;
+      fixerThread = fixerThreadResult.value;
 
       log.info('Pre-commit auto-fix: fixer thread created', {
         namespace: 'pipeline',

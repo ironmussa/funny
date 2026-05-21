@@ -133,7 +133,7 @@ export class RuntimeActionProvider implements ActionProvider {
       const allowedTools = agentOpts.allowedTools ?? agentOpts.agent?.allowedTools;
       const disallowedTools = agentOpts.disallowedTools ?? agentOpts.agent?.disallowedTools;
 
-      const childThread = await createAndStartThread({
+      const childThreadResult = await createAndStartThread({
         projectId,
         userId,
         title: agentOpts.agent ? `Pipeline: ${agentOpts.agent.label}` : `Pipeline agent`,
@@ -147,6 +147,8 @@ export class RuntimeActionProvider implements ActionProvider {
         allowedTools,
         disallowedTools,
       });
+      if (childThreadResult.isErr()) throw childThreadResult.error;
+      const childThread = childThreadResult.value;
 
       log.info('Pipeline adapter: agent thread created', {
         namespace: 'pipeline-adapter',

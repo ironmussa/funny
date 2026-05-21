@@ -36,5 +36,8 @@
     "nanoid": "^5.1.5",
     "pg": "^8.20.0",
     "xstate": "^5.28.0"
+  },
+  "devDependencies": {
+    "@types/pg": "^8.18.0"
   }
 }

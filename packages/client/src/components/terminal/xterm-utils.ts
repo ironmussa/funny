@@ -1,5 +1,10 @@
 import { useEffect, type RefObject } from 'react';
 
+import { createClientLogger } from '@/lib/client-logger';
+import { metric } from '@/lib/telemetry';
+
+const log = createClientLogger('terminal/webgl');
+
 export const isTauri = !!(window as unknown as { __TAURI_INTERNALS__: unknown })
   .__TAURI_INTERNALS__;
 
@@ -8,6 +13,7 @@ let xtermModulesPromise: Promise<{
   FitAddon: typeof import('@xterm/addon-fit').FitAddon;
   WebLinksAddon: typeof import('@xterm/addon-web-links').WebLinksAddon;
   SearchAddon: typeof import('@xterm/addon-search').SearchAddon;
+  WebglAddon: typeof import('@xterm/addon-webgl').WebglAddon;
 }> | null = null;
 
 export function getXtermModules() {
@@ -17,16 +23,56 @@ export function getXtermModules() {
       import('@xterm/addon-fit'),
       import('@xterm/addon-web-links'),
       import('@xterm/addon-search'),
+      import('@xterm/addon-webgl'),
       // @ts-ignore - CSS import handled by Vite bundler
       import('@xterm/xterm/css/xterm.css'),
-    ]).then(([xterm, fit, webLinks, search]) => ({
+    ]).then(([xterm, fit, webLinks, search, webgl]) => ({
       Terminal: xterm.Terminal,
       FitAddon: fit.FitAddon,
       WebLinksAddon: webLinks.WebLinksAddon,
       SearchAddon: search.SearchAddon,
+      WebglAddon: webgl.WebglAddon,
     }));
   }
   return xtermModulesPromise;
+}
+
+/**
+ * Attach the WebGL renderer addon to a Terminal. Must be called AFTER
+ * `terminal.open(container)` so the canvas exists.
+ *
+ * Falls back to the default DOM renderer silently on:
+ *   - missing WebGL2 context (older GPUs / disabled in browser)
+ *   - synchronous addon load failure
+ *   - asynchronous WebGL context loss (e.g. GPU reset, tab moved between displays)
+ *
+ * Emits `terminal.renderer` metric with attribute `renderer = webgl | dom-fallback`
+ * on initial attach, and `dom-fallback-context-lost` on later context loss.
+ *
+ * Returns the addon (or null when fallback was used) so the caller can
+ * dispose it manually if needed — `terminal.dispose()` will also dispose it.
+ */
+export function attachWebglRenderer(
+  terminal: import('@xterm/xterm').Terminal,
+  WebglAddon: typeof import('@xterm/addon-webgl').WebglAddon,
+): import('@xterm/addon-webgl').WebglAddon | null {
+  try {
+    const addon = new WebglAddon();
+    addon.onContextLoss(() => {
+      log.warn('WebGL context lost, falling back to DOM renderer');
+      metric('terminal.renderer', 1, { attributes: { renderer: 'dom-fallback-context-lost' } });
+      addon.dispose();
+    });
+    terminal.loadAddon(addon);
+    metric('terminal.renderer', 1, { attributes: { renderer: 'webgl' } });
+    return addon;
+  } catch (err) {
+    log.warn('WebGL renderer unavailable, using DOM renderer', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    metric('terminal.renderer', 1, { attributes: { renderer: 'dom-fallback' } });
+    return null;
+  }
 }
 
 export const searchAddonRegistry = new Map<string, import('@xterm/addon-search').SearchAddon>();

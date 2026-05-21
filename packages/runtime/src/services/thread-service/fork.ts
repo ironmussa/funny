@@ -19,6 +19,7 @@ import { forkSession, getSessionMessages } from '@anthropic-ai/claude-agent-sdk'
 import type { SessionMessage } from '@anthropic-ai/claude-agent-sdk';
 import { forkAcpSession } from '@funny/core/agents';
 import { nanoid } from 'nanoid';
+import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import { metric, startSpan } from '../../lib/telemetry.js';
@@ -48,7 +49,15 @@ function isPromptUserMessage(sm: SessionMessage): boolean {
   return !m.content.some((b: any) => b?.type === 'tool_result');
 }
 
-export async function forkThread(params: ForkThreadParams) {
+export function forkThread(
+  params: ForkThreadParams,
+): ResultAsync<Awaited<ReturnType<typeof forkThreadImpl>>, ThreadServiceError> {
+  return ResultAsync.fromPromise(forkThreadImpl(params), (err) =>
+    err instanceof ThreadServiceError ? err : new ThreadServiceError(String(err), 500),
+  );
+}
+
+async function forkThreadImpl(params: ForkThreadParams) {
   const span = startSpan('thread.fork', {
     attributes: { threadId: params.sourceThreadId },
   });

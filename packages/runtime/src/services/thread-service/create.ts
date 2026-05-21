@@ -17,11 +17,13 @@ import type {
 } from '@funny/shared';
 import { DEFAULT_MODEL } from '@funny/shared/models';
 import { nanoid } from 'nanoid';
+import { ResultAsync } from 'neverthrow';
 
 import { log } from '../../lib/logger.js';
 import {
   augmentPromptWithFiles,
   augmentPromptWithSymbols,
+  stripInlineReferencedContent,
   type FileRef,
   type SymbolRef,
 } from '../../utils/file-mentions.js';
@@ -89,7 +91,15 @@ export interface CreateIdleThreadParams {
   templateVariables?: Record<string, string>;
 }
 
-export async function createIdleThread(params: CreateIdleThreadParams) {
+export function createIdleThread(
+  params: CreateIdleThreadParams,
+): ResultAsync<Awaited<ReturnType<typeof createIdleThreadImpl>>, ThreadServiceError> {
+  return ResultAsync.fromPromise(createIdleThreadImpl(params), (err) =>
+    err instanceof ThreadServiceError ? err : new ThreadServiceError(String(err), 500),
+  );
+}
+
+async function createIdleThreadImpl(params: CreateIdleThreadParams) {
   const project = await getServices().projects.getProject(params.projectId);
   if (!project) throw new ThreadServiceError('Project not found', 404);
 
@@ -200,7 +210,15 @@ export interface CreateAndStartThreadParams {
   isScratch?: boolean;
 }
 
-export async function createAndStartThread(params: CreateAndStartThreadParams) {
+export function createAndStartThread(
+  params: CreateAndStartThreadParams,
+): ResultAsync<Awaited<ReturnType<typeof createAndStartThreadImpl>>, ThreadServiceError> {
+  return ResultAsync.fromPromise(createAndStartThreadImpl(params), (err) =>
+    err instanceof ThreadServiceError ? err : new ThreadServiceError(String(err), 500),
+  );
+}
+
+async function createAndStartThreadImpl(params: CreateAndStartThreadParams) {
   if (params.isScratch) {
     return createAndStartScratchThread(params);
   }
@@ -282,7 +300,9 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
     await tm.createThread(thread as any);
 
     if (params.prompt) {
-      // Augment prompt with file/symbol contents so the stored message includes context XML
+      // The agent gets the fully augmented prompt (with file contents inlined)
+      // when startAgent runs; what we persist for display is the path-only
+      // metadata version. See stripInlineReferencedContent.
       let storedContent = await augmentPromptWithFiles(
         params.prompt,
         params.fileReferences,
@@ -296,7 +316,7 @@ export async function createAndStartThread(params: CreateAndStartThreadParams) {
       await tm.insertMessage({
         threadId,
         role: 'user',
-        content: storedContent,
+        content: stripInlineReferencedContent(storedContent),
         images: params.images?.length ? JSON.stringify(params.images) : null,
       });
     }

@@ -1,3 +1,4 @@
+import { mkdirSync } from 'node:fs';
 import { basename, dirname, resolve, sep } from 'path';
 
 import { WORKTREE_DIR_NAME } from '@funny/core/git';
@@ -5,6 +6,8 @@ import { WORKTREE_DIR_NAME } from '@funny/core/git';
 import { log } from '../lib/logger.js';
 import * as ptyManager from '../services/pty-manager.js';
 import { getServices } from '../services/service-registry.js';
+import { scratchPathFor } from '../services/thread-context.js';
+import * as tm from '../services/thread-manager.js';
 
 /**
  * Routes incoming PTY-related WS messages (spawn / write / resize / kill /
@@ -51,8 +54,67 @@ function handlePtySpawn(data: any, userId: string, send: (msg: any) => void): vo
     namespace: 'ws',
     ptyId: data.id,
     projectId: data.projectId,
+    scratchThreadId: data.scratchThreadId,
     userId,
   });
+
+  const sendError = (error: string) => {
+    send({ type: 'pty:error', data: { ptyId: data.id, error } });
+  };
+
+  // Scratch path: the client passes `scratchThreadId` instead of a real cwd
+  // (the runner is the only side that knows `homedir()` + userId). Validate
+  // ownership against the thread record, then mkdir + spawn in the scratch
+  // dir. No project lookup involved.
+  if (data.scratchThreadId) {
+    const scratchThreadId: string = data.scratchThreadId;
+    (async () => {
+      try {
+        const thread = await tm.getThread(scratchThreadId);
+        if (!thread || thread.userId !== userId || !thread.isScratch) {
+          log.warn('PTY spawn denied: scratch thread not owned by user', {
+            namespace: 'ws',
+            scratchThreadId,
+            userId,
+          });
+          sendError('Access denied: scratch thread not found');
+          return;
+        }
+        const cwd = scratchPathFor(userId, scratchThreadId);
+        try {
+          mkdirSync(cwd, { recursive: true });
+        } catch (mkErr) {
+          log.error('PTY spawn failed: scratch dir mkdir error', {
+            namespace: 'ws',
+            error: (mkErr as Error).message,
+            cwd,
+            ptyId: data.id,
+          });
+          sendError('Failed to prepare scratch directory');
+          return;
+        }
+        ptyManager.spawnPty(
+          data.id,
+          cwd,
+          data.cols,
+          data.rows,
+          userId,
+          data.shell,
+          data.projectId,
+          data.label,
+        );
+      } catch (err) {
+        log.error('PTY spawn failed: scratch thread lookup error', {
+          namespace: 'ws',
+          error: (err as Error).message,
+          scratchThreadId,
+          userId,
+        });
+        sendError('Failed to validate scratch thread');
+      }
+    })();
+    return;
+  }
 
   const resolvedCwd = resolve(data.cwd);
   const isUnder = (target: string, scope: string) =>
@@ -71,13 +133,7 @@ function handlePtySpawn(data: any, userId: string, send: (msg: any) => void): vo
       cwd: data.cwd,
       userId,
     });
-    send({
-      type: 'pty:error',
-      data: {
-        ptyId: data.id,
-        error: 'Access denied: directory not in a registered project',
-      },
-    });
+    sendError('Access denied: directory not in a registered project');
   };
 
   const doSpawn = () => {
@@ -118,13 +174,7 @@ function handlePtySpawn(data: any, userId: string, send: (msg: any) => void): vo
         ptyId: data.id,
         userId,
       });
-      send({
-        type: 'pty:error',
-        data: {
-          ptyId: data.id,
-          error: 'Failed to validate project access',
-        },
-      });
+      sendError('Failed to validate project access');
     });
 }
 

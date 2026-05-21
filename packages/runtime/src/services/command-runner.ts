@@ -11,6 +11,9 @@
  * Supports auto-restart with exponential backoff for managed processes.
  */
 
+import { internal, type DomainError } from '@funny/shared/errors';
+import { ResultAsync } from 'neverthrow';
+
 import { log } from '../lib/logger.js';
 import { getServices } from './service-registry.js';
 import { wsBroker } from './ws-broker.js';
@@ -93,7 +96,21 @@ async function emitWS(type: string, data: unknown, projectId?: string) {
   });
 }
 
-export async function startCommand(
+export function startCommand(
+  commandId: string,
+  command: string,
+  cwd: string,
+  projectId: string,
+  label: string,
+  options?: RestartOptions,
+): ResultAsync<void, DomainError> {
+  return ResultAsync.fromPromise(
+    startCommandImpl(commandId, command, cwd, projectId, label, options),
+    (err) => internal(String((err as Error)?.message ?? err)),
+  );
+}
+
+async function startCommandImpl(
   commandId: string,
   command: string,
   cwd: string,
@@ -205,7 +222,15 @@ export async function startCommand(
               restartWindow: entry.restartWindow,
               restartCount: entry.restartCount + 1,
               restartHistory: entry.restartHistory,
-            });
+            }).match(
+              () => undefined,
+              (e) =>
+                log.warn('Auto-restart failed', {
+                  namespace: 'command-runner',
+                  commandId,
+                  error: e.message,
+                }),
+            );
           }, backoffMs);
           return;
         }

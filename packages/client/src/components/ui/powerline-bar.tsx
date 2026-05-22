@@ -5,7 +5,7 @@ import { cn, ICON_SIZE } from '@/lib/utils';
 import { contrastText, darkenHex } from './project-chip';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from './tooltip';
 
-type PowerlineVariant = 'arrow' | 'chips';
+type PowerlineVariant = 'arrow' | 'chips' | 'plain';
 
 /** Read --powerline-variant from the current theme CSS (defaults to 'arrow'). */
 function useThemeVariant(): PowerlineVariant {
@@ -15,6 +15,7 @@ function useThemeVariant(): PowerlineVariant {
       .getPropertyValue('--powerline-variant')
       .trim();
     if (raw === 'chips') setVariant('chips');
+    else if (raw === 'plain') setVariant('plain');
     else setVariant('arrow');
   });
   return variant;
@@ -40,7 +41,8 @@ export interface PowerlineBarProps {
   segments: PowerlineSegmentData[];
   /** Size variant */
   size?: 'sm' | 'md';
-  /** Visual style: "arrow" (powerline chevrons) or "chips" (rounded pills).
+  /** Visual style: "arrow" (powerline chevrons), "chips" (rounded pills), or
+   *  "plain" (monochrome text with separator, no colors).
    *  When omitted, falls back to the theme's --powerline-variant CSS variable (default: arrow). */
   variant?: PowerlineVariant;
   /** Additional class names for the outer container */
@@ -92,6 +94,7 @@ export function PowerlineBar({
         className={cn(
           'inline-flex items-center min-w-0',
           variant === 'chips' && 'gap-1',
+          variant === 'plain' && 'gap-1',
           className,
         )}
         data-testid={props['data-testid']}
@@ -101,6 +104,35 @@ export function PowerlineBar({
           const isLast = i === segments.length - 1;
           const textColor = segment.textColor || contrastText(segment.color);
           const Icon = segment.icon;
+
+          if (variant === 'plain') {
+            return (
+              <React.Fragment key={segment.key}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <div
+                      className={cn('inline-flex items-center gap-1 min-w-0 text-muted-foreground')}
+                      data-testid={`powerline-segment-${segment.key}`}
+                    >
+                      {Icon && <Icon className={cn(config.icon, 'shrink-0')} aria-hidden="true" />}
+                      <span className={cn(config.text, 'truncate font-medium whitespace-nowrap')}>
+                        {segment.label}
+                      </span>
+                    </div>
+                  </TooltipTrigger>
+                  <TooltipContent>{segment.tooltip || segment.label}</TooltipContent>
+                </Tooltip>
+                {!isLast && (
+                  <span
+                    aria-hidden="true"
+                    className={cn(config.text, 'text-muted-foreground/50 select-none')}
+                  >
+                    /
+                  </span>
+                )}
+              </React.Fragment>
+            );
+          }
 
           if (variant === 'chips') {
             return (

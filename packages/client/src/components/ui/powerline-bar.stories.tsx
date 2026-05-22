@@ -11,7 +11,7 @@ const meta = {
   argTypes: {
     variant: {
       control: 'select',
-      options: ['arrow', 'chips'],
+      options: ['arrow', 'chips', 'plain'],
     },
     size: {
       control: 'select',
@@ -46,6 +46,17 @@ export const ArrowVariant: Story = {
 export const ChipsVariant: Story = {
   args: {
     variant: 'chips',
+    segments: [
+      { key: 'project', icon: Folder, label: 'funny', color: '#7CB9E8' },
+      { key: 'branch', icon: GitBranch, label: 'main', color: '#5A9BD5' },
+      { key: 'worktree', icon: GitBranch, label: 'feat/new-feature', color: '#3D7EAA' },
+    ],
+  },
+};
+
+export const PlainVariant: Story = {
+  args: {
+    variant: 'plain',
     segments: [
       { key: 'project', icon: Folder, label: 'funny', color: '#7CB9E8' },
       { key: 'branch', icon: GitBranch, label: 'main', color: '#5A9BD5' },

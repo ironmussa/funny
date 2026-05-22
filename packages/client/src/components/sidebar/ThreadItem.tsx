@@ -295,7 +295,6 @@ export const ThreadItem = memo(function ThreadItem({
                 projectTooltip={projectPath}
                 gitStatus={effectiveGitStatus}
                 diffStatsSize="xs"
-                variant={isSelected ? 'arrow' : undefined}
                 data-testid={`thread-powerline-${thread.id}`}
               />
             )}

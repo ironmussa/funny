@@ -3,19 +3,6 @@
     "supabase": {
       "type": "http",
       "url": "https://mcp.supabase.com/mcp"
-    },
-    "chrome-devtools": {
-      "type": "stdio",
-      "command": "cmd",
-      "args": ["/c", "npx", "chrome-devtools-mcp@latest"],
-      "env": {}
-    },
-    "o2": {
-      "type": "http",
-      "url": "http://localhost:5080/api/default/mcp",
-      "headers": {
-        "Authorization": "Basic cm9vdEBleGFtcGxlLmNvbTpDb21wbGV4cGFzcyMxMjM="
-      }
     }
   }
 }

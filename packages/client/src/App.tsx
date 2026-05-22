@@ -342,11 +342,18 @@ export function App() {
                 <div className="min-h-0 flex-1 overflow-hidden">
                   <ErrorBoundary area="right-pane">
                     <Suspense>
-                      {rightPaneTab === 'review' && activeThreadCanShowGit ? (
+                      {rightPaneTab === 'review' &&
+                      (activeThreadCanShowGit || hasSelectedProject) ? (
                         <ReviewPane />
                       ) : rightPaneTab === 'files' &&
                         (activeThreadCanShowGit || hasSelectedProject) ? (
                         <ProjectFilesPane />
+                      ) : rightPaneTab === 'activity' &&
+                        !activeThreadCanShowGit &&
+                        hasSelectedProject ? (
+                        // Compose mode (no thread) — activity has nothing to
+                        // render, so show the branch-level review instead.
+                        <ReviewPane />
                       ) : (
                         <ActivityPane />
                       )}

@@ -744,7 +744,6 @@ export const ProjectHeader = memo(function ProjectHeader({
   const setTestRunnerOpen = useUIStore((s) => s.setTestRunnerOpen);
   const testRunnerOpen = useUIStore((s) => s.testRunnerOpen);
   const setFilesPaneOpen = useUIStore((s) => s.setFilesPaneOpen);
-  const setActivityPaneOpen = useUIStore((s) => s.setActivityPaneOpen);
   const rightPaneTab = useUIStore((s) => s.rightPaneTab);
   const kanbanContext = useUIStore((s) => s.kanbanContext);
   const { openPreview, isTauri } = usePreviewWindow();
@@ -1035,7 +1034,8 @@ export const ProjectHeader = memo(function ProjectHeader({
                 <TooltipContent>{t('terminal.toggle', 'Toggle Terminal')} (Ctrl+`)</TooltipContent>
               </Tooltip>
             )}
-            {activeThreadCanShowGit && (
+            {(activeThreadCanShowGit ||
+              (!activeThreadId && selectedProjectId && !activeThreadIsScratch)) && (
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button

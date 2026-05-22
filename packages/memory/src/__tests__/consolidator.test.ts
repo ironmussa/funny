@@ -8,7 +8,7 @@ import {
   trackCompletion,
 } from '../consolidator.js';
 import type { LLMConfig } from '../llm.js';
-import { setMeta, getMeta } from '../storage.js';
+import { setMeta } from '../storage.js';
 import { createTestDb } from './helpers.js';
 
 describe('consolidator', () => {

@@ -4,7 +4,6 @@
  */
 
 import { eq, and, or, desc } from 'drizzle-orm';
-import { nanoid } from 'nanoid';
 
 import { db, dbAll, dbGet, dbRun } from '../db/index.js';
 import * as schema from '../db/schema.js';

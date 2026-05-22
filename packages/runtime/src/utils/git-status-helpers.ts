@@ -2,14 +2,8 @@
  * Shared git-status helpers used by route handlers and event handlers.
  */
 
-import {
-  invalidateStatusCache,
-  getStatusSummary,
-  getPRForBranch,
-  getCurrentBranch,
-} from '@funny/core/git';
+import { invalidateStatusCache, getPRForBranch, getCurrentBranch } from '@funny/core/git';
 
-import { deriveGitSyncState } from '../services/git-service.js';
 import type { HandlerServiceContext } from '../services/handlers/types.js';
 
 /** Compute a stable cache key that groups threads sharing the same git working state. */

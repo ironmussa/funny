@@ -10,7 +10,7 @@ import { mkdirSync, rmSync, unlinkSync, writeFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { resolve } from 'path';
 
-import { describe, test, expect, beforeAll, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, beforeEach, afterEach } from 'vitest';
 
 import { getCommittedBranchSummary, getDiffSummary, stageFiles } from '../git/index.js';
 import { getNativeGit } from '../git/native.js';

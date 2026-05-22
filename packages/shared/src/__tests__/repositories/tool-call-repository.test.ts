@@ -1,13 +1,7 @@
 import { describe, test, expect, beforeEach } from 'bun:test';
 
 import { createToolCallRepository } from '../../repositories/tool-call-repository.js';
-import {
-  createTestDb,
-  seedProject,
-  seedThread,
-  seedMessage,
-  seedToolCall,
-} from '../helpers/test-db.js';
+import { createTestDb, seedProject, seedThread, seedMessage } from '../helpers/test-db.js';
 
 let deps: ReturnType<typeof createTestDb>;
 let repo: ReturnType<typeof createToolCallRepository>;

@@ -203,7 +203,7 @@ statusRoutes.get('/status', async (c) => {
           summaryResult.isErr() ? summaryResult.error.message : undefined,
         );
         if (summaryResult.isErr()) {
-          for (const t of activeThreads) {
+          for (const _t of activeThreads) {
             results.push({ status: 'fulfilled', value: null });
           }
           return;
@@ -259,7 +259,7 @@ statusRoutes.get('/status', async (c) => {
             summaryResult.isErr() ? summaryResult.error.message : undefined,
           );
           if (summaryResult.isErr()) {
-            for (const t of threads) {
+            for (const _t of threads) {
               results.push({ status: 'fulfilled', value: null });
             }
             return;

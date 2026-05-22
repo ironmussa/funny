@@ -334,9 +334,9 @@ describe('data-handler queue operations', () => {
     });
 
     test('enqueue, cancel middle, dequeue remaining in order', async () => {
-      const first = await enqueue('t1', { content: 'first' });
+      await enqueue('t1', { content: 'first' });
       const second = await enqueue('t1', { content: 'second' });
-      const third = await enqueue('t1', { content: 'third' });
+      await enqueue('t1', { content: 'third' });
 
       await cancel(second.id);
       expect(await queueCount('t1')).toBe(2);

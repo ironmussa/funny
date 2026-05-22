@@ -15,7 +15,6 @@
 import type { Client } from '@libsql/client';
 import { Result, err, ok } from 'neverthrow';
 
-import { log } from './logger.js';
 import { deleteEmbedding, getAllEmbeddings, getMeta, setMeta, upsertEmbedding } from './storage.js';
 import type { EmbeddingProvider } from './types.js';
 

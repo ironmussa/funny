@@ -13,8 +13,7 @@ import type { Client, InValue } from '@libsql/client';
 import { createClient } from '@libsql/client';
 import { Result, err, ok } from 'neverthrow';
 
-import { log } from './logger.js';
-import type { EmbeddingProvider, FactRow, MemoryFact, StorageConfig } from './types.js';
+import type { FactRow, MemoryFact, StorageConfig } from './types.js';
 import { rowToFact } from './types.js';
 
 // ─── Schema ────────────────────────────────────────────

@@ -219,7 +219,7 @@ app.post('/write', async (c) => {
 
   const writeResult = await ResultAsync.fromPromise(
     writeFile(canon.canonical, content, 'utf-8'),
-    (e: any) => internal('File write error'),
+    () => internal('File write error'),
   );
   if (writeResult.isErr()) return resultToResponse(c, writeResult);
   return c.json({ ok: true });

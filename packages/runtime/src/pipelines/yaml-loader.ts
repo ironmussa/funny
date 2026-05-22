@@ -201,7 +201,7 @@ async function mergeLayer(
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       const note = `Failed to read ${layer} pipeline ${filePath}: ${message}`;
-      if (strict) throw new Error(note);
+      if (strict) throw new Error(note, { cause: err });
       warnings.push(note);
       continue;
     }

@@ -32,7 +32,7 @@
  */
 
 import { existsSync, readdirSync, statSync } from 'fs';
-import { dirname, join as pathJoin, basename } from 'path';
+import { dirname, join as pathJoin } from 'path';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));

@@ -2,7 +2,7 @@
  * Commit log and commit detail operations.
  */
 
-import { processError, internal, type DomainError } from '@funny/shared/errors';
+import { processError, type DomainError } from '@funny/shared/errors';
 import { ResultAsync } from 'neverthrow';
 
 import { getNativeGit } from './native.js';

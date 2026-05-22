@@ -85,7 +85,6 @@ vi.mock('../../services/service-registry.js', () => ({
 vi.mock('../../services/pipeline-adapter.js', () => {
   return {
     RuntimeActionProvider: class {
-      constructor() {}
       spawnAgent = vi.fn().mockResolvedValue({ ok: true, output: '' });
       runCommand = vi.fn().mockResolvedValue({ ok: true, output: '' });
       gitCommit = vi.fn().mockResolvedValue({ ok: true, output: '' });
@@ -97,7 +96,6 @@ vi.mock('../../services/pipeline-adapter.js', () => {
       requestApproval = vi.fn().mockResolvedValue({ decision: 'approve' });
     },
     RuntimeProgressReporter: class {
-      constructor() {}
       onStepProgress = vi.fn();
       onPipelineEvent = vi.fn();
     },

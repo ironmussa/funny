@@ -13,13 +13,7 @@ import type { Client } from '@libsql/client';
 import { RelationshipGraph } from './graph.js';
 import { listFacts } from './storage.js';
 import { calculateDecayScore } from './temporal.js';
-import type {
-  MemoryFact,
-  MemoryScope,
-  RecallOptions,
-  SearchFilters,
-  TimelineOptions,
-} from './types.js';
+import type { MemoryFact, RecallOptions, SearchFilters, TimelineOptions } from './types.js';
 import { VectorIndex } from './vector-index.js';
 
 // ─── Scored fact for ranking ───────────────────────────

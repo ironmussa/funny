@@ -18,7 +18,6 @@ import {
   getSingleFileDiff,
   getStatusSummary,
   getUnpushedHashes,
-  gitSync,
   invalidateStatusCache,
   mergeBranch,
   revertFiles,

@@ -12,7 +12,7 @@
 import { Result, err, ok } from 'neverthrow';
 
 import { log } from './logger.js';
-import { listFacts, updateFact, deleteFact, syncDb } from './storage.js';
+import { listFacts, updateFact, syncDb } from './storage.js';
 import { calculateDecayScore, cosineSimilarity } from './temporal.js';
 import { DEFAULT_GC_CONFIG, type GCConfig, type StorageConfig } from './types.js';
 
@@ -121,7 +121,6 @@ export async function runGC(
               const newer = activeFacts[i];
 
               // Link newer to older, then invalidate older
-              const newRelated = [...new Set([...JSON.parse('[]'), older.id])];
               await updateFact(db, newer.id, {
                 related: JSON.stringify([...newer.related, older.id]),
               });

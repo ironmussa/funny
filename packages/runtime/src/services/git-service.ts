@@ -30,7 +30,6 @@ import {
   type GitIdentityOptions,
   type PullStrategy,
 } from '@funny/core/git';
-import type { WSEvent } from '@funny/shared';
 import type { DomainError } from '@funny/shared/errors';
 import { badRequest, internal, notFound } from '@funny/shared/errors';
 import { type Result, ResultAsync, err, errAsync, ok } from 'neverthrow';

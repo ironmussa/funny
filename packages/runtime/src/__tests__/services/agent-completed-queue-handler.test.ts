@@ -9,7 +9,7 @@
  * 5. Does nothing if the project uses a non-queue follow-up mode
  * 6. Does nothing if the queue is empty
  */
-import { describe, test, expect, vi, beforeEach } from 'vitest';
+import { describe, test, expect, vi } from 'vitest';
 
 import { agentCompletedQueueHandler } from '../../services/handlers/agent-completed-queue-handler.js';
 import type { HandlerServiceContext } from '../../services/handlers/types.js';

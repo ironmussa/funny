@@ -11,7 +11,7 @@
  * to know about projects upfront.
  */
 
-import type { AgentModel, AgentProvider, PermissionMode, WSEvent } from './types.js';
+import type { AgentModel, AgentProvider, PermissionMode } from './types.js';
 
 // ─── Tunnel Limits ──────────────────────────────────────
 

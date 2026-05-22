@@ -16,7 +16,6 @@ import { cors } from 'hono/cors';
 import { runConsolidation, checkAdmission } from './consolidator.js';
 import { runGC } from './gc.js';
 import { PaisleyPark, getPaisleyPark } from './index.js';
-import type { LLMConfig } from './llm.js';
 import { log } from './logger.js';
 import type { SearchFilters, StorageConfig, TimelineOptions } from './types.js';
 

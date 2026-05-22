@@ -3,7 +3,6 @@ import { Hono } from 'hono';
 import { describe, it, expect, beforeAll, afterAll, vi } from 'vitest';
 
 import { createDb, initSchema, insertFact, listFacts } from '../storage.js';
-import type { StorageConfig } from '../types.js';
 import { makeFact } from './helpers.js';
 
 // Mock the embedding provider
@@ -48,7 +47,6 @@ describe('server HTTP endpoints (integration)', () => {
     // POST /v1/facts - add a fact
     app.post('/v1/facts', async (c) => {
       const body = await c.req.json();
-      const now = new Date().toISOString();
       const fact = makeFact({
         id: `fact-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
         projectId,

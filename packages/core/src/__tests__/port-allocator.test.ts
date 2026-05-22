@@ -4,7 +4,7 @@
  * Tests port availability checking and allocation logic.
  */
 import { describe, test, expect } from 'bun:test';
-import { createServer, type Server } from 'net';
+import { createServer } from 'net';
 
 import { isPortAvailable, findAvailablePort, allocatePorts } from '../ports/port-allocator.js';
 

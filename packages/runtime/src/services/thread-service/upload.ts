@@ -17,7 +17,7 @@ import { mkdir, writeFile } from 'fs/promises';
 import { join, relative, resolve, sep } from 'path';
 
 import type { AgentProvider } from '@funny/shared';
-import { type DomainError, badRequest, internal, notFound } from '@funny/shared/errors';
+import { type DomainError, badRequest, internal } from '@funny/shared/errors';
 import { getAttachmentLimits } from '@funny/shared/models';
 import { err, ok, ResultAsync, type Result } from 'neverthrow';
 

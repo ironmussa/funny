@@ -86,15 +86,19 @@ function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>)
   // Match /word characters, colons, dots, hyphens (e.g. /skill-creator:skill-creator)
   regexParts.push('(?<=^|\\s)\\/([\\w:.-]+)(?![\\w/:.-])');
 
-  // @path mentions
+  // @path mentions — always present as group 2, even if empty (use a never-matching
+  // pattern so URL stays as group 3 regardless of fileMap size).
   if (fileMap.size > 0) {
     const escapedPaths = Array.from(fileMap.keys())
       .sort((a, b) => b.length - a.length)
       .map((p) => p.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
     regexParts.push(`@(${escapedPaths.join('|')})`);
+  } else {
+    regexParts.push('()(?!)');
   }
 
-  if (regexParts.length === 0) return [text];
+  // URLs (http/https) — trailing punctuation is stripped after match.
+  regexParts.push('(https?:\\/\\/[^\\s<]+)');
 
   const pattern = new RegExp(regexParts.join('|'), 'g');
   const parts: ReactNode[] = [];
@@ -109,14 +113,40 @@ function renderInlineContent(text: string, fileMap: Map<string, ReferencedItem>)
     if (match[1] !== undefined) {
       // Slash command match (group 1)
       parts.push(<UserMessageSkillChip key={`slash-${match.index}`} name={match[1]} />);
+      lastIndex = match.index + match[0].length;
     } else if (match[2] !== undefined) {
       // @path mention match (group 2)
       const item = fileMap.get(match[2]);
       if (item) {
         parts.push(<ReferencedFileChip key={`chip-${match.index}`} item={item} />);
       }
+      lastIndex = match.index + match[0].length;
+    } else if (match[3] !== undefined) {
+      // URL match (group 3) — strip trailing punctuation so ")", ".", "," etc. stay as text
+      let url = match[3];
+      let trailing = '';
+      const trailingMatch = url.match(/[)\]}.,;:!?'"]+$/);
+      if (trailingMatch) {
+        trailing = trailingMatch[0];
+        url = url.slice(0, -trailing.length);
+      }
+      parts.push(
+        <a
+          key={`url-${match.index}`}
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-sky-600 underline decoration-sky-600/40 underline-offset-2 hover:text-sky-500 hover:decoration-sky-500"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {url}
+        </a>,
+      );
+      if (trailing) parts.push(trailing);
+      lastIndex = match.index + match[0].length;
+    } else {
+      lastIndex = match.index + match[0].length;
     }
-    lastIndex = match.index + match[0].length;
   }
 
   if (lastIndex < text.length) {

@@ -10,7 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
-import { statusConfig, timeAgo, getStatusLabels } from '@/lib/thread-utils';
+import { statusConfig, timeAgo } from '@/lib/thread-utils';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 
 interface ThreadListViewProps {
@@ -73,7 +73,6 @@ export function ThreadListView({
 }: ThreadListViewProps) {
   const { t } = useTranslation();
   useMinuteTick();
-  const statusLabels = getStatusLabels(t);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const itemRefs = useRef<(HTMLElement | null)[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);

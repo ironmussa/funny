@@ -13,7 +13,6 @@ import {
 import { flushSync } from 'react-dom';
 import { useTranslation } from 'react-i18next';
 
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
 import {
   getCachedPrepared,

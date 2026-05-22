@@ -22,7 +22,6 @@ import {
 } from '@/components/general-settings-project/setting-primitives';
 import { projectsApi } from '@/lib/api/projects';
 import { getModelOptions, PROVIDERS } from '@/lib/providers';
-import { cn } from '@/lib/utils';
 import { usePiModelsStore } from '@/stores/pi-models-store';
 import { useProjectStore } from '@/stores/project-store';
 import { ALL_STANDARD_TOOLS, TOOL_LABELS, useSettingsStore } from '@/stores/settings-store';

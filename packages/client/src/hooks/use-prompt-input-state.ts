@@ -23,7 +23,7 @@ import { useBranchPickerStore } from '@/stores/branch-picker-store';
 import { useDraftStore } from '@/stores/draft-store';
 import { useProfileStore } from '@/stores/profile-store';
 import { useProjectStore } from '@/stores/project-store';
-import { getThreadById, useThreadId, useThreadSelector } from '@/stores/thread-context';
+import { useThreadId, useThreadSelector } from '@/stores/thread-context';
 import * as mutations from '@/stores/thread-mutations';
 import { useThreadStore } from '@/stores/thread-store';
 

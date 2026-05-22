@@ -32,7 +32,7 @@ const initialState = {
   projectId: null as string | null,
 };
 
-export const useBranchPickerStore = create<BranchPickerState>((set, get) => ({
+export const useBranchPickerStore = create<BranchPickerState>((set) => ({
   ...initialState,
 
   fetchBranches: async (projectId: string, projectDefaultBranch?: string | null) => {

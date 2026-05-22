@@ -9,7 +9,6 @@ import { useThreadsByProject } from '@/lib/thread-selectors';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
 import { useOrchestratorStore } from '@/stores/orchestrator-store';
-import { useThreadStore } from '@/stores/thread-store';
 
 type RunStatus = 'dispatched' | 'claimed' | 'retry-queued';
 

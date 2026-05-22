@@ -1,11 +1,10 @@
 import type { FileDiffSummary, GitHubPR, PRCommit, PRFile } from '@funny/shared';
-import { FileCode, GitCommitHorizontal, Loader2, Search, X } from 'lucide-react';
+import { FileCode, GitCommitHorizontal, Loader2, X } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import {

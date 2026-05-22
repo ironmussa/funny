@@ -79,7 +79,7 @@ export function getEditorLabel(editor?: Editor): string {
  * Otherwise, opens in the external editor (URI protocol or server API).
  */
 export function openFileInEditor(filePath: string, editor?: Editor): void {
-  const { defaultEditor, useInternalEditor } = useSettingsStore.getState();
+  const { useInternalEditor } = useSettingsStore.getState();
 
   // If internal editor is enabled, use Monaco
   if (useInternalEditor) {

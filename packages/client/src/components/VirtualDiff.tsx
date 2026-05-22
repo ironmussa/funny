@@ -27,7 +27,6 @@ import {
 import { parseUnifiedDiff } from '@/lib/diff/parse';
 import type {
   ConflictBlock,
-  DiffSection,
   DiffViewMode,
   RenderRow,
   VirtualDiffProps,

@@ -1,4 +1,4 @@
-import type { Automation, InboxItem, AutomationRun, Thread } from '@funny/shared';
+import type { Automation, InboxItem, AutomationRun } from '@funny/shared';
 import { ok, err } from 'neverthrow';
 import { describe, test, expect, beforeEach, vi } from 'vitest';
 

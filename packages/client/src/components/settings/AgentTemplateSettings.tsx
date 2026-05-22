@@ -24,7 +24,6 @@ import {
   Upload,
   Lock,
   Share2,
-  Variable,
 } from 'lucide-react';
 import { useState, useCallback, useEffect } from 'react';
 import { toast } from 'sonner';

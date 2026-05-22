@@ -571,8 +571,6 @@ function WebTerminalTabContent({
     prevPanelVisibleRef.current = panelVisible;
   }, [active, panelVisible]);
 
-  const { t } = useTranslation();
-
   const handleRestart = useCallback(() => {
     if (termRef.current?.terminal) {
       termRef.current.terminal.clear();

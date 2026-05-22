@@ -68,7 +68,7 @@ const ProjectThreadItem: FC<ProjectThreadItemProps> = memo(function ProjectThrea
   thread,
   projectId,
   projectPath,
-  projectName,
+  projectName: _projectName,
   projectColor,
   isSelected,
   gitStatus,

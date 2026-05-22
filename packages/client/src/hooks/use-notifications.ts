@@ -2,7 +2,6 @@ import { useCallback, useState } from 'react';
 
 import { createClientLogger } from '@/lib/client-logger';
 import { useSettingsStore } from '@/stores/settings-store';
-import { useThreadStore } from '@/stores/thread-store';
 
 const log = createClientLogger('notifications');
 
@@ -16,11 +15,6 @@ function readPermission(): NotificationPermissionState {
 /** True if browser supports the Notification API. */
 export function isNotificationsSupported(): boolean {
   return typeof window !== 'undefined' && 'Notification' in window;
-}
-
-/** True if the user is currently viewing the given thread (active thread in store). */
-function isViewingThread(threadId: string): boolean {
-  return useThreadStore.getState().activeThread?.id === threadId;
 }
 
 /**

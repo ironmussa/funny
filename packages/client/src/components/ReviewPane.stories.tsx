@@ -275,7 +275,7 @@ function installMockFetch(opts: MockFetchOptions = {}) {
   } = opts;
   const gitStatus = makeGitStatus();
 
-  window.fetch = (async (input: RequestInfo | URL, init?: RequestInit): Promise<Response> => {
+  window.fetch = (async (input: RequestInfo | URL, _init?: RequestInit): Promise<Response> => {
     const url =
       typeof input === 'string' ? input : input instanceof URL ? input.toString() : input.url;
 

@@ -45,7 +45,7 @@ export function PRBadge({
   ...props
 }: PRBadgeProps) {
   const { t } = useTranslation();
-  const { icon: Icon, color, label } = CONFIG[prState] ?? CONFIG.OPEN;
+  const { icon: Icon, color } = CONFIG[prState] ?? CONFIG.OPEN;
 
   const textSize = size === 'xxs' ? 'text-[10px]' : size === 'xs' ? 'text-xs' : 'text-sm';
   const iconSize = size === 'sm' ? 'h-3.5 w-3.5' : size === 'xs' ? 'icon-xs' : 'h-2.5 w-2.5';
@@ -62,20 +62,6 @@ export function PRBadge({
             number: prNumber,
             defaultValue: `PR #${prNumber} (closed)`,
           });
-
-  const content = (
-    <span
-      className={cn(
-        'flex flex-shrink-0 items-center gap-0.5 font-mono',
-        textSize,
-        color,
-        className,
-      )}
-    >
-      <Icon className={iconSize} />
-      <span>#{prNumber}</span>
-    </span>
-  );
 
   if (prUrl) {
     return (

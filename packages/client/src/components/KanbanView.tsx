@@ -10,9 +10,6 @@ import {
   Plus,
   Search,
   Trash2,
-  Chrome,
-  Bot,
-  Webhook,
   Terminal,
   FolderOpenDot,
   MoreVertical,
@@ -42,7 +39,6 @@ import { HighlightText, normalize } from '@/components/ui/highlight-text';
 import { Input } from '@/components/ui/input';
 import { Popover, PopoverTrigger, PopoverContent } from '@/components/ui/popover';
 import { colorFromName } from '@/components/ui/project-chip';
-import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { useThreadCreation } from '@/hooks/use-thread-creation';
 import { api } from '@/lib/api';
 import { stageConfig, timeAgo } from '@/lib/thread-utils';
@@ -64,15 +60,6 @@ interface KanbanViewProps {
 }
 
 const STAGES: ThreadStage[] = ['backlog', 'planning', 'in_progress', 'review', 'done', 'archived'];
-
-const SOURCE_ICON: Record<string, typeof Chrome | undefined> = {
-  chrome_extension: Chrome,
-  api: Terminal,
-  automation: Bot,
-  ingest: Webhook,
-};
-
-const AUTOMATED_SOURCES = new Set(['automation', 'pipeline', 'external']);
 
 export const KanbanCard = memo(function KanbanCard({
   thread,

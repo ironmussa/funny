@@ -1,6 +1,5 @@
 import type { FileDiffSummary, PRReviewThread } from '@funny/shared';
 import {
-  Check,
   Columns3,
   Columns2,
   FileCode,
@@ -34,8 +33,7 @@ import {
 import { SearchBar } from '@/components/ui/search-bar';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { TriCheckbox } from '@/components/ui/tri-checkbox';
-import { parseRawDiff, buildPatchFromSelection, getChangeableIndices } from '@/lib/patch-builder';
+import { parseRawDiff, getChangeableIndices } from '@/lib/patch-builder';
 import { cn } from '@/lib/utils';
 
 import { DiffCommentThread } from '../DiffCommentThread';
@@ -656,16 +654,13 @@ export function ExpandedDiffView({
   loading = false,
   rawDiff,
   files,
-  onFileSelect,
   diffCache,
   onClose,
   prReviewThreads,
   onResolveConflict,
   onRequestFullDiff,
   selectable = false,
-  onStagePatch,
-  onUnstagePatch,
-  stagingInProgress = false,
+  onStagePatch: _onStagePatch,
   onSelectionStateChange,
   selectAllSignal = 0,
   deselectAllSignal = 0,
@@ -680,7 +675,6 @@ export function ExpandedDiffView({
   const [loadingFullDiff, setLoadingFullDiff] = useState(false);
 
   const currentFileStatus = files?.find((f) => f.path === filePath)?.status;
-  const currentFileStaged = files?.find((f) => f.path === filePath)?.staged ?? false;
   const isOneSided = currentFileStatus === 'deleted' || currentFileStatus === 'added';
   // Force unified view only when the file is fully added/deleted (one-sided)
   const viewMode: DiffViewMode = isOneSided ? 'unified' : userViewMode;
@@ -797,20 +791,6 @@ export function ExpandedDiffView({
       return next;
     });
   }, []);
-
-  const handleSelectAll = useCallback(() => {
-    setSelectedLines(new Set(allChangeableIndices));
-  }, [allChangeableIndices]);
-
-  const handleSelectNone = useCallback(() => {
-    setSelectedLines(new Set());
-  }, []);
-
-  const handleStageSelected = useCallback(() => {
-    if (!parsedDiff || !onStagePatch) return;
-    const patch = buildPatchFromSelection(parsedDiff, selectedLines);
-    if (patch) onStagePatch(patch);
-  }, [parsedDiff, selectedLines, onStagePatch]);
 
   const selectedCount = selectable ? selectedLines.size : 0;
   const totalChangeable = selectable ? allChangeableIndices.size : 0;

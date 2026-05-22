@@ -178,7 +178,6 @@ export const MessageStream = forwardRef<MessageStreamHandle, MessageStreamProps>
     promptPinSpacerHeightRef.current = promptPinSpacerHeight;
 
     // ── Lightbox fallback ────────────────────────────────────────────
-    const noop = useCallback(() => {}, []);
     const noopLightbox = useCallback(
       (_images: { src: string; alt: string }[], _index: number) => {},
       [],

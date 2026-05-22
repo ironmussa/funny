@@ -897,6 +897,9 @@
     "model": "Model:",
     "cwd": "CWD:",
     "tools": "Tools:",
+    "mcpServers": "MCP Servers:",
+    "plugins": "Plugins:",
+    "connectors": "Connectors:",
     "providerManaged": "Managed by provider"
   },
   "prompt": {

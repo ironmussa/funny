@@ -881,6 +881,9 @@
     "model": "Modelo:",
     "cwd": "Diretório:",
     "tools": "Ferramentas:",
+    "mcpServers": "Servidores MCP:",
+    "plugins": "Plugins:",
+    "connectors": "Conectores:",
     "providerManaged": "Gerenciado pelo provedor"
   },
   "prompt": {

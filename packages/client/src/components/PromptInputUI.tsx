@@ -1133,6 +1133,19 @@ export const PromptInputUI = memo(function PromptInputUI({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
         >
+          {typeof contextPct === 'number' && (
+            <div className="pointer-events-none absolute bottom-1 right-1 z-10">
+              <div className="pointer-events-auto">
+                <ContextUsageRing
+                  pct={contextPct}
+                  usedTokens={contextUsedTokens}
+                  maxTokens={contextMaxTokens}
+                  onCompact={onCompact}
+                  disabled={!onCompact}
+                />
+              </div>
+            </div>
+          )}
           {/* Image previews */}
           {images.length > 0 && (
             <div className="flex flex-wrap gap-2 px-3 pt-2">
@@ -1266,15 +1279,6 @@ export const PromptInputUI = memo(function PromptInputUI({
               <ModeSelect value={mode} onChange={onModeChange} modes={modes} />
               {/* Model + effort + send — always visible, pushed right */}
               <div className="ml-auto flex shrink-0 items-center gap-1">
-                {typeof contextPct === 'number' && (
-                  <ContextUsageRing
-                    pct={contextPct}
-                    usedTokens={contextUsedTokens}
-                    maxTokens={contextMaxTokens}
-                    onCompact={onCompact}
-                    disabled={!onCompact}
-                  />
-                )}
                 <ModelSelect
                   value={unifiedModel}
                   onChange={onUnifiedModelChange}

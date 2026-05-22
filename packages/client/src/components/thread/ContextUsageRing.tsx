@@ -9,8 +9,8 @@ interface Props {
   disabled?: boolean;
 }
 
-const SIZE = 18;
-const STROKE = 2.5;
+const SIZE = 12;
+const STROKE = 1.25;
 const RADIUS = (SIZE - STROKE) / 2;
 const CIRC = 2 * Math.PI * RADIUS;
 
@@ -41,11 +41,16 @@ export function ContextUsageRing({ pct, usedTokens, maxTokens, onCompact, disabl
           disabled={disabled}
           onClick={onCompact}
           className={cn(
-            'mr-1 flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted',
+            'mr-1 flex h-6 shrink-0 items-center justify-center gap-1 rounded-md px-1.5 text-[11px] text-muted-foreground hover:bg-muted',
             disabled && 'cursor-not-allowed opacity-50',
           )}
         >
-          <svg width={SIZE} height={SIZE} viewBox={`0 0 ${SIZE} ${SIZE}`} className="-rotate-90">
+          <svg
+            width={SIZE}
+            height={SIZE}
+            viewBox={`0 0 ${SIZE} ${SIZE}`}
+            className="shrink-0 -rotate-90"
+          >
             <circle
               cx={SIZE / 2}
               cy={SIZE / 2}
@@ -65,6 +70,7 @@ export function ContextUsageRing({ pct, usedTokens, maxTokens, onCompact, disabl
               className={cn('transition-[stroke-dasharray] duration-500', color)}
             />
           </svg>
+          <span className="tabular-nums leading-none">{Math.round(clamped)}% de contexto</span>
         </button>
       </HoverCardTrigger>
       <HoverCardContent side="top" align="end" className="w-64 text-sm">

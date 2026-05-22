@@ -22,8 +22,16 @@ import {
 
 /**
  * Compute a minimal unified diff from old/new strings for inline display.
+ *
+ * `snippetBaseLine` is the 1-indexed line in the actual file where the
+ * snippet begins. Defaults to 1 (snippet-relative numbering) when the real
+ * file location isn't yet known.
  */
-function computeUnifiedDiff(oldValue: string, newValue: string): string {
+function computeUnifiedDiff(
+  oldValue: string,
+  newValue: string,
+  snippetBaseLine: number = 1,
+): string {
   const oldLines = oldValue.split('\n');
   const newLines = newValue.split('\n');
   const lines: string[] = [];
@@ -54,8 +62,8 @@ function computeUnifiedDiff(oldValue: string, newValue: string): string {
 
   const ctxBefore = Math.min(prefixLen, 3);
   const ctxAfter = Math.min(suffixLen, 3);
-  const hunkOldStart = prefixLen - ctxBefore + 1;
-  const hunkNewStart = prefixLen - ctxBefore + 1;
+  const hunkOldStart = snippetBaseLine + prefixLen - ctxBefore;
+  const hunkNewStart = snippetBaseLine + prefixLen - ctxBefore;
   const hunkOldLen = ctxBefore + oldChanged.length + ctxAfter;
   const hunkNewLen = ctxBefore + newChanged.length + ctxAfter;
 
@@ -95,7 +103,24 @@ export function EditFileCard({
   const [expanded, setExpanded] = useState(true);
   const [showExpandedDiff, setShowExpandedDiff] = useState(false);
   const [diffMounted, setDiffMounted] = useState(false);
+  const [snippetBaseLine, setSnippetBaseLine] = useState<number>(1);
   const diffSlotRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    if (!filePath || newString == null) return;
+    let cancelled = false;
+    api.readFile(filePath).then((result) => {
+      if (cancelled || result.isErr()) return;
+      const content = result.value.content;
+      const idx = content.indexOf(newString);
+      if (idx < 0) return;
+      const baseLine = content.slice(0, idx).split('\n').length;
+      setSnippetBaseLine(baseLine);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [filePath, newString]);
 
   useEffect(() => {
     if (!expanded || diffMounted) return;
@@ -142,8 +167,8 @@ export function EditFileCard({
 
   const unifiedDiff = useMemo(() => {
     if (!hasDiff) return '';
-    return computeUnifiedDiff(oldString || '', newString || '');
-  }, [hasDiff, oldString, newString]);
+    return computeUnifiedDiff(oldString || '', newString || '', snippetBaseLine);
+  }, [hasDiff, oldString, newString, snippetBaseLine]);
 
   return (
     <div className="w-full min-w-0 overflow-hidden rounded-lg border border-border text-sm">

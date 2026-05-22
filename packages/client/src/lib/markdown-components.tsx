@@ -108,14 +108,14 @@ function HighlightedCode({ code, language }: { code: string; language: string })
   if (html) {
     return (
       <code
-        className="hljs block overflow-x-auto font-mono text-xs leading-relaxed"
+        className="hljs block overflow-x-auto font-mono text-sm leading-relaxed"
         dangerouslySetInnerHTML={{ __html: html }}
       />
     );
   }
 
   return (
-    <code className={cn('block bg-muted p-2 rounded text-xs font-mono overflow-x-auto')}>
+    <code className={cn('block bg-muted p-2 rounded text-sm font-mono overflow-x-auto')}>
       {code}
     </code>
   );
@@ -163,7 +163,7 @@ export const baseMarkdownComponents = {
     const text = extractText(children);
     if (text.includes('\n')) {
       return (
-        <code className="block overflow-x-auto font-mono text-xs leading-relaxed" {...props}>
+        <code className="block overflow-x-auto font-mono text-sm leading-relaxed" {...props}>
           {children}
         </code>
       );
@@ -202,7 +202,7 @@ export const baseMarkdownComponents = {
 
     return (
       <div className="group/codeblock relative my-2">
-        <pre className="overflow-x-auto rounded bg-muted p-2 font-mono">
+        <pre className="overflow-x-auto rounded bg-muted p-2 font-mono text-sm leading-relaxed">
           {language && (
             <div className="mb-1 select-none text-[10px] uppercase tracking-wider text-muted-foreground/80">
               {language}

@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { GitBranch, Check, Copy, Plus } from 'lucide-react';
+import { GitBranch, Check, Copy, Plus, ChevronDown } from 'lucide-react';
 import { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -190,6 +190,7 @@ export function SearchablePicker({
         >
           {icon ?? <GitBranch className="icon-xs shrink-0" />}
           <span className="truncate font-mono">{displayValue}</span>
+          <ChevronDown className="icon-xs shrink-0 opacity-60" />
         </button>
       </PopoverTrigger>
       <PopoverContent
@@ -202,8 +203,18 @@ export function SearchablePicker({
           searchInputRef.current?.focus();
         }}
       >
-        <div className="border-b border-border bg-muted/30 px-3 py-2">
-          <p className="text-sm font-medium text-muted-foreground">{label}</p>
+        <div className="border-b border-border px-2 py-1.5">
+          <Input
+            ref={searchInputRef}
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            onKeyDown={handleSearchKeyDown}
+            placeholder={searchPlaceholder}
+            aria-label={label}
+            autoComplete="off"
+            className="h-auto w-full rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
+          />
         </div>
         <div
           className="min-h-0 flex-1 overflow-y-auto overscroll-contain p-1"
@@ -300,19 +311,6 @@ export function SearchablePicker({
               })}
             </div>
           )}
-        </div>
-        <div className="border-t border-border px-2 py-1.5">
-          <Input
-            ref={searchInputRef}
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            onKeyDown={handleSearchKeyDown}
-            placeholder={searchPlaceholder}
-            aria-label={label}
-            autoComplete="off"
-            className="h-auto w-full rounded-none border-0 bg-transparent p-0 text-sm shadow-none focus-visible:ring-0"
-          />
         </div>
       </PopoverContent>
     </Popover>

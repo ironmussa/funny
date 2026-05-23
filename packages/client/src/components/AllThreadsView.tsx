@@ -465,7 +465,7 @@ export function AllThreadsView() {
               <Search className="icon-sm text-muted-foreground" />
             )}
             {scratchOnlyFilter
-              ? t('sidebar.scratchTitle', { defaultValue: 'Scratch' })
+              ? t('sidebar.scratchTitle', { defaultValue: 'Quick Chats' })
               : projectFilter && filteredProject
                 ? t('allThreads.title')
                 : t('allThreads.globalTitle')}

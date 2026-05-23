@@ -922,22 +922,26 @@ export const ProjectHeader = memo(function ProjectHeader({
                       />
                     </span>
                   ) : (
-                    <span
-                      role="button"
-                      tabIndex={0}
-                      data-testid="header-thread-title"
-                      onClick={startEditingTitle}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter' || e.key === ' ') {
-                          e.preventDefault();
-                          startEditingTitle();
-                        }
-                      }}
-                      title={t('thread.renameTitle', 'Click to rename')}
-                      className="block min-w-0 max-w-full cursor-text truncate text-sm font-medium hover:text-accent-foreground"
-                    >
-                      {activeThreadTitle}
-                    </span>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <span
+                          role="button"
+                          tabIndex={0}
+                          data-testid="header-thread-title"
+                          onClick={startEditingTitle}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter' || e.key === ' ') {
+                              e.preventDefault();
+                              startEditingTitle();
+                            }
+                          }}
+                          className="block min-w-0 max-w-full cursor-text truncate text-sm font-medium hover:text-accent-foreground"
+                        >
+                          {activeThreadTitle}
+                        </span>
+                      </TooltipTrigger>
+                      <TooltipContent>{t('thread.renameTitle', 'Click to rename')}</TooltipContent>
+                    </Tooltip>
                   )}
                 </BreadcrumbItem>
               )}

@@ -186,7 +186,7 @@ export function AllThreadsToolbar(props: Props) {
         options={[
           {
             value: 'scratch',
-            label: t('sidebar.scratchTitle', { defaultValue: 'Scratch' }),
+            label: t('sidebar.scratchTitle', { defaultValue: 'Quick Chats' }),
           },
           {
             value: 'normal',

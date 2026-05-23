@@ -171,7 +171,10 @@ export function AppSidebar({ singleProjectId }: { singleProjectId?: string | nul
           onShowIssues={handleShowIssues}
         />
 
-        <SidebarScratchSection />
+        <SidebarScratchSection
+          onRenameThread={handleRenameThread}
+          onDeleteThread={handleDeleteThreadFromList}
+        />
 
         <SidebarFooter />
       </div>

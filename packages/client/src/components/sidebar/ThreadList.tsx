@@ -107,7 +107,7 @@ export function ThreadList({ onRenameThread, onArchiveThread, onDeleteThread }: 
     }
 
     for (const thread of scratchThreads) {
-      includeThread(thread, _t('sidebar.scratchTitle', { defaultValue: 'Scratch' }), '');
+      includeThread(thread, _t('sidebar.scratchTitle', { defaultValue: 'Quick Chats' }), '');
     }
 
     // Running threads always go first, then sort each group by most recent

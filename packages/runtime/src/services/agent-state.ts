@@ -23,6 +23,16 @@ export class AgentStateTracker {
    */
   readonly resultReceived = new Set<string>();
 
+  /**
+   * Threads whose `agent:completed` bus event has already been emitted for
+   * the current run. Guards against double-fire when both the SDK result
+   * path AND a failure/stop path resolve the same run (which would dequeue
+   * the next follow-up twice in the queue handler).
+   *
+   * Cleared by `clearRunState` so the next run can emit normally.
+   */
+  readonly completedEmitted = new Set<string>();
+
   /** Current assistant message DB ID per thread */
   readonly currentAssistantMsgId = new Map<string, string>();
 
@@ -89,6 +99,7 @@ export class AgentStateTracker {
     this.touch(threadId);
     this.currentAssistantMsgId.delete(threadId);
     this.resultReceived.delete(threadId);
+    this.completedEmitted.delete(threadId);
     this.pendingUserInput.delete(threadId);
     this.pendingPermissionRequest.delete(threadId);
     this.cumulativeInputTokens.delete(threadId);
@@ -98,6 +109,7 @@ export class AgentStateTracker {
   cleanupThread(threadId: string): void {
     this.touchedAt.delete(threadId);
     this.resultReceived.delete(threadId);
+    this.completedEmitted.delete(threadId);
     this.currentAssistantMsgId.delete(threadId);
     this.processedToolUseIds.delete(threadId);
     this.cliToDbMsgId.delete(threadId);

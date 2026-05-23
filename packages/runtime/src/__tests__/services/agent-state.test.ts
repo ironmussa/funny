@@ -210,6 +210,19 @@ describe('AgentStateTracker', () => {
       expect(tracker.resultReceived.has('thread-2')).toBe(true);
     });
 
+    test('clears completedEmitted so the next run can emit agent:completed again', () => {
+      // Regression: bug 3b — without clearing, every subsequent run for the
+      // same thread would be silently suppressed and the queue handler would
+      // never drain the next follow-up.
+      tracker.completedEmitted.add('thread-1');
+      tracker.completedEmitted.add('thread-2');
+
+      tracker.clearRunState('thread-1');
+
+      expect(tracker.completedEmitted.has('thread-1')).toBe(false);
+      expect(tracker.completedEmitted.has('thread-2')).toBe(true);
+    });
+
     test('clears pendingUserInput for the thread', () => {
       tracker.pendingUserInput.set('thread-1', 'question');
       tracker.pendingUserInput.set('thread-2', 'plan');

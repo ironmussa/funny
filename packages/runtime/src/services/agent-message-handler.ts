@@ -804,9 +804,12 @@ export class AgentMessageHandler {
         });
       }
 
-      // Emit agent:completed (reuse already-fetched thread)
+      // Emit agent:completed (reuse already-fetched thread).
+      // Idempotency: shared `completedEmitted` set with AgentEventRouter —
+      // if a failure/stop path already emitted for this run, skip here.
       const t = updatedThread ?? preThread;
-      if (t) {
+      if (t && !this.state.completedEmitted.has(threadId)) {
+        this.state.completedEmitted.add(threadId);
         const proj = await this.getProject(t.projectId);
         threadEventBus.emit('agent:completed', {
           threadId,

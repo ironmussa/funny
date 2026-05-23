@@ -184,6 +184,22 @@ export class AgentEventRouter {
     },
     status: 'completed' | 'failed' | 'stopped',
   ): Promise<void> {
+    // Idempotency: skip if the bus event was already emitted for this run.
+    // Both the SDK result path (agent-message-handler) and the failure/stop
+    // paths can resolve the same run if the process exits or is stopped
+    // shortly after a normal completion — emitting twice would cause the
+    // queue handler to dequeue the next follow-up message twice.
+    if (this.state.completedEmitted.has(threadId)) {
+      log.warn('Suppressing duplicate agent:completed emission', {
+        namespace: 'agent',
+        threadId,
+        status,
+      });
+      metric('agent.completed_emit_suppressed', 1, { type: 'sum', attributes: { status } });
+      return;
+    }
+    this.state.completedEmitted.add(threadId);
+
     const project = thread.projectId
       ? await getServices().projects.getProject(thread.projectId)
       : undefined;

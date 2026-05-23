@@ -1,10 +1,11 @@
-import type { Thread, ThreadStatus } from '@funny/shared';
+import type { Thread } from '@funny/shared';
 import { Pin, PinOff } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
-import { statusConfig } from '@/lib/thread-utils';
+import { getDisplayThreadStatus, statusConfig } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
+import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { isThreadUnread, useThreadReadStore } from '@/stores/thread-read-store';
 
 export type ThreadStatusPinHoverGroup = 'thread' | 'card' | 'row';
@@ -39,9 +40,14 @@ export function ThreadStatusPin({
   className,
 }: ThreadStatusPinProps) {
   const { t } = useTranslation();
-  const cfg = statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending;
+  const runnerStatus = useRunnerStatusStore((s) => s.status);
+  const displayStatus = getDisplayThreadStatus(thread.status, runnerStatus);
+  const cfg = statusConfig[displayStatus] ?? statusConfig.pending;
   const StatusIcon = cfg.icon;
-  const isBusy = thread.status === 'running' || thread.status === 'setting_up';
+  // Stop showing the "busy" affordances (no pin/unread dot) once the runner
+  // drops — the thread is effectively paused, and the user should be able to
+  // pin or notice unread messages in the meantime.
+  const isBusy = displayStatus === 'running' || displayStatus === 'setting_up';
   const canPin = !!onPin;
   const showPinRest = canPin && thread.pinned && !isBusy;
   const hideOnHover = canPin ? HIDE_ON_HOVER[hoverGroup] : '';
@@ -57,7 +63,9 @@ export function ThreadStatusPin({
         <StatusIcon className={cn('icon-sm', cfg.className)} />
       </TooltipTrigger>
       <TooltipContent side="top" className="text-xs">
-        {t(`thread.status.${thread.status}`)}
+        {displayStatus === 'runner_offline'
+          ? t('thread.status.runnerOffline', { defaultValue: 'Runner offline' })
+          : t(`thread.status.${displayStatus}`)}
       </TooltipContent>
     </Tooltip>
   ) : (

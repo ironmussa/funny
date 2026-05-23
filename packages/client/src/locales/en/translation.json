@@ -120,7 +120,8 @@
       "interrupted": "Interrupted",
       "idle": "Idle",
       "settingUp": "Setting up",
-      "error": "Error"
+      "error": "Error",
+      "runnerOffline": "Runner offline"
     },
     "mode": {
       "local": "Local",

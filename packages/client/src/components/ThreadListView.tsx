@@ -1,4 +1,4 @@
-import type { Thread, ThreadStatus } from '@funny/shared';
+import type { Thread } from '@funny/shared';
 import { ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
 import { type ReactNode, useState, useRef, useEffect, useCallback } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -10,8 +10,9 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { SearchBar } from '@/components/ui/search-bar';
 import { TooltipIconButton } from '@/components/ui/tooltip-icon-button';
 import { useMinuteTick } from '@/hooks/use-minute-tick';
-import { statusConfig, timeAgo } from '@/lib/thread-utils';
+import { getDisplayThreadStatus, statusConfig, timeAgo } from '@/lib/thread-utils';
 import { cn, resolveThreadBranch } from '@/lib/utils';
+import { useRunnerStatusStore } from '@/stores/runner-status-store';
 
 interface ThreadListViewProps {
   threads: Thread[];
@@ -73,6 +74,7 @@ export function ThreadListView({
 }: ThreadListViewProps) {
   const { t } = useTranslation();
   useMinuteTick();
+  const runnerStatus = useRunnerStatusStore((s) => s.status);
   const [highlightIndex, setHighlightIndex] = useState(-1);
   const itemRefs = useRef<(HTMLElement | null)[]>([]);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -204,7 +206,9 @@ export function ThreadListView({
       ) : (
         <ScrollArea className="min-h-0 flex-1 rounded-lg border border-border/50">
           {threads.map((thread, i) => {
-            const s = statusConfig[thread.status as ThreadStatus] ?? statusConfig.pending;
+            const s =
+              statusConfig[getDisplayThreadStatus(thread.status, runnerStatus)] ??
+              statusConfig.pending;
             const Icon = s.icon;
             const Wrapper = onThreadClick ? 'button' : 'div';
 

@@ -119,7 +119,8 @@
       "interrupted": "Interrumpido",
       "idle": "Inactivo",
       "settingUp": "Configurando",
-      "error": "Error"
+      "error": "Error",
+      "runnerOffline": "Runner desconectado"
     },
     "mode": {
       "local": "Local",

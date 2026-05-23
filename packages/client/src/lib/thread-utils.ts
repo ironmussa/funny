@@ -15,19 +15,49 @@ import {
   Play,
   Eye,
   Archive,
+  WifiOff,
 } from 'lucide-react';
 
-export const statusConfig: Record<ThreadStatus, { icon: typeof Clock; className: string }> = {
-  setting_up: { icon: Loader2, className: 'text-gray-400 animate-spin' },
-  idle: { icon: CircleDot, className: 'text-gray-400' },
-  pending: { icon: Clock, className: 'text-yellow-400' },
-  running: { icon: Loader2, className: 'text-gray-400 animate-spin' },
-  waiting: { icon: Clock, className: 'text-yellow-400' },
-  completed: { icon: CheckCircle2, className: 'text-gray-400' },
-  failed: { icon: XCircle, className: 'text-red-400' },
-  stopped: { icon: CircleStop, className: 'text-red-400' },
-  interrupted: { icon: AlertTriangle, className: 'text-orange-400' },
-};
+import type { RunnerStatus } from '@/stores/runner-status-store';
+
+/**
+ * Display status — superset of `ThreadStatus` plus client-only derived states.
+ * `runner_offline` is rendered when the thread's DB status is `running`/
+ * `setting_up` but the runner has dropped its connection; auto-resume on the
+ * runtime side will pick it back up when the runner returns, so we keep the
+ * DB row untouched and only swap the displayed icon/label.
+ */
+export type DisplayThreadStatus = ThreadStatus | 'runner_offline';
+
+export const statusConfig: Record<DisplayThreadStatus, { icon: typeof Clock; className: string }> =
+  {
+    setting_up: { icon: Loader2, className: 'text-gray-400 animate-spin' },
+    idle: { icon: CircleDot, className: 'text-gray-400' },
+    pending: { icon: Clock, className: 'text-yellow-400' },
+    running: { icon: Loader2, className: 'text-gray-400 animate-spin' },
+    waiting: { icon: Clock, className: 'text-yellow-400' },
+    completed: { icon: CheckCircle2, className: 'text-gray-400' },
+    failed: { icon: XCircle, className: 'text-red-400' },
+    stopped: { icon: CircleStop, className: 'text-red-400' },
+    interrupted: { icon: AlertTriangle, className: 'text-orange-400' },
+    runner_offline: { icon: WifiOff, className: 'text-orange-400' },
+  };
+
+/**
+ * Compute the displayed status given the DB status + current runner liveness.
+ * A `running`/`setting_up` thread on a disconnected runner shows as
+ * `runner_offline` so the UI doesn't show a permanent spinner for a process
+ * that isn't actually executing anymore.
+ */
+export function getDisplayThreadStatus(
+  status: ThreadStatus,
+  runnerStatus: RunnerStatus,
+): DisplayThreadStatus {
+  if (runnerStatus === 'offline' && (status === 'running' || status === 'setting_up')) {
+    return 'runner_offline';
+  }
+  return status;
+}
 
 export const stageConfig: Record<
   ThreadStage,
@@ -123,7 +153,7 @@ export function resolveModelLabel(modelId: string, t: (key: string, opts?: any) 
   return t(`thread.model.${key}`, { defaultValue: modelId });
 }
 
-export function getStatusLabels(t: (key: string) => string): Record<ThreadStatus, string> {
+export function getStatusLabels(t: (key: string) => string): Record<DisplayThreadStatus, string> {
   return {
     setting_up: t('thread.status.settingUp'),
     idle: t('thread.status.idle'),
@@ -134,5 +164,6 @@ export function getStatusLabels(t: (key: string) => string): Record<ThreadStatus
     failed: t('thread.status.failed'),
     stopped: t('thread.status.stopped'),
     interrupted: t('thread.status.interrupted'),
+    runner_offline: t('thread.status.runnerOffline'),
   };
 }

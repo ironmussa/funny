@@ -15,9 +15,10 @@ import { useThreadSearchState } from '@/hooks/use-thread-search';
 import { api } from '@/lib/api';
 import { createClientLogger } from '@/lib/client-logger';
 import { setDashedDragPreview } from '@/lib/drag-preview';
-import { statusConfig } from '@/lib/thread-utils';
+import { getDisplayThreadStatus, statusConfig } from '@/lib/thread-utils';
 import { cn } from '@/lib/utils';
 import { useAppStore } from '@/stores/app-store';
+import { useRunnerStatusStore } from '@/stores/runner-status-store';
 import { deriveToolLists, useSettingsStore } from '@/stores/settings-store';
 import { ThreadProvider } from '@/stores/thread-context';
 import { useThreadStore } from '@/stores/thread-store';
@@ -202,7 +203,8 @@ export const ThreadColumn = memo(function ThreadColumn({
     return () => window.removeEventListener('keydown', handler, true);
   }, [threadId, setSearchOpen]);
 
-  const status = thread?.status ?? 'idle';
+  const runnerStatus = useRunnerStatusStore((s) => s.status);
+  const status = getDisplayThreadStatus(thread?.status ?? 'idle', runnerStatus);
   const StatusIcon = statusConfig[status]?.icon ?? Loader2;
   const statusClass = statusConfig[status]?.className ?? '';
 

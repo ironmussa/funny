@@ -15,9 +15,10 @@ import {
 import { colorFromName } from '@/components/ui/project-chip';
 import { useThreadsByProject } from '@/lib/thread-selectors';
 import { cleanThreadTitle } from '@/lib/thread-title';
-import { statusConfig } from '@/lib/thread-utils';
+import { getDisplayThreadStatus, statusConfig } from '@/lib/thread-utils';
 import { cn, resolveThreadBranch } from '@/lib/utils';
 import { useProjectStore } from '@/stores/project-store';
+import { useRunnerStatusStore } from '@/stores/runner-status-store';
 
 /** Return the most recent activity timestamp for a thread (completedAt > createdAt). */
 function threadActivityTime(thread: Thread): number {
@@ -65,6 +66,7 @@ function ThreadPickerDialogContent({
   const { t } = useTranslation();
   const threadsByProject = useThreadsByProject();
   const projects = useProjectStore((s) => s.projects);
+  const runnerStatus = useRunnerStatusStore((s) => s.status);
   const [search, setSearch] = useState('');
 
   const excludeSet = useMemo(() => new Set(excludeIds), [excludeIds]);
@@ -116,8 +118,9 @@ function ThreadPickerDialogContent({
             }
           >
             {threads.map((thread) => {
-              const StatusIcon = statusConfig[thread.status]?.icon;
-              const statusClass = statusConfig[thread.status]?.className ?? '';
+              const displayStatus = getDisplayThreadStatus(thread.status, runnerStatus);
+              const StatusIcon = statusConfig[displayStatus]?.icon;
+              const statusClass = statusConfig[displayStatus]?.className ?? '';
               const { displayTitle } = cleanThreadTitle(thread.title);
               return (
                 <CommandItem

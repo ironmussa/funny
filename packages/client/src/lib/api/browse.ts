@@ -14,15 +14,15 @@ export const browseApi = {
       method: 'POST',
       body: JSON.stringify({ path, editor }),
     }),
-  openDirectory: (path: string) =>
+  openDirectory: (target: { path: string } | { threadId: string }) =>
     request<{ ok: boolean }>('/browse/open-directory', {
       method: 'POST',
-      body: JSON.stringify({ path }),
+      body: JSON.stringify(target),
     }),
-  openTerminal: (path: string) =>
+  openTerminal: (target: { path: string } | { threadId: string }) =>
     request<{ ok: boolean }>('/browse/open-terminal', {
       method: 'POST',
-      body: JSON.stringify({ path }),
+      body: JSON.stringify(target),
     }),
   repoName: (path: string) =>
     request<{ name: string }>(`/browse/repo-name?path=${encodeURIComponent(path)}`),
@@ -51,13 +51,26 @@ export const browseApi = {
    * Fetch the full file index for a project. Returns the entire list of
    * tracked files and a monotonic `version`. Pass `since` to get a no-op
    * `{ unchanged: true }` response when the server-side index is unchanged.
+   *
+   * Accepts either `{ path }` (project scope) or `{ threadId }`. The thread
+   * variant lets scratch/worktree threads be indexed without the client
+   * knowing the cwd — the server resolves it and echoes it back as
+   * `basePath` so the client can build absolute paths.
    */
-  getFileIndex: (path: string, since?: number) => {
-    const params = new URLSearchParams({ path });
-    if (since && since > 0) params.set('since', String(since));
-    return request<{ files: string[]; version: number } | { unchanged: true; version: number }>(
-      `/browse/files/index?${params.toString()}`,
-    );
+  getFileIndex: (
+    target: { path: string; since?: number } | { threadId: string; since?: number },
+  ) => {
+    const params = new URLSearchParams();
+    if ('threadId' in target) {
+      params.set('threadId', target.threadId);
+    } else {
+      params.set('path', target.path);
+    }
+    if (target.since && target.since > 0) params.set('since', String(target.since));
+    return request<
+      | { files: string[]; version: number; basePath?: string }
+      | { unchanged: true; version: number; basePath?: string }
+    >(`/browse/files/index?${params.toString()}`);
   },
   searchSymbols: (path: string, query?: string, file?: string) => {
     const params = new URLSearchParams({ path });

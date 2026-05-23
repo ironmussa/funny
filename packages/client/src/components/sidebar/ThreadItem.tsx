@@ -11,7 +11,7 @@ import {
   GitFork,
   GitBranch,
   Loader2,
-  StickyNote,
+  NotebookPen,
 } from 'lucide-react';
 import { useState, memo, useCallback, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -40,7 +40,12 @@ import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip
 import { api } from '@/lib/api';
 import { threadsVisuallyEqual } from '@/lib/shallow-compare';
 import { timeAgo } from '@/lib/thread-utils';
-import { canShowPowerline, getThreadRoute, isScratch } from '@/lib/thread-variant';
+import {
+  canConvertToWorktree,
+  canShowPowerline,
+  getThreadRoute,
+  isScratch,
+} from '@/lib/thread-variant';
 import { toastError } from '@/lib/toast-error';
 import { buildPath } from '@/lib/url';
 import { cn } from '@/lib/utils';
@@ -303,10 +308,9 @@ export const ThreadItem = memo(function ThreadItem({
                 <TooltipTrigger asChild>
                   <span
                     data-testid={`thread-scratch-badge-${thread.id}`}
-                    className="flex flex-shrink-0 items-center gap-1 rounded bg-muted/60 px-1.5 py-0.5 text-[10px] font-medium leading-none text-muted-foreground"
+                    className="flex flex-shrink-0 items-center rounded bg-muted/60 p-1 leading-none text-muted-foreground"
                   >
-                    <StickyNote className="icon-xs" />
-                    {t('sidebar.scratchTitle', { defaultValue: 'Scratch' })}
+                    <NotebookPen className="icon-xs" />
                   </span>
                 </TooltipTrigger>
                 <TooltipContent side="top" className="text-xs">
@@ -374,8 +378,7 @@ export const ThreadItem = memo(function ThreadItem({
                 <DropdownMenuItem
                   onClick={async (e) => {
                     e.stopPropagation();
-                    const folderPath = thread.worktreePath || projectPath;
-                    const result = await api.openDirectory(folderPath);
+                    const result = await api.openDirectory({ threadId: thread.id });
                     if (result.isErr()) {
                       toastError(result.error);
                     }
@@ -387,8 +390,7 @@ export const ThreadItem = memo(function ThreadItem({
                 <DropdownMenuItem
                   onClick={async (e) => {
                     e.stopPropagation();
-                    const folderPath = thread.worktreePath || projectPath;
-                    const result = await api.openTerminal(folderPath);
+                    const result = await api.openTerminal({ threadId: thread.id });
                     if (result.isErr()) {
                       toastError(result.error);
                     }
@@ -397,7 +399,7 @@ export const ThreadItem = memo(function ThreadItem({
                   <Terminal className="icon-sm" />
                   {t('sidebar.openTerminal')}
                 </DropdownMenuItem>
-                {thread.mode !== 'worktree' && !isBusy && (
+                {canConvertToWorktree(thread) && !isBusy && (
                   <>
                     <DropdownMenuSeparator />
                     <DropdownMenuItem

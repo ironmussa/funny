@@ -390,7 +390,7 @@ export function FileTree({
           : ''
         : relativePath;
       const absoluteDir = dirRelative ? `${basePath}/${dirRelative}` : basePath;
-      const result = await api.openDirectory(absoluteDir);
+      const result = await api.openDirectory({ path: absoluteDir });
       if (result.isErr()) {
         log.error('Failed to open directory', {
           path: absoluteDir,

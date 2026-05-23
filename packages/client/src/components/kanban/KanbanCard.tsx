@@ -209,9 +209,7 @@ export const KanbanCard = memo(function KanbanCard({
                 <DropdownMenuItem
                   onClick={async (e) => {
                     e.stopPropagation();
-                    const folderPath = thread.worktreePath || projectInfo?.path;
-                    if (!folderPath) return;
-                    const result = await api.openDirectory(folderPath);
+                    const result = await api.openDirectory({ threadId: thread.id });
                     if (result.isErr()) toastError(result.error);
                   }}
                 >
@@ -221,9 +219,7 @@ export const KanbanCard = memo(function KanbanCard({
                 <DropdownMenuItem
                   onClick={async (e) => {
                     e.stopPropagation();
-                    const folderPath = thread.worktreePath || projectInfo?.path;
-                    if (!folderPath) return;
-                    const result = await api.openTerminal(folderPath);
+                    const result = await api.openTerminal({ threadId: thread.id });
                     if (result.isErr()) toastError(result.error);
                   }}
                 >

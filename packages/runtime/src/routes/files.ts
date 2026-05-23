@@ -6,6 +6,7 @@
  */
 
 import { readFile, writeFile, stat, realpath } from 'fs/promises';
+import { homedir } from 'os';
 import { basename, dirname, join, normalize, resolve, sep } from 'path';
 
 import { WORKTREE_DIR_NAME } from '@funny/core/git';
@@ -37,6 +38,15 @@ async function resolveProjectScope(
   userId: string,
 ): Promise<ProjectScope | null> {
   const normalizedTarget = normalize(resolve(targetPath));
+
+  // Scratch threads live outside any project under the per-user scratch root
+  // (`<home>/.funny/scratch/<userId>/`). Authorize any path inside that root
+  // for this user — cross-user isolation is enforced by including `userId`
+  // in the path itself.
+  const scratchRoot = normalize(resolve(homedir(), '.funny', 'scratch', userId));
+  if (normalizedTarget === scratchRoot || normalizedTarget.startsWith(scratchRoot + sep)) {
+    return { projectPath: scratchRoot, worktreeBase: scratchRoot };
+  }
 
   const projects = await getServices().projects.listProjects(userId);
   for (const project of projects) {

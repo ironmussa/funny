@@ -9,11 +9,12 @@ import { HighlightText } from '@/components/ui/highlight-text';
 import { createClientLogger } from '@/lib/client-logger';
 import { FileExtensionIcon } from '@/lib/file-icons';
 import { FileSearchWorkerClient, type FileSearchMatch } from '@/lib/file-search-worker-client';
+import { isScratch } from '@/lib/thread-variant';
 import { cn } from '@/lib/utils';
-import { useFileIndexStore } from '@/stores/file-index-store';
+import { useFileIndexStore, type FileIndexTarget } from '@/stores/file-index-store';
 import { useInternalEditorStore } from '@/stores/internal-editor-store';
 import { useProjectStore } from '@/stores/project-store';
-import { useThreadWorktreePath } from '@/stores/thread-context';
+import { useThreadCore, useThreadWorktreePath } from '@/stores/thread-context';
 
 const log = createClientLogger('file-search-dialog');
 
@@ -40,7 +41,21 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
   const projects = useProjectStore((s) => s.projects);
   const project = projects.find((p) => p.id === selectedProjectId);
   const worktreePath = useThreadWorktreePath();
-  const basePath = worktreePath || project?.path;
+  const threadCore = useThreadCore();
+  const scratch = isScratch(threadCore);
+
+  // Scratch threads have no project/worktree path the client can compute —
+  // we ask the server to resolve the cwd by threadId and echo it back as
+  // `resolvedBasePath`. Non-scratch threads keep using the local path.
+  const [resolvedBasePath, setResolvedBasePath] = useState<string | undefined>(undefined);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const localBasePath = worktreePath || project?.path;
+  const basePath = scratch ? resolvedBasePath : localBasePath;
+
+  const indexTarget = useMemo<FileIndexTarget | null>(() => {
+    if (scratch) return threadCore ? { threadId: threadCore.id } : null;
+    return localBasePath ? { path: localBasePath } : null;
+  }, [scratch, threadCore, localBasePath]);
 
   const ensureIndex = useFileIndexStore((s) => s.ensureIndex);
   const indexEntry = useFileIndexStore((s) => (basePath ? s.byPath[basePath] : undefined));
@@ -73,13 +88,28 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
     };
   }, []);
 
-  // Hydrate the index when the dialog opens (or basePath changes)
+  // Hydrate the index when the dialog opens (or target changes). For scratch
+  // threads the server resolves the cwd by threadId and returns it as
+  // `basePath`; we stash it locally so `handleSelect` can build absolute paths.
   useEffect(() => {
-    if (!open || !basePath) return;
-    ensureIndex(basePath).catch((err) => {
-      log.warn('failed to load file index', { basePath, error: String(err) });
-    });
-  }, [open, basePath, ensureIndex]);
+    if (!open || !indexTarget) return;
+    setLoadError(null);
+    ensureIndex(indexTarget)
+      .then((result) => {
+        if (scratch && result.basePath) {
+          setResolvedBasePath(result.basePath);
+        }
+        // Resolved but no usable index — surface as an error so the dialog
+        // doesn't sit spinning forever (e.g. 404 / 502 from the runner).
+        if (!result.entry && !result.basePath) {
+          setLoadError('Could not load file index');
+        }
+      })
+      .catch((err) => {
+        log.warn('failed to load file index', { target: indexTarget, error: String(err) });
+        setLoadError(String(err?.message ?? err));
+      });
+  }, [open, indexTarget, scratch, ensureIndex]);
 
   // Push the index into the worker whenever it changes
   useEffect(() => {
@@ -118,6 +148,7 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
       setMatches([]);
       setTruncated(false);
       setActiveIndex(0);
+      setLoadError(null);
     }
   }, [open]);
 
@@ -190,8 +221,12 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
     [items, activeIndex, handleSelect],
   );
 
-  const isLoadingIndex = !indexEntry && !!basePath;
-  const showEmpty = !isLoadingIndex && !searching && items.length === 0 && !!basePath;
+  // Scratch threads wait for the server to resolve their cwd, so we show
+  // "indexing" while the resolve+fetch is in flight even before basePath
+  // is known locally.
+  const hasTarget = !!indexTarget;
+  const isLoadingIndex = hasTarget && !loadError && (!basePath || !indexEntry);
+  const showEmpty = hasTarget && !isLoadingIndex && !loadError && !searching && items.length === 0;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -228,8 +263,10 @@ function FileSearchDialogContent({ open, onOpenChange }: FileSearchDialogProps) 
             className="overflow-y-auto"
             style={{ maxHeight: LIST_MAX_HEIGHT_PX }}
           >
-            {!basePath ? (
+            {!hasTarget ? (
               <EmptyRow text={t('fileSearch.noProject', 'Select a project first')} />
+            ) : loadError ? (
+              <EmptyRow text={t('fileSearch.loadError', 'Could not load file index')} />
             ) : isLoadingIndex ? (
               <LoadingRow text={t('fileSearch.indexing', 'Indexing files...')} />
             ) : showEmpty ? (

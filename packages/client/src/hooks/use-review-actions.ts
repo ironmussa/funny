@@ -664,7 +664,7 @@ export function useReviewActions({
           : ''
         : relativePath;
       const absoluteDir = dirRelative ? `${basePath}/${dirRelative}` : basePath;
-      const result = await browseApi.openDirectory(absoluteDir);
+      const result = await browseApi.openDirectory({ path: absoluteDir });
       if (result.isErr()) {
         log.error('Failed to open directory', {
           path: absoluteDir,

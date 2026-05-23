@@ -13,96 +13,147 @@ interface FileIndexEntry {
   stale: boolean;
 }
 
+/**
+ * Lookup target for an index. `path` is the absolute project / worktree
+ * path; `threadId` lets the server resolve the cwd (used for scratch and
+ * any other thread where the client doesn't know the path up front). When
+ * resolving by threadId, the entry is cached under the server-returned
+ * `basePath` so a follow-up `path` lookup hits the same cache.
+ */
+export type FileIndexTarget = { path: string } | { threadId: string };
+
 interface FileIndexState {
   byPath: Record<string, FileIndexEntry>;
-  inflight: Record<string, Promise<FileIndexEntry | null>>;
+  inflight: Record<string, Promise<{ entry: FileIndexEntry | null; basePath: string | null }>>;
   /**
-   * Ensure an index for `basePath` is loaded. Hydrates from IndexedDB
-   * synchronously if available, then revalidates against the server in the
-   * background. Returns the current entry (which may still be marked stale).
+   * Ensure an index is loaded for `target`. Hydrates from IndexedDB
+   * synchronously if `target.path` is available, then revalidates against
+   * the server in the background. Returns the current entry and the
+   * resolved `basePath` (the path the entry is keyed under in `byPath`).
    */
-  ensureIndex: (basePath: string) => Promise<FileIndexEntry | null>;
+  ensureIndex: (
+    target: FileIndexTarget,
+  ) => Promise<{ entry: FileIndexEntry | null; basePath: string | null }>;
   /** Force a server fetch (e.g. user pressed refresh). */
-  refresh: (basePath: string) => Promise<FileIndexEntry | null>;
+  refresh: (
+    target: FileIndexTarget,
+  ) => Promise<{ entry: FileIndexEntry | null; basePath: string | null }>;
 }
 
 async function fetchFromServer(
-  basePath: string,
+  target: FileIndexTarget,
   sinceVersion?: number,
-): Promise<{ files: string[]; version: number } | null> {
-  const result = await api.getFileIndex(basePath, sinceVersion);
+): Promise<{ files: string[]; version: number; basePath?: string } | { basePath?: string } | null> {
+  const apiArg =
+    'path' in target
+      ? { path: target.path, since: sinceVersion }
+      : { threadId: target.threadId, since: sinceVersion };
+  const result = await api.getFileIndex(apiArg);
   if (result.isErr()) {
     log.warn('file-index fetch failed', {
-      basePath,
+      target,
       error: result.error.message,
     });
     return null;
   }
   if ('unchanged' in result.value && result.value.unchanged) {
-    return null; // signal: caller should keep current cache
+    return result.value.basePath ? { basePath: result.value.basePath } : {};
   }
   // Type narrowed: must have files when not unchanged
   if ('files' in result.value) {
-    return { files: result.value.files, version: result.value.version };
+    return {
+      files: result.value.files,
+      version: result.value.version,
+      basePath: result.value.basePath,
+    };
   }
   return null;
+}
+
+function targetKey(target: FileIndexTarget): string {
+  return 'path' in target ? target.path : `thread:${target.threadId}`;
 }
 
 export const useFileIndexStore = create<FileIndexState>((set, get) => ({
   byPath: {},
   inflight: {},
 
-  ensureIndex: async (basePath) => {
+  ensureIndex: async (target) => {
+    const knownPath = 'path' in target ? target.path : undefined;
     const state = get();
-    const existing = state.byPath[basePath];
-    if (existing && !existing.stale) return existing;
+    if (knownPath) {
+      const existing = state.byPath[knownPath];
+      if (existing && !existing.stale) return { entry: existing, basePath: knownPath };
+    }
 
-    const inflight = state.inflight[basePath];
+    const key = targetKey(target);
+    const inflight = state.inflight[key];
     if (inflight) return inflight;
 
-    const op = (async (): Promise<FileIndexEntry | null> => {
-      // 1. Try IDB cache for instant cold-start
+    const op = (async (): Promise<{ entry: FileIndexEntry | null; basePath: string | null }> => {
+      // 1. Try IDB cache for instant cold-start (only when the path is known)
       let cached: FileIndexEntry | null = null;
-      const idbHit = await loadCachedFileIndex(basePath);
-      if (idbHit) {
-        cached = { files: idbHit.files, version: idbHit.version, stale: true };
-        set((s) => ({ byPath: { ...s.byPath, [basePath]: cached! } }));
+      if (knownPath) {
+        const idbHit = await loadCachedFileIndex(knownPath);
+        if (idbHit) {
+          cached = { files: idbHit.files, version: idbHit.version, stale: true };
+          set((s) => ({ byPath: { ...s.byPath, [knownPath]: cached! } }));
+        }
       }
 
       // 2. Revalidate against server (delta if possible)
-      const fresh = await fetchFromServer(basePath, cached?.version);
+      const fresh = await fetchFromServer(target, cached?.version);
 
-      if (fresh) {
-        const entry: FileIndexEntry = { ...fresh, stale: false };
-        set((s) => ({ byPath: { ...s.byPath, [basePath]: entry } }));
-        void saveCachedFileIndex(basePath, fresh.files, fresh.version);
-        return entry;
+      // Resolved basePath: prefer server-reported, fall back to the input path
+      const resolvedBase =
+        fresh && 'basePath' in fresh && fresh.basePath ? fresh.basePath : (knownPath ?? null);
+
+      if (fresh && 'files' in fresh && fresh.files) {
+        const entry: FileIndexEntry = {
+          files: fresh.files,
+          version: fresh.version,
+          stale: false,
+        };
+        if (resolvedBase) {
+          set((s) => ({ byPath: { ...s.byPath, [resolvedBase]: entry } }));
+          void saveCachedFileIndex(resolvedBase, fresh.files, fresh.version);
+        }
+        return { entry, basePath: resolvedBase };
       }
 
       // No fresh data — either server said unchanged, or fetch failed
-      if (cached) {
+      if (cached && knownPath) {
         const entry: FileIndexEntry = { ...cached, stale: false };
-        set((s) => ({ byPath: { ...s.byPath, [basePath]: entry } }));
-        return entry;
+        set((s) => ({ byPath: { ...s.byPath, [knownPath]: entry } }));
+        return { entry, basePath: knownPath };
       }
-      return null;
+      // Thread-based lookup with no fresh data and no cache: still report
+      // the basePath the server told us about so callers can show "empty".
+      if (resolvedBase) {
+        const existing = get().byPath[resolvedBase];
+        return { entry: existing ?? null, basePath: resolvedBase };
+      }
+      return { entry: null, basePath: null };
     })().finally(() => {
       set((s) => {
         const next = { ...s.inflight };
-        delete next[basePath];
+        delete next[key];
         return { inflight: next };
       });
     });
 
-    set((s) => ({ inflight: { ...s.inflight, [basePath]: op } }));
+    set((s) => ({ inflight: { ...s.inflight, [key]: op } }));
     return op;
   },
 
-  refresh: async (basePath) => {
-    set((s) => {
-      if (!s.byPath[basePath]) return s;
-      return { byPath: { ...s.byPath, [basePath]: { ...s.byPath[basePath], stale: true } } };
-    });
-    return get().ensureIndex(basePath);
+  refresh: async (target) => {
+    if ('path' in target) {
+      const basePath = target.path;
+      set((s) => {
+        if (!s.byPath[basePath]) return s;
+        return { byPath: { ...s.byPath, [basePath]: { ...s.byPath[basePath], stale: true } } };
+      });
+    }
+    return get().ensureIndex(target);
   },
 }));

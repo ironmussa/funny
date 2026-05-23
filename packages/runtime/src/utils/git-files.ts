@@ -1,3 +1,5 @@
+import type { Dirent } from 'fs';
+import { readdir } from 'fs/promises';
 import { join } from 'path';
 
 import { getNativeGit, gitRead } from '@funny/core/git';
@@ -133,6 +135,61 @@ export async function gitLsFiles(cwd: string): Promise<string[]> {
   }
 
   return Array.from(out);
+}
+
+/**
+ * Recursive fs walk used as a fallback when the directory is not a git repo
+ * (e.g. scratch threads). Returns sorted relative POSIX paths, pruning any
+ * entries inside `HEAVY_IGNORED_DIRS` and dot-directories like `.git`.
+ *
+ * Symlinks are not followed to avoid cycles. Errors on individual entries
+ * (e.g. permission denied) are logged and skipped rather than aborting.
+ */
+export async function walkDirectoryTree(cwd: string): Promise<string[]> {
+  const span = startSpan('file-index.list-files', {
+    attributes: { backend: 'fs-walk', cwd },
+  });
+  const out: string[] = [];
+
+  async function walk(dir: string, prefix: string): Promise<void> {
+    let entries: Dirent[];
+    try {
+      entries = (await readdir(dir, { withFileTypes: true, encoding: 'utf8' })) as Dirent[];
+    } catch (err) {
+      log.warn('git-files: walkDirectoryTree readdir failed', {
+        namespace: 'git-files',
+        cwd: dir,
+        error: String(err),
+      });
+      return;
+    }
+
+    const subdirs: { name: string; rel: string }[] = [];
+    for (const entry of entries) {
+      const name = entry.name;
+      if (HEAVY_IGNORED_DIRS.has(name)) continue;
+      const rel = prefix ? `${prefix}/${name}` : name;
+      if (entry.isSymbolicLink()) continue;
+      if (entry.isDirectory()) {
+        subdirs.push({ name, rel });
+      } else if (entry.isFile()) {
+        out.push(rel);
+      }
+    }
+
+    await Promise.all(subdirs.map(({ name, rel }) => walk(join(dir, name), rel)));
+  }
+
+  try {
+    await walk(cwd, '');
+    out.sort();
+    span.attributes['file.count'] = out.length;
+    span.end('ok');
+    return out;
+  } catch (err) {
+    span.end('error', String(err));
+    throw err;
+  }
 }
 
 /**

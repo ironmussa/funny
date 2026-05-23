@@ -409,7 +409,7 @@ export const ProjectItem = memo(function ProjectItem({
                   data-testid="project-menu-open-directory"
                   onClick={async (e) => {
                     e.stopPropagation();
-                    const result = await api.openDirectory(project.path);
+                    const result = await api.openDirectory({ path: project.path });
                     if (result.isErr()) {
                       console.error('Failed to open directory:', result.error);
                     }
@@ -422,7 +422,7 @@ export const ProjectItem = memo(function ProjectItem({
                   data-testid="project-menu-open-terminal"
                   onClick={async (e) => {
                     e.stopPropagation();
-                    const result = await api.openTerminal(project.path);
+                    const result = await api.openTerminal({ path: project.path });
                     if (result.isErr()) {
                       console.error('Failed to open terminal:', result.error);
                     }

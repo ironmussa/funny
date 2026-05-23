@@ -15,7 +15,7 @@
  */
 
 import { watch, type FSWatcher } from 'fs';
-import { stat } from 'fs/promises';
+import { access, stat } from 'fs/promises';
 import { join, relative, sep } from 'path';
 
 import { internal, type DomainError } from '@funny/shared/errors';
@@ -26,6 +26,7 @@ import {
   HEAVY_IGNORED_DIRS,
   invalidateGitFilesCache,
   resolveGitFiles,
+  walkDirectoryTree,
 } from '../utils/git-files.js';
 import { shutdownManager, ShutdownPhase } from './shutdown-manager.js';
 import { threadEventBus } from './thread-event-bus.js';
@@ -175,12 +176,20 @@ async function buildIndex(projectPath: string): Promise<FileIndex> {
   const op = (async () => {
     const start = Date.now();
     let files: string[] = [];
+    // Scratch threads (and other non-git directories) live outside any git
+    // repo. `git ls-files` would return nothing for them, so we fall back to
+    // a plain fs walk that honors `HEAVY_IGNORED_DIRS`.
+    const isGitRepo = await access(join(projectPath, '.git')).then(
+      () => true,
+      () => false,
+    );
     try {
-      files = await resolveGitFiles(projectPath);
+      files = isGitRepo ? await resolveGitFiles(projectPath) : await walkDirectoryTree(projectPath);
     } catch (err) {
-      log.warn('File index: resolveGitFiles failed', {
+      log.warn('File index: file listing failed', {
         namespace: 'file-index',
         projectPath,
+        isGitRepo,
         error: String(err),
       });
     }
